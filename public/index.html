@@ -177,6 +177,7 @@ button{cursor:pointer}
 </div>
 <script type="module">
 import { ROAD_TYPES, CATS, BUILDING_TYPES } from '/shared/catalog.js';
+import { treasuryOn, CHUNK as CHUNK_SIZE } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 const GAME_MIN_MS = 15000;              // 1 game minute = 15 s  → 1 game day = 6 h
@@ -198,31 +199,76 @@ function el(tag, props, ...kids){ const e = document.createElement(tag); if(prop
 const $ = id => document.getElementById(id);
 
 /* ---------------- state + live connection to the server ---------------- */
-const S = { meta:null, buildings:new Map(), roadChunks:new Map([['all',{tiles:{}}]]), citizens:new Map(), events:[] };
-const D = { roads:new Map(), occ:new Map(), version:0, bounds:{minX:-10,minY:-10,maxX:10,maxY:10}, assign:new Map(), homes:new Map(), jobs:new Map() };
+// The browser only holds the part of the map near the screen, in 32×32-tile chunks. It subscribes to those chunks
+// and hears only about them, plus town-wide news. Citizens arrive with the chunks their home, job or hangout is in.
+const S = { meta:null, buildings:new Map(), roads:new Map(), citizens:new Map(), events:[], chunks:new Map() };
+const D = { roads:new Map(), occ:new Map() };
 const Store = { canWrite:false, ready:false, token:null, online:false };
+const CHUNK = CHUNK_SIZE, ck=(cx,cy)=>cx+'_'+cy, ckTile=(x,y)=>ck(Math.floor(x/CHUNK),Math.floor(y/CHUNK));
+const loading=new Set(), buffered=new Map(); let ws=null, subKey='', pinned=null;
 async function api(path, opts={}){
   const r=await fetch(path,{ method:opts.method||'GET', headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined });
   const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`); return j; }
-function applySnapshot(w){
-  S.meta=w.meta; S.buildings=new Map(w.buildings.map(b=>[b.id,b])); S.roadChunks=new Map([['all',{tiles:{...w.roads}}]]);
-  S.citizens=new Map(w.citizens.map(c=>[c.id,c])); S.events=w.events||[]; if(w.serverNow) skew=w.serverNow-Date.now(); feedDirty=true; changed(); }
-function applyOp(o){ switch(o.op){
+const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, home:c.home, job:c.job, hang:c.hang });
+const placeChunks = c => [c.home,c.job,c.hang].filter(Boolean).map(p=>ckTile(p[2],p[3]));
+const keepCitizen = c => c.id===pinned || placeChunks(c).some(k=>S.chunks.has(k));
+// A big change in a district: forget it and download it again.
+function applyReload(o){ let any=false; for(const k of o.chunks) if(S.chunks.has(k)){ dropChunk(k); any=true; } if(!any) return; for(const [id,c] of S.citizens) if(!keepCitizen(c)) S.citizens.delete(id); changed(); syncChunks(); }
+function putBuilding(b){ const old=S.buildings.get(b.id); if(old) S.chunks.get(ck(old.cx,old.cy))?.buildings.delete(b.id);
+  const slot=S.chunks.get(ck(b.cx,b.cy)); if(!slot){ S.buildings.delete(b.id); return; } S.buildings.set(b.id,b); slot.buildings.add(b.id); }
+function applyOp(o){
+  if(o.op==='reload'){ applyReload(o); return; }
+  if(o.chunks && !o.chunks.some(k=>S.chunks.has(k))){
+    // Hold changes for chunks still downloading, and replay them once they arrive, so nothing is missed.
+    for(const k of o.chunks) if(loading.has(k)){ if(!buffered.has(k)) buffered.set(k,[]); buffered.get(k).push(o); return; }
+    if(o.op!=='citizen'&&o.op!=='citizenGone') return; }
+  switch(o.op){
   case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&activeTab!=='feed'&&activeTab!=='people') renderPane(); break;
-  case 'building': S.buildings.set(o.data.id,o.data); changed(); break;
-  case 'removeBuilding': S.buildings.delete(o.id); changed(); break;
-  case 'roads': { const t=S.roadChunks.get('all').tiles; for(const k in o.set) t[k]=o.set[k]; for(const k of o.remove) delete t[k]; changed(); break; }
-  case 'citizen': { const had=S.citizens.has(o.data.id); S.citizens.set(o.data.id,o.data); changed(had); break; }
-  case 'removeCitizen': S.citizens.delete(o.id); changed(); break;
+  case 'building': putBuilding(o.data); changed(); break;
+  case 'removeBuilding': { const b=S.buildings.get(o.id); if(b && ck(b.cx,b.cy)===o.chunks[0]){ S.chunks.get(o.chunks[0])?.buildings.delete(o.id); S.buildings.delete(o.id); changed(); } break; }
+  case 'roads': { const slot=S.chunks.get(o.chunks[0]); for(const k in o.set){ S.roads.set(k,o.set[k]); slot?.roads.add(k); } for(const k of o.remove){ S.roads.delete(k); slot?.roads.delete(k); } changed(); break; }
+  case 'citizen': { const c=normC(o.data); if(keepCitizen(c)) S.citizens.set(c.id,c); else S.citizens.delete(c.id); detail.delete(c.id); changed(true); break; }
+  case 'citizenGone': S.citizens.delete(o.id); detail.delete(o.id); changed(true); break;
   case 'event': S.events.unshift(o.data); if(S.events.length>300) S.events.length=300; feedDirty=true; updateNews(); break; } }
+
+// Which chunks the screen needs: everything visible plus a one-chunk margin, capped when zoomed far out.
+function viewChunks(){
+  const cs=[[0,0],[cw,0],[0,ch],[cw,ch]].map(([sx,sy])=>{ const w=screenToWorld(sx,sy); return worldToTileF(w.x,w.y); });
+  let x0=Math.floor(Math.min(...cs.map(c=>c.x))/CHUNK)-1, x1=Math.floor(Math.max(...cs.map(c=>c.x))/CHUNK)+1, y0=Math.floor(Math.min(...cs.map(c=>c.y))/CHUNK)-1, y1=Math.floor(Math.max(...cs.map(c=>c.y))/CHUNK)+1;
+  const mx=Math.floor((x0+x1)/2), my=Math.floor((y0+y1)/2); x0=Math.max(x0,mx-4); x1=Math.min(x1,mx+4); y0=Math.max(y0,my-4); y1=Math.min(y1,my+4);
+  const out=[]; for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++) out.push(ck(x,y)); return out; }
+function dropChunk(k){ const slot=S.chunks.get(k); if(!slot) return; for(const id of slot.buildings) S.buildings.delete(id); for(const r of slot.roads) S.roads.delete(r); S.chunks.delete(k); }
+function subscribe(){ const keys=[...new Set([...S.chunks.keys(),...loading])].sort(); const key=keys.join(','); if(key===subKey||!ws||ws.readyState!==1) return; subKey=key; ws.send(JSON.stringify({type:'sub',chunks:keys})); }
+let syncing=false;
+async function syncChunks(){
+  if(syncing||!S.meta) return; syncing=true;
+  try{
+    const want=viewChunks(), wantSet=new Set(want);
+    let dropped=false; if(S.chunks.size>100){ for(const k of [...S.chunks.keys()]) if(!wantSet.has(k)){ dropChunk(k); dropped=true; } }
+    if(dropped){ for(const [id,c] of S.citizens) if(!keepCitizen(c)) S.citizens.delete(id); changed(); }
+    const missing=want.filter(k=>!S.chunks.has(k)&&!loading.has(k)); if(!missing.length){ subscribe(); return; }
+    missing.forEach(k=>loading.add(k)); subscribe();
+    for(let i=0;i<missing.length;i+=25){ const batch=missing.slice(i,i+25);
+      try{ const r=await api('/api/chunks?keys='+batch.join(','));
+        for(const k of batch){ const c=r.chunks[k]||{buildings:[],roads:{}}; S.chunks.set(k,{buildings:new Set(),roads:new Set()}); for(const b of c.buildings) putBuilding(b); const slot=S.chunks.get(k); for(const rk in c.roads){ S.roads.set(rk,c.roads[rk]); slot.roads.add(rk); } }
+        for(const raw of r.citizens){ const c=normC(raw); if(keepCitizen(c)) S.citizens.set(c.id,c); }
+        for(const k of batch){ loading.delete(k); for(const o of buffered.get(k)||[]) applyOp(o); buffered.delete(k); }
+      }catch(e){ batch.forEach(k=>{ loading.delete(k); buffered.delete(k); }); }
+    }
+    subscribe(); changed();
+  } finally { syncing=false; } }
+function reloadAll(){ for(const k of [...S.chunks.keys()]) dropChunk(k); S.citizens.clear(); subKey=''; syncChunks(); }
+async function loadMeta(){ const r=await api('/api/meta'); S.meta=r.meta; S.events=r.events||[]; skew=r.serverNow-Date.now(); }
 function connect(){
-  const ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`);
-  ws.onopen=()=>{ Store.online=true; };
+  ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`);
+  ws.onopen=()=>{ Store.online=true; subKey=''; };
   ws.onmessage=e=>{ let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
-    if(m.type==='snapshot'){ applySnapshot(m.world); if(!Store.ready){ Store.ready=true; afterLoad(); } else { $('setup').hidden=!!S.meta||!Store.canWrite; refreshUI(); } }
+    if(m.type==='hello'){ S.meta=m.meta; skew=m.serverNow-Date.now();
+      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
     else if(m.type==='ops') m.ops.forEach(applyOp);
+    else if(m.type==='resync') reloadAll();
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now(); };
-  ws.onclose=()=>{ if(Store.online) toast('Reconnecting to the city…'); Store.online=false; setTimeout(connect,2000); };
+  ws.onclose=()=>{ if(Store.online) toast('Reconnecting to the city…'); Store.online=false; setTimeout(connect,2000+Math.random()*3000); };
 }
 async function initStore(){
   try{ Store.token=localStorage.getItem('settlement-token'); }catch(e){}
@@ -231,29 +277,20 @@ async function initStore(){
   if(Store.token){ try{ await api('/api/admin/check'); Store.canWrite=true; }catch(e){ Store.canWrite=false; toast('That builder token was not accepted.'); } }
   connect();
 }
+setInterval(()=>syncChunks(),400);
 
 /* ---------------- derived world ---------------- */
 const T = b => BUILDING_TYPES[b.type] || BUILDING_TYPES.tent;
 const blocks = b => !T(b).outdoor;
-const chunkKey = (x,y) => `c_${Math.floor(x/16)}_${Math.floor(y/16)}`;
+// A citizen's home/job/hangout travels as [id, type, x, y]; use the loaded building if we have it.
+const bOf = p => p ? (S.buildings.get(p[0]) || { id:p[0], type:p[1], x:p[2], y:p[3], name:'' }) : null;
 let changeTimer = null;
 function changed(light){
-  if(light){ feedDirty = true; return; }
-  D.roads = new Map();
-  for(const ch of S.roadChunks.values()) for(const k in (ch.tiles||{})) D.roads.set(k, ch.tiles[k]);
+  if(light){ feedDirty = true; planCache.clear(); return; }
+  D.roads = S.roads;
   D.occ = new Map();
-  let minX=0,minY=0,maxX=1,maxY=1;
-  for(const b of S.buildings.values()){ const [w,d]=T(b).size; for(let i=0;i<w;i++) for(let j=0;j<d;j++) D.occ.set((b.x+i)+','+(b.y+j), b.id); minX=Math.min(minX,b.x); minY=Math.min(minY,b.y); maxX=Math.max(maxX,b.x+w); maxY=Math.max(maxY,b.y+d); }
-  for(const k of D.roads.keys()){ const [x,y]=k.split(',').map(Number); minX=Math.min(minX,x); minY=Math.min(minY,y); maxX=Math.max(maxX,x+1); maxY=Math.max(maxY,y+1); }
-  D.bounds = { minX:minX-8, minY:minY-8, maxX:maxX+8, maxY:maxY+8 };
-  // assignments: earliest citizens get earliest homes and jobs
-  const cits = [...S.citizens.values()].sort((a,b)=>a.joinedAt-b.joinedAt);
-  const blds = [...S.buildings.values()].sort((a,b)=>a.builtAt-b.builtAt);
-  const homeSlots=[], jobSlots=[];
-  for(const b of blds){ const t=T(b); if(t.home) for(let i=0;i<t.home.capacity;i++) homeSlots.push(b.id); if(t.work) for(let i=0;i<t.work.slots;i++) jobSlots.push(b.id); }
-  D.assign = new Map(); D.homes = new Map(); D.jobs = new Map();
-  cits.forEach((c,i)=>{ const h=homeSlots[i]||null, j=jobSlots[i]||null; D.assign.set(c.id,{home:h, job:j}); if(h){ if(!D.homes.has(h)) D.homes.set(h,[]); D.homes.get(h).push(c.id);} if(j){ if(!D.jobs.has(j)) D.jobs.set(j,[]); D.jobs.get(j).push(c.id);} });
-  D.version++; planCache.clear(); pathCache.clear(); feedDirty = true;
+  for(const b of S.buildings.values()){ const [w,d]=T(b).size; for(let i=0;i<w;i++) for(let j=0;j<d;j++) D.occ.set((b.x+i)+','+(b.y+j), b.id); }
+  planCache.clear(); pathCache.clear(); feedDirty = true;
   clearTimeout(changeTimer); changeTimer = setTimeout(refreshUI, 30);
 }
 
@@ -263,7 +300,8 @@ function walkable(x,y){ const id = D.occ.get(x+','+y); if(!id) return true; cons
 function stepCost(x,y){ const r = D.roads.get(x+','+y); return 1 / (r && ROAD_TYPES[r] ? ROAD_TYPES[r].speed : GROUND_SPEED); }
 function findPath(sx,sy,gx,gy){
   const key = `${sx},${sy}|${gx},${gy}`; if(pathCache.has(key)) return pathCache.get(key);
-  const B = D.bounds; const minX=Math.min(B.minX,sx,gx)-2, minY=Math.min(B.minY,sy,gy)-2, maxX=Math.max(B.maxX,sx,gx)+2, maxY=Math.max(B.maxY,sy,gy)+2;
+  if(Math.abs(sx-gx)+Math.abs(sy-gy)>160){ const p=[[sx,sy],[gx,gy]]; pathCache.set(key,p); return p; } // long commutes skip pathfinding
+  const minX=Math.min(sx,gx)-12, minY=Math.min(sy,gy)-12, maxX=Math.max(sx,gx)+12, maxY=Math.max(sy,gy)+12;
   const Wd=maxX-minX+1, Ht=maxY-minY+1; const idx=(x,y)=>(x-minX)+(y-minY)*Wd;
   const g = new Float64Array(Wd*Ht).fill(Infinity), from = new Int32Array(Wd*Ht).fill(-1), closed = new Uint8Array(Wd*Ht);
   const heap=[]; const push=(f,i)=>{ heap.push([f,i]); let n=heap.length-1; while(n>0){ const p=(n-1)>>1; if(heap[p][0]<=heap[n][0]) break; [heap[p],heap[n]]=[heap[n],heap[p]]; n=p; } };
@@ -282,7 +320,7 @@ function findPath(sx,sy,gx,gy){
 
 /* ---------------- simulation (pure function of time) ---------------- */
 const planCache = new Map();
-function centerTile(){ const fire=[...S.buildings.values()].find(b=>b.type==='campfire'); return fire?[fire.x,fire.y]:[0,0]; }
+function centerTile(){ const fire=[...S.buildings.values()].find(b=>b.type==='campfire'); return fire?[fire.x,fire.y]:[2,1]; }
 function placeFor(b, r, label){
   if(!b){ const [cx,cy]=centerTile(); const a=r()*Math.PI*2; const tx=Math.round(cx+Math.cos(a)*1.6), ty=Math.round(cy+Math.sin(a)*1.6); return { tile:[tx,ty], pos:[tx+0.5,ty+0.5], indoor:false, bid:null, name:label||'the settlement' }; }
   const t=T(b), [w,d]=t.size;
@@ -290,41 +328,38 @@ function placeFor(b, r, label){
     let tx,ty;
     if(w===1&&d===1){ const n=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]][Math.floor(r()*8)]; tx=b.x+n[0]; ty=b.y+n[1]; }
     else { tx=b.x+Math.floor(r()*w); ty=b.y+Math.floor(r()*d); }
-    return { tile:[tx,ty], pos:[tx+0.3+r()*0.4, ty+0.3+r()*0.4], indoor:false, bid:b.id, name:b.name||t.name };
+    return { tile:[tx,ty], pos:[tx+0.3+r()*0.4, ty+0.3+r()*0.4], indoor:false, bid:b.id, name:(S.buildings.get(b.id)||b).name||t.name };
   }
   const tx=b.x+Math.floor(w/2), ty=b.y+d;
-  return { tile:[tx,ty], pos:[tx+0.5,ty+0.35], indoor:true, bid:b.id, name:b.name||t.name };
+  return { tile:[tx,ty], pos:[tx+0.5,ty+0.35], indoor:true, bid:b.id, name:(S.buildings.get(b.id)||b).name||t.name };
 }
-function wanderPlace(r){
-  const roads=[...D.roads.keys()];
-  if(roads.length && r()<0.7){ const [x,y]=roads[Math.floor(r()*roads.length)].split(',').map(Number); return { tile:[x,y], pos:[x+0.3+r()*0.4,y+0.3+r()*0.4], indoor:false, bid:null, name:'the roads' }; }
-  const [cx,cy]=centerTile(); for(let k=0;k<12;k++){ const x=cx+Math.floor(r()*13)-6, y=cy+Math.floor(r()*13)-6; if(walkable(x,y)) return { tile:[x,y], pos:[x+0.5,y+0.5], indoor:false, bid:null, name:'the edge of the settlement' }; }
-  return placeFor(null,r);
+function wanderNear(b, r){
+  const [w,d]=T(b).size, x0=b.x+Math.floor(w/2), y0=b.y+d;
+  for(let k=0;k<12;k++){ const x=x0+Math.floor(r()*13)-6, y=y0+Math.floor(r()*13)-6; if(walkable(x,y)) return { tile:[x,y], pos:[x+0.3+r()*0.4,y+0.3+r()*0.4], indoor:false, bid:null, name:D.roads.has(x+','+y)?'the street':'the neighbourhood' }; }
+  return { tile:[x0,y0], pos:[x0+0.5,y0+0.5], indoor:false, bid:null, name:'the street' };
 }
 function getPlan(c, day){
   const key=c.id+'|'+day; const hit=planCache.get(key); if(hit) return hit;
-  const r=rng(hash(c.id+':'+day)); const a=D.assign.get(c.id)||{home:null,job:null};
-  const home=a.home?S.buildings.get(a.home):null, job=a.job?S.buildings.get(a.job):null;
+  const r=rng(hash(c.id+':'+day));
+  const home=bOf(c.home), job=bOf(c.job), hang=bOf(c.hang);
   const homeP=placeFor(home, rng(hash(c.id+'home')), 'the campfire');
-  const leisure=[...S.buildings.values()].filter(b=>T(b).leisure && b.id!==a.job);
   const steps=[];
-  const sleepAct = home ? 'Sleeping' : 'Sleeping under the stars';
-  steps.push({ p:homeP, act:sleepAct, until:360+r()*60, kind:'home' });
-  steps.push({ p:homeP, act: home?'Getting ready for the day':'Warming up by the fire', until:450+r()*25, kind:'home' });
+  steps.push({ p:homeP, act:'Sleeping', until:360+r()*60, kind:'home' });
+  steps.push({ p:homeP, act:'Getting ready for the day', until:450+r()*25, kind:'home' });
   if(job){ const t=T(job); steps.push({ p:placeFor(job,r), act:`Working as ${t.work.title.toLowerCase()}`, until:960+r()*40, kind:'work' }); }
-  else { const n=2+Math.floor(r()*2); for(let i=0;i<n;i++) steps.push({ p:wanderPlace(r), act: i===0?'Looking for work':'Exploring the settlement', until:480+(i+1)*(480/n), kind:'wander' }); }
-  if(leisure.length){ const lb=leisure[Math.floor(r()*leisure.length)]; const lp=placeFor(lb,r); steps.push({ p:lp, act:`Hanging out at ${lp.name}`, until:1130+r()*70, kind:'leisure' }); }
-  else steps.push({ p:wanderPlace(r), act:'Taking an evening walk', until:1100+r()*60, kind:'wander' });
-  steps.push({ p:homeP, act: home?'Relaxing at home':'Sitting by the campfire', until:1310+r()*50, kind:'home' });
-  steps.push({ p:homeP, act:sleepAct, until:1440, kind:'home' });
+  else { const n=2+Math.floor(r()*2); for(let i=0;i<n;i++) steps.push({ p:home?wanderNear(home,r):placeFor(null,r), act: i===0?'Looking for work':'Exploring the neighbourhood', until:480+(i+1)*(480/n), kind:'wander' }); }
+  if(hang){ const lp=placeFor(hang,r); steps.push({ p:lp, act:`Hanging out at ${lp.name}`, until:1130+r()*70, kind:'leisure' }); }
+  else steps.push({ p:home?wanderNear(home,r):placeFor(null,r), act:'Taking an evening walk', until:1100+r()*60, kind:'wander' });
+  steps.push({ p:homeP, act:'Relaxing at home', until:1310+r()*50, kind:'home' });
+  steps.push({ p:homeP, act:'Sleeping', until:1440, kind:'home' });
   const segs=[]; let t=0;
   for(let i=0;i<steps.length;i++){
     const s=steps[i];
-    if(i>0){ const prev=steps[i-1]; if(prev.p.tile[0]!==s.p.tile[0]||prev.p.tile[1]!==s.p.tile[1]){ const path=findPath(prev.p.tile[0],prev.p.tile[1],s.p.tile[0],s.p.tile[1]); const cum=[0]; for(let k=1;k<path.length;k++) cum.push(cum[k-1]+stepCost(path[k][0],path[k][1])); const dur=cum[cum.length-1]; segs.push({ type:'move', from:t, to:t+dur, path, cum, fromP:prev.p, toP:s.p, act:s.act, kind:s.kind }); t+=dur; } }
+    if(i>0){ const prev=steps[i-1]; if(prev.p.tile[0]!==s.p.tile[0]||prev.p.tile[1]!==s.p.tile[1]){ const path=findPath(prev.p.tile[0],prev.p.tile[1],s.p.tile[0],s.p.tile[1]); const cum=[0]; for(let k=1;k<path.length;k++) cum.push(cum[k-1]+(path.length===2?Math.abs(path[1][0]-path[0][0])+Math.abs(path[1][1]-path[0][1]):stepCost(path[k][0],path[k][1]))/(path.length===2?2:1)); const dur=cum[cum.length-1]; segs.push({ type:'move', from:t, to:t+dur, path, cum, fromP:prev.p, toP:s.p, act:s.act, kind:s.kind }); t+=dur; } }
     const end=Math.max(t, s.until); if(end>t || i===steps.length-1) segs.push({ type:'stay', from:t, to:Math.max(end,t), p:s.p, act:s.act, kind:s.kind }); t=end;
   }
   const plan={ segs, job, home }; planCache.set(key,plan);
-  if(planCache.size>4000) planCache.clear();
+  if(planCache.size>8000) planCache.clear();
   return plan;
 }
 function citizenAt(c, gm){
@@ -690,12 +725,11 @@ Object.assign(SHADOW_H, { factory:t=>(t.height||26)+(t.saw?11:10), silo:()=>56, 
 
 /* ---------------- economy ---------------- */
 const TAX_RATE=0.2, GRANT=200, START_FUNDS=5000;
-function pay(c){ const a=D.assign.get(c.id)||{}; const j=a.job&&S.buildings.get(a.job), h=a.home&&S.buildings.get(a.home); return { salary:j?T(j).work.salary:0, rent:h?T(h).home.rent:0 }; }
-function dailyIncome(){ let s=GRANT; for(const c of S.citizens.values()){ const {salary,rent}=pay(c); s+=Math.round(salary*TAX_RATE)+rent; } return s; }
-const treasury = () => S.meta ? (S.meta.treasury ?? START_FUNDS) : 0;
-function needs(){ let home=0, job=0; for(const c of S.citizens.values()){ const a=D.assign.get(c.id)||{}; if(!a.home) home++; if(!a.job) job++; } return {home,job}; }
-function happiness(){ const n=S.citizens.size; if(!n) return 0; let ok=0; for(const c of S.citizens.values()){ const a=D.assign.get(c.id)||{}; ok+=(a.home?0.5:0)+(a.job?0.5:0); } return Math.round(ok/n*100); }
-async function settle(){ /* the server settles paydays and taxes */ }
+function pay(c){ const j=bOf(c.job), h=bOf(c.home); return { salary:j?T(j).work.salary:0, rent:h?T(h).home.rent:0 }; }
+const today = () => Math.floor(gmNow()/1440);
+const treasury = () => S.meta ? treasuryOn(S.meta, today()) : 0;
+function happiness(){ const m=S.meta; if(!m||!m.population) return 0; return Math.round(100*((m.residents||0)+(m.employed||0))/(2*m.population)); }
+async function settle(){ /* paydays are worked out by formula on the server */ }
 let freeBuild=false; try{ freeBuild=localStorage.getItem('settlement-free')==='1'; }catch(e){}
 function canAfford(cost){ return freeBuild || treasury()>=cost; }
 function spend(){}
@@ -734,6 +768,7 @@ function drawRoadTile(x,y,R,has,pushDeco){ const k=x+','+y;
 }
 
 /* ---------------- frame ---------------- */
+const CROWD_MAX=1500; let crowd=[], crowdAt=-1e9;
 function frame(ts){
   T_NOW=ts; windowQuads=[]; lights=[];
   const gm=gmNow(); DARK=darkness(gm);
@@ -758,7 +793,13 @@ function frame(ts){
   if(selB){ const [w,d]=T(selB).size; poly([iso(selB.x,selB.y),iso(selB.x+w,selB.y),iso(selB.x+w,selB.y+d),iso(selB.x,selB.y+d)], 'rgba(217,113,74,.3)', '#D9714A', 2.5); }
   for(const b of S.buildings.values()){ if(tool.kind==='move'&&tool.id===b.id) continue; const [w,d]=T(b).size; if(b.x+w<tminX||b.x>tmaxX+3||b.y+d<tminY||b.y>tmaxY+3) continue; items.push({ k:b.x+w+b.y+d-0.5, b }); }
   const states=new Map();
-  for(const c of S.citizens.values()){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible) items.push({ k:st.x+st.y, c, st }); }
+  // Only the people whose day happens near the screen are simulated, at most CROWD_MAX of them, nearest first.
+  if(ts-crowdAt>500){ crowdAt=ts; const ctr=worldToTileF(cam.x,cam.y); const near=p=>p&&p[2]>=tminX-40&&p[2]<=tmaxX+40&&p[3]>=tminY-40&&p[3]<=tmaxY+40;
+    const dist=c=>Math.min(...[c.home,c.job,c.hang].filter(Boolean).map(p=>Math.abs(p[2]-ctr.x)+Math.abs(p[3]-ctr.y)));
+    crowd=[...S.citizens.values()].filter(c=>c.id===follow||near(c.home)||near(c.job)||near(c.hang));
+    if(crowd.length>CROWD_MAX) crowd=crowd.map(c=>[dist(c),c]).sort((a,b)=>a[0]-b[0]).slice(0,CROWD_MAX).map(x=>x[1]);
+    if(follow&&!crowd.some(c=>c.id===follow)&&S.citizens.has(follow)) crowd.push(S.citizens.get(follow)); }
+  if(cam.z>=0.45) for(const c of crowd){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible) items.push({ k:st.x+st.y, c, st }); }
   items.sort((a,b)=>a.k-b.k);
   for(const it of items){ if(it.fn) it.fn(); else if(it.b){ const t=T(it.b); (DRAW[t.style]||DRAW.house)(it.b,t); } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
   if(hoverTile && tool.kind!=='pan'){ const [hx,hy]=hoverTile;
@@ -927,27 +968,40 @@ function renderPane(){
   p.append(cards);
 }
 
-function selectCitizen(id){ sel={kind:'c',id}; follow=id; renderCard(); }
+const detail=new Map();
+async function loadDetail(handle){ try{ const d=await api('/api/citizens/'+encodeURIComponent(handle)); detail.set(d.id,d); return d; }catch(e){ toast(e.message); return null; } }
+function selectCitizen(id){ const c=S.citizens.get(id); if(!c) return; sel={kind:'c',id,handle:c.handle}; follow=id; renderCard(); loadDetail(c.handle).then(()=>{ if(sel&&sel.id===id) renderCard(); }); }
+// Find anyone by name: residents fly the camera to their home; Outskirts residents show their place in the queue.
+async function openCitizen(handle){ const d=await loadDetail(handle); if(!d) return; const c=normC(d); pinned=c.id; S.citizens.set(c.id,c);
+  if(c.home){ const p=iso(c.home[2]+0.5,c.home[3]+0.5); cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.6); follow=c.id; } else follow=null;
+  sel={kind:'c',id:c.id,handle:c.handle}; if(innerWidth<900) openTab(null); renderCard(); }
 function selectBuilding(id){ sel={kind:'b',id}; follow=null; renderCard(); }
-function closeCard(){ sel=null; follow=null; $('card').hidden=true; }
+function closeCard(){ sel=null; follow=null; if(pinned){ const c=S.citizens.get(pinned); pinned=null; if(c&&!keepCitizen(c)) S.citizens.delete(c.id); } $('card').hidden=true; }
 const CAT_NAME = id => (CATS.find(c=>c.id===id)||{}).name || 'Building';
-function levelOf(b){ const t=T(b); let lv=1; const res=(D.homes.get(b.id)||[]).length, wk=(D.jobs.get(b.id)||[]).length; if((t.home&&res>=t.home.capacity)||(t.work&&wk>=t.work.slots)) lv++; if(gmNow()/1440-(b.builtDay||0)>=7) lv++; return lv; }
+function levelOf(b){ const t=T(b); let lv=1; const res=b.homeUsed||0, wk=b.jobUsed||0; if((t.home&&res>=t.home.capacity)||(t.work&&wk>=t.work.slots)) lv++; if(gmNow()/1440-(b.builtDay||0)>=7) lv++; return lv; }
 function renderCard(){
   const card=$('card'); if(!sel){ card.hidden=true; return; } card.innerHTML='';
   const close=el('button',{class:'x','aria-label':'Close',onclick:closeCard,text:'×'});
-  if(sel.kind==='c'){ const c=S.citizens.get(sel.id); if(!c){ closeCard(); return; } const st=citizenAt(c,gmNow()); const a=D.assign.get(c.id)||{}; const h=a.home&&S.buildings.get(a.home), j=a.job&&S.buildings.get(a.job); const {salary,rent}=pay(c);
-    const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,'@'+c.handle); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); head.append(av, el('div',null,title, el('p',{class:'now',text: st? st.act : 'Arriving soon'})));
-    card.append(close, head, el('dl',null, el('dt',{text:'Home'}), el('dd',{text:h?(h.name||T(h).name):'No home yet, sleeps by the campfire'}), el('dt',{text:'Job'}), el('dd',{text:j?`${T(j).work.title} at ${j.name||T(j).name}`:'Looking for work'}), el('dt',{text:'Coins'}), el('dd',{text:`${fmt(c.coins||0)}, ${salary-rent>=0?'+':''}${salary-rent} per day`}), el('dt',{text:'Joined'}), el('dd',{text:`Day ${Math.floor(gmAt(c.joinedAt)/1440)+1}`})));
+  if(sel.kind==='c'){ const d=detail.get(sel.id); const c=S.citizens.get(sel.id)||(d&&normC(d)); if(!c){ closeCard(); return; }
+    const h=bOf(c.home), j=bOf(c.job); const st=h?citizenAt(c,gmNow()):null;
+    const now = !h ? (d&&d.queue ? `Waiting in the Outskirts, #${fmt(d.queue)} in the housing queue` : 'Waiting in the Outskirts') : st ? st.act : 'Arriving soon';
+    const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,'@'+c.handle); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); head.append(av, el('div',null,title, el('p',{class:'now',text:now})));
+    const nm=b=>(S.buildings.get(b.id)||b).name||T(b).name;
+    card.append(close, head, el('dl',null,
+      el('dt',{text:'Home'}), el('dd',{text:h?nm(h):d&&d.queue?`None yet. Moves in when ${fmt(d.queue)} more ${d.queue===1?'home is':'homes are'} built`:'None yet'}),
+      el('dt',{text:'Job'}), el('dd',{text:j?`${T(j).work.title} at ${nm(j)}`:h?'Looking for work':'Gets one after moving in'}),
+      el('dt',{text:'Coins'}), el('dd',{text:d?`${fmt(d.coins)}, ${d.net>=0?'+':''}${d.net} per day`:'…'}),
+      el('dt',{text:'Joined'}), el('dd',{text:`Day ${Math.max(1,Math.floor(gmAt(c.joinedAt)/1440)+1)}, arrival #${fmt(c.seq||0)}`})));
     if(Store.canWrite && !c.founder) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:'Remove citizen',onclick:()=>removeCitizen(c)})));
   } else { const b=S.buildings.get(sel.id); if(!b){ closeCard(); return; } const t=T(b); const gm=gmNow();
     const inside=[...S.citizens.values()].filter(c=>{ const st=citizenAt(c,gm); return st&&st.bid===b.id; }).map(c=>'@'+c.handle);
-    const res=(D.homes.get(b.id)||[]).map(id=>'@'+(S.citizens.get(id)||{}).handle), wk=(D.jobs.get(b.id)||[]).map(id=>'@'+(S.citizens.get(id)||{}).handle);
+    const list=(slot,n)=>{ const names=[...S.citizens.values()].filter(c=>c[slot]&&c[slot][0]===b.id).slice(0,8).map(c=>'@'+c.handle); return names.length?': '+names.join(', ')+(n>names.length?` and ${fmt(n-names.length)} more`:''):''; };
     const lv=levelOf(b);
     const head=el('div',{class:'chead'}); const im=el('img',{class:'cthumb',alt:'',src:thumbFor(b.type)}); head.append(im, el('div',null, el('h2',{text:b.name||t.name}), el('div',{class:'chips2'}, el('span',{class:'pill',text:CAT_NAME(t.cat)}), el('span',{class:'pill',text:`${t.size[0]}×${t.size[1]}`}), el('span',{class:'pill',text:`Level ${lv} ${'★'.repeat(lv)}${'☆'.repeat(3-lv)}`}))));
     const dl=el('dl',null); const add=(k,v)=>dl.append(el('dt',{text:k}),el('dd',{text:v}));
     add('Built',`Day ${(b.builtDay??0)+1}`+(b.requestedBy?`, requested by @${b.requestedBy}`:''));
-    if(t.home) add('Residents',`${res.length} of ${t.home.capacity}${res.length?': '+res.join(', '):''}`);
-    if(t.work) add('Workers',`${wk.length} of ${t.work.slots}${wk.length?': '+wk.join(', '):''}`);
+    if(t.home) add('Residents',`${fmt(b.homeUsed||0)} of ${fmt(t.home.capacity)}${list('home',b.homeUsed||0)}`);
+    if(t.work) add('Workers',`${fmt(b.jobUsed||0)} of ${fmt(t.work.slots)}${list('job',b.jobUsed||0)}`);
     if(t.work) add('Pay',`${t.work.salary} coins a day`);
     add('Here now', inside.length?inside.join(', '):'Nobody');
     card.append(close, head, dl);
@@ -956,16 +1010,21 @@ function renderCard(){
   card.hidden=false;
 }
 async function removeCitizen(c){ try{ await api('/api/admin/citizens/'+encodeURIComponent(c.id),{method:'DELETE'}); closeCard(); toast(`Removed @${c.handle}`); }catch(e){ toast(e.message); } }
-let peopleQuery='';
+let peopleQuery='', searchTimer=null, searchSeq=0;
+// Empty search shows people near the screen; typing searches the whole town on the server.
 function renderPeople(){
-  const list=$('peopleList'); if(!list) return; const q=cleanHandle(peopleQuery).toLowerCase(); list.innerHTML=''; const gm=gmNow();
-  const cits=[...S.citizens.values()].filter(c=>!q||c.handle.toLowerCase().includes(q)).sort((a,b)=>(b.founder?1:0)-(a.founder?1:0)||a.handle.localeCompare(b.handle));
-  if(!cits.length){ list.append(el('p',{class:'hint',text:q?`No citizen called @${q} yet. Comment on a post to move in.`:'Nobody lives here yet.'})); return; }
-  for(const c of cits.slice(0,200)){ const st=citizenAt(c,gm); const av=el('span',{class:'ava sm'}); av.innerHTML=avatarSVG(c);
-    list.append(el('button',{class:'person',onclick:()=>{ selectCitizen(c.id); if(innerWidth<900) openTab(null); }}, av, el('span',null, el('div',{class:'who',text:'@'+c.handle+(c.founder?' ★':'')}), el('div',{class:'what',text:st?st.act:'Arriving soon'})))); }
+  const list=$('peopleList'); if(!list) return; const q=cleanHandle(peopleQuery).toLowerCase(); const gm=gmNow();
+  const show=(cits,empty)=>{ list.innerHTML=''; if(!cits.length){ list.append(el('p',{class:'hint',text:empty})); return; }
+    for(const c of cits){ const st=c.home?citizenAt(c,gm):null; const av=el('span',{class:'ava sm'}); av.innerHTML=avatarSVG(c);
+      list.append(el('button',{class:'person',onclick:()=>openCitizen(c.handle)}, av, el('span',null, el('div',{class:'who',text:'@'+c.handle+(c.founder?' ★':'')}), el('div',{class:'what',text:!c.home?'Waiting in the Outskirts':st?st.act:'Arriving soon'})))); } };
+  if(!q){ const near=[...S.citizens.values()].sort((a,b)=>(b.founder?1:0)-(a.founder?1:0)||a.handle.localeCompare(b.handle)).slice(0,60);
+    show(near, S.meta&&S.meta.population?'Nobody lives in this part of town. Search for a name.':'Nobody lives here yet.');
+    if(near.length && S.meta) list.prepend(el('p',{class:'hint',text:`People near you. Search to find anyone among ${fmt(S.meta.population)} citizens.`})); return; }
+  clearTimeout(searchTimer); const my=++searchSeq;
+  searchTimer=setTimeout(async()=>{ try{ const r=await api('/api/citizens?q='+encodeURIComponent(q)); if(my!==searchSeq) return; show(r.map(normC), `No citizen called @${q} yet. Comment SPAWN on a post to move in.`); }catch(e){ if(my===searchSeq) show([], e.message); } },250);
 }
 async function spawnFromInput(){ const inp=$('spawnInput'); const h=cleanHandle(inp.value); if(!h){ toast('Type a username first.'); return; }
-  try{ await api('/api/admin/citizens',{method:'POST',body:{handle:h}}); inp.value=''; toast(`@${h} moved in`); }catch(e){ toast(e.message); } }
+  try{ const r=await api('/api/admin/citizens',{method:'POST',body:{handle:h}}); inp.value=''; toast(r.citizen.housed?`@${h} moved in`:`@${h} is waiting in the Outskirts`); }catch(e){ toast(e.message); } }
 /* ---------------- avatars + posts ---------------- */
 function avatarSVG(c){ const L=look(c); return `<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#F4EBDD" stroke="${INK}" stroke-width="1.5"/><path d="M7 35c2-7 7-10 13-10s11 3 13 10" fill="${L.shirt}" stroke="${INK}" stroke-width="1.5"/><circle cx="20" cy="17" r="7.5" fill="${L.skin}" stroke="${INK}" stroke-width="1.4"/><path d="M12.6 15.5a7.5 7.5 0 0 1 14.8 0c-3-1.8-5.2-2.4-7.4-2.4s-4.4.6-7.4 2.4z" fill="${L.hair}" stroke="${INK}" stroke-width="1.1"/><circle cx="17.2" cy="18" r="1.7" fill="#fff" stroke="${INK}" stroke-width=".6"/><circle cx="22.8" cy="18" r="1.7" fill="#fff" stroke="${INK}" stroke-width=".6"/><circle cx="17.4" cy="18.2" r=".9" fill="${INK}"/><circle cx="23" cy="18.2" r=".9" fill="${INK}"/><path d="M17.6 21.6q2.4 1.8 4.8 0" stroke="#7A2E2E" fill="none" stroke-width="1.1" stroke-linecap="round"/></svg>`; }
 const POSTS = {
@@ -984,9 +1043,8 @@ function postsFor(c, day, gm){ const out=[]; const r=rng(hash(c.id+':post:'+day)
     if(recent.length && r()<0.45){ const b=recent[Math.floor(r()*recent.length)]; txt=pick(POSTS.newb).replace('{b}',b.name||T(b).name); }
     else if(!plan.home && r()<0.7) txt=pick(POSTS.homeless);
     else if(!plan.job && r()<0.7) txt=pick(POSTS.jobless);
-    else if((c.coins||0)>=200 && r()<0.25) txt=pick(POSTS.rich).replace('{coins}',fmt(c.coins));
     else { const k=st.seg&&st.seg.kind; const bank = k==='work'?POSTS.work : k==='leisure'?POSTS.leisure : k==='home'&&plan.home?POSTS.home : POSTS.jobless; txt=pick(bank).replace('{place}',st.where||'home'); }
-    const hv=hash(c.id+':'+day+':'+i); out.push({ g, c, text:txt, likes:2+hv%23+Math.floor(S.citizens.size*0.6), reposts:hv%6 }); }
+    const hv=hash(c.id+':'+day+':'+i); out.push({ g, c, text:txt, likes:2+hv%23+Math.floor(Math.sqrt((S.meta&&S.meta.population)||1)*3), reposts:hv%6 }); }
   return out; }
 function postItems(){ const gm=gmNow(); const today=Math.floor(gm/1440); const out=[];
   const cits=[...S.citizens.values()].slice(0,300);
@@ -1000,7 +1058,7 @@ function feedItems(){
   const gm=gmNow(); const today=Math.floor(gm/1440); const firstDay=Math.max(0,today-3);
   const items=[];
   for(const e of S.events){ const g=gmAt(e.t); if(g<=gm && Math.floor(g/1440)>=firstDay) items.push({ g, text:e.text, big:true }); }
-  for(const c of S.citizens.values()){ const jg=gmAt(c.joinedAt);
+  for(const c of [...S.citizens.values()].slice(0,300)){ const jg=gmAt(c.joinedAt);
     for(let d=firstDay; d<=today; d++){ const plan=getPlan(c,d);
       for(const s of plan.segs){ if(s.type!=='move') continue; const g=d*1440+s.from; if(g>gm||g<jg) continue;
         const to=s.toP.name; let txt;
@@ -1055,8 +1113,8 @@ const SPEEDS=[1,60,600];
 $('clockBtn').onclick=()=>{ const i=SPEEDS.indexOf(speed); const n=SPEEDS[(i+1)%SPEEDS.length]; setSpeed(n); const tag=$('speedTag'); tag.hidden=n===1; tag.textContent=`Preview ${n}×`; toast(n===1?'Back to live time':`Previewing the future at ${n}× speed. Tap the clock to return.`); feedDirty=true; };
 $('musicBtn').onclick=()=>Music.toggle();
 function refreshHUD(){
-  if(S.meta){ $('townName').textContent=S.meta.name; const pop=S.citizens.size; const nd=needs(); $('popLine').textContent=`${pop} citizen${pop===1?'':'s'}${nd.home?`, ${nd.home} need${nd.home===1?'s':''} a home`:''}${nd.job?`, ${nd.job} need${nd.job===1?'s':''} work`:''}`;
-    $('coinVal').textContent=fmt(treasury()); $('coinRate').textContent=`+${fmt(dailyIncome())}/day`; $('happyVal').textContent=`${happiness()}%`; $('chips').hidden=false; }
+  if(S.meta){ $('townName').textContent=S.meta.name; const pop=S.meta.population||0, out=S.meta.outskirts??(pop-(S.meta.residents||0)); $('popLine').textContent=`${fmt(pop)} citizen${pop===1?'':'s'}${out>0?`, ${fmt(out)} waiting in the Outskirts`:''}`;
+    $('coinVal').textContent=fmt(treasury()); $('coinRate').textContent=`+${fmt(S.meta.income||0)}/day`; $('happyVal').textContent=`${happiness()}%`; $('chips').hidden=false; }
   const mb=$('musicBtn'); mb.setAttribute('aria-pressed',String(Music.on)); $('musicIcon').textContent=Music.on?'❚❚':'▶'; $('musicLabel').textContent=Music.on?'Music on':'Music';
 }
 function refreshUI(){ refreshHUD(); if(sel) renderCard(); if(activeTab==='people') renderPeople(); else if(activeTab && activeTab!=='feed') renderPane(); feedDirty=true; renderFeed(); }

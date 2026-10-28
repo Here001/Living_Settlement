@@ -1,0 +1,21 @@
+# One-click setup on Render: New → Blueprint → pick this repo.
+# You'll be asked for DATABASE_URL (paste your Neon connection string).
+# ADMIN_TOKEN and CRON_KEY are generated for you; find them under the service's Environment tab.
+# Add IG_APP_SECRET there later, when you connect Instagram.
+services:
+  - type: web
+    name: living-settlement
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: PGSSL
+        value: "1"
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: CRON_KEY
+        generateValue: true
+      - key: IG_VERIFY_TOKEN
+        generateValue: true

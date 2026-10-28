@@ -1,6 +1,5 @@
-// End-to-end check of a running city server.
-// Usage: BASE_URL=http://localhost:3000 ADMIN_TOKEN=... CRON_KEY=... IG_APP_SECRET=... node scripts/smoke.mjs
-// Run it against a fresh database: it founds a settlement.
+// End-to-end check of a running city server. Run it against a THROWAWAY database: it founds a settlement.
+// Usage: npm test   (reads BASE_URL, ADMIN_TOKEN, CRON_KEY, IG_APP_SECRET, IG_VERIFY_TOKEN from .env)
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import WebSocket from 'ws';
@@ -9,6 +8,7 @@ const BASE = process.env.BASE_URL || `http://localhost:${process.env.PORT || 300
 const TOKEN = process.env.ADMIN_TOKEN;
 let passed = 0, failed = 0;
 const ok = (cond, name, extra = '') => { if (cond) { passed++; console.log('  ✓', name); } else { failed++; console.log('  ✗', name, extra); } };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function call(method, path, body, { auth = true, headers = {}, raw } = {}) {
   const r = await fetch(BASE + path, {
@@ -19,121 +19,137 @@ async function call(method, path, body, { auth = true, headers = {}, raw } = {})
   const text = await r.text(); let json; try { json = JSON.parse(text); } catch { json = text; }
   return { status: r.status, json };
 }
+const meta = async () => (await call('GET', '/api/meta', undefined, { auth: false })).json.meta;
+const chunk = async keys => (await call('GET', `/api/chunks?keys=${keys}`, undefined, { auth: false })).json;
+const who = async h => (await call('GET', `/api/citizens/${h}`, undefined, { auth: false })).json;
 
-// Collect live updates the way a browser would.
-const live = [];
-const ws = new WebSocket(BASE.replace(/^http/, 'ws') + '/ws');
-ws.on('message', m => live.push(JSON.parse(m)));
-await new Promise((res, rej) => { ws.once('open', res); ws.once('error', rej); });
-const waitFor = async (pred, ms = 2000) => { const t = Date.now(); while (Date.now() - t < ms) { if (live.some(pred)) return true; await new Promise(r => setTimeout(r, 25)); } return false; };
-const sawOp = op => m => m.type === 'ops' && m.ops.some(op);
+// Two viewers: one watching the town centre (chunk 0_0), one watching far away (chunk 50_50).
+function viewer(chunks) {
+  const v = { msgs: [] }; v.ws = new WebSocket(BASE.replace(/^http/, 'ws') + '/ws');
+  v.ws.on('message', m => v.msgs.push(JSON.parse(m)));
+  v.ready = new Promise((res, rej) => { v.ws.once('open', () => { v.ws.send(JSON.stringify({ type: 'sub', chunks })); res(); }); v.ws.once('error', rej); });
+  v.saw = async (pred, ms = 2000) => { const t = Date.now(); while (Date.now() - t < ms) { if (v.msgs.some(m => m.type === 'ops' && m.ops.some(pred))) return true; await sleep(25); } return false; };
+  return v;
+}
+const near = viewer(['0_0', '-1_0', '0_-1', '-1_-1']), far = viewer(['50_50']);
+await near.ready; await far.ready;
 
 console.log('Viewer access');
-ok(await waitFor(m => m.type === 'snapshot'), 'WebSocket sends a snapshot on connect');
+ok(near.msgs.length > 0 || await (async () => { await sleep(300); return near.msgs.some(m => m.type === 'hello'); })(), 'WebSocket says hello on connect');
 ok((await call('GET', '/health', undefined, { auth: false })).status === 200, 'health check');
-ok((await call('GET', '/api/world', undefined, { auth: false })).status === 200, 'anyone can read the world');
-ok((await call('POST', '/api/admin/buildings', { type: 'house', x: 0, y: 0 }, { auth: false })).status === 401, 'building without a token is refused');
-ok((await call('POST', '/api/admin/buildings', { type: 'house', x: 0, y: 0 }, { headers: { authorization: 'Bearer wrong-token-000000000' } })).status === 401, 'wrong token is refused');
 ok((await call('GET', '/', undefined, { auth: false })).status === 200, 'city page is served');
 ok((await call('GET', '/shared/catalog.js', undefined, { auth: false })).status === 200, 'shared catalog is served');
+ok((await call('POST', '/api/admin/buildings', { type: 'house', x: 0, y: 0 }, { auth: false })).status === 401, 'building without a token is refused');
+ok((await call('POST', '/api/admin/buildings', { type: 'house', x: 0, y: 0 }, { headers: { authorization: 'Bearer wrong-token-000000000' } })).status === 401, 'wrong token is refused');
 
 console.log('Founding');
-let r = await call('POST', '/api/admin/buildings', { type: 'house', x: 9, y: 9 });
-ok(r.status === 409, 'cannot build before founding', JSON.stringify(r.json));
-r = await call('POST', '/api/admin/found', { name: 'Testville', handle: '@builder' });
-ok(r.status === 200 && r.json.name === 'Testville', 'found the settlement', JSON.stringify(r.json));
-ok(await waitFor(m => m.type === 'snapshot' && m.world.meta?.name === 'Testville'), 'viewers get the new world live');
+ok((await call('POST', '/api/admin/buildings', { type: 'house', x: 9, y: 9 })).status === 409, 'cannot build before founding');
+let r = await call('POST', '/api/admin/found', { name: 'Testville', handle: '@builder' });
+ok(r.status === 200, 'found the settlement', JSON.stringify(r.json));
 ok((await call('POST', '/api/admin/found', { name: 'Again' })).status === 409, 'cannot found twice');
-let world = (await call('GET', '/api/world', undefined, { auth: false })).json;
-ok(world.citizens.length === 1 && world.citizens[0].founder, 'founder citizen exists');
-ok(world.buildings.some(b => b.type === 'tent') && world.buildings.some(b => b.type === 'campfire'), 'starter tent and campfire exist');
-const startFunds = world.meta.treasury;
+let m = await meta();
+ok(m.name === 'Testville' && m.population === 1 && m.residents === 1, 'founder lives in the starter tent', JSON.stringify(m));
+let c = await chunk('0_0');
+ok(c.chunks['0_0'].buildings.some(b => b.type === 'tent') && c.citizens.some(x => x.h === 'builder' && x.home), 'chunk 0_0 has the tent and the founder');
+const startFunds = m.treasuryBase;
 
-console.log('Building');
-r = await call('POST', '/api/admin/buildings', { type: 'house', x: 10, y: 10, name: 'Anna’s House', requestedBy: '@anna' });
-ok(r.status === 200 && r.json.building?.id, 'build a house', JSON.stringify(r.json));
+console.log('Housing queue');
+ok((await call('POST', '/api/admin/citizens', { handle: '@kofi.b' })).json.citizen?.housed === true, 'second citizen takes the last tent spot');
+for (const h of ['ada', 'bola', 'chidi']) await call('POST', '/api/admin/citizens', { handle: h });
+m = await meta();
+ok(m.population === 5 && m.residents === 2 && m.outskirts === 3, 'three more wait in the Outskirts', JSON.stringify({ p: m.population, r: m.residents, o: m.outskirts }));
+ok((await who('ada')).queue === 1 && (await who('chidi')).queue === 3, 'queue positions are in arrival order');
+ok((await call('POST', '/api/admin/citizens', { handle: 'KOFI.B' })).status === 409, 'no duplicate citizens (case-insensitive)');
+r = await call('POST', '/api/admin/buildings', { type: 'house', x: 10, y: 10, name: 'Maple House', requestedBy: '@ada' });
+ok(r.status === 200, 'build a house (4 homes)', JSON.stringify(r.json));
 const house = r.json.building;
-ok(await waitFor(sawOp(o => o.op === 'building' && o.data.id === house.id)), 'viewers see the house appear live');
-world = (await call('GET', '/api/world', undefined, { auth: false })).json;
-ok(world.meta.treasury === startFunds - 900, 'house cost 900 coins', `${startFunds} → ${world.meta.treasury}`);
-ok(world.events.some(e => e.text.includes('requested by @anna')), 'news credits the requester');
-ok((await call('POST', '/api/admin/buildings', { type: 'house', x: 11, y: 11 })).status === 409, 'overlapping build is refused');
-ok((await call('POST', '/api/admin/buildings', { type: 'spaceship', x: 30, y: 30 })).status === 400, 'unknown building type is refused');
-r = await call('POST', '/api/admin/buildings', { type: 'biztower', x: 40, y: 40 });
-ok(r.status === 402, 'too expensive is refused', JSON.stringify(r.json));
-r = await call('POST', '/api/admin/buildings', { type: 'biztower', x: 40, y: 40, free: true });
-ok(r.status === 200, 'free build skips the cost');
-const tower = r.json.building;
+m = await meta();
+ok(m.outskirts === 0 && m.residents === 5, 'the whole queue moved into the house');
+ok(m.treasuryBase === startFunds - 900, 'house cost 900 coins');
+ok(near.msgs.length && await near.saw(o => o.op === 'event' && /3 people moved out of the Outskirts into Maple House/.test(o.data.text)), 'one grouped headline for the move-in');
+ok(await near.saw(o => o.op === 'building' && o.data.id === house.id), 'viewer watching the centre sees the house');
+await sleep(400);
+ok(!far.msgs.some(x => x.type === 'ops' && x.ops.some(o => o.op === 'building' && o.data.id === house.id)), 'viewer watching elsewhere is not sent it');
+ok(far.msgs.some(x => x.type === 'ops' && x.ops.some(o => o.op === 'event')), 'but everyone still gets the news');
+ok((await who('ada')).home?.[0] === house.id, 'ada now lives in Maple House');
 
-console.log('Moving, demolishing, undo');
+console.log('Jobs and money');
+ok((await who('ada')).job === null, 'no jobs exist yet');
+const income0 = m.income;
+r = await call('POST', '/api/admin/buildings', { type: 'bakery', x: 14, y: 10 });
+ok(r.status === 200, 'build a bakery (2 jobs)');
+const bakery = r.json.building;
+m = await meta();
+ok(m.employed === 2 && m.income === income0 + 2 * 5, 'two people hired; taxes raise daily income', JSON.stringify({ e: m.employed, i: m.income, i0: income0 }));
+const worker = await who('builder');
+ok(worker.job?.[0] === bakery.id && worker.net === 24, 'the earliest resident works there and nets 24 a day', JSON.stringify(worker));
+ok((await who('chidi')).net === 0, 'unemployed residents live rent-free until they find work');
+
+console.log('Demolish, undo, move');
+ok((await call('DELETE', `/api/admin/buildings/${house.id}`)).status === 200, 'demolish the house');
+m = await meta();
+ok(m.outskirts === 3 && m.residents === 2, 'its residents go back to the Outskirts');
+ok((await who('ada')).queue === 1, 'they keep their place at the front of the queue');
+ok(await near.saw(o => o.op === 'removeBuilding' && o.id === house.id), 'viewers see it disappear');
+ok((await call('POST', '/api/admin/buildings/restore', { building: house })).status === 200, 'undo demolish');
+ok((await meta()).outskirts === 0 && (await who('ada')).home?.[0] === house.id, 'everyone moves back in');
 ok((await call('PATCH', `/api/admin/buildings/${house.id}`, { x: 20, y: 20 })).status === 200, 'move the house');
-world = (await call('GET', '/api/world', undefined, { auth: false })).json;
-ok(world.buildings.find(b => b.id === house.id)?.x === 20, 'house is at its new spot');
-const beforeDemolish = world.meta.treasury;
-ok((await call('DELETE', `/api/admin/buildings/${tower.id}`)).status === 200, 'demolish the tower');
-ok(await waitFor(sawOp(o => o.op === 'removeBuilding' && o.id === tower.id)), 'viewers see it disappear');
-world = (await call('GET', '/api/world', undefined, { auth: false })).json;
-ok(world.meta.treasury === beforeDemolish, 'plain demolish gives no refund');
-ok((await call('POST', '/api/admin/buildings/restore', { building: tower })).status === 200, 'undo demolish restores it');
-world = (await call('GET', '/api/world', undefined, { auth: false })).json;
-ok(world.buildings.some(b => b.id === tower.id), 'tower is back');
-r = await call('POST', '/api/admin/buildings', { type: 'cafe', x: 50, y: 50 });
-const cafe = r.json.building; const afterCafe = (await call('GET', '/api/world', undefined, { auth: false })).json.meta.treasury;
-ok((await call('DELETE', `/api/admin/buildings/${cafe.id}?refund=1`)).status === 200, 'undo a build');
-ok((await call('GET', '/api/world', undefined, { auth: false })).json.meta.treasury === afterCafe + 1000, 'undoing a build refunds it');
+ok((await who('ada')).home?.[2] === 20, 'residents move with it');
+ok((await call('POST', '/api/admin/buildings', { type: 'house', x: 21, y: 21 })).status === 409, 'overlapping build is refused');
+ok((await call('POST', '/api/admin/buildings', { type: 'spaceship', x: 30, y: 30 })).status === 400, 'unknown building type is refused');
+ok((await call('POST', '/api/admin/buildings', { type: 'biztower', x: 40, y: 40 })).status === 402, 'too expensive is refused');
+r = await call('POST', '/api/admin/buildings', { type: 'cafe', x: 3, y: 10 });
+const before = (await meta()).treasuryBase;
+ok((await call('DELETE', `/api/admin/buildings/${r.json.building.id}?refund=1`)).status === 200 && (await meta()).treasuryBase === before + 1000, 'undoing a build refunds it');
+
+console.log('Hangouts');
+r = await call('POST', '/api/admin/buildings', { type: 'park', x: 24, y: 20 });
+ok((await who('ada')).hang?.[0] === r.json.building.id, 'residents start hanging out at the new park next door');
 
 console.log('Roads');
 r = await call('POST', '/api/admin/roads', { set: { '0,5': 'street', '1,5': 'street', '2,5': 'trees' } });
 ok(r.status === 200 && r.json.changed === 3 && r.json.cost === 105, 'lay three road tiles', JSON.stringify(r.json));
-ok(await waitFor(sawOp(o => o.op === 'roads' && o.set['0,5'] === 'street')), 'viewers see the road live');
-r = await call('POST', '/api/admin/roads', { set: { '20,20': 'street' } });
-ok(r.json.changed === 0, 'roads cannot go through a house');
+ok(await near.saw(o => o.op === 'roads' && o.set['0,5'] === 'street'), 'viewers see the road');
+ok((await call('POST', '/api/admin/roads', { set: { '20,20': 'street' } })).json.changed === 0, 'roads cannot go through a house');
 ok((await call('POST', '/api/admin/buildings', { type: 'cottage', x: 1, y: 5 })).status === 409, 'buildings cannot go on a road');
-r = await call('POST', '/api/admin/roads', { remove: ['2,5'] });
-ok(r.json.changed === 1, 'remove a road tile');
-world = (await call('GET', '/api/world', undefined, { auth: false })).json;
-ok(world.roads['0,5'] === 'street' && !world.roads['2,5'], 'roads saved correctly');
+ok((await call('POST', '/api/admin/roads', { remove: ['2,5'] })).json.changed === 1, 'remove a road tile');
+c = await chunk('0_0');
+ok(c.chunks['0_0'].roads['0,5'] === 'street' && !c.chunks['0_0'].roads['2,5'], 'roads saved correctly');
 
-console.log('Citizens');
-r = await call('POST', '/api/admin/citizens', { handle: '@kofi.b' });
-ok(r.status === 200 && r.json.citizen.handle === 'kofi.b', 'spawn a citizen by hand');
-const kofi = r.json.citizen;
-ok((await call('POST', '/api/admin/citizens', { handle: 'KOFI.B' })).status === 409, 'no duplicate citizens (case-insensitive)');
-ok((await call('GET', '/api/citizens/@kofi.b', undefined, { auth: false })).status === 200, 'look up a citizen by name');
-ok((await call('DELETE', `/api/admin/citizens/${kofi.id}`)).status === 200, 'remove a citizen');
-const founder = world.citizens.find(c => c.founder);
-ok((await call('DELETE', `/api/admin/citizens/${founder.id}`)).status === 400, 'the founder cannot be removed');
+console.log('Search and removal');
+r = await call('GET', '/api/citizens?q=b', undefined, { auth: false });
+ok(r.json.map(x => x.h).join() === 'bola,builder', 'search by the start of a name', JSON.stringify(r.json.map(x => x.h)));
+const bola = await who('bola');
+ok((await call('DELETE', `/api/admin/citizens/${bola.id}`)).status === 200, 'remove a citizen');
+ok(await near.saw(o => o.op === 'citizenGone' && o.id === bola.id), 'viewers drop them from the map');
+ok((await call('DELETE', `/api/admin/citizens/${(await who('builder')).id}`)).status === 400, 'the founder cannot be removed');
 
-console.log('Instagram webhook');
+console.log('Instagram webhook and comment queue');
 const secret = process.env.IG_APP_SECRET, verify = process.env.IG_VERIFY_TOKEN;
 r = await call('GET', `/webhooks/instagram?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(verify)}&hub.challenge=12345`, undefined, { auth: false });
 ok(r.status === 200 && String(r.json) === '12345', 'Meta verification handshake');
 ok((await call('GET', '/webhooks/instagram?hub.mode=subscribe&hub.verify_token=nope&hub.challenge=1', undefined, { auth: false })).status === 403, 'wrong verify token refused');
 const comment = (id, username, text, media = 'post-1') => JSON.stringify({ object: 'instagram', entry: [{ id: 'me', time: Date.now(), changes: [{ field: 'comments', value: { id, text, from: { id: 'u-' + username, username }, media: { id: media } } }] }] });
 const sign = body => 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');
+const post = body => call('POST', '/webhooks/instagram', undefined, { auth: false, raw: body, headers: { 'x-hub-signature-256': sign(body) } });
 let body = comment('c1', 'zara_ng', 'SPAWN me please! 🙏');
-ok((await call('POST', '/webhooks/instagram', undefined, { auth: false, raw: body, headers: { 'x-hub-signature-256': sign('tampered') } })).status === 401, 'unsigned/forged webhook refused');
-ok((await call('POST', '/webhooks/instagram', undefined, { auth: false, raw: body, headers: { 'x-hub-signature-256': sign(body) } })).status === 200, 'signed comment accepted');
-ok(await waitFor(sawOp(o => o.op === 'citizen' && o.data.handle === 'zara_ng')), 'commenting "spawn" moves them in, live');
-await call('POST', '/webhooks/instagram', undefined, { auth: false, raw: body, headers: { 'x-hub-signature-256': sign(body) } });
-body = comment('c2', 'tunde', 'love this city');
-await call('POST', '/webhooks/instagram', undefined, { auth: false, raw: body, headers: { 'x-hub-signature-256': sign(body) } });
-await new Promise(r => setTimeout(r, 300));
-world = (await call('GET', '/api/world', undefined, { auth: false })).json;
-ok(world.citizens.filter(c => c.handle === 'zara_ng').length === 1, 'a re-sent comment does not spawn twice');
-ok(!world.citizens.some(c => c.handle === 'tunde'), 'a comment without "spawn" does not spawn');
+ok((await call('POST', '/webhooks/instagram', undefined, { auth: false, raw: body, headers: { 'x-hub-signature-256': sign('tampered') } })).status === 401, 'forged webhook refused');
+ok((await post(body)).status === 200, 'signed comment accepted');
+await post(body); await post(comment('c2', 'tunde', 'love this city'));
+let z = null; for (let i = 0; i < 40 && !z?.id; i++) { await sleep(100); z = await who('zara_ng'); }
+ok(z?.id && z.home?.[0] === house.id, 'commenting "spawn" brings them in, straight into the home bola left', JSON.stringify(z));
+ok((await call('GET', '/api/citizens?q=zara', undefined, { auth: false })).json.length === 1, 'a re-sent comment does not spawn twice');
+ok((await who('tunde')).error, 'a comment without "spawn" does not spawn');
 ok((await call('PUT', '/api/admin/build-post', { mediaId: 'vote-post' })).status === 200, 'mark the build-vote post');
-body = comment('c3', 'tunde', 'Build a football pitch!', 'vote-post');
-await call('POST', '/webhooks/instagram', undefined, { auth: false, raw: body, headers: { 'x-hub-signature-256': sign(body) } });
-await new Promise(r => setTimeout(r, 300));
+await post(comment('c3', 'tunde', 'Build a football pitch!', 'vote-post'));
 r = await call('GET', '/api/admin/requests');
-ok(r.status === 200 && r.json.some(c => c.username === 'tunde' && c.text.includes('football')), 'build requests are collected', JSON.stringify(r.json));
+ok(r.status === 200 && r.json.some(x => x.username === 'tunde' && x.text.includes('football')), 'build requests are collected');
 
-console.log('Clock (runs with nobody watching)');
+console.log('Clock');
 ok((await call('GET', '/api/cron/tick?key=wrong', undefined, { auth: false })).status === 401, 'cron ping needs its key');
 r = await call('GET', `/api/cron/tick?key=${encodeURIComponent(process.env.CRON_KEY)}`, undefined, { auth: false });
 ok(r.status === 200 && r.json.ok, 'cron ping works', JSON.stringify(r.json));
 
-ws.close();
+near.ws.close(); far.ws.close();
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

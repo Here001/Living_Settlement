@@ -1255,6 +1255,7 @@ function drawConstruction(b,t){
 function frame(ts){
   T_NOW=ts; windowQuads=[]; lights=[]; edgePan();
   const gm=gmNow(); DARK=darkness(gm); LAMPS=Math.min(1,Math.max(0,(DARK-0.2)/0.25)); // on from about 7pm, off by about 5:30am
+  if(S.meta){ const wNow=weatherAt(S.meta,gm); if(wNow==='storm'||wNow==='fog') LAMPS=1; } // and whenever the weather turns dark
   if(follow){ const c=S.citizens.get(follow); const st=c&&citizenAt(c,gm); if(st){ const p=iso(st.x,st.y); cam.x+=(p.x-cam.x)*0.08; cam.y+=(p.y-14-cam.y)*0.08; } }
   ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,cw,ch);
   worldT();
@@ -1305,7 +1306,7 @@ function frame(ts){
   if(ghostTool()) drawFootprint();
   else if(tool.kind==='road'&&roadMode==='line') drawRoadPreview();
   else if(hoverTile && tool.kind!=='pan'){ const [hx,hy]=hoverTile; poly([iso(hx,hy),iso(hx+1,hy),iso(hx+1,hy+1),iso(hx,hy+1)], tool.kind==='erase'?'rgba(184,67,58,.35)':'rgba(255,255,255,.35)', tool.kind==='erase'?'#B8433A':'#fff', 2); }
-  if(S.meta){ const w0=weatherAt(S.meta,gm); if(w0==='storm') DARK=Math.max(DARK,0.45); else if(w0==='rain') DARK=Math.max(DARK,0.22); }
+  if(S.meta){ const w0=weatherAt(S.meta,gm); if(w0==='storm') DARK=Math.max(DARK,0.45); else if(w0==='rain') DARK=Math.max(DARK,0.22); else if(w0==='fog') DARK=Math.max(DARK,0.15); }
   if(DARK>0.01){
     if(lights.length>400){ const ctr=iso(worldToTileF(cam.x,cam.y).x,worldToTileF(cam.x,cam.y).y); lights.sort((a,b)=>Math.hypot(a.x-cam.x,a.y-cam.y)-Math.hypot(b.x-cam.x,b.y-cam.y)); lights.length=400; }
     ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=`rgba(10,14,42,${0.8*DARK})`; ctx.fillRect(0,0,cw,ch);

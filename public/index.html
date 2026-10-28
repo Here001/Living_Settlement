@@ -621,7 +621,9 @@ function star(x,y,r){ ctx.beginPath(); for(let i=0;i<10;i++){ const a=i*Math.PI/
 function label(text, x, y, strong){ const k=Math.min(1,1.25/cam.z); if(k<1){ ctx.save(); ctx.translate(x,y); ctx.scale(k,k); label0(text,0,0,strong); ctx.restore(); return; } label0(text,x,y,strong); }
 function label0(text, x, y, strong){ ctx.font=`${strong?700:600} 11px "Bricolage Grotesque",system-ui,sans-serif`; const w=ctx.measureText(text).width+12; ctx.fillStyle=strong?'rgba(31,45,38,.92)':'rgba(251,252,247,.92)'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x-w/2,y-16,w,17,8) : ctx.rect(x-w/2,y-16,w,17); ctx.fill(); ctx.fillStyle=strong?'#FBFCF7':'#1F2D26'; ctx.textAlign='center'; ctx.fillText(text,x,y-4); ctx.textAlign='start'; }
 
-function darkness(m){ const h=(((m%1440)+1440)%1440)/60; if(h<4.5) return 1; if(h<6.5) return 1-(h-4.5)/2; if(h<18) return 0; if(h<20.5) return (h-18)/2.5; return 1; }
+// How dark the sky is (0 = day, 1 = the dead of night around 1–3am). Dusk deepens through the evening, and dawn lifts it again.
+const NIGHT=[[0,0.93],[1,1],[3,1],[4.5,0.8],[5.5,0.45],[6.5,0],[17.8,0],[18.8,0.35],[20,0.62],[21.5,0.75],[23,0.85],[24,0.93]];
+function darkness(m){ const h=(((m%1440)+1440)%1440)/60; for(let i=1;i<NIGHT.length;i++){ const [h1,v1]=NIGHT[i], [h0,v0]=NIGHT[i-1]; if(h<=h1){ const f=(h-h0)/((h1-h0)||1), e=f*f*(3-2*f); return v0+(v1-v0)*e; } } return 0.93; }
 const gmNow = () => gmAt(nowMs());
 const worldT=()=>ctx.setTransform(dpr*cam.z,0,0,dpr*cam.z,dpr*(cw/2-cam.x*cam.z+shake.x),dpr*(ch/2-cam.y*cam.z+shake.y));
 
@@ -1274,7 +1276,7 @@ function frame(ts){
   if(S.meta){ const w0=weatherAt(S.meta,gm); if(w0==='storm') DARK=Math.max(DARK,0.45); else if(w0==='rain') DARK=Math.max(DARK,0.22); }
   if(DARK>0.01){
     if(lights.length>400){ const ctr=iso(worldToTileF(cam.x,cam.y).x,worldToTileF(cam.x,cam.y).y); lights.sort((a,b)=>Math.hypot(a.x-cam.x,a.y-cam.y)-Math.hypot(b.x-cam.x,b.y-cam.y)); lights.length=400; }
-    ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=`rgba(16,22,58,${0.58*DARK})`; ctx.fillRect(0,0,cw,ch);
+    ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=`rgba(10,14,42,${0.8*DARK})`; ctx.fillRect(0,0,cw,ch);
     worldT();
     for(const q of windowQuads) poly(q, `rgba(255,206,120,${0.92*DARK})`, false);
     ctx.globalCompositeOperation='lighter';

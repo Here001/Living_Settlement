@@ -339,3 +339,8 @@ export const DISASTER_TYPES = {
 export const WEATHER_TYPES = {
   sunny:  { name:'Sunny' }, cloudy: { name:'Cloudy' }, rain: { name:'Rain' }, fog: { name:'Fog' }, storm: { name:'Storm' },
 };
+
+// A new road clears small things in its way (trees, bushes, rocks, benches, lamps and other 1×1 street furniture).
+// Anything bigger, like a park, farm, or solid building, stops the road instead.
+export function roadClears(type) { const t = BUILDING_TYPES[type]; if (!t) return false; const [w, d] = t.size;
+  return t.cat === 'nature' || (t.cat === 'decor' && w === 1 && d === 1); }

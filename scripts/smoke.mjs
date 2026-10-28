@@ -222,6 +222,17 @@ await post(comment('c3', 'tunde', 'Build a football pitch!', 'vote-post'));
 r = await call('GET', '/api/admin/requests');
 ok(r.status === 200 && r.json.some(x => x.username === 'tunde' && x.text.includes('football')), 'build requests are collected');
 
+console.log('Roads clear small things');
+const tree = (await call('POST', '/api/admin/buildings', { type: 'tree', x: 300, y: 300 })).json.building;
+const park = (await call('POST', '/api/admin/buildings', { type: 'park', x: 302, y: 299 })).json.building;
+r = await call('POST', '/api/admin/roads', { set: { '299,300': 'street', '300,300': 'street', '301,300': 'street', '302,300': 'street' } });
+ok(r.status === 200 && r.json.cleared?.length === 1 && r.json.cleared[0].id === tree.id, 'a road clears the tree in its way', JSON.stringify(r.json));
+ok(r.json.changed === 3, 'but stops at the park');
+let c9 = (await chunk('9_9')).chunks['9_9'];
+ok(!c9.buildings.some(b => b.id === tree.id) && c9.buildings.some(b => b.id === park.id) && c9.roads['300,300'] === 'street', 'tree gone, park and road there');
+await call('POST', '/api/admin/roads', { set: {}, remove: ['299,300', '300,300', '301,300'] });
+ok((await call('POST', '/api/admin/buildings/restore', { building: r.json.cleared[0] })).status === 200, 'undo puts the tree back');
+
 console.log('Men and women');
 await post(comment('c4', 'ada_f', 'spawn female 👩')); await post(comment('c5', 'bayo_m', 'Spawn me as a man'));
 let ada = null; for (let i = 0; i < 40 && !ada?.id; i++) { await sleep(100); ada = await who('ada_f'); }

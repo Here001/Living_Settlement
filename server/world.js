@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { pool, worldTx } from './db.js';
-import { BUILDING_TYPES, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES } from '../shared/catalog.js';
+import { BUILDING_TYPES, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, roadClears } from '../shared/catalog.js';
 import * as R from '../shared/rules.js';
 
 const uid = () => crypto.randomUUID();
@@ -482,7 +482,7 @@ export class World {
       await this.assertFree(ch, b.type, x, y);
       const row = await this.insertBuilding(ch, { id: String(b.id), type: b.type, x, y, name: String(b.name || '').slice(0, 40), requestedBy: R.cleanHandle(b.requestedBy),
         builtAt: Number(b.builtAt) || Date.now(), builtDay: Number(b.builtDay) || 0 });
-      await ch.event(`${row.name || BUILDING_TYPES[b.type].name} was rebuilt`, 'build');
+      if (!roadClears(b.type)) await ch.event(`${row.name || BUILDING_TYPES[b.type].name} was rebuilt`, 'build'); // trees and benches coming back aren't news
       await ch.fillVacancies();
       return { ok: true };
     });
@@ -511,15 +511,16 @@ export class World {
   async paintRoads({ set = {}, remove = [] }) {
     return this.change(async ch => {
       const keys = Object.keys(set).filter(k => /^-?\d+,-?\d+$/.test(k) && R.isRoadType(set[k])).slice(0, 5000);
-      const toSet = {}; let cost = 0;
+      const toSet = {}, cleared = []; let cost = 0;
       if (keys.length) {
         const xs = keys.map(k => +k.split(',')[0]), ys = keys.map(k => +k.split(',')[1]);
-        // Tiles under solid buildings are skipped; tiles that already have the same road cost nothing.
-        const solid = new Set((await ch.q(`select t.x || ',' || t.y k, b.type from unnest($1::int[], $2::int[]) t(x, y)
-          join buildings b on t.x >= b.x and t.x < b.x + b.w and t.y >= b.y and t.y < b.y + b.d`, [xs, ys])).rows
-          .filter(r => !BUILDING_TYPES[r.type]?.outdoor).map(r => r.k));
+        // Small things in the way (trees, rocks, benches, lamps) are cleared; tiles under anything bigger are skipped.
+        const under = (await ch.q(`select t.x || ',' || t.y k, b.* from unnest($1::int[], $2::int[]) t(x, y)
+          join buildings b on t.x >= b.x and t.x < b.x + b.w and t.y >= b.y and t.y < b.y + b.d`, [xs, ys])).rows;
+        const solid = new Set(under.filter(r => !roadClears(r.type)).map(r => r.k));
         const existing = new Map((await ch.q('select x || \',\' || y k, type from roads where (x, y) in (select * from unnest($1::int[], $2::int[]))', [xs, ys])).rows.map(r => [r.k, r.type]));
         for (const k of keys) { if (solid.has(k) || existing.get(k) === set[k]) continue; toSet[k] = set[k]; cost += R.roadCost(set[k]); }
+        for (const r of under) if (toSet[r.k] && roadClears(r.type) && !cleared.some(c => c.id === r.id)) { const b = { ...r }; delete b.k; cleared.push(bRow(b)); await this.demolishIn(ch, b); }
       }
       const rm = remove.filter(k => /^-?\d+,-?\d+$/.test(k)).slice(0, 5000);
       let removed = [];
@@ -534,7 +535,8 @@ export class World {
       }
       // One road op per chunk so viewers only hear about roads they can see.
       this.roadOps(ch, toSet, removed);
-      return { changed: n + removed.length, cost: 0 };
+      if (cleared.length) await ch.fillVacancies();
+      return { changed: n + removed.length, cost: 0, cleared };
     });
   }
 

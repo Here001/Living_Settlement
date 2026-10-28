@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#8FC463">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -32,6 +32,9 @@ button,input{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 #world{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+/* Taps belong to the game: no page zoom on double tap, no text selection, magnifier or copy menu on long press */
+html,body{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 .inked{background:var(--panel);border:1.6px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
 .hud{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:10px;right:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;pointer-events:none;z-index:5}
 .plate,.clock{pointer-events:auto}
@@ -1466,6 +1469,12 @@ function finishArea(){ const a=areaSel; const ax=Math.min(a.a[0],a.b[0]), bx=Mat
   toast(`Clear ${fmt(nb)} building${nb===1?'':'s'} and ${fmt(nr)} road tile${nr===1?'':'s'}?`,'Clear',async()=>{ try{ const r=await api('/api/admin/bulldoze',{method:'POST',body:{x0:ax,y0:ay,x1:bx,y1:by}}); toast(`Cleared ${fmt(r.buildings)} building${r.buildings===1?'':'s'} and ${fmt(r.roads)} road tile${r.roads===1?'':'s'}`); }catch(e){ toast(e.message); } areaSel=null; });
   setTimeout(()=>{ if(areaSel===a) areaSel=null; },5000); }
 cv.addEventListener('contextmenu', e=>e.preventDefault());
+// Safari on iPhone and iPad: stop pinch and double tap from zooming the page, and long press from selecting text, outside text boxes.
+const typing = e => e.target && e.target.closest && e.target.closest('input,textarea,[contenteditable]');
+for(const ev of ['gesturestart','gesturechange','gestureend']) document.addEventListener(ev, e=>e.preventDefault(), { passive:false });
+document.addEventListener('dblclick', e=>{ if(!typing(e)) e.preventDefault(); }, { passive:false });
+document.addEventListener('selectstart', e=>{ if(!typing(e)) e.preventDefault(); });
+document.addEventListener('contextmenu', e=>{ if(!typing(e)) e.preventDefault(); });
 cv.addEventListener('pointerdown', e=>{ cv.setPointerCapture(e.pointerId); pointers.set(e.pointerId,{x:e.clientX,y:e.clientY}); lastPtr={x:e.clientX,y:e.clientY};
   if(pointers.size===1){ gesture={ type:'one', sx:e.clientX, sy:e.clientY, lx:e.clientX, ly:e.clientY, t:performance.now(), moved:false };
     if(e.pointerType==='mouse' && e.button!==0){ /* right or middle mouse button always moves the map */ }

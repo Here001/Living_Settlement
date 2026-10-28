@@ -79,6 +79,17 @@ app.get('/api/admin/check', admin, (req, res) => res.json({ ok: true }));
 app.post('/api/admin/found', admin, send(req => world.found(req.body || {})));
 app.post('/api/admin/buildings', admin, send(req => world.build(req.body || {})));
 app.post('/api/admin/buildings/restore', admin, send(req => world.restore((req.body || {}).building)));
+app.post('/api/admin/buildings/:id/finish', admin, send(req => world.finish(req.params.id)));
+app.post('/api/admin/construction/finish-all', admin, send(() => world.finishAll()));
+app.post('/api/admin/bulldoze', admin, send(req => world.bulldozeArea(req.body || {})));
+app.get('/api/admin/places', admin, send(req => world.places(req.query.kind, req.query.x, req.query.y)));
+app.post('/api/admin/citizens/bulk', admin, send(req => world.spawnBulk((req.body || {}).handles)));
+app.patch('/api/admin/citizens/:id', admin, send(async req => {
+  const b = req.body || {};
+  if ('homeId' in b) await world.setHome(req.params.id, b.homeId);
+  if ('jobId' in b) await world.setJob(req.params.id, b.jobId);
+  return { ok: true };
+}));
 app.patch('/api/admin/buildings/:id', admin, send(req => world.move(req.params.id, (req.body || {}).x, (req.body || {}).y)));
 app.delete('/api/admin/buildings/:id', admin, send(req => world.demolish(req.params.id, { refund: req.query.refund === '1' })));
 app.post('/api/admin/roads', admin, send(req => world.paintRoads(req.body || {})));

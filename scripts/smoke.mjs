@@ -48,7 +48,7 @@ let r = await call('POST', '/api/admin/found', { name: 'Testville', handle: '@bu
 ok(r.status === 200, 'found the settlement', JSON.stringify(r.json));
 ok((await call('POST', '/api/admin/found', { name: 'Again' })).status === 409, 'cannot found twice');
 let m = await meta();
-ok(m.name === 'Testville' && m.population === 1 && m.residents === 1, 'founder lives in the starter tent', JSON.stringify(m));
+ok(m.name === 'Testville' && m.population === 1 && m.residents === 1 && m.founder === 'builder', 'founder lives in the starter tent', JSON.stringify(m));
 let c = await chunk('0_0');
 ok(c.chunks['0_0'].buildings.some(b => b.type === 'tent') && c.citizens.some(x => x.h === 'builder' && x.home), 'chunk 0_0 has the tent and the founder');
 const startFunds = m.treasuryBase;
@@ -65,7 +65,7 @@ ok(r.status === 200, 'build a house (4 homes)', JSON.stringify(r.json));
 const house = r.json.building;
 m = await meta();
 ok(m.outskirts === 0 && m.residents === 5, 'the whole queue moved into the house');
-ok(m.treasuryBase === startFunds - 900, 'house cost 900 coins');
+ok(m.treasuryBase === startFunds, 'the developer builds for free');
 ok(near.msgs.length && await near.saw(o => o.op === 'event' && /3 people moved out of the Outskirts into Maple House/.test(o.data.text)), 'one grouped headline for the move-in');
 ok(await near.saw(o => o.op === 'building' && o.data.id === house.id), 'viewer watching the centre sees the house');
 await sleep(400);
@@ -97,10 +97,10 @@ ok((await call('PATCH', `/api/admin/buildings/${house.id}`, { x: 20, y: 20 })).s
 ok((await who('ada')).home?.[2] === 20, 'residents move with it');
 ok((await call('POST', '/api/admin/buildings', { type: 'house', x: 21, y: 21 })).status === 409, 'overlapping build is refused');
 ok((await call('POST', '/api/admin/buildings', { type: 'spaceship', x: 30, y: 30 })).status === 400, 'unknown building type is refused');
-ok((await call('POST', '/api/admin/buildings', { type: 'biztower', x: 40, y: 40 })).status === 402, 'too expensive is refused');
-r = await call('POST', '/api/admin/buildings', { type: 'cafe', x: 3, y: 10 });
-const before = (await meta()).treasuryBase;
-ok((await call('DELETE', `/api/admin/buildings/${r.json.building.id}?refund=1`)).status === 200 && (await meta()).treasuryBase === before + 1000, 'undoing a build refunds it');
+r = await call('POST', '/api/admin/buildings', { type: 'biztower', x: 40, y: 40 });
+ok(r.status === 200 && r.json.building.done, 'the developer can build anything, even the priciest tower');
+await call('DELETE', `/api/admin/buildings/${r.json.building.id}`);
+
 
 console.log('Hangouts');
 r = await call('POST', '/api/admin/buildings', { type: 'park', x: 24, y: 20 });
@@ -108,7 +108,7 @@ ok((await who('ada')).hang?.[0] === r.json.building.id, 'residents start hanging
 
 console.log('Roads');
 r = await call('POST', '/api/admin/roads', { set: { '0,5': 'street', '1,5': 'street', '2,5': 'trees' } });
-ok(r.status === 200 && r.json.changed === 3 && r.json.cost === 105, 'lay three road tiles', JSON.stringify(r.json));
+ok(r.status === 200 && r.json.changed === 3 && r.json.cost === 0, 'lay three road tiles for free', JSON.stringify(r.json));
 ok(await near.saw(o => o.op === 'roads' && o.set['0,5'] === 'street'), 'viewers see the road');
 ok((await call('POST', '/api/admin/roads', { set: { '20,20': 'street' } })).json.changed === 0, 'roads cannot go through a house');
 ok((await call('POST', '/api/admin/buildings', { type: 'cottage', x: 1, y: 5 })).status === 409, 'buildings cannot go on a road');
@@ -124,6 +124,52 @@ ok((await call('DELETE', `/api/admin/citizens/${bola.id}`)).status === 200, 'rem
 ok(await near.saw(o => o.op === 'citizenGone' && o.id === bola.id), 'viewers drop them from the map');
 ok((await call('DELETE', `/api/admin/citizens/${(await who('builder')).id}`)).status === 400, 'the founder cannot be removed');
 
+console.log('Developer tools');
+r = await call('POST', '/api/admin/buildings', { type: 'apartment', x: 30, y: 0, instant: false });
+ok(r.status === 200 && r.json.building.done === false && r.json.building.readyAt > Date.now(), 'build with construction time');
+const site = r.json.building;
+ok(await near.saw(o => o.op === 'event' && /Construction started on Panel block/.test(o.data.text)), 'news announces the construction');
+const out0 = (await meta()).outskirts;
+r = await call('POST', '/api/admin/citizens/bulk', { handles: 'ife, @jide\nkemi, ife' });
+ok(r.json.added === 3 && r.json.skipped === 1, 'add several people at once (duplicates skipped)', JSON.stringify(r.json));
+m = await meta();
+ok(m.outskirts > out0, 'without enough free homes, the rest wait in the Outskirts');
+ok((await who('kemi')).queue > 0 && (await chunk('0_0')).chunks['0_0'] && (await call('GET', '/api/admin/places?kind=home&x=0&y=0')).json.every(p => p.id !== site.id), 'a building under construction offers no homes yet');
+ok((await call('POST', `/api/admin/buildings/${site.id}/finish`)).status === 200, 'fast-forward: finish it now');
+m = await meta();
+ok(m.outskirts === 0, 'everyone waiting moves into the finished block', JSON.stringify({ o: m.outskirts }));
+ok(await near.saw(o => o.op === 'event' && /Panel block is finished/.test(o.data.text)), 'news announces it is finished');
+await call('POST', '/api/admin/buildings', { type: 'house', x: 30, y: 6, instant: false });
+await call('POST', '/api/admin/buildings', { type: 'cottage', x: 34, y: 6, instant: false });
+r = await call('POST', '/api/admin/construction/finish-all');
+ok(r.json.finished === 2, 'fast-forward everything under construction at once');
+const jobs = (await call('GET', '/api/admin/places?kind=job&x=10&y=10')).json;
+ok(jobs.length && jobs[0].title, 'list nearby workplaces');
+const kemi = await who('kemi');
+r = await call('POST', '/api/admin/buildings', { type: 'brickoffice', x: 36, y: 0 });
+const office = r.json.building;
+const desk = (await call('GET', '/api/admin/places?kind=job&x=36&y=0')).json.find(p => p.id === office.id);
+ok(desk && desk.title === 'Analyst' && desk.used < desk.cap, 'the new office shows up with free desks', JSON.stringify(desk));
+ok((await call('PATCH', `/api/admin/citizens/${kemi.id}`, { jobId: office.id })).status === 200, "change someone's career");
+let k = await who('kemi');
+ok(k.job?.[0] === office.id && k.net === 32 - 12, 'they work at the office and earn its wage minus rent', JSON.stringify(k));
+ok((await call('PATCH', `/api/admin/citizens/${kemi.id}`, { jobId: null })).status === 200 && (await who('kemi')).job === null, 'make them quit');
+const bakeryNow = (await call('GET', '/api/admin/places?kind=job&x=14&y=10')).json.find(p => p.type === 'bakery');
+ok(bakeryNow.used === bakeryNow.cap, 'the bakery is full');
+ok((await call('PATCH', `/api/admin/citizens/${kemi.id}`, { jobId: bakeryNow.id })).status === 200 && (await who('kemi')).job?.[0] === bakeryNow.id, 'the developer can still put someone there; an auto-hired worker makes room');
+ok((await call('GET', '/api/admin/places?kind=job&x=14&y=10')).json.find(p => p.type === 'bakery').used === bakeryNow.cap, 'the bakery stays at capacity');
+await call('PATCH', `/api/admin/citizens/${kemi.id}`, { jobId: null });
+await call('GET', `/api/cron/tick?key=${encodeURIComponent(process.env.CRON_KEY)}`, undefined, { auth: false });
+ok((await who('kemi')).job === null, 'automatic hiring leaves a hand-set career alone');
+const cottage = (await call('GET', '/api/admin/places?kind=home&x=34&y=6')).json.find(p => p.type === 'cottage');
+ok((await call('PATCH', `/api/admin/citizens/${kemi.id}`, { homeId: cottage.id })).status === 200 && (await who('kemi')).home?.[0] === cottage.id, 'move someone to another home');
+const before = await meta();
+r = await call('POST', '/api/admin/bulldoze', { x0: 28, y0: -2, x1: 40, y1: 9 });
+ok(r.status === 200 && r.json.buildings === 4, 'clear a whole area in one go', JSON.stringify(r.json));
+const after = await meta();
+ok(after.residents < before.residents && after.outskirts > before.outskirts, 'people from the cleared homes go back to the Outskirts');
+ok(!(await chunk('0_0')).chunks['0_0'].buildings.some(b => b.x >= 28 && b.x <= 40 && b.y >= -2 && b.y <= 9), 'nothing is left in the area');
+
 console.log('Instagram webhook and comment queue');
 const secret = process.env.IG_APP_SECRET, verify = process.env.IG_VERIFY_TOKEN;
 r = await call('GET', `/webhooks/instagram?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(verify)}&hub.challenge=12345`, undefined, { auth: false });
@@ -137,7 +183,7 @@ ok((await call('POST', '/webhooks/instagram', undefined, { auth: false, raw: bod
 ok((await post(body)).status === 200, 'signed comment accepted');
 await post(body); await post(comment('c2', 'tunde', 'love this city'));
 let z = null; for (let i = 0; i < 40 && !z?.id; i++) { await sleep(100); z = await who('zara_ng'); }
-ok(z?.id && z.home?.[0] === house.id, 'commenting "spawn" brings them in, straight into the home bola left', JSON.stringify(z));
+ok(z?.id && (z.home || z.queue > 0), 'commenting "spawn" brings them in', JSON.stringify(z));
 ok((await call('GET', '/api/citizens?q=zara', undefined, { auth: false })).json.length === 1, 'a re-sent comment does not spawn twice');
 ok((await who('tunde')).error, 'a comment without "spawn" does not spawn');
 ok((await call('PUT', '/api/admin/build-post', { mediaId: 'vote-post' })).status === 200, 'mark the build-vote post');

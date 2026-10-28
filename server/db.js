@@ -66,6 +66,14 @@ const MIGRATIONS = [
    update buildings b set hang_used = (select count(*) from citizens c where c.hang_id = b.id);
    drop index buildings_leisure;
    create index buildings_free_hang on buildings (x, y) where leisure and hang_used < hang_cap;`,
+
+  // v3: buildings can be under construction (no homes, jobs or visitors until done), and the developer can
+  // set someone's job by hand, which automatic hiring then leaves alone.
+  `alter table buildings add column done boolean not null default true, add column ready_at bigint not null default 0;
+   create index buildings_constructing on buildings (ready_at) where not done;
+   alter table citizens add column manual boolean not null default false;
+   drop index citizens_unemployed;
+   create index citizens_unemployed on citizens (seq) where home_id is not null and job_id is null and not manual;`,
 ];
 
 export async function migrate() {
@@ -92,7 +100,7 @@ export async function migrate() {
     // Keep each building's capacities in step with the catalog, so changing a number there takes effect on restart.
     for (const [type, t] of Object.entries(BUILDING_TYPES)) {
       const cap = capacities(type);
-      await c.query('update buildings set home_cap = $2, job_cap = $3, hang_cap = $4, leisure = $5 where type = $1 and (home_cap, job_cap, hang_cap, leisure) is distinct from ($2, $3, $4, $5)',
+      await c.query('update buildings set home_cap = $2, job_cap = $3, hang_cap = $4, leisure = $5 where type = $1 and done and (home_cap, job_cap, hang_cap, leisure) is distinct from ($2, $3, $4, $5)',
         [type, cap.homeCap, cap.jobCap, cap.hangCap, cap.leisure]);
     }
   } catch (e) { await c.query('rollback').catch(() => {}); throw e; }

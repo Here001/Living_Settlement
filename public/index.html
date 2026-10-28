@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#8FC463">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png">
 <title>The Settlement</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,6 +48,22 @@ button{cursor:pointer}
 .chip{pointer-events:auto;display:flex;align-items:center;gap:6px;padding:4px 11px 4px 6px;font-size:13px;border-radius:999px}
 .chip b{font-size:15px;font-variant-numeric:tabular-nums}
 .chip small{color:#3F8A4E;font-weight:600}
+.chip .lbl{color:var(--muted)}
+@media (max-width:480px){ .chip .lbl{display:none} }
+.viewbtns{position:fixed;z-index:6;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 104px);display:flex;flex-direction:column;gap:8px}
+.vbtn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--panel);border:1.6px solid var(--line);box-shadow:var(--shadow)}
+.vbtn svg{width:22px;height:22px}
+#showUi{position:fixed;z-index:20;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);opacity:.45;border:1.6px solid #2B2621;background:#FBF8F1;color:#2B2621;border-radius:999px;padding:6px 12px;font-weight:600}
+#showUi:hover,#showUi:focus-visible{opacity:1}
+#showUi[hidden]{display:none}
+body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .viewbtns,body.clean .toast{display:none!important}
+.bulk{width:100%;min-height:72px;padding:9px 10px;border-radius:12px;border:1.6px solid var(--soft);background:var(--paper);resize:vertical;margin-top:6px}
+.btn.sm{padding:4px 10px;font-size:13px}
+.picker{margin-top:10px;border-top:1.4px solid var(--soft);padding-top:8px;max-height:34vh;overflow:auto}
+.pick{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;background:none;border:0;border-bottom:1.2px solid var(--soft);padding:7px 2px}
+.pick small{color:var(--muted);white-space:nowrap}
+.pick[disabled]{opacity:.45;cursor:not-allowed}
+.pick[aria-current="true"] b{color:var(--accent)}
 .coin{width:18px;height:18px;border-radius:50%;background:var(--gold);border:1.5px solid #2B2621;box-shadow:inset 0 0 0 2.5px #F4D57A}
 .chip button{border:0;background:none;padding:0;display:flex;align-items:center;gap:6px;font-weight:600}
 .mi{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:10px;border:1.5px solid #2B2621}
@@ -153,11 +176,17 @@ button{cursor:pointer}
 </header>
 <div class="chips" id="chips" hidden>
   <div class="chip inked"><span class="coin" aria-hidden="true"></span><b id="coinVal">0</b><small id="coinRate"></small></div>
-  <div class="chip inked"><span aria-hidden="true">♥</span><b id="happyVal">0%</b><span style="color:var(--muted)">happy</span></div>
-  <div class="chip inked"><button id="musicBtn" aria-pressed="false"><span class="mi" id="musicIcon">▶</span><span id="musicLabel">Music</span></button></div>
+  <div class="chip inked"><span aria-hidden="true">♥</span><b id="happyVal">0%</b><span class="lbl">happy</span></div>
+  <div class="chip inked"><button id="musicBtn" aria-pressed="false" aria-label="Music"><span class="mi" id="musicIcon">▶</span><span id="musicLabel" class="lbl">Music</span></button></div>
+  <div class="chip inked"><button id="findBtn"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 22s7-7.2 7-12.5A7 7 0 0 0 5 9.5C5 14.8 12 22 12 22z" fill="#D9714A" stroke="#2B2621" stroke-width="1.6"/><circle cx="12" cy="9.5" r="2.6" fill="#FBF8F1" stroke="#2B2621" stroke-width="1.4"/></svg><span>Find me</span></button></div>
 </div>
 <button class="news inked" id="news" hidden><span class="kick" id="newsKick"></span><span class="head" id="newsText"></span></button>
 <div class="toast" id="toast" hidden><span id="toastMsg"></span><button id="toastBtn" hidden>Undo</button></div>
+<div class="viewbtns" id="viewBtns">
+  <button class="vbtn" id="fsBtn" aria-label="Full screen" title="Full screen (F)"><svg viewBox="0 0 24 24" fill="none" stroke="#2B2621" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  <button class="vbtn" id="hideBtn" aria-label="Hide the interface" title="Hide the interface (H)"><svg viewBox="0 0 24 24" fill="none" stroke="#2B2621" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg></button>
+</div>
+<button id="showUi" hidden>Show interface</button>
 <div class="bar">
   <div class="toolchip" id="toolchip" hidden><span id="toolLabel"></span><button id="toolDone">Done</button></div>
   <section class="card inked" id="card" hidden></section>
@@ -177,7 +206,7 @@ button{cursor:pointer}
 </div>
 <script type="module">
 import { ROAD_TYPES, CATS, BUILDING_TYPES } from '/shared/catalog.js';
-import { treasuryOn, CHUNK as CHUNK_SIZE } from '/shared/rules.js';
+import { treasuryOn, buildMinutes, CHUNK as CHUNK_SIZE } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 const GAME_MIN_MS = 15000;              // 1 game minute = 15 s  → 1 game day = 6 h
@@ -730,8 +759,6 @@ const today = () => Math.floor(gmNow()/1440);
 const treasury = () => S.meta ? treasuryOn(S.meta, today()) : 0;
 function happiness(){ const m=S.meta; if(!m||!m.population) return 0; return Math.round(100*((m.residents||0)+(m.employed||0))/(2*m.population)); }
 async function settle(){ /* paydays are worked out by formula on the server */ }
-let freeBuild=false; try{ freeBuild=localStorage.getItem('settlement-free')==='1'; }catch(e){}
-function canAfford(cost){ return freeBuild || treasury()>=cost; }
 function spend(){}
 function refund(){}
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -768,7 +795,21 @@ function drawRoadTile(x,y,R,has,pushDeco){ const k=x+','+y;
 }
 
 /* ---------------- frame ---------------- */
-const CROWD_MAX=1500; let crowd=[], crowdAt=-1e9;
+const CROWD_MAX=1500; let crowd=[], crowdAt=-1e9, areaSel=null;
+const progressOf = b => { const span=Math.max(1,(b.readyAt||0)-(b.builtAt||0)); return Math.max(0.03,Math.min(1,(Date.now()+skew-(b.builtAt||0))/span)); };
+// A building site: dug-out ground, a faint outline of what's coming, and scaffolding that rises as work goes on.
+function drawConstruction(b,t){
+  const [w,d]=t.size, x=b.x, y=b.y, prog=progressOf(b);
+  poly([iso(x,y),iso(x+w,y),iso(x+w,y+d),iso(x,y+d)],'#BE9C6B','#8A6A44',1);
+  const full=Math.min(150,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24)), h=Math.max(8,full*prog);
+  ctx.save(); ctx.globalAlpha=0.18+0.55*prog; (DRAW[t.style]||DRAW.house)(b,t); ctx.restore();
+  const k=-0.05, cs=[iso(x+k,y+k),iso(x+w-k,y+k),iso(x+w-k,y+d-k),iso(x+k,y+d-k)];
+  for(const p of cs) line(p,up(p,h),'#8A5A2B',1.8);
+  for(let z=10; z<=h; z+=11) for(const [i,j] of [[3,2],[2,1]]) line(up(cs[i],z),up(cs[j],z),'#9C6A36',1.1);
+  for(const [i,j] of [[3,2],[2,1]]){ const a=cs[i], c=cs[j]; for(let z=0; z+11<=h; z+=11) line(up(a,z),up(c,z+11),'rgba(156,106,54,.6)',0.8); }
+  if(w*d>=4){ const p=cs[0], top=up(p,full+24); line(p,top,'#E2B13C',3); line(p,top,INK,0.8); const arm={x:top.x+46,y:top.y+10}; line(top,arm,'#E2B13C',2.6); line({x:top.x-12,y:top.y-3},top,'#E2B13C',2.6);
+    const sway=Math.sin(T_NOW/900)*3; line({x:arm.x-8,y:arm.y-2},{x:arm.x-8+sway,y:arm.y+18+h*0.3},INK,0.8); ctx.fillStyle='#7C8288'; ctx.fillRect(arm.x-12+sway,arm.y+18+h*0.3,8,5); }
+}
 function frame(ts){
   T_NOW=ts; windowQuads=[]; lights=[];
   const gm=gmNow(); DARK=darkness(gm);
@@ -801,7 +842,8 @@ function frame(ts){
     if(follow&&!crowd.some(c=>c.id===follow)&&S.citizens.has(follow)) crowd.push(S.citizens.get(follow)); }
   if(cam.z>=0.45) for(const c of crowd){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible) items.push({ k:st.x+st.y, c, st }); }
   items.sort((a,b)=>a.k-b.k);
-  for(const it of items){ if(it.fn) it.fn(); else if(it.b){ const t=T(it.b); (DRAW[t.style]||DRAW.house)(it.b,t); } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
+  for(const it of items){ if(it.fn) it.fn(); else if(it.b){ const t=T(it.b); if(it.b.done===false) drawConstruction(it.b,t); else (DRAW[t.style]||DRAW.house)(it.b,t); } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
+  if(areaSel){ const ax=Math.min(areaSel.a[0],areaSel.b[0]), bx=Math.max(areaSel.a[0],areaSel.b[0])+1, ay=Math.min(areaSel.a[1],areaSel.b[1]), by=Math.max(areaSel.a[1],areaSel.b[1])+1; poly([iso(ax,ay),iso(bx,ay),iso(bx,by),iso(ax,by)],'rgba(184,67,58,.28)','#B8433A',2.5); }
   if(hoverTile && tool.kind!=='pan'){ const [hx,hy]=hoverTile;
     const typeId = tool.kind==='place'?tool.type : tool.kind==='move'?(S.buildings.get(tool.id)||{}).type : null;
     if(typeId){ const t=BUILDING_TYPES[typeId]; const ok=canPlace(typeId,hx,hy,tool.id); const [w,d]=t.size; poly([iso(hx,hy),iso(hx+w,hy),iso(hx+w,hy+d),iso(hx,hy+d)], ok?'rgba(63,138,78,.35)':'rgba(184,67,58,.4)', ok?'#3F8A4E':'#B8433A', 2); ctx.globalAlpha=0.6; (DRAW[t.style]||DRAW.house)({x:hx,y:hy,type:typeId,id:'ghost'},t); ctx.globalAlpha=1; }
@@ -816,7 +858,9 @@ function frame(ts){
     ctx.globalCompositeOperation='source-over';
   } else { const h=(((gm%1440)+1440)%1440)/60; if(h>16.5&&h<18){ ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=`rgba(255,140,60,${0.12*Math.sin((h-16.5)/1.5*Math.PI)})`; ctx.fillRect(0,0,cw,ch); worldT(); } }
   if(GRAIN){ ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=GRAIN; ctx.fillRect(0,0,cw,ch); worldT(); }
-  for(const b of S.buildings.values()){ if(!b.name && !(selB&&selB.id===b.id)) continue; if(cam.z<0.8 && !(selB&&selB.id===b.id)) continue; const t=T(b); const [w,d]=t.size; const p=iso(b.x+w/2,b.y+d/2); label(b.name||t.name, p.x, p.y-Math.min(120,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24))-14, selB&&selB.id===b.id); }
+  for(const b of S.buildings.values()){ if(b.done===false && cam.z>=0.6){ const t=T(b); const [w,d]=t.size; const p=iso(b.x+w/2,b.y+d/2); label(`Building ${Math.round(progressOf(b)*100)}%`, p.x, p.y-Math.min(120,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24))*Math.max(.3,progressOf(b))-18, selB&&selB.id===b.id); continue; }
+    if(!b.name && !(selB&&selB.id===b.id)) continue; if(cam.z<0.8 && !(selB&&selB.id===b.id)) continue; const t=T(b); const [w,d]=t.size; const p=iso(b.x+w/2,b.y+d/2); label(b.name||t.name, p.x, p.y-Math.min(120,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24))-14, selB&&selB.id===b.id); }
+  if(sel&&sel.kind==='c'){ const st=states.get(sel.id); if(st&&!st.visible&&st.bid){ const c=S.citizens.get(sel.id); const tup=[c.home,c.job,c.hang].find(p=>p&&p[0]===st.bid); const b=S.buildings.get(st.bid)||(tup&&bOf(tup)); if(b){ const t=T(b); const [w,d]=t.size; const p=iso(b.x+w/2,b.y+d/2); const top=p.y-Math.min(140,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24))-16; const bob=Math.sin(T_NOW/300)*2; ctx.fillStyle='#D9714A'; ctx.strokeStyle=INK; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(p.x-6,top-4+bob); ctx.lineTo(p.x+6,top-4+bob); ctx.lineTo(p.x,top+5+bob); ctx.closePath(); ctx.fill(); ctx.stroke(); label(`@${c.handle} is inside`, p.x, top-6+bob, true); } } }
   for(const [id,st] of states){ if(!st.visible) continue; const c=S.citizens.get(id); const isSel=sel&&sel.kind==='c'&&sel.id===id; if(isSel || cam.z>=2.2 || (c.founder && cam.z>=1.2)){ const p=iso(st.x,st.y); label('@'+c.handle, p.x, p.y-(c.founder?36:30), isSel); } }
   requestAnimationFrame(frame);
 }
@@ -842,23 +886,31 @@ function roadThumb(id){ const R=ROAD_TYPES[id]; return renderThumb('r:'+id, 3, 1
 let tool={ kind:'pan' }, hoverTile=null, sel=null, follow=null, buildMeta={ name:'', by:'' };
 const pointers=new Map(); let gesture=null, paintBuf=null;
 function canPlace(type,x,y,ignore){ const [w,d]=BUILDING_TYPES[type].size; for(let i=0;i<w;i++) for(let j=0;j<d;j++){ const k=(x+i)+','+(y+j); const o=D.occ.get(k); if((o&&o!==ignore)||D.roads.has(k)) return false; } return true; }
-const paints = () => tool.kind==='road' || (tool.kind==='erase' && tool.mode!=='buildings');
+const paints = () => tool.kind==='road' || (tool.kind==='erase' && (tool.mode==='all'||tool.mode==='roads'));
+// After dragging a box: say what's inside and ask before clearing it.
+function finishArea(){ const a=areaSel; const ax=Math.min(a.a[0],a.b[0]), bx=Math.max(a.a[0],a.b[0]), ay=Math.min(a.a[1],a.b[1]), by=Math.max(a.a[1],a.b[1]);
+  let nb=0, nr=0; for(const b of S.buildings.values()){ const [w,d]=T(b).size; if(b.x<=bx&&b.x+w>ax&&b.y<=by&&b.y+d>ay) nb++; } for(const k of S.roads.keys()){ const [x,y]=k.split(',').map(Number); if(x>=ax&&x<=bx&&y>=ay&&y<=by) nr++; }
+  if(!nb&&!nr){ areaSel=null; toast('Nothing to clear there. Drag across buildings or roads.'); return; }
+  toast(`Clear ${fmt(nb)} building${nb===1?'':'s'} and ${fmt(nr)} road tile${nr===1?'':'s'}?`,'Clear',async()=>{ try{ const r=await api('/api/admin/bulldoze',{method:'POST',body:{x0:ax,y0:ay,x1:bx,y1:by}}); toast(`Cleared ${fmt(r.buildings)} building${r.buildings===1?'':'s'} and ${fmt(r.roads)} road tile${r.roads===1?'':'s'}`); }catch(e){ toast(e.message); } areaSel=null; });
+  setTimeout(()=>{ if(areaSel===a) areaSel=null; },5000); }
 cv.addEventListener('pointerdown', e=>{ cv.setPointerCapture(e.pointerId); pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(pointers.size===1){ gesture={ type:'one', sx:e.clientX, sy:e.clientY, lx:e.clientX, ly:e.clientY, t:performance.now(), moved:false };
-    if(paints()){ paintBuf=new Map(); paintAt(e.clientX,e.clientY); } }
-  else if(pointers.size===2){ const [a,b]=[...pointers.values()]; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture={ type:'pinch', d0:Math.hypot(a.x-b.x,a.y-b.y), z0:cam.z, wx:w.x, wy:w.y }; if(paintBuf){ paintBuf=null; changed(); } }
+    if(paints()){ paintBuf=new Map(); paintAt(e.clientX,e.clientY); }
+    else if(tool.kind==='erase'&&tool.mode==='area'){ const t=tileAt(e.clientX,e.clientY); areaSel={a:t,b:t}; } }
+  else if(pointers.size===2){ const [a,b]=[...pointers.values()]; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture={ type:'pinch', d0:Math.hypot(a.x-b.x,a.y-b.y), z0:cam.z, wx:w.x, wy:w.y }; if(paintBuf){ paintBuf=null; changed(); } areaSel=null; }
 });
 cv.addEventListener('pointermove', e=>{
   if(e.pointerType==='mouse') hoverTile=tileAt(e.clientX,e.clientY);
   if(!pointers.has(e.pointerId)) return; pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(gesture&&gesture.type==='one'){ if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)>6) gesture.moved=true;
     if(paintBuf){ paintAt(e.clientX,e.clientY); hoverTile=tileAt(e.clientX,e.clientY); }
+    else if(areaSel){ areaSel.b=tileAt(e.clientX,e.clientY); }
     else if(gesture.moved){ cam.x-=(e.clientX-gesture.lx)/cam.z; cam.y-=(e.clientY-gesture.ly)/cam.z; follow=null; }
     gesture.lx=e.clientX; gesture.ly=e.clientY; }
   else if(gesture&&gesture.type==='pinch'&&pointers.size>=2){ const [a,b]=[...pointers.values()]; cam.z=Math.min(4,Math.max(0.35,gesture.z0*Math.hypot(a.x-b.x,a.y-b.y)/gesture.d0)); const mx=(a.x+b.x)/2,my=(a.y+b.y)/2; cam.x=gesture.wx-(mx-cw/2)/cam.z; cam.y=gesture.wy-(my-ch/2)/cam.z; follow=null; }
 });
 function endPointer(e){ if(!pointers.has(e.pointerId)) return; pointers.delete(e.pointerId);
-  if(gesture&&gesture.type==='one'&&pointers.size===0){ if(paintBuf){ commitPaint(); } else if(!gesture.moved && performance.now()-gesture.t<600) tap(e.clientX,e.clientY); gesture=null; }
+  if(gesture&&gesture.type==='one'&&pointers.size===0){ if(paintBuf){ commitPaint(); } else if(areaSel){ finishArea(); } else if(!gesture.moved && performance.now()-gesture.t<600) tap(e.clientX,e.clientY); gesture=null; }
   if(pointers.size===0) gesture=null; }
 cv.addEventListener('pointerup', endPointer); cv.addEventListener('pointercancel', endPointer);
 cv.addEventListener('pointerleave', e=>{ if(e.pointerType==='mouse') hoverTile=null; });
@@ -870,7 +922,7 @@ function paintAt(sx,sy){ const [x,y]=tileAt(sx,sy); const k=x+','+y; if(paintBuf
 async function commitPaint(){ const buf=paintBuf; paintBuf=null; const mode=tool.kind, erase=tool.kind==='erase'&&tool.mode==='all', g=gesture;
   if(!buf.size){ if(erase && g){ const [x,y]=tileAt(g.sx,g.sy); const id=D.occ.get(x+','+y); if(id) removeBuilding(id); } return; }
   const set={}, remove=[]; for(const [k,v] of buf){ if(v) set[k]=v; else remove.push(k); }
-  try{ const r=await api('/api/admin/roads',{method:'POST',body:{set,remove,free:freeBuild}});
+  try{ const r=await api('/api/admin/roads',{method:'POST',body:{set,remove}});
     toast(mode==='road'?`Laid ${r.changed} tile${r.changed===1?'':'s'}${r.cost?` for ${fmt(r.cost)} coins`:''}`:`Removed ${r.changed} road tile${r.changed===1?'':'s'}`); }
   catch(e){ changed(); toast(e.message); } }
 async function removeBuilding(id){ const b=S.buildings.get(id); if(!b) return; const nm=b.name||T(b).name;
@@ -890,9 +942,9 @@ function tap(sx,sy){
 }
 async function placeBuilding(type,x,y){ const t=BUILDING_TYPES[type];
   if(!canPlace(type,x,y)){ toast('That spot is taken. Pick an empty patch of grass.'); return; }
-  try{ const r=await api('/api/admin/buildings',{method:'POST',body:{type,x,y,name:buildMeta.name,requestedBy:buildMeta.by,free:freeBuild}});
+  try{ const r=await api('/api/admin/buildings',{method:'POST',body:{type,x,y,name:buildMeta.name,requestedBy:buildMeta.by,instant:instantBuild}});
     buildMeta.name=''; const ni=$('bName'); if(ni) ni.value='';
-    toast(`Built ${r.building.name||t.name}`,'Undo',()=>api(`/api/admin/buildings/${encodeURIComponent(r.building.id)}?refund=${freeBuild?0:1}`,{method:'DELETE'}).catch(e=>toast(e.message))); }
+    toast(r.building.done?`Built ${r.building.name||t.name}`:`Construction started on ${r.building.name||t.name}`,'Undo',()=>api(`/api/admin/buildings/${encodeURIComponent(r.building.id)}`,{method:'DELETE'}).catch(e=>toast(e.message))); }
   catch(e){ toast(e.message); } }
 async function moveBuilding(id,x,y){ const b=S.buildings.get(id); if(!b){ setTool({kind:'pan'}); return; }
   try{ await api('/api/admin/buildings/'+encodeURIComponent(id),{method:'PATCH',body:{x,y}}); setTool({kind:'pan'}); selectBuilding(id); toast(`Moved ${b.name||T(b).name}`); }
@@ -913,6 +965,7 @@ const ICONS={
   decor: I('<path d="M5 13h22v4H5z" fill="#E8B07A"/><path d="M5 19h22v3H5z" fill="#E8B07A"/><path d="M8 22v5M24 22v5M8 13V9M24 13V9"/>'),
   landmarks: I('<path d="M13 9h6l1 15h-8z" fill="#F4E3B5"/><path d="M16 3l3 6h-6z" fill="#E2B13C"/><path d="M9 24h14v3H9z" fill="#F4E3B5"/>'),
   nature: I('<path d="M16 3 8 14h4l-5 8h18l-5-8h4z" fill="#5E9E45"/><path d="M16 22v6"/>'),
+  area: I('<path d="M5 5h22v22H5z" stroke-dasharray="3 3" fill="#F6D6CF"/><path d="M11 11l10 10M21 11 11 21" stroke="#B8433A" stroke-width="2.4"/>'),
   bulldoze: I('<path d="M5 16h13v7H5z" fill="#F2C94C"/><path d="M8 10h7v6H8z" fill="#F2C94C"/><path d="M20 12l7 3v9l-7-2z" fill="#B9BDBF"/><circle cx="8" cy="25" r="2"/><circle cx="15" cy="25" r="2"/>'),
 };
 
@@ -921,7 +974,7 @@ let toastTimer=null;
 function toast(msg, btn, fn){ $('toastMsg').textContent=msg; const b=$('toastBtn'); b.hidden=!btn; if(btn){ b.textContent=btn; b.onclick=()=>{ fn(); $('toast').hidden=true; }; } $('toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('toast').hidden=true, btn?5000:2800); }
 function setTool(t){ tool=t; const chip=$('toolchip');
   if(t.kind==='pan'){ chip.hidden=true; }
-  else { chip.hidden=false; $('toolLabel').textContent = t.kind==='place'?`Tap the map to place: ${BUILDING_TYPES[t.type].name}` : t.kind==='road'?`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}` : t.kind==='move'?'Tap where it should go' : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
+  else { chip.hidden=false; $('toolLabel').textContent = t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Tap the map to place: ${BUILDING_TYPES[t.type].name}` : t.kind==='road'?`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}` : t.kind==='move'?'Tap where it should go' : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
   if(activeTab && activeTab!=='feed' && activeTab!=='people') renderPane(); }
 $('toolDone').onclick=()=>setTool({kind:'pan'});
 
@@ -935,10 +988,15 @@ function openTab(name){ activeTab=name; if((name==='feed'||name==='people'||!nam
 function applyPermissions(){ buildToolbar(); $('spawnBoxNote')&&0; if(!Store.canWrite && activeTab && activeTab!=='feed' && activeTab!=='people') openTab(null); }
 
 function paneHead(title, extra){ const h=el('div',{class:'pane-head'}, el('h2',{class:'pane-title',text:title})); if(extra) h.append(...extra); h.append(el('button',{class:'x','aria-label':'Close panel',text:'×',onclick:()=>openTab(null)})); return h; }
+let instantBuild=true; try{ instantBuild=localStorage.getItem('settlement-instant')!=='0'; }catch(e){}
+const gameHours = type => buildMinutes(type)/60;
+const realTime = ms => { const m=Math.max(1,Math.round(ms/60000)); return m<60?`${m} min`:`${Math.floor(m/60)} h${m%60?` ${m%60} min`:''}`; };
+function timeText(type){ const h=gameHours(type); if(instantBuild||!h) return 'Instant'; return `Builds in ${h} game h (${realTime(h*60*GAME_MIN_MS)})`; }
+async function finishAll(){ try{ const r=await api('/api/admin/construction/finish-all',{method:'POST'}); toast(r.finished?`Finished ${fmt(r.finished)} building${r.finished===1?'':'s'}`:'Nothing is under construction'); }catch(e){ toast(e.message); } }
 function buildExtras(){ const nameI=el('input',{id:'bName',placeholder:'Name it (optional)',maxlength:'40','aria-label':'Building name'}); nameI.value=buildMeta.name; nameI.oninput=()=>buildMeta.name=nameI.value;
   const byI=el('input',{id:'bBy',placeholder:'Requested by @',maxlength:'31','aria-label':'Requested by'}); byI.value=buildMeta.by; byI.oninput=()=>buildMeta.by=byI.value;
-  const fb=el('label',{class:'free'}); const cb=el('input',{type:'checkbox'}); cb.checked=freeBuild; cb.onchange=()=>{ freeBuild=cb.checked; try{ localStorage.setItem('settlement-free',freeBuild?'1':'0'); }catch(e){} renderPane(); }; fb.append(cb, ' Free build');
-  return [el('span',{class:'treas',text:`${fmt(treasury())} coins`}), el('div',{class:'fields'},nameI,byI), fb]; }
+  const ib=el('label',{class:'free'}); const cb=el('input',{type:'checkbox'}); cb.checked=instantBuild; cb.onchange=()=>{ instantBuild=cb.checked; try{ localStorage.setItem('settlement-instant',instantBuild?'1':'0'); }catch(e){} renderPane(); }; ib.append(cb, ' Build instantly');
+  return [el('div',{class:'fields'},nameI,byI), ib, el('button',{class:'btn sm',text:'Finish all construction',onclick:finishAll})]; }
 function statLine(t){ if(t.home) return `${t.home.capacity} residents`; if(t.work) return `${t.work.slots} job${t.work.slots>1?'s':''}`; if(t.leisure) return 'hangout spot'; return `${t.size[0]}×${t.size[1]}`; }
 function card(img, title, costText, stat, pressed, onclick, cant){ const b=el('button',{class:'cardb'+(cant?' cant':''),'aria-pressed':String(!!pressed),onclick}); const im=el('img',{alt:'',src:img||''}); b.append(im, el('b',{text:title}), el('span',{class:'cost',text:costText}), el('span',{class:'stat',text:stat||''})); return b; }
 const costText = c => c ? `${fmt(c)} coins` : 'free';
@@ -952,29 +1010,44 @@ function renderPane(){
     const s=el('input',{class:'search',id:'search',type:'search',placeholder:'Search a username',autocomplete:'off'}); s.value=peopleQuery; s.oninput=()=>{ peopleQuery=s.value; renderPeople(); };
     body.append(s, el('div',{id:'peopleList'}));
     if(Store.canWrite){ const inp=el('input',{id:'spawnInput',placeholder:'@username',autocomplete:'off'}); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') spawnFromInput(); });
-      body.append(el('h3',{text:'Spawn a follower'}), el('div',{class:'spawn'}, inp, el('button',{class:'btn primary',text:'Spawn',onclick:spawnFromInput})), el('p',{class:'hint',text:'Later, comments on your posts will do this automatically.'})); }
+      const bulk=el('textarea',{id:'bulkInput',class:'bulk',placeholder:'Paste usernames: one per line, or separated by commas','aria-label':'Usernames to add'});
+      body.append(el('h3',{text:'Add a person'}), el('div',{class:'spawn'}, inp, el('button',{class:'btn primary',text:'Add',onclick:spawnFromInput})),
+        el('h3',{text:'Add many at once'}), bulk, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Add everyone',onclick:bulkAdd})),
+        el('p',{class:'hint',text:'Comments saying SPAWN on your Instagram posts add people automatically.'})); }
     p.append(body); renderPeople(); return; }
   const cards=el('div',{class:'cards'});
-  if(activeTab==='roads'){ p.append(paneHead('Roads',[el('span',{class:'treas',text:`${fmt(treasury())} coins`})]));
-    for(const id in ROAD_TYPES){ const R=ROAD_TYPES[id]; if(R.hidden) continue; cards.append(card(roadThumb(id), R.name, R.cost?`${fmt(R.cost)} coins per tile`:'free', R.note, tool.kind==='road'&&tool.road===id, ()=>setTool(tool.kind==='road'&&tool.road===id?{kind:'pan'}:{kind:'road',road:id}), !canAfford(R.cost||0))); }
+  if(activeTab==='roads'){ p.append(paneHead('Roads'));
+    for(const id in ROAD_TYPES){ const R=ROAD_TYPES[id]; if(R.hidden) continue; cards.append(card(roadThumb(id), R.name, 'Drag to lay', R.note, tool.kind==='road'&&tool.road===id, ()=>setTool(tool.kind==='road'&&tool.road===id?{kind:'pan'}:{kind:'road',road:id}))); }
     p.append(cards); return; }
   if(activeTab==='bulldoze'){ p.append(paneHead('Bulldoze'));
-    for(const [mode,nm,note] of [['all','Bulldozer','buildings and roads'],['buildings','Buildings only','roads stay'],['roads','Roads only','buildings stay']]){ const b=card('', nm, note, '', tool.kind==='erase'&&tool.mode===mode, ()=>setTool(tool.kind==='erase'&&tool.mode===mode?{kind:'pan'}:{kind:'erase',mode}));
-      const ic=el('span',{class:'icthumb'}); ic.innerHTML=ICONS[mode==='roads'?'roads':mode==='buildings'?'housing':'bulldoze']; b.replaceChild(ic,b.querySelector('img')); cards.append(b); }
+    for(const [mode,nm,note] of [['area','Clear an area','drag a box over anything'],['all','Bulldozer','buildings and roads'],['buildings','Buildings only','roads stay'],['roads','Roads only','buildings stay']]){ const b=card('', nm, note, '', tool.kind==='erase'&&tool.mode===mode, ()=>setTool(tool.kind==='erase'&&tool.mode===mode?{kind:'pan'}:{kind:'erase',mode}));
+      const ic=el('span',{class:'icthumb'}); ic.innerHTML=ICONS[mode==='roads'?'roads':mode==='buildings'?'housing':mode==='area'?'area':'bulldoze']; b.replaceChild(ic,b.querySelector('img')); cards.append(b); }
     p.append(cards); return; }
   const cat=CATS.find(c=>c.id===activeTab); p.append(paneHead(cat?cat.name:'Build', buildExtras()));
   const ids=Object.keys(BUILDING_TYPES).filter(id=>BUILDING_TYPES[id].cat===activeTab).sort((a,b)=>(BUILDING_TYPES[a].cost||0)-(BUILDING_TYPES[b].cost||0));
-  for(const id of ids){ const t=BUILDING_TYPES[id]; cards.append(card(thumbFor(id), t.name, costText(t.cost||0), statLine(t), tool.kind==='place'&&tool.type===id, ()=>setTool(tool.kind==='place'&&tool.type===id?{kind:'pan'}:{kind:'place',type:id}), !canAfford(t.cost||0))); }
+  for(const id of ids){ const t=BUILDING_TYPES[id]; cards.append(card(thumbFor(id), t.name, timeText(id), statLine(t), tool.kind==='place'&&tool.type===id, ()=>setTool(tool.kind==='place'&&tool.type===id?{kind:'pan'}:{kind:'place',type:id}))); }
   p.append(cards);
 }
 
-const detail=new Map();
+const detail=new Map(), detailLoading=new Set();
 async function loadDetail(handle){ try{ const d=await api('/api/citizens/'+encodeURIComponent(handle)); detail.set(d.id,d); return d; }catch(e){ toast(e.message); return null; } }
 function selectCitizen(id){ const c=S.citizens.get(id); if(!c) return; sel={kind:'c',id,handle:c.handle}; follow=id; renderCard(); loadDetail(c.handle).then(()=>{ if(sel&&sel.id===id) renderCard(); }); }
 // Find anyone by name: residents fly the camera to their home; Outskirts residents show their place in the queue.
 async function openCitizen(handle){ const d=await loadDetail(handle); if(!d) return; const c=normC(d); pinned=c.id; S.citizens.set(c.id,c);
   if(c.home){ const p=iso(c.home[2]+0.5,c.home[3]+0.5); cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.6); follow=c.id; } else follow=null;
   sel={kind:'c',id:c.id,handle:c.handle}; if(innerWidth<900) openTab(null); renderCard(); }
+// The developer's job and home pickers: the nearest places first, full ones greyed out.
+async function openPicker(kind,c){ const at=c.home||c.job; const ctr=worldToTileF(cam.x,cam.y); const x=at?at[2]:Math.round(ctr.x), y=at?at[3]:Math.round(ctr.y);
+  if(kind==='job'&&!c.home){ toast(`@${c.handle} is waiting in the Outskirts. Give them a home first.`); return; }
+  try{ const items=await api(`/api/admin/places?kind=${kind}&x=${x}&y=${y}`); if(!sel||sel.id!==c.id) return; sel.picker={kind,items}; renderCard(); }catch(e){ toast(e.message); } }
+function renderPicker(c){ const {kind,items}=sel.picker; const cur=(kind==='job'?c.job:c.home)?.[0]; const box=el('div',{class:'picker'});
+  const choose=async id=>{ try{ await api('/api/admin/citizens/'+encodeURIComponent(c.id),{method:'PATCH',body:kind==='job'?{jobId:id}:{homeId:id}}); sel.picker=null; detail.delete(c.id); await loadDetail(c.handle); toast(kind==='job'?(id?'Career changed':'They left their job'):'Moved home'); renderCard(); }catch(e){ toast(e.message); } };
+  box.append(el('div',{class:'pane-head',style:'padding:0 0 6px'}, el('b',{text:kind==='job'?'Pick a workplace':'Pick a new home'}), el('button',{class:'btn sm',style:'margin-left:auto',text:'Cancel',onclick:()=>{ sel.picker=null; renderCard(); }})));
+  if(kind==='job'&&c.job) box.append(el('button',{class:'pick',onclick:()=>choose(null)}, el('b',{text:'No job'}), el('small',{text:'stays unemployed'})));
+  if(!items.length) box.append(el('p',{class:'hint',text:kind==='job'?'No workplaces yet. Build a shop, office or farm first.':'No homes yet. Build some housing first.'}));
+  for(const it of items){ const full=it.used>=it.cap&&it.id!==cur; box.append(el('button',{class:'pick','aria-current':String(it.id===cur),onclick:()=>choose(it.id)},
+    el('span',null, el('b',{text:it.name}), kind==='job'?el('small',{text:' '+it.title.toLowerCase()}):null), el('small',{text:`${it.id===cur?'current · ':''}${fmt(it.used)}/${fmt(it.cap)}${full?(kind==='job'?' full, bumps someone':' full, someone moves out'):''}`}))); }
+  return box; }
 function selectBuilding(id){ sel={kind:'b',id}; follow=null; renderCard(); }
 function closeCard(){ sel=null; follow=null; if(pinned){ const c=S.citizens.get(pinned); pinned=null; if(c&&!keepCitizen(c)) S.citizens.delete(c.id); } $('card').hidden=true; }
 const CAT_NAME = id => (CATS.find(c=>c.id===id)||{}).name || 'Building';
@@ -983,6 +1056,7 @@ function renderCard(){
   const card=$('card'); if(!sel){ card.hidden=true; return; } card.innerHTML='';
   const close=el('button',{class:'x','aria-label':'Close',onclick:closeCard,text:'×'});
   if(sel.kind==='c'){ const d=detail.get(sel.id); const c=S.citizens.get(sel.id)||(d&&normC(d)); if(!c){ closeCard(); return; }
+    if(!d && !detailLoading.has(c.id)){ detailLoading.add(c.id); const id=c.id; loadDetail(c.handle).finally(()=>{ detailLoading.delete(id); if(sel&&sel.id===id&&detail.has(id)) renderCard(); }); }
     const h=bOf(c.home), j=bOf(c.job); const st=h?citizenAt(c,gmNow()):null;
     const now = !h ? (d&&d.queue ? `Waiting in the Outskirts, #${fmt(d.queue)} in the housing queue` : 'Waiting in the Outskirts') : st ? st.act : 'Arriving soon';
     const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,'@'+c.handle); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); head.append(av, el('div',null,title, el('p',{class:'now',text:now})));
@@ -992,20 +1066,27 @@ function renderCard(){
       el('dt',{text:'Job'}), el('dd',{text:j?`${T(j).work.title} at ${nm(j)}`:h?'Looking for work':'Gets one after moving in'}),
       el('dt',{text:'Coins'}), el('dd',{text:d?`${fmt(d.coins)}, ${d.net>=0?'+':''}${d.net} per day`:'…'}),
       el('dt',{text:'Joined'}), el('dd',{text:`Day ${Math.max(1,Math.floor(gmAt(c.joinedAt)/1440)+1)}, arrival #${fmt(c.seq||0)}`})));
-    if(Store.canWrite && !c.founder) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:'Remove citizen',onclick:()=>removeCitizen(c)})));
+    if(Store.canWrite){ card.append(el('div',{class:'row-actions'},
+        el('button',{class:'btn',text:'Change job',onclick:()=>openPicker('job',c)}), el('button',{class:'btn',text:'Change home',onclick:()=>openPicker('home',c)}),
+        c.founder?null:el('button',{class:'btn danger',text:'Remove',onclick:()=>removeCitizen(c)})));
+      if(sel.picker) card.append(renderPicker(c)); }
+    else { let mine=null; try{ mine=localStorage.getItem('settlement-me'); }catch(e){}
+      if(mine!==c.handle) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'This is me',onclick:()=>{ try{ localStorage.setItem('settlement-me',c.handle); }catch(e){} toast('Saved. Tap Find me to come back to yourself.'); renderCard(); }}))); }
   } else { const b=S.buildings.get(sel.id); if(!b){ closeCard(); return; } const t=T(b); const gm=gmNow();
     const inside=[...S.citizens.values()].filter(c=>{ const st=citizenAt(c,gm); return st&&st.bid===b.id; }).map(c=>'@'+c.handle);
     const list=(slot,n)=>{ const names=[...S.citizens.values()].filter(c=>c[slot]&&c[slot][0]===b.id).slice(0,8).map(c=>'@'+c.handle); return names.length?': '+names.join(', ')+(n>names.length?` and ${fmt(n-names.length)} more`:''):''; };
     const lv=levelOf(b);
     const head=el('div',{class:'chead'}); const im=el('img',{class:'cthumb',alt:'',src:thumbFor(b.type)}); head.append(im, el('div',null, el('h2',{text:b.name||t.name}), el('div',{class:'chips2'}, el('span',{class:'pill',text:CAT_NAME(t.cat)}), el('span',{class:'pill',text:`${t.size[0]}×${t.size[1]}`}), el('span',{class:'pill',text:`Level ${lv} ${'★'.repeat(lv)}${'☆'.repeat(3-lv)}`}))));
     const dl=el('dl',null); const add=(k,v)=>dl.append(el('dt',{text:k}),el('dd',{text:v}));
+    if(b.done===false){ const left=(b.readyAt||0)-(Date.now()+skew); add('Status', left>0?`Under construction, ready in ${realTime(left)}`:'Finishing…'); }
     add('Built',`Day ${(b.builtDay??0)+1}`+(b.requestedBy?`, requested by @${b.requestedBy}`:''));
     if(t.home) add('Residents',`${fmt(b.homeUsed||0)} of ${fmt(t.home.capacity)}${list('home',b.homeUsed||0)}`);
     if(t.work) add('Workers',`${fmt(b.jobUsed||0)} of ${fmt(t.work.slots)}${list('job',b.jobUsed||0)}`);
     if(t.work) add('Pay',`${t.work.salary} coins a day`);
     add('Here now', inside.length?inside.join(', '):'Nobody');
     card.append(close, head, dl);
-    if(Store.canWrite) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Move',onclick:()=>{ setTool({kind:'move',id:b.id}); toast('Tap where it should go'); }}), el('button',{class:'btn',text:'One more',onclick:()=>{ setTool({kind:'place',type:b.type}); }}), el('button',{class:'btn danger',text:'Demolish',onclick:()=>removeBuilding(b.id)})));
+    if(Store.canWrite) card.append(el('div',{class:'row-actions'}, b.done===false?el('button',{class:'btn primary',text:'Finish now',onclick:async()=>{ try{ await api(`/api/admin/buildings/${encodeURIComponent(b.id)}/finish`,{method:'POST'}); toast(`${b.name||t.name} is finished`); }catch(e){ toast(e.message); } }}):null,
+      el('button',{class:'btn',text:'Move',onclick:()=>{ setTool({kind:'move',id:b.id}); toast('Tap where it should go'); }}), el('button',{class:'btn',text:'One more',onclick:()=>{ setTool({kind:'place',type:b.type}); }}), el('button',{class:'btn danger',text:'Demolish',onclick:()=>removeBuilding(b.id)})));
   }
   card.hidden=false;
 }
@@ -1023,6 +1104,8 @@ function renderPeople(){
   clearTimeout(searchTimer); const my=++searchSeq;
   searchTimer=setTimeout(async()=>{ try{ const r=await api('/api/citizens?q='+encodeURIComponent(q)); if(my!==searchSeq) return; show(r.map(normC), `No citizen called @${q} yet. Comment SPAWN on a post to move in.`); }catch(e){ if(my===searchSeq) show([], e.message); } },250);
 }
+async function bulkAdd(){ const ta=$('bulkInput'); const list=ta.value.split(/[\s,;]+/).map(cleanHandle).filter(Boolean); if(!list.length){ toast('Paste at least one username.'); return; }
+  try{ const r=await api('/api/admin/citizens/bulk',{method:'POST',body:{handles:list}}); ta.value=''; toast(`Added ${fmt(r.added)}${r.skipped?`, skipped ${fmt(r.skipped)} already here`:''}. ${fmt(r.housed)} moved into homes.`); }catch(e){ toast(e.message); } }
 async function spawnFromInput(){ const inp=$('spawnInput'); const h=cleanHandle(inp.value); if(!h){ toast('Type a username first.'); return; }
   try{ const r=await api('/api/admin/citizens',{method:'POST',body:{handle:h}}); inp.value=''; toast(r.citizen.housed?`@${h} moved in`:`@${h} is waiting in the Outskirts`); }catch(e){ toast(e.message); } }
 /* ---------------- avatars + posts ---------------- */
@@ -1112,6 +1195,19 @@ const Music={ ac:null, on:false, timer:null, step:0, next:0,
 const SPEEDS=[1,60,600];
 $('clockBtn').onclick=()=>{ const i=SPEEDS.indexOf(speed); const n=SPEEDS[(i+1)%SPEEDS.length]; setSpeed(n); const tag=$('speedTag'); tag.hidden=n===1; tag.textContent=`Preview ${n}×`; toast(n===1?'Back to live time':`Previewing the future at ${n}× speed. Tap the clock to return.`); feedDirty=true; };
 $('musicBtn').onclick=()=>Music.toggle();
+function findMe(){ let mine=null; try{ mine=localStorage.getItem('settlement-me'); }catch(e){}
+  const h = Store.canWrite ? (S.meta&&S.meta.founder) : mine;
+  if(h){ openCitizen(h); return; }
+  openTab('people'); setTimeout(()=>{ const s=$('search'); if(s) s.focus(); },50); toast('Type your username, open your card and tap "This is me".'); }
+$('findBtn').onclick=findMe;
+function toggleFullscreen(){ const d=document; const on=d.fullscreenElement||d.webkitFullscreenElement;
+  const req=d.documentElement.requestFullscreen||d.documentElement.webkitRequestFullscreen, exit=d.exitFullscreen||d.webkitExitFullscreen;
+  if(on){ exit&&exit.call(d); return; }
+  if(req){ try{ const r=req.call(d.documentElement); if(r&&r.catch) r.catch(()=>toast('Full screen was blocked by the browser.')); }catch(e){ toast('Full screen was blocked by the browser.'); } }
+  else toast('On iPhone: tap Share, then "Add to Home Screen". The city then opens full screen.'); }
+function setClean(on){ document.body.classList.toggle('clean',on); $('showUi').hidden=!on; if(on) closeCard(); }
+$('fsBtn').onclick=toggleFullscreen; $('hideBtn').onclick=()=>setClean(true); $('showUi').onclick=()=>setClean(false);
+addEventListener('keydown',e=>{ if(e.target.closest&&e.target.closest('input,textarea')) return; if(e.key==='f'||e.key==='F') toggleFullscreen(); else if(e.key==='h'||e.key==='H') setClean(!document.body.classList.contains('clean')); else if(e.key==='Escape'&&document.body.classList.contains('clean')) setClean(false); });
 function refreshHUD(){
   if(S.meta){ $('townName').textContent=S.meta.name; const pop=S.meta.population||0, out=S.meta.outskirts??(pop-(S.meta.residents||0)); $('popLine').textContent=`${fmt(pop)} citizen${pop===1?'':'s'}${out>0?`, ${fmt(out)} waiting in the Outskirts`:''}`;
     $('coinVal').textContent=fmt(treasury()); $('coinRate').textContent=`+${fmt(S.meta.income||0)}/day`; $('happyVal').textContent=`${happiness()}%`; $('chips').hidden=false; }

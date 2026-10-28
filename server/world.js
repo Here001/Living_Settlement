@@ -9,7 +9,8 @@ export class HttpError extends Error { constructor(status, msg) { super(msg); th
 
 // ---------- row shapes ----------
 export const bRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, name: r.name, requestedBy: r.requested_by,
-  builtAt: r.built_at, builtDay: r.built_day, homeUsed: r.home_used, jobUsed: r.job_used, hangUsed: r.hang_used });
+  builtAt: r.built_at, builtDay: r.built_day, homeUsed: r.home_used, jobUsed: r.job_used, hangUsed: r.hang_used,
+  done: r.done !== false, readyAt: r.ready_at || 0 });
 const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_cy], [c.hang_cx, c.hang_cy]]
   .filter(([x]) => x !== null && x !== undefined).map(([x, y]) => R.chunkKey(x, y)))];
 
@@ -59,8 +60,8 @@ class Change {
 
   async saveCitizen(c) {
     await this.q(`update citizens set home_id=$2, home_cx=$3, home_cy=$4, job_id=$5, job_cx=$6, job_cy=$7, hang_id=$8, hang_cx=$9, hang_cy=$10,
-      coins_base=$11, coins_day=$12, net=$13 where id=$1`,
-      [c.id, c.home_id, c.home_cx, c.home_cy, c.job_id, c.job_cx, c.job_cy, c.hang_id, c.hang_cx, c.hang_cy, c.coins_base, c.coins_day, c.net]);
+      coins_base=$11, coins_day=$12, net=$13, manual=$14 where id=$1`,
+      [c.id, c.home_id, c.home_cx, c.home_cy, c.job_id, c.job_cx, c.job_cy, c.hang_id, c.hang_cx, c.hang_cy, c.coins_base, c.coins_day, c.net, !!c.manual]);
   }
   async bump(id, col, delta) {
     const r = await this.q(`update buildings set ${col} = ${col} + $2::int where id = $1 returning *`, [id, delta]);
@@ -123,8 +124,21 @@ class Change {
     this.coins(c);
     await this.bump(c.home_id, 'home_used', -1);
     await this.setHangout(c, null);
-    c.home_id = c.home_cx = c.home_cy = null; c.net = 0;
+    c.home_id = c.home_cx = c.home_cy = null; c.net = 0; c.manual = false;
     this.meta.residents = Math.max(0, (this.meta.residents || 0) - 1);
+    await this.saveCitizen(c);
+  }
+
+  async rehome(c, home, types) {
+    this.touch(c); this.coins(c);
+    if (c.job_id) {
+      const { salary } = R.capacities(types.job), oldRent = R.capacities(types.home).rent, newRent = R.capacities(home.type).rent;
+      this.income(newRent - oldRent); c.net = R.netOf(salary, newRent);
+    }
+    await this.bump(c.home_id, 'home_used', -1);
+    c.home_id = home.id; c.home_cx = home.cx; c.home_cy = home.cy;
+    await this.bump(home.id, 'home_used', 1);
+    await this.setHangout(c, await this.nearestLeisure(home.x, home.y));
     await this.saveCitizen(c);
   }
 
@@ -145,7 +159,7 @@ class Change {
       const free = (await this.q('select 1 from buildings where job_used < job_cap limit 1')).rowCount;
       if (!free) break;
       const idle = (await this.q(`select c.*, h.x hx, h.y hy, h.type htype from citizens c join buildings h on h.id = c.home_id
-        where c.home_id is not null and c.job_id is null order by c.seq limit 200 for update of c`)).rows;
+        where c.home_id is not null and c.job_id is null and not c.manual order by c.seq limit 200 for update of c`)).rows;
       if (!idle.length) break;
       let any = false;
       for (const c of idle) {
@@ -175,6 +189,7 @@ export class World {
     this.buildings = new Map(); this.roads = new Map(); this.chunks = new Map();
     for (const r of (await pool.query('select * from buildings')).rows) this.putB(bRow(r));
     for (const r of (await pool.query('select x, y, type from roads')).rows) this.putR(`${r.x},${r.y}`, r.type);
+    this.founderHandle = (await pool.query('select handle from citizens where founder order by seq limit 1')).rows[0]?.handle || null;
   }
   slot(key) { let c = this.chunks.get(key); if (!c) this.chunks.set(key, c = { buildings: new Map(), roads: {} }); return c; }
   putB(b) { const old = this.buildings.get(b.id); if (old) this.slot(R.chunkKey(old.cx, old.cy)).buildings.delete(b.id); this.buildings.set(b.id, b); this.slot(R.chunkKey(b.cx, b.cy)).buildings.set(b.id, b); }
@@ -195,7 +210,7 @@ export class World {
   publicMeta() {
     if (!this.meta) return null;
     const m = this.meta; const pop = m.population || 0, res = m.residents || 0;
-    return { ...m, outskirts: pop - res };
+    return { ...m, outskirts: pop - res, founder: m.founder || this.founderHandle };
   }
 
   // Runs fn inside the world lock with a fresh copy of the meta row, then tells every server what changed.
@@ -270,7 +285,7 @@ export class World {
       if (ch.meta) throw new HttpError(409, 'This settlement is already founded.');
       const now = Date.now(); name = String(name || '').trim().slice(0, 40) || 'Followville'; handle = R.cleanHandle(handle) || 'founder';
       ch.meta = { name, epoch: now - 7 * 60 * R.GAME_MIN_MS, createdAt: now, treasuryBase: R.START_FUNDS, treasuryDay: 0, income: R.GRANT,
-        population: 0, residents: 0, employed: 0, newsDay: 0, buildPostId: null };
+        population: 0, residents: 0, employed: 0, newsDay: 0, buildPostId: null, founder: handle };
       ch.today = 0;
       const starter = [['tent', 0, 0, ''], ['campfire', 2, 1, 'The first fire'], ['tree', -3, -2], ['pine', 4, -3], ['birch', -2, 4], ['pine', 5, 3], ['tree', -4, 1], ['bush', 3, -1], ['rocks', -1, -3]];
       let i = 0; for (const [type, x, y, nm] of starter) await this.insertBuilding(ch, { type, x, y, name: nm || '', builtAt: now + i++ });
@@ -281,12 +296,21 @@ export class World {
     }, { allowUnfounded: true });
   }
 
-  async insertBuilding(ch, { id = uid(), type, x, y, name = '', requestedBy = '', builtAt = Date.now(), builtDay }) {
+  // A building under construction exists on the map but has no homes, jobs or visitors until it's finished.
+  async insertBuilding(ch, { id = uid(), type, x, y, name = '', requestedBy = '', builtAt = Date.now(), builtDay, instant = true }) {
     const t = BUILDING_TYPES[type]; const [w, d] = t.size; const [cx, cy] = R.chunkOf(x, y); const cap = R.capacities(type);
-    const r = await ch.q(`insert into buildings (id, type, x, y, w, d, cx, cy, name, requested_by, built_at, built_day, home_cap, job_cap, leisure, hang_cap)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) returning *`,
-      [id, type, x, y, w, d, cx, cy, name, requestedBy, builtAt, builtDay ?? ch.today, cap.homeCap, cap.jobCap, cap.leisure, cap.hangCap]);
+    const minutes = instant ? 0 : R.buildMinutes(type); const done = minutes === 0;
+    const r = await ch.q(`insert into buildings (id, type, x, y, w, d, cx, cy, name, requested_by, built_at, built_day, home_cap, job_cap, leisure, hang_cap, done, ready_at)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) returning *`,
+      [id, type, x, y, w, d, cx, cy, name, requestedBy, builtAt, builtDay ?? ch.today, done ? cap.homeCap : 0, done ? cap.jobCap : 0, cap.leisure, done ? cap.hangCap : 0,
+        done, done ? builtAt : builtAt + minutes * R.GAME_MIN_MS]);
     ch.buildings.add(id);
+    if (done) await this.attractVisitors(ch, r.rows[0]);
+    return r.rows[0];
+  }
+
+  async attractVisitors(ch, b) {
+    const { id, x, y, cx, cy } = b; const cap = R.capacities(b.type);
     if (cap.leisure) {
       // The closest nearby residents whose hangout is farther away (or missing) start coming here, up to its capacity.
       const rows = (await ch.q(`select c.* from citizens c join buildings h on h.id = c.home_id
@@ -297,7 +321,34 @@ export class World {
       const g = { id, cx, cy };
       for (const c of rows) { await ch.setHangout(c, g); await ch.saveCitizen(c); }
     }
-    return r.rows[0];
+  }
+
+  async finishIn(ch, b) {
+    const cap = R.capacities(b.type);
+    const r = (await ch.q('update buildings set done = true, ready_at = $2, home_cap = $3, job_cap = $4, hang_cap = $5 where id = $1 and not done returning *',
+      [b.id, Date.now(), cap.homeCap, cap.jobCap, cap.hangCap])).rows[0];
+    if (!r) return false;
+    ch.buildings.add(b.id);
+    await this.attractVisitors(ch, r);
+    await ch.event(`${r.name || BUILDING_TYPES[r.type]?.name || 'A building'} is finished${r.requested_by ? `. Thanks for the idea, @${r.requested_by}` : ''}`, 'build');
+    return true;
+  }
+  // The developer's fast-forward: finish one building, or every building under construction.
+  async finish(id) {
+    return this.change(async ch => {
+      const b = (await ch.q('select * from buildings where id = $1 for update', [id])).rows[0];
+      if (!b) throw new HttpError(404, 'No such building.');
+      if (b.done) return { finished: 0 };
+      await this.finishIn(ch, b); await ch.fillVacancies(); return { finished: 1 };
+    });
+  }
+  async finishAll({ dueOnly = false } = {}) {
+    return this.change(async ch => {
+      const rows = (await ch.q(`select * from buildings where not done ${dueOnly ? 'and ready_at <= $1' : 'and $1::bigint is not null'} order by ready_at limit 500 for update`, [Date.now()])).rows;
+      for (const b of rows) await this.finishIn(ch, b);
+      if (rows.length) await ch.fillVacancies();
+      return { finished: rows.length };
+    });
   }
 
   // Adds people to the end of the housing queue in one statement, then lets the queue fill any empty homes.
@@ -317,16 +368,17 @@ export class World {
     return rows;
   }
 
-  async build({ type, x, y, name = '', requestedBy = '', free = false }) {
+  // The developer builds for free. `instant: false` gives the building a construction period instead.
+  async build({ type, x, y, name = '', requestedBy = '', instant = true }) {
     const t = BUILDING_TYPES[type]; if (!t) throw new HttpError(400, 'Unknown building type.');
     x = Math.trunc(Number(x)); y = Math.trunc(Number(y));
     if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 100000 || Math.abs(y) > 100000) throw new HttpError(400, 'Bad position.');
     return this.change(async ch => {
       await this.assertFree(ch, type, x, y);
-      ch.spend(t.cost || 0, free);
-      const b = bRow(await this.insertBuilding(ch, { type, x, y, name: String(name).trim().slice(0, 40), requestedBy: R.cleanHandle(requestedBy) }));
-      const nm = b.name || t.name;
-      await ch.event(b.requestedBy ? `${nm} was built, requested by @${b.requestedBy}` : `${nm} was built`, 'build');
+      const b = bRow(await this.insertBuilding(ch, { type, x, y, name: String(name).trim().slice(0, 40), requestedBy: R.cleanHandle(requestedBy), instant: instant !== false }));
+      const nm = b.name || t.name, by = b.requestedBy ? `, requested by @${b.requestedBy}` : '';
+      if (b.done) await ch.event(`${nm} was built${by}`, 'build');
+      else { const h = Math.round(R.buildMinutes(type) / 60); await ch.event(`Construction started on ${nm}${by}. Ready in ${h} game hour${h === 1 ? '' : 's'}`, 'build'); }
       await ch.fillVacancies();
       return { building: b };
     });
@@ -345,10 +397,21 @@ export class World {
       const b = (await ch.q('select * from buildings where id = $1 for update', [id])).rows[0];
       if (!b) throw new HttpError(404, 'No such building.');
       const t = BUILDING_TYPES[b.type] || {};
+      await this.demolishIn(ch, b);
+      if (refund) ch.refund(t.cost || 0);
+      await ch.event(`${b.name || t.name || 'A building'} was demolished`, 'demolish');
+      await ch.fillVacancies();
+      return { ok: true };
+    });
+  }
+
+  async demolishIn(ch, b) {
+    const id = b.id;
+    {
       const typeOfId = async bid => bid ? (await ch.q('select type from buildings where id = $1', [bid])).rows[0]?.type : null;
       // Workers lose this job; residents go back to the Outskirts (keeping their place at the front of the queue).
       for (const c of (await ch.q('select c.*, h.type htype from citizens c left join buildings h on h.id = c.home_id where c.job_id = $1 for update of c', [id])).rows) {
-        const homeType = c.htype; delete c.htype; await ch.leaveJob(c, b.type, homeType); await ch.saveCitizen(c); }
+        const homeType = c.htype; delete c.htype; await ch.leaveJob(c, b.type, homeType); c.manual = false; await ch.saveCitizen(c); }
       for (const c of (await ch.q('select * from citizens where home_id = $1 for update', [id])).rows) await ch.moveOut(c, { home: b.type, job: await typeOfId(c.job_id) });
       if (b.leisure) {
         const rows = (await ch.q('select c.*, h.x hx, h.y hy from citizens c left join buildings h on h.id = c.home_id where c.hang_id = $1 for update of c', [id])).rows;
@@ -360,11 +423,31 @@ export class World {
       }
       await ch.q('delete from buildings where id = $1', [id]);
       ch.buildings.delete(id); ch.removedBuildings.set(id, R.chunkKey(b.cx, b.cy));
-      if (refund) ch.refund(t.cost || 0);
-      await ch.event(`${b.name || t.name || 'A building'} was demolished`, 'demolish');
+    }
+  }
+
+  // Clear a rectangle of the map: every building touching it and every road tile inside it.
+  async bulldozeArea({ x0, y0, x1, y1 }) {
+    [x0, y0, x1, y1] = [x0, y0, x1, y1].map(v => Math.trunc(Number(v)));
+    if (![x0, y0, x1, y1].every(Number.isFinite)) throw new HttpError(400, 'Bad area.');
+    const ax = Math.min(x0, x1), bx = Math.max(x0, x1), ay = Math.min(y0, y1), by = Math.max(y0, y1);
+    if (bx - ax > 400 || by - ay > 400) throw new HttpError(400, 'That area is too big. Clear at most 400 × 400 tiles at a time.');
+    return this.change(async ch => {
+      const blds = (await ch.q('select * from buildings where x <= $3 and x + w > $1 and y <= $4 and y + d > $2 limit 2000 for update', [ax, ay, bx, by])).rows;
+      for (const b of blds) await this.demolishIn(ch, b);
+      const removed = (await ch.q('delete from roads where x between $1 and $3 and y between $2 and $4 returning x, y', [ax, ay, bx, by])).rows.map(r => `${r.x},${r.y}`);
+      this.roadOps(ch, {}, removed);
+      if (blds.length || removed.length) await ch.event(`An area was cleared: ${fmt(blds.length)} building${blds.length === 1 ? '' : 's'} and ${fmt(removed.length)} road tile${removed.length === 1 ? '' : 's'} removed`, 'demolish');
       await ch.fillVacancies();
-      return { ok: true };
+      return { buildings: blds.length, roads: removed.length };
     });
+  }
+
+  roadOps(ch, set, removed) {
+    const by = new Map(); const slot = k => { const [x, y] = k.split(',').map(Number); const ck = R.chunkKeyOfTile(x, y); if (!by.has(ck)) by.set(ck, { set: {}, remove: [] }); return by.get(ck); };
+    for (const k in set) slot(k).set[k] = set[k];
+    for (const k of removed) slot(k).remove.push(k);
+    for (const [ck, o] of by) ch.roadOps.push({ op: 'roads', set: o.set, remove: o.remove, chunks: [ck] });
   }
 
   async restore(b) {
@@ -401,7 +484,7 @@ export class World {
     });
   }
 
-  async paintRoads({ set = {}, remove = [], free = false }) {
+  async paintRoads({ set = {}, remove = [] }) {
     return this.change(async ch => {
       const keys = Object.keys(set).filter(k => /^-?\d+,-?\d+$/.test(k) && R.isRoadType(set[k])).slice(0, 5000);
       const toSet = {}; let cost = 0;
@@ -420,18 +503,14 @@ export class World {
         [rm.map(k => +k.split(',')[0]), rm.map(k => +k.split(',')[1])])).rows.map(r => `${r.x},${r.y}`);
       const n = Object.keys(toSet).length;
       if (!n && !removed.length) return { changed: 0, cost: 0 };
-      ch.spend(cost, free);
       if (n) {
         const ks = Object.keys(toSet); const xs = ks.map(k => +k.split(',')[0]), ys = ks.map(k => +k.split(',')[1]);
         await ch.q(`insert into roads (x, y, type, cx, cy) select x, y, t, floor(x::float / ${R.CHUNK})::int, floor(y::float / ${R.CHUNK})::int
           from unnest($1::int[], $2::int[], $3::text[]) u(x, y, t) on conflict (x, y) do update set type = excluded.type`, [xs, ys, ks.map(k => toSet[k])]);
       }
       // One road op per chunk so viewers only hear about roads they can see.
-      const by = new Map(); const slot = k => { const [x, y] = k.split(',').map(Number); const ck = R.chunkKeyOfTile(x, y); if (!by.has(ck)) by.set(ck, { set: {}, remove: [] }); return by.get(ck); };
-      for (const k in toSet) slot(k).set[k] = toSet[k];
-      for (const k of removed) slot(k).remove.push(k);
-      for (const [ck, o] of by) ch.roadOps.push({ op: 'roads', set: o.set, remove: o.remove, chunks: [ck] });
-      return { changed: n + removed.length, cost: free ? 0 : cost };
+      this.roadOps(ch, toSet, removed);
+      return { changed: n + removed.length, cost: 0 };
     });
   }
 
@@ -458,6 +537,82 @@ export class World {
       else if (waiting > 0) await ch.event(`${fmt(rows.length)} new followers arrived. ${fmt(ch.meta.population - ch.meta.residents)} are waiting in the Outskirts`, 'spawn');
       return { added: rows.length };
     });
+  }
+
+  async spawnBulk(handles) {
+    const list = (Array.isArray(handles) ? handles : String(handles || '').split(/[\s,;]+/)).map(R.cleanHandle).filter(Boolean).slice(0, 5000);
+    if (!list.length) throw new HttpError(400, 'Add at least one username.');
+    return this.change(async ch => {
+      const rows = await this.insertCitizens(ch, list, 'manual');
+      if (rows.length) {
+        const { moved } = await ch.fillVacancies();
+        await ch.event(rows.length === 1 ? `@${rows[0].handle} joined ${ch.meta.name}` : `${fmt(rows.length)} new citizens joined ${ch.meta.name}`, 'spawn');
+        return { added: rows.length, skipped: list.length - rows.length, housed: moved };
+      }
+      return { added: 0, skipped: list.length, housed: 0 };
+    });
+  }
+
+  // The developer's career and housing controls.
+  async setJob(id, jobId) {
+    return this.change(async ch => {
+      const c = (await ch.q('select c.*, h.type htype, j.type jtype from citizens c left join buildings h on h.id = c.home_id left join buildings j on j.id = c.job_id where c.id = $1 for update of c', [id])).rows[0];
+      if (!c) throw new HttpError(404, 'No such citizen.');
+      const homeType = c.htype, jobType = c.jtype; delete c.htype; delete c.jtype;
+      if (!c.home_id) throw new HttpError(400, `@${c.handle} is waiting in the Outskirts. Give them a home first.`);
+      let j = null;
+      if (jobId) {
+        j = (await ch.q('select * from buildings where id = $1 for update', [jobId])).rows[0];
+        if (!j || !j.job_cap && !BUILDING_TYPES[j.type]?.work) throw new HttpError(400, 'That building has no jobs.');
+        if (!j.done) throw new HttpError(409, 'That building is still under construction.');
+        if (c.job_id === j.id) return { ok: true };
+        if (j.job_used >= j.job_cap) {
+          // Full: the newest worker who was placed automatically makes room. Hand-placed workers are never bumped.
+          const out = (await ch.q(`select c.*, h.type htype from citizens c left join buildings h on h.id = c.home_id
+            where c.job_id = $1 and not c.manual order by c.seq desc limit 1 for update of c`, [j.id])).rows[0];
+          if (!out) throw new HttpError(409, `Everyone at ${j.name || BUILDING_TYPES[j.type].name} was placed by hand. Move one of them first.`);
+          const ht = out.htype; delete out.htype; await ch.leaveJob(out, j.type, ht); await ch.saveCitizen(out);
+          j = (await ch.q('select * from buildings where id = $1', [j.id])).rows[0];
+        }
+      }
+      if (c.job_id) await ch.leaveJob(c, jobType, homeType);
+      if (j) await ch.takeJob(c, j, homeType);
+      c.manual = true; await ch.saveCitizen(c);
+      await ch.event(j ? `@${c.handle} is now working as ${BUILDING_TYPES[j.type].work.title.toLowerCase()} at ${j.name || BUILDING_TYPES[j.type].name}` : `@${c.handle} left their job`, 'career');
+      await ch.fillVacancies();
+      return { ok: true };
+    });
+  }
+  async setHome(id, homeId) {
+    return this.change(async ch => {
+      const c = (await ch.q('select c.*, h.type htype, j.type jtype from citizens c left join buildings h on h.id = c.home_id left join buildings j on j.id = c.job_id where c.id = $1 for update of c', [id])).rows[0];
+      if (!c) throw new HttpError(404, 'No such citizen.');
+      const types = { home: c.htype, job: c.jtype }; delete c.htype; delete c.jtype;
+      const h = (await ch.q('select * from buildings where id = $1 for update', [homeId])).rows[0];
+      if (!h || !BUILDING_TYPES[h.type]?.home) throw new HttpError(400, 'That building has no homes.');
+      if (!h.done) throw new HttpError(409, 'That building is still under construction.');
+      if (c.home_id === h.id) return { ok: true };
+      if (h.home_used >= h.home_cap) {
+        // Full: the newest resident (never the founder) goes back to the front of the housing queue to make room.
+        const out = (await ch.q(`select c.*, j.type jtype from citizens c left join buildings j on j.id = c.job_id
+          where c.home_id = $1 and not c.founder order by c.seq desc limit 1 for update of c`, [h.id])).rows[0];
+        if (!out) throw new HttpError(409, `${h.name || BUILDING_TYPES[h.type].name} is full.`);
+        const jt = out.jtype; delete out.jtype; await ch.moveOut(out, { home: h.type, job: jt });
+        await ch.event(`@${out.handle} made room in ${h.name || BUILDING_TYPES[h.type].name}`, 'movein');
+      }
+      if (c.home_id) await ch.rehome(c, h, types); else await ch.moveIn(c, h);
+      await ch.event(`@${c.handle} moved into ${h.name || BUILDING_TYPES[h.type].name}`, 'movein');
+      ch.moved.clear(); await ch.fillVacancies();
+      return { ok: true };
+    });
+  }
+  // Workplaces or homes near a spot, for the developer's pickers.
+  async places(kind, x, y) {
+    const col = kind === 'home' ? 'home' : 'job';
+    const rows = (await pool.query(`select * from buildings where done and ${col}_cap > 0
+      order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 60`, [Math.trunc(Number(x) || 0), Math.trunc(Number(y) || 0)])).rows;
+    return rows.map(r => ({ id: r.id, type: r.type, name: r.name || BUILDING_TYPES[r.type]?.name, x: r.x, y: r.y,
+      used: r[`${col}_used`], cap: r[`${col}_cap`], title: col === 'job' ? BUILDING_TYPES[r.type]?.work?.title : null }));
   }
 
   async removeCitizen(id) {
@@ -488,8 +643,10 @@ export class World {
   async tick() {
     if (!this.meta) return { days: 0 };
     const today = R.gameDay(Date.now(), this.meta.epoch);
+    const due = (await pool.query('select 1 from buildings where not done and ready_at <= $1 limit 1', [Date.now()])).rowCount;
+    if (due) await this.finishAll({ dueOnly: true });
     const pending = this.meta.population > this.meta.residents && (await pool.query('select 1 from buildings where home_used < home_cap limit 1')).rowCount;
-    if (today <= (this.meta.newsDay ?? 0) && !pending) return { days: 0 };
+    if (today <= (this.meta.newsDay ?? 0) && !pending) return { days: 0, finished: due };
     return this.change(async ch => {
       const days = today - (ch.meta.newsDay ?? 0);
       if (days > 0) {

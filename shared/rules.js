@@ -26,6 +26,14 @@ export function capacities(type) {
     rent: t.home ? t.home.rent : 0, salary: t.work ? t.work.salary : 0 };
 }
 
+// Construction time in game minutes. Small things (trees, benches, lamps) appear instantly.
+// A catalog entry can set buildHours to override; otherwise bigger, pricier buildings take longer.
+export function buildMinutes(type) {
+  const t = BUILDING_TYPES[type] || {};
+  if (t.buildHours != null) return Math.round(t.buildHours * 60);
+  return (t.cost || 0) < 100 ? 0 : 60 * Math.max(1, Math.ceil((t.cost || 0) / 1500));
+}
+
 // What one citizen adds to the treasury each day, and what they gain themselves.
 export const taxOf = salary => Math.round(salary * TAX_RATE);
 export const netOf = (salary, rent) => salary - rent;

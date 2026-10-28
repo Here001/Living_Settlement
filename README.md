@@ -17,6 +17,17 @@ Postgres (the truth) ◀─▶ web server(s) ─▶ WebSocket, per district ─�
 - **Money:** jobs pay daily wages. Rent and 20% tax come out of wages and fund the treasury, along with a daily grant of 200. Unemployed residents live rent-free. Building costs coins from the treasury.
 - **Only you build.** Open the site with `#builder` and enter your `ADMIN_TOKEN`. Everyone else gets a view-only city.
 
+## Developer controls
+
+Open the site with `#builder` and enter your `ADMIN_TOKEN`. As the developer you can:
+
+- **Build anything for free.** Turn **Build instantly** off to give buildings a construction period. They appear as building sites with scaffolding and a crane, and their homes and jobs open when they're finished. Fast-forward one with **Finish now** on its card, or all of them with **Finish all construction**.
+- **Remove anything.** Use **Bulldoze → Clear an area** and drag a box over buildings, roads, trees, anything. It asks before clearing. The other bulldoze modes remove one thing at a time.
+- **Add people.** Open **Citizens** and add one name, or paste a list into **Add many at once**.
+- **Change careers and homes.** Tap a person, then **Change job** or **Change home**. If a place is full, the newest automatically placed person makes room. People you placed by hand are never bumped, and automatic hiring leaves them alone.
+- **Find yourself.** **Find me** flies to your character. If you're indoors, a pointer shows which building you're in.
+- **Go full screen.** Use the buttons above the toolbar for full screen (F) and to hide the interface for streaming (H). On iPhone, use Share → Add to Home Screen to open the city full screen.
+
 ## Run it on your computer
 
 With Docker: `docker compose up --build`, then open http://localhost:3000/#builder (token `local-dev-token-please-change`).

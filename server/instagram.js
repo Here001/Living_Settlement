@@ -1,5 +1,6 @@
 import express from 'express';
 import crypto from 'node:crypto';
+import { checkClaimComment } from './players.js';
 
 // Instagram comments webhook (Instagram API with Instagram Login, "comments" field).
 //   GET  /webhooks/instagram  → Meta's one-time verification handshake
@@ -31,6 +32,7 @@ export function instagramRouter(world) {
       const v = change.value || {}; const username = v.from?.username;
       if (!username || !v.id) continue;
       saves.push(world.recordComment({ id: v.id, username, text: v.text, mediaId: v.media?.id, source: 'instagram', wantsSpawn: SPAWN_WORD.test(v.text || '') }));
+      saves.push(checkClaimComment(username, v.text)); // "CLAIM 482913" from the avatar's own account proves it's theirs
     }
     // Saving is one quick insert per comment, so Meta gets its answer fast. If saving fails, a non-200 makes Meta retry later.
     try { await Promise.all(saves); res.sendStatus(200); }

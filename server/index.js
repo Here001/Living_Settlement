@@ -10,6 +10,7 @@ import { pool, migrate } from './db.js';
 import { World, HttpError } from './world.js';
 import { createBus } from './bus.js';
 import { instagramRouter } from './instagram.js';
+import { playersRouter, sweepPlayers } from './players.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -109,6 +110,10 @@ app.post('/api/admin/citizens', admin, send(req => world.spawn((req.body || {}).
 app.delete('/api/admin/citizens/:id', admin, send(req => world.removeCitizen(req.params.id)));
 app.put('/api/admin/build-post', admin, send(req => world.setBuildPost((req.body || {}).mediaId)));
 app.get('/api/admin/requests', admin, send(() => world.buildRequests()));
+
+// ---------- players: prove an avatar is yours, set a password, log in ----------
+app.use('/api', playersRouter({ limit, send, admin }));
+setInterval(() => { if (isLeader) sweepPlayers().catch(e => console.error('sweep:', e.message)); }, 3600 * 1000).unref();
 
 // ---------- the city in the browser ----------
 app.use('/shared', express.static(path.join(root, 'shared'), { maxAge: '5m' }));

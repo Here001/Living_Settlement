@@ -289,10 +289,10 @@ export class World {
     return rows.map(cOut);
   }
   async citizenDetail(handle) {
-    const r = (await pool.query(`${CITIZEN_SELECT.replace('select c.id,', 'select c.coins_base, c.coins_day, c.net, c.id,')} where lower(c.handle) = lower($1)`, [R.cleanHandle(handle)])).rows[0];
+    const r = (await pool.query(`${CITIZEN_SELECT.replace('select c.id,', 'select c.coins_base, c.coins_day, c.net, c.pass_hash is not null has_pw, c.id,')} where lower(c.handle) = lower($1)`, [R.cleanHandle(handle)])).rows[0];
     if (!r) return null;
     const out = cOut(r); const today = this.meta ? R.gameDay(Date.now(), this.meta.epoch) : 0;
-    out.coins = R.balanceOn(r.coins_base, r.coins_day, r.net, today); out.net = r.net;
+    out.coins = R.balanceOn(r.coins_base, r.coins_day, r.net, today); out.net = r.net; out.claimed = !!r.has_pw;
     if (!r.hid) out.queue = Number((await pool.query('select count(*) n from citizens where home_id is null and seq < $1', [r.seq])).rows[0].n) + 1;
     return out;
   }

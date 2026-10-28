@@ -256,6 +256,38 @@ ok((await call('PATCH', `/api/admin/buildings/${row.id}`, { x: 320, y: 320, rot:
 r = await call('PATCH', `/api/admin/buildings/${row.id}`, { x: 330, y: 330, rot: 0 });
 ok(r.status === 200 && (await chunk('10_10')).chunks['10_10'].buildings.find(b => b.id === row.id)?.rot === 0, 'move and turn in one go');
 
+console.log('Players prove it is them, then set a password');
+r = await call('POST', '/api/claim', { handle: 'zara_ng' }, { auth: false });
+ok(r.status === 200 && /^CLAIM \d{6}$/.test(r.json.code) && r.json.claimId, 'get a claim code', JSON.stringify(r.json));
+const claim = r.json, digits = claim.code.split(' ')[1];
+ok((await call('POST', `/api/claim/${claim.claimId}/password`, { password: 'secret1' }, { auth: false })).status === 409, 'no password before the comment');
+await post(comment('cc1', 'tunde', `CLAIM ${digits}`)); await sleep(300);
+ok((await call('GET', `/api/claim/${claim.claimId}`, undefined, { auth: false })).json.status === 'waiting', "someone else commenting the code doesn't count");
+await post(comment('cc2', 'zara_ng', `here you go claim ${digits} 🙌`));
+let st = null; for (let i = 0; i < 20 && st !== 'verified'; i++) { await sleep(100); st = (await call('GET', `/api/claim/${claim.claimId}`, undefined, { auth: false })).json.status; }
+ok(st === 'verified', 'the real account commenting the code verifies it');
+ok((await call('POST', `/api/claim/${claim.claimId}/password`, { password: '123' }, { auth: false })).status === 400, 'too-short passwords are refused');
+r = await call('POST', `/api/claim/${claim.claimId}/password`, { password: 'secret1' }, { auth: false });
+ok(r.status === 200 && r.json.token && r.json.handle === 'zara_ng', 'set the password and get signed in');
+const tok1 = r.json.token;
+ok((await call('POST', `/api/claim/${claim.claimId}/password`, { password: 'secret2' }, { auth: false })).status === 404, 'a code works only once');
+ok((await call('GET', '/api/me', undefined, { auth: false, headers: { 'x-player': tok1 } })).json.handle === 'zara_ng', 'the session knows who you are');
+ok((await who('zara_ng')).claimed === true, 'the card shows the avatar is claimed');
+ok((await call('POST', '/api/login', { handle: 'zara_ng', password: 'nope' }, { auth: false })).status === 401, 'wrong password refused');
+r = await call('POST', '/api/login', { handle: 'ZARA_NG', password: 'secret1' }, { auth: false });
+ok(r.status === 200 && r.json.token, 'log in with the password');
+r = await call('POST', '/api/claim', { handle: 'zara_ng' }, { auth: false });
+ok(r.json.reset === true, 'forgot password starts the same way');
+await post(comment('cc3', 'zara_ng', r.json.code)); await sleep(400);
+const r2 = await call('POST', `/api/claim/${r.json.claimId}/password`, { password: 'newpass9' }, { auth: false });
+ok(r2.status === 200, 'reset the password');
+ok((await call('GET', '/api/me', undefined, { auth: false, headers: { 'x-player': tok1 } })).status === 401, 'resetting signs out old sessions');
+const zara = await who('zara_ng');
+ok((await call('POST', `/api/admin/citizens/${zara.id}/setup-link`, {}, { auth: false })).status === 401, 'only the developer makes setup links');
+r = await call('POST', `/api/admin/citizens/${zara.id}/setup-link`);
+ok(r.status === 200 && (await call('POST', `/api/claim/${r.json.claimId}/password`, { password: 'linkpass1' }, { auth: false })).status === 200, 'a setup link lets them set a password directly');
+ok((await call('DELETE', `/api/admin/citizens/${zara.id}/password`)).status === 200 && (await who('zara_ng')).claimed === false, 'the developer can clear a password');
+
 console.log('Men and women');
 await post(comment('c4', 'ada_f', 'spawn female 👩')); await post(comment('c5', 'bayo_m', 'Spawn me as a man'));
 let ada = null; for (let i = 0; i < 40 && !ada?.id; i++) { await sleep(100); ada = await who('ada_f'); }

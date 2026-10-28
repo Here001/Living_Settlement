@@ -153,6 +153,14 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .card .now{margin:2px 0 0;color:var(--muted)}
 .chips2{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
 .pill{border:1.4px solid var(--line);border-radius:999px;padding:1px 8px;font-size:12px;font-weight:600}
+.authbox{margin-top:10px;padding:10px 12px;border:1.6px dashed var(--soft);border-radius:14px;display:flex;flex-direction:column;gap:6px}
+.authbox h3{margin:0;font-size:15px}
+.authbox input{padding:8px 10px;border-radius:12px;border:1.6px solid var(--soft);background:var(--paper);font-size:15px}
+.codebig{display:flex;align-items:center;justify-content:space-between;gap:10px;font:800 clamp(18px,6vw,26px)/1 'Bricolage Grotesque',system-ui,sans-serif;letter-spacing:.05em;white-space:nowrap;padding:8px 12px;background:var(--chip);border-radius:12px;-webkit-user-select:all;user-select:all}
+.autherr{color:var(--danger);margin:0;font-weight:600}
+.hint.wait{font-style:italic}
+.linkb{border:0;background:none;color:var(--accent);font-weight:600;padding:4px 0;text-align:left;text-decoration:underline}
+.badge.ok{background:#E3F1E5;color:#2F6E3B}
 .card dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:10px 0 0;font-size:14px}
 .card dt{color:var(--muted)}
 .card dd{margin:0}
@@ -290,8 +298,14 @@ const D = { roads:new Map(), occ:new Map(), buildings:new Map(), water:new Map()
 const Store = { canWrite:false, ready:false, token:null, online:false };
 const CHUNK = CHUNK_SIZE, ck=(cx,cy)=>cx+'_'+cy, ckTile=(x,y)=>ck(Math.floor(x/CHUNK),Math.floor(y/CHUNK));
 const loading=new Set(), buffered=new Map(); let ws=null, subKey='', pinned=null;
+// ---- The signed-in player (a follower who proved an avatar is theirs) ----
+const ls={ get(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }, set(k,v){ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,JSON.stringify(v)); }catch(e){} } };
+let Me=ls.get('settlement-player'); // { token, handle }
+let auth=null, authPoll=null; // the open "prove it's you" or "log in" panel
+async function checkMe(){ if(!Me||!Me.token) return; try{ const r=await api('/api/me'); Me={...Me,handle:r.handle}; ls.set('settlement-player',Me); }catch(e){ Me=null; ls.set('settlement-player',null); } }
+function signedIn(r){ Me={token:r.token,handle:r.handle}; ls.set('settlement-player',Me); ls.set('settlement-me',r.handle); ls.set('settlement-claim',null); auth=null; clearInterval(authPoll); }
 async function api(path, opts={}){
-  const r=await fetch(path,{ method:opts.method||'GET', headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined });
+  const r=await fetch(path,{ method:opts.method||'GET', headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{}), ...(Me&&Me.token?{'x-player':Me.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined });
   const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`); return j; }
 const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', home:c.home, job:c.job, hang:c.hang });
 const placeChunks = c => [c.home,c.job,c.hang].filter(Boolean).map(p=>ckTile(p[2],p[3]));
@@ -1730,7 +1744,7 @@ function renderPane(){
 
 const detail=new Map(), detailLoading=new Set();
 async function loadDetail(handle){ try{ const d=await api('/api/citizens/'+encodeURIComponent(handle)); detail.set(d.id,d); return d; }catch(e){ toast(e.message); return null; } }
-function selectCitizen(id){ const c=S.citizens.get(id); if(!c) return; sel={kind:'c',id,handle:c.handle}; follow=id; renderCard(); loadDetail(c.handle).then(()=>{ if(sel&&sel.id===id) renderCard(); }); }
+function selectCitizen(id){ const c=S.citizens.get(id); if(!c) return; if(auth&&auth.handle!==c.handle&&!auth.claimId) auth=null; sel={kind:'c',id,handle:c.handle}; follow=id; renderCard(); loadDetail(c.handle).then(()=>{ if(sel&&sel.id===id) renderCard(); }); }
 // Find anyone by name: residents fly the camera to their home; Outskirts residents show their place in the queue.
 async function openCitizen(handle){ const d=await loadDetail(handle); if(!d) return; const c=normC(d); pinned=c.id; S.citizens.set(c.id,c);
   if(c.home){ const p=iso(c.home[2]+0.5,c.home[3]+0.5); cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.6); follow=c.id; } else follow=null;
@@ -1751,6 +1765,34 @@ function selectBuilding(id){ sel={kind:'b',id}; follow=null; renderCard(); }
 function closeCard(){ sel=null; follow=null; if(pinned){ const c=S.citizens.get(pinned); pinned=null; if(c&&!keepCitizen(c)) S.citizens.delete(c.id); } $('card').hidden=true; }
 const CAT_NAME = id => (CATS.find(c=>c.id===id)||{}).name || 'Building';
 function levelOf(b){ const t=T(b); let lv=1; const res=b.homeUsed||0, wk=b.jobUsed||0; if((t.home&&res>=t.home.capacity)||(t.work&&wk>=t.work.slots)) lv++; if(gmNow()/1440-(b.builtDay||0)>=7) lv++; return lv; }
+function authPanel(c){ const box=el('div',{class:'authbox'}); const A=auth;
+  const err=A.err?el('p',{class:'autherr',text:A.err}):null; const set=(o)=>{ auth={...auth,...o}; renderCard(); };
+  if(A.mode==='login'){ const pw=el('input',{type:'password',placeholder:'Your password',autocomplete:'current-password','aria-label':'Password'});
+    const go=async()=>{ try{ const r=await api('/api/login',{method:'POST',body:{handle:c.handle,password:pw.value}}); signedIn(r); toast(`Welcome back, @${r.handle}`); renderCard(); }catch(e){ set({err:e.message}); } };
+    pw.addEventListener('keydown',e=>{ if(e.key==='Enter') go(); }); setTimeout(()=>pw.focus(),30);
+    box.append(el('h3',{text:`Log in as @${c.handle}`}), el('div',{class:'spawn'}, pw, el('button',{class:'btn primary',text:'Log in',onclick:go})), err||'', el('button',{class:'linkb',text:'Forgot your password?',onclick:()=>set({mode:'claim',err:null})})); return box; }
+  if(A.mode==='claim' && !A.claimId){ const start=async()=>{ try{ const r=await api('/api/claim',{method:'POST',body:{handle:c.handle}}); const st={handle:r.handle,claimId:r.claimId,code:r.code,expiresAt:r.expiresAt,reset:r.reset}; ls.set('settlement-claim',st); set({...st,status:'waiting',err:null}); pollClaim(); }catch(e){ set({err:e.message}); } };
+    box.append(el('h3',{text:A.reset||(detail.get(c.id)||{}).claimed?'Reset your password':'Prove this is you'}), el('p',{class:'hint',text:`We'll give you a short code. Comment it on any of our Instagram posts from @${c.handle}, and you can set a password. Nobody else can do this for you.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Get my code',onclick:start})), err||''); return box; }
+  if(A.mode==='claim' && A.status!=='verified'){ const left=Math.max(0,Math.round((A.expiresAt-Date.now()+skew)/60000));
+    const copy=el('button',{class:'btn',text:'Copy',onclick:()=>{ try{ navigator.clipboard.writeText(A.code); toast('Copied. Paste it as a comment on Instagram.'); }catch(e){ toast('Hold the code to copy it.'); } }});
+    box.append(el('h3',{text:'Comment this code on Instagram'}), el('div',{class:'codebig'}, el('span',{text:A.code}), copy),
+      el('p',{class:'hint',text:A.status==='expired'?'This code expired. Get a new one.':`Post it as a comment on any of our posts, from the @${A.handle} account. This updates by itself within a few seconds of your comment. Code works for ${left} more minute${left===1?'':'s'}.`}),
+      el('p',{class:'hint wait',text:A.status==='expired'?'':'Waiting for your comment…'}), err||'',
+      el('div',{class:'row-actions'}, A.status==='expired'?el('button',{class:'btn primary',text:'Get a new code',onclick:()=>set({claimId:null,status:null})}):'', el('button',{class:'linkb',text:'Cancel',onclick:()=>{ ls.set('settlement-claim',null); clearInterval(authPoll); auth=null; renderCard(); }}))); return box; }
+  // verified: choose a password
+  const p1=el('input',{type:'password',placeholder:'New password (6+ characters)',autocomplete:'new-password','aria-label':'New password'}), p2=el('input',{type:'password',placeholder:'Type it again',autocomplete:'new-password','aria-label':'Repeat password'});
+  const save=async()=>{ if(p1.value!==p2.value){ set({err:"Those passwords don't match."}); return; } try{ const r=await api(`/api/claim/${encodeURIComponent(A.claimId)}/password`,{method:'POST',body:{password:p1.value}}); signedIn(r); toast(`You're in, @${r.handle}. Keep your password safe: you'll need it for special actions.`); renderCard(); }catch(e){ set({err:e.message}); } };
+  p2.addEventListener('keydown',e=>{ if(e.key==='Enter') save(); }); setTimeout(()=>p1.focus(),30);
+  box.append(el('h3',{text:`It's you, @${A.handle}! Choose a password`}), el('p',{class:'hint',text:"You'll use it to control your citizen: special tasks, the casino and more."}), p1, p2, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Save password',onclick:save})), err||''); return box; }
+function pollClaim(){ clearInterval(authPoll); authPoll=setInterval(async()=>{ if(!auth||!auth.claimId){ clearInterval(authPoll); return; }
+  try{ const r=await api('/api/claim/'+encodeURIComponent(auth.claimId)); if(r.status!==auth.status){ auth={...auth,status:r.status}; if(r.status!=='waiting') clearInterval(authPoll); if(r.status==='verified') toast('Got it! Now choose a password.'); renderCard(); } }
+  catch(e){ clearInterval(authPoll); auth={...auth,status:'expired'}; renderCard(); } },4000); }
+// Resume a half-finished claim (people switch to Instagram and come back), or open a developer's setup link.
+async function resumeClaim(){ const q=new URLSearchParams(location.search).get('claim'); let st=ls.get('settlement-claim');
+  if(q){ try{ const r=await api('/api/claim/'+encodeURIComponent(q)); st={handle:r.handle,claimId:q,code:'',expiresAt:Date.now()+3600e3}; window.history.replaceState(null,'',location.pathname+location.hash); if(r.status!=='verified'){ toast('That setup link has already been used or expired.'); return; } }catch(e){ toast(e.message); return; } }
+  if(!st||!st.claimId) return; let status='waiting'; try{ status=(await api('/api/claim/'+encodeURIComponent(st.claimId))).status; }catch(e){ ls.set('settlement-claim',null); return; }
+  if(status==='used'){ ls.set('settlement-claim',null); return; }
+  auth={mode:'claim',...st,status}; await openCitizen(st.handle); if(status==='waiting') pollClaim(); }
 function renderCard(){
   const card=$('card'); if(!sel){ card.hidden=true; return; } card.innerHTML='';
   const close=el('button',{class:'x','aria-label':'Close',onclick:closeCard,text:'×'});
@@ -1770,9 +1812,14 @@ function renderCard(){
         el('button',{class:'btn',text:c.gender==='f'?'Make a man':'Make a woman',onclick:()=>setGender(c,c.gender==='f'?'m':'f')}),
         el('button',{class:'btn',text:'Change job',onclick:()=>openPicker('job',c)}), el('button',{class:'btn',text:'Change home',onclick:()=>openPicker('home',c)}),
         c.founder?null:el('button',{class:'btn danger',text:'Remove',onclick:()=>removeCitizen(c)})));
+      card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Copy setup link',title:'A link that lets this person set a password without the Instagram code',onclick:async()=>{ try{ const r=await api(`/api/admin/citizens/${c.id}/setup-link`,{method:'POST'}); const link=`${location.origin}/?claim=${encodeURIComponent(r.claimId)}`; try{ await navigator.clipboard.writeText(link); toast(`Setup link for @${c.handle} copied. It works once, for 24 hours.`); }catch(e){ prompt('Setup link (works once, for 24 hours):',link); } }catch(e){ toast(e.message); } }}),
+        d&&d.claimed?el('button',{class:'btn danger',text:'Clear password',onclick:()=>toast(`Clear @${c.handle}'s password? They'll need a new code to get back in.`,'Clear',async()=>{ try{ await api(`/api/admin/citizens/${c.id}/password`,{method:'DELETE'}); d.claimed=false; toast('Password cleared.'); renderCard(); }catch(e){ toast(e.message); } })}):null,
+        el('span',{class:'hint',text:d?(d.claimed?'Has a password':'No password yet'):''})));
       if(sel.picker) card.append(renderPicker(c)); }
-    else { let mine=null; try{ mine=localStorage.getItem('settlement-me'); }catch(e){}
-      if(mine!==c.handle) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'This is me',onclick:()=>{ try{ localStorage.setItem('settlement-me',c.handle); }catch(e){} toast('Saved. Tap Find me to come back to yourself.'); renderCard(); }}))); }
+    else { const mine=Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase();
+      if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; ls.set('settlement-player',null); toast('Logged out.'); renderCard(); }})));
+      else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
+      else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(); }}))); }
   } else if(sel.kind==='v'){ const v=D.vehicles.get(sel.id); if(!v){ closeCard(); return; } const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car;
     const head=el('div',{class:'chead'}); head.append(el('img',{class:'cthumb',alt:'',src:vehicleThumb(v.type)}), el('div',null, el('h2',{text:V.name}), el('p',{class:'now',text:'Driving around the neighbourhood'})));
     card.append(close, head); if(Store.canWrite) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:'Remove vehicle',onclick:async()=>{ if(draftOn){ draftEdit(`removing a ${V.name.toLowerCase()}`,d=>{ if(isDraftId(v.id)) d.vehicles=d.vehicles.filter(q=>q.tid!==v.id); else d.removeVehicles.push(v.id); }); closeCard(); return; } try{ await api('/api/admin/vehicles/'+encodeURIComponent(v.id),{method:'DELETE'}); closeCard(); toast(`Removed the ${V.name.toLowerCase()}`); }catch(e){ toast(e.message); } }})));
@@ -1917,10 +1964,11 @@ const Music={ ac:null, on:false, timer:null, step:0, next:0,
 const SPEEDS=[1,10,60];
 $('clockBtn').onclick=()=>{ const i=SPEEDS.indexOf(speed); const n=SPEEDS[(i+1)%SPEEDS.length]; setSpeed(n); const tag=$('speedTag'); tag.hidden=n===1; tag.textContent=`Preview ${n}×`; toast(n===1?'Back to live time':`Previewing the future at ${n}× speed. Tap the clock to return.`); feedDirty=true; };
 $('musicBtn').onclick=()=>Music.toggle();
-function findMe(){ let mine=null; try{ mine=localStorage.getItem('settlement-me'); }catch(e){}
+function findMe(){ let mine=(Me&&Me.handle)||null; if(!mine){ try{ const v=localStorage.getItem('settlement-me'); mine=v&&v.startsWith('"')?JSON.parse(v):v; }catch(e){} }
   const h = Store.canWrite ? (S.meta&&S.meta.founder) : mine;
   if(h){ openCitizen(h); return; }
   openTab('people'); setTimeout(()=>{ const s=$('search'); if(s) s.focus(); },50); toast('Type your username, open your card and tap "This is me".'); }
+checkMe().then(resumeClaim);
 $('findBtn').onclick=findMe;
 $('wxBtn').onclick=()=>{ if(Store.canWrite) openTab('weather'); else { const w=weatherAt(S.meta,gmNow()); toast(`Weather: ${WEATHER_TYPES[w].name}`); } };
 function toggleFullscreen(){ const d=document; const on=d.fullscreenElement||d.webkitFullscreenElement;

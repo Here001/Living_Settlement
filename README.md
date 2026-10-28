@@ -41,6 +41,16 @@ Open the site with `#builder` and enter your `ADMIN_TOKEN`. As the developer you
 - **Trigger disasters.** **Disasters** (fire, tornado, earthquake, flood, meteor) hit where you tap. Damaged buildings become ruins and their people lose that home or job until you **Rebuild** them. **Clear ruins** removes all rubble.
 - **Go full screen.** Use the buttons above the toolbar for full screen (F) and to hide the interface for streaming (H). On iPhone, use Share → Add to Home Screen to open the city full screen.
 
+## Players: prove it's you, then set a password
+
+A follower opens the city, finds their citizen and taps **This is me**. The site gives them a one-time code like `CLAIM 482913`.
+They comment it on any of your Instagram posts **from their own account**. The webhook sees the comment, checks it came from that exact username, and the page moves on by itself to "Choose a password". From then on they log in with that password, and it's what will unlock special actions like the casino or crime.
+
+- The code is public, but useless to anyone else: it only counts when the avatar's own account posts it, and only the browser that asked for it can then set the password.
+- **Forgot password:** the same steps reset it, and old logins are signed out.
+- **Before Instagram is connected, or to settle a dispute:** on a citizen's card, developer view has **Copy setup link**, a one-time link (valid 24 hours) that lets that person set a password directly. **Clear password** locks an avatar until its owner proves it again.
+- Passwords are stored hashed (scrypt). After 8 wrong guesses, a username is locked for 15 minutes.
+
 ## Run it on your computer
 
 With Docker: `docker compose up --build`, then open http://localhost:3000/#builder (token `local-dev-token-please-change`).

@@ -90,6 +90,14 @@ const MIGRATIONS = [
   `create table draft (id int primary key default 1, data jsonb not null, updated_at bigint not null);`,
   // v7: a building can be turned to face the other way (its width and depth swap).
   `alter table buildings add column rot smallint not null default 0;`,
+  // v8: players prove an avatar is theirs (claim codes), set a password, and stay signed in (sessions).
+  `alter table citizens add column pass_hash text, add column pass_set_at bigint;
+   create table claims (id_hash text primary key, citizen_id text not null, handle text not null, code text not null,
+     created_at bigint not null, expires_at bigint not null, verified_at bigint, used_at bigint);
+   create index claims_code on claims (code);
+   create index claims_citizen on claims (citizen_id);
+   create table sessions (token_hash text primary key, citizen_id text not null, created_at bigint not null, last_seen bigint not null);
+   create index sessions_citizen on sessions (citizen_id);`,
 ];
 
 export async function migrate() {

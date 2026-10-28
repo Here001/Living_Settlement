@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { pool, worldTx } from './db.js';
 import { BUILDING_TYPES, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, roadClears } from '../shared/catalog.js';
 import * as R from '../shared/rules.js';
+const changeScope = new AsyncLocalStorage();
 
 const uid = () => crypto.randomUUID();
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -56,6 +58,7 @@ class Change {
   touch(c) { if (!this.citizens.has(c.id)) this.citizens.set(c.id, chunksOfRow(c)); }
   coins(c) { c.coins_base = R.balanceOn(c.coins_base, c.coins_day, c.net, this.today); c.coins_day = this.today; }
   async event(text, kind) {
+    if (this.quiet) return;
     const e = { id: uid(), t: Date.now(), kind, text };
     await this.q('insert into events (id, t, kind, text) values ($1, $2, $3, $4)', [e.id, e.t, e.kind, e.text]);
     this.events.push(e);
@@ -228,11 +231,13 @@ export class World {
 
   // Runs fn inside the world lock with a fresh copy of the meta row, then tells every server what changed.
   async change(fn, { allowUnfounded = false } = {}) {
+    // Inside another change (publishing a draft), join its transaction so the whole batch succeeds or fails together.
+    const outer = changeScope.getStore(); if (outer) return fn(outer);
     const result = await worldTx(async db => {
       const row = (await db.query('select data from meta where id = 1 for update')).rows[0];
       if (!row && !allowUnfounded) throw new HttpError(409, 'Found the settlement first.');
       const ch = new Change(db, row ? row.data : null);
-      const r = await fn(ch);
+      const r = await changeScope.run(ch, () => fn(ch));
       if (ch.meta) await db.query('insert into meta (id, data) values (1, $1) on conflict (id) do update set data = $1', [ch.meta]);
       const ops = await this.collectOps(db, ch);
       return { r, ops };
@@ -829,6 +834,43 @@ export class World {
       await ch.fillVacancies();
       return { days };
     });
+  }
+
+  // ---------- the developer's draft ----------
+  // A draft is a list of building work saved but not yet live. Publishing replays it in one transaction:
+  // anything that no longer fits is skipped and reported, everything else appears at once with a single headline.
+  async getDraft() { return (await pool.query('select data, updated_at from draft where id = 1')).rows[0] || null; }
+  async saveDraft(data) {
+    const json = JSON.stringify(data || {}); if (json.length > 400000) throw new HttpError(413, 'That draft is too big. Publish part of it first.');
+    await pool.query('insert into draft (id, data, updated_at) values (1, $1, $2) on conflict (id) do update set data = $1, updated_at = $2', [json, Date.now()]);
+    return { ok: true };
+  }
+  async discardDraft() { await pool.query('delete from draft where id = 1'); return { ok: true }; }
+  async publishDraft() {
+    const row = await this.getDraft(); const d = row?.data; if (!d) throw new HttpError(400, 'There is no draft to publish.');
+    const n = { built: 0, moved: 0, demolished: 0, roads: 0, water: 0, vehicles: 0 }, skipped = [];
+    const attempt = async (what, fn) => { try { await fn(); return true; } catch (e) { if (e instanceof HttpError) { skipped.push(`${what}: ${e.message}`); return false; } throw e; } };
+    const split = m => { const set = {}, remove = []; for (const [k, v] of Object.entries(m || {})) { if (v) set[k] = v; else remove.push(k); } return { set, remove }; };
+    const roads = split(d.roads), water = split(d.water);
+    const name = id => (d.labels || {})[id] || 'a building'; // the client keeps a readable name for each building it touches
+    await this.change(async ch => {
+      ch.quiet = true;
+      for (const id of d.demolish || []) if (await attempt(`demolish ${name(id)}`, () => this.demolish(id))) n.demolished++;
+      for (const id of d.removeVehicles || []) if (await attempt('remove a vehicle', () => this.removeVehicle(id))) n.vehicles++;
+      for (const [id, p] of Object.entries(d.moves || {})) if (await attempt(`move ${name(id)}`, () => this.move(id, p.x, p.y))) n.moved++;
+      if (water.remove.length) n.water += (await this.paintWater({ set: {}, remove: water.remove })).changed || 0;
+      if (roads.remove.length) n.roads += (await this.paintRoads({ set: {}, remove: roads.remove })).changed || 0;
+      for (const b of d.builds || []) if (await attempt(`build ${BUILDING_TYPES[b.type]?.name || b.type}`, () => this.build(b))) n.built++;
+      if (Object.keys(water.set).length) n.water += (await this.paintWater({ set: water.set, remove: [] })).changed || 0;
+      if (Object.keys(roads.set).length) n.roads += (await this.paintRoads({ set: roads.set, remove: [] })).changed || 0;
+      for (const v of d.vehicles || []) if (await attempt(`add a ${VEHICLE_TYPES[v.type]?.name?.toLowerCase() || 'vehicle'}`, () => this.placeVehicle(v))) n.vehicles++;
+      ch.quiet = false;
+      const parts = [[n.built, 'new building'], [n.moved, 'building moved', 'buildings moved'], [n.demolished, 'building demolished', 'buildings demolished'], [n.roads, 'road tile'], [n.water, 'tile of water', 'tiles of water'], [n.vehicles, 'vehicle change']]
+        .filter(([c]) => c).map(([c, one, many]) => `${fmt(c)} ${c === 1 ? one : (many || one + 's')}`);
+      if (parts.length) await ch.event(`${ch.meta.name} update: ${parts.join(', ')}`, 'build');
+      await ch.q('delete from draft where id = 1');
+    });
+    return { ...n, skipped };
   }
 
   // ---------- incoming comments ----------

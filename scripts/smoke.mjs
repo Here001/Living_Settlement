@@ -233,6 +233,20 @@ ok(!c9.buildings.some(b => b.id === tree.id) && c9.buildings.some(b => b.id === 
 await call('POST', '/api/admin/roads', { set: {}, remove: ['299,300', '300,300', '301,300'] });
 ok((await call('POST', '/api/admin/buildings/restore', { building: r.json.cleared[0] })).status === 200, 'undo puts the tree back');
 
+console.log('Draft, then update live');
+ok((await call('POST', '/api/admin/draft/publish')).status === 400, 'nothing to publish at first');
+ok((await call('GET', '/api/admin/draft', undefined, { auth: false })).status === 401, 'players cannot read the draft');
+const b0 = (await chunk('9_9')).chunks['9_9'].buildings.length;
+r = await call('PUT', '/api/admin/draft', { data: { builds: [{ tid: 'd:1', type: 'house', x: 310, y: 310 }, { tid: 'd:2', type: 'house', x: 300, y: 300 }], roads: { '310,312': 'street', '311,312': 'street' }, labels: {} } });
+ok(r.status === 200, 'save a draft');
+ok((await call('GET', '/api/admin/draft')).json.draft.data.builds.length === 2, 'the draft is kept on the server');
+ok((await chunk('9_9')).chunks['9_9'].buildings.length === b0, 'players see nothing yet');
+r = await call('POST', '/api/admin/draft/publish');
+ok(r.status === 200 && r.json.built === 1 && r.json.roads === 2 && r.json.skipped.length === 1, 'update live: one house, two road tiles, one skipped (spot taken)', JSON.stringify(r.json));
+ok((await chunk('9_9')).chunks['9_9'].buildings.some(b => b.type === 'house' && b.x === 310), 'the house is live');
+ok((await call('GET', '/api/meta', undefined, { auth: false })).json.events.filter(e => e.text.includes('update:')).length === 1, 'one headline for the whole update');
+ok((await call('GET', '/api/admin/draft')).json.draft === null, 'the draft is cleared after publishing');
+
 console.log('Men and women');
 await post(comment('c4', 'ada_f', 'spawn female 👩')); await post(comment('c5', 'bayo_m', 'Spawn me as a man'));
 let ada = null; for (let i = 0; i < 40 && !ada?.id; i++) { await sleep(100); ada = await who('ada_f'); }

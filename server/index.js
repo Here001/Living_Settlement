@@ -87,6 +87,10 @@ app.post('/api/admin/vehicles', admin, send(req => world.placeVehicle(req.body |
 app.delete('/api/admin/vehicles/:id', admin, send(req => world.removeVehicle(req.params.id)));
 app.post('/api/admin/disasters', admin, send(async req => { const r = await world.disaster(req.body || {}); eventsCache.t = 0; return r; }));
 app.put('/api/admin/weather', admin, send(req => world.setWeather((req.body || {}).kind)));
+app.get('/api/admin/draft', admin, send(async () => ({ draft: await world.getDraft() })));
+app.put('/api/admin/draft', admin, send(req => world.saveDraft((req.body || {}).data)));
+app.delete('/api/admin/draft', admin, send(() => world.discardDraft()));
+app.post('/api/admin/draft/publish', admin, send(async () => { const r = await world.publishDraft(); eventsCache.t = 0; return r; }));
 app.post('/api/admin/construction/finish-all', admin, send(() => world.finishAll()));
 app.post('/api/admin/bulldoze', admin, send(req => world.bulldozeArea(req.body || {})));
 app.get('/api/admin/places', admin, send(req => world.places(req.query.kind, req.query.x, req.query.y)));

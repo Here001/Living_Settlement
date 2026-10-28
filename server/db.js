@@ -86,6 +86,8 @@ const MIGRATIONS = [
   // v5: every citizen is a man or a woman. Existing citizens get a fixed coin-flip from their id.
   `alter table citizens add column gender char(1) not null default 'm' check (gender in ('m', 'f'));
    update citizens set gender = case when ('x' || substr(md5(id), 1, 2))::bit(8)::int % 2 = 0 then 'm' else 'f' end;`,
+  // v6: the developer's unpublished draft (only one at a time).
+  `create table draft (id int primary key default 1, data jsonb not null, updated_at bigint not null);`,
 ];
 
 export async function migrate() {

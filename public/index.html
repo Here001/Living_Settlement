@@ -184,23 +184,55 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 .found .btn{width:100%;margin-top:16px;padding:11px}
 @media (min-width:900px){ .tb{min-width:76px} .pane{max-height:40vh} }
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+/* ---- Compact layout: one slim line on top, one slim tool row at the bottom, more city in between ---- */
+.hud{align-items:center;gap:6px}
+.plate{flex:none;display:flex;align-items:baseline;gap:8px;padding:4px 12px;max-width:42%;border-radius:14px}
+.town{font-size:15px}
+.sub{font-size:11.5px}
+.hud .chips{position:static;flex:1;min-width:0;display:flex;flex-wrap:nowrap;gap:5px;overflow-x:auto;scrollbar-width:none;padding:2px;pointer-events:auto}
+.hud .chips::-webkit-scrollbar{display:none}
+.hud .chips[hidden]{display:none}
+.chip{flex:none;padding:3px 9px 3px 5px;font-size:12px;gap:5px}
+.chip button{gap:5px}
+.chip b{font-size:13px}
+.chip svg{width:15px;height:15px}
+.coin{width:14px;height:14px}
+.mi{width:18px;height:18px;font-size:9px}
+#wxIcon{font-size:13px!important}
+.clock{flex:none;min-width:0;padding:4px 10px;border-radius:14px}
+.clock .time{font-size:16px}
+.news{top:calc(env(safe-area-inset-top,0px) + 52px);flex-direction:row;align-items:baseline;gap:8px;padding:3px 12px 4px;border-radius:12px;max-width:min(520px,calc(100% - 20px))}
+.news .kick{font-size:11px;white-space:nowrap}
+.news .head{font-size:13px}
+.toast{top:calc(env(safe-area-inset-top,0px) + 88px)}
+.bar{gap:6px;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 6px)}
+.bar>.tools-row{width:auto;max-width:min(1040px,100%)}
+.tools-row{padding:3px;gap:0;border-radius:16px}
+.tb{min-width:50px;gap:0;padding:3px 5px 2px;font-size:10.5px;border-radius:11px;border-width:1.4px}
+.tb svg{width:20px;height:20px}
+.sep{margin:4px 3px}
+.viewbtns{bottom:calc(env(safe-area-inset-bottom,0px) + 64px);gap:6px}
+.vbtn{width:36px;height:36px}
+.vbtn svg{width:18px;height:18px}
+.bar>.draftbar{position:static;transform:none;width:auto;font-size:13px;padding:4px 4px 4px 12px}
+@media (max-width:640px){ .bar>.draftbar{top:auto;bottom:auto} .plate .sub{display:none} }
 </style>
 </head>
 <body>
 <canvas id="world" aria-label="Map of the settlement"></canvas>
 <header class="hud">
   <div class="plate inked"><div class="town" id="townName">Opening the settlement…</div><div class="sub" id="popLine"></div></div>
+  <div class="chips" id="chips" hidden>
+    <div class="chip inked"><span class="coin" aria-hidden="true"></span><b id="coinVal">0</b><small id="coinRate"></small></div>
+    <div class="chip inked"><button id="musicBtn" aria-pressed="false" aria-label="Music"><span class="mi" id="musicIcon">▶</span><span id="musicLabel" class="lbl">Music</span></button></div>
+    <div class="chip inked" hidden><button id="draftBtn" aria-pressed="false" title="Draft mode: build privately, then update the live city"><span aria-hidden="true">✎</span><span id="draftLbl" class="lbl">Draft</span></button></div>
+    <div class="chip inked"><button id="wxBtn" aria-label="Weather"><span id="wxIcon" style="font-size:16px;line-height:1">☀</span><span id="wxLabel" class="lbl">Sunny</span></button></div>
+    <div class="chip inked"><button id="findBtn"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 22s7-7.2 7-12.5A7 7 0 0 0 5 9.5C5 14.8 12 22 12 22z" fill="#D9714A" stroke="#2B2621" stroke-width="1.6"/><circle cx="12" cy="9.5" r="2.6" fill="#FBF8F1" stroke="#2B2621" stroke-width="1.4"/></svg><span>Find me</span></button></div>
+  </div>
   <button class="clock inked" id="clockBtn" aria-label="World clock. Tap to preview faster time.">
     <span class="time" id="clockTime">--:--</span><span class="speed" id="speedTag" hidden></span>
   </button>
 </header>
-<div class="chips" id="chips" hidden>
-  <div class="chip inked"><span class="coin" aria-hidden="true"></span><b id="coinVal">0</b><small id="coinRate"></small></div>
-  <div class="chip inked"><button id="musicBtn" aria-pressed="false" aria-label="Music"><span class="mi" id="musicIcon">▶</span><span id="musicLabel" class="lbl">Music</span></button></div>
-  <div class="chip inked" hidden><button id="draftBtn" aria-pressed="false" title="Draft mode: build privately, then update the live city"><span aria-hidden="true">✎</span><span id="draftLbl" class="lbl">Draft</span></button></div>
-  <div class="chip inked"><button id="wxBtn" aria-label="Weather"><span id="wxIcon" style="font-size:16px;line-height:1">☀</span><span id="wxLabel" class="lbl">Sunny</span></button></div>
-  <div class="chip inked"><button id="findBtn"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 22s7-7.2 7-12.5A7 7 0 0 0 5 9.5C5 14.8 12 22 12 22z" fill="#D9714A" stroke="#2B2621" stroke-width="1.6"/><circle cx="12" cy="9.5" r="2.6" fill="#FBF8F1" stroke="#2B2621" stroke-width="1.4"/></svg><span>Find me</span></button></div>
-</div>
 <button class="news inked" id="news" hidden><span class="kick" id="newsKick"></span><span class="head" id="newsText"></span></button>
 <div class="toast" id="toast" hidden><span id="toastMsg"></span><button id="toastBtn" hidden>Undo</button></div>
 <div class="viewbtns" id="viewBtns">
@@ -209,8 +241,8 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
   <button class="vbtn" id="hideBtn" aria-label="Hide the interface" title="Hide the interface (H)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg></button>
 </div>
 <button id="showUi" hidden>Show interface</button>
-<div class="draftbar inked" id="draftBar" hidden><span class="dot" aria-hidden="true"></span><span><b>Draft</b> · <span id="draftText"></span></span><button id="draftDiscard" class="btn">Discard</button><button id="draftPub" class="btn primary">Update live</button><button id="draftOff" class="x" aria-label="Leave draft mode" title="Leave draft mode">×</button></div>
 <div class="bar">
+  <div class="draftbar inked" id="draftBar" hidden><span class="dot" aria-hidden="true"></span><span><b>Draft</b> · <span id="draftText"></span></span><button id="draftDiscard" class="btn">Discard</button><button id="draftPub" class="btn primary">Update live</button><button id="draftOff" class="x" aria-label="Leave draft mode" title="Leave draft mode">×</button></div>
   <div class="toolchip" id="toolchip" hidden><span id="toolLabel"></span><button id="toolTurn" class="ghostb" hidden title="Turn it to face the other way (R)">⟲ Turn</button><button id="toolUndo" class="ghostb" hidden>↶ Undo</button><button id="toolMin" class="ghostb" aria-pressed="false" title="Hide the menus but keep this tool (M)">Hide menu</button><button id="toolDone">Done</button></div>
   <section class="card inked" id="card" hidden></section>
   <section class="pane inked" id="pane" hidden></section>

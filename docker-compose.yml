@@ -1,0 +1,18 @@
+# Local development: `docker compose up` gives you Postgres + the city on http://localhost:3000
+services:
+  db:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: city, POSTGRES_PASSWORD: city, POSTGRES_DB: city }
+    volumes: [ "pgdata:/var/lib/postgresql/data" ]
+    ports: [ "5432:5432" ]
+  app:
+    build: .
+    depends_on: [ db ]
+    environment:
+      DATABASE_URL: postgres://city:city@db:5432/city
+      ADMIN_TOKEN: local-dev-token-please-change
+      CRON_KEY: local-cron
+    ports: [ "3000:3000" ]
+    restart: unless-stopped
+volumes:
+  pgdata:

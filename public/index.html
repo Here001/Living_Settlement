@@ -191,12 +191,13 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 <button class="news inked" id="news" hidden><span class="kick" id="newsKick"></span><span class="head" id="newsText"></span></button>
 <div class="toast" id="toast" hidden><span id="toastMsg"></span><button id="toastBtn" hidden>Undo</button></div>
 <div class="viewbtns" id="viewBtns">
+  <button class="vbtn" id="undoBtn" aria-label="Undo" title="Undo (Ctrl+Z)" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
   <button class="vbtn" id="fsBtn" aria-label="Full screen" title="Full screen (F)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   <button class="vbtn" id="hideBtn" aria-label="Hide the interface" title="Hide the interface (H)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg></button>
 </div>
 <button id="showUi" hidden>Show interface</button>
 <div class="bar">
-  <div class="toolchip" id="toolchip" hidden><span id="toolLabel"></span><button id="toolMin" class="ghostb" aria-pressed="false" title="Hide the menus but keep this tool (M)">Hide menu</button><button id="toolDone">Done</button></div>
+  <div class="toolchip" id="toolchip" hidden><span id="toolLabel"></span><button id="toolUndo" class="ghostb" hidden>↶ Undo</button><button id="toolMin" class="ghostb" aria-pressed="false" title="Hide the menus but keep this tool (M)">Hide menu</button><button id="toolDone">Done</button></div>
   <section class="card inked" id="card" hidden></section>
   <section class="pane inked" id="pane" hidden></section>
   <nav class="tools-row inked" id="toolsRow" aria-label="Menus"></nav>
@@ -1020,19 +1021,33 @@ Object.assign(SHADOW_H, { gabled:t=>(t.height||30)+10, pilotis:t=>t.height||60, 
 
 /* ---------------- water ---------------- */
 const SAND='#E2CF9A';
-function drawWaterTile(x,y,kind){ const W=WATER_TYPES[kind]||WATER_TYPES.river, k=x+','+y;
-  const N=iso(x,y),E=iso(x+1,y),S2=iso(x+1,y+1),Wp=iso(x,y+1), C=iso(x+0.5,y+0.5);
-  const wet=(a,b)=>S.water.has(a+','+b);
-  poly([N,E,S2,Wp],W.color,W.color,0.8);
-  const sides=[[N,E,!wet(x,y-1)],[E,S2,!wet(x+1,y)],[S2,Wp,!wet(x,y+1)],[Wp,N,!wet(x-1,y)]];
-  const inner=sides.filter(s=>!s[2]).length===4;
-  if(inner && kind!=='river'){ poly([lerp(N,C,0.35),lerp(E,C,0.35),lerp(S2,C,0.35),lerp(Wp,C,0.35)],W.deep,false); }
-  for(const [a,b,open] of sides){ if(!open) continue; const a2=lerp(a,C,0.22), b2=lerp(b,C,0.22); poly([a,b,b2,a2],SAND,false); line(a2,b2,shade(W.color,0.8),1); line(a,b,'#B59E68',1); }
-  const hh=hash(k), t=T_NOW/1000;
-  ctx.strokeStyle='rgba(255,255,255,.75)'; ctx.lineWidth=1.1; ctx.lineCap='round';
-  for(let i=0;i<(kind==='sea'?3:2);i++){ const ph=((hh>>>(i*5))%100)/100, u=(ph+t*(kind==='river'?0.18:0.06))%1, v=0.25+((hh>>>(i*7+3))%50)/100;
-    const p=iso(x+u,y+v); ctx.beginPath(); ctx.moveTo(p.x-4,p.y); ctx.quadraticCurveTo(p.x,p.y-2.5,p.x+4,p.y); ctx.stroke(); }
-}
+// Water is drawn as soft shapes in tile space: outer corners are rounded, inner corners get a curved fillet,
+// and a sand beach (then a strip of wet sand) runs round every shore. Iso is an affine map, so circles become the right ellipses.
+const WATER_R=0.48, WATER_FILLET=0.62, BEACH=0.3, WETSAND=0.13;
+function tileShape(P2,x,y,wet,off,rv,rc){
+  const dry=(dx,dy)=>!wet(x+dx,y+dy), dN=dry(0,-1), dE=dry(1,0), dS=dry(0,1), dW=dry(-1,0);
+  const x0=x-(dW?off:0.02), x1=x+1+(dE?off:0.02), y0=y-(dN?off:0.02), y1=y+1+(dS?off:0.02);
+  const r=(a,b)=>a&&b?rv+off:0, rNW=r(dW,dN), rNE=r(dE,dN), rSE=r(dE,dS), rSW=r(dW,dS);
+  P2.moveTo(x0+rNW,y0); P2.arcTo(x1,y0,x1,y1,rNE); P2.arcTo(x1,y1,x0,y1,rSE); P2.arcTo(x0,y1,x0,y0,rSW); P2.arcTo(x0,y0,x1,y0,rNW); P2.closePath();
+  const rf=rc-off; if(rf<=0.01) return;
+  for(const [sx,sy] of [[-1,-1],[1,-1],[1,1],[-1,1]]){ if(dry(sx,0)||dry(0,sy)||!dry(sx,sy)) continue; // both sides wet, the diagonal dry: an inner corner
+    const qx=x+(sx>0?1:0)+sx*off, qy=y+(sy>0?1:0)+sy*off; let A=[qx+sx*rf,qy], B=[qx,qy+sy*rf]; if(sx*sy>0){ const t=A; A=B; B=t; }
+    P2.moveTo(A[0],A[1]); P2.lineTo(qx,qy); P2.lineTo(B[0],B[1]); P2.arcTo(qx,qy,A[0],A[1],rf); P2.closePath(); } }
+function drawWaterTiles(list){ if(!list.length) return; const wet=(a,b)=>S.water.has(a+','+b);
+  const deepOf=(a,b)=>{ const k=S.water.get(a+','+b); if(!k||k==='river') return false; for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++) if(!wet(a+i,b+j)) return false; return true; };
+  const sand=new Path2D(), damp=new Path2D(), byKind=new Map(), deep=new Map();
+  for(const [x,y,kind] of list){ tileShape(sand,x,y,wet,BEACH,WATER_R,WATER_FILLET); tileShape(damp,x,y,wet,WETSAND,WATER_R,WATER_FILLET);
+    let p=byKind.get(kind); if(!p) byKind.set(kind,p=new Path2D()); tileShape(p,x,y,wet,0,WATER_R,WATER_FILLET);
+    if(deepOf(x,y)){ let d=deep.get(kind); if(!d) deep.set(kind,d=new Path2D()); tileShape(d,x,y,deepOf,0.05,WATER_R,WATER_FILLET); } }
+  ctx.save(); ctx.transform(HW,HH,-HW,HH,0,0);
+  ctx.fillStyle=SAND; ctx.fill(sand); ctx.fillStyle='#CDB57A'; ctx.fill(damp);
+  for(const [kind,p] of byKind){ const W=WATER_TYPES[kind]||WATER_TYPES.river; ctx.fillStyle=W.color; ctx.fill(p); }
+  for(const [kind,p] of deep){ const W=WATER_TYPES[kind]||WATER_TYPES.river; ctx.fillStyle=W.deep; ctx.fill(p); }
+  ctx.restore();
+  const t=T_NOW/1000; ctx.strokeStyle='rgba(255,255,255,.75)'; ctx.lineWidth=1.1; ctx.lineCap='round';
+  for(const [x,y,kind] of list){ const hh=hash(x+','+y);
+    for(let i=0;i<(kind==='sea'?3:2);i++){ const ph=((hh>>>(i*5))%100)/100, u=0.15+((ph+t*(kind==='river'?0.18:0.06))%1)*0.7, v=0.25+((hh>>>(i*7+3))%50)/100;
+      const p=iso(x+u,y+v); ctx.beginPath(); ctx.moveTo(p.x-4,p.y); ctx.quadraticCurveTo(p.x,p.y-2.5,p.x+4,p.y); ctx.stroke(); } } }
 function drawBridge(x,y,R,has){ const N=iso(x,y),E=iso(x+1,y),S2=iso(x+1,y+1),Wp=iso(x,y+1);
   const sides=[[N,E,!has(x,y-1)],[E,S2,!has(x+1,y)],[S2,Wp,!has(x,y+1)],[Wp,N,!has(x-1,y)]];
   for(const [a,b,open] of sides){ if(!open) continue; line(up(a,4),up(b,4),'#5E5A57',1.6); for(let i=0;i<=3;i++){ const p=lerp(a,b,i/3); line(p,up(p,5),'#5E5A57',1.2); } }
@@ -1240,7 +1255,7 @@ function frame(ts){
   }
   const items=[]; const pushDeco=(k,fn)=>items.push({k,fn});
   const hasRoad=(a,b)=>D.roads.has(a+','+b);
-  for(const [k,kind] of S.water){ const [x,y]=k.split(',').map(Number); if(x<tminX||x>tmaxX||y<tminY||y>tmaxY) continue; drawWaterTile(x,y,kind); }
+  { const wl=[]; for(const [k,kind] of S.water){ const [x,y]=k.split(',').map(Number); if(x<tminX-1||x>tmaxX+1||y<tminY-1||y>tmaxY+1) continue; wl.push([x,y,kind]); } drawWaterTiles(wl); }
   for(const [k,type] of D.roads){ const [x,y]=k.split(',').map(Number); if(x<tminX||x>tmaxX||y<tminY||y>tmaxY) continue; const R=ROAD_TYPES[type]||ROAD_TYPES.dirt;
     if(R.kind==='highway') drawHighwayTile(x,y,R,hasRoad); else drawRoadTile(x,y,R,hasRoad,pushDeco);
     if(cam.z>=0.5) roadExtras(x,y,R,hasRoad,pushDeco); if(S.water.has(k)) drawBridge(x,y,R,hasRoad); }
@@ -1272,6 +1287,7 @@ function frame(ts){
   ctx.globalAlpha=0.38; for(const it of items) if(it.c) drawCitizen(it.c,it.st,false,true); ctx.globalAlpha=1;
   if(areaSel){ const ax=Math.min(areaSel.a[0],areaSel.b[0]), bx=Math.max(areaSel.a[0],areaSel.b[0])+1, ay=Math.min(areaSel.a[1],areaSel.b[1]), by=Math.max(areaSel.a[1],areaSel.b[1])+1; poly([iso(ax,ay),iso(bx,ay),iso(bx,by),iso(ax,by)],'rgba(184,67,58,.28)','#B8433A',2.5); }
   if(ghostTool()) drawFootprint();
+  else if(tool.kind==='road'&&roadMode==='line') drawRoadPreview();
   else if(hoverTile && tool.kind!=='pan'){ const [hx,hy]=hoverTile; poly([iso(hx,hy),iso(hx+1,hy),iso(hx+1,hy+1),iso(hx,hy+1)], tool.kind==='erase'?'rgba(184,67,58,.35)':'rgba(255,255,255,.35)', tool.kind==='erase'?'#B8433A':'#fff', 2); }
   if(S.meta){ const w0=weatherAt(S.meta,gm); if(w0==='storm') DARK=Math.max(DARK,0.45); else if(w0==='rain') DARK=Math.max(DARK,0.22); }
   if(DARK>0.01){
@@ -1316,7 +1332,7 @@ function roadThumb(id){ const R=ROAD_TYPES[id]; return renderThumb('r:'+id, 3, 1
 
 /* ---------------- interaction ---------------- */
 let tool={ kind:'pan' }, hoverTile=null, sel=null, follow=null, buildMeta={ name:'', by:'' };
-const pointers=new Map(); let gesture=null, paintBuf=null;
+const pointers=new Map(); let gesture=null, paintBuf=null, paintPrev=new Map();
 function canPlace(type,x,y,ignore){ const [w,d]=BUILDING_TYPES[type].size; for(let i=0;i<w;i++) for(let j=0;j<d;j++){ const k=(x+i)+','+(y+j); if(S.water.has(k)) return false; const o=D.occ.get(k); if((o&&o!==ignore)||D.roads.has(k)) return false; } return true; }
 // What's under each tile of a footprint: null when free, otherwise what's in the way.
 function blockers(type,x,y,ignore){ const [w,d]=BUILDING_TYPES[type].size, out=[]; for(let i=0;i<w;i++) for(let j=0;j<d;j++){ const k=(x+i)+','+(y+j); const o=D.occ.get(k);
@@ -1329,7 +1345,7 @@ function ghostType(){ return tool.kind==='place'?tool.type : tool.kind==='move'?
 function updateGhost(sx,sy){ const t=tileAt(sx,sy); ghost={ ...(ghost||{}), tile:t }; hoverTile=t; }
 function blockedText(list){ const bad=list.filter(b=>b.why), w=[...new Set(bad.map(b=>b.why))]; return w.length?`Blocked by ${w.join(' and ')}: ${bad.length} tile${bad.length===1?'':'s'}`:''; }
 function dropGhost(){ if(!ghost||!ghost.tile) return; const [tx,ty]=ghost.tile;
-  if(tool.kind==='vehicle'){ if(!carOK(tx+','+ty)){ toast('Vehicles go on roads. Drop it on a street.'); return; } api('/api/admin/vehicles',{method:'POST',body:{type:tool.vtype,x:tx,y:ty}}).then(()=>toast(`${VEHICLE_TYPES[tool.vtype].name} is on the road`)).catch(e=>toast(e.message)); return; }
+  if(tool.kind==='vehicle'){ if(!carOK(tx+','+ty)){ toast('Vehicles go on roads. Drop it on a street.'); return; } const vt=tool.vtype; api('/api/admin/vehicles',{method:'POST',body:{type:vt,x:tx,y:ty}}).then(r=>{ remember(`adding a ${VEHICLE_TYPES[vt].name.toLowerCase()}`,()=>api('/api/admin/vehicles/'+encodeURIComponent(r.vehicle.id),{method:'DELETE'})); toast(`${VEHICLE_TYPES[vt].name} is on the road`); }).catch(e=>toast(e.message)); return; }
   const type=ghostType(); if(!type) return; const [x,y]=ghostOrigin(type,tx,ty); const bl=blockers(type,x,y,tool.id);
   if(bl.some(b=>b.why)){ toast(blockedText(bl)+'. Move it onto clear ground.'); return; }
   if(tool.kind==='place') placeBuilding(type,x,y); else moveBuilding(tool.id,x,y); }
@@ -1349,7 +1365,33 @@ function drawFootprint(){ const gt=(ghost&&ghost.tile)||hoverTile; if(!gt) retur
   const top=iso(x+w/2,y+d/2), hgt=Math.min(140,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24));
   if(bad){ noSign(top.x, top.y-hgt-20); label(blockedText(bl), top.x, top.y-hgt-36, false); }
   else if(gesture&&gesture.type==='ghost') label(`${w}×${d} tiles · let go to ${tool.kind==='move'?'move it':'build'}`, top.x, top.y-hgt-12, true); }
-const paints = () => tool.kind==='road' || tool.kind==='water' || tool.kind==='drain' || (tool.kind==='erase' && (tool.mode==='all'||tool.mode==='roads'));
+// ---- Undo: every developer action records how to reverse it. ----
+const history=[];
+function remember(label, undo){ history.push({label,undo}); if(history.length>40) history.shift(); refreshUndo(); }
+async function undoLast(){ const h=history.pop(); refreshUndo(); if(!h){ toast('Nothing to undo.'); return; }
+  try{ await h.undo(); toast(`Undone: ${h.label}`); }catch(e){ toast(`Couldn't undo: ${e.message}`); } }
+function refreshUndo(){ const n=history.length; for(const id of ['undoBtn','toolUndo']){ const b=$(id); if(!b) continue; b.hidden=!n||!Store.canWrite; b.title=n?`Undo: ${history[n-1].label} (Ctrl+Z)`:'Nothing to undo'; } }
+const roadUndo=prev=>()=>{ const set={}, remove=[]; for(const [k,v] of prev){ if(v) set[k]=v; else remove.push(k); } return api('/api/admin/roads',{method:'POST',body:{set,remove}}); };
+// ---- Roads by points: tap a start, tap an end; straight lines snap to the grid and bend once (an L) if needed. ----
+let roadMode='line', roadStart=null;
+function lineTiles(a,b){ let [x,y]=a; const [bx,by]=b, out=[[x,y]];
+  const goX=()=>{ while(x!==bx){ x+=Math.sign(bx-x); out.push([x,y]); } }, goY=()=>{ while(y!==by){ y+=Math.sign(by-y); out.push([x,y]); } };
+  if(Math.abs(bx-x)>=Math.abs(by-y)){ goX(); goY(); } else { goY(); goX(); } return out; }
+function roadOK(x,y){ const k=x+','+y, o=D.occ.get(k); if(o){ const b=S.buildings.get(o); if(b&&blocks(b)) return false; } return true; }
+async function commitLine(a,b){ const tiles=lineTiles(a,b), set={}, prev=new Map(); let blocked=0;
+  for(const [x,y] of tiles){ const k=x+','+y; if(!roadOK(x,y)){ blocked++; continue; } if(D.roads.get(k)===tool.road) continue; prev.set(k,D.roads.get(k)||null); set[k]=tool.road; D.roads.set(k,tool.road); }
+  if(!prev.size){ toast(blocked?'Buildings are in the way of that road.':'That road is already there.'); return; }
+  try{ const r=await api('/api/admin/roads',{method:'POST',body:{set,remove:[]}}); remember(`${r.changed} tile${r.changed===1?'':'s'} of road`, roadUndo(prev));
+    toast(`Laid ${r.changed} tile${r.changed===1?'':'s'}${blocked?`, skipped ${blocked} under buildings`:''}`); }
+  catch(e){ changed(); toast(e.message); } }
+function drawRoadPreview(){ if(tool.kind!=='road'||roadMode!=='line') return; const end=hoverTile;
+  const dot=(t,col)=>{ const p=iso(t[0]+0.5,t[1]+0.5); ctx.fillStyle=col; ctx.strokeStyle='#fff'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,9,4.5,0,0,7); ctx.fill(); ctx.stroke(); line(p,{x:p.x,y:p.y-22},INK,2); ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(p.x,p.y-22); ctx.lineTo(p.x+12,p.y-17); ctx.lineTo(p.x,p.y-12); ctx.closePath(); ctx.fill(); ctx.strokeStyle=INK; ctx.lineWidth=1; ctx.stroke(); };
+  if(roadStart&&end){ const tiles=lineTiles(roadStart,end); let bad=0;
+    for(const [x,y] of tiles){ const ok=roadOK(x,y); if(!ok) bad++; poly([iso(x,y),iso(x+1,y),iso(x+1,y+1),iso(x,y+1)], ok?'rgba(70,80,90,.45)':'rgba(210,56,46,.5)', ok?'rgba(255,255,255,.8)':'#9E2A22', 1.2); }
+    dot(end,'#D9714A'); const p=iso(end[0]+0.5,end[1]+0.5); label(`${tiles.length} tile${tiles.length===1?'':'s'}${bad?` · ${bad} blocked`:''}`, p.x, p.y-30, true); }
+  if(roadStart) dot(roadStart,'#3F8A4E');
+  else if(end){ poly([iso(end[0],end[1]),iso(end[0]+1,end[1]),iso(end[0]+1,end[1]+1),iso(end[0],end[1]+1)],'rgba(255,255,255,.35)','#fff',2); dot(end,'#3F8A4E'); } }
+const paints = () => (tool.kind==='road'&&roadMode==='free') || tool.kind==='water' || tool.kind==='drain' || (tool.kind==='erase' && (tool.mode==='all'||tool.mode==='roads'));
 // After dragging a box: say what's inside and ask before clearing it.
 function finishArea(){ const a=areaSel; const ax=Math.min(a.a[0],a.b[0]), bx=Math.max(a.a[0],a.b[0]), ay=Math.min(a.a[1],a.b[1]), by=Math.max(a.a[1],a.b[1]);
   let nb=0, nr=0; for(const b of S.buildings.values()){ const [w,d]=T(b).size; if(b.x<=bx&&b.x+w>ax&&b.y<=by&&b.y+d>ay) nb++; } for(const k of S.roads.keys()){ const [x,y]=k.split(',').map(Number); if(x>=ax&&x<=bx&&y>=ay&&y<=by) nr++; }
@@ -1366,7 +1408,8 @@ cv.addEventListener('pointerdown', e=>{ cv.setPointerCapture(e.pointerId); point
       if(id) holdTimer=setTimeout(()=>{ const b=S.buildings.get(id); if(!b||!gesture||gesture.type!=='one'||gesture.moved||pointers.size!==1) return;
         setTool({kind:'move',id}); ghost={ tile:t, off:[t[0]-b.x,t[1]-b.y] }; gesture.type='ghost'; gesture.pickup=true; try{ navigator.vibrate&&navigator.vibrate(18); }catch(_){} }, 450); }
     if(gesture.type!=='one'){}
-    else if(paints()){ paintBuf=new Map(); paintAt(e.clientX,e.clientY); }
+    else if(paints()){ paintBuf=new Map(); paintPrev=new Map(); paintAt(e.clientX,e.clientY); }
+    else if(tool.kind==='road'&&roadMode==='line'){ gesture.type='roadline'; const t=tileAt(e.clientX,e.clientY); hoverTile=t; if(!roadStart){ roadStart=t; gesture.fresh=true; } }
     else if(tool.kind==='erase'&&tool.mode==='area'){ const t=tileAt(e.clientX,e.clientY); areaSel={a:t,b:t}; } }
   else if(pointers.size===2){ clearTimeout(holdTimer); const [a,b]=[...pointers.values()]; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture={ type:'pinch', d0:Math.hypot(a.x-b.x,a.y-b.y), z0:cam.z, wx:w.x, wy:w.y }; if(paintBuf){ paintBuf=null; changed(); } areaSel=null; }
 });
@@ -1375,6 +1418,7 @@ cv.addEventListener('pointermove', e=>{
   if(e.pointerType==='mouse' && ghostTool() && !pointers.size) updateGhost(e.clientX,e.clientY);
   if(!pointers.has(e.pointerId)) return; pointers.set(e.pointerId,{x:e.clientX,y:e.clientY}); lastPtr={x:e.clientX,y:e.clientY};
   if(gesture&&gesture.type==='ghost'){ if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)>6) gesture.moved=true; updateGhost(e.clientX,e.clientY); }
+  else if(gesture&&gesture.type==='roadline'){ if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)>6) gesture.moved=true; hoverTile=tileAt(e.clientX,e.clientY); }
   else if(gesture&&gesture.type==='one'){ if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)>6) gesture.moved=true;
     if(paintBuf){ paintAt(e.clientX,e.clientY); hoverTile=tileAt(e.clientX,e.clientY); }
     else if(areaSel){ areaSel.b=tileAt(e.clientX,e.clientY); }
@@ -1383,6 +1427,11 @@ cv.addEventListener('pointermove', e=>{
   else if(gesture&&gesture.type==='pinch'&&pointers.size>=2){ const [a,b]=[...pointers.values()]; cam.z=Math.min(4,Math.max(0.35,gesture.z0*Math.hypot(a.x-b.x,a.y-b.y)/gesture.d0)); const mx=(a.x+b.x)/2,my=(a.y+b.y)/2; cam.x=gesture.wx-(mx-cw/2)/cam.z; cam.y=gesture.wy-(my-ch/2)/cam.z; follow=null; }
 });
 function endPointer(e){ if(!pointers.has(e.pointerId)) return; pointers.delete(e.pointerId); clearTimeout(holdTimer);
+  if(gesture&&gesture.type==='roadline'&&pointers.size===0){ const g=gesture; gesture=null; if(e.type==='pointercancel') return; const t=tileAt(e.clientX,e.clientY);
+    // A quick tap that just set the start waits for the end tap; otherwise lay the road and carry on from where it ended.
+    if(g.fresh && !g.moved){ toast('Start marked. Now tap where the road ends.'); return; }
+    if(t[0]===roadStart[0]&&t[1]===roadStart[1]&&!g.fresh){ toast('Tap a different tile to end the road.'); return; }
+    const a=roadStart; roadStart=t; commitLine(a,t); return; }
   if(gesture&&gesture.type==='ghost'&&pointers.size===0){ const g=gesture; gesture=null; if(e.type==='pointercancel') return;
     if(g.pickup && !g.moved){ toast('Picked up. Drag it to a new spot and let go.'); return; } dropGhost(); return; }
   if(gesture&&gesture.type==='one'&&pointers.size===0){ if(paintBuf){ commitPaint(); } else if(areaSel){ finishArea(); } else if(!gesture.moved && performance.now()-gesture.t<600) tap(e.clientX,e.clientY); gesture=null; }
@@ -1393,22 +1442,22 @@ cv.addEventListener('wheel', e=>{ e.preventDefault(); const w=screenToWorld(e.cl
 
 function paintAt(sx,sy){ const [x,y]=tileAt(sx,sy); const k=x+','+y;
   if(tool.kind==='water'||tool.kind==='drain'){ const n=tool.size||1, r=Math.floor(n/2); for(let i=0;i<n;i++) for(let j=0;j<n;j++){ const kk=(x-r+i)+','+(y-r+j); if(paintBuf.has(kk)) continue;
-      if(tool.kind==='water'){ if(D.occ.has(kk)) continue; paintBuf.set(kk,tool.water); S.water.set(kk,tool.water); } else { if(!S.water.has(kk)) continue; paintBuf.set(kk,null); S.water.delete(kk); } } return; }
+      if(tool.kind==='water'){ if(D.occ.has(kk)) continue; paintPrev.set(kk,S.water.get(kk)||null); paintBuf.set(kk,tool.water); S.water.set(kk,tool.water); } else { if(!S.water.has(kk)) continue; paintPrev.set(kk,S.water.get(kk)); paintBuf.set(kk,null); S.water.delete(kk); } } return; }
   if(paintBuf.has(k)) return;
-  if(tool.kind==='road'){ if(D.occ.has(k)){ const b=S.buildings.get(D.occ.get(k)); if(b&&blocks(b)) return; } if(D.roads.get(k)===tool.road) return; paintBuf.set(k,tool.road); D.roads.set(k,tool.road); }
-  else { if(!D.roads.has(k)) return; paintBuf.set(k,null); D.roads.delete(k); } }
-async function commitPaint(){ const buf=paintBuf; paintBuf=null; const mode=tool.kind, erase=tool.kind==='erase'&&tool.mode==='all', g=gesture;
+  if(tool.kind==='road'){ if(D.occ.has(k)){ const b=S.buildings.get(D.occ.get(k)); if(b&&blocks(b)) return; } if(D.roads.get(k)===tool.road) return; paintPrev.set(k,D.roads.get(k)||null); paintBuf.set(k,tool.road); D.roads.set(k,tool.road); }
+  else { if(!D.roads.has(k)) return; paintPrev.set(k,D.roads.get(k)); paintBuf.set(k,null); D.roads.delete(k); } }
+async function commitPaint(){ const buf=paintBuf, prev=paintPrev; paintBuf=null; paintPrev=new Map(); const mode=tool.kind, erase=tool.kind==='erase'&&tool.mode==='all', g=gesture;
   if(mode==='water'||mode==='drain'){ if(!buf.size) return; const set={}, remove=[]; for(const [k,v] of buf){ if(v) set[k]=v; else remove.push(k); }
-    try{ const r=await api('/api/admin/water',{method:'POST',body:{set,remove}}); toast(mode==='water'?`Added ${fmt(r.changed)} tile${r.changed===1?'':'s'} of ${WATER_TYPES[tool.water].name.toLowerCase()}${r.skipped?` (${r.skipped} under buildings skipped)`:''}`:`Drained ${fmt(r.changed)} tile${r.changed===1?'':'s'}`); }
+    try{ const r=await api('/api/admin/water',{method:'POST',body:{set,remove}}); remember(mode==='water'?`${r.changed} tiles of water`:`draining ${r.changed} tiles`,()=>{ const s2={}, r2=[]; for(const [k,v] of prev){ if(v) s2[k]=v; else r2.push(k); } return api('/api/admin/water',{method:'POST',body:{set:s2,remove:r2}}); }); toast(mode==='water'?`Added ${fmt(r.changed)} tile${r.changed===1?'':'s'} of ${WATER_TYPES[tool.water].name.toLowerCase()}${r.skipped?` (${r.skipped} under buildings skipped)`:''}`:`Drained ${fmt(r.changed)} tile${r.changed===1?'':'s'}`); }
     catch(e){ for(const [k,v] of buf){ if(v) S.water.delete(k); } toast(e.message); } changed(); return; }
   if(!buf.size){ if(erase && g){ const [x,y]=tileAt(g.sx,g.sy); const id=D.occ.get(x+','+y); if(id) removeBuilding(id); } return; }
   const set={}, remove=[]; for(const [k,v] of buf){ if(v) set[k]=v; else remove.push(k); }
-  try{ const r=await api('/api/admin/roads',{method:'POST',body:{set,remove}});
+  try{ const r=await api('/api/admin/roads',{method:'POST',body:{set,remove}}); remember(mode==='road'?`${r.changed} tiles of road`:`removing ${r.changed} road tiles`, roadUndo(prev));
     toast(mode==='road'?`Laid ${r.changed} tile${r.changed===1?'':'s'}${r.cost?` for ${fmt(r.cost)} coins`:''}`:`Removed ${r.changed} road tile${r.changed===1?'':'s'}`); }
   catch(e){ changed(); toast(e.message); } }
 async function removeBuilding(id){ const b=S.buildings.get(id); if(!b) return; const nm=b.name||T(b).name;
   try{ await api('/api/admin/buildings/'+encodeURIComponent(id),{method:'DELETE'}); if(sel&&sel.id===id) closeCard();
-    toast(`Demolished ${nm}`,'Undo',()=>api('/api/admin/buildings/restore',{method:'POST',body:{building:b}}).catch(e=>toast(e.message))); }
+    remember(`demolishing ${nm}`,()=>api('/api/admin/buildings/restore',{method:'POST',body:{building:b}})); toast(`Demolished ${nm}`); }
   catch(e){ toast(e.message); } }
 function tap(sx,sy){
   const [x,y]=tileAt(sx,sy);
@@ -1428,11 +1477,12 @@ async function placeBuilding(type,x,y){ const t=BUILDING_TYPES[type];
   if(!canPlace(type,x,y)){ toast('That spot is taken. Pick an empty patch of grass.'); return; }
   try{ const r=await api('/api/admin/buildings',{method:'POST',body:{type,x,y,name:buildMeta.name,requestedBy:buildMeta.by,instant:instantBuild}});
     buildMeta.name=''; const ni=$('bName'); if(ni) ni.value='';
-    toast(r.building.done?`Built ${r.building.name||t.name}`:`Construction started on ${r.building.name||t.name}`,'Undo',()=>api(`/api/admin/buildings/${encodeURIComponent(r.building.id)}`,{method:'DELETE'}).catch(e=>toast(e.message))); }
+    const nm=r.building.name||t.name; remember(`building ${nm}`,()=>api(`/api/admin/buildings/${encodeURIComponent(r.building.id)}`,{method:'DELETE'}));
+    toast(r.building.done?`Built ${nm}`:`Construction started on ${nm}`); }
   catch(e){ toast(e.message); } }
 async function moveBuilding(id,x,y){ const b=S.buildings.get(id); if(!b){ setTool({kind:'pan'}); return; }
   const from={x:b.x,y:b.y};
-  try{ await api('/api/admin/buildings/'+encodeURIComponent(id),{method:'PATCH',body:{x,y}}); setTool({kind:'pan'}); selectBuilding(id); toast(`Moved ${b.name||T(b).name}`,'Undo',()=>api('/api/admin/buildings/'+encodeURIComponent(id),{method:'PATCH',body:from}).catch(e=>toast(e.message))); }
+  try{ await api('/api/admin/buildings/'+encodeURIComponent(id),{method:'PATCH',body:{x,y}}); setTool({kind:'pan'}); selectBuilding(id); remember(`moving ${b.name||T(b).name}`,()=>api('/api/admin/buildings/'+encodeURIComponent(id),{method:'PATCH',body:from})); toast(`Moved ${b.name||T(b).name}`); }
   catch(e){ toast(e.message); } }
 /* ---------------- icons ---------------- */
 const I=(body)=>`<svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="${INK}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${body}</svg>`;
@@ -1461,15 +1511,17 @@ const ICONS={
 /* ---------------- UI ---------------- */
 let toastTimer=null;
 function toast(msg, btn, fn){ $('toastMsg').textContent=msg; const b=$('toastBtn'); b.hidden=!btn; if(btn){ b.textContent=btn; b.onclick=()=>{ fn(); $('toast').hidden=true; }; } $('toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('toast').hidden=true, btn?5000:2800); }
-function setTool(t){ tool=t; ghost=null; const chip=$('toolchip');
+function setTool(t){ tool=t; ghost=null; roadStart=null; const chip=$('toolchip');
   if(t.kind==='pan'){ chip.hidden=true; setMini(false); }
-  else { chip.hidden=false; $('toolLabel').textContent = t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} onto a road` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}` : t.kind==='move'?`Drag ${(S.buildings.get(t.id)&&(S.buildings.get(t.id).name||T(S.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
+  else { chip.hidden=false; $('toolLabel').textContent = t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} onto a road` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(S.buildings.get(t.id)&&(S.buildings.get(t.id).name||T(S.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
   if(activeTab && activeTab!=='feed' && activeTab!=='people') renderPane(); }
 $('toolDone').onclick=()=>setTool({kind:'pan'});
 // Minimise: tuck the menus away while keeping the chosen tool, so the whole map is free to build on.
 let mini=false;
 function setMini(on){ mini=!!on; document.body.classList.toggle('mini',mini); const b=$('toolMin'); if(b){ b.textContent=mini?'Show menu':'Hide menu'; b.setAttribute('aria-pressed',String(mini)); } }
 $('toolMin').onclick=()=>setMini(!mini);
+$('toolUndo').onclick=undoLast; $('undoBtn').onclick=undoLast;
+addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z')&&!/INPUT|TEXTAREA/.test(e.target.tagName||'')){ e.preventDefault(); if(Store.canWrite) undoLast(); } });
 addEventListener('keydown',e=>{ if((e.key==='m'||e.key==='M') && !/INPUT|TEXTAREA/.test((e.target.tagName||'')) && tool.kind!=='pan') setMini(!mini); if(e.key==='Escape' && tool.kind!=='pan') setTool({kind:'pan'}); });
 
 let activeTab=null, feedMode='posts';
@@ -1479,7 +1531,7 @@ function buildToolbar(){ const row=$('toolsRow'); row.innerHTML='';
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
     const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(activeTab===c.id),onclick:()=>openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); row.append(btn); } }
 function openTab(name){ activeTab=name; if((name==='feed'||name==='people'||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
-function applyPermissions(){ buildToolbar(); refreshHUD(); $('spawnBoxNote')&&0; if(!Store.canWrite && activeTab && activeTab!=='feed' && activeTab!=='people') openTab(null); }
+function applyPermissions(){ buildToolbar(); refreshHUD(); refreshUndo(); $('spawnBoxNote')&&0; if(!Store.canWrite && activeTab && activeTab!=='feed' && activeTab!=='people') openTab(null); }
 
 const subTab={}; let brushSize=2;
 async function setWeather(kind){ try{ await api('/api/admin/weather',{method:'PUT',body:{kind}}); toast(kind?`Weather pinned to ${WEATHER_TYPES[kind].name.toLowerCase()}`:'Weather is automatic again'); }catch(e){ toast(e.message); } }
@@ -1488,7 +1540,7 @@ const WX_SVG={ auto:'<circle cx="16" cy="16" r="9" fill="#F2C94C"/><path d="M16 
 const DIS_SVG={ fire:'<path d="M16 4c2 6 8 8 8 15a8 8 0 0 1-16 0c0-4 2-6 4-8 0 3 1 5 3 5-1-5 0-9 1-12z" fill="#E2572B"/><path d="M16 17c2 2 3 3 3 5a3 3 0 0 1-6 0c0-2 2-3 3-5z" fill="#FFE07A"/>', tornado:'<path d="M5 6h22M7 11h18M10 16h13M12 21h8M14 26h4" stroke="#7C8288" stroke-width="2.6"/>', earthquake:'<path d="M4 18h5l2-5 3 10 3-14 3 12 2-3h6" stroke="#B85A37" stroke-width="2.2"/><path d="M4 27h24" stroke="#8A6A44"/>', flood:'<path d="M3 14c4-3 6 3 10 0s6 3 10 0 4 0 6 0M3 20c4-3 6 3 10 0s6 3 10 0 4 0 6 0M3 26c4-3 6 3 10 0s6 3 10 0 4 0 6 0" stroke="#5B8DB8" stroke-width="2.2"/>', meteor:'<circle cx="20" cy="20" r="6" fill="#B85A37"/><path d="M15 15L5 5M17 13L10 4M13 17L4 10" stroke="#F2B33D" stroke-width="2.2"/>' };
 const wxIconEl = k => { const s2=el('span',{class:'icthumb'}); s2.innerHTML=I(WX_SVG[k]); return s2; };
 const disasterIconEl = k => { const s2=el('span',{class:'icthumb'}); s2.innerHTML=I(DIS_SVG[k]); return s2; };
-function waterThumb(id){ return renderThumb('w:'+id, 2, 2, 8, ()=>{ const back=S.water; S.water=new Map([['0,0',id],['1,0',id],['0,1',id],['1,1',id]]); for(const k of S.water.keys()){ const [x,y]=k.split(',').map(Number); drawWaterTile(x,y,id); } S.water=back; }); }
+function waterThumb(id){ return renderThumb('w:'+id, 2, 2, 8, ()=>{ const back=S.water; S.water=new Map([['0,0',id],['1,0',id],['0,1',id],['1,1',id]]); drawWaterTiles([...S.water.keys()].map(k=>{ const [x,y]=k.split(',').map(Number); return [x,y,id]; })); S.water=back; }); }
 function drainThumb(){ return renderThumb('drain', 2, 2, 8, ()=>{ poly([iso(0,0),iso(2,0),iso(2,2),iso(0,2)],'#8FC463','#6E9E48',1); poly([iso(1,0),iso(2,0),iso(2,1),iso(1,1)],'#6FB3D2',INK,1); }); }
 function vehicleThumb(id){ return renderThumb('v:'+id, 2, 1, 16, ()=>{ poly([iso(-0.2,0),iso(2.2,0),iso(2.2,1),iso(-0.2,1)],'#7E8185',INK,1); drawVehicle(1,0.5,1,0,VEHICLE_TYPES[id],VEHICLE_TYPES[id].colors[0],true,1.3); }); }
 function paneHead(title, extra){ const h=el('div',{class:'pane-head'}, el('h2',{class:'pane-title',text:title})); if(extra) h.append(...extra); h.append(el('button',{class:'x','aria-label':'Close panel',text:'×',onclick:()=>openTab(null)})); return h; }
@@ -1523,8 +1575,9 @@ function renderPane(){
   const cards=el('div',{class:'cards'});
   const subs=SUBS[activeTab]; let subNow=subs&&(subTab[activeTab]||subs[0][0]);
   const subRow=()=>{ const row=el('div',{class:'subtabs',role:'tablist'}); for(const [id,nm] of subs){ const n=activeTab==='roads'?Object.values(ROAD_TYPES).filter(R=>!R.hidden&&R.sub===id).length:Object.values(BUILDING_TYPES).filter(t=>t.cat===activeTab&&t.sub===id).length; row.append(el('button',{'aria-pressed':String(subNow===id),onclick:()=>{ subTab[activeTab]=id; renderPane(); }}, nm, el('small',{text:' '+n}))); } return row; };
-  if(activeTab==='roads'){ p.append(paneHead('Roads'), subRow());
-    for(const id in ROAD_TYPES){ const R=ROAD_TYPES[id]; if(R.hidden||R.sub!==subNow) continue; cards.append(card(roadThumb(id), R.name, 'Drag to lay', R.note, tool.kind==='road'&&tool.road===id, ()=>setTool(tool.kind==='road'&&tool.road===id?{kind:'pan'}:{kind:'road',road:id}))); }
+  if(activeTab==='roads'){ const mseg=el('div',{class:'seg',role:'radiogroup','aria-label':'How to lay roads'}); for(const [m,nm] of [['line','Point to point'],['free','Freehand']]) mseg.append(el('button',{'aria-pressed':String(roadMode===m),onclick:()=>{ roadMode=m; roadStart=null; if(tool.kind==='road') setTool({...tool}); else renderPane(); },text:nm}));
+    p.append(paneHead('Roads',[mseg]), subRow());
+    for(const id in ROAD_TYPES){ const R=ROAD_TYPES[id]; if(R.hidden||R.sub!==subNow) continue; cards.append(card(roadThumb(id), R.name, roadMode==='line'?'Tap start, tap end':'Drag to lay', R.note, tool.kind==='road'&&tool.road===id, ()=>setTool(tool.kind==='road'&&tool.road===id?{kind:'pan'}:{kind:'road',road:id}))); }
     p.append(cards); return; }
   if(activeTab==='terrain'){ const sizes=el('div',{class:'seg'}); for(const n of [1,2,3,5]) sizes.append(el('button',{'aria-pressed':String(brushSize===n),onclick:()=>{ brushSize=n; if(tool.kind==='water'||tool.kind==='drain') tool.size=n; renderPane(); },text:`${n}×${n}`}));
     p.append(paneHead('Terrain',[el('span',{class:'treas',text:'Brush'}),sizes]));

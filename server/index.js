@@ -51,10 +51,10 @@ const send = fn => async (req, res) => {
 
 // ---------- public ----------
 const CHUNK_KEY = /^-?\d{1,6}_-?\d{1,6}$/;
-let eventsCache = { t: 0, rows: [] };
+let eventsCache = { t: 0, rows: [], disasters: [] };
 app.get('/api/meta', limit, send(async () => {
-  if (Date.now() - eventsCache.t > 2000) eventsCache = { t: Date.now(), rows: await world.recentEvents() };
-  return { meta: world.publicMeta(), events: eventsCache.rows, serverNow: Date.now() };
+  if (Date.now() - eventsCache.t > 2000) eventsCache = { t: Date.now(), rows: await world.recentEvents(), disasters: await world.recentDisasters() };
+  return { meta: world.publicMeta(), events: eventsCache.rows, disasters: eventsCache.disasters, serverNow: Date.now() };
 }));
 app.get('/api/chunks', limit, send(async req => {
   const keys = [...new Set(String(req.query.keys || '').split(','))].filter(k => CHUNK_KEY.test(k)).slice(0, 25);
@@ -80,6 +80,13 @@ app.post('/api/admin/found', admin, send(req => world.found(req.body || {})));
 app.post('/api/admin/buildings', admin, send(req => world.build(req.body || {})));
 app.post('/api/admin/buildings/restore', admin, send(req => world.restore((req.body || {}).building)));
 app.post('/api/admin/buildings/:id/finish', admin, send(req => world.finish(req.params.id)));
+app.post('/api/admin/buildings/:id/repair', admin, send(req => world.repair(req.params.id)));
+app.post('/api/admin/ruins/clear', admin, send(() => world.clearRuins()));
+app.post('/api/admin/water', admin, send(req => world.paintWater(req.body || {})));
+app.post('/api/admin/vehicles', admin, send(req => world.placeVehicle(req.body || {})));
+app.delete('/api/admin/vehicles/:id', admin, send(req => world.removeVehicle(req.params.id)));
+app.post('/api/admin/disasters', admin, send(req => world.disaster(req.body || {})));
+app.put('/api/admin/weather', admin, send(req => world.setWeather((req.body || {}).kind)));
 app.post('/api/admin/construction/finish-all', admin, send(() => world.finishAll()));
 app.post('/api/admin/bulldoze', admin, send(req => world.bulldozeArea(req.body || {})));
 app.get('/api/admin/places', admin, send(req => world.places(req.query.kind, req.query.x, req.query.y)));
@@ -168,6 +175,7 @@ await migrate();
 await bus.start();
 await world.load();
 await tryLead();
+if (isLeader && await world.reanchor().catch(e => { console.error('reanchor failed:', e.message); return false; })) console.log('Switched the clock to 30 real minutes per game day.');
 if (isLeader) await world.tick().catch(e => console.error('tick failed:', e.message)); // catch up on anything missed while off
 server.listen(PORT, () => console.log(`City running on :${PORT} with ${world.meta?.population || 0} citizens (bus: ${bus.kind})`));
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { server.close(); process.exit(0); });

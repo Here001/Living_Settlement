@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { pool, worldTx } from './db.js';
-import { BUILDING_TYPES } from '../shared/catalog.js';
+import { BUILDING_TYPES, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES } from '../shared/catalog.js';
 import * as R from '../shared/rules.js';
 
 const uid = () => crypto.randomUUID();
@@ -10,7 +10,9 @@ export class HttpError extends Error { constructor(status, msg) { super(msg); th
 // ---------- row shapes ----------
 export const bRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, name: r.name, requestedBy: r.requested_by,
   builtAt: r.built_at, builtDay: r.built_day, homeUsed: r.home_used, jobUsed: r.job_used, hangUsed: r.hang_used,
-  done: r.done !== false, readyAt: r.ready_at || 0 });
+  done: r.done !== false, readyAt: r.ready_at || 0, ruin: !!r.ruin, ruinedAt: r.ruined_at || 0 });
+const vRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, placedAt: r.placed_at });
+const tileKeys = keys => keys.filter(k => /^-?\d{1,7},-?\d{1,7}$/.test(k));
 const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_cy], [c.hang_cx, c.hang_cy]]
   .filter(([x]) => x !== null && x !== undefined).map(([x, y]) => R.chunkKey(x, y)))];
 
@@ -34,6 +36,7 @@ class Change {
     this.gone = new Map();       // id → chunks, for removed citizens
     this.buildings = new Set(); this.removedBuildings = new Map(); this.roadOps = []; this.events = [];
     this.moved = new Map();      // building id → handles that moved in during this change
+    this.extraOps = [];          // water, vehicle and disaster changes
   }
   q(sql, args) { return this.db.query(sql, args); }
 
@@ -189,9 +192,16 @@ export class World {
     this.buildings = new Map(); this.roads = new Map(); this.chunks = new Map();
     for (const r of (await pool.query('select * from buildings')).rows) this.putB(bRow(r));
     for (const r of (await pool.query('select x, y, type from roads')).rows) this.putR(`${r.x},${r.y}`, r.type);
+    this.water = new Map(); this.vehicles = new Map();
+    for (const r of (await pool.query('select x, y, kind from water')).rows) this.putW(`${r.x},${r.y}`, r.kind);
+    for (const r of (await pool.query('select * from vehicles')).rows) this.putV(vRow(r));
     this.founderHandle = (await pool.query('select handle from citizens where founder order by seq limit 1')).rows[0]?.handle || null;
   }
-  slot(key) { let c = this.chunks.get(key); if (!c) this.chunks.set(key, c = { buildings: new Map(), roads: {} }); return c; }
+  slot(key) { let c = this.chunks.get(key); if (!c) this.chunks.set(key, c = { buildings: new Map(), roads: {}, water: {}, vehicles: new Map() }); return c; }
+  putW(k, t) { const [x, y] = k.split(',').map(Number); this.water.set(k, t); this.slot(R.chunkKeyOfTile(x, y)).water[k] = t; }
+  delW(k) { const [x, y] = k.split(',').map(Number); this.water.delete(k); delete this.slot(R.chunkKeyOfTile(x, y)).water[k]; }
+  putV(v) { const old = this.vehicles.get(v.id); if (old) this.slot(R.chunkKey(old.cx, old.cy)).vehicles.delete(v.id); this.vehicles.set(v.id, v); this.slot(R.chunkKey(v.cx, v.cy)).vehicles.set(v.id, v); }
+  delV(id) { const old = this.vehicles.get(id); if (!old) return; this.slot(R.chunkKey(old.cx, old.cy)).vehicles.delete(id); this.vehicles.delete(id); }
   putB(b) { const old = this.buildings.get(b.id); if (old) this.slot(R.chunkKey(old.cx, old.cy)).buildings.delete(b.id); this.buildings.set(b.id, b); this.slot(R.chunkKey(b.cx, b.cy)).buildings.set(b.id, b); }
   delB(id) { const old = this.buildings.get(id); if (!old) return; this.slot(R.chunkKey(old.cx, old.cy)).buildings.delete(id); this.buildings.delete(id); }
   putR(k, t) { const [x, y] = k.split(',').map(Number); this.roads.set(k, t); this.slot(R.chunkKeyOfTile(x, y)).roads[k] = t; }
@@ -204,6 +214,9 @@ export class World {
       else if (o.op === 'building') this.putB(o.data);
       else if (o.op === 'removeBuilding') { const b = this.buildings.get(o.id); if (b && o.chunks[0] === R.chunkKey(b.cx, b.cy)) this.delB(o.id); }
       else if (o.op === 'roads') { for (const k in o.set) this.putR(k, o.set[k]); for (const k of o.remove) this.delR(k); }
+      else if (o.op === 'water') { for (const k in o.set) this.putW(k, o.set[k]); for (const k of o.remove) this.delW(k); }
+      else if (o.op === 'vehicle') this.putV(o.data);
+      else if (o.op === 'removeVehicle') this.delV(o.id);
     }
   }
   requireFounded() { if (!this.meta) throw new HttpError(409, 'Found the settlement first.'); }
@@ -235,7 +248,7 @@ export class World {
       for (const r of rows) { const b = bRow(r); ops.push({ op: 'building', data: b, chunks: [R.chunkKey(b.cx, b.cy)] }); }
     }
     for (const [id, chunk] of ch.removedBuildings) ops.push({ op: 'removeBuilding', id, chunks: [chunk] });
-    ops.push(...ch.roadOps);
+    ops.push(...ch.roadOps, ...ch.extraOps);
     if (ch.citizens.size > 400) {
       const rows = (await db.query('select home_cx, home_cy, job_cx, job_cy, hang_cx, hang_cy from citizens where id = any($1)', [[...ch.citizens.keys()]])).rows;
       const chunks = new Set([...ch.citizens.values()].flat()); for (const r of rows) chunksOfRow(r).forEach(k => chunks.add(k));
@@ -253,7 +266,7 @@ export class World {
   // ---------- reads ----------
   chunk(cx, cy) {
     const c = this.chunks.get(R.chunkKey(cx, cy));
-    return { buildings: c ? [...c.buildings.values()] : [], roads: c ? { ...c.roads } : {} };
+    return { buildings: c ? [...c.buildings.values()] : [], roads: c ? { ...c.roads } : {}, water: c ? { ...c.water } : {}, vehicles: c ? [...c.vehicles.values()] : [] };
   }
   async citizensIn(keys, limit = 6000) {
     const vals = keys.map(k => k.split('_').map(Number));
@@ -285,7 +298,7 @@ export class World {
       if (ch.meta) throw new HttpError(409, 'This settlement is already founded.');
       const now = Date.now(); name = String(name || '').trim().slice(0, 40) || 'Followville'; handle = R.cleanHandle(handle) || 'founder';
       ch.meta = { name, epoch: now - 7 * 60 * R.GAME_MIN_MS, createdAt: now, treasuryBase: R.START_FUNDS, treasuryDay: 0, income: R.GRANT,
-        population: 0, residents: 0, employed: 0, newsDay: 0, buildPostId: null, founder: handle };
+        population: 0, residents: 0, employed: 0, newsDay: 0, buildPostId: null, founder: handle, minMs: R.GAME_MIN_MS, weather: null };
       ch.today = 0;
       const starter = [['tent', 0, 0, ''], ['campfire', 2, 1, 'The first fire'], ['tree', -3, -2], ['pine', 4, -3], ['birch', -2, 4], ['pine', 5, 3], ['tree', -4, 1], ['bush', 3, -1], ['rocks', -1, -3]];
       let i = 0; for (const [type, x, y, nm] of starter) await this.insertBuilding(ch, { type, x, y, name: nm || '', builtAt: now + i++ });
@@ -390,6 +403,8 @@ export class World {
     const hit = await ch.q(`select 1 from buildings where id is distinct from $5::text and x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int limit 1`, [x, y, w, d, ignoreId]);
     const road = await ch.q('select 1 from roads where x >= $1::int and x < $1::int + $3::int and y >= $2::int and y < $2::int + $4::int limit 1', [x, y, w, d]);
     if (hit.rowCount || road.rowCount) throw new HttpError(409, 'That spot is taken. Pick an empty patch of grass.');
+    const wet = await ch.q('select 1 from water where x >= $1::int and x < $1::int + $3::int and y >= $2::int and y < $2::int + $4::int limit 1', [x, y, w, d]);
+    if (wet.rowCount) throw new HttpError(409, "That's water. Build on dry land, or drain it with Terrain → Dry land.");
   }
 
   async demolish(id, { refund = false } = {}) {
@@ -406,6 +421,13 @@ export class World {
   }
 
   async demolishIn(ch, b) {
+    await this.evict(ch, b);
+    await ch.q('delete from buildings where id = $1', [b.id]);
+    ch.buildings.delete(b.id); ch.removedBuildings.set(b.id, R.chunkKey(b.cx, b.cy));
+  }
+
+  // Everyone who lives, works or hangs out in a building leaves it.
+  async evict(ch, b) {
     const id = b.id;
     {
       const typeOfId = async bid => bid ? (await ch.q('select type from buildings where id = $1', [bid])).rows[0]?.type : null;
@@ -421,8 +443,6 @@ export class World {
           await ch.setHangout(c, hx === null ? null : await ch.nearestLeisure(hx, hy, id)); await ch.saveCitizen(c);
         }
       }
-      await ch.q('delete from buildings where id = $1', [id]);
-      ch.buildings.delete(id); ch.removedBuildings.set(id, R.chunkKey(b.cx, b.cy));
     }
   }
 
@@ -437,6 +457,8 @@ export class World {
       for (const b of blds) await this.demolishIn(ch, b);
       const removed = (await ch.q('delete from roads where x between $1 and $3 and y between $2 and $4 returning x, y', [ax, ay, bx, by])).rows.map(r => `${r.x},${r.y}`);
       this.roadOps(ch, {}, removed);
+      for (const v of (await ch.q('delete from vehicles where x between $1 and $3 and y between $2 and $4 returning id, cx, cy', [ax, ay, bx, by])).rows)
+        ch.extraOps.push({ op: 'removeVehicle', id: v.id, chunks: [R.chunkKey(v.cx, v.cy)] });
       if (blds.length || removed.length) await ch.event(`An area was cleared: ${fmt(blds.length)} building${blds.length === 1 ? '' : 's'} and ${fmt(removed.length)} road tile${removed.length === 1 ? '' : 's'} removed`, 'demolish');
       await ch.fillVacancies();
       return { buildings: blds.length, roads: removed.length };
@@ -631,6 +653,144 @@ export class World {
       await ch.fillVacancies();
       return { ok: true };
     });
+  }
+
+  // ---------- the clock speed changed (30 real minutes = 1 game day) ----------
+  // Keeps the current game time and construction progress where they were, so nothing jumps.
+  async reanchor() {
+    if (!this.meta || (this.meta.minMs ?? R.LEGACY_GAME_MIN_MS) === R.GAME_MIN_MS) return false;
+    return this.change(async ch => {
+      const old = ch.meta.minMs ?? R.LEGACY_GAME_MIN_MS; if (old === R.GAME_MIN_MS) return false;
+      const now = Date.now(), gm = (now - ch.meta.epoch) / old;
+      ch.meta.epoch = Math.round(now - gm * R.GAME_MIN_MS); ch.meta.minMs = R.GAME_MIN_MS;
+      const k = R.GAME_MIN_MS / old;
+      const rows = (await ch.q(`update buildings set built_at = $1::bigint - round(($1::bigint - built_at) * $2::float8)::bigint,
+        ready_at = $1::bigint + round(greatest(ready_at - $1::bigint, 0) * $2::float8)::bigint where not done returning id`, [now, k])).rows;
+      for (const r of rows) ch.buildings.add(r.id);
+      await ch.event('Time now runs faster: a full day passes every 30 real minutes', 'day');
+      return true;
+    });
+  }
+
+  // ---------- water ----------
+  // Water can't go under buildings. Water under a road turns that road into a bridge.
+  async paintWater({ set = {}, remove = [] }) {
+    return this.change(async ch => {
+      const keys = tileKeys(Object.keys(set)).filter(k => WATER_TYPES[set[k]]).slice(0, 20000);
+      const toSet = {};
+      if (keys.length) {
+        const xs = keys.map(k => +k.split(',')[0]), ys = keys.map(k => +k.split(',')[1]);
+        const covered = new Set((await ch.q(`select t.x || ',' || t.y k from unnest($1::int[], $2::int[]) t(x, y)
+          join buildings b on t.x >= b.x and t.x < b.x + b.w and t.y >= b.y and t.y < b.y + b.d`, [xs, ys])).rows.map(r => r.k));
+        for (const k of keys) if (!covered.has(k)) toSet[k] = set[k];
+        const ks = Object.keys(toSet);
+        if (ks.length) await ch.q(`insert into water (x, y, kind, cx, cy) select x, y, k, floor(x::float / ${R.CHUNK})::int, floor(y::float / ${R.CHUNK})::int
+          from unnest($1::int[], $2::int[], $3::text[]) u(x, y, k) on conflict (x, y) do update set kind = excluded.kind`,
+          [ks.map(k => +k.split(',')[0]), ks.map(k => +k.split(',')[1]), ks.map(k => toSet[k])]);
+      }
+      const rm = tileKeys(remove).slice(0, 20000);
+      const removed = rm.length ? (await ch.q('delete from water where (x, y) in (select * from unnest($1::int[], $2::int[])) returning x, y',
+        [rm.map(k => +k.split(',')[0]), rm.map(k => +k.split(',')[1])])).rows.map(r => `${r.x},${r.y}`) : [];
+      const by = new Map(); const slot = k => { const [x, y] = k.split(',').map(Number); const ck = R.chunkKeyOfTile(x, y); if (!by.has(ck)) by.set(ck, { set: {}, remove: [] }); return by.get(ck); };
+      for (const k in toSet) slot(k).set[k] = toSet[k];
+      for (const k of removed) slot(k).remove.push(k);
+      for (const [ck, o] of by) ch.extraOps.push({ op: 'water', set: o.set, remove: o.remove, chunks: [ck] });
+      return { changed: Object.keys(toSet).length + removed.length, skipped: keys.length - Object.keys(toSet).length };
+    });
+  }
+
+  // ---------- vehicles the developer places (they drive around on their own) ----------
+  async placeVehicle({ type, x, y }) {
+    if (!VEHICLE_TYPES[type]) throw new HttpError(400, 'Unknown vehicle.');
+    x = Math.trunc(Number(x)); y = Math.trunc(Number(y));
+    return this.change(async ch => {
+      if (!(await ch.q('select 1 from roads where x = $1 and y = $2', [x, y])).rowCount) throw new HttpError(409, 'Vehicles need a road. Tap a road tile.');
+      if (Number((await ch.q('select count(*) n from vehicles')).rows[0].n) >= 2000) throw new HttpError(409, 'That is the vehicle limit (2,000). Remove some first.');
+      const [cx, cy] = R.chunkOf(x, y);
+      const v = vRow((await ch.q('insert into vehicles (id, type, x, y, cx, cy, placed_at) values ($1,$2,$3,$4,$5,$6,$7) returning *', [uid(), type, x, y, cx, cy, Date.now()])).rows[0]);
+      ch.extraOps.push({ op: 'vehicle', data: v, chunks: [R.chunkKey(cx, cy)] });
+      return { vehicle: v };
+    });
+  }
+  async removeVehicle(id) {
+    return this.change(async ch => {
+      const v = (await ch.q('delete from vehicles where id = $1 returning id, cx, cy', [id])).rows[0];
+      if (!v) throw new HttpError(404, 'No such vehicle.');
+      ch.extraOps.push({ op: 'removeVehicle', id, chunks: [R.chunkKey(v.cx, v.cy)] });
+      return { ok: true };
+    });
+  }
+
+  // ---------- disasters ----------
+  // Hit buildings become ruins: their people leave (residents to the Outskirts), and they stay as rubble
+  // until repaired or cleared. Small things like trees and benches are simply destroyed.
+  async disaster({ kind, x, y, dir }) {
+    const D = DISASTER_TYPES[kind]; if (!D) throw new HttpError(400, 'Unknown disaster.');
+    x = Math.trunc(Number(x)); y = Math.trunc(Number(y)); if (!Number.isFinite(x) || !Number.isFinite(y)) throw new HttpError(400, 'Bad position.');
+    dir = Number.isFinite(Number(dir)) ? Number(dir) : Math.random() * Math.PI * 2;
+    return this.change(async ch => {
+      const reach = kind === 'tornado' ? D.length + D.radius : D.radius;
+      const near = (await ch.q('select * from buildings where not ruin and x <= $1::int + $3::int and x + w >= $1::int - $3::int and y <= $2::int + $3::int and y + d >= $2::int - $3::int for update',
+        [x, y, reach])).rows;
+      const hit = [];
+      const dist = b => Math.hypot(b.x + b.w / 2 - x - 0.5, b.y + b.d / 2 - y - 0.5);
+      for (const b of near) {
+        const t = BUILDING_TYPES[b.type] || {}; let p = 0;
+        if (kind === 'fire') p = dist(b) <= 1.5 ? 1 : dist(b) <= D.radius + 1.5 ? 0.55 : 0;
+        else if (kind === 'meteor') p = dist(b) <= D.radius + 0.8 ? 1 : 0;
+        else if (kind === 'flood') p = dist(b) <= D.radius ? (t.outdoor ? 0.3 : 0.45) : 0;
+        else if (kind === 'earthquake') p = dist(b) <= D.radius ? Math.min(0.85, 0.2 + (t.height || 20) / 160) * (1 - dist(b) / (D.radius * 1.6)) : 0;
+        else if (kind === 'tornado') {
+          const cx = b.x + b.w / 2 - x - 0.5, cy = b.y + b.d / 2 - y - 0.5, along = cx * Math.cos(dir) + cy * Math.sin(dir), across = Math.abs(-cx * Math.sin(dir) + cy * Math.cos(dir));
+          p = along >= -1 && along <= D.length && across <= D.radius + Math.max(b.w, b.d) / 2 ? 0.9 : 0;
+        }
+        if (p && Math.random() < p) hit.push(b);
+      }
+      let ruined = 0, destroyed = 0;
+      for (const b of hit) {
+        const t = BUILDING_TYPES[b.type] || {};
+        if (t.cat === 'nature' || t.cat === 'decor' || (t.cost || 0) < 100) { await this.demolishIn(ch, b); destroyed++; continue; }
+        await this.evict(ch, b);
+        await ch.q('update buildings set ruin = true, ruined_at = $2, done = true, home_cap = 0, job_cap = 0, hang_cap = 0 where id = $1', [b.id, Date.now()]);
+        ch.buildings.add(b.id); ruined++;
+      }
+      const rec = { id: uid(), kind, x, y, r: D.radius, dir, t: Date.now(), hit: ruined };
+      await ch.q('insert into disasters (id, kind, x, y, r, dir, t, hit) values ($1,$2,$3,$4,$5,$6,$7,$8)', [rec.id, kind, x, y, rec.r, dir, rec.t, ruined]);
+      ch.extraOps.push({ op: 'disaster', data: rec });
+      const what = { fire: 'A fire broke out', tornado: 'A tornado tore through town', earthquake: 'An earthquake shook the city', flood: 'A flood swept the streets', meteor: 'A meteor crashed into town' }[kind];
+      await ch.event(ruined ? `${what}. ${fmt(ruined)} building${ruined === 1 ? ' is' : 's are'} in ruins. Emergency crews are on the way` : `${what}, but every building is still standing`, 'disaster');
+      await ch.fillVacancies();
+      return { ruined, destroyed, disaster: rec };
+    });
+  }
+  async repair(id) {
+    return this.change(async ch => {
+      const b = (await ch.q('select * from buildings where id = $1 and ruin for update', [id])).rows[0];
+      if (!b) throw new HttpError(404, 'That building is not in ruins.');
+      const cap = R.capacities(b.type);
+      const r = (await ch.q('update buildings set ruin = false, ruined_at = 0, home_cap = $2, job_cap = $3, hang_cap = $4 where id = $1 returning *', [id, cap.homeCap, cap.jobCap, cap.hangCap])).rows[0];
+      ch.buildings.add(id); await this.attractVisitors(ch, r);
+      await ch.event(`${r.name || BUILDING_TYPES[r.type]?.name || 'A building'} was rebuilt after the disaster`, 'build');
+      await ch.fillVacancies();
+      return { ok: true };
+    });
+  }
+  async clearRuins() {
+    return this.change(async ch => {
+      const rows = (await ch.q('select * from buildings where ruin limit 5000 for update')).rows;
+      for (const b of rows) await this.demolishIn(ch, b);
+      if (rows.length) await ch.event(`Crews cleared ${fmt(rows.length)} ruin${rows.length === 1 ? '' : 's'}`, 'demolish');
+      return { cleared: rows.length };
+    });
+  }
+  async recentDisasters(ms = 15 * 60000) {
+    return (await pool.query('select id, kind, x, y, r, dir, t, hit from disasters where t > $1 order by t desc limit 20', [Date.now() - ms])).rows;
+  }
+
+  // ---------- weather ----------
+  async setWeather(kind) {
+    if (kind && !WEATHER_TYPES[kind]) throw new HttpError(400, 'Unknown weather.');
+    return this.change(async ch => { ch.meta.weather = kind || null; return { weather: ch.meta.weather }; });
   }
 
   async setBuildPost(mediaId) {

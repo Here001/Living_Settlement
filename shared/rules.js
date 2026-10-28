@@ -1,7 +1,8 @@
 // Game rules shared by the server (authoritative) and the browser.
 import { BUILDING_TYPES, ROAD_TYPES } from './catalog.js';
 
-export const GAME_MIN_MS = 15000;          // 1 game minute = 15 real seconds → 4 game days per real day
+export const GAME_MIN_MS = 1250;           // 1 game minute = 1.25 real seconds → 1 game day = 30 real minutes (48 a day)
+export const LEGACY_GAME_MIN_MS = 15000;   // the speed towns founded before October 2026 started with
 export const DAY_MS = 1440 * GAME_MIN_MS;
 export const TAX_RATE = 0.2;               // share of each salary that goes to the treasury
 export const GRANT = 200;                  // coins the town receives every game day regardless
@@ -64,3 +65,16 @@ export function canPlace(type, x, y, occ, roads, ignoreId) {
 
 export const roadCost = type => (ROAD_TYPES[type] && ROAD_TYPES[type].cost) || 0;
 export const isRoadType = type => !!ROAD_TYPES[type] && !ROAD_TYPES[type].hidden;
+
+// Weather is worked out from the clock, so every viewer sees the same sky. Each game day is split into
+// four 6-hour spells; the developer can pin one kind of weather instead (meta.weather).
+export const WEATHER_ODDS = [['sunny', 44], ['cloudy', 24], ['rain', 15], ['fog', 9], ['storm', 8]];
+function mix(n) { n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); return (n ^ (n >>> 16)) >>> 0; }
+export function weatherAt(meta, gm) {
+  if (meta && meta.weather) return meta.weather;
+  const spell = Math.floor(gm / 360), r = mix(spell * 2654435761 + (meta ? (meta.createdAt % 100000) : 0)) % 100;
+  const hour = ((gm % 1440) + 1440) % 1440 / 60;
+  if (hour >= 4 && hour < 8 && r < 18) return 'fog';
+  let acc = 0; for (const [k, p] of WEATHER_ODDS) { acc += p; if (r < acc) return k; }
+  return 'sunny';
+}

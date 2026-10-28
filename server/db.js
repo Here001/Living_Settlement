@@ -74,6 +74,15 @@ const MIGRATIONS = [
    alter table citizens add column manual boolean not null default false;
    drop index citizens_unemployed;
    create index citizens_unemployed on citizens (seq) where home_id is not null and job_id is null and not manual;`,
+
+  // v4: water, ruins left by disasters, vehicles the developer places, and a record of disasters for replaying their animation.
+  `create table water (x int not null, y int not null, kind text not null, cx int not null, cy int not null, primary key (x, y));
+   create index water_chunk on water (cx, cy);
+   alter table buildings add column ruin boolean not null default false, add column ruined_at bigint not null default 0;
+   create table vehicles (id text primary key, type text not null, x int not null, y int not null, cx int not null, cy int not null, placed_at bigint not null);
+   create index vehicles_chunk on vehicles (cx, cy);
+   create table disasters (id text primary key, kind text not null, x int not null, y int not null, r int not null, dir real not null default 0, t bigint not null, hit int not null default 0);
+   create index disasters_t on disasters (t desc);`,
 ];
 
 export async function migrate() {
@@ -100,7 +109,7 @@ export async function migrate() {
     // Keep each building's capacities in step with the catalog, so changing a number there takes effect on restart.
     for (const [type, t] of Object.entries(BUILDING_TYPES)) {
       const cap = capacities(type);
-      await c.query('update buildings set home_cap = $2, job_cap = $3, hang_cap = $4, leisure = $5 where type = $1 and done and (home_cap, job_cap, hang_cap, leisure) is distinct from ($2, $3, $4, $5)',
+      await c.query('update buildings set home_cap = $2, job_cap = $3, hang_cap = $4, leisure = $5 where type = $1 and done and not ruin and (home_cap, job_cap, hang_cap, leisure) is distinct from ($2, $3, $4, $5)',
         [type, cap.homeCap, cap.jobCap, cap.hangCap, cap.leisure]);
     }
   } catch (e) { await c.query('rollback').catch(() => {}); throw e; }

@@ -11,7 +11,7 @@ export class HttpError extends Error { constructor(status, msg) { super(msg); th
 
 // ---------- row shapes ----------
 export const bRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, name: r.name, requestedBy: r.requested_by,
-  builtAt: r.built_at, builtDay: r.built_day, homeUsed: r.home_used, jobUsed: r.job_used, hangUsed: r.hang_used,
+  builtAt: r.built_at, builtDay: r.built_day, rot: r.rot || 0, homeUsed: r.home_used, jobUsed: r.job_used, hangUsed: r.hang_used,
   done: r.done !== false, readyAt: r.ready_at || 0, ruin: !!r.ruin, ruinedAt: r.ruined_at || 0 });
 const vRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, placedAt: r.placed_at });
 const tileKeys = keys => keys.filter(k => /^-?\d{1,7},-?\d{1,7}$/.test(k));
@@ -315,13 +315,13 @@ export class World {
   }
 
   // A building under construction exists on the map but has no homes, jobs or visitors until it's finished.
-  async insertBuilding(ch, { id = uid(), type, x, y, name = '', requestedBy = '', builtAt = Date.now(), builtDay, instant = true }) {
-    const t = BUILDING_TYPES[type]; const [w, d] = t.size; const [cx, cy] = R.chunkOf(x, y); const cap = R.capacities(type);
+  async insertBuilding(ch, { id = uid(), type, x, y, name = '', requestedBy = '', builtAt = Date.now(), builtDay, instant = true, rot = 0 }) {
+    const t = BUILDING_TYPES[type]; rot = R.cleanRot(rot); const [w, d] = R.footprint(t.size, rot); const [cx, cy] = R.chunkOf(x, y); const cap = R.capacities(type);
     const minutes = instant ? 0 : R.buildMinutes(type); const done = minutes === 0;
-    const r = await ch.q(`insert into buildings (id, type, x, y, w, d, cx, cy, name, requested_by, built_at, built_day, home_cap, job_cap, leisure, hang_cap, done, ready_at)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) returning *`,
+    const r = await ch.q(`insert into buildings (id, type, x, y, w, d, cx, cy, name, requested_by, built_at, built_day, home_cap, job_cap, leisure, hang_cap, done, ready_at, rot)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) returning *`,
       [id, type, x, y, w, d, cx, cy, name, requestedBy, builtAt, builtDay ?? ch.today, done ? cap.homeCap : 0, done ? cap.jobCap : 0, cap.leisure, done ? cap.hangCap : 0,
-        done, done ? builtAt : builtAt + minutes * R.GAME_MIN_MS]);
+        done, done ? builtAt : builtAt + minutes * R.GAME_MIN_MS, rot]);
     ch.buildings.add(id);
     if (done) await this.attractVisitors(ch, r.rows[0]);
     return r.rows[0];
@@ -389,13 +389,13 @@ export class World {
   }
 
   // The developer builds for free. `instant: false` gives the building a construction period instead.
-  async build({ type, x, y, name = '', requestedBy = '', instant = true }) {
+  async build({ type, x, y, name = '', requestedBy = '', instant = true, rot = 0 }) {
     const t = BUILDING_TYPES[type]; if (!t) throw new HttpError(400, 'Unknown building type.');
     x = Math.trunc(Number(x)); y = Math.trunc(Number(y));
     if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 100000 || Math.abs(y) > 100000) throw new HttpError(400, 'Bad position.');
     return this.change(async ch => {
-      await this.assertFree(ch, type, x, y);
-      const b = bRow(await this.insertBuilding(ch, { type, x, y, name: String(name).trim().slice(0, 40), requestedBy: R.cleanHandle(requestedBy), instant: instant !== false }));
+      await this.assertFree(ch, type, x, y, null, rot);
+      const b = bRow(await this.insertBuilding(ch, { type, x, y, name: String(name).trim().slice(0, 40), requestedBy: R.cleanHandle(requestedBy), instant: instant !== false, rot }));
       const nm = b.name || t.name, by = b.requestedBy ? `, requested by @${b.requestedBy}` : '';
       if (b.done) await ch.event(`${nm} was built${by}`, 'build');
       else { const h = Math.round(R.buildMinutes(type) / 60); await ch.event(`Construction started on ${nm}${by}. Ready in ${h} game hour${h === 1 ? '' : 's'}`, 'build'); }
@@ -405,8 +405,8 @@ export class World {
   }
 
   // Placement is checked against the database inside the lock, so two servers can't build on the same spot.
-  async assertFree(ch, type, x, y, ignoreId = null) {
-    const [w, d] = BUILDING_TYPES[type].size;
+  async assertFree(ch, type, x, y, ignoreId = null, rot = 0) {
+    const [w, d] = R.footprint(BUILDING_TYPES[type].size, R.cleanRot(rot));
     const hit = await ch.q(`select 1 from buildings where id is distinct from $5::text and x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int limit 1`, [x, y, w, d, ignoreId]);
     const road = await ch.q('select 1 from roads where x >= $1::int and x < $1::int + $3::int and y >= $2::int and y < $2::int + $4::int limit 1', [x, y, w, d]);
     if (hit.rowCount || road.rowCount) throw new HttpError(409, 'That spot is taken. Pick an empty patch of grass.');
@@ -484,25 +484,27 @@ export class World {
     return this.change(async ch => {
       if ((await ch.q('select 1 from buildings where id = $1', [String(b.id)])).rowCount) throw new HttpError(400, 'Nothing to restore.');
       const x = Math.trunc(b.x), y = Math.trunc(b.y);
-      await this.assertFree(ch, b.type, x, y);
+      await this.assertFree(ch, b.type, x, y, null, b.rot);
       const row = await this.insertBuilding(ch, { id: String(b.id), type: b.type, x, y, name: String(b.name || '').slice(0, 40), requestedBy: R.cleanHandle(b.requestedBy),
-        builtAt: Number(b.builtAt) || Date.now(), builtDay: Number(b.builtDay) || 0 });
+        builtAt: Number(b.builtAt) || Date.now(), builtDay: Number(b.builtDay) || 0, rot: b.rot });
       if (!roadClears(b.type)) await ch.event(`${row.name || BUILDING_TYPES[b.type].name} was rebuilt`, 'build'); // trees and benches coming back aren't news
       await ch.fillVacancies();
       return { ok: true };
     });
   }
 
-  async move(id, x, y) {
+  // Moves a building, and can turn it at the same time (rot undefined = keep how it faces).
+  async move(id, x, y, rot) {
     x = Math.trunc(Number(x)); y = Math.trunc(Number(y));
     if (!Number.isFinite(x) || !Number.isFinite(y)) throw new HttpError(400, 'Bad position.');
     return this.change(async ch => {
       const b = (await ch.q('select * from buildings where id = $1 for update', [id])).rows[0];
       if (!b) throw new HttpError(404, 'No such building.');
-      await this.assertFree(ch, b.type, x, y, id);
+      const r2 = rot === undefined || rot === null ? b.rot : R.cleanRot(rot), [w, d] = R.footprint(BUILDING_TYPES[b.type].size, r2);
+      await this.assertFree(ch, b.type, x, y, id, r2);
       const [cx, cy] = R.chunkOf(x, y);
       if (cx !== b.cx || cy !== b.cy) ch.removedBuildings.set(id, R.chunkKey(b.cx, b.cy));
-      await ch.q('update buildings set x = $2, y = $3, cx = $4, cy = $5 where id = $1', [id, x, y, cx, cy]);
+      await ch.q('update buildings set x = $2, y = $3, cx = $4, cy = $5, rot = $6, w = $7, d = $8 where id = $1', [id, x, y, cx, cy, r2, w, d]);
       ch.buildings.add(id);
       for (const [col, cxc, cyc] of [['home_id', 'home_cx', 'home_cy'], ['job_id', 'job_cx', 'job_cy'], ['hang_id', 'hang_cx', 'hang_cy']]) {
         const rows = (await ch.q(`select * from citizens where ${col} = $1`, [id])).rows;
@@ -857,7 +859,7 @@ export class World {
       ch.quiet = true;
       for (const id of d.demolish || []) if (await attempt(`demolish ${name(id)}`, () => this.demolish(id))) n.demolished++;
       for (const id of d.removeVehicles || []) if (await attempt('remove a vehicle', () => this.removeVehicle(id))) n.vehicles++;
-      for (const [id, p] of Object.entries(d.moves || {})) if (await attempt(`move ${name(id)}`, () => this.move(id, p.x, p.y))) n.moved++;
+      for (const [id, p] of Object.entries(d.moves || {})) if (await attempt(`move ${name(id)}`, () => this.move(id, p.x, p.y, p.rot))) n.moved++;
       if (water.remove.length) n.water += (await this.paintWater({ set: {}, remove: water.remove })).changed || 0;
       if (roads.remove.length) n.roads += (await this.paintRoads({ set: {}, remove: roads.remove })).changed || 0;
       for (const b of d.builds || []) if (await attempt(`build ${BUILDING_TYPES[b.type]?.name || b.type}`, () => this.build(b))) n.built++;

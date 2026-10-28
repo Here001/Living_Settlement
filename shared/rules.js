@@ -87,3 +87,7 @@ export function genderFrom(text) {
   return null;
 }
 export const randomGender = () => (Math.random() < 0.5 ? 'm' : 'f');
+
+// A building's footprint: turned buildings (rot 1) swap width and depth.
+export const footprint = (size, rot) => (rot ? [size[1], size[0]] : [size[0], size[1]]);
+export const cleanRot = r => (Number(r) === 1 ? 1 : 0);

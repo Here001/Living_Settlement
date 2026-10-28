@@ -88,6 +88,8 @@ const MIGRATIONS = [
    update citizens set gender = case when ('x' || substr(md5(id), 1, 2))::bit(8)::int % 2 = 0 then 'm' else 'f' end;`,
   // v6: the developer's unpublished draft (only one at a time).
   `create table draft (id int primary key default 1, data jsonb not null, updated_at bigint not null);`,
+  // v7: a building can be turned to face the other way (its width and depth swap).
+  `alter table buildings add column rot smallint not null default 0;`,
 ];
 
 export async function migrate() {

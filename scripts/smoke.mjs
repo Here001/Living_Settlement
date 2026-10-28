@@ -247,6 +247,15 @@ ok((await chunk('9_9')).chunks['9_9'].buildings.some(b => b.type === 'house' && 
 ok((await call('GET', '/api/meta', undefined, { auth: false })).json.events.filter(e => e.text.includes('update:')).length === 1, 'one headline for the whole update');
 ok((await call('GET', '/api/admin/draft')).json.draft === null, 'the draft is cleared after publishing');
 
+console.log('Turning buildings');
+const row = (await call('POST', '/api/admin/buildings', { type: 'townhouses', x: 320, y: 320, rot: 1 })).json.building;
+ok(row?.rot === 1, 'build a terrace turned the other way', JSON.stringify(row));
+ok((await call('POST', '/api/admin/buildings', { type: 'tree', x: 320, y: 322 })).status === 409, 'a turned 3×1 covers 1×3 tiles');
+ok((await call('POST', '/api/admin/buildings', { type: 'tree', x: 322, y: 320 })).status === 200, 'and leaves the old row free');
+ok((await call('PATCH', `/api/admin/buildings/${row.id}`, { x: 320, y: 320, rot: 0 })).status === 409, 'turning back is refused when the tree is in the way');
+r = await call('PATCH', `/api/admin/buildings/${row.id}`, { x: 330, y: 330, rot: 0 });
+ok(r.status === 200 && (await chunk('10_10')).chunks['10_10'].buildings.find(b => b.id === row.id)?.rot === 0, 'move and turn in one go');
+
 console.log('Men and women');
 await post(comment('c4', 'ada_f', 'spawn female 👩')); await post(comment('c5', 'bayo_m', 'Spawn me as a man'));
 let ada = null; for (let i = 0; i < 40 && !ada?.id; i++) { await sleep(100); ada = await who('ada_f'); }

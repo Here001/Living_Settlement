@@ -102,7 +102,7 @@ app.patch('/api/admin/citizens/:id', admin, send(async req => {
   if ('jobId' in b) await world.setJob(req.params.id, b.jobId);
   return { ok: true };
 }));
-app.patch('/api/admin/buildings/:id', admin, send(req => world.move(req.params.id, (req.body || {}).x, (req.body || {}).y)));
+app.patch('/api/admin/buildings/:id', admin, send(req => world.move(req.params.id, (req.body || {}).x, (req.body || {}).y, (req.body || {}).rot)));
 app.delete('/api/admin/buildings/:id', admin, send(req => world.demolish(req.params.id, { refund: req.query.refund === '1' })));
 app.post('/api/admin/roads', admin, send(req => world.paintRoads(req.body || {})));
 app.post('/api/admin/citizens', admin, send(req => world.spawn((req.body || {}).handle, 'manual', (req.body || {}).gender)));

@@ -19,12 +19,12 @@ const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_c
 // The compact citizen record viewers receive. Coordinates travel with it so a viewer can draw a commute
 // even when the workplace is in a part of the map they haven't loaded.
 const CITIZEN_SELECT = `
-  select c.id, c.seq, c.handle, c.joined_at, c.founder,
+  select c.id, c.seq, c.handle, c.joined_at, c.founder, c.gender,
          c.home_cx, c.home_cy, c.job_cx, c.job_cy, c.hang_cx, c.hang_cy,
          h.id hid, h.type ht, h.x hx, h.y hy, j.id jid, j.type jt, j.x jx, j.y jy, g.id gid, g.type gt, g.x gx, g.y gy
   from citizens c
   left join buildings h on h.id = c.home_id left join buildings j on j.id = c.job_id left join buildings g on g.id = c.hang_id`;
-export const cOut = r => ({ id: r.id, s: r.seq, h: r.handle, t: r.joined_at, f: r.founder ? 1 : 0,
+export const cOut = r => ({ id: r.id, s: r.seq, h: r.handle, t: r.joined_at, f: r.founder ? 1 : 0, g: r.gender || 'm',
   home: r.hid ? [r.hid, r.ht, r.hx, r.hy] : null, job: r.jid ? [r.jid, r.jt, r.jx, r.jy] : null, hang: r.gid ? [r.gid, r.gt, r.gx, r.gy] : null });
 
 // One world change. Holds the database connection inside the global world lock and records everything that changed,
@@ -293,7 +293,7 @@ export class World {
   }
 
   // ---------- builder actions ----------
-  async found({ name, handle }) {
+  async found({ name, handle, gender }) {
     return this.change(async ch => {
       if (ch.meta) throw new HttpError(409, 'This settlement is already founded.');
       const now = Date.now(); name = String(name || '').trim().slice(0, 40) || 'Followville'; handle = R.cleanHandle(handle) || 'founder';
@@ -302,7 +302,7 @@ export class World {
       ch.today = 0;
       const starter = [['tent', 0, 0, ''], ['campfire', 2, 1, 'The first fire'], ['tree', -3, -2], ['pine', 4, -3], ['birch', -2, 4], ['pine', 5, 3], ['tree', -4, 1], ['bush', 3, -1], ['rocks', -1, -3]];
       let i = 0; for (const [type, x, y, nm] of starter) await this.insertBuilding(ch, { type, x, y, name: nm || '', builtAt: now + i++ });
-      await this.insertCitizens(ch, [handle], 'founder', true);
+      await this.insertCitizens(ch, [handle], 'founder', true, gender);
       await ch.event(`@${handle} founded ${name}`, 'found');
       await ch.fillVacancies();
       return { name, handle };
@@ -365,7 +365,8 @@ export class World {
   }
 
   // Adds people to the end of the housing queue in one statement, then lets the queue fill any empty homes.
-  async insertCitizens(ch, handles, source, founder = false) {
+  // `genders` (optional) maps a lower-case handle to 'm' or 'f'; anyone not in it gets a coin-flip.
+  async insertCitizens(ch, handles, source, founder = false, genders = null) {
     const seen = new Set(); const fresh = [];
     for (const h of handles) { const c = R.cleanHandle(h); if (c && !seen.has(c.toLowerCase())) { seen.add(c.toLowerCase()); fresh.push(c); } }
     if (!fresh.length) return [];
@@ -373,9 +374,10 @@ export class World {
     const add = fresh.filter(h => !taken.has(h.toLowerCase()));
     if (!add.length) return [];
     const now = Date.now(); const ids = add.map(() => uid());
-    const rows = (await ch.q(`insert into citizens (id, handle, joined_at, founder, source, coins_base, coins_day)
-      select id, handle, $3, $4, $5, $6, $7 from unnest($1::text[], $2::text[]) with ordinality as t(id, handle, ord) order by ord
-      returning *`, [ids, add, now, founder, source, founder ? 50 : 20, ch.today])).rows;
+    const gs = add.map(h => { const g = genders?.get?.(h.toLowerCase()) ?? (typeof genders === 'string' ? genders : null); return g === 'm' || g === 'f' ? g : R.randomGender(); });
+    const rows = (await ch.q(`insert into citizens (id, handle, joined_at, founder, source, coins_base, coins_day, gender)
+      select id, handle, $3, $4, $5, $6, $7, gender from unnest($1::text[], $2::text[], $8::text[]) with ordinality as t(id, handle, gender, ord) order by ord
+      returning *`, [ids, add, now, founder, source, founder ? 50 : 20, ch.today, gs])).rows;
     for (const c of rows) ch.citizens.set(c.id, []);
     ch.meta.population = (ch.meta.population || 0) + rows.length;
     return rows;
@@ -536,10 +538,10 @@ export class World {
     });
   }
 
-  async spawn(handle, source = 'manual') {
+  async spawn(handle, source = 'manual', gender = null) {
     const h = R.cleanHandle(handle); if (!h) throw new HttpError(400, 'Type a username first.');
     return this.change(async ch => {
-      const rows = await this.insertCitizens(ch, [h], source);
+      const rows = await this.insertCitizens(ch, [h], source, false, gender);
       if (!rows.length) throw new HttpError(409, `@${h} already lives here.`);
       await ch.fillVacancies();
       const housed = (await ch.q('select home_id from citizens where id = $1', [rows[0].id])).rows[0].home_id;
@@ -549,9 +551,9 @@ export class World {
   }
 
   // Many arrivals in one change: used by the comment queue during viral moments.
-  async spawnMany(handles, source) {
+  async spawnMany(handles, source, genders = null) {
     return this.change(async ch => {
-      const rows = await this.insertCitizens(ch, handles, source);
+      const rows = await this.insertCitizens(ch, handles, source, false, genders);
       if (!rows.length) return { added: 0 };
       const { moved } = await ch.fillVacancies();
       const waiting = rows.length - Math.min(rows.length, moved);
@@ -561,11 +563,11 @@ export class World {
     });
   }
 
-  async spawnBulk(handles) {
+  async spawnBulk(handles, gender = null) {
     const list = (Array.isArray(handles) ? handles : String(handles || '').split(/[\s,;]+/)).map(R.cleanHandle).filter(Boolean).slice(0, 5000);
     if (!list.length) throw new HttpError(400, 'Add at least one username.');
     return this.change(async ch => {
-      const rows = await this.insertCitizens(ch, list, 'manual');
+      const rows = await this.insertCitizens(ch, list, 'manual', false, gender === 'm' || gender === 'f' ? gender : null);
       if (rows.length) {
         const { moved } = await ch.fillVacancies();
         await ch.event(rows.length === 1 ? `@${rows[0].handle} joined ${ch.meta.name}` : `${fmt(rows.length)} new citizens joined ${ch.meta.name}`, 'spawn');
@@ -603,6 +605,14 @@ export class World {
       await ch.event(j ? `@${c.handle} is now working as ${BUILDING_TYPES[j.type].work.title.toLowerCase()} at ${j.name || BUILDING_TYPES[j.type].name}` : `@${c.handle} left their job`, 'career');
       await ch.fillVacancies();
       return { ok: true };
+    });
+  }
+  async setGender(id, gender) {
+    if (gender !== 'm' && gender !== 'f') throw new HttpError(400, "Gender must be 'm' or 'f'.");
+    return this.change(async ch => {
+      const c = (await ch.q('update citizens set gender = $2 where id = $1 returning *', [id, gender])).rows[0];
+      if (!c) throw new HttpError(404, 'No such citizen.');
+      ch.touch(c); return { ok: true };
     });
   }
   async setHome(id, homeId) {
@@ -830,11 +840,12 @@ export class World {
     const client = await pool.connect(); let rows;
     try {
       rows = (await client.query(`update comments set status = 'processing' where id in (
-        select id from comments where status = 'pending' order by t limit $1 for update skip locked) returning id, username, source`, [batch])).rows;
+        select id from comments where status = 'pending' order by t limit $1 for update skip locked) returning id, username, source, text`, [batch])).rows;
     } finally { client.release(); }
     if (!rows.length) return 0;
     try {
-      if (this.meta) await this.spawnMany(rows.map(r => r.username), rows[0].source || 'instagram');
+      const genders = new Map(); for (const r of rows) { const g = R.genderFrom(r.text); if (g) genders.set(String(r.username).toLowerCase(), g); }
+      if (this.meta) await this.spawnMany(rows.map(r => r.username), rows[0].source || 'instagram', genders);
       await pool.query(`update comments set status = 'done' where id = any($1)`, [rows.map(r => r.id)]);
     } catch (e) { await pool.query(`update comments set status = 'pending' where id = any($1)`, [rows.map(r => r.id)]); throw e; }
     return rows.length;

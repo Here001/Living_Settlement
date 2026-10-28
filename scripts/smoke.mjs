@@ -222,6 +222,18 @@ await post(comment('c3', 'tunde', 'Build a football pitch!', 'vote-post'));
 r = await call('GET', '/api/admin/requests');
 ok(r.status === 200 && r.json.some(x => x.username === 'tunde' && x.text.includes('football')), 'build requests are collected');
 
+console.log('Men and women');
+await post(comment('c4', 'ada_f', 'spawn female 👩')); await post(comment('c5', 'bayo_m', 'Spawn me as a man'));
+let ada = null; for (let i = 0; i < 40 && !ada?.id; i++) { await sleep(100); ada = await who('ada_f'); }
+ok(ada?.g === 'f', '"spawn female" makes a woman', JSON.stringify(ada));
+ok((await who('bayo_m'))?.g === 'm', '"spawn me as a man" makes a man');
+r = await call('POST', '/api/admin/citizens', { handle: 'chioma', gender: 'f' });
+ok(r.status === 200 && (await who('chioma')).g === 'f', 'the developer can add a woman');
+ok(['m', 'f'].includes((await who('zara_ng')).g), 'everyone else gets a gender');
+r = await call('PATCH', `/api/admin/citizens/${(await who('chioma')).id}`, { gender: 'm' });
+ok(r.status === 200 && (await who('chioma')).g === 'm', 'the developer can change it');
+ok((await call('PATCH', `/api/admin/citizens/${(await who('chioma')).id}`, { gender: 'x' })).status === 400, 'only man or woman');
+
 console.log('Clock');
 ok((await call('GET', '/api/cron/tick?key=wrong', undefined, { auth: false })).status === 401, 'cron ping needs its key');
 r = await call('GET', `/api/cron/tick?key=${encodeURIComponent(process.env.CRON_KEY)}`, undefined, { auth: false });

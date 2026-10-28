@@ -85,14 +85,15 @@ app.post('/api/admin/ruins/clear', admin, send(() => world.clearRuins()));
 app.post('/api/admin/water', admin, send(req => world.paintWater(req.body || {})));
 app.post('/api/admin/vehicles', admin, send(req => world.placeVehicle(req.body || {})));
 app.delete('/api/admin/vehicles/:id', admin, send(req => world.removeVehicle(req.params.id)));
-app.post('/api/admin/disasters', admin, send(req => world.disaster(req.body || {})));
+app.post('/api/admin/disasters', admin, send(async req => { const r = await world.disaster(req.body || {}); eventsCache.t = 0; return r; }));
 app.put('/api/admin/weather', admin, send(req => world.setWeather((req.body || {}).kind)));
 app.post('/api/admin/construction/finish-all', admin, send(() => world.finishAll()));
 app.post('/api/admin/bulldoze', admin, send(req => world.bulldozeArea(req.body || {})));
 app.get('/api/admin/places', admin, send(req => world.places(req.query.kind, req.query.x, req.query.y)));
-app.post('/api/admin/citizens/bulk', admin, send(req => world.spawnBulk((req.body || {}).handles)));
+app.post('/api/admin/citizens/bulk', admin, send(req => world.spawnBulk((req.body || {}).handles, (req.body || {}).gender)));
 app.patch('/api/admin/citizens/:id', admin, send(async req => {
   const b = req.body || {};
+  if ('gender' in b) await world.setGender(req.params.id, b.gender);
   if ('homeId' in b) await world.setHome(req.params.id, b.homeId);
   if ('jobId' in b) await world.setJob(req.params.id, b.jobId);
   return { ok: true };
@@ -100,7 +101,7 @@ app.patch('/api/admin/citizens/:id', admin, send(async req => {
 app.patch('/api/admin/buildings/:id', admin, send(req => world.move(req.params.id, (req.body || {}).x, (req.body || {}).y)));
 app.delete('/api/admin/buildings/:id', admin, send(req => world.demolish(req.params.id, { refund: req.query.refund === '1' })));
 app.post('/api/admin/roads', admin, send(req => world.paintRoads(req.body || {})));
-app.post('/api/admin/citizens', admin, send(req => world.spawn((req.body || {}).handle, 'manual')));
+app.post('/api/admin/citizens', admin, send(req => world.spawn((req.body || {}).handle, 'manual', (req.body || {}).gender)));
 app.delete('/api/admin/citizens/:id', admin, send(req => world.removeCitizen(req.params.id)));
 app.put('/api/admin/build-post', admin, send(req => world.setBuildPost((req.body || {}).mediaId)));
 app.get('/api/admin/requests', admin, send(() => world.buildRequests()));

@@ -83,6 +83,9 @@ const MIGRATIONS = [
    create index vehicles_chunk on vehicles (cx, cy);
    create table disasters (id text primary key, kind text not null, x int not null, y int not null, r int not null, dir real not null default 0, t bigint not null, hit int not null default 0);
    create index disasters_t on disasters (t desc);`,
+  // v5: every citizen is a man or a woman. Existing citizens get a fixed coin-flip from their id.
+  `alter table citizens add column gender char(1) not null default 'm' check (gender in ('m', 'f'));
+   update citizens set gender = case when ('x' || substr(md5(id), 1, 2))::bit(8)::int % 2 = 0 then 'm' else 'f' end;`,
 ];
 
 export async function migrate() {

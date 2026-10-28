@@ -78,3 +78,12 @@ export function weatherAt(meta, gm) {
   let acc = 0; for (const [k, p] of WEATHER_ODDS) { acc += p; if (r < acc) return k; }
   return 'sunny';
 }
+
+// "spawn female", "spawn as a man", "spawn girl"… Returns 'm', 'f' or null when the comment doesn't say.
+export function genderFrom(text) {
+  const t = String(text || '').toLowerCase();
+  if (/\b(female|woman|girl|lady|queen)\b|👩|👧|♀/u.test(t)) return 'f';
+  if (/\b(male|man|boy|guy|king)\b|👨|👦|♂/u.test(t)) return 'm';
+  return null;
+}
+export const randomGender = () => (Math.random() < 0.5 ? 'm' : 'f');

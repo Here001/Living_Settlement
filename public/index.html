@@ -51,7 +51,7 @@ button{cursor:pointer}
 .chip .lbl{color:var(--muted)}
 @media (max-width:480px){ .chip .lbl{display:none} }
 .viewbtns{position:fixed;z-index:6;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 104px);display:flex;flex-direction:column;gap:8px}
-.vbtn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--panel);border:1.6px solid var(--line);box-shadow:var(--shadow)}
+.vbtn{color:var(--ink);width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--panel);border:1.6px solid var(--line);box-shadow:var(--shadow)}
 .vbtn svg{width:22px;height:22px}
 #showUi{position:fixed;z-index:20;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);opacity:.45;border:1.6px solid #2B2621;background:#FBF8F1;color:#2B2621;border-radius:999px;padding:6px 12px;font-weight:600}
 #showUi:hover,#showUi:focus-visible{opacity:1}
@@ -192,8 +192,8 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 <button class="news inked" id="news" hidden><span class="kick" id="newsKick"></span><span class="head" id="newsText"></span></button>
 <div class="toast" id="toast" hidden><span id="toastMsg"></span><button id="toastBtn" hidden>Undo</button></div>
 <div class="viewbtns" id="viewBtns">
-  <button class="vbtn" id="fsBtn" aria-label="Full screen" title="Full screen (F)"><svg viewBox="0 0 24 24" fill="none" stroke="#2B2621" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
-  <button class="vbtn" id="hideBtn" aria-label="Hide the interface" title="Hide the interface (H)"><svg viewBox="0 0 24 24" fill="none" stroke="#2B2621" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg></button>
+  <button class="vbtn" id="fsBtn" aria-label="Full screen" title="Full screen (F)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  <button class="vbtn" id="hideBtn" aria-label="Hide the interface" title="Hide the interface (H)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg></button>
 </div>
 <button id="showUi" hidden>Show interface</button>
 <div class="bar">
@@ -219,7 +219,7 @@ import { treasuryOn, buildMinutes, weatherAt, GAME_MIN_MS, CHUNK as CHUNK_SIZE }
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
-const GROUND_SPEED = 1.0;
+const GROUND_SPEED = 0.55; // tiles per game minute on grass; streets are quicker (see stepCost)
 let speed = 1, anchorWall = Date.now(), anchorVirt = Date.now();
 let skew=0;
 const nowMs = () => anchorVirt + (Date.now() - anchorWall) * speed + skew;
@@ -339,7 +339,7 @@ function changed(light){
 /* ---------------- pathfinding ---------------- */
 const pathCache = new Map();
 function walkable(x,y){ const k=x+','+y; if(S.water.has(k) && !D.roads.has(k)) return false; const id = D.occ.get(k); if(!id) return true; const b = S.buildings.get(id); return !b || !blocks(b) || b.ruin; }
-function stepCost(x,y){ const r = D.roads.get(x+','+y), R=r&&ROAD_TYPES[r]; return R ? (R.walkCost || 1/R.speed) : 1/GROUND_SPEED; }
+function stepCost(x,y){ const r = D.roads.get(x+','+y), R=r&&ROAD_TYPES[r]; return R ? (R.walkCost || 1/(R.speed*0.35)) : 1/GROUND_SPEED; } // a street (speed 2) is 0.7 tiles a minute on foot; cars do 1
 function findPath(sx,sy,gx,gy){
   const key = `${sx},${sy}|${gx},${gy}`; if(pathCache.has(key)) return pathCache.get(key);
   if(Math.abs(sx-gx)+Math.abs(sy-gy)>160){ const p=[[sx,sy],[gx,gy]]; pathCache.set(key,p); return p; } // long commutes skip pathfinding
@@ -406,7 +406,7 @@ function getPlan(c, day){
   for(let i=0;i<steps.length;i++){
     const s=steps[i];
     if(i>0){ const prev=steps[i-1]; const drive=carTrip(c,prev.p,s.p,s.kind); if(drive){ segs.push({ type:'move', mode:'car', from:t, to:t+drive.dur, path:drive.path, fromP:prev.p, toP:s.p, act:s.act, kind:s.kind, V:drive.V, col:drive.col }); t+=drive.dur; }
-      else if(prev.p.tile[0]!==s.p.tile[0]||prev.p.tile[1]!==s.p.tile[1]){ const path=findPath(prev.p.tile[0],prev.p.tile[1],s.p.tile[0],s.p.tile[1]); const cum=[0]; for(let k=1;k<path.length;k++) cum.push(cum[k-1]+(path.length===2?Math.abs(path[1][0]-path[0][0])+Math.abs(path[1][1]-path[0][1]):stepCost(path[k][0],path[k][1]))/(path.length===2?2:1)); const dur=cum[cum.length-1]; segs.push({ type:'move', from:t, to:t+dur, path, cum, fromP:prev.p, toP:s.p, act:s.act, kind:s.kind }); t+=dur; } }
+      else if(prev.p.tile[0]!==s.p.tile[0]||prev.p.tile[1]!==s.p.tile[1]){ const path=findPath(prev.p.tile[0],prev.p.tile[1],s.p.tile[0],s.p.tile[1]); const cum=[0]; for(let k=1;k<path.length;k++) cum.push(cum[k-1]+(path.length===2?Math.abs(path[1][0]-path[0][0])+Math.abs(path[1][1]-path[0][1]):stepCost(path[k][0],path[k][1]))/(path.length===2?0.7:1)); const dur=cum[cum.length-1]; segs.push({ type:'move', from:t, to:t+dur, path, cum, fromP:prev.p, toP:s.p, act:s.act, kind:s.kind }); t+=dur; } }
     const end=Math.max(t, s.until); if(end>t || i===steps.length-1) segs.push({ type:'stay', from:t, to:Math.max(end,t), p:s.p, act:s.act, kind:s.kind }); t=end;
   }
   const plan={ segs, job, home }; planCache.set(key,plan);
@@ -555,7 +555,7 @@ const DRAW = {
   },
   lamp(b){ const p=iso(b.x+0.5,b.y+0.5); line(p,{x:p.x,y:p.y-30},INK,3.2); line(p,{x:p.x,y:p.y-30},'#3E5148',1.8);
     const q=[{x:p.x-3.5,y:p.y-30},{x:p.x+3.5,y:p.y-30},{x:p.x+2.6,y:p.y-38},{x:p.x-2.6,y:p.y-38}]; poly(q,'#F4E7B0'); poly([{x:p.x-4,y:p.y-38},{x:p.x+4,y:p.y-38},{x:p.x,y:p.y-42}],'#3E5148');
-    windowQuads.push(q); lights.push({ x:p.x, y:p.y-30, r:52, col:'255,220,140' });
+    windowQuads.push(q); lights.push({ x:p.x, y:p.y-30, r:18, col:'255,220,140', a:0.8 });
   },
   bench(b){ const a=iso(b.x+0.22,b.y+0.5), c=iso(b.x+0.78,b.y+0.5);
     for(const p of [a,c]) line(p,up(p,5),INK,1.4);
@@ -589,9 +589,9 @@ const HATS=['#C0392B','#2E5E8C','#E2A23B','#3E6B48'];
 const look = c => { const h=hash(c.handle||c.id), f=c.gender==='f';
   return { f, shirt:SHIRTS[h%SHIRTS.length], skin:SKIN[(h>>>4)%SKIN.length], hair:HAIR[(h>>>8)%HAIR.length], pants:PANTS[(h>>>12)%PANTS.length],
     style: f ? ['long','long','bun','pony'][(h>>>16)%4] : ['short','short','cap','buzz'][(h>>>16)%4], dress: f && (h>>>20)%5<3, hat:HATS[(h>>>22)%HATS.length] }; };
-function drawCitizen(c, st, selected){
+function drawCitizen(c, st, selected, ghost){
   const p=iso(st.x,st.y), L=look(c); const bob=st.moving?Math.abs(Math.sin(T_NOW/140+hash(c.id)))*2:0;
-  ctx.fillStyle='rgba(30,40,70,.25)'; ctx.beginPath(); ctx.ellipse(p.x-4,p.y+1.5,7,3,0,0,7); ctx.fill();
+  if(!ghost){ ctx.fillStyle='rgba(30,40,70,.25)'; ctx.beginPath(); ctx.ellipse(p.x-4,p.y+1.5,7,3,0,0,7); ctx.fill(); }
   if(selected){ ctx.strokeStyle='#F2B33D'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,11,5.5,0,0,7); ctx.stroke(); }
   const y=p.y-bob, x=p.x; ctx.strokeStyle=INK; ctx.lineWidth=0.9;
   const rr=(a,b,w,h,r)=>{ ctx.beginPath(); ctx.roundRect ? ctx.roundRect(a,b,w,h,r) : ctx.rect(a,b,w,h); ctx.fill(); ctx.stroke(); };
@@ -1039,7 +1039,7 @@ function drawBridge(x,y,R,has){ const N=iso(x,y),E=iso(x+1,y),S2=iso(x+1,y+1),Wp
 
 /* ---------------- road details: lanes, highway, street lamps ---------------- */
 function drawStreetLamp(p){ line(p,up(p,26),INK,2.4); line(p,up(p,26),'#3E5148',1.2); const q=up(p,26); poly([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}],'#F4E7B0'); poly([{x:q.x-3.5,y:q.y-6},{x:q.x+3.5,y:q.y-6},{x:q.x,y:q.y-9}],'#3E5148');
-  windowQuads.push([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}]); lights.push({x:q.x,y:q.y,r:46,col:'255,214,140'}); }
+  windowQuads.push([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}]); lights.push({x:q.x,y:q.y-2,r:15,col:'255,214,140',a:0.8},{x:p.x,y:p.y,r:26,col:'255,214,140',a:0.3}); }
 function roadExtras(x,y,R,has,pushDeco){ const k=x+','+y, hx=has(x-1,y)||has(x+1,y), hy=has(x,y-1)||has(x,y+1), C=iso(x+0.5,y+0.5), hh=hash(k);
   const straight=hx!==hy;
   if(straight && R.lanes){ const along=(t)=>hx?iso(x+t,y+0.5):iso(x+0.5,y+t), off=(t,s)=>hx?iso(x+t,y+0.5+s):iso(x+0.5+s,y+t);
@@ -1048,7 +1048,7 @@ function roadExtras(x,y,R,has,pushDeco){ const k=x+','+y, hx=has(x-1,y)||has(x+1
     if(R.lanes==='four'){ line(off(0,-0.025),off(1,-0.025),'#E6C35C',1.1); line(off(0,0.025),off(1,0.025),'#E6C35C',1.1); for(const s of [-0.2,0.2]) line(off(0.15,s),off(0.55,s),'#F1EFE7',1.1); }
     if(R.lanes==='median'||R.lanes==='median4'){ const m0=off(0,-0.07), m1=off(1,-0.07), m2=off(1,0.07), m3=off(0,0.07); poly([m0,m1,m2,m3],'#7DB656',INK,0.8); if(hh%2===0) pushDeco(x+y+0.5,()=>drawTreeAt(along(0.5),'#6FAE45',0.42,hh)); if(R.lanes==='median4') for(const s of [-0.22,0.22]) line(off(0.15,s),off(0.55,s),'#F1EFE7',1.1); } }
   if(R.deco==='lamps' || (R.kind==='street' && hh%3===0)){ const corner=[[0.12,0.12],[0.88,0.12],[0.88,0.88],[0.12,0.88]][hh%4]; if(!(R.walkW&&R.walkW<0.25)) pushDeco(x+y+0.3,()=>drawStreetLamp(iso(x+corner[0],y+corner[1]))); }
-  if(R.kind==='highway' && straight && hh%2===0) pushDeco(x+y+0.5,()=>{ const p=iso(x+0.5,y+0.5); line(p,up(p,34),'#7C8288',1.8); const q=up(p,34); line(q,{x:q.x-7,y:q.y+2},'#7C8288',1.4); line(q,{x:q.x+7,y:q.y+2},'#7C8288',1.4); for(const dx of [-7,7]){ ctx.fillStyle='#F4E7B0'; ctx.fillRect(q.x+dx-2,q.y+1,4,2); lights.push({x:q.x+dx,y:q.y+3,r:50,col:'255,214,140'}); } });
+  if(R.kind==='highway' && straight && hh%2===0) pushDeco(x+y+0.5,()=>{ const p=iso(x+0.5,y+0.5); line(p,up(p,34),'#7C8288',1.8); const q=up(p,34); line(q,{x:q.x-7,y:q.y+2},'#7C8288',1.4); line(q,{x:q.x+7,y:q.y+2},'#7C8288',1.4); for(const dx of [-7,7]){ ctx.fillStyle='#F4E7B0'; ctx.fillRect(q.x+dx-2,q.y+1,4,2); lights.push({x:q.x+dx,y:q.y+3,r:16,col:'255,214,140',a:0.8}); } });
 }
 function drawHighwayTile(x,y,R,has){ const N=iso(x,y),E=iso(x+1,y),S2=iso(x+1,y+1),Wp=iso(x,y+1);
   poly([N,E,S2,Wp],R.top,R.top,0.6); const hx=has(x-1,y)||has(x+1,y), hy=has(x,y-1)||has(x,y+1);
@@ -1075,8 +1075,8 @@ function drawVehicle(px,py,dx,dy,V,col,siren,scale=1){ const len=V.len/2*scale, 
   if(DARK>0.3){ const f=P(1.15,0,3); lights.push({x:f.x,y:f.y,r:26,col:'255,240,200'}); ctx.fillStyle='#FFF4C8'; ctx.fillRect(f.x-1.5,f.y-1,3,2); }
 }
 const carOK = k => { const t=D.roads.get(k); return !!t && !(ROAD_TYPES[t]||{}).nocars; };
-// Cars cover about 2 street tiles per game minute (a little quicker than people walk), 4 on a highway.
-const carCost = k => 1/((ROAD_TYPES[D.roads.get(k)]||{speed:2}).speed*1.0);
+// Cars cover about 1 street tile per game minute (about walking pace on screen), 2 on a highway.
+const carCost = k => 1/((ROAD_TYPES[D.roads.get(k)]||{speed:2}).speed*0.5);
 const rpCache=new Map();
 function findRoadPath(sx,sy,gx,gy){ const key=`${sx},${sy}|${gx},${gy}`; if(rpCache.has(key)) return rpCache.get(key);
   if(Math.abs(sx-gx)+Math.abs(sy-gy)>120){ rpCache.set(key,null); return null; }
@@ -1086,7 +1086,7 @@ function findRoadPath(sx,sy,gx,gy){ const key=`${sx},${sy}|${gx},${gy}`; if(rpCa
   const pop=()=>{ const top=heap[0], last=heap.pop(); if(heap.length){ heap[0]=last; let n=0; for(;;){ const l=2*n+1,r=l+1; let m=n; if(l<heap.length&&heap[l][0]<heap[m][0]) m=l; if(r<heap.length&&heap[r][0]<heap[m][0]) m=r; if(m===n) break; [heap[m],heap[n]]=[heap[n],heap[m]]; n=m; } } return top; };
   const s=idx(sx,sy), goal=idx(gx,gy); g[s]=0; push(0,s); let found=false, steps=0;
   while(heap.length && steps++<20000){ const [,i]=pop(); if(closed[i]) continue; closed[i]=1; if(i===goal){ found=true; break; } const x=i%Wd+minX, y=Math.floor(i/Wd)+minY;
-    for(const [ddx,ddy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+ddx, ny=y+ddy; if(nx<minX||ny<minY||nx>maxX||ny>maxY) continue; const kk=nx+','+ny; if(!carOK(kk)) continue; const ni=idx(nx,ny); if(closed[ni]) continue; const ng=g[i]+carCost(kk); if(ng<g[ni]){ g[ni]=ng; from[ni]=i; push(ng+(Math.abs(nx-gx)+Math.abs(ny-gy))*0.1,ni); } } }
+    for(const [ddx,ddy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+ddx, ny=y+ddy; if(nx<minX||ny<minY||nx>maxX||ny>maxY) continue; const kk=nx+','+ny; if(!carOK(kk)) continue; const ni=idx(nx,ny); if(closed[ni]) continue; const pi=from[i], turn=pi>=0&&((i-pi)!==(ni-i)); const ng=g[i]+carCost(kk)+(turn?0.6:0); if(ng<g[ni]){ g[ni]=ng; from[ni]=i; push(ng+(Math.abs(nx-gx)+Math.abs(ny-gy))*0.1,ni); } } }
   let path=null; if(found){ path=[]; for(let i=goal;i!==-1;i=from[i]) path.push([i%Wd+minX, Math.floor(i/Wd)+minY]); path.reverse(); }
   if(rpCache.size>6000) rpCache.clear(); rpCache.set(key,path); return path; }
 const nrCache=new Map();
@@ -1094,20 +1094,28 @@ function nearestRoad(x,y,r=4){ const key=x+','+y+','+r; if(nrCache.has(key)) ret
   for(let d=0; d<=r && !best; d++) for(let i=-d;i<=d && !best;i++) for(const [ax,ay] of [[x+i,y-d],[x+i,y+d],[x-d,y+i],[x+d,y+i]]) if(carOK(ax+','+ay)){ best=[ax,ay]; break; }
   if(nrCache.size>6000) nrCache.clear(); nrCache.set(key,best); return best; }
 // Where something driving along a road path is, `u` game minutes after it set off. Cars keep to the right-hand lane.
-function alongRoad(path,u,speedMul=1){ let t=0; for(let i=1;i<path.length;i++){ const k=path[i][0]+','+path[i][1], c=carCost(k)/speedMul; if(u<=t+c){ const f=(u-t)/c, a=path[i-1], b=path[i]; const dx=b[0]-a[0], dy=b[1]-a[1]; return { x:a[0]+0.5+dx*f-dy*0.2, y:a[1]+0.5+dy*f+dx*0.2, dx, dy, moving:true }; } t+=c; }
-  const a=path[path.length-2]||path[0], b=path[path.length-1]; const dx=(b[0]-a[0])||1, dy=b[1]-a[1]; return { x:b[0]+0.5-dy*0.32, y:b[1]+0.5+dx*0.32, dx, dy, moving:false }; }
+function alongRoad(path,u,speedMul=1){
+  // Position on the road's centre line after u game minutes; the heading is measured over a short stretch so turns are smooth and the car never jitters.
+  const n=path.length; let ts=pathTimes(path,speedMul); const total=ts[n-1];
+  const centre=v=>{ if(v<=0) return [path[0][0]+0.5,path[0][1]+0.5]; if(v>=total) return [path[n-1][0]+0.5,path[n-1][1]+0.5]; let i=1; while(i<n-1&&ts[i]<v) i++; const f=(v-ts[i-1])/((ts[i]-ts[i-1])||1), a=path[i-1], b=path[i]; return [a[0]+0.5+(b[0]-a[0])*f, a[1]+0.5+(b[1]-a[1])*f]; };
+  const moving=u<total, uu=Math.min(Math.max(u,0),total), h=Math.max(0.35,total/Math.max(1,n-1)*0.45);
+  const c=centre(uu), A=centre(uu-h), B=centre(uu+h); let dx=B[0]-A[0], dy=B[1]-A[1]; const L=Math.hypot(dx,dy);
+  if(L<1e-6){ const a=path[n-2]||path[0], b=path[n-1]; dx=(b[0]-a[0])||1; dy=b[1]-a[1]; } else { dx/=L; dy/=L; }
+  const side=moving?0.2:0.32; return { x:c[0]-dy*side, y:c[1]+dx*side, dx, dy, moving }; }
+const ptCache=new WeakMap();
+function pathTimes(path,speedMul){ let m=ptCache.get(path); if(!m){ m=new Map(); ptCache.set(path,m); } let ts=m.get(speedMul); if(ts) return ts; ts=[0]; for(let i=1;i<path.length;i++) ts.push(ts[i-1]+carCost(path[i][0]+','+path[i][1])/speedMul); m.set(speedMul,ts); return ts; }
 const pathTime=(path,speedMul=1)=>{ let t=0; for(let i=1;i<path.length;i++) t+=carCost(path[i][0]+','+path[i][1])/speedMul; return t; };
 // Traffic follows the clock: rush hours busy, nights quiet.
 function traffic(gm){ const h=Math.floor(((gm%1440)+1440)%1440/60); return h<5?0.12:h<6?0.3:h<7?0.55:h<10?0.95:h<16?0.6:h<19?0.95:h<22?0.5:0.22; }
 const candCache=new Map();
-function roadsNear(ax,ay,r=12){ const key=ax+','+ay; let c=candCache.get(key); if(c) return c; c=[]; for(let x=ax-r;x<=ax+r;x++) for(let y=ay-r;y<=ay+r;y++) if(carOK(x+','+y)) c.push([x,y]); candCache.set(key,c); if(candCache.size>3000) candCache.clear(); return c; }
+function roadsNear(ax,ay,r=12){ const key=ax+','+ay+','+r; let c=candCache.get(key); if(c) return c; c=[]; for(let x=ax-r;x<=ax+r;x++) for(let y=ay-r;y<=ay+r;y++) if(carOK(x+','+y)) c.push([x,y]); candCache.set(key,c); if(candCache.size>3000) candCache.clear(); return c; }
 // A roaming vehicle drives from one random nearby road tile to the next, one leg every LEG game minutes; every viewer computes the same route.
-const LEG=24;
-function roam(id,ax,ay,gm,V,ambient){ const n=Math.floor(gm/LEG), cands=roadsNear(ax,ay); if(cands.length<2) return carOK(ax+','+ay)?{x:ax+0.5,y:ay+0.5,dx:1,dy:0,moving:false}:null;
+const LEG=60; // each trip gets a game hour: drive a few blocks, then park until the next one
+function roam(id,ax,ay,gm,V,ambient){ const n=Math.floor(gm/LEG), cands=roadsNear(ax,ay,7); if(cands.length<2) return carOK(ax+','+ay)?{x:ax+0.5,y:ay+0.5,dx:1,dy:0,moving:false}:null;
   if(ambient && rng(hash(id+':a:'+n))()>traffic(n*LEG)) return null;
   const pick=m=>cands[hash(id+':'+m)%cands.length], from=pick(n-1), to=pick(n); const path=findRoadPath(from[0],from[1],to[0],to[1]);
   if(!path||path.length<2) return {x:from[0]+0.5,y:from[1]+0.5,dx:1,dy:0,moving:false};
-  return alongRoad(path, gm-n*LEG, (V.speed||1)); }
+  const mul=Math.max(V.speed||1, pathTime(path,1)/(LEG*0.9)); return alongRoad(path, gm-n*LEG, mul); }
 const AMBIENT_TYPES=[['car',58],['taxi',10],['van',14],['bus',10],['truck',8]];
 const ambientType = k => { let r=hash(k+':t')%100, acc=0; for(const [t,p] of AMBIENT_TYPES){ acc+=p; if(r<acc) return t; } return 'car'; };
 // Emergency crews: when a disaster happens they drive from the nearest station (or from out of town) and park at the scene with sirens on.
@@ -1238,7 +1246,7 @@ function frame(ts){
   { const P=new Path2D(); for(const b of S.buildings.values()){ const [w,d]=T(b).size; if(b.x+w<tminX-4||b.x>tmaxX+2||b.y+d<tminY-2||b.y>tmaxY+4) continue; addShadow(P,b); } ctx.fillStyle='rgba(38,52,86,.2)'; ctx.fill(P,'nonzero'); }
   const selB = sel&&sel.kind==='b' ? S.buildings.get(sel.id) : null;
   if(selB){ const [w,d]=T(selB).size; poly([iso(selB.x,selB.y),iso(selB.x+w,selB.y),iso(selB.x+w,selB.y+d),iso(selB.x,selB.y+d)], 'rgba(217,113,74,.3)', '#D9714A', 2.5); }
-  for(const b of S.buildings.values()){ if(tool.kind==='move'&&tool.id===b.id) continue; const [w,d]=T(b).size; if(b.x+w<tminX||b.x>tmaxX+3||b.y+d<tminY||b.y>tmaxY+3) continue; items.push({ k:b.x+w+b.y+d-0.5, b }); }
+  for(const b of S.buildings.values()){ if(tool.kind==='move'&&tool.id===b.id) continue; const [w,d]=T(b).size; if(b.x+w<tminX||b.x>tmaxX+3||b.y+d<tminY||b.y>tmaxY+3) continue; items.push({ k:blocks(b)||b.ruin||b.done===false?b.x+w+b.y+d-0.5:b.x+b.y+0.2, b }); }
   const states=new Map();
   // Only the people whose day happens near the screen are simulated, at most CROWD_MAX of them, nearest first.
   if(ts-crowdAt>500){ crowdAt=ts; const ctr=worldToTileF(cam.x,cam.y); const near=p=>p&&p[2]>=tminX-40&&p[2]<=tmaxX+40&&p[3]>=tminY-40&&p[3]<=tmaxY+40;
@@ -1260,6 +1268,7 @@ function frame(ts){
   for(const it of items){ if(it.fn) it.fn(); else if(it.veh){ const v=it.veh; drawVehicle(v.st.x,v.st.y,v.st.dx||1,v.st.dy||0,v.V,v.col,v.siren); if(sel&&sel.kind==='v'&&sel.id===v.id){ const p=iso(v.st.x,v.st.y); ctx.strokeStyle='#F2B33D'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,16,8,0,0,7); ctx.stroke(); } }
     else if(it.b){ const t=T(it.b); if(it.b.ruin) drawRuin(it.b,t); else if(it.b.done===false) drawConstruction(it.b,t); else (DRAW[t.style]||DRAW.house)(it.b,t); } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
   drawDisasters();
+  ctx.globalAlpha=0.38; for(const it of items) if(it.c) drawCitizen(it.c,it.st,false,true); ctx.globalAlpha=1;
   if(areaSel){ const ax=Math.min(areaSel.a[0],areaSel.b[0]), bx=Math.max(areaSel.a[0],areaSel.b[0])+1, ay=Math.min(areaSel.a[1],areaSel.b[1]), by=Math.max(areaSel.a[1],areaSel.b[1])+1; poly([iso(ax,ay),iso(bx,ay),iso(bx,by),iso(ax,by)],'rgba(184,67,58,.28)','#B8433A',2.5); }
   if(ghostTool()) drawFootprint();
   else if(hoverTile && tool.kind!=='pan'){ const [hx,hy]=hoverTile; poly([iso(hx,hy),iso(hx+1,hy),iso(hx+1,hy+1),iso(hx,hy+1)], tool.kind==='erase'?'rgba(184,67,58,.35)':'rgba(255,255,255,.35)', tool.kind==='erase'?'#B8433A':'#fff', 2); }
@@ -1270,7 +1279,7 @@ function frame(ts){
     worldT();
     for(const q of windowQuads) poly(q, `rgba(255,206,120,${0.92*DARK})`, false);
     ctx.globalCompositeOperation='lighter';
-    for(const L of lights){ const g=ctx.createRadialGradient(L.x,L.y,0,L.x,L.y,L.r); g.addColorStop(0,`rgba(${L.col},${0.45*DARK})`); g.addColorStop(1,`rgba(${L.col},0)`); ctx.fillStyle=g; ctx.fillRect(L.x-L.r,L.y-L.r,L.r*2,L.r*2); }
+    for(const L of lights){ const g=ctx.createRadialGradient(L.x,L.y,0,L.x,L.y,L.r); g.addColorStop(0,`rgba(${L.col},${0.36*DARK*(L.a||1)})`); g.addColorStop(1,`rgba(${L.col},0)`); ctx.fillStyle=g; ctx.fillRect(L.x-L.r,L.y-L.r,L.r*2,L.r*2); }
     ctx.globalCompositeOperation='source-over';
   } else { const h=(((gm%1440)+1440)%1440)/60; if(h>16.5&&h<18){ ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=`rgba(255,140,60,${0.12*Math.sin((h-16.5)/1.5*Math.PI)})`; ctx.fillRect(0,0,cw,ch); worldT(); } }
   const wx=S.meta?weatherAt(S.meta,gm):'sunny'; if(wx!=='sunny') drawWeather(wx,gm); if(wx!==lastWx){ lastWx=wx; refreshHUD(); }

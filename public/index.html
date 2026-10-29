@@ -337,7 +337,9 @@ function hash(str){ let h = 2166136261; for(let i=0;i<str.length;i++){ h ^= str.
 function rng(seed){ let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)).replace(/[^a-zA-Z0-9-]/g,'');
 const cleanHandle = s => (s||'').trim().replace(/^@+/,'').replace(/[^A-Za-z0-9._]/g,'').slice(0,30);
-function shade(hex, f){ const n = parseInt(hex.slice(1),16); const r=Math.min(255,((n>>16)&255)*f|0), g=Math.min(255,((n>>8)&255)*f|0), b=Math.min(255,(n&255)*f|0); return `rgb(${r},${g},${b})`; }
+const shadeCache=new Map();
+function shade(hex, f){ const k=hex+f; let v=shadeCache.get(k); if(v===undefined){ v=shade0(hex,f); if(shadeCache.size>4000) shadeCache.clear(); shadeCache.set(k,v); } return v; }
+function shade0(hex, f){ const n = parseInt(hex.slice(1),16); const r=Math.min(255,((n>>16)&255)*f|0), g=Math.min(255,((n>>8)&255)*f|0), b=Math.min(255,(n&255)*f|0); return `rgb(${r},${g},${b})`; }
 function el(tag, props, ...kids){ const e = document.createElement(tag); if(props) for(const k in props){ if(k==='class') e.className = props[k]; else if(k==='text') e.textContent = props[k]; else if(k.startsWith('on')) e.addEventListener(k.slice(2), props[k]); else if(props[k]!==false && props[k]!=null) e.setAttribute(k, props[k]); } for(const c of kids){ if(c!=null) e.append(c); } return e; }
 const $ = id => document.getElementById(id);
 
@@ -358,9 +360,13 @@ async function loadMyMoney(){ if(!(Me&&Me.handle)){ myMoney=null; return; } try{
 setInterval(loadMyMoney,60000);
 async function checkMe(){ if(!Me||!Me.token) return; try{ const r=await api('/api/me'); Me={...Me,handle:r.handle,genderChosen:!!r.genderChosen}; ls.set('settlement-player',Me); loadMyMoney(); }catch(e){ Me=null; ls.set('settlement-player',null); } }
 function signedIn(r){ Me={token:r.token,handle:r.handle,genderChosen:true}; checkMe().then(()=>renderCard(true)); ls.set('settlement-player',Me); ls.set('settlement-me',r.handle); ls.set('settlement-claim',null); auth=null; clearInterval(authPoll); }
+// Every request gives up after a while (20 s by default), so a dropped mobile connection can never leave a screen waiting forever.
 async function api(path, opts={}){
-  const r=await fetch(path,{ method:opts.method||'GET', headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{}), ...(Me&&Me.token?{'x-player':Me.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined });
-  const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`); return j; }
+  const ac=typeof AbortController!=='undefined'?new AbortController():null, timer=ac&&setTimeout(()=>ac.abort(), opts.timeout||20000);
+  let r;
+  try{ r=await fetch(path,{ method:opts.method||'GET', signal:ac?ac.signal:undefined, headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{}), ...(Me&&Me.token?{'x-player':Me.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined }); }
+  catch(e){ clearTimeout(timer); throw new Error(e&&e.name==='AbortError'?'The connection is slow. Please try again.':'Can\'t reach the colony right now. Check your connection.'); }
+  try{ const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`); return j; } finally { clearTimeout(timer); } }
 const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang });
 const placeChunks = c => [c.home,c.job,c.hang].filter(Boolean).map(p=>ckTile(p[2],p[3]));
 const keepCitizen = c => c.id===pinned || placeChunks(c).some(k=>S.chunks.has(k));
@@ -389,7 +395,8 @@ function applyOp(o){
   case 'chatPin': { const m=S.chat.find(x=>x.id===o.id); if(m){ m.p=o.pinned?1:0; feedDirty=true; renderFeed(); } break; }
   case 'chatGone': S.chat=S.chat.filter(m=>m.id!==o.id); feedDirty=true; renderFeed(); break;
   case 'reset': location.reload(); break;
-  case 'event': S.events.unshift(o.data); if(S.events.length>300) S.events.length=300; feedDirty=true; updateNews(); break; } }
+  case 'event': S.events.unshift(o.data); if(S.events.length>300) S.events.length=300; feedDirty=true; newsSoon(); break; } }
+let newsTimer=null; const newsSoon=()=>{ if(!newsTimer) newsTimer=setTimeout(()=>{ newsTimer=null; updateNews(); },300); }; // a burst of news updates the ticker once
 
 // Which chunks the screen needs: everything visible plus a one-chunk margin, capped when zoomed far out.
 function viewChunks(){
@@ -420,17 +427,28 @@ async function syncChunks(){
 function reloadAll(){ for(const k of [...S.chunks.keys()]) dropChunk(k); S.citizens.clear(); subKey=''; syncChunks(); }
 async function loadMeta(){ const r=await api('/api/meta'); S.meta=r.meta; S.events=r.events||[]; S.disasters=r.disasters||[]; skew=r.serverNow-Date.now(); loadChat(); }
 S.chat=[]; async function loadChat(){ try{ S.chat=await api('/api/square'); feedDirty=true; renderFeed(); }catch(e){} }
+// The live connection: the server sends a clock tick every 1.25 s, so a silent line for 20 s means it died without telling us
+// (common on phones switching networks). Reconnects back off gently and happen at once when the phone wakes or comes back online.
+let lastMsgAt=Date.now(), retryN=0, retryTimer=null;
+function reconnectSoon(now){ clearTimeout(retryTimer); const wait=now?200:Math.min(30000,1500*Math.pow(1.7,retryN++))+Math.random()*1500; retryTimer=setTimeout(connect,wait); }
 function connect(){
-  ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`);
-  ws.onopen=()=>{ Store.online=true; subKey=''; };
-  ws.onmessage=e=>{ let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
+  clearTimeout(retryTimer);
+  if(ws){ ws.onclose=ws.onmessage=ws.onerror=null; try{ ws.close(); }catch(e){} }
+  try{ ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`); }catch(e){ reconnectSoon(); return; }
+  lastMsgAt=Date.now(); const me=ws;
+  ws.onopen=()=>{ Store.online=true; subKey=''; retryN=0; };
+  ws.onerror=()=>{ try{ me.close(); }catch(e){} };
+  ws.onmessage=e=>{ lastMsgAt=Date.now(); let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
     if(m.type==='hello'){ S.meta=m.meta; skew=m.serverNow-Date.now();
       if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
-    else if(m.type==='ops') m.ops.forEach(applyOp);
+    else if(m.type==='ops'){ opBatch++; try{ for(const o of m.ops){ try{ applyOp(o); }catch(err){ console.error('Skipped an update:', err); } } } finally { opBatch--; } if(!opBatch&&batchChanged){ batchChanged=false; changed(); } }
     else if(m.type==='resync') reloadAll();
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now(); };
-  ws.onclose=()=>{ if(Store.online) toast('Reconnecting to the city…'); Store.online=false; setTimeout(connect,2000+Math.random()*3000); };
+  ws.onclose=()=>{ if(ws!==me) return; if(Store.online) toast('Reconnecting to the colony…'); Store.online=false; reconnectSoon(); };
 }
+setInterval(()=>{ if(!ws||document.hidden) return; if(ws.readyState===1&&Date.now()-lastMsgAt>20000){ lastMsgAt=Date.now(); try{ ws.close(); }catch(e){} reconnectSoon(true); } },5000);
+const wake=()=>{ if(!Store.ready&&!ws) return; if(!ws||ws.readyState>1||Date.now()-lastMsgAt>20000){ retryN=0; reconnectSoon(true); } };
+addEventListener('online', wake); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) wake(); });
 async function initStore(){
   try{ Store.token=localStorage.getItem('settlement-token'); }catch(e){}
   if(location.hash==='#builder' && !Store.token){ const t=prompt('Builder token'); if(t){ Store.token=t.trim(); try{ localStorage.setItem('settlement-token',Store.token); }catch(e){} } }
@@ -438,7 +456,7 @@ async function initStore(){
   if(Store.token){ try{ await api('/api/admin/check'); Store.canWrite=true; }catch(e){ Store.canWrite=false; toast('That builder token was not accepted.'); } }
   connect();
 }
-setInterval(()=>syncChunks(),400);
+setInterval(()=>{ if(!document.hidden) syncChunks(); },400);
 
 /* ---------------- derived world ---------------- */
 // A turned building (rot 1) uses its type with width and depth swapped; drawB draws it mirrored so it faces the other way.
@@ -457,16 +475,17 @@ function drawB(b,t){ if(!b.rot){ (DRAW[t.style]||DRAW.house)(b,t); return; }
 const blocks = b => !T(b).outdoor;
 // A citizen's home/job/hangout travels as [id, type, x, y]; use the loaded building if we have it.
 const bOf = p => p ? (D.buildings.get(p[0]) || { id:p[0], type:p[1], x:p[2], y:p[3], name:'' }) : null;
-let changeTimer = null;
+let changeTimer = null, opBatch = 0, batchChanged = false;
 function changed(light){
-  if(light){ feedDirty = true; planCache.clear(); return; }
-  D.roads = S.roads; D.water = S.water; D.buildings = S.buildings; D.vehicles = S.vehicles;
+  if(opBatch){ if(!light) batchChanged=true; else feedDirty=true; return; } // a burst of updates: rebuild once at the end
+  if(light){ feedDirty = true; return; } // a person's plan is keyed by their home, job and hangout, so it renews itself
+  D.roads = S.roads; D.water = S.water; D.buildings = S.buildings; D.vehicles = S.vehicles; tileListGen++;
   if(draftOn) draftView(); // in draft mode the screen works on copies, so nothing drafted leaks into the live maps
   D.occ = new Map();
   for(const b of D.buildings.values()){ if(b.draftDel) continue; const [w,d]=T(b).size; for(let i=0;i<w;i++) for(let j=0;j<d;j++) D.occ.set((b.x+i)+','+(b.y+j), b.id); }
   if(draftOn) for(const [k,v] of Object.entries(draft.roads)) if(v){ const id=D.occ.get(k), b=id&&D.buildings.get(id); if(b&&roadClears(b.type)){ D.buildings.set(id,{...b,draftDel:true}); D.occ.delete(k); } }
   refreshDraftBar();
-  planCache.clear(); pathCache.clear(); rpCache.clear(); nrCache.clear(); candCache.clear(); feedDirty = true;
+  planGen++; pathCache.clear(); rpCache.clear(); nrCache.clear(); candCache.clear(); feedDirty = true;
   clearTimeout(changeTimer); changeTimer = setTimeout(refreshUI, 30);
 }
 
@@ -491,12 +510,19 @@ function findPath(sx,sy,gx,gy){
   let path;
   if(found){ path=[]; for(let i=goal;i!==-1;i=from[i]) path.push([i%Wd+minX, Math.floor(i/Wd)+minY]); path.reverse(); }
   else path=[[sx,sy],[gx,gy]];
-  pathCache.set(key,path); return path;
+  if(pathCache.size>20000) pathCache.clear(); pathCache.set(key,path); return path;
 }
 
 /* ---------------- simulation (pure function of time) ---------------- */
-const planCache = new Map();
-function centerTile(){ const st=[...D.buildings.values()].find(b=>b.type==='landing'); if(st) return [st.x+1,st.y+2]; const fire=[...D.buildings.values()].find(b=>b.type==='campfire'); return fire?[fire.x,fire.y]:[2,1]; }
+// Plans are cached per person per day. After a map change, people keep yesterday's plan until there's time to redo it:
+// while drawing, new plans get a few milliseconds per frame, so a big change or a crowd coming into view never stalls the screen.
+const planCache = new Map(); let planGen=0, planBudgetEnd=Infinity;
+// Run fn with at most ms milliseconds of new planning (anything over uses old plans or is skipped this time round).
+function withBudget(ms, fn){ const prev=planBudgetEnd; planBudgetEnd=Math.min(prev, performance.now()+ms); try{ return fn(); } finally { planBudgetEnd=prev; } }
+let centerAt=null, centerGen=-1;
+function centerTile(){ if(centerGen===planGen&&centerAt) return centerAt; centerGen=planGen;
+  let st=null, fire=null; for(const b of D.buildings.values()){ if(b.type==='landing'){ st=b; break; } if(!fire&&b.type==='campfire') fire=b; }
+  return centerAt = st ? [st.x+1,st.y+2] : fire ? [fire.x,fire.y] : [2,1]; }
 function placeFor(b, r, label){
   if(!b){ const [cx,cy]=centerTile(); const a=r()*Math.PI*2; const tx=Math.round(cx+Math.cos(a)*1.6), ty=Math.round(cy+Math.sin(a)*1.6); return { tile:[tx,ty], pos:[tx+0.5,ty+0.5], indoor:false, bid:null, name:label||'the collement' }; }
   const t=T(b), [w,d]=t.size;
@@ -520,7 +546,9 @@ function carTrip(c,a,b,kind){ if(!hasCar(c)||kind==='lunch') return null; const 
   const s=nearestRoad(ax,ay,3), e=nearestRoad(bx,by,3); if(!s||!e) return null; const path=findRoadPath(s[0],s[1],e[0],e[1]); if(!path||path.length<3) return null;
   const V=VEHICLE_TYPES.car; return { path, dur:pathTime(path)+2, V, col:V.colors[hash(c.id)%V.colors.length] }; }
 function getPlan(c, day){
-  const key=c.id+'|'+day; const hit=planCache.get(key); if(hit) return hit;
+  const key=c.id+'|'+day+'|'+(c.home?c.home[0]:'')+'|'+(c.job?c.job[0]:'')+'|'+(c.hang?c.hang[0]:''); const hit=planCache.get(key);
+  if(hit&&hit.gen===planGen) return hit.plan;
+  if(performance.now()>planBudgetEnd) return hit ? hit.plan : null; // out of time this frame: the old plan, or wait a frame
   const r=rng(hash(c.id+':'+day));
   const home=bOf(c.home), job=bOf(c.job), hang=bOf(c.hang);
   const homeP=placeFor(home, rng(hash(c.id+'home')), 'the landing station');
@@ -543,13 +571,12 @@ function getPlan(c, day){
       else if(prev.p.tile[0]!==s.p.tile[0]||prev.p.tile[1]!==s.p.tile[1]){ const path=findPath(prev.p.tile[0],prev.p.tile[1],s.p.tile[0],s.p.tile[1]); const cum=[0]; for(let k=1;k<path.length;k++) cum.push(cum[k-1]+(path.length===2?Math.abs(path[1][0]-path[0][0])+Math.abs(path[1][1]-path[0][1]):stepCost(path[k][0],path[k][1]))/(path.length===2?0.7:1)); const dur=cum[cum.length-1]; segs.push({ type:'move', from:t, to:t+dur, path, cum, fromP:prev.p, toP:s.p, act:s.act, kind:s.kind }); t+=dur; } }
     const end=Math.max(t, s.until); if(end>t || i===steps.length-1) segs.push({ type:'stay', from:t, to:Math.max(end,t), p:s.p, act:s.act, kind:s.kind }); t=end;
   }
-  const plan={ segs, job, home }; planCache.set(key,plan);
-  if(planCache.size>8000) planCache.clear();
+  const plan={ segs, job, home }; if(planCache.size>12000) planCache.clear(); planCache.set(key,{plan,gen:planGen});
   return plan;
 }
 function citizenAt(c, gm){
   const joinGm=gmAt(c.joinedAt); if(gm<joinGm) return null;
-  const day=Math.floor(gm/1440), m=gm-day*1440; const plan=getPlan(c,day);
+  const day=Math.floor(gm/1440), m=gm-day*1440; const plan=getPlan(c,day); if(!plan) return null;
   let seg=plan.segs[plan.segs.length-1]; for(const s of plan.segs){ if(m<s.to){ seg=s; break; } }
   if(seg.type==='stay'){ const ph=hash(c.id)%1000; const sway=seg.p.indoor?0:Math.sin(gm*0.6+ph)*0.08; return { x:seg.p.pos[0]+sway, y:seg.p.pos[1]-sway*0.5, visible:!seg.p.indoor, act:seg.act, where:seg.p.name, bid:seg.p.bid, moving:false, seg, plan }; }
   if(seg.mode==='car'){ const st=alongRoad(seg.path, Math.max(0,m-seg.from-1)); return { x:st.x, y:st.y, dx:st.dx, dy:st.dy, visible:true, car:true, V:seg.V, col:seg.col, act:`Driving to ${seg.toP.name}`, where:seg.toP.name, bid:null, moving:true, seg, plan }; }
@@ -577,7 +604,22 @@ const INK='#2B2621';
 function poly(pts, fill, stroke, lw){ ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y); ctx.closePath(); if(fill){ ctx.fillStyle=fill; ctx.fill(); } if(stroke!==false){ ctx.strokeStyle=stroke||INK; ctx.lineWidth=lw||1.1; ctx.lineJoin='round'; ctx.stroke(); } }
 function line(a,b,col,lw){ ctx.strokeStyle=col||INK; ctx.lineWidth=lw||1; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
 function hatch(a,b,c,d,n,col,lw){ ctx.strokeStyle=col; ctx.lineWidth=lw||0.8; ctx.beginPath(); for(let i=1;i<n;i++){ const t=i/n, p=lerp(a,d,t), q=lerp(b,c,t); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); } ctx.stroke(); }
-function resize(){ dpr=Math.min(window.devicePixelRatio||1,2); cw=innerWidth; ch=innerHeight; cv.width=cw*dpr; cv.height=ch*dpr; }
+// Quality: if a phone can't keep up, the city drops to a slightly lower resolution (and skips small extras) instead of stuttering,
+// and climbs back up when there's headroom again. Level 0 is full quality.
+const Quality={ level:0, slow:0, fast:0, last:0, avg:16,
+  dpr(){ const full=Math.min(window.devicePixelRatio||1,2); return Math.max(1,Math.min(full,[2,1.5,1.25,1][this.level])); },
+  get grain(){ return this.level<2; }, get ghosts(){ return this.level<3; },
+  sample(work,ts){ const dt=this.last?ts-this.last:16; this.last=ts; if(dt>400||document.hidden) return; // ignore pauses (tab hidden, alerts)
+    this.avg+=(dt-this.avg)*Math.min(0.3,dt/320); // a smoothed frame time that reacts within about a third of a second
+    // slow = milliseconds spent below about 25 frames a second; fast = milliseconds spent at nearly 50+
+    if(this.avg>40){ this.fast=0; if((this.slow+=dt)>2500&&this.level<3){ this.set(this.level+1); } }
+    else if(this.avg<21){ this.slow=0; if((this.fast+=dt)>8000&&this.level>this.floor){ this.set(this.level-1); } }
+    else { this.slow=Math.max(0,this.slow-dt); this.fast=0; } },
+  floor:0, upAt:0,
+  set(l){ const now=performance.now();
+    if(l<this.level) this.upAt=now; else if(now-this.upAt<20000) this.floor=l; // went up and had to come straight back down: stay here
+    this.level=l; this.slow=this.fast=0; this.avg=24; resize(); } };
+function resize(){ dpr=Quality.dpr(); cw=innerWidth; ch=innerHeight; cv.width=Math.round(cw*dpr); cv.height=Math.round(ch*dpr); }
 addEventListener('resize', resize); resize();
 function screenToWorld(sx,sy){ return { x:(sx-cw/2)/cam.z+cam.x, y:(sy-ch/2)/cam.z+cam.y }; }
 function worldToTileF(wx,wy){ return { x:(wx/HW + wy/HH)/2, y:(wy/HH - wx/HW)/2 }; }
@@ -757,35 +799,68 @@ const HATS=['#C0392B','#2E5E8C','#E2A23B','#3E6B48'];
 const look = c => { const h=hash(c.handle||c.id), f=c.gender==='f';
   return { f, shirt:SHIRTS[h%SHIRTS.length], skin:SKIN[(h>>>4)%SKIN.length], hair:HAIR[(h>>>8)%HAIR.length], pants:PANTS[(h>>>12)%PANTS.length],
     style: f ? ['long','long','bun','pony'][(h>>>16)%4] : ['short','short','cap','buzz'][(h>>>16)%4], dress: f && (h>>>20)%5<3, hat:HATS[(h>>>22)%HATS.length] }; };
+// People are stamped from small cached pictures of their parts (legs, top, head, hair), drawn once per zoom level in the
+// same order and style as before, so a crowd of a thousand costs a few thousand image copies instead of tens of thousands of shapes.
+const PART_DRAW={
+  shadow(){ ctx.fillStyle='rgba(30,40,70,.25)'; ctx.beginPath(); ctx.ellipse(-4,1.5,7,3,0,0,7); ctx.fill(); },
+  legsF(col,sw){ ctx.fillStyle=col; ctx.beginPath(); ctx.rect(-2.6+sw*0.5,-7,2,7); ctx.rect(0.6-sw*0.5,-7,2,7); ctx.fill(); ctx.stroke(); },
+  legsM(col,sw){ ctx.fillStyle=col; ctx.beginPath(); ctx.rect(-3.2+sw*0.5,-7.5,2.8,7.5); ctx.rect(0.4-sw*0.5,-7.5,2.8,7.5); ctx.fill(); ctx.stroke(); },
+  longBack(col){ ctx.fillStyle=col; rr0(-5,-25,10,12,4); },
+  dress(col){ ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(-3.6,-17); ctx.lineTo(3.6,-17); ctx.lineTo(6,-6); ctx.quadraticCurveTo(0,-4.6,-6,-6); ctx.closePath(); ctx.fill(); ctx.stroke(); },
+  blouse(col){ ctx.fillStyle=col; rr0(-4,-17,8,10.5,3.2); },
+  shirtM(col){ ctx.fillStyle=col; rr0(-5.2,-17.5,10.4,11,2.2); },
+  headF(col){ ctx.fillStyle=col; ctx.beginPath(); ctx.arc(0,-21,4.1,0,7); ctx.fill(); ctx.stroke(); },
+  headM(col){ ctx.fillStyle=col; ctx.beginPath(); ctx.arc(0,-21.4,4.3,0,7); ctx.fill(); ctx.stroke(); },
+  hairF(col,style){ ctx.fillStyle=col; ctx.beginPath(); ctx.arc(0,-22,4.3,Math.PI*0.95,Math.PI*2.05); ctx.quadraticCurveTo(1,-21.6,-4.2,-20.6); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if(style==='bun'){ ctx.beginPath(); ctx.arc(0.5,-27,2.3,0,7); ctx.fill(); ctx.stroke(); }
+    if(style==='pony'){ ctx.beginPath(); ctx.ellipse(5,-20,1.8,3.6,-0.4,0,7); ctx.fill(); ctx.stroke(); } },
+  cap(col){ ctx.fillStyle=col; ctx.beginPath(); ctx.arc(0,-22.6,4.5,Math.PI,0); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.ellipse(3.5,-22.6,3,1.1,0,0,7); ctx.fill(); ctx.stroke(); },
+  buzz(col){ ctx.fillStyle=col; ctx.beginPath(); ctx.arc(0,-22.4,4.35,Math.PI*1.05,Math.PI*1.95); ctx.closePath(); ctx.fill(); },
+  short(col){ ctx.fillStyle=col; ctx.beginPath(); ctx.arc(0,-22.4,4.5,Math.PI,0); ctx.lineTo(4.5,-21.4); ctx.lineTo(2,-23.2); ctx.lineTo(-4.5,-21.4); ctx.closePath(); ctx.fill(); ctx.stroke(); },
+  star(hy){ ctx.fillStyle='#F2B33D'; star(0,-hy,4); ctx.stroke(); } };
+function rr0(a,b,w,h,r){ ctx.beginPath(); ctx.roundRect ? ctx.roundRect(a,b,w,h,r) : ctx.rect(a,b,w,h); ctx.fill(); ctx.stroke(); }
+// Sprites cover x −12…11 and y −40…6 around the feet, at the current zoom × screen density rounded to steps of about 19%.
+// All parts for the current zoom live in one atlas image, so the browser copies from a single picture.
+const SPR={ step:0, map:new Map(), atlas:null, g:null, cx:0, cy:0, full:false };
+function sprStep(){ const s=cam.z*dpr; return Math.pow(2,Math.round(Math.log2(Math.max(0.2,s))*4)/4); }
+function part(name,a,b){ const key=name+'|'+a+'|'+b; let c=SPR.map.get(key); if(c) return c;
+  const s=SPR.step, w=Math.ceil(23*s)+2, h=Math.ceil(46*s)+2, A=SPR.atlas;
+  if(SPR.cx+w>A.width){ SPR.cx=0; SPR.cy+=h; } if(SPR.cy+h>A.height) return null; // full: draw by hand this time
+  const g=SPR.g, ox=SPR.cx, oy=SPR.cy; SPR.cx+=w;
+  const keep=ctx; ctx=g; try{ g.setTransform(s,0,0,s,ox+12*s+1,oy+40*s+1); g.strokeStyle=INK; g.lineWidth=0.9; g.lineJoin='round'; PART_DRAW[name](a,b); } finally { ctx=keep; }
+  c={ox,oy,w,h,s}; SPR.map.set(key,c); return c; }
+function stamp(c,x,y){ const s=c.s; ctx.drawImage(SPR.atlas, c.ox, c.oy, c.w, c.h, x-(12*s+1)/s, y-(40*s+1)/s, c.w/s, c.h/s); }
+function sprBegin(){ const st=sprStep(); if(st===SPR.step&&SPR.atlas) return;
+  SPR.step=st; SPR.map=new Map(); SPR.cx=SPR.cy=0;
+  if(!SPR.atlas){ SPR.atlas=document.createElement('canvas'); SPR.atlas.width=SPR.atlas.height=2048; SPR.g=SPR.atlas.getContext('2d'); }
+  SPR.g.setTransform(1,0,0,1,0,0); SPR.g.clearRect(0,0,2048,2048); }
+const SW_STEPS=[-1.4,-0.7,0,0.7,1.4];
 function drawCitizen(c, st, selected, ghost){
-  const p=iso(st.x,st.y), L=look(c); const bob=st.moving?Math.abs(Math.sin(T_NOW/140+hash(c.id)))*2:0;
-  if(!ghost){ ctx.fillStyle='rgba(30,40,70,.25)'; ctx.beginPath(); ctx.ellipse(p.x-4,p.y+1.5,7,3,0,0,7); ctx.fill(); }
+  const p=iso(st.x,st.y), L=c._look||(c._look=look(c)), hc=c._h??(c._h=hash(c.id)); const bob=st.moving?Math.abs(Math.sin(T_NOW/140+hc))*2:0;
+  const y=p.y-bob, x=p.x, sw=st.moving?SW_STEPS[Math.round((Math.sin(T_NOW/110+hc)+1)*2)]:0; // a stride when walking
+  const big=SPR.step>5; // very close up there are only a few people: draw them directly, crisp
+  const put=(name,a,b,px,py)=>{ const pc=big?null:part(name,a,b); if(pc) stamp(pc,px,py); else { ctx.save(); ctx.translate(px,py); ctx.strokeStyle=INK; ctx.lineWidth=0.9; ctx.lineJoin='round'; PART_DRAW[name](a,b); ctx.restore(); } };
+  if(!ghost) put('shadow',0,0,p.x,p.y);
   if(selected){ ctx.strokeStyle='#F2B33D'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,11,5.5,0,0,7); ctx.stroke(); }
-  const y=p.y-bob, x=p.x; ctx.strokeStyle=INK; ctx.lineWidth=0.9;
-  const rr=(a,b,w,h,r)=>{ ctx.beginPath(); ctx.roundRect ? ctx.roundRect(a,b,w,h,r) : ctx.rect(a,b,w,h); ctx.fill(); ctx.stroke(); };
-  // a stride when walking
-  const sw=st.moving?Math.sin(T_NOW/110+hash(c.id))*1.4:0;
   if(L.f){
-    ctx.fillStyle=L.dress?L.skin:L.pants; ctx.beginPath(); ctx.rect(x-2.6+sw*0.5,y-7,2,7); ctx.rect(x+0.6-sw*0.5,y-7,2,7); ctx.fill(); ctx.stroke();
-    if(L.style==='long'){ ctx.fillStyle=L.hair; rr(x-5,y-25,10,12,4); }
-    ctx.fillStyle=L.shirt;
-    if(L.dress){ ctx.beginPath(); ctx.moveTo(x-3.6,y-17); ctx.lineTo(x+3.6,y-17); ctx.lineTo(x+6,y-6); ctx.quadraticCurveTo(x,y-4.6,x-6,y-6); ctx.closePath(); ctx.fill(); ctx.stroke(); }
-    else rr(x-4,y-17,8,10.5,3.2);
-    ctx.fillStyle=L.skin; ctx.beginPath(); ctx.arc(x,y-21,4.1,0,7); ctx.fill(); ctx.stroke();
-    ctx.fillStyle=L.hair; ctx.beginPath(); ctx.arc(x,y-22,4.3,Math.PI*0.95,Math.PI*2.05); ctx.quadraticCurveTo(x+1,y-21.6,x-4.2,y-20.6); ctx.closePath(); ctx.fill(); ctx.stroke();
-    if(L.style==='bun'){ ctx.beginPath(); ctx.arc(x+0.5,y-27,2.3,0,7); ctx.fill(); ctx.stroke(); }
-    if(L.style==='pony'){ ctx.beginPath(); ctx.ellipse(x+5,y-20,1.8,3.6,-0.4,0,7); ctx.fill(); ctx.stroke(); }
+    put('legsF',L.dress?L.skin:L.pants,sw,x,y);
+    if(L.style==='long') put('longBack',L.hair,0,x,y);
+    put(L.dress?'dress':'blouse',L.shirt,0,x,y);
+    put('headF',L.skin,0,x,y);
+    put('hairF',L.hair,L.style,x,y);
   } else {
-    ctx.fillStyle=L.pants; ctx.beginPath(); ctx.rect(x-3.2+sw*0.5,y-7.5,2.8,7.5); ctx.rect(x+0.4-sw*0.5,y-7.5,2.8,7.5); ctx.fill(); ctx.stroke();
-    ctx.fillStyle=L.shirt; rr(x-5.2,y-17.5,10.4,11,2.2);
-    ctx.fillStyle=L.skin; ctx.beginPath(); ctx.arc(x,y-21.4,4.3,0,7); ctx.fill(); ctx.stroke();
-    if(L.style==='cap'){ ctx.fillStyle=L.hat; ctx.beginPath(); ctx.arc(x,y-22.6,4.5,Math.PI,0); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.ellipse(x+3.5,y-22.6,3,1.1,0,0,7); ctx.fill(); ctx.stroke(); }
-    else if(L.style==='buzz'){ ctx.fillStyle=L.hair; ctx.beginPath(); ctx.arc(x,y-22.4,4.35,Math.PI*1.05,Math.PI*1.95); ctx.closePath(); ctx.fill(); }
-    else { ctx.fillStyle=L.hair; ctx.beginPath(); ctx.arc(x,y-22.4,4.5,Math.PI,0); ctx.lineTo(x+4.5,y-21.4); ctx.lineTo(x+2,y-23.2); ctx.lineTo(x-4.5,y-21.4); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    put('legsM',L.pants,sw,x,y);
+    put('shirtM',L.shirt,0,x,y);
+    put('headM',L.skin,0,x,y);
+    if(L.style==='cap') put('cap',L.hat,0,x,y); else put(L.style==='buzz'?'buzz':'short',L.hair,0,x,y);
   }
-  if(c.founder){ ctx.fillStyle='#F2B33D'; star(x,y-(L.style==='bun'?34:31),4); ctx.stroke(); }
+  if(c.founder) put('star',L.style==='bun'?34:31,0,x,y);
   if(st.act && st.act.startsWith('Sleeping')){ ctx.fillStyle='rgba(255,255,255,.9)'; ctx.font='600 8px "Bricolage Grotesque",sans-serif'; ctx.fillText('z',x+6,y-26); ctx.fillText('Z',x+10,y-32); }
 }
+// A glow for street lights and windows: one soft disc per colour, scaled and faded as needed.
+const glowCache=new Map();
+function glowSprite(col){ let c=glowCache.get(col); if(c) return c; c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d');
+  const gr=g.createRadialGradient(64,64,0,64,64,64); gr.addColorStop(0,`rgba(${col},1)`); gr.addColorStop(1,`rgba(${col},0)`); g.fillStyle=gr; g.fillRect(0,0,128,128); glowCache.set(col,c); return c; }
 function star(x,y,r){ ctx.beginPath(); for(let i=0;i<10;i++){ const a=i*Math.PI/5-Math.PI/2, rr=i%2?r*0.45:r; ctx.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } ctx.closePath(); ctx.fill(); }
 function label(text, x, y, strong){ const k=Math.min(1,1.25/cam.z); if(k<1){ ctx.save(); ctx.translate(x,y); ctx.scale(k,k); label0(text,0,0,strong); ctx.restore(); return; } label0(text,x,y,strong); }
 function label0(text, x, y, strong){ ctx.font=`${strong?700:600} 11px "Bricolage Grotesque",system-ui,sans-serif`; const w=ctx.measureText(text).width+12; ctx.fillStyle=strong?'rgba(31,45,38,.92)':'rgba(251,252,247,.92)'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x-w/2,y-16,w,17,8) : ctx.rect(x-w/2,y-16,w,17); ctx.fill(); ctx.fillStyle=strong?'#FBFCF7':'#1F2D26'; ctx.textAlign='center'; ctx.fillText(text,x,y-4); ctx.textAlign='start'; }
@@ -1202,7 +1277,8 @@ function tileShape(P2,x,y,wet,off,rv,rc){
   for(const [sx,sy] of [[-1,-1],[1,-1],[1,1],[-1,1]]){ if(dry(sx,0)||dry(0,sy)||!dry(sx,sy)) continue; // both sides wet, the diagonal dry: an inner corner
     const qx=x+(sx>0?1:0)+sx*off, qy=y+(sy>0?1:0)+sy*off; let A=[qx+sx*rf,qy], B=[qx,qy+sy*rf]; if(sx*sy>0){ const t=A; A=B; B=t; }
     P2.moveTo(A[0],A[1]); P2.lineTo(qx,qy); P2.lineTo(B[0],B[1]); P2.arcTo(qx,qy,A[0],A[1],rf); P2.closePath(); } }
-function drawWaterTiles(list){ if(!list.length) return; const wet=(a,b)=>D.water.has(a+','+b);
+function drawWaterTiles(list, part){ if(!list.length) return; const wet=(a,b)=>D.water.has(a+','+b);
+  if(part==='ripples'){ waterRipples(list); return; }
   const deepOf=(a,b)=>{ const k=D.water.get(a+','+b); if(!k||k==='river') return false; for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++) if(!wet(a+i,b+j)) return false; return true; };
   const sand=new Path2D(), damp=new Path2D(), byKind=new Map(), deep=new Map();
   for(const [x,y,kind] of list){ tileShape(sand,x,y,wet,BEACH,WATER_R,WATER_FILLET); tileShape(damp,x,y,wet,WETSAND,WATER_R,WATER_FILLET);
@@ -1213,6 +1289,8 @@ function drawWaterTiles(list){ if(!list.length) return; const wet=(a,b)=>D.water
   for(const [kind,p] of byKind){ const W=WATER_TYPES[kind]||WATER_TYPES.river; ctx.fillStyle=W.color; ctx.fill(p); }
   for(const [kind,p] of deep){ const W=WATER_TYPES[kind]||WATER_TYPES.river; ctx.fillStyle=W.deep; ctx.fill(p); }
   ctx.restore();
+  if(part!=='base') waterRipples(list); }
+function waterRipples(list){
   const t=T_NOW/1000; ctx.strokeStyle='rgba(255,255,255,.75)'; ctx.lineWidth=1.1; ctx.lineCap='round';
   for(const [x,y,kind] of list){ const hh=hash(x+','+y);
     for(let i=0;i<(kind==='sea'?3:2);i++){ const ph=((hh>>>(i*5))%100)/100, u=0.15+((ph+t*(kind==='river'?0.18:0.06))%1)*0.7, v=0.25+((hh>>>(i*7+3))%50)/100;
@@ -1346,7 +1424,7 @@ function drawDisasters(){ const now=Date.now()+skew; shake={x:0,y:0};
       ctx.strokeStyle=`rgba(255,255,255,${0.6*rise})`; ctx.lineWidth=1.2; for(let i=0;i<14;i++){ const a=i*2.4, rr=(i*0.07%1)*r; const q={x:c.x+Math.cos(a)*rr*HW,y:c.y+Math.sin(a)*rr*HH}; const o=Math.sin(T_NOW/400+i)*4; ctx.beginPath(); ctx.moveTo(q.x-5+o,q.y); ctx.quadraticCurveTo(q.x+o,q.y-3,q.x+5+o,q.y); ctx.stroke(); } }
     if(d.kind==='fire' && age<120){ const tt=T_NOW/1000; for(let i=0;i<6;i++){ const q=((tt*0.22+i/6)%1); ctx.fillStyle=`rgba(60,55,52,${0.4*(1-q)*(1-age/120)})`; ctx.beginPath(); ctx.arc(c.x+Math.sin(tt+i)*8+q*40,c.y-30-q*120,12+q*30,0,7); ctx.fill(); } } } }
 
-let vehicleHits=[];
+let vehicleHits=[], lastStates=new Map(); // what the last frame drew, for taps
 
 /* ---------------- economy ---------------- */
 const TAX_RATE=0.2, GRANT=200, START_FUNDS=5000;
@@ -1406,56 +1484,102 @@ function drawConstruction(b,t){
   if(w*d>=4){ const p=cs[0], top=up(p,full+24); line(p,top,'#E2B13C',3); line(p,top,INK,0.8); const arm={x:top.x+46,y:top.y+10}; line(top,arm,'#E2B13C',2.6); line({x:top.x-12,y:top.y-3},top,'#E2B13C',2.6);
     const sway=Math.sin(T_NOW/900)*3; line({x:arm.x-8,y:arm.y-2},{x:arm.x-8+sway,y:arm.y+18+h*0.3},INK,0.8); ctx.fillStyle='#7C8288'; ctx.fillRect(arm.x-12+sway,arm.y+18+h*0.3,8,5); }
 }
-function frame(ts){
-  T_NOW=ts; windowQuads=[]; lights=[]; edgePan();
+// Road and water tiles as parsed lists, rebuilt only when the map changes (not every frame).
+const tileLists=new WeakMap(); let tileListGen=0;
+function tileList(m){ let e=tileLists.get(m); if(e&&e.gen===tileListGen&&e.n===m.size) return e.list;
+  const list=[]; for(const [k,v] of m){ const i=k.indexOf(','); list.push({ k, v, x:+k.slice(0,i), y:+k.slice(i+1), h:hash(k) }); }
+  tileLists.set(m,{gen:tileListGen,n:m.size,list}); return list; }
+function tileBounds(wx0,wy0,wx1,wy1){ const cs=[[wx0,wy0],[wx1,wy0],[wx0,wy1],[wx1,wy1]].map(([x,y])=>worldToTileF(x,y));
+  return { tminX:Math.floor(Math.min(...cs.map(c=>c.x)))-1, tmaxX:Math.ceil(Math.max(...cs.map(c=>c.x)))+1, tminY:Math.floor(Math.min(...cs.map(c=>c.y)))-1, tmaxY:Math.ceil(Math.max(...cs.map(c=>c.y)))+1 }; }
+const Ground={ cv:null, g:null, wx0:0, wy0:0, ww:0, wh:0, rz:0, dpr:0, gen:-1, deco:[], lastZ:0, zoomAt:0 };
+function renderGround(wx0,wy0,wx1,wy1,rz){
+  const W=Math.max(1,Math.min(4096,Math.ceil((wx1-wx0)*rz))), H=Math.max(1,Math.min(4096,Math.ceil((wy1-wy0)*rz)));
+  if(!Ground.cv){ Ground.cv=document.createElement('canvas'); Ground.g=Ground.cv.getContext('2d'); }
+  if(Ground.cv.width!==W||Ground.cv.height!==H){ Ground.cv.width=W; Ground.cv.height=H; }
+  Ground.renders=(Ground.renders||0)+1; Object.assign(Ground,{ wx0, wy0, ww:W/rz, wh:H/rz, rz, dpr, gen:tileListGen, deco:[] });
+  const {tminX,tmaxX,tminY,tmaxY}=tileBounds(wx0,wy0,wx0+W/rz,wy0+H/rz), keep=ctx; ctx=Ground.g;
+  try{
+    ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,W,H); ctx.setTransform(rz,0,0,rz,-wx0*rz,-wy0*rz);
+    if(cam.z>=0.45 && (tmaxX-tminX)*(tmaxY-tminY)<60000){
+      const dark=new Path2D(), light=new Path2D(), tuft=new Path2D();
+      for(let x=tminX;x<=tmaxX;x++) for(let y=tminY;y<=tmaxY;y++){ const v=(Math.imul(x,73856093)^Math.imul(y,19349663))>>>0; const c=iso(x+0.5,y+0.5);
+        if(v%9===0){ const r=16+(v>>>5)%26; dark.moveTo(c.x+r*1.7,c.y); dark.ellipse(c.x,c.y,r*1.7,r*0.8,0,0,Math.PI*2); }
+        else if(v%11===3){ const r=10+(v>>>6)%16; light.moveTo(c.x+r*1.6,c.y); light.ellipse(c.x,c.y,r*1.6,r*0.7,0,0,Math.PI*2); }
+        if(v%5===1){ const tx=c.x+((v>>>8)%40)-20, ty=c.y+((v>>>12)%16)-8; tuft.moveTo(tx-3,ty); tuft.lineTo(tx-1,ty-4); tuft.lineTo(tx,ty-1); tuft.lineTo(tx+2,ty-5); tuft.lineTo(tx+3,ty); } }
+      ctx.fillStyle='#82B858'; ctx.fill(dark); ctx.fillStyle='#9CCD6F'; ctx.fill(light); ctx.strokeStyle='#6E9E48'; ctx.lineWidth=1; ctx.stroke(tuft);
+    }
+    let tx=0, ty=0; const pushDeco=(k,fn)=>Ground.deco.push({k,fn,x:tx,y:ty});
+    const hasRoad=(a,b)=>D.roads.has(a+','+b);
+    { const wl=[]; for(const w of tileList(D.water)){ const x=w.x, y=w.y; if(x<tminX-1||x>tmaxX+1||y<tminY-1||y>tmaxY+1) continue; wl.push([x,y,w.v]); } drawWaterTiles(wl,'base'); }
+    for(const r of tileList(D.roads)){ const x=r.x, y=r.y, k=r.k, type=r.v; if(x<tminX||x>tmaxX||y<tminY||y>tmaxY) continue; const R=ROAD_TYPES[type]||ROAD_TYPES.dirt; tx=x; ty=y;
+      if(R.kind==='highway') drawHighwayTile(x,y,R,hasRoad); else drawRoadTile(x,y,R,hasRoad,pushDeco);
+      if(cam.z>=0.5) roadExtras(x,y,R,hasRoad,pushDeco); if(D.water.has(k)) drawBridge(x,y,R,hasRoad); }
+    { const P=new Path2D(); for(const b of D.buildings.values()){ const [w,d]=T(b).size; if(b.x+w<tminX-4||b.x>tmaxX+2||b.y+d<tminY-2||b.y>tmaxY+4) continue; addShadow(P,b); } ctx.fillStyle='rgba(38,52,86,.2)'; ctx.fill(P,'nonzero'); }
+  } finally { ctx=keep; } }
+// People drawn faintly on top only where a building drawn after them covers them, so they stay visible behind it.
+function hiddenPeople(items){ const out=[], grid=new Map(), C=128;
+  for(let i=items.length-1;i>=0;i--){ const it=items[i];
+    if(it.b){ const t=T(it.b), [w,d]=t.size, b=it.b, N=iso(b.x,b.y), E=iso(b.x+w,b.y), S2=iso(b.x+w,b.y+d), W=iso(b.x,b.y+d);
+      const box={x0:W.x,x1:E.x,y0:N.y-((SHADOW_H[t.style]?SHADOW_H[t.style](t):60)+30),y1:S2.y};
+      for(let gx=Math.floor(box.x0/C);gx<=Math.floor(box.x1/C);gx++) for(let gy=Math.floor(box.y0/C);gy<=Math.floor(box.y1/C);gy++){ const k=gx+','+gy; let a=grid.get(k); if(!a) grid.set(k,a=[]); a.push(box); } }
+    else if(it.c&&grid.size){ const p=iso(it.st.x,it.st.y), x0=p.x-7, x1=p.x+7, y0=p.y-38, y1=p.y; let hit=false;
+      for(let gx=Math.floor(x0/C);gx<=Math.floor(x1/C)&&!hit;gx++) for(let gy=Math.floor(y0/C);gy<=Math.floor(y1/C)&&!hit;gy++){ const a=grid.get(gx+','+gy); if(a) for(const q of a) if(q.x0<x1&&q.x1>x0&&q.y0<y1&&q.y1>y0){ hit=true; break; } }
+      if(hit) out.push(it); } }
+  return out; }
+// The loop always books the next frame first, so one bad drawing call can never freeze the city.
+let frameErrors=0;
+function frame(ts){ requestAnimationFrame(frame);
+  const t0=performance.now();
+  try{ drawFrame(ts); }
+  catch(e){ if(frameErrors++<3) console.error('Drawing error (the city keeps running):', e); try{ ctx.restore(); ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over'; }catch(e2){} }
+  finally { planBudgetEnd=Infinity; }
+  Quality.sample(performance.now()-t0, ts); }
+function drawFrame(ts){
+  T_NOW=ts; windowQuads=[]; lights=[]; edgePan(); sprBegin();
   const gm=gmNow(); DARK=darkness(gm); LAMPS=Math.min(1,Math.max(0,(DARK-0.2)/0.25)); // on from about 7pm, off by about 5:30am
   if(S.meta){ const wNow=weatherAt(S.meta,gm); if(wNow==='storm'||wNow==='fog') LAMPS=1; } // and whenever the weather turns dark
   if(follow){ const c=S.citizens.get(follow); const st=c&&citizenAt(c,gm); if(st){ const p=iso(st.x,st.y); cam.x+=(p.x-cam.x)*0.08; cam.y+=(p.y-14-cam.y)*0.08; } }
-  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,cw,ch);
-  worldT();
-  const cs=[[0,0],[cw,0],[0,ch],[cw,ch]].map(([sx,sy])=>{ const w=screenToWorld(sx,sy); return worldToTileF(w.x,w.y); });
-  const tminX=Math.floor(Math.min(...cs.map(c=>c.x)))-1, tmaxX=Math.ceil(Math.max(...cs.map(c=>c.x)))+1, tminY=Math.floor(Math.min(...cs.map(c=>c.y)))-1, tmaxY=Math.ceil(Math.max(...cs.map(c=>c.y)))+1;
-  if(cam.z>=0.45 && (tmaxX-tminX)*(tmaxY-tminY)<40000){
-    const dark=new Path2D(), light=new Path2D(), tuft=new Path2D();
-    for(let x=tminX;x<=tmaxX;x++) for(let y=tminY;y<=tmaxY;y++){ const v=(Math.imul(x,73856093)^Math.imul(y,19349663))>>>0; const c=iso(x+0.5,y+0.5);
-      if(v%9===0){ const r=16+(v>>>5)%26; dark.moveTo(c.x+r*1.7,c.y); dark.ellipse(c.x,c.y,r*1.7,r*0.8,0,0,Math.PI*2); }
-      else if(v%11===3){ const r=10+(v>>>6)%16; light.moveTo(c.x+r*1.6,c.y); light.ellipse(c.x,c.y,r*1.6,r*0.7,0,0,Math.PI*2); }
-      if(v%5===1){ const tx=c.x+((v>>>8)%40)-20, ty=c.y+((v>>>12)%16)-8; tuft.moveTo(tx-3,ty); tuft.lineTo(tx-1,ty-4); tuft.lineTo(tx,ty-1); tuft.lineTo(tx+2,ty-5); tuft.lineTo(tx+3,ty); } }
-    ctx.fillStyle='#82B858'; ctx.fill(dark); ctx.fillStyle='#9CCD6F'; ctx.fill(light); ctx.strokeStyle='#6E9E48'; ctx.lineWidth=1; ctx.stroke(tuft);
-  }
-  const items=[]; const pushDeco=(k,fn)=>items.push({k,fn});
-  const hasRoad=(a,b)=>D.roads.has(a+','+b);
-  { const wl=[]; for(const [k,kind] of D.water){ const [x,y]=k.split(',').map(Number); if(x<tminX-1||x>tmaxX+1||y<tminY-1||y>tmaxY+1) continue; wl.push([x,y,kind]); } drawWaterTiles(wl); }
-  for(const [k,type] of D.roads){ const [x,y]=k.split(',').map(Number); if(x<tminX||x>tmaxX||y<tminY||y>tmaxY) continue; const R=ROAD_TYPES[type]||ROAD_TYPES.dirt;
-    if(R.kind==='highway') drawHighwayTile(x,y,R,hasRoad); else drawRoadTile(x,y,R,hasRoad,pushDeco);
-    if(cam.z>=0.5) roadExtras(x,y,R,hasRoad,pushDeco); if(D.water.has(k)) drawBridge(x,y,R,hasRoad); }
+  const v0=screenToWorld(0,0), v1=screenToWorld(cw,ch), {tminX,tmaxX,tminY,tmaxY}=tileBounds(v0.x,v0.y,v1.x,v1.y);
+  // The ground (grass, sand, water, roads, shadows) comes from a cached picture that is only redrawn when the map changes,
+  // the view leaves it, or the zoom has settled at a new level. Only the water's ripples move, so those are drawn live.
+  if(cam.z!==Ground.lastZ){ Ground.lastZ=cam.z; Ground.zoomAt=ts; }
+  const rz=cam.z*dpr, covered=Ground.cv&&v0.x>=Ground.wx0&&v0.y>=Ground.wy0&&v1.x<=Ground.wx0+Ground.ww&&v1.y<=Ground.wy0+Ground.wh;
+  const ratio=Ground.rz?rz/Ground.rz:0;
+  if(!covered||Ground.gen!==tileListGen||Ground.dpr!==dpr||ratio>1.6||ratio<0.6||(Ground.rz!==rz&&ts-Ground.zoomAt>180)){
+    const mx=(v1.x-v0.x)*0.3, my=(v1.y-v0.y)*0.3; renderGround(v0.x-mx,v0.y-my,v1.x+mx,v1.y+my,rz); }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  if(Ground.rz===rz){ ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(Ground.cv, Math.round((Ground.wx0-cam.x)*rz+dpr*(cw/2+shake.x)), Math.round((Ground.wy0-cam.y)*rz+dpr*(ch/2+shake.y))); worldT(); }
+  else { ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,cw,ch); worldT(); ctx.drawImage(Ground.cv, Ground.wx0, Ground.wy0, Ground.ww, Ground.wh); }
+  const items=[];
+  { const wl=[]; for(const w of tileList(D.water)){ const x=w.x, y=w.y; if(x<tminX||x>tmaxX||y<tminY||y>tmaxY||D.roads.has(w.k)) continue; wl.push([x,y,w.v]); } drawWaterTiles(wl,'ripples'); }
+  for(const d of Ground.deco) if(d.x>=tminX-1&&d.x<=tmaxX+1&&d.y>=tminY-1&&d.y<=tmaxY+1) items.push(d);
   if(Store.canWrite && draftOn) drawDraftGround(); // blue over drafted roads and water, red over what's being removed
-  { const P=new Path2D(); for(const b of D.buildings.values()){ const [w,d]=T(b).size; if(b.x+w<tminX-4||b.x>tmaxX+2||b.y+d<tminY-2||b.y>tmaxY+4) continue; addShadow(P,b); } ctx.fillStyle='rgba(38,52,86,.2)'; ctx.fill(P,'nonzero'); }
   const selB = sel&&sel.kind==='b' ? D.buildings.get(sel.id) : null;
   if(selB){ const [w,d]=T(selB).size; poly([iso(selB.x,selB.y),iso(selB.x+w,selB.y),iso(selB.x+w,selB.y+d),iso(selB.x,selB.y+d)], 'rgba(217,113,74,.3)', '#D9714A', 2.5); }
   for(const b of D.buildings.values()){ if(tool.kind==='move'&&tool.id===b.id) continue; const [w,d]=T(b).size; if(b.x+w<tminX||b.x>tmaxX+3||b.y+d<tminY||b.y>tmaxY+3) continue; items.push({ k:blocks(b)||b.ruin||b.done===false?b.x+w+b.y+d-0.5:b.x+b.y+0.2, b }); }
-  const states=new Map();
+  const states=new Map(); lastStates=states;
   // Only the people whose day happens near the screen are simulated, at most CROWD_MAX of them, nearest first.
   if(ts-crowdAt>500){ crowdAt=ts; const ctr=worldToTileF(cam.x,cam.y); const near=p=>p&&p[2]>=tminX-40&&p[2]<=tmaxX+40&&p[3]>=tminY-40&&p[3]<=tmaxY+40;
     const dist=c=>Math.min(...[c.home,c.job,c.hang].filter(Boolean).map(p=>Math.abs(p[2]-ctr.x)+Math.abs(p[3]-ctr.y)));
     crowd=[...S.citizens.values()].filter(c=>c.id===follow||near(c.home)||near(c.job)||near(c.hang));
     if(crowd.length>CROWD_MAX) crowd=crowd.map(c=>[dist(c),c]).sort((a,b)=>a[0]-b[0]).slice(0,CROWD_MAX).map(x=>x[1]);
     if(follow&&!crowd.some(c=>c.id===follow)&&S.citizens.has(follow)) crowd.push(S.citizens.get(follow)); }
+  planBudgetEnd=performance.now()+6; // up to 6 ms a frame for working out new plans
   if(cam.z>=0.45) for(const c of crowd){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible) items.push(st.car?{ k:st.x+st.y, veh:{V:st.V,col:st.col,st} }:{ k:st.x+st.y, c, st }); }
   // Traffic: ambient cars, buses and vans on busy roads, the developer's own vehicles, and crews answering disasters.
   vehicleHits=[];
   if(cam.z>=0.45){
-    for(const [k,type] of D.roads){ if(hash(k)%9!==0||!carOK(k)) continue; const [x,y]=k.split(',').map(Number); if(x<tminX-6||x>tmaxX+6||y<tminY-6||y>tmaxY+6) continue;
+    for(const r of tileList(D.roads)){ const k=r.k, x=r.x, y=r.y; if(r.h%9!==0||x<tminX-6||x>tmaxX+6||y<tminY-6||y>tmaxY+6||!carOK(k)) continue;
       const vt=ambientType(k), V=VEHICLE_TYPES[vt], st=roam('amb:'+k,x,y,gm,V,true); if(st) items.push({ k:st.x+st.y, veh:{V,col:V.colors[hash(k)%V.colors.length],st} }); }
     for(const v of D.vehicles.values()){ if(v.x<tminX-14||v.x>tmaxX+14||v.y<tminY-14||v.y>tmaxY+14) continue; const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car, st=roam(v.id,v.x,v.y,gm,V,false); if(!st) continue;
       items.push({ k:st.x+st.y, veh:{V,col:V.colors[hash(v.id)%V.colors.length],st,siren:v.type==='police'&&Math.floor(gm/LEG)%5===0,id:v.id} }); vehicleHits.push({id:v.id,st}); }
     for(const r of responders(gm)) items.push({ k:r.st.x+r.st.y, veh:{V:r.V,col:r.V.colors[0],st:r.st,siren:r.siren} }); }
-  frameStats={ crowd:crowd.length, walking:items.filter(i=>i.c).length, driving:items.filter(i=>i.veh&&!i.veh.id).length, citizens:S.citizens.size };
+  { let wk=0, dr=0; for(const i of items){ if(i.c) wk++; else if(i.veh&&!i.veh.id) dr++; } frameStats={ crowd:crowd.length, walking:wk, driving:dr, citizens:S.citizens.size, quality:Quality.level, dpr }; }
   items.sort((a,b)=>a.k-b.k);
   for(const it of items){ if(it.fn) it.fn(); else if(it.veh){ const v=it.veh; const hd=(v.st.dx||v.st.dy)?[v.st.dx||0,v.st.dy||0]:[1,0]; drawVehicle(v.st.x,v.st.y,hd[0],hd[1],v.V,v.col,v.siren); if(sel&&sel.kind==='v'&&sel.id===v.id){ const p=iso(v.st.x,v.st.y); ctx.strokeStyle='#F2B33D'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,16,8,0,0,7); ctx.stroke(); } }
     else if(it.b){ const t=T(it.b); if(it.b.draft||it.b.draftDel){ draftMark(it.b); ctx.globalAlpha=it.b.draftDel?0.4:0.78; drawB(it.b,t); ctx.globalAlpha=1; } else if(it.b.ruin) drawRuin(it.b,t); else if(it.b.done===false) drawConstruction(it.b,t); else drawB(it.b,t); } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
   drawDisasters();
-  ctx.globalAlpha=0.38; for(const it of items) if(it.c) drawCitizen(it.c,it.st,false,true); ctx.globalAlpha=1;
+  if(Quality.ghosts){ ctx.globalAlpha=0.38; for(const it of hiddenPeople(items)) drawCitizen(it.c,it.st,false,true); ctx.globalAlpha=1; }
   if(areaSel){ const ax=Math.min(areaSel.a[0],areaSel.b[0]), bx=Math.max(areaSel.a[0],areaSel.b[0])+1, ay=Math.min(areaSel.a[1],areaSel.b[1]), by=Math.max(areaSel.a[1],areaSel.b[1])+1; poly([iso(ax,ay),iso(bx,ay),iso(bx,by),iso(ax,by)],'rgba(184,67,58,.28)','#B8433A',2.5); }
   if(ghostTool()) drawFootprint();
   else if(tool.kind==='road'&&roadMode==='line') drawRoadPreview();
@@ -1467,11 +1591,12 @@ function frame(ts){
     worldT();
     for(const q of windowQuads) poly(q, `rgba(255,206,120,${0.92*DARK})`, false);
     ctx.globalCompositeOperation='lighter';
-    for(const L of lights){ const g=ctx.createRadialGradient(L.x,L.y,0,L.x,L.y,L.r); g.addColorStop(0,`rgba(${L.col},${0.36*DARK*(L.a||1)})`); g.addColorStop(1,`rgba(${L.col},0)`); ctx.fillStyle=g; ctx.fillRect(L.x-L.r,L.y-L.r,L.r*2,L.r*2); }
+    for(const L of lights){ const a=0.36*DARK*(L.a||1); if(a<0.004) continue; ctx.globalAlpha=Math.min(1,a); ctx.drawImage(glowSprite(L.col),L.x-L.r,L.y-L.r,L.r*2,L.r*2); }
+    ctx.globalAlpha=1;
     ctx.globalCompositeOperation='source-over';
   } else { const h=(((gm%1440)+1440)%1440)/60; if(h>16.5&&h<18){ ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=`rgba(255,140,60,${0.12*Math.sin((h-16.5)/1.5*Math.PI)})`; ctx.fillRect(0,0,cw,ch); worldT(); } }
   const wx=S.meta?weatherAt(S.meta,gm):'sunny'; if(wx!=='sunny') drawWeather(wx,gm); if(wx!==lastWx){ lastWx=wx; refreshHUD(); }
-  if(GRAIN){ ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=GRAIN; ctx.fillRect(0,0,cw,ch); worldT(); }
+  if(GRAIN&&Quality.grain){ ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=GRAIN; ctx.fillRect(0,0,cw,ch); worldT(); }
   if(tool.kind==='water'||tool.kind==='drain'){ if(hoverTile){ const [hx,hy]=hoverTile, r=Math.floor((tool.size||1)/2); poly([iso(hx-r,hy-r),iso(hx-r+(tool.size||1),hy-r),iso(hx-r+(tool.size||1),hy-r+(tool.size||1)),iso(hx-r,hy-r+(tool.size||1))],'rgba(255,255,255,.25)','#fff',2); } }
   for(const b of D.buildings.values()){ if(b.done===false && cam.z>=0.6){ const t=T(b); const [w,d]=t.size; const p=iso(b.x+w/2,b.y+d/2); label(`Building ${Math.round(progressOf(b)*100)}%`, p.x, p.y-Math.min(120,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24))*Math.max(.3,progressOf(b))-18, selB&&selB.id===b.id); continue; }
     if(!b.name && !(selB&&selB.id===b.id)) continue; if(cam.z<0.8 && !(selB&&selB.id===b.id)) continue; const t=T(b); const [w,d]=t.size; const p=iso(b.x+w/2,b.y+d/2); label(b.name||t.name, p.x, p.y-Math.min(120,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24))-14, selB&&selB.id===b.id); }
@@ -1481,7 +1606,6 @@ function frame(ts){
       if(isSel||(c.founder&&cam.z>=1.2)||cam.z>=2.2) tags.push({c,p,isSel,pri:isSel?-2:c.founder?-1:Math.hypot(p.x-cam.x,p.y-cam.y)}); }
     tags.sort((a,b)=>a.pri-b.pri);
     for(const t of tags){ const lk=Math.min(1,1.25/cam.z), y=t.p.y-(t.c.founder?36:30), w=((nameOf(t.c).length)*6+12)*lk; if(t.pri>=0&&(placed.length>=12||placed.some(q=>Math.abs(q.x-t.p.x)<(q.w+w)/2&&Math.abs(q.y-y)<18*lk))) continue; placed.push({x:t.p.x,y,w}); label(nameOf(t.c), t.p.x, y, t.isSel); } }
-  requestAnimationFrame(frame);
 }
 
 /* ---------------- thumbnails ---------------- */
@@ -1589,7 +1713,7 @@ function lineTiles(a,b){ let [x,y]=a; const [bx,by]=b, out=[[x,y]];
 function roadOK(x,y){ const o=D.occ.get(x+','+y); if(!o) return 'ok'; const b=D.buildings.get(o); if(!b) return 'ok'; return roadClears(b.type)&&!b.ruin ? 'clear' : false; }
 async function commitLine(a,b){ const tiles=lineTiles(a,b), set={}, prev=new Map(); let blocked=0;
   if(draftOn){ const ks=tiles.filter(([x,y])=>roadOK(x,y)).map(([x,y])=>x+','+y); if(!ks.length){ toast('Buildings are in the way of that road.'); return; } draftEdit(`${ks.length} tiles of road`,d=>{ for(const k of ks){ if(S.roads.get(k)===tool.road) delete d.roads[k]; else d.roads[k]=tool.road; } }); return; }
-  for(const [x,y] of tiles){ const k=x+','+y; if(!roadOK(x,y)){ blocked++; continue; } if(D.roads.get(k)===tool.road) continue; prev.set(k,D.roads.get(k)||null); set[k]=tool.road; D.roads.set(k,tool.road); }
+  for(const [x,y] of tiles){ const k=x+','+y; if(!roadOK(x,y)){ blocked++; continue; } if(D.roads.get(k)===tool.road) continue; prev.set(k,D.roads.get(k)||null); set[k]=tool.road; D.roads.set(k,tool.road); tileListGen++; }
   if(!prev.size){ toast(blocked?'Buildings are in the way of that road.':'That road is already there.'); return; }
   try{ const r=await api('/api/admin/roads',{method:'POST',body:{set,remove:[]}}); remember(`${r.changed} tile${r.changed===1?'':'s'} of road`, roadUndo(prev,r.cleared));
     toast(`Laid ${r.changed} tile${r.changed===1?'':'s'}${clearedText(r.cleared)}${blocked?`, skipped ${blocked} under buildings`:''}`); }
@@ -1658,9 +1782,9 @@ cv.addEventListener('wheel', e=>{ e.preventDefault(); const w=screenToWorld(e.cl
 
 function paintAt(sx,sy){ const [x,y]=tileAt(sx,sy); const k=x+','+y;
   if(tool.kind==='water'||tool.kind==='drain'){ const n=tool.size||1, r=Math.floor(n/2); for(let i=0;i<n;i++) for(let j=0;j<n;j++){ const kk=(x-r+i)+','+(y-r+j); if(paintBuf.has(kk)) continue;
-      if(tool.kind==='water'){ if(D.occ.has(kk)) continue; paintPrev.set(kk,D.water.get(kk)||null); paintBuf.set(kk,tool.water); D.water.set(kk,tool.water); } else { if(!D.water.has(kk)) continue; paintPrev.set(kk,D.water.get(kk)); paintBuf.set(kk,null); D.water.delete(kk); } } return; }
+      if(tool.kind==='water'){ if(D.occ.has(kk)) continue; paintPrev.set(kk,D.water.get(kk)||null); paintBuf.set(kk,tool.water); D.water.set(kk,tool.water), tileListGen++; } else { if(!D.water.has(kk)) continue; paintPrev.set(kk,D.water.get(kk)); paintBuf.set(kk,null); D.water.delete(kk); } } return; }
   if(paintBuf.has(k)) return;
-  if(tool.kind==='road'){ if(!roadOK(x,y)) return; if(D.roads.get(k)===tool.road) return; paintPrev.set(k,D.roads.get(k)||null); paintBuf.set(k,tool.road); D.roads.set(k,tool.road); }
+  if(tool.kind==='road'){ if(!roadOK(x,y)) return; if(D.roads.get(k)===tool.road) return; paintPrev.set(k,D.roads.get(k)||null); paintBuf.set(k,tool.road); D.roads.set(k,tool.road); tileListGen++; }
   else { if(!D.roads.has(k)) return; paintPrev.set(k,D.roads.get(k)); paintBuf.set(k,null); D.roads.delete(k); } }
 async function commitPaint(){ const buf=paintBuf, prev=paintPrev; paintBuf=null; paintPrev=new Map(); const mode=tool.kind, erase=tool.kind==='erase'&&tool.mode==='all', g=gesture;
   if(draftOn && buf.size){ const water=mode==='water'||mode==='drain', live=water?S.water:S.roads;
@@ -1687,7 +1811,7 @@ function tap(sx,sy){
   if(tool.kind==='disaster'){ api('/api/admin/disasters',{method:'POST',body:{kind:tool.dtype,x,y}}).then(r=>toast(r.ruined?`${DISASTER_TYPES[tool.dtype].name}: ${r.ruined} building${r.ruined===1?'':'s'} in ruins`:`${DISASTER_TYPES[tool.dtype].name}: nothing was destroyed`)).catch(e=>toast(e.message)); setTool({kind:'pan'}); return; }
   if(tool.kind==='erase'){ if(tool.mode!=='roads'){ const id=D.occ.get(x+','+y); if(id) removeBuilding(id); } return; }
   const gm=gmNow(); let best=null, bd=18;
-  for(const c of S.citizens.values()){ const st=citizenAt(c,gm); if(!st||!st.visible) continue; const p=iso(st.x,st.y); const sp={ x:(p.x-cam.x)*cam.z+cw/2, y:(p.y-12-cam.y)*cam.z+ch/2 }; const dd=Math.hypot(sp.x-sx,sp.y-sy)/Math.max(1,cam.z*0.8); if(dd<bd){ bd=dd; best=c; } }
+  for(const [id,st] of lastStates){ const c=S.citizens.get(id); if(!c||!st.visible) continue; const p=iso(st.x,st.y); const sp={ x:(p.x-cam.x)*cam.z+cw/2, y:(p.y-12-cam.y)*cam.z+ch/2 }; const dd=Math.hypot(sp.x-sx,sp.y-sy)/Math.max(1,cam.z*0.8); if(dd<bd){ bd=dd; best=c; } }
   if(best){ selectCitizen(best.id); return; }
   for(const h of vehicleHits){ const p=iso(h.st.x,h.st.y); const sp={ x:(p.x-cam.x)*cam.z+cw/2, y:(p.y-6-cam.y)*cam.z+ch/2 }; if(Math.hypot(sp.x-sx,sp.y-sy)<16*Math.max(1,cam.z*0.8)){ sel={kind:'v',id:h.id}; follow=null; renderCard(); return; } }
   const id=D.occ.get(x+','+y); if(id){ selectBuilding(id); return; }
@@ -1938,7 +2062,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     const head=el('div',{class:'chead'}); head.append(el('img',{class:'cthumb',alt:'',src:thumbFor(b.type)}), el('div',null, el('h2',{text:`${b.name||t.name} (ruins)`}), el('p',{class:'now',text:'Destroyed in a disaster. Nobody can live or work here until it’s rebuilt.'})));
     card.append(close, head); if(Store.canWrite) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Rebuild',onclick:async()=>{ try{ await api(`/api/admin/buildings/${encodeURIComponent(b.id)}/repair`,{method:'POST'}); toast(`${b.name||t.name} was rebuilt`); }catch(e){ toast(e.message); } }}), el('button',{class:'btn danger',text:'Clear the rubble',onclick:()=>removeBuilding(b.id)})));
   } else { const b=D.buildings.get(sel.id); if(!b){ closeCard(); return; } const t=T(b); const gm=gmNow();
-    const inside=[...S.citizens.values()].filter(c=>{ const st=citizenAt(c,gm); return st&&st.bid===b.id; }).map(c=>'@'+c.handle);
+    const inside=withBudget(15,()=>[...S.citizens.values()].filter(c=>{ const st=citizenAt(c,gm); return st&&st.bid===b.id; }).map(c=>'@'+c.handle));
     const list=(slot,n)=>{ const names=[...S.citizens.values()].filter(c=>c[slot]&&c[slot][0]===b.id).slice(0,8).map(c=>'@'+c.handle); return names.length?': '+names.join(', ')+(n>names.length?` and ${fmt(n-names.length)} more`:''):''; };
     const lv=levelOf(b);
     const head=el('div',{class:'chead'}); const im=el('img',{class:'cthumb',alt:'',src:thumbFor(b.type)}); head.append(im, el('div',null, el('h2',{text:b.name||t.name}), el('div',{class:'chips2'}, el('span',{class:'pill',text:CAT_NAME(t.cat)}), el('span',{class:'pill',text:`${t.size[0]}×${t.size[1]}`}), el('span',{class:'pill',text:`Level ${lv} ${'★'.repeat(lv)}${'☆'.repeat(3-lv)}`}))));
@@ -1962,7 +2086,7 @@ function renderPeople(){
   const list=$('peopleList'); if(!list) return; const q=cleanHandle(peopleQuery).toLowerCase(); const gm=gmNow();
   const show=(cits,empty)=>{ list.innerHTML=''; if(!cits.length){ list.append(el('p',{class:'hint',text:empty})); return; }
     for(const c of cits){ const st=c.home?citizenAt(c,gm):null; const av=el('span',{class:'ava sm'}); av.innerHTML=avatarSVG(c);
-      list.append(el('button',{class:'person',onclick:()=>openCitizen(c.handle)}, av, el('span',null, el('div',{class:'who',text:(c.name?c.name+' · @'+c.handle:'@'+c.handle)+(c.founder?' ★':'')}), el('div',{class:'what',text:!c.home?'In cryosleep aboard the arkrts':st?st.act:'Arriving soon'})))); } };
+      list.append(el('button',{class:'person',onclick:()=>openCitizen(c.handle)}, av, el('span',null, el('div',{class:'who',text:(c.name?c.name+' · @'+c.handle:'@'+c.handle)+(c.founder?' ★':'')}), el('div',{class:'what',text:!c.home?'In cryosleep aboard the ark':st?st.act:'Arriving soon'})))); } };
   if(!q){ const near=[...S.citizens.values()].sort((a,b)=>(b.founder?1:0)-(a.founder?1:0)||a.handle.localeCompare(b.handle)).slice(0,60);
     show(near, S.meta&&S.meta.population?'Nobody lives in this part of town. Search for a name.':'Nobody lives here yet.');
     if(near.length && S.meta) list.prepend(el('p',{class:'hint',text:`People near you. Search to find anyone among ${fmt(S.meta.population)} citizens.`})); return; }
@@ -2036,9 +2160,9 @@ const POSTS = {
   newb:['Have you seen the new {b}? 😍','The new {b} changes everything.','Walked past the new {b} today. Fancy.'],
   rich:['{coins} coins saved. Might treat myself.','Payday hit. {coins} coins and counting.'],
 };
-function postsFor(c, day, gm){ const out=[]; const r=rng(hash(c.id+':post:'+day)); const n = r()<0.55?1:(r()<0.5?2:0); const jg=gmAt(c.joinedAt); const plan=getPlan(c,day);
+function postsFor(c, day, gm){ const out=[]; const r=rng(hash(c.id+':post:'+day)); const n = r()<0.55?1:(r()<0.5?2:0); const jg=gmAt(c.joinedAt); const plan=getPlan(c,day); if(!plan) return out;
   for(let i=0;i<n;i++){ const g=day*1440+420+Math.floor(r()*960); if(g>gm||g<jg) continue; const st=citizenAt(c,g); if(!st) continue; const pick=a=>a[Math.floor(r()*a.length)];
-    const recent=[...S.buildings.values()].filter(b=>{ const bg=gmAt(b.builtAt); return bg<=g && g-bg<1440 && T(b).cat!=='nature' && T(b).cat!=='decor'; });
+    const recent=builtRecently.filter(([bg])=>bg<=g && g-bg<1440).map(x=>x[1]);
     let txt;
     if(recent.length && r()<0.45){ const b=recent[Math.floor(r()*recent.length)]; txt=pick(POSTS.newb).replace('{b}',b.name||T(b).name); }
     else if(!plan.home && r()<0.7) txt=pick(POSTS.homeless);
@@ -2046,7 +2170,10 @@ function postsFor(c, day, gm){ const out=[]; const r=rng(hash(c.id+':post:'+day)
     else { const k=st.seg&&st.seg.kind; const bank = k==='work'?POSTS.work : k==='leisure'?POSTS.leisure : k==='home'&&plan.home?POSTS.home : POSTS.jobless; txt=pick(bank).replace('{place}',st.where||'home'); }
     const hv=hash(c.id+':'+day+':'+i); out.push({ g, c, text:txt, likes:2+hv%23+Math.floor(Math.sqrt((S.meta&&S.meta.population)||1)*3), reposts:hv%6 }); }
   return out; }
-function postItems(){ const gm=gmNow(); const today=Math.floor(gm/1440); const out=[];
+let builtRecently=[];
+function postItems(){ return withBudget(20, postItems0); }
+function postItems0(){ const gm=gmNow(); const today=Math.floor(gm/1440); const out=[];
+  builtRecently=[]; for(const b of S.buildings.values()){ const t=T(b); if(t.cat==='nature'||t.cat==='decor') continue; const bg=gmAt(b.builtAt); if(gm-bg<2880) builtRecently.push([bg,b]); }
   const cits=[...S.citizens.values()].slice(0,300);
   for(const c of cits) for(let d=Math.max(0,today-1); d<=today; d++) out.push(...postsFor(c,d,gm));
   for(const e of S.events){ const g=gmAt(e.t); if(g<=gm && g>=(today-1)*1440) out.push({ g, gazette:true, text:e.text }); }
@@ -2055,12 +2182,13 @@ function postItems(){ const gm=gmNow(); const today=Math.floor(gm/1440); const o
 
 /* ---------------- storyboard log ---------------- */
 let feedDirty=true;
-function feedItems(){
+function feedItems(){ return withBudget(25, feedItems0); }
+function feedItems0(){
   const gm=gmNow(); const today=Math.floor(gm/1440); const firstDay=Math.max(0,today-3);
   const items=[];
   for(const e of S.events){ const g=gmAt(e.t); if(g<=gm && Math.floor(g/1440)>=firstDay) items.push({ g, text:e.text, big:true }); }
   for(const c of [...S.citizens.values()].slice(0,300)){ const jg=gmAt(c.joinedAt);
-    for(let d=firstDay; d<=today; d++){ const plan=getPlan(c,d);
+    for(let d=firstDay; d<=today; d++){ const plan=getPlan(c,d); if(!plan) continue;
       for(const s of plan.segs){ if(s.type!=='move') continue; const g=d*1440+s.from; if(g>gm||g<jg) continue;
         const to=s.toP.name; let txt;
         if(s.kind==='work') txt=`@${c.handle} set off for work at ${to}`; else if(s.kind==='leisure') txt=`@${c.handle} headed to ${to}`; else if(s.kind==='home') txt= plan.home?`@${c.handle} went home`:`@${c.handle} went back to the campfire`; else txt=`@${c.handle} wandered toward ${to}`;
@@ -2208,13 +2336,13 @@ function refreshHUD(){
   const mb=$('musicBtn'); mb.setAttribute('aria-pressed',String(Music.on)); $('musicIcon').textContent=Music.on?'❚❚':'▶'; $('musicLabel').textContent=Music.on?'Music on':'Music';
 }
 function refreshUI(){ refreshHUD(); if(sel) renderCard(); if(activeTab==='people') renderPeople(); else if(activeTab && activeTab!=='feed') renderPane(); feedDirty=true; renderFeed(); }
-setInterval(()=>{ if(!S.meta) return; const gm=gmNow(); $('clockTime').textContent=fmtClock(gm); },250);
-setInterval(()=>{ feedDirty=true; renderFeed(); if(sel) renderCard(); if(activeTab==='people'&&document.activeElement!==$('search')) renderPeople(); refreshHUD(); },4000);
+setInterval(()=>{ if(!S.meta||document.hidden) return; const gm=gmNow(); $('clockTime').textContent=fmtClock(gm); },250);
+setInterval(()=>{ if(document.hidden) return; feedDirty=true; renderFeed(); if(sel) renderCard(); if(activeTab==='people'&&document.activeElement!==$('search')) renderPeople(); refreshHUD(); },4000);
 setInterval(settle, 30000);
 function updateNews(){ if(!S.meta) return; const items=postItems(); const gz=items.find(i=>i.gazette); const it=gz||items[0]; if(!it) return;
   $('newsKick').textContent=it.gazette?`${S.meta.name} Colony Log, ${when(it.g)}`:`@${it.c.handle}, ${when(it.g)}`; $('newsText').textContent=it.text; $('news').hidden=false; }
 $('news').onclick=()=>openTab('feed');
-setInterval(updateNews,5000);
+setInterval(()=>{ if(!document.hidden) updateNews(); },5000);
 
 function afterLoad(){
   applyPermissions(); refreshUI();
@@ -2228,7 +2356,7 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
 let frameStats={};
-window.__dbg={ stats:()=>frameStats, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+window.__dbg={ nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>frameStats, Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

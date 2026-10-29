@@ -18,6 +18,20 @@ Everything below follows from keeping those two apart.
 7. **Motion, traffic and weather cost the server nothing.** Walking, driving, background traffic (seeded per road tile and scaled by the hour), emergency responses and the weather (a seeded 6-hour forecast) are all computed in each viewer's browser from the clock. The server stores only what you place: water tiles and parked-in vehicles live in the same chunks as roads, and a disaster is one row plus a bounded set of ruined buildings. The clock speed is stored in `meta.minMs`, so changing it re-anchors time instead of jumping it.
 8. **Any number of web servers, one leader.** Postgres is the single source of truth, and an advisory lock serializes world changes, so two servers can never hand out the same home. Exactly one server, the leader, runs the clock and the comment queue. If it dies, another takes over within seconds. With `REDIS_URL` set, servers share live updates over Redis.
 
+## Staying smooth and staying up
+
+- **The screen never freezes on a bad frame.** The draw loop books its next frame before drawing, so a drawing error is logged and the city keeps moving.
+- **Work is spread out.** People's daily plans get a few milliseconds per frame. After a map change, people keep their old plan until there's time to redo it. A burst of updates rebuilds the map once, and the news ticker refreshes once per burst. Test result: 150 changes in view used to freeze the screen for 4 s; now the longest frame is about 0.2 s.
+- **Cached drawing.** The ground (grass, water, roads, shadows) is one cached picture, redrawn only when the map changes, the view leaves it, or the zoom settles. People are stamped from an atlas of body parts. Light glows are cached images.
+- **Slow phones adapt.** If frames drop below about 25 per second for 2.5 s, the canvas steps down in resolution, then drops the film grain and the "behind buildings" pass. It steps back up when there's headroom, and won't bounce between two levels.
+- **The connection heals itself.** Requests time out after 20 s. A live connection that goes silent for 20 s is replaced. Reconnects back off gently and happen at once when the phone wakes or comes back online.
+- **The server shrugs off database hiccups.**
+  - A dropped database connection is logged instead of crashing the process.
+  - New connections time out after 15 s, and stuck transactions are ended after 60 s.
+  - The leader checks its lock connection every 10 s and hands over if it's gone.
+  - Clock ticks never overlap.
+  - Socket errors close just that viewer.
+
 ## Measured (one laptop-class server, one CPU core, local Postgres)
 
 | What | Result |

@@ -7,7 +7,7 @@ class MemoryBus {
   constructor() { this.handlers = new Set(); this.kind = 'memory'; }
   async start() {}
   on(fn) { this.handlers.add(fn); }
-  publish(ops) { if (ops.length) for (const fn of this.handlers) fn(ops); }
+  publish(ops) { if (ops.length) for (const fn of this.handlers) { try { fn(ops); } catch (e) { console.error('update delivery failed:', e); } } }
 }
 
 class RedisBus {
@@ -17,7 +17,7 @@ class RedisBus {
     this.pub = createClient({ url: this.url }); this.sub = this.pub.duplicate();
     for (const c of [this.pub, this.sub]) c.on('error', e => console.error('redis:', e.message));
     await this.pub.connect(); await this.sub.connect();
-    await this.sub.subscribe(CHANNEL, msg => { let ops; try { ops = JSON.parse(msg); } catch { return; } for (const fn of this.handlers) fn(ops); });
+    await this.sub.subscribe(CHANNEL, msg => { let ops; try { ops = JSON.parse(msg); } catch { return; } for (const fn of this.handlers) { try { fn(ops); } catch (e) { console.error('update delivery failed:', e); } } });
   }
   on(fn) { this.handlers.add(fn); }
   publish(ops) { if (ops.length) this.pub.publish(CHANNEL, JSON.stringify(ops)).catch(e => console.error('redis publish failed:', e.message)); }

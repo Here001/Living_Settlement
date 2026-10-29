@@ -10,7 +10,11 @@ export const pool = new pg.Pool({
   ssl: process.env.PGSSL === '1' ? { rejectUnauthorized: false } : undefined,
   max: Number(process.env.PG_POOL_SIZE || 8),
   idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 15000,          // a cold or unreachable database fails a request instead of hanging it
+  keepAlive: true,
 });
+// Hosted Postgres (Neon) closes idle connections now and then. Without this listener that would crash the server.
+pool.on('error', e => console.error('database connection dropped (will reconnect):', e.message));
 
 // Each entry runs once, in order, and is recorded so it never runs again.
 // To change the database later, add a new entry at the end. Never edit an old one.
@@ -145,13 +149,14 @@ export async function migrate() {
 // Run a world change atomically. The advisory lock makes changes from every server instance happen one at a time,
 // so two servers can never hand the same home to two people.
 export async function worldTx(fn) {
-  const client = await pool.connect();
+  const client = await pool.connect(); let broken = false;
   try {
     await client.query('begin');
+    await client.query("set local idle_in_transaction_session_timeout = '60s'"); // a stuck change can't hold the world lock forever
     await client.query('select pg_advisory_xact_lock(4242)');
     const r = await fn(client);
     await client.query('commit');
     return r;
-  } catch (e) { await client.query('rollback').catch(() => {}); throw e; }
-  finally { client.release(); }
+  } catch (e) { await client.query('rollback').catch(() => { broken = true; }); throw e; }
+  finally { client.release(broken); } // a connection that couldn't even roll back is thrown away, not reused
 }

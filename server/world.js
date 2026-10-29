@@ -885,6 +885,11 @@ export class World {
   // Paydays need no work (balances are formulas). The clock only writes the daily headline and
   // finishes any queue work a busy moment left over.
   async tick() {
+    if (this.ticking) return { days: 0, busy: true }; // the clock and the cron ping can't run the same work twice at once
+    this.ticking = true;
+    try { return await this.tick0(); } finally { this.ticking = false; }
+  }
+  async tick0() {
     if (!this.meta) return { days: 0 };
     const today = R.gameDay(Date.now(), this.meta.epoch);
     const due = (await pool.query('select 1 from buildings where not done and ready_at <= $1 limit 1', [Date.now()])).rowCount;

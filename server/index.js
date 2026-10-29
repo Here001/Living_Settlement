@@ -18,6 +18,10 @@ const PORT = Number(process.env.PORT || 3000);
 if (!process.env.DATABASE_URL) { console.error('Set DATABASE_URL (see .env.example).'); process.exit(1); }
 if (!process.env.ADMIN_TOKEN || process.env.ADMIN_TOKEN.length < 16) { console.error('Set ADMIN_TOKEN to a long random string (16+ characters).'); process.exit(1); }
 
+// Last line of defence: log anything that slipped through instead of taking the whole colony offline.
+process.on('unhandledRejection', e => console.error('unhandled rejection:', e));
+process.on('uncaughtException', e => { console.error('uncaught exception:', e); });
+
 const bus = createBus();
 const world = new World(bus);
 const app = express();
@@ -160,8 +164,10 @@ app.use(express.static(path.join(root, 'public'), { maxAge: '5m' }));
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 8192 });
 const MAX_BUFFER = 2 * 1024 * 1024;
+wss.on('error', e => console.error('websocket server:', e.message));
 wss.on('connection', ws => {
   ws.isAlive = true; ws.subs = new Set(); ws.out = [];
+  ws.on('error', () => { try { ws.terminate(); } catch {} });
   ws.on('pong', () => { ws.isAlive = true; });
   ws.on('message', raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
@@ -170,7 +176,7 @@ wss.on('connection', ws => {
   ws.send(JSON.stringify({ type: 'hello', meta: world.publicMeta(), serverNow: Date.now() }));
 });
 bus.on(ops => {
-  world.apply(ops);
+  try { world.apply(ops); } catch (e) { console.error('applying update failed:', e); }
   for (const o of ops) o.json = JSON.stringify(o, (k, v) => k === 'json' ? undefined : v);
   for (const ws of wss.clients) {
     if (ws.readyState !== 1) continue;
@@ -185,21 +191,26 @@ setInterval(() => {
     let meta = null; const parts = [];
     for (const o of ws.out) { if (o.op === 'meta') meta = o; else parts.push(o.json); }
     if (meta) parts.push(meta.json);
-    ws.out = []; ws.send('{"type":"ops","ops":[' + parts.join(',') + ']}');
+    ws.out = []; try { ws.send('{"type":"ops","ops":[' + parts.join(',') + ']}'); } catch { ws.terminate(); }
   }
 }, 250);
 setInterval(() => { for (const ws of wss.clients) { if (!ws.isAlive) { ws.terminate(); continue; } ws.isAlive = false; ws.ping(); } }, 30000);
-setInterval(() => { const msg = JSON.stringify({ type: 'tick', serverNow: Date.now() }); for (const ws of wss.clients) if (ws.readyState === 1) ws.send(msg); }, GAME_MIN_MS);
+setInterval(() => { const msg = JSON.stringify({ type: 'tick', serverNow: Date.now() }); for (const ws of wss.clients) if (ws.readyState === 1) { try { ws.send(msg); } catch {} } }, GAME_MIN_MS);
 
 // ---------- the leader: exactly one server runs the clock and the comment queue ----------
 // Every instance tries to hold a Postgres advisory lock; whichever gets it is the leader. If it dies, its
 // database session ends, the lock frees, and another instance takes over within seconds.
 let isLeader = false, leaderClient = null;
 async function tryLead() {
-  if (isLeader) return;
+  if (isLeader) {
+    // Make sure the connection that holds the lock is still alive; if the database dropped it, the lock is gone too.
+    try { await Promise.race([leaderClient.query('select 1'), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 10000))]); }
+    catch (e) { console.error('lost the leader connection:', e.message); isLeader = false; try { leaderClient?.release(true); } catch {} leaderClient = null; }
+    return;
+  }
   try {
     leaderClient = leaderClient || await pool.connect();
-    leaderClient.on?.('error', () => { isLeader = false; leaderClient = null; });
+    if (!leaderClient.watched) { leaderClient.watched = true; const c = leaderClient; c.on('error', () => { if (leaderClient === c) { isLeader = false; leaderClient = null; } }); }
     isLeader = (await leaderClient.query('select pg_try_advisory_lock(777) ok')).rows[0].ok;
     if (isLeader) console.log('This server is the leader (clock + comment queue).');
     else { leaderClient.release(); leaderClient = null; }
@@ -214,7 +225,8 @@ async function drainLoop() {
 }
 setInterval(tryLead, 10000);
 setInterval(drainLoop, 1000);
-setInterval(() => { if (isLeader) world.tick().catch(e => console.error('tick failed:', e.message)); }, GAME_MIN_MS);
+let ticking = false; // never start a clock tick while the last one is still running (a slow database would pile them up)
+setInterval(async () => { if (!isLeader || ticking) return; ticking = true; try { await world.tick(); } catch (e) { console.error('tick failed:', e.message); } finally { ticking = false; } }, GAME_MIN_MS);
 
 await migrate();
 await loadIgStatus();
@@ -224,5 +236,6 @@ await tryLead();
 if (isLeader && await world.reanchor().catch(e => { console.error('reanchor failed:', e.message); return false; })) console.log('Switched the clock to 30 real minutes per game day.');
 if (isLeader) await world.upgradeCampfire().catch(e => console.error('landing station:', e.message));
 if (isLeader) await world.tick().catch(e => console.error('tick failed:', e.message)); // catch up on anything missed while off
+server.keepAliveTimeout = 65000; server.headersTimeout = 66000; // longer than the host's proxy, so it never reuses a closed connection
 server.listen(PORT, () => console.log(`City running on :${PORT} with ${world.meta?.population || 0} citizens (bus: ${bus.kind})`));
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { server.close(); process.exit(0); });

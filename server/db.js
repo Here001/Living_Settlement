@@ -129,6 +129,8 @@ const MIGRATIONS = [
   `create table lotteries (id serial primary key, draw_at bigint not null, price int not null, bonus int not null default 0, created_at bigint not null,
      announced boolean not null default false, drawn boolean not null default false, winner text, prize int);
    create table lottery_tickets (lottery_id int not null, citizen_id text not null, handle text not null, count int not null, primary key (lottery_id, citizen_id));`,
+  // v19: when a visit started, so every viewer can draw the same trip there (walk, drive, cab or police car)
+  `alter table citizens add column visit_from bigint;`,
 ];
 
 export async function migrate() {

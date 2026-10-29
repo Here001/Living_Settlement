@@ -104,6 +104,10 @@ They comment it on any of your Instagram posts **from their own account**. After
 A signed-in colonist with a home sees these on their own card. They see one at a time.
 
 - **Go out.** Send your colonist to a park, shop, café, landmark or a friend's home for 4 game hours (about 5 real minutes). Everyone sees them there. Other colonists' cards have **Visit their home** too.
+- **Getting there.** Colonists travel to wherever they're going, whether that's going out, the Casino or the Jail, and come back the same way afterwards.
+  - Short trips (under 14 tiles) are walked.
+  - Longer ones are driven by colonists who own a car; everyone else takes a cab.
+  - Anyone caught for a crime is driven to the Jail in a police car with its lights on.
 - **Crime.** Crimes can be tried once every 10 minutes.
   - **Pickpocket:** steal 10–25% of a colonist's coins, up to 300. Other colonists' cards have **Pick their pocket**.
   - **Rob the nearest shop:** 60–400 coins from the till, which the treasury pays.

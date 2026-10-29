@@ -36,7 +36,8 @@ export class Actions {
     const hx = c.hx, hy = c.hy; delete c.hx; delete c.hy; return { c, hx, hy };
   }
   async setVisit(ch, c, b, until) {
-    await ch.q('update citizens set visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5 where id = $1', [c.id, b?.id ?? null, b ? until : null, b?.cx ?? null, b?.cy ?? null]);
+    if (!b) { await ch.q('update citizens set visit_until = least(visit_until, $2) where id = $1 and visit_until > $2', [c.id, Date.now()]); ch.touch(c); return; } // ending early: head back from here
+    await ch.q('update citizens set visit_from = case when visit_id = $2 and visit_until > $6 then visit_from else $6 end, visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5 where id = $1', [c.id, b.id, until, b.cx, b.cy, Date.now()]);
     const before = ch.citizens.get(c.id) || []; ch.touch(c);
     if (b) ch.citizens.set(c.id, [...new Set([...before, ...(ch.citizens.get(c.id) || []), R.chunkKey(b.cx, b.cy)])]);
   }

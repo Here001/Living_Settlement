@@ -387,7 +387,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(go.status === 200 && (await who('zara_ng')).visit?.[0] === pl.places[0].id, 'and goes there, for everyone to see');
     ok((await call('POST', '/api/me/visit', { friend: 'jobfill_a' }, P)).status === 200 && (await who('zara_ng')).visit?.[0] === (await who('jobfill_a')).home[0], "visiting a friend's home");
     ok(policeId && (await call('POST', '/api/me/visit', { buildingId: policeId }, P)).status === 400, "can't just walk into a police station");
-    ok((await call('POST', '/api/me/visit/end', {}, P)).status === 200 && !(await who('zara_ng')).visit, 'and comes home');
+    ok((await call('POST', '/api/me/visit/end', {}, P)).status === 200 && (await who('zara_ng')).visit?.[4] <= Date.now() + 1000, 'and heads home (the trip back stays visible)');
     // pets
     await set('zara_ng', 'coins_base = 150'); ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip' }, P)).status === 400, 'a pet costs 200 coins');
     await set('zara_ng', 'coins_base = 500');

@@ -23,14 +23,16 @@ const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_c
 // even when the workplace is in a part of the map they haven't loaded.
 const CITIZEN_SELECT = `
   select c.id, c.seq, c.handle, c.joined_at, c.founder, c.gender, c.display_name, c.pet,
-         c.home_cx, c.home_cy, c.job_cx, c.job_cy, c.hang_cx, c.hang_cy, c.visit_cx, c.visit_cy, c.visit_until,
+         c.home_cx, c.home_cy, c.job_cx, c.job_cy, c.hang_cx, c.hang_cy, c.visit_cx, c.visit_cy, c.visit_until, c.visit_from,
          h.id hid, h.type ht, h.x hx, h.y hy, j.id jid, j.type jt, j.x jx, j.y jy, g.id gid, g.type gt, g.x gx, g.y gy, v.id vid, v.type vt, v.x vx, v.y vy
   from citizens c
   left join buildings h on h.id = c.home_id left join buildings j on j.id = c.job_id left join buildings g on g.id = c.hang_id
   left join buildings v on v.id = c.visit_id`;
 export const cOut = r => ({ id: r.id, s: r.seq, h: r.handle, t: r.joined_at, f: r.founder ? 1 : 0, g: r.gender || 'm', n: r.display_name || '',
   home: r.hid ? [r.hid, r.ht, r.hx, r.hy] : null, job: r.jid ? [r.jid, r.jt, r.jx, r.jy] : null, hang: r.gid ? [r.gid, r.gt, r.gx, r.gy] : null,
-  visit: r.vid && Number(r.visit_until) > Date.now() ? [r.vid, r.vt, r.vx, r.vy, Number(r.visit_until)] : null, pet: r.pet || null });
+  // A visit: [building, type, x, y, until, from]. Kept for 20 minutes after it ends so viewers can draw the trip back.
+  visit: r.vid && Number(r.visit_until) > Date.now() - VISIT_TAIL ? [r.vid, r.vt, r.vx, r.vy, Number(r.visit_until), Number(r.visit_from || r.visit_until - 300000)] : null, pet: r.pet || null });
+export const VISIT_TAIL = 20 * 60 * 1000;
 
 // One world change. Holds the database connection inside the global world lock and records everything that changed,
 // so the right viewers can be told afterwards.
@@ -306,7 +308,7 @@ export class World {
         select id from citizens where (home_cx, home_cy) in (values ${ph})
         union select id from citizens where (job_cx, job_cy) in (values ${ph})
         union select id from citizens where (hang_cx, hang_cy) in (values ${ph})
-        union select id from citizens where visit_until > ${Date.now()} and (visit_cx, visit_cy) in (values ${ph}))
+        union select id from citizens where visit_until > ${Date.now() - VISIT_TAIL} and (visit_cx, visit_cy) in (values ${ph}))
       order by c.seq limit ${Number(limit)}`;
     return (await pool.query(sql, flat)).rows.map(cOut);
   }
@@ -677,7 +679,7 @@ export class World {
       ch.meta.treasuryBase = Math.max(0, R.treasuryOn(ch.meta, ch.today) + bet - round.payout); ch.meta.treasuryDay = ch.today;
       ch.touch(c); await ch.saveCitizen(c);
       const until = Date.now() + 10 * 60 * 1000;
-      await ch.q('update citizens set visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5 where id = $1', [c.id, cas.id, until, cas.cx, cas.cy]);
+      await ch.q('update citizens set visit_from = case when visit_id = $2 and visit_until > $6 then visit_from else $6 end, visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5 where id = $1', [c.id, cas.id, until, cas.cx, cas.cy, Date.now()]);
       ch.citizens.set(c.id, [...new Set([...(ch.citizens.get(c.id) || []), R.chunkKey(cas.cx, cas.cy)])]);
       const won = round.payout - bet;
       if (won >= 200 || (round.payout >= bet * 20 && won >= 50)) await ch.event(`@${c.handle} won ${fmt(round.payout)} coins on ${GAMES[game].name.toLowerCase()} at the ${cas.name || 'casino'}!`, 'casino');

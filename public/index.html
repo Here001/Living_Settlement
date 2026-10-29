@@ -407,7 +407,7 @@ async function api(path, opts={}){
   catch(e){ clearTimeout(timer); throw new Error(e&&e.name==='AbortError'?'The connection is slow. Please try again.':'Can\'t reach the colony right now. Check your connection.'); }
   try{ const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`); return j; } finally { clearTimeout(timer); } }
 const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang, visit:c.visit||null, pet:c.pet||null });
-const visiting = c => c.visit && Date.now()+skew < c.visit[4] ? c.visit : null; // [buildingId, type, x, y, until]
+const visiting = c => c.visit && Date.now()+skew < c.visit[4]+20*60000 ? c.visit : null; // [buildingId, type, x, y, until, from]: kept a while after it ends for the trip back
 const placeChunks = c => [c.home,c.job,c.hang,visiting(c)].filter(Boolean).map(p=>ckTile(p[2],p[3]));
 const keepCitizen = c => c.id===pinned || placeChunks(c).some(k=>S.chunks.has(k));
 // A big change in a district: forget it and download it again.
@@ -616,23 +616,58 @@ function getPlan(c, day){
   const plan={ segs, job, home }; if(planCache.size>12000) planCache.clear(); planCache.set(key,{plan,gen:planGen});
   return plan;
 }
+// Where someone is at game minute gm: on a trip they chose (a visit), or following their usual day.
 function citizenAt(c, gm){
   const joinGm=gmAt(c.joinedAt); if(gm<joinGm) return null;
-  // On a visit (the casino): inside that building until it ends, whatever their usual plan says.
-  const v=visiting(c); if(v && Math.abs(gm-gmNow())<3){ const b=bOf(v), p=placeFor(b, rng(hash(c.id+'visit'))), nm=(D.buildings.get(v[0])||b).name||T(b).name;
-    const act = b.type==='jail' ? 'Locked up in the Jail' : T(b).home ? `Visiting ${nm}` : `At the ${nm}`;
-    return { x:p.pos[0], y:p.pos[1], visible:!p.indoor, act, where:p.name, bid:v[0], moving:false, seg:{type:'stay',kind:'leisure'}, plan:{segs:[]} }; }
+  const v=visiting(c); if(v){ const st=tripAt(c, v, gm); if(st) return st; }
+  return dayAt(c, gm); }
+function dayAt(c, gm){
   const day=Math.floor(gm/1440), m=gm-day*1440; const plan=getPlan(c,day); if(!plan) return null;
   let seg=plan.segs[plan.segs.length-1]; for(const s of plan.segs){ if(m<s.to){ seg=s; break; } }
+  return segAt(c, seg, m, gm, plan); }
+// One part of a day or trip: staying put, driving, or walking. m is minutes on the same clock as seg.from/seg.to.
+function segAt(c, seg, m, gm, plan){
   if(seg.type==='stay'){ const ph=hash(c.id)%1000; const sway=seg.p.indoor?0:Math.sin(gm*0.6+ph)*0.08; return { x:seg.p.pos[0]+sway, y:seg.p.pos[1]-sway*0.5, visible:!seg.p.indoor, act:seg.act, where:seg.p.name, bid:seg.p.bid, moving:false, seg, plan }; }
-  if(seg.mode==='car'){ const st=alongRoad(seg.path, Math.max(0,m-seg.from-1)); return { x:st.x, y:st.y, dx:st.dx, dy:st.dy, visible:true, car:true, V:seg.V, col:seg.col, act:`Driving to ${seg.toP.name}`, where:seg.toP.name, bid:null, moving:true, seg, plan }; }
+  if(seg.mode==='car'){ const st=alongRoad(seg.path, Math.max(0,m-seg.from-1)); return { x:st.x, y:st.y, dx:st.dx, dy:st.dy, visible:true, car:true, V:seg.V, col:seg.col, siren:seg.siren, act:seg.verb||`Driving to ${seg.toP.name}`, where:seg.toP.name, bid:null, moving:true, seg, plan }; }
   const u=Math.min(Math.max(m-seg.from,0), seg.cum[seg.cum.length-1]); let k=0; while(k<seg.cum.length-2 && seg.cum[k+1]<u) k++;
   const a=seg.path[k], b=seg.path[Math.min(k+1,seg.path.length-1)]; const span=(seg.cum[k+1]-seg.cum[k])||1; const f=Math.min(1,(u-seg.cum[k])/span);
   let x=a[0]+0.5+(b[0]-a[0])*f, y=a[1]+0.5+(b[1]-a[1])*f;
   if(D.roads.has(a[0]+','+a[1]) && D.roads.has(b[0]+','+b[1])){ const side=(hash(c.id)&1)?0.34:-0.34, ddx=b[0]-a[0], ddy=b[1]-a[1]; x+=-ddy*side; y+=ddx*side; }
   if(k===0){ const p=seg.fromP.pos, q=[a[0]+0.5,a[1]+0.5]; const g=Math.min(1,f*2); x=p[0]+(x-p[0])*g; y=p[1]+(y-p[1])*g; }
-  return { x, y, visible:true, act:`Heading to ${seg.toP.name}`, where:seg.toP.name, bid:null, moving:true, seg, plan };
+  return { x, y, visible:true, act:seg.verb||`Heading to ${seg.toP.name}`, where:seg.toP.name, bid:null, moving:true, seg, plan };
 }
+// ---- Trips: going somewhere they chose (Go out, the Casino) or being taken to the Jail, and coming back afterwards ----
+// Short trips are walked. Longer ones (14+ tiles) are driven by car owners; everyone else takes a cab. The Jail is a police car.
+const TRIP_DRIVE=14, tripCache=new Map();
+function placeOf(st, name){ // a stop on a trip, from where someone is at a moment of their day
+  if(st&&st.seg&&st.seg.type==='stay') return st.seg.p;
+  const x=st?st.x:0, y=st?st.y:0; return { tile:[Math.floor(x),Math.floor(y)], pos:[x,y], indoor:false, bid:null, name:name||'home' }; }
+function tripLeg(c, fromP, toP, start, kind){
+  const [ax,ay]=fromP.tile, [bx,by]=toP.tile, far=Math.abs(ax-bx)+Math.abs(ay-by)>=TRIP_DRIVE;
+  if(kind==='police'||far){ const s=nearestRoad(ax,ay,6), e=nearestRoad(bx,by,6), path=s&&e?findRoadPath(s[0],s[1],e[0],e[1],true):null;
+    if(path&&path.length>=2){ const V=kind==='police'?VEHICLE_TYPES.police:hasCar(c)?VEHICLE_TYPES.car:VEHICLE_TYPES.taxi;
+      const verb=kind==='police'?'Being driven to the Jail':V===VEHICLE_TYPES.taxi?`Taking a cab to ${toP.name}`:`Driving to ${toP.name}`;
+      const dur=pathTime(path, V.speed||1)+2; return { type:'move', mode:'car', from:start, to:start+dur, path, fromP, toP, V, col:V===VEHICLE_TYPES.car?V.colors[hash(c.id)%V.colors.length]:V.colors[0], siren:kind==='police', verb }; } }
+  if(ax===bx&&ay===by) return null;
+  const path=findPath(ax,ay,bx,by), cum=[0];
+  for(let k=1;k<path.length;k++) cum.push(cum[k-1]+(path.length===2?Math.abs(path[1][0]-path[0][0])+Math.abs(path[1][1]-path[0][1]):stepCost(path[k][0],path[k][1]))/(path.length===2?0.7:1));
+  return { type:'move', from:start, to:start+cum[cum.length-1], path, cum, fromP, toP, verb:kind==='police'?'Being taken to the Jail':`Walking to ${toP.name}` }; }
+function tripPlan(c, v){
+  const key=c.id+'|'+v.join('|')+'|'+planGen; const hit=tripCache.get(key); if(hit) return hit;
+  if(performance.now()>planBudgetEnd) return null; // out of time this frame: draw them where they're going
+  const b=bOf(v), nm=(D.buildings.get(v[0])||b).name||T(b).name, dest=placeFor(b, rng(hash(c.id+'visit'))), kind=b.type==='jail'?'police':'go';
+  const g0=gmAt(v[5]), g1=gmAt(v[4]), start=placeOf(dayAt(c,g0));
+  const at=/^the /i.test(nm)?nm:`the ${nm}`, act=b.type==='jail'?'Locked up in the Jail':T(b).home?`Visiting ${nm}`:`At ${at}`, stopAt={...dest, name:at};
+  const segs=[], out=tripLeg(c,start,stopAt,g0,kind); let t=g0; if(out){ segs.push(out); t=out.to; }
+  if(t<g1) segs.push({ type:'stay', from:t, to:g1, p:stopAt, act, kind:'leisure' });
+  const back=placeOf(dayAt(c,g1)); const ret=tripLeg(c,stopAt,{...back,name:back.name||'home'},Math.max(g1,t),'go'); if(ret){ ret.verb=ret.mode==='car'?(ret.V===VEHICLE_TYPES.taxi?'Taking a cab home':'Driving home'):'Walking home'; segs.push(ret); }
+  const plan={ segs, end:segs.length?segs[segs.length-1].to:g1, start:g0 }; if(tripCache.size>4000) tripCache.clear(); tripCache.set(key,plan); return plan; }
+function tripAt(c, v, gm){
+  const p=tripPlan(c, v);
+  if(!p){ if(gm<gmAt(v[5])||gm>gmAt(v[4])) return null; const b=bOf(v), d=placeFor(b, rng(hash(c.id+'visit'))); return { x:d.pos[0], y:d.pos[1], visible:!d.indoor, act:'On the way', where:d.name, bid:v[0], moving:false, seg:{type:'stay',kind:'leisure',p:d}, plan:{segs:[]} }; }
+  if(gm<p.start||gm>=p.end) return null; // before the trip, or home again: their usual day
+  for(const s of p.segs) if(gm<s.to) return segAt(c, s, gm, gm, p);
+  return null; }
 
 /* ---------------- rendering ---------------- */
 const cv=$('world'); let ctx=cv.getContext('2d');
@@ -1423,14 +1458,15 @@ const carOK = k => { const t=D.roads.get(k); return !!t && !(ROAD_TYPES[t]||{}).
 // Cars cover about 1 street tile per game minute (about walking pace on screen), 2 on a highway.
 const carCost = k => 1/((ROAD_TYPES[D.roads.get(k)]||{speed:2}).speed*0.5);
 const rpCache=new Map();
-function findRoadPath(sx,sy,gx,gy){ const key=`${sx},${sy}|${gx},${gy}`; if(rpCache.has(key)) return rpCache.get(key);
-  if(Math.abs(sx-gx)+Math.abs(sy-gy)>120){ rpCache.set(key,null); return null; }
+// far: chosen trips (visits) may cross the whole colony; everyday commutes stop at 120 tiles to keep them cheap.
+function findRoadPath(sx,sy,gx,gy,far){ const key=`${sx},${sy}|${gx},${gy}`; if(rpCache.has(key)) return rpCache.get(key);
+  if(Math.abs(sx-gx)+Math.abs(sy-gy)>(far?400:120)){ rpCache.set(key,null); return null; }
   const minX=Math.min(sx,gx)-20, minY=Math.min(sy,gy)-20, maxX=Math.max(sx,gx)+20, maxY=Math.max(sy,gy)+20, Wd=maxX-minX+1, Ht=maxY-minY+1, idx=(x,y)=>(x-minX)+(y-minY)*Wd;
   const g=new Float64Array(Wd*Ht).fill(Infinity), from=new Int32Array(Wd*Ht).fill(-1), closed=new Uint8Array(Wd*Ht), heap=[];
   const push=(f,i)=>{ heap.push([f,i]); let n=heap.length-1; while(n>0){ const p=(n-1)>>>1; if(heap[p][0]<=heap[n][0]) break; [heap[p],heap[n]]=[heap[n],heap[p]]; n=p; } };
   const pop=()=>{ const top=heap[0], last=heap.pop(); if(heap.length){ heap[0]=last; let n=0; for(;;){ const l=2*n+1,r=l+1; let m=n; if(l<heap.length&&heap[l][0]<heap[m][0]) m=l; if(r<heap.length&&heap[r][0]<heap[m][0]) m=r; if(m===n) break; [heap[m],heap[n]]=[heap[n],heap[m]]; n=m; } } return top; };
   const s=idx(sx,sy), goal=idx(gx,gy); g[s]=0; push(0,s); let found=false, steps=0;
-  while(heap.length && steps++<20000){ const [,i]=pop(); if(closed[i]) continue; closed[i]=1; if(i===goal){ found=true; break; } const x=i%Wd+minX, y=Math.floor(i/Wd)+minY;
+  while(heap.length && steps++<(far?120000:20000)){ const [,i]=pop(); if(closed[i]) continue; closed[i]=1; if(i===goal){ found=true; break; } const x=i%Wd+minX, y=Math.floor(i/Wd)+minY;
     for(const [ddx,ddy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+ddx, ny=y+ddy; if(nx<minX||ny<minY||nx>maxX||ny>maxY) continue; const kk=nx+','+ny; if(!carOK(kk)) continue; const ni=idx(nx,ny); if(closed[ni]) continue; const pi=from[i], turn=pi>=0&&((i-pi)!==(ni-i)); const ng=g[i]+carCost(kk)+(turn?0.6:0); if(ng<g[ni]){ g[ni]=ng; from[ni]=i; push(ng+(Math.abs(nx-gx)+Math.abs(ny-gy))*0.1,ni); } } }
   let path=null; if(found){ path=[]; for(let i=goal;i!==-1;i=from[i]) path.push([i%Wd+minX, Math.floor(i/Wd)+minY]); path.reverse(); }
   if(rpCache.size>6000) rpCache.clear(); rpCache.set(key,path); return path; }
@@ -1642,12 +1678,12 @@ function drawFrame(ts){
   const states=new Map(); lastStates=states;
   // Only the people whose day happens near the screen are simulated, at most CROWD_MAX of them, nearest first.
   if(ts-crowdAt>500){ crowdAt=ts; const ctr=worldToTileF(cam.x,cam.y); const near=p=>p&&p[2]>=tminX-40&&p[2]<=tmaxX+40&&p[3]>=tminY-40&&p[3]<=tmaxY+40;
-    const dist=c=>Math.min(...[c.home,c.job,c.hang].filter(Boolean).map(p=>Math.abs(p[2]-ctr.x)+Math.abs(p[3]-ctr.y)));
-    crowd=[...S.citizens.values()].filter(c=>c.id===follow||near(c.home)||near(c.job)||near(c.hang));
+    const dist=c=>Math.min(...[c.home,c.job,c.hang,visiting(c)].filter(Boolean).map(p=>Math.abs(p[2]-ctr.x)+Math.abs(p[3]-ctr.y)));
+    crowd=[...S.citizens.values()].filter(c=>c.id===follow||near(c.home)||near(c.job)||near(c.hang)||near(visiting(c)));
     if(crowd.length>CROWD_MAX) crowd=crowd.map(c=>[dist(c),c]).sort((a,b)=>a[0]-b[0]).slice(0,CROWD_MAX).map(x=>x[1]);
     if(follow&&!crowd.some(c=>c.id===follow)&&S.citizens.has(follow)) crowd.push(S.citizens.get(follow)); }
   planBudgetEnd=performance.now()+6; // up to 6 ms a frame for working out new plans
-  if(cam.z>=0.45) for(const c of crowd){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible) items.push(st.car?{ k:st.x+st.y, veh:{V:st.V,col:st.col,st} }:{ k:st.x+st.y, c, st }); }
+  if(cam.z>=0.45) for(const c of crowd){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible) items.push(st.car?{ k:st.x+st.y, veh:{V:st.V,col:st.col,st,siren:!!st.siren} }:{ k:st.x+st.y, c, st }); }
   // Traffic: ambient cars, buses and vans on busy roads, the developer's own vehicles, and crews answering disasters.
   vehicleHits=[];
   if(cam.z>=0.45){
@@ -2652,7 +2688,7 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
 let frameStats={};
-window.__dbg={ creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>frameStats, Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+window.__dbg={ whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>frameStats, Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

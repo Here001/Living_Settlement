@@ -31,11 +31,11 @@ body{background:#8FC463;color:var(--ink);overflow:hidden;font-family:'Bricolage 
 button,input{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-html{background:var(--edge-top,#5E7F45)} body{background:transparent}
+html{background-color:var(--edge-bot,#5E7F45)} body{background:transparent} /* Safari tints its bottom bar from the page background, its top bar from the theme colour */
 /* Safari colours its own top and bottom bars from the page's edges: these strips copy the map's colours there. */
 #edgeTop,#edgeBot{position:fixed;left:0;right:0;z-index:0;pointer-events:none}
 #edgeTop{top:0;height:2px;background:var(--edge-top,#5E7F45)}
-#edgeBot{bottom:0;height:2px;background:var(--edge-bot,#5E7F45)}
+#edgeBot{bottom:0;height:6px;background:var(--edge-bot,#5E7F45)}
 #world{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100lvh;display:block;touch-action:none} /* the whole screen, behind the browser's bars too */
 /* Taps belong to the game: no page zoom on double tap, no text selection, magnifier or copy menu on long press */
 html,body{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
@@ -2604,6 +2604,10 @@ function renderCard(force){ if(!force && cardBusy()) return;
       card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Copy setup link',title:'A link that lets this person set a password without the Instagram code',onclick:async()=>{ try{ const r=await api(`/api/admin/citizens/${c.id}/setup-link`,{method:'POST'}); const link=`${location.origin}/?claim=${encodeURIComponent(r.claimId)}`; try{ await navigator.clipboard.writeText(link); toast(`Setup link for @${c.handle} copied. It works once, for 24 hours.`); }catch(e){ prompt('Setup link (works once, for 24 hours):',link); } }catch(e){ toast(e.message); } }}),
         d&&d.claimed?el('button',{class:'btn danger',text:'Clear password',onclick:()=>toast(`Clear @${c.handle}'s password? They'll need a new code to get back in.`,'Clear',async()=>{ try{ await api(`/api/admin/citizens/${c.id}/password`,{method:'DELETE'}); d.claimed=false; toast('Password cleared.'); renderCard(); }catch(e){ toast(e.message); } })}):null,
         el('span',{class:'hint',text:d?(d.claimed?'Has a password':'No password yet'):''})));
+      { const ci=el('input',{type:'number',step:'1',inputmode:'numeric','aria-label':'Coins',placeholder:'Coins'});
+        const go=async sign=>{ const n=Math.floor(Math.abs(Number(ci.value)||0)); if(!n){ toast('Enter an amount.'); return; } try{ const r=await api(`/api/admin/citizens/${c.id}/coins`,{method:'POST',body:{amount:sign*n}}); toast(`${sign>0?'Added':'Took away'} ${fmt(n)} coins. @${c.handle} now has ${fmt(r.coins)}; the treasury has ${fmt(r.treasury)}.`); detail.delete(c.id); loadDetail(c.handle).then(()=>renderCard(true)); refreshHUD(); }catch(e){ toast(e.message); } };
+        card.append(el('div',{class:'authbox'}, el('h3',{text:'Coins'}), el('p',{class:'hint',text:'Added coins come out of the treasury; coins taken away go back into it.'}),
+          el('div',{class:'cbet'}, ci, el('button',{class:'btn primary',text:'Add',onclick:()=>go(1)}), el('button',{class:'btn danger',text:'Take away',onclick:()=>go(-1)})))); }
       if(sel.picker) card.append(renderPicker(c)); }
     else { const mine=Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase();
       if(mine && Me.genderChosen===false){ const pick=async g=>{ try{ await api('/api/me/gender',{method:'POST',body:{gender:g}}); Me.genderChosen=true; ls.set('settlement-player',Me); const x=S.citizens.get(c.id); if(x) x.gender=g; const dd=detail.get(c.id); if(dd) dd.g=g; toast(g==='f'?'Welcome to Gliese 12 b. She’s all yours.':'Welcome to Gliese 12 b. He’s all yours.'); renderCard(true); }catch(e){ toast(e.message); } };

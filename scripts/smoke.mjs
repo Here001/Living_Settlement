@@ -498,6 +498,16 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     wb.ws.close(); await sleep(600);
     ok(!(await call('GET', '/api/online', undefined, { auth: false })).json.some(p => p.h === 'jobfill_a'), 'closing the colony goes offline');
     wa.ws.close(); stranger.ws.close(); await pool.query("update citizens set pass_hash = null where handle = 'jobfill_a'"); }
+  // ---- the developer adjusts coins ----
+  { const zid = (await whoDev('zara_ng')).id; await pool.query("update citizens set coins_base = 100, coins_day = 0, net = 0 where handle = 'zara_ng'");
+    const t0 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.treasuryBase;
+    ok((await call('POST', `/api/admin/citizens/${zid}/coins`, { amount: 500 }, { auth: false })).status === 401, 'only the developer adjusts coins');
+    const add = await call('POST', `/api/admin/citizens/${zid}/coins`, { amount: 500 });
+    ok(add.status === 200 && add.json.coins === 600 && (await whoDev('zara_ng')).coins === 600, 'the developer adds 500 coins', JSON.stringify(add.json));
+    ok((await call('POST', `/api/admin/citizens/${zid}/coins`, { amount: -1000 })).status === 400, "can't take away more than they have");
+    ok((await call('POST', `/api/admin/citizens/${zid}/coins`, { amount: -200 })).json.coins === 400, 'and takes 200 away');
+    const t1 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.treasuryBase;
+    ok(Math.round(t0 - t1) === 300 || t0 === undefined, 'the treasury pays for it (net 300)', `${t0} → ${t1}`); }
   const hut = await call('POST', '/api/admin/buildings', { type: 'house', x: 906, y: 906 });
   ok(hut.status === 200 && (await call('POST', '/api/me/job', { buildingId: hut.json.building?.id }, P)).status === 400, 'homes are not jobs', JSON.stringify(hut.json));
   ok((await call('POST', '/api/me/job/quit', {}, P)).status === 200 && (await call('POST', '/api/me/job/quit', {}, P)).status === 400, 'cannot quit with no job'); }

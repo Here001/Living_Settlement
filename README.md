@@ -43,6 +43,10 @@ Open the site with `#builder` and enter your `ADMIN_TOKEN`. As the developer you
 - **Trigger disasters.** **Disasters** (fire, tornado, earthquake, flood, meteor) hit where you tap. Damaged buildings become ruins and their people lose that home or job until you **Rebuild** them. **Clear ruins** removes all rubble.
 - **Go full screen.** Use the buttons above the toolbar for full screen (F) and to hide the interface for streaming (H). On iPhone, use Share → Add to Home Screen to open the city full screen.
 
+## Adjusting a colonist's coins
+
+In developer mode, every colonist's card has a **Coins** box. **Add** gives them coins out of the treasury; **Take away** returns coins to the treasury. The colony's total stays the same.
+
 ## Removing people and starting over
 
 In developer view, **Colonists** (at the bottom) has:

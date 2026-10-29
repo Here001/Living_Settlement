@@ -62,6 +62,20 @@ export class Economy {
     });
   }
 
+  // ---------- the developer adjusts a colonist's coins ----------
+  // Adding takes the coins from the treasury and taking away puts them back, so the colony's total stays the same.
+  async adjust(id, amount, { fromTreasury = true } = {}) {
+    amount = Math.trunc(Number(amount)); if (!amount || Math.abs(amount) > 10000000) throw new HttpError(400, 'Enter an amount (use a minus sign to take coins away).');
+    return this.world.change(async ch => {
+      const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
+      ch.coins(c);
+      if (amount < 0 && c.coins_base < -amount) throw new HttpError(400, `@${c.handle} only has ${fmt(c.coins_base)} coins on them.`);
+      if (amount > 0 && fromTreasury) { const t = R.treasuryOn(ch.meta, ch.today); if (t < amount) throw new HttpError(400, `The treasury only has ${fmt(t)} coins.`); }
+      c.coins_base += amount; if (fromTreasury) treasuryAdd(ch, -amount); ch.touch(c); await ch.saveCitizen(c);
+      return { ok: true, coins: c.coins_base, treasury: R.treasuryOn(ch.meta, ch.today) };
+    });
+  }
+
   // ---------- gifts ----------
   // A colonist sends coins to another verified colonist: from their pocket first, and the rest from their bank savings.
   // At most GIFT_DAILY a game day, so nobody can pour a stack of accounts into one. Only avatars that have been claimed

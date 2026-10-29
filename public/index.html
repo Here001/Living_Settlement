@@ -190,6 +190,14 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .uname{margin:0;color:var(--muted);font-size:13px;font-weight:500}
 .namebox{margin-top:10px;display:flex;flex-direction:column;gap:4px}
 .namebox label{font-size:12px;font-weight:700;color:var(--muted)}
+.casino .ctabs,.casino .cpicks{display:flex;flex-wrap:wrap;gap:6px}
+.casino .pill{cursor:pointer;border:1.4px solid var(--ink,#2B2621);background:transparent;padding:5px 10px;border-radius:999px;font:inherit;font-size:13px}
+.casino .pill.on{background:var(--accent,#D9714A);color:#fff;border-color:var(--accent,#D9714A)}
+.casino .crule{margin:0;font-size:13px}
+.casino .cbet{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.casino .cbet input{width:90px;padding:6px 8px;border-radius:10px;border:1.4px solid var(--soft);font:inherit}
+.cresult{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px;border-radius:12px;background:rgba(0,0,0,.04);animation:cpop .35s ease-out}
+.cresult .roll{font-size:30px;letter-spacing:4px}.cresult.win{background:rgba(242,179,61,.22)}
+@keyframes cpop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
 .joblist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:230px;overflow-y:auto}
 .joblist li{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:10px;background:var(--paper2,rgba(0,0,0,.04))}
 .joblist .jt{flex:1;min-width:0;font-size:13px;line-height:1.3}.joblist .jt b{display:block}.joblist .jt span{opacity:.75}
@@ -324,6 +332,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 </div>
 <script type="module">
 import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, roadClears } from '/shared/catalog.js';
+import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES } from '/shared/casino.js';
 import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
@@ -371,8 +380,9 @@ async function api(path, opts={}){
   try{ r=await fetch(path,{ method:opts.method||'GET', signal:ac?ac.signal:undefined, headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{}), ...(Me&&Me.token?{'x-player':Me.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined }); }
   catch(e){ clearTimeout(timer); throw new Error(e&&e.name==='AbortError'?'The connection is slow. Please try again.':'Can\'t reach the colony right now. Check your connection.'); }
   try{ const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`); return j; } finally { clearTimeout(timer); } }
-const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang });
-const placeChunks = c => [c.home,c.job,c.hang].filter(Boolean).map(p=>ckTile(p[2],p[3]));
+const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang, visit:c.visit||null });
+const visiting = c => c.visit && Date.now()+skew < c.visit[4] ? c.visit : null; // [buildingId, type, x, y, until]
+const placeChunks = c => [c.home,c.job,c.hang,visiting(c)].filter(Boolean).map(p=>ckTile(p[2],p[3]));
 const keepCitizen = c => c.id===pinned || placeChunks(c).some(k=>S.chunks.has(k));
 // A big change in a district: forget it and download it again.
 function applyReload(o){ let any=false; for(const k of o.chunks) if(S.chunks.has(k)){ dropChunk(k); any=true; } if(!any) return; for(const [id,c] of S.citizens) if(!keepCitizen(c)) S.citizens.delete(id); changed(); syncChunks(); }
@@ -580,6 +590,8 @@ function getPlan(c, day){
 }
 function citizenAt(c, gm){
   const joinGm=gmAt(c.joinedAt); if(gm<joinGm) return null;
+  // On a visit (the casino): inside that building until it ends, whatever their usual plan says.
+  const v=visiting(c); if(v && Math.abs(gm-gmNow())<3){ const b=bOf(v), p=placeFor(b, rng(hash(c.id+'visit'))); return { x:p.pos[0], y:p.pos[1], visible:false, act:`At the ${(D.buildings.get(v[0])||b).name||T(b).name}`, where:p.name, bid:v[0], moving:false, seg:{type:'stay',kind:'leisure'}, plan:{segs:[]} }; }
   const day=Math.floor(gm/1440), m=gm-day*1440; const plan=getPlan(c,day); if(!plan) return null;
   let seg=plan.segs[plan.segs.length-1]; for(const s of plan.segs){ if(m<s.to){ seg=s; break; } }
   if(seg.type==='stay'){ const ph=hash(c.id)%1000; const sway=seg.p.indoor?0:Math.sin(gm*0.6+ph)*0.08; return { x:seg.p.pos[0]+sway, y:seg.p.pos[1]-sway*0.5, visible:!seg.p.indoor, act:seg.act, where:seg.p.name, bid:seg.p.bid, moving:false, seg, plan }; }
@@ -2020,6 +2032,41 @@ function cardBusy(){ const card=$('card'); if(!card||card.hidden) return false; 
   if(a&&card.contains(a)&&/INPUT|TEXTAREA/.test(a.tagName)) return true; return [...card.querySelectorAll('input,textarea')].some(i=>i.dataset.edited&&i.value); }
 document.getElementById('card').addEventListener('input',e=>{ if(e.target&&e.target.dataset) e.target.dataset.edited='1'; });
 // Change the name shown on an avatar. Colonists edit their own; the developer can edit anyone's.
+// ---- Casino: three games against the house, played from your own card ----
+let casino=null; // { id, info, open, game, pick, bet, last, busy, at }
+const DICE='⚀⚁⚂⚃⚄⚅', ICON=Object.fromEntries(SLOT_SYMBOLS.map(x=>[x.id,x.icon]));
+async function loadCasino(c){ const prev=casino||{}, same=prev.id===c.id;
+  casino={ id:c.id, game:prev.game||'coin', pick:prev.pick||'heads', bet:prev.bet||10, last:same?prev.last:null, open:!!prev.open, info:same?prev.info:null, busy:false, loading:true, at:Date.now() };
+  try{ casino.info=await api('/api/me/casino'); }catch(e){} casino.loading=false; if(sel&&sel.id===c.id) renderCard(true); }
+async function casinoPlay(c){ if(casino.busy) return; const bet=Math.floor(Number(casino.bet));
+  if(!(bet>=1)){ toast('Bet at least 1 coin.'); return; }
+  casino.busy=true; renderCard(true);
+  try{ const r=await api('/api/me/casino',{method:'POST',body:{game:casino.game,pick:casino.pick,bet}});
+    casino.last=r; casino.info={...casino.info, coins:r.coins}; myMoney={...(myMoney||{}), coins:r.coins}; refreshHUD();
+    const dd=detail.get(c.id); if(dd) dd.coins=r.coins; }
+  catch(e){ toast(e.message); }
+  casino.busy=false; renderCard(true); }
+function resultLine(r){ const g=r.result;
+  const shown = Array.isArray(g) ? g.map(x=>ICON[x]||x).join(' ') : casino.game==='dice' ? `${DICE[Number(g)-1]} ${g}` : (g==='heads'?'🪙 Heads':'🪙 Tails');
+  return el('div',{class:'cresult '+(r.won?'win':'lose')}, el('span',{class:'roll',text:shown}), el('b',{text:r.won?`You won ${fmt(r.payout)} coins!`:`No luck. You lost ${fmt(r.bet)}.`})); }
+function casinoPanel(c){ const box=el('div',{class:'authbox casino'}, el('h3',{text:'Casino'}));
+  if(!casino||casino.id!==c.id||(!casino.loading&&Date.now()-casino.at>30000)) loadCasino(c);
+  const info=casino&&casino.id===c.id?casino.info:null;
+  if(!info){ box.append(el('p',{class:'hint',text:'Checking the casino…'})); return box; }
+  if(!info.housed){ box.append(el('p',{class:'hint',text:'The casino is for colonists who have woken up and have a home.'})); return box; }
+  if(!info.casino){ box.append(el('p',{class:'hint',text:"The colony doesn't have a casino yet. Once one is built, you can play here."})); return box; }
+  if(!casino.open){ box.append(el('p',{class:'hint',text:`${info.casino.name} is open. You have ${fmt(info.coins)} coins.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Go to the casino',onclick:()=>{ casino.open=true; renderCard(true); }}))); return box; }
+  const tabs=el('div',{class:'ctabs'}); for(const k of Object.keys(GAMES)) tabs.append(el('button',{class:'pill'+(casino.game===k?' on':''),'aria-pressed':String(casino.game===k),text:GAMES[k].name,onclick:()=>{ casino.game=k; casino.pick=GAMES[k].picks?GAMES[k].picks[0]:null; casino.last=null; renderCard(true); }}));
+  box.append(el('p',{class:'hint',text:`You have ${fmt(info.coins)} coins.`}), tabs, el('p',{class:'crule',text:GAMES[casino.game].rule}));
+  if(casino.game==='slots') box.append(el('p',{class:'hint',text:SLOT_SYMBOLS.slice().reverse().map(x=>`${x.icon}${x.icon}${x.icon} ${SLOT_PAYS[x.id]}×`).join(' · ')+` · 🍒🍒 ${SLOT_TWO_CHERRIES}×`}));
+  const g=GAMES[casino.game]; if(g.picks){ const row=el('div',{class:'cpicks'}); for(const p of g.picks) row.append(el('button',{class:'pill'+(casino.pick===p?' on':''),'aria-pressed':String(casino.pick===p),text:casino.game==='coin'?(p==='heads'?'Heads':'Tails'):`${DICE[Number(p)-1]} ${p}`,onclick:()=>{ casino.pick=p; renderCard(true); }})); box.append(row); }
+  const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Bet',value:String(casino.bet)}); inp.oninput=()=>{ casino.bet=inp.value; };
+  const quick=(label,v)=>el('button',{class:'pill',text:label,onclick:()=>{ casino.bet=Math.max(1,Math.floor(v)); renderCard(true); }});
+  box.append(el('div',{class:'cbet'}, el('span',{text:'Bet'}), inp, quick('10',10), quick('100',100), quick('Half',info.coins/2), quick('All',info.coins)));
+  box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:casino.busy?'Playing…':'Play',disabled:casino.busy||info.coins<1,onclick:()=>casinoPlay(c)}), el('button',{class:'linkb',text:'Leave',onclick:()=>{ casino.open=false; casino.last=null; renderCard(true); }})));
+  if(info.coins<1) box.append(el('p',{class:'hint',text:'You need coins to play. A job earns them every day.'}));
+  if(casino.last) box.append(resultLine(casino.last));
+  return box; }
 // ---- Work: a signed-in colonist's own job, and the board of open jobs near home ----
 let jobBoard=null; // { id, data, open, busy }
 async function loadJobs(c, open){ const same=jobBoard&&jobBoard.id===c.id; jobBoard={ id:c.id, data:same?jobBoard.data:null, open:open??(same&&jobBoard.open), busy:true, at:Date.now() };
@@ -2081,6 +2128,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
         card.append(el('div',{class:'authbox'}, el('h3',{text:'Choose your colonist'}), el('p',{class:'hint',text:'Pick once. After this, only the developer can change it.'}), el('div',{class:'row-actions'}, mk('m'), mk('f')))); }
       if(mine) card.append(nameEditor(c,'me'));
       if(mine) card.append(workPanel(c));
+      if(mine) card.append(casinoPanel(c));
       if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; myMoney=null; ls.set('settlement-player',null); refreshHUD(); toast('Logged out.'); renderCard(true); }})));
       else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
       // Already signed in as someone else: one person, one colonist, so no "This is me" on other cards.
@@ -2105,6 +2153,9 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(t.work) add('Pay',`${t.work.salary} coins a day`);
     add('Here now', inside.length?inside.join(', '):'Nobody');
     card.append(close, head, dl);
+    if(b.type==='casino' && b.done!==false && !b.ruin && !Store.canWrite) card.append(el('div',{class:'row-actions'}, Me&&Me.token&&Me.handle
+      ? el('button',{class:'btn primary',text:'Play here',onclick:()=>{ casino={ ...(casino||{ game:'coin', pick:'heads', bet:10, last:null }), id:null, open:true }; openCitizen(Me.handle).then(()=>{ if(casino) casino.open=true; }); }})
+      : el('span',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'})));
     if(Store.canWrite) card.append(el('div',{class:'row-actions'}, b.done===false?el('button',{class:'btn primary',text:'Finish now',onclick:async()=>{ try{ await api(`/api/admin/buildings/${encodeURIComponent(b.id)}/finish`,{method:'POST'}); toast(`${b.name||t.name} is finished`); }catch(e){ toast(e.message); } }}):null,
       el('button',{class:'btn',text:'Move',onclick:()=>{ setTool({kind:'move',id:b.id,rot:b.rot||0}); }}), el('button',{class:'btn',text:'⟲ Turn',onclick:()=>rotateBuilding(b.id)}), el('button',{class:'btn',text:'One more',onclick:()=>{ setTool({kind:'place',type:b.type}); }}), el('button',{class:'btn danger',text:'Demolish',onclick:()=>removeBuilding(b.id)})));
   }

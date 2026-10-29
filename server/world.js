@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { pool, worldTx } from './db.js';
+import { playRound, GAMES, MAX_BET } from '../shared/casino.js';
 import { BUILDING_TYPES, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, roadClears } from '../shared/catalog.js';
 import * as R from '../shared/rules.js';
 const changeScope = new AsyncLocalStorage();
@@ -15,19 +16,21 @@ export const bRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy
   done: r.done !== false, readyAt: r.ready_at || 0, ruin: !!r.ruin, ruinedAt: r.ruined_at || 0 });
 const vRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, placedAt: r.placed_at });
 const tileKeys = keys => keys.filter(k => /^-?\d{1,7},-?\d{1,7}$/.test(k));
-const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_cy], [c.hang_cx, c.hang_cy]]
+const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_cy], [c.hang_cx, c.hang_cy], [c.visit_cx, c.visit_cy]]
   .filter(([x]) => x !== null && x !== undefined).map(([x, y]) => R.chunkKey(x, y)))];
 
 // The compact citizen record viewers receive. Coordinates travel with it so a viewer can draw a commute
 // even when the workplace is in a part of the map they haven't loaded.
 const CITIZEN_SELECT = `
   select c.id, c.seq, c.handle, c.joined_at, c.founder, c.gender, c.display_name,
-         c.home_cx, c.home_cy, c.job_cx, c.job_cy, c.hang_cx, c.hang_cy,
-         h.id hid, h.type ht, h.x hx, h.y hy, j.id jid, j.type jt, j.x jx, j.y jy, g.id gid, g.type gt, g.x gx, g.y gy
+         c.home_cx, c.home_cy, c.job_cx, c.job_cy, c.hang_cx, c.hang_cy, c.visit_cx, c.visit_cy, c.visit_until,
+         h.id hid, h.type ht, h.x hx, h.y hy, j.id jid, j.type jt, j.x jx, j.y jy, g.id gid, g.type gt, g.x gx, g.y gy, v.id vid, v.type vt, v.x vx, v.y vy
   from citizens c
-  left join buildings h on h.id = c.home_id left join buildings j on j.id = c.job_id left join buildings g on g.id = c.hang_id`;
+  left join buildings h on h.id = c.home_id left join buildings j on j.id = c.job_id left join buildings g on g.id = c.hang_id
+  left join buildings v on v.id = c.visit_id`;
 export const cOut = r => ({ id: r.id, s: r.seq, h: r.handle, t: r.joined_at, f: r.founder ? 1 : 0, g: r.gender || 'm', n: r.display_name || '',
-  home: r.hid ? [r.hid, r.ht, r.hx, r.hy] : null, job: r.jid ? [r.jid, r.jt, r.jx, r.jy] : null, hang: r.gid ? [r.gid, r.gt, r.gx, r.gy] : null });
+  home: r.hid ? [r.hid, r.ht, r.hx, r.hy] : null, job: r.jid ? [r.jid, r.jt, r.jx, r.jy] : null, hang: r.gid ? [r.gid, r.gt, r.gx, r.gy] : null,
+  visit: r.vid && Number(r.visit_until) > Date.now() ? [r.vid, r.vt, r.vx, r.vy, Number(r.visit_until)] : null });
 
 // One world change. Holds the database connection inside the global world lock and records everything that changed,
 // so the right viewers can be told afterwards.
@@ -278,7 +281,7 @@ export class World {
     for (const [id, chunk] of ch.removedBuildings) ops.push({ op: 'removeBuilding', id, chunks: [chunk] });
     ops.push(...ch.roadOps, ...ch.extraOps);
     if (ch.citizens.size > 400) {
-      const rows = (await db.query('select home_cx, home_cy, job_cx, job_cy, hang_cx, hang_cy from citizens where id = any($1)', [[...ch.citizens.keys()]])).rows;
+      const rows = (await db.query('select home_cx, home_cy, job_cx, job_cy, hang_cx, hang_cy, visit_cx, visit_cy from citizens where id = any($1)', [[...ch.citizens.keys()]])).rows;
       const chunks = new Set([...ch.citizens.values()].flat()); for (const r of rows) chunksOfRow(r).forEach(k => chunks.add(k));
       ops.push({ op: 'reload', chunks: [...chunks] });
     } else if (ch.citizens.size) {
@@ -302,7 +305,8 @@ export class World {
     const sql = `${CITIZEN_SELECT} where c.id in (
         select id from citizens where (home_cx, home_cy) in (values ${ph})
         union select id from citizens where (job_cx, job_cy) in (values ${ph})
-        union select id from citizens where (hang_cx, hang_cy) in (values ${ph}))
+        union select id from citizens where (hang_cx, hang_cy) in (values ${ph})
+        union select id from citizens where visit_until > ${Date.now()} and (visit_cx, visit_cy) in (values ${ph}))
       order by c.seq limit ${Number(limit)}`;
     return (await pool.query(sql, flat)).rows.map(cOut);
   }
@@ -639,6 +643,46 @@ export class World {
       return { ok: true };
     });
   }
+  // ---------- the casino ----------
+  // The nearest finished casino to a colonist's home (null if the colony hasn't built one).
+  async casinoFor(c) {
+    return (await pool.query(`select * from buildings where type = 'casino' and done and not ruin
+      order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [c.hx ?? 0, c.hy ?? 0])).rows[0] || null;
+  }
+  async casinoInfo(id) {
+    const c = (await pool.query('select c.*, h.x hx, h.y hy from citizens c left join buildings h on h.id = c.home_id where c.id = $1', [id])).rows[0];
+    if (!c) throw new HttpError(404, 'No such citizen.');
+    const today = this.meta ? R.gameDay(Date.now(), this.meta.epoch) : 0, cas = c.home_id ? await this.casinoFor(c) : null;
+    return { housed: !!c.home_id, casino: cas ? { id: cas.id, name: cas.name || BUILDING_TYPES.casino.name } : null, coins: R.balanceOn(c.coins_base, c.coins_day, c.net, today) };
+  }
+  // One bet. The server rolls; winnings come from the colony treasury and losses go into it.
+  // While playing (and for 10 minutes after the last game) the colonist is inside the casino for everyone to see.
+  async casinoPlay(id, { game, pick, bet }) {
+    if (!GAMES[game]) throw new HttpError(400, 'Pick a game: coin flip, dice or slots.');
+    if (GAMES[game].picks && !GAMES[game].picks.includes(String(pick))) throw new HttpError(400, game === 'coin' ? 'Pick heads or tails.' : 'Pick a number from 1 to 6.');
+    bet = Math.floor(Number(bet)); if (!Number.isFinite(bet) || bet < 1) throw new HttpError(400, 'Bet at least 1 coin.');
+    if (bet > MAX_BET) throw new HttpError(400, `The most you can bet at once is ${fmt(MAX_BET)} coins.`);
+    return this.change(async ch => {
+      const c = (await ch.q('select c.*, h.x hx, h.y hy from citizens c left join buildings h on h.id = c.home_id where c.id = $1 for update of c', [id])).rows[0];
+      if (!c) throw new HttpError(404, 'No such citizen.');
+      if (!c.home_id) throw new HttpError(400, "You're still in cryosleep. The casino is for colonists who have woken up.");
+      const cas = await this.casinoFor(c); if (!cas) throw new HttpError(409, "The colony doesn't have a casino yet.");
+      const hx = c.hx, hy = c.hy; delete c.hx; delete c.hy;
+      ch.coins(c); if (c.coins_base < bet) throw new HttpError(400, c.coins_base ? `You only have ${fmt(c.coins_base)} coins.` : "You don't have any coins yet. Get a job first.");
+      const round = playRound(game, String(pick), bet, n => crypto.randomInt(n));
+      c.coins_base = c.coins_base - bet + round.payout;
+      // The house keeps losses and pays wins: the treasury moves by the opposite amount.
+      ch.meta.treasuryBase = Math.max(0, R.treasuryOn(ch.meta, ch.today) + bet - round.payout); ch.meta.treasuryDay = ch.today;
+      ch.touch(c); await ch.saveCitizen(c);
+      const until = Date.now() + 10 * 60 * 1000;
+      await ch.q('update citizens set visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5 where id = $1', [c.id, cas.id, until, cas.cx, cas.cy]);
+      ch.citizens.set(c.id, [...new Set([...(ch.citizens.get(c.id) || []), R.chunkKey(cas.cx, cas.cy)])]);
+      const won = round.payout - bet;
+      if (won >= 200 || (round.payout >= bet * 20 && won >= 50)) await ch.event(`@${c.handle} won ${fmt(round.payout)} coins on ${GAMES[game].name.toLowerCase()} at the ${cas.name || 'casino'}!`, 'casino');
+      return { ...round, bet, coins: c.coins_base, casino: { id: cas.id, name: cas.name || BUILDING_TYPES.casino.name } };
+    });
+  }
+
   // ---------- the job board: a signed-in colonist choosing their own work ----------
   // Openings are jobs in finished buildings, nearest the colonist's home first, with the pay they'd actually take home
   // (salary minus their rent). Claimed colonists get priority: a full workplace still counts as open if one of its places

@@ -115,6 +115,8 @@ const MIGRATIONS = [
   `alter table messages add column official boolean not null default false, add column pinned boolean not null default false;`,
   // v14: the game day a colonist last took a job themselves (one new job per game day)
   `alter table citizens add column job_changed_day int;`,
+  // v15: a short visit somewhere (the casino), so everyone sees the colonist inside while it lasts
+  `alter table citizens add column visit_id text, add column visit_until bigint, add column visit_cx int, add column visit_cy int;`,
 ];
 
 export async function migrate() {

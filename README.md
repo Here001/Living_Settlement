@@ -84,6 +84,21 @@ They comment it on any of your Instagram posts **from their own account**. After
 - **After quitting.** Automatic hiring leaves them alone until they choose another job. If their workplace is demolished, automatic hiring takes over again.
 - **Claimed colonists get priority.** A full workplace still counts as open if a place in it is held by an automatically placed colonist who hasn't claimed their avatar. That colonist goes back to looking for work. Claimed colonists and anyone the developer placed by hand are never pushed out.
 
+## Casino
+
+- **Opening.** Once the colony has a finished **Casino**, signed-in colonists with a home see a Casino box on their own card. The Casino's card also has **Play here**.
+- **The games:**
+  - **Coin flip:** pick heads or tails, win 1.9×.
+  - **Dice:** pick 1 to 6, win 5.7×.
+  - **Slots:** three in a row pays 5× (🍒) up to 100× (🚀🚀🚀); two 🍒 pays 1.5×.
+- **Odds and fairness.**
+  - Every game pays back about 95% over time.
+  - The house edge goes into the colony treasury, and wins are paid from it.
+  - The server rolls the dice, so nobody can cheat from their browser.
+- **Limits.** One bet every ~1 second, and at most 100,000 coins per bet. There is no daily limit.
+- **Visits.** While playing, and for 10 minutes after their last bet, the colonist is inside the Casino for everyone to see.
+- **Announcements.** Big wins (200+ coins of profit, or 20×+ on a small bet) go in the Colony Log.
+
 ## Run it on your computer
 
 With Docker: `docker compose up --build`, then open http://localhost:3000/#builder (token `local-dev-token-please-change`).

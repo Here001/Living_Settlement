@@ -328,6 +328,31 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     await pool.query('update citizens set job_changed_day = null where handle = $1', ['zara_ng']);
     ok((await call('POST', '/api/me/job', { buildingId: shop.json.building?.id }, P)).status === 200 && (await whoDev('zara_ng')).job?.[0] === shop.json.building?.id, 'a claimed colonist takes it');
     ok((await whoDev('jobfill_a')).job?.[0] !== shop.json.building?.id, 'and the newcomer goes back to looking for work'); }
+  // ---- the casino ----
+  { const sleep = ms => new Promise(r => setTimeout(r, ms));
+    ok((await call('POST', '/api/me/casino', { game: 'coin', pick: 'heads', bet: 5 }, { auth: false })).status === 401, 'only signed-in colonists can gamble');
+    const before = (await call('GET', '/api/me/casino', undefined, P)).json;
+    ok(before.casino === null && (await call('POST', '/api/me/casino', { game: 'coin', pick: 'heads', bet: 5 }, P)).status === 409, 'no casino, no gambling');
+    const cas = await call('POST', '/api/admin/buildings', { type: 'casino', x: 920, y: 920 }); await call('POST', `/api/admin/buildings/${cas.json.building?.id}/finish`);
+    ok((await call('GET', '/api/me/casino', undefined, P)).json.casino?.id === cas.json.building?.id, 'once a casino is built, it opens');
+    await pool.query('update citizens set coins_base = 0, net = 0, coins_day = 0 where handle = $1', ['zara_ng']); await sleep(1300);
+    ok((await call('POST', '/api/me/casino', { game: 'coin', pick: 'heads', bet: 5 }, P)).status === 400, 'no coins, no bets');
+    await pool.query('update citizens set coins_base = 1000 where handle = $1', ['zara_ng']); await sleep(1300);
+    ok((await call('POST', '/api/me/casino', { game: 'poker', bet: 5 }, P)).status === 400, 'unknown games are refused'); await sleep(1300);
+    ok((await call('POST', '/api/me/casino', { game: 'dice', pick: '9', bet: 5 }, P)).status === 400, 'dice picks are 1 to 6'); await sleep(1300);
+    ok((await call('POST', '/api/me/casino', { game: 'coin', pick: 'heads', bet: 5000 }, P)).status === 400, "can't bet more than you have"); await sleep(1300);
+    const tre0 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta;
+    const r1 = await call('POST', '/api/me/casino', { game: 'coin', pick: 'heads', bet: 100 }, P);
+    ok(r1.status === 200 && ['heads', 'tails'].includes(r1.json.result) && r1.json.coins === 1000 - 100 + r1.json.payout && (r1.json.won ? r1.json.payout === 190 : r1.json.payout === 0), 'a coin flip pays 1.9× or takes the bet', JSON.stringify(r1.json));
+    ok((await call('POST', '/api/me/casino', { game: 'coin', pick: 'heads', bet: 1 }, P)).status === 429, 'one bet at a time');
+    const tre1 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta;
+    ok(Math.round(tre1.treasuryBase - tre0.treasuryBase) === 100 - r1.json.payout || tre0.treasuryBase === undefined, 'the treasury takes losses and pays wins', `${tre0.treasuryBase} → ${tre1.treasuryBase}`);
+    ok((await whoDev('zara_ng')).coins === r1.json.coins, 'the balance sticks');
+    ok((await who('zara_ng')).visit?.[0] === cas.json.building?.id, 'everyone can see the colonist is at the casino');
+    await sleep(1300); const sl = await call('POST', '/api/me/casino', { game: 'slots', bet: 10 }, P);
+    ok(sl.status === 200 && sl.json.result.length === 3, 'slots spin three reels');
+    await sleep(1300); const dc = await call('POST', '/api/me/casino', { game: 'dice', pick: '3', bet: 10 }, P);
+    ok(dc.status === 200 && (dc.json.won ? dc.json.result === '3' && dc.json.payout === 57 : dc.json.payout === 0), 'dice pays 5.7× on the right number'); }
   const hut = await call('POST', '/api/admin/buildings', { type: 'house', x: 906, y: 906 });
   ok(hut.status === 200 && (await call('POST', '/api/me/job', { buildingId: hut.json.building?.id }, P)).status === 400, 'homes are not jobs', JSON.stringify(hut.json));
   ok((await call('POST', '/api/me/job/quit', {}, P)).status === 200 && (await call('POST', '/api/me/job/quit', {}, P)).status === 400, 'cannot quit with no job'); }

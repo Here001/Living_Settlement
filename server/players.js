@@ -119,6 +119,19 @@ export function playersRouter({ limit, send, admin, world }) {
     const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
     return world.setName(p.id, (req.body || {}).name);
   }));
+  // The casino: what's available, and one bet at a time (a short pause between bets stops scripted spam).
+  const lastBet = new Map();
+  setInterval(() => { const now = Date.now(); for (const [k, t] of lastBet) if (now - t > 60000) lastBet.delete(k); }, 60000).unref();
+  r.get('/me/casino', limit, send(async req => {
+    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    return world.casinoInfo(p.id);
+  }));
+  r.post('/me/casino', limit, send(async req => {
+    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    const now = Date.now(); if (now - (lastBet.get(p.id) || 0) < 1200) throw new HttpError(429, 'One bet at a time.');
+    lastBet.set(p.id, now);
+    const b = req.body || {}; return world.casinoPlay(p.id, { game: b.game, pick: b.pick, bet: b.bet });
+  }));
   // The job board: openings near home, take one (once per game day), or quit.
   r.get('/me/jobs', limit, send(async req => {
     const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');

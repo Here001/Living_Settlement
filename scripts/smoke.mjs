@@ -22,6 +22,7 @@ async function call(method, path, body, { auth = true, headers = {}, raw } = {})
 const meta = async () => (await call('GET', '/api/meta', undefined, { auth: false })).json.meta;
 const chunk = async keys => (await call('GET', `/api/chunks?keys=${keys}`, undefined, { auth: false })).json;
 const who = async h => (await call('GET', `/api/citizens/${h}`, undefined, { auth: false })).json;
+const whoDev = async h => (await call('GET', `/api/citizens/${h}`)).json; // the developer also sees coins
 
 // Two viewers: one watching the town centre (chunk 0_0), one watching far away (chunk 50_50).
 function viewer(chunks) {
@@ -82,9 +83,9 @@ ok(r.status === 200, 'build a bakery (2 jobs)');
 const bakery = r.json.building;
 m = await meta();
 ok(m.employed === 2 && m.income === income0 + 2 * 5, 'two people hired; taxes raise daily income', JSON.stringify({ e: m.employed, i: m.income, i0: income0 }));
-const worker = await who('builder');
+const worker = await whoDev('builder');
 ok(worker.job?.[0] === bakery.id && worker.net === 24, 'the earliest resident works there and nets 24 a day', JSON.stringify(worker));
-ok((await who('chidi')).net === 0, 'unemployed residents live rent-free until they find work');
+ok((await whoDev('chidi')).net === 0, 'unemployed residents live rent-free until they find work');
 
 console.log('Demolish, undo, move');
 ok((await call('DELETE', `/api/admin/buildings/${house.id}`)).status === 200, 'demolish the house');
@@ -152,7 +153,7 @@ const office = r.json.building;
 const desk = (await call('GET', '/api/admin/places?kind=job&x=36&y=0')).json.find(p => p.id === office.id);
 ok(desk && desk.title === 'Analyst' && desk.used < desk.cap, 'the new office shows up with free desks', JSON.stringify(desk));
 ok((await call('PATCH', `/api/admin/citizens/${kemi.id}`, { jobId: office.id })).status === 200, "change someone's career");
-let k = await who('kemi');
+let k = await whoDev('kemi');
 ok(k.job?.[0] === office.id && k.net === 32 - 12, 'they work at the office and earn its wage minus rent', JSON.stringify(k));
 ok((await call('PATCH', `/api/admin/citizens/${kemi.id}`, { jobId: null })).status === 200 && (await who('kemi')).job === null, 'make them quit');
 const bakeryNow = (await call('GET', '/api/admin/places?kind=job&x=14&y=10')).json.find(p => p.type === 'bakery');
@@ -312,7 +313,8 @@ for (const path of ['/privacy', '/data-deletion', '/terms']) { const pr = await 
 
 console.log('Newcomers start with nothing');
 await call('POST', '/api/admin/citizens', { handle: 'broke_newbie' });
-ok((await who('broke_newbie')).coins === 0, 'a new colonist starts with 0 coins until they work');
+ok((await call('GET', '/api/citizens/broke_newbie')).json.coins === 0, 'a new colonist starts with 0 coins until they work');
+ok((await who('broke_newbie')).coins === undefined, "other people can't see a colonist's coins");
 
 console.log('Men and women');
 await post(comment('c4', 'ada_f', 'spawn female 👩')); await post(comment('c5', 'bayo_m', 'Spawn me as a man'));

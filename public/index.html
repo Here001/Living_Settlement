@@ -272,7 +272,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 <header class="hud">
   <div class="plate inked"><div class="town" id="townName">Waking the colony…</div><div class="sub" id="popLine"></div></div>
   <div class="chips" id="chips" hidden>
-    <div class="chip inked"><span class="coin" aria-hidden="true"></span><b id="coinVal">0</b><small id="coinRate"></small></div>
+    <div class="chip inked" id="coinChip" hidden><span class="coin" aria-hidden="true"></span><b id="coinVal">0</b><small id="coinRate"></small></div>
     <div class="chip inked"><button id="musicBtn" aria-pressed="false" aria-label="Music"><span class="mi" id="musicIcon">▶</span><span id="musicLabel" class="lbl">Music</span></button></div>
     <div class="chip inked" hidden><button id="draftBtn" aria-pressed="false" title="Draft mode: build privately, then update the live city"><span aria-hidden="true">✎</span><span id="draftLbl" class="lbl">Draft</span></button></div>
     <div class="chip inked"><button id="wxBtn" aria-label="Weather"><span id="wxIcon" style="font-size:16px;line-height:1">☀</span><span id="wxLabel" class="lbl">Sunny</span></button></div>
@@ -343,7 +343,10 @@ const loading=new Set(), buffered=new Map(); let ws=null, subKey='', pinned=null
 const ls={ get(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }, set(k,v){ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,JSON.stringify(v)); }catch(e){} } };
 let Me=ls.get('settlement-player'); // { token, handle }
 let auth=null, authPoll=null; // the open "prove it's you" or "log in" panel
-async function checkMe(){ if(!Me||!Me.token) return; try{ const r=await api('/api/me'); Me={...Me,handle:r.handle,genderChosen:!!r.genderChosen}; ls.set('settlement-player',Me); }catch(e){ Me=null; ls.set('settlement-player',null); } }
+let myMoney=null; // the signed-in colonist's own coins
+async function loadMyMoney(){ if(!(Me&&Me.handle)){ myMoney=null; return; } try{ const d=await api('/api/citizens/'+encodeURIComponent(Me.handle)); myMoney={coins:d.coins,net:d.net}; }catch(e){ myMoney=null; } refreshHUD(); }
+setInterval(loadMyMoney,60000);
+async function checkMe(){ if(!Me||!Me.token) return; try{ const r=await api('/api/me'); Me={...Me,handle:r.handle,genderChosen:!!r.genderChosen}; ls.set('settlement-player',Me); loadMyMoney(); }catch(e){ Me=null; ls.set('settlement-player',null); } }
 function signedIn(r){ Me={token:r.token,handle:r.handle,genderChosen:true}; checkMe().then(()=>renderCard(true)); ls.set('settlement-player',Me); ls.set('settlement-me',r.handle); ls.set('settlement-claim',null); auth=null; clearInterval(authPoll); }
 async function api(path, opts={}){
   const r=await fetch(path,{ method:opts.method||'GET', headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{}), ...(Me&&Me.token?{'x-player':Me.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined });
@@ -1887,7 +1890,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       el('dt',{text:'Gender'}), el('dd',{text:c.gender==='f'?'Woman':'Man'}),
       el('dt',{text:'Home'}), el('dd',{text:h?nm(h):d&&d.queue?`None yet. Moves in when ${fmt(d.queue)} more ${d.queue===1?'home is':'homes are'} built`:'None yet'}),
       el('dt',{text:'Job'}), el('dd',{text:j?`${T(j).work.title} at ${nm(j)}`:h?'Looking for work':'Gets one after moving in'}),
-      el('dt',{text:'Coins'}), el('dd',{text:d?`${fmt(d.coins)}, ${d.net>=0?'+':''}${d.net} per day`:'…'}),
+      ...((Store.canWrite||(Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase()))?[el('dt',{text:'Coins'}), el('dd',{text:d?(d.net?`${fmt(d.coins)}, ${d.net>0?'+':''}${d.net} per day`:`${fmt(d.coins)}, no job yet`):'…'})]:[]),
       el('dt',{text:'Joined'}), el('dd',{text:`Day ${Math.max(1,Math.floor(gmAt(c.joinedAt)/1440)+1)}, arrival #${fmt(c.seq||0)}`})));
     if(Store.canWrite){ card.append(el('div',{class:'row-actions'},
         el('button',{class:'btn',text:c.gender==='f'?'Make a man':'Make a woman',onclick:()=>setGender(c,c.gender==='f'?'m':'f')}),
@@ -1901,7 +1904,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       if(mine && Me.genderChosen===false){ const pick=async g=>{ try{ await api('/api/me/gender',{method:'POST',body:{gender:g}}); Me.genderChosen=true; ls.set('settlement-player',Me); const x=S.citizens.get(c.id); if(x) x.gender=g; const dd=detail.get(c.id); if(dd) dd.g=g; toast(g==='f'?'Welcome to Gliese 12 b. She’s all yours.':'Welcome to Gliese 12 b. He’s all yours.'); renderCard(true); }catch(e){ toast(e.message); } };
         const mk=g=>{ const L=look({...c,gender:g}); const b=el('button',{class:'gpick',onclick:()=>toast(`Choose ${g==='f'?'woman':'man'}? You can only pick once.`,'Yes',()=>pick(g))}); const a=el('span',{class:'ava'}); a.innerHTML=avatarSVG({...c,gender:g}); b.append(a, el('span',{text:g==='f'?'Woman':'Man'})); return b; };
         card.append(el('div',{class:'authbox'}, el('h3',{text:'Choose your colonist'}), el('p',{class:'hint',text:'Pick once. After this, only the developer can change it.'}), el('div',{class:'row-actions'}, mk('m'), mk('f')))); }
-      if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; ls.set('settlement-player',null); toast('Logged out.'); renderCard(true); }})));
+      if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; myMoney=null; ls.set('settlement-player',null); refreshHUD(); toast('Logged out.'); renderCard(true); }})));
       else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
       else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}))); }
   } else if(sel.kind==='v'){ const v=D.vehicles.get(sel.id); if(!v){ closeCard(); return; } const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car;
@@ -2151,7 +2154,12 @@ addEventListener('keydown',e=>{ if(e.target.closest&&e.target.closest('input,tex
 function refreshHUD(){
   if(S.meta){ const w=weatherAt(S.meta,gmNow()); $('wxIcon').textContent=WX_ICON[w]; $('wxLabel').textContent=WEATHER_TYPES[w].name+(S.meta.weather?' (pinned)':''); }
   if(S.meta){ $('townName').textContent=S.meta.name; const pop=S.meta.population||0, out=S.meta.outskirts??(pop-(S.meta.residents||0)); $('popLine').textContent=`${fmt(pop)} colonist${pop===1?'':'s'}${out>0?`, ${fmt(out)} in cryosleep`:''}`; $('popLine').hidden=!Store.canWrite; // only the developer sees the head count
-    $('coinVal').textContent=fmt(treasury()); $('coinRate').textContent=`+${fmt(S.meta.income||0)}/day`; $('chips').hidden=false; }
+    // Money is private: the developer sees the colony treasury; a verified colonist sees only their own coins; everyone else sees none.
+    const cc=$('coinChip');
+    if(Store.canWrite){ cc.hidden=false; cc.title='Colony treasury'; $('coinVal').textContent=fmt(treasury()); $('coinRate').textContent=`+${fmt(S.meta.income||0)}/day`; }
+    else if(Me&&Me.token&&myMoney){ cc.hidden=false; cc.title='Your coins'; $('coinVal').textContent=fmt(myMoney.coins); $('coinRate').textContent=myMoney.net>0?`+${fmt(myMoney.net)}/day`:myMoney.net<0?`${fmt(myMoney.net)}/day`:'no job yet'; }
+    else cc.hidden=true;
+    $('chips').hidden=false; }
   const mb=$('musicBtn'); mb.setAttribute('aria-pressed',String(Music.on)); $('musicIcon').textContent=Music.on?'❚❚':'▶'; $('musicLabel').textContent=Music.on?'Music on':'Music';
 }
 function refreshUI(){ refreshHUD(); if(sel) renderCard(); if(activeTab==='people') renderPeople(); else if(activeTab && activeTab!=='feed') renderPane(); feedDirty=true; renderFeed(); }

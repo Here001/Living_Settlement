@@ -10,7 +10,7 @@ import { pool, migrate } from './db.js';
 import { World, HttpError } from './world.js';
 import { createBus } from './bus.js';
 import { instagramRouter, igStatus, connectInstagram, loadIgStatus } from './instagram.js';
-import { playersRouter, sweepPlayers } from './players.js';
+import { playersRouter, sweepPlayers, playerFrom } from './players.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -65,7 +65,11 @@ app.get('/api/chunks', limit, send(async req => {
 }));
 app.get('/api/citizens', limit, send(req => world.search(req.query.q)));
 app.get('/api/citizens/:handle', limit, send(async req => {
-  const c = await world.citizenDetail(req.params.handle); if (!c) throw new HttpError(404, 'No citizen with that name.'); return c;
+  const c = await world.citizenDetail(req.params.handle); if (!c) throw new HttpError(404, 'No citizen with that name.');
+  // Coins are private: only the colonist themself (signed in) and the developer see them.
+  const me = admin.check(req) ? null : await playerFrom(req);
+  if (!admin.check(req) && !(me && me.id === c.id)) { delete c.coins; delete c.net; }
+  return c;
 }));
 app.get('/health', (req, res) => res.json({ ok: true, founded: !!world.meta, population: world.meta?.population || 0, viewers: wss?.clients.size || 0, bus: bus.kind, leader: isLeader }));
 

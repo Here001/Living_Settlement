@@ -468,6 +468,36 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     const gb = await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 130 }, P), zz = await whoDev('zara_ng');
     ok(gb.status === 200 && gb.json.fromPocket === 100 && gb.json.fromBank === 30 && zz.coins === 0 && zz.bank === 20, 'pocket first, then the bank', JSON.stringify(gb.json));
     await pool.query("update citizens set pass_hash = null where handle = 'jobfill_a'"); }
+  // ---- private chats and who's online ----
+  { const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const bid = (await whoDev('jobfill_a')).id, link = (await call('POST', `/api/admin/citizens/${bid}/setup-link`)).json.claimId;
+    const tokB = (await call('POST', `/api/claim/${link}/password`, { password: 'secret88' }, { auth: false })).json.token, PB = { auth: false, headers: { 'x-player': tokB } };
+    const sock = token => new Promise(res => { const w = { msgs: [] }; w.ws = new WebSocket(BASE.replace(/^http/, 'ws') + '/ws'); w.ws.on('message', d => { try { w.msgs.push(JSON.parse(d)); } catch {} }); w.ws.on('open', () => { if (token) w.ws.send(JSON.stringify({ type: 'auth', token })); setTimeout(() => res(w), 400); }); });
+    const wa = await sock(P.headers['x-player']), wb = await sock(tokB), stranger = await sock(null);
+    ok(wb.msgs.some(m => m.type === 'authed' && m.ok), 'a signed-in colonist identifies their live connection');
+    const on = (await call('GET', '/api/online', undefined, { auth: false })).json;
+    ok(on.some(p => p.h === 'zara_ng') && on.some(p => p.h === 'jobfill_a'), 'both show as online', JSON.stringify(on.map(p => p.h)));
+    ok((await who('jobfill_a')).online === true, 'and their card says online');
+    ok((await call('POST', '/api/dm/jobfill_b', { text: 'hi' }, P)).status === 403, "unverified avatars can't be messaged");
+    ok((await call('POST', '/api/dm/zara_ng', { text: 'hi' }, P)).status === 400, "can't message yourself");
+    ok((await call('POST', '/api/dm/jobfill_a', { text: 'x'.repeat(501) }, P)).status === 400, 'messages are capped at 500 characters');
+    ok((await call('POST', '/api/dm/jobfill_a', { text: 'hello' }, { auth: false })).status === 401, 'only signed-in colonists can chat');
+    await sleep(800); const sent = await call('POST', '/api/dm/jobfill_a', { text: 'Hello from Zara 👋' }, P);
+    await sleep(500);
+    ok(sent.status === 200 && wb.msgs.some(m => m.type === 'dm' && m.data.text === 'Hello from Zara 👋' && m.data.from.h === 'zara_ng'), 'the message arrives live for the recipient');
+    ok(wa.msgs.some(m => m.type === 'dm' && m.data.id === sent.json.id), "and on the sender's other screens");
+    ok(!stranger.msgs.some(m => m.type === 'dm' || JSON.stringify(m).includes('Hello from Zara')), 'nobody else receives it');
+    const convB = (await call('GET', '/api/dm', undefined, PB)).json;
+    ok(convB.length === 1 && convB[0].with.h === 'zara_ng' && convB[0].unread === 1, 'it shows as unread in their chats', JSON.stringify(convB));
+    const th = (await call('GET', '/api/dm/zara_ng', undefined, PB)).json;
+    ok(th.messages.length === 1 && !th.messages[0].mine && th.with.online, 'opening the chat shows the message');
+    ok((await call('GET', '/api/dm', undefined, PB)).json[0].unread === 0, 'and marks it read');
+    await sleep(800); await call('POST', '/api/dm/zara_ng', { text: 'Hi Zara!' }, PB); await sleep(400);
+    ok(wa.msgs.some(m => m.type === 'dm' && m.data.text === 'Hi Zara!'), 'replies arrive live too');
+    ok((await call('POST', '/api/dm/zara_ng', { text: 'again' }, PB)).status === 429, 'sending is slowed down a little');
+    wb.ws.close(); await sleep(600);
+    ok(!(await call('GET', '/api/online', undefined, { auth: false })).json.some(p => p.h === 'jobfill_a'), 'closing the colony goes offline');
+    wa.ws.close(); stranger.ws.close(); await pool.query("update citizens set pass_hash = null where handle = 'jobfill_a'"); }
   const hut = await call('POST', '/api/admin/buildings', { type: 'house', x: 906, y: 906 });
   ok(hut.status === 200 && (await call('POST', '/api/me/job', { buildingId: hut.json.building?.id }, P)).status === 400, 'homes are not jobs', JSON.stringify(hut.json));
   ok((await call('POST', '/api/me/job/quit', {}, P)).status === 200 && (await call('POST', '/api/me/job/quit', {}, P)).status === 400, 'cannot quit with no job'); }

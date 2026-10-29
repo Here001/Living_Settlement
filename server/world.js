@@ -22,7 +22,7 @@ const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_c
 // The compact citizen record viewers receive. Coordinates travel with it so a viewer can draw a commute
 // even when the workplace is in a part of the map they haven't loaded.
 const CITIZEN_SELECT = `
-  select c.id, c.seq, c.handle, c.joined_at, c.founder, c.gender, c.display_name, c.pet, c.cars, c.car_active, (c.pass_hash is not null) claimed,
+  select c.id, c.seq, c.handle, c.joined_at, c.founder, c.gender, c.display_name, c.pet, c.cars, c.car_active, (c.pass_hash is not null) claimed, c.last_seen,
          c.home_cx, c.home_cy, c.job_cx, c.job_cy, c.hang_cx, c.hang_cy, c.visit_cx, c.visit_cy, c.visit_until, c.visit_from,
          h.id hid, h.type ht, h.x hx, h.y hy, j.id jid, j.type jt, j.x jx, j.y jy, g.id gid, g.type gt, g.x gx, g.y gy, v.id vid, v.type vt, v.x vx, v.y vy
   from citizens c
@@ -317,7 +317,7 @@ export class World {
   async search(q, limit = 20) {
     q = R.cleanHandle(q).toLowerCase(); if (!q) return [];
     const rows = (await pool.query(`${CITIZEN_SELECT} where lower(c.handle) like $1 order by lower(c.handle) limit $2`, [q.replace(/[_%]/g, m => '\\' + m) + '%', limit])).rows;
-    return rows.map(cOut);
+    return rows.map(r => ({ ...cOut(r), o: Number(r.last_seen || 0) > Date.now() - 90000 ? 1 : 0 })); // o: online right now
   }
   async citizenDetail(handle) {
     const r = (await pool.query(`${CITIZEN_SELECT.replace('select c.id,', 'select c.coins_base, c.coins_day, c.net, c.pass_hash is not null has_pw, c.jailed_until, c.bank, c.id,')} where lower(c.handle) = lower($1)`, [R.cleanHandle(handle)])).rows[0];
@@ -325,6 +325,7 @@ export class World {
     const out = cOut(r); const today = this.meta ? R.gameDay(Date.now(), this.meta.epoch) : 0;
     out.coins = R.balanceOn(r.coins_base, r.coins_day, r.net, today); out.net = r.net; out.claimed = !!r.has_pw;
     out.jailedUntil = Number(r.jailed_until || 0) > Date.now() ? Number(r.jailed_until) : 0;
+    out.online = Number(r.last_seen || 0) > Date.now() - 90000; out.seen = Number(r.last_seen || 0);
     out.bank = Number(r.bank || 0); out.cars = Array.isArray(r.cars) ? r.cars : []; out.carActive = r.car_active || null;
     if (!r.hid) out.queue = Number((await pool.query('select count(*) n from citizens where home_id is null and seq < $1', [r.seq])).rows[0].n) + 1;
     return out;

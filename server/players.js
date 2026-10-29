@@ -59,8 +59,10 @@ export async function checkClaimComment(username, text) {
 }
 
 // Who is calling: a player session token in the X-Player header (or null).
-export async function playerFrom(req) {
-  const t = req.get('x-player'); if (!t) return null;
+export async function playerFrom(req) { return playerByToken(req.get('x-player')); }
+// The same check for a token on its own (the live connection signs in with it, so chats can be delivered there).
+export async function playerByToken(t) {
+  if (!t || typeof t !== 'string') return null;
   const s = (await pool.query(`select s.citizen_id, s.last_seen, c.handle, c.gender, c.gender_chosen, c.display_name from sessions s join citizens c on c.id = s.citizen_id where s.token_hash = $1`, [sha(t)])).rows[0];
   if (!s || Date.now() - Number(s.last_seen) > SESSION_TTL) return null;
   if (Date.now() - Number(s.last_seen) > 3600 * 1000) pool.query('update sessions set last_seen = $2 where token_hash = $1', [sha(t), Date.now()]).catch(() => {});
@@ -130,6 +132,12 @@ export function playersRouter({ limit, send, admin, world }) {
   r.put('/me/pet', limit, send(async req => world.actions.renamePet((await me(req)).id, (req.body || {}).name)));
   r.delete('/me/pet', limit, send(async req => world.actions.release((await me(req)).id)));
   // The Bank, cars, moving home, and owning buildings.
+  // Private chats between verified colonists, and who's online.
+  r.get('/online', limit, send(() => world.chat.online()));
+  r.get('/dm', limit, send(async req => world.chat.conversations((await me(req)).id)));
+  r.get('/dm/:handle', limit, send(async req => world.chat.thread((await me(req)).id, req.params.handle)));
+  r.post('/dm/:handle', limit, send(async req => world.chat.send(await me(req), req.params.handle, (req.body || {}).text)));
+  r.post('/dm/:handle/read', limit, send(async req => world.chat.read((await me(req)).id, req.params.handle)));
   r.get('/me/gift', limit, send(async req => world.economy.giftInfo((await me(req)).id)));
   r.post('/me/gift', limit, send(async req => { const b = req.body || {}; return world.economy.gift((await me(req)).id, b.to, b.amount); }));
   r.get('/me/bank', limit, send(async req => world.economy.bankInfo((await me(req)).id)));

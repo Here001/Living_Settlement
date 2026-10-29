@@ -191,6 +191,19 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .namebox{margin-top:10px;display:flex;flex-direction:column;gap:4px}
 .namebox label{font-size:12px;font-weight:700;color:var(--muted)}
 .lotto{background:rgba(242,179,61,.12)}.lotto summary,.authbox summary{cursor:pointer;font-weight:700}
+.ava.on{position:relative}.ava.on::after{content:'';position:absolute;right:-1px;bottom:-1px;width:30%;height:30%;min-width:9px;min-height:9px;border-radius:50%;background:#34C759;box-shadow:0 0 0 2px var(--panel),0 0 6px rgba(52,199,89,.8)}
+dd.online{color:#2E9D4F;font-weight:700}
+.tb{position:relative}.tbadge{position:absolute;top:1px;right:6px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:#E4572E;color:#fff;font-size:10.5px;line-height:17px;text-align:center;font-weight:800}
+.dmrow{position:relative;align-items:center}.dmrow .dmtxt{flex:1;min-width:0}.dmrow .what{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dmrow .tbadge{position:static}.dmrow.unread .who{font-weight:800}
+.onlinerow{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}.onl{display:flex;flex-direction:column;align-items:center;gap:2px;border:0;background:none;font-size:11px;max-width:64px;flex:none}.onl span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:64px}
+.onl-now{color:#2E9D4F!important;font-weight:700}
+.dmhead{gap:8px}.dmhead .x:first-child{font-size:20px;line-height:1}.dmwho{display:flex;flex-direction:column;min-width:0;flex:1}.dmwho b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dmwho .hint{margin:0}
+.dmbody{display:flex;flex-direction:column;gap:6px;padding-top:4px}
+.dm{max-width:78%;padding:6px 10px 4px;border-radius:16px;font-size:13.5px;line-height:1.35;word-wrap:break-word;border:1px solid var(--glass-line,rgba(0,0,0,.1))}
+.dm p{margin:0;white-space:pre-wrap}.dm time{display:block;text-align:right;font-size:10px;opacity:.6;margin-top:1px}
+.dm.them{align-self:flex-start;background:var(--glass-2,rgba(0,0,0,.05));border-bottom-left-radius:5px}
+.dm.me{align-self:flex-end;background:linear-gradient(180deg,rgba(244,150,112,.92),rgba(217,113,74,.82));color:#fff;border-color:rgba(255,255,255,.5);border-bottom-right-radius:5px}
+.dmbar{display:flex;gap:6px;padding:6px 11px 10px;align-items:flex-end}.dmbar textarea{flex:1;resize:none;min-height:34px;max-height:90px;padding:7px 10px;border-radius:14px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:var(--glass-2,var(--paper));font:13.5px/1.35 'Bricolage Grotesque',system-ui,sans-serif;color:var(--ink)}
 .swatches{display:flex;gap:6px;flex-wrap:wrap}.sw{width:26px;height:26px;border-radius:999px;border:2px solid var(--glass-edge,#fff);box-shadow:0 0 0 1px rgba(0,0,0,.25);cursor:pointer}.sw.on{box-shadow:0 0 0 2.5px var(--accent)}
 .joblist li img{flex:none}
 .acttabs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
@@ -472,7 +485,9 @@ let myMoney=null; // the signed-in colonist's own coins
 async function loadMyMoney(){ if(!(Me&&Me.handle)){ myMoney=null; return; } try{ const d=await api('/api/citizens/'+encodeURIComponent(Me.handle)); myMoney={coins:d.coins,net:d.net}; }catch(e){ myMoney=null; } refreshHUD(); }
 setInterval(loadMyMoney,60000);
 async function checkMe(){ if(!Me||!Me.token) return; try{ const r=await api('/api/me'); Me={...Me,handle:r.handle,genderChosen:!!r.genderChosen}; ls.set('settlement-player',Me); loadMyMoney(); }catch(e){ Me=null; ls.set('settlement-player',null); } }
-function signedIn(r){ Me={token:r.token,handle:r.handle,genderChosen:true}; checkMe().then(()=>renderCard(true)); ls.set('settlement-player',Me); ls.set('settlement-me',r.handle); ls.set('settlement-claim',null); auth=null; clearInterval(authPoll); }
+// Tell the live connection who we are (or that we signed out), so chats arrive and friends see us online.
+function wsAuth(){ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'auth',token:Me&&Me.token||null})); }catch(e){} }
+function signedIn(r){ Me={token:r.token,handle:r.handle,genderChosen:true}; setTimeout(()=>{ wsAuth(); buildToolbar(); Chats.load(); },50); checkMe().then(()=>renderCard(true)); ls.set('settlement-player',Me); ls.set('settlement-me',r.handle); ls.set('settlement-claim',null); auth=null; clearInterval(authPoll); }
 // Every request gives up after a while (20 s by default), so a dropped mobile connection can never leave a screen waiting forever.
 async function api(path, opts={}){
   const ac=typeof AbortController!=='undefined'?new AbortController():null, timer=ac&&setTimeout(()=>ac.abort(), opts.timeout||20000);
@@ -480,7 +495,7 @@ async function api(path, opts={}){
   try{ r=await fetch(path,{ method:opts.method||'GET', signal:ac?ac.signal:undefined, headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{}), ...(Me&&Me.token?{'x-player':Me.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined }); }
   catch(e){ clearTimeout(timer); throw new Error(e&&e.name==='AbortError'?'The connection is slow. Please try again.':'Can\'t reach the colony right now. Check your connection.'); }
   try{ const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`); return j; } finally { clearTimeout(timer); } }
-const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang, visit:c.visit||null, pet:c.pet||null, claimed:!!c.k, car:c.car||null });
+const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang, visit:c.visit||null, pet:c.pet||null, claimed:!!c.k, car:c.car||null, online:!!c.o });
 const visiting = c => c.visit && Date.now()+skew < c.visit[4]+20*60000 ? c.visit : null; // [buildingId, type, x, y, until, from]: kept a while after it ends for the trip back
 const placeChunks = c => [c.home,c.job,c.hang,visiting(c)].filter(Boolean).map(p=>ckTile(p[2],p[3]));
 const keepCitizen = c => c.id===pinned || placeChunks(c).some(k=>S.chunks.has(k));
@@ -552,14 +567,15 @@ function connect(){
   if(ws){ ws.onclose=ws.onmessage=ws.onerror=null; try{ ws.close(); }catch(e){} }
   try{ ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`); }catch(e){ reconnectSoon(); return; }
   lastMsgAt=Date.now(); const me=ws;
-  ws.onopen=()=>{ Store.online=true; subKey=''; retryN=0; };
+  ws.onopen=()=>{ Store.online=true; subKey=''; retryN=0; wsAuth(); };
   ws.onerror=()=>{ try{ me.close(); }catch(e){} };
   ws.onmessage=e=>{ lastMsgAt=Date.now(); let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
     if(m.type==='hello'){ S.meta=m.meta; skew=m.serverNow-Date.now();
-      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
+      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); Chats.load(); buildToolbar(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
     else if(m.type==='ops'){ opBatch++; try{ for(const o of m.ops){ try{ applyOp(o); }catch(err){ console.error('Skipped an update:', err); } } } finally { opBatch--; } if(!opBatch&&batchChanged){ batchChanged=false; changed(); } }
     else if(m.type==='resync') reloadAll();
-    else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now(); };
+    else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
+    else if(m.type==='dm' && m.data) Chats.incoming(m.data); };
   ws.onclose=()=>{ if(ws!==me) return; if(Store.online) toast('Reconnecting to the colony…'); Store.online=false; reconnectSoon(); };
 }
 setInterval(()=>{ if(!ws||document.hidden) return; if(ws.readyState===1&&Date.now()-lastMsgAt>20000){ lastMsgAt=Date.now(); try{ ws.close(); }catch(e){} reconnectSoon(true); } },5000);
@@ -2034,6 +2050,7 @@ async function moveBuilding(id,x,y){ const b=D.buildings.get(id); if(!b){ setToo
 const I=(body)=>`<svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="${INK}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${body}</svg>`;
 const ICONS={
   feed: I('<path d="M5 7h22v14H14l-6 5v-5H5z" fill="#9CC4E4"/><path d="M10 12h12M10 16h8"/>'),
+  chats: I('<path d="M5 8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-7l-5 4v-4a3 3 0 0 1-3-3z" fill="#A8D5BA"/><path d="M11 21h7l5 4v-4a3 3 0 0 0 3-3v-6" fill="none"/>'),
   races: I('<path d="M8 27V5"/><path d="M8 6h16l-3 5 3 5H8z" fill="#F4EDE0"/><path d="M8 6h4v5H8zM16 6h4v5h-4zM12 11h4v5h-4zM20 11h4v5h-4z" fill="#2B2621" stroke="none"/>'),
   people: I('<circle cx="12" cy="11" r="4" fill="#E8A07A"/><circle cx="21" cy="12" r="3.5" fill="#F2C9A8"/><path d="M4 25c0-5 4-8 8-8s8 3 8 8z" fill="#E8A07A"/><path d="M17 25c0-4 2-7 5-7s6 3 6 7z" fill="#F2C9A8"/>'),
   roads: I('<path d="M12 5h8l5 22H7z" fill="#A3A3A0"/><path d="M16 8v3M16 15v3M16 22v3" stroke="#fff"/>'),
@@ -2081,12 +2098,12 @@ addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==
 addEventListener('keydown',e=>{ if((e.key==='m'||e.key==='M') && !/INPUT|TEXTAREA/.test((e.target.tagName||'')) && tool.kind!=='pan') setMini(!mini); if(e.key==='Escape' && tool.kind!=='pan') setTool({kind:'pan'}); });
 
 let activeTab=null, feedMode='posts';
-const PLAYER_TABS=new Set(['feed','people','races']); // everyone's tabs; the rest are the developer's build menus
+const PLAYER_TABS=new Set(['feed','people','races','chats']); // everyone's tabs; the rest are the developer's build menus
 function buildToolbar(){ const row=$('toolsRow'); row.innerHTML='';
-  const tabs=[{id:'feed',name:'Town Square'},{id:'people',name:'Colonists'},{id:'races',name:'Races'}];
+  const tabs=[{id:'feed',name:'Town Square'},{id:'people',name:'Colonists'},{id:'races',name:'Races'}].concat(Me&&Me.token?[{id:'chats',name:'Chats'}]:[]);
   const all = Store.canWrite ? tabs.concat([{sep:true}],CATS) : tabs;
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
-    const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(activeTab===c.id),onclick:()=>openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); row.append(btn); } }
+    const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(activeTab===c.id),onclick:()=>openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); row.append(btn); } }
 function openTab(name){ activeTab=name; if((PLAYER_TABS.has(name)||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
 function applyPermissions(){ buildToolbar(); refreshHUD(); refreshUndo(); refreshDraftBar(); if(Store.canWrite && !draftLoaded){ draftLoaded=true; loadDraft(); } $('spawnBoxNote')&&0; if(!Store.canWrite && activeTab && !PLAYER_TABS.has(activeTab)) openTab(null); }
 
@@ -2119,6 +2136,7 @@ function renderPane(){
   if(activeTab==='feed'){
     const seg=el('div',{class:'seg',role:'tablist'}); for(const [id,nm] of [['posts','Posts'],['log','Daily log'],['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
     p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
+  if(activeTab==='chats'){ Chats.render(p); return; }
   if(activeTab==='races'){ p.append(paneHead('Races')); const body=el('div',{class:'pane-body',id:'raceBody'}); p.append(body); renderRaces(true); return; }
   if(activeTab==='people'){ p.append(paneHead('Colonists')); const body=el('div',{class:'pane-body'});
     const s=el('input',{class:'search',id:'search',type:'search',placeholder:'Search a username',autocomplete:'off'}); s.value=peopleQuery; s.oninput=()=>{ peopleQuery=s.value; renderPeople(); };
@@ -2221,6 +2239,55 @@ function cardBusy(){ const card=$('card'); if(!card||card.hidden) return false; 
   if(a&&card.contains(a)&&/INPUT|TEXTAREA/.test(a.tagName)) return true; return [...card.querySelectorAll('input,textarea')].some(i=>i.dataset.edited&&i.value); }
 document.getElementById('card').addEventListener('input',e=>{ if(e.target&&e.target.dataset) e.target.dataset.edited='1'; });
 // Change the name shown on an avatar. Colonists edit their own; the developer can edit anyone's.
+// ---- Chats: private messages between verified colonists, delivered live ----
+const ago = t => { const s=Math.max(0,(Date.now()+skew-t)/1000); return s<90?'just now':s<3600?`${Math.round(s/60)} min ago`:s<86400?`${Math.round(s/3600)} h ago`:`${Math.round(s/86400)} days ago`; };
+const hhmm = t => { const d=new Date(t); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
+var Chats={ list:[], online:[], unread:0, with:null, thread:null, draft:'', busy:false, loadedAt:0,
+  reset(){ this.list=[]; this.online=[]; this.unread=0; this.with=null; this.thread=null; this.draft=''; },
+  async load(){ if(!(Me&&Me.token)) return; try{ const [l,o]=await Promise.all([api('/api/dm'),api('/api/online')]); this.list=l; this.online=o; this.loadedAt=Date.now(); this.count(); }catch(e){} if(activeTab==='chats'&&!this.with) this.renderNow(); },
+  count(){ const n=this.list.reduce((a,c)=>a+c.unread,0); if(n!==this.unread){ this.unread=n; buildToolbar(); } },
+  async open(handle){ if(!(Me&&Me.token)){ toast('Sign in to your colonist to chat.'); return; } this.with=handle; this.thread=null; this.draft=''; closeCard(); openTab('chats');
+    try{ this.thread=await api('/api/dm/'+encodeURIComponent(handle)); const c=this.list.find(x=>x.with.h.toLowerCase()===handle.toLowerCase()); if(c){ c.unread=0; this.count(); } }catch(e){ toast(e.message); this.with=null; }
+    this.renderNow(); },
+  back(){ this.with=null; this.thread=null; this.load(); this.renderNow(); },
+  incoming(m){ const meId=this.thread&&this.thread.with; const other=m.from.h.toLowerCase()===(Me&&Me.handle||'').toLowerCase()?m.to.h:m.from.h, mine=m.from.h.toLowerCase()===(Me&&Me.handle||'').toLowerCase();
+    if(this.with&&this.with.toLowerCase()===other.toLowerCase()&&this.thread&&activeTab==='chats'){ if(!this.thread.messages.some(x=>x.id===m.id)){ this.thread.messages.push({id:m.id,mine,text:m.text,t:m.t}); this.addBubble({mine,text:m.text,t:m.t}); } if(!mine) api('/api/dm/'+encodeURIComponent(other)+'/read',{method:'POST'}).catch(()=>{}); return; }
+    let c=this.list.find(x=>x.with.h.toLowerCase()===other.toLowerCase()); if(!c){ c={ with:{h:other,n:mine?'':m.from.n,g:mine?'m':m.from.g,online:true}, last:null, unread:0 }; this.list.unshift(c); }
+    c.last={text:m.text,t:m.t,mine}; if(!mine){ c.unread++; c.with.online=true; this.count(); toast(`💬 @${m.from.h}: ${m.text.length>60?m.text.slice(0,60)+'…':m.text}`,'Reply',()=>this.open(m.from.h)); }
+    this.list.sort((a,b)=>(b.last?b.last.t:0)-(a.last?a.last.t:0)); if(activeTab==='chats'&&!this.with) this.renderNow(); },
+  async send(){ const ta=$('dmText'); const text=(ta?ta.value:this.draft).trim(); if(!text||this.busy||!this.with) return; this.busy=true;
+    try{ await api('/api/dm/'+encodeURIComponent(this.with),{method:'POST',body:{text}}); this.draft=''; if(ta){ ta.value=''; ta.focus(); } }catch(e){ toast(e.message); } this.busy=false; },
+  addBubble(m){ const body=$('dmBody'); if(!body) return; const near=body.scrollHeight-body.scrollTop-body.clientHeight<60; body.append(this.bubble(m)); if(near||m.mine) body.scrollTop=body.scrollHeight; },
+  bubble(m){ return el('div',{class:'dm '+(m.mine?'me':'them')}, el('p',{text:m.text}), el('time',{text:hhmm(m.t)})); },
+  dot(p){ return el('span',{class:'odot'+(p&&p.online?' on':''),title:p&&p.online?'Online':'Offline'}); },
+  renderNow(){ if(activeTab!=='chats') return; const p=$('pane'); if(p) { p.innerHTML=''; this.render(p); } },
+  render(p){
+    if(!(Me&&Me.token)){ p.append(paneHead('Chats')); p.append(el('div',{class:'pane-body'}, el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to chat.'}))); return; }
+    if(this.with){ const w=this.thread&&this.thread.with; const av=el('span',{class:'ava sm'+(w&&w.online?' on':'')}); if(w) av.innerHTML=avatarSVG({handle:w.h,id:w.id,gender:w.g});
+      const head=el('div',{class:'pane-head dmhead'}, el('button',{class:'x',text:'‹','aria-label':'Back to chats',onclick:()=>this.back()}), av,
+        el('div',{class:'dmwho'}, el('b',{text:w?(w.n||'@'+w.h):'@'+this.with}), el('span',{class:'hint'+(w&&w.online?' onl-now':''),text:w?(w.online?'● Online now':w.seen?`Last seen ${ago(w.seen)}`:'Offline'):'…'})),
+        el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>openTab(null)}));
+      const body=el('div',{class:'pane-body dmbody',id:'dmBody'});
+      if(!this.thread) body.append(el('p',{class:'hint',text:'Opening the chat…'}));
+      else if(!this.thread.messages.length) body.append(el('p',{class:'hint',text:`Say hello to @${this.with}. Only the two of you can see this chat.`}));
+      else for(const m of this.thread.messages) body.append(this.bubble(m));
+      const ta=el('textarea',{id:'dmText',rows:'1',maxlength:'500',placeholder:'Message…','aria-label':'Message'}); ta.value=this.draft; ta.oninput=()=>{ this.draft=ta.value; };
+      ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); this.send(); } });
+      const bar=el('div',{class:'dmbar'}, ta, el('button',{class:'btn primary',text:'Send',onclick:()=>this.send()}));
+      p.append(head, body, bar); requestAnimationFrame(()=>{ body.scrollTop=body.scrollHeight; }); return; }
+    p.append(paneHead('Chats')); const body=el('div',{class:'pane-body'});
+    const others=this.online.filter(o=>o.h.toLowerCase()!==Me.handle.toLowerCase());
+    if(others.length){ body.append(el('h3',{text:`Online now (${others.length})`})); const row=el('div',{class:'onlinerow'});
+      for(const o of others.slice(0,30)){ const av=el('span',{class:'ava sm on'}); av.innerHTML=avatarSVG({handle:o.h,id:o.id,gender:o.g}); row.append(el('button',{class:'onl',title:'@'+o.h,onclick:()=>this.open(o.h)}, av, el('span',{text:o.n||'@'+o.h}))); }
+      body.append(row); }
+    body.append(el('h3',{text:'Your chats'}));
+    if(!this.list.length) body.append(el('p',{class:'hint',text:'No chats yet. Open a verified colonist’s card and tap 💬 Message, or tap someone who’s online above.'}));
+    for(const c of this.list){ const av=el('span',{class:'ava sm'+(c.with.online?' on':'')}); av.innerHTML=avatarSVG({handle:c.with.h,id:c.with.id||c.with.h,gender:c.with.g});
+      body.append(el('button',{class:'person dmrow'+(c.unread?' unread':''),onclick:()=>this.open(c.with.h)}, av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:c.with.n?`${c.with.n} · @${c.with.h}`:'@'+c.with.h}), el('div',{class:'what',text:c.last?(c.last.mine?'You: ':'')+c.last.text:''})),
+        c.unread?el('b',{class:'tbadge',text:String(c.unread)}):el('time',{class:'hint',text:c.last?ago(c.last.t):''}))); }
+    p.append(body); if(Date.now()-this.loadedAt>8000) this.load(); } };
+setInterval(()=>{ if(!document.hidden && Me&&Me.token && Date.now()-Chats.loadedAt>45000) Chats.load(); },15000);
+
 // ---- Creature races: the Races tab, the live race on the track, and the 2½-minute call ----
 const Race={ info:null, skew:0, pick:null, amount:10, busy:false, loadAt:0, toastN:0 };
 const raceNow = () => Date.now()+Race.skew;
@@ -2502,6 +2569,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       el('dt',{text:'Home'}), el('dd',{text:h?nm(h):d&&d.queue?`None yet. Moves in when ${fmt(d.queue)} more ${d.queue===1?'home is':'homes are'} built`:'None yet'}),
       el('dt',{text:'Job'}), el('dd',{text:j?`${T(j).work.title} at ${nm(j)}`:h?'Looking for work':'Gets one after moving in'}),
       ...((Store.canWrite||(Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase()))?[el('dt',{text:'Coins'}), el('dd',{text:d&&typeof d.coins==='number'?(d.net?`${fmt(d.coins)}, ${d.net>0?'+':''}${d.net} per day`:`${fmt(d.coins)}, no job yet`):(coinsReload(c),'…')})]:[]),
+      ...(d&&d.claimed?[el('dt',{text:'Online'}), el('dd',{class:d.online?'online':'',text:d.online?'● Online now':d.seen?`Last seen ${ago(d.seen)}`:'Not seen yet'})]:[]),
       ...(c.pet&&CREATURES[c.pet.k]?[el('dt',{text:'Pet'}), el('dd',{text:`${c.pet.n}, a ${CREATURES[c.pet.k].name.toLowerCase()}`})]:[]),
       ...(d&&d.jailedUntil>Date.now()+skew?[el('dt',{text:'Status'}), el('dd',{text:`In jail for ${Math.max(1,Math.ceil((d.jailedUntil-Date.now()-skew)/60000))} more min`})]:[]),
       el('dt',{text:'Joined'}), el('dd',{text:`Day ${Math.max(1,Math.floor(gmAt(c.joinedAt)/1440)+1)}, arrival #${fmt(c.seq||0)}`})));
@@ -2519,12 +2587,13 @@ function renderCard(force){ if(!force && cardBusy()) return;
         card.append(el('div',{class:'authbox'}, el('h3',{text:'Choose your colonist'}), el('p',{class:'hint',text:'Pick once. After this, only the developer can change it.'}), el('div',{class:'row-actions'}, mk('m'), mk('f')))); }
       if(mine) card.append(nameEditor(c,'me'));
       if(mine) card.append(actionTabs(c));
-      if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; myMoney=null; ls.set('settlement-player',null); refreshHUD(); toast('Logged out.'); renderCard(true); }})));
+      if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; myMoney=null; ls.set('settlement-player',null); wsAuth(); Chats.reset(); buildToolbar(); refreshHUD(); toast('Logged out.'); renderCard(true); }})));
       else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
       // Already signed in as someone else: one person, one colonist, so no "This is me" on other cards.
       else if(Me&&Me.token&&Me.handle){ card.append(el('div',{class:'row-actions'}, el('span',{class:'hint',text:`You're signed in as @${Me.handle}.`}), el('button',{class:'linkb',text:'Go to my colonist',onclick:()=>findMe()})));
         if(c.home) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Visit their home',onclick:()=>meAction('/api/me/visit',{friend:c.handle},r=>`You're on your way to ${r.place}.`)}),
           el('button',{class:'btn',text:'Pick their pocket',onclick:()=>toast(`Try to pick @${c.handle}'s pocket? If you're caught you'll be fined, and jailed if the colony has a Jail.`,'Do it',()=>doCrime('pickpocket',c.handle))})));
+        if(c.claimed) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'💬 Message',onclick:()=>Chats.open(c.handle)})));
         if(c.claimed) card.append(giftBox(c.handle)); else card.append(el('p',{class:'hint',text:`@${c.handle} hasn't verified their avatar yet, so they can't receive gifts.`})); }
       else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}))); }
   } else if(sel.kind==='v'){ const v=D.vehicles.get(sel.id); if(!v){ closeCard(); return; } const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car;
@@ -2566,7 +2635,7 @@ let peopleQuery='', searchTimer=null, searchSeq=0;
 function renderPeople(){
   const list=$('peopleList'); if(!list) return; const q=cleanHandle(peopleQuery).toLowerCase(); const gm=gmNow();
   const show=(cits,empty)=>{ list.innerHTML=''; if(!cits.length){ list.append(el('p',{class:'hint',text:empty})); return; }
-    for(const c of cits){ const st=c.home?citizenAt(c,gm):null; const av=el('span',{class:'ava sm'}); av.innerHTML=avatarSVG(c);
+    for(const c of cits){ const st=c.home?citizenAt(c,gm):null; const av=el('span',{class:'ava sm'+(c.online?' on':'')}); av.innerHTML=avatarSVG(c);
       list.append(el('button',{class:'person',onclick:()=>openCitizen(c.handle)}, av, el('span',null, el('div',{class:'who',text:(c.name?c.name+' · @'+c.handle:'@'+c.handle)+(c.founder?' ★':'')}), el('div',{class:'what',text:!c.home?'In cryosleep aboard the ark':st?st.act:'Arriving soon'})))); } };
   if(!q){ const near=[...S.citizens.values()].sort((a,b)=>(b.founder?1:0)-(a.founder?1:0)||a.handle.localeCompare(b.handle)).slice(0,60);
     show(near, S.meta&&S.meta.population?'Nobody lives in this part of town. Search for a name.':'Nobody lives here yet.');
@@ -2817,7 +2886,7 @@ function refreshHUD(){
     $('chips').hidden=false; }
   const mb=$('musicBtn'); mb.setAttribute('aria-pressed',String(Music.on)); $('musicIcon').textContent=Music.on?'❚❚':'▶'; $('musicLabel').textContent=Music.on?'Music on':'Music';
 }
-function refreshUI(){ refreshHUD(); if(sel) renderCard(); if(activeTab==='people') renderPeople(); else if(activeTab && activeTab!=='feed' && activeTab!=='races') renderPane(); feedDirty=true; renderFeed(); }
+function refreshUI(){ refreshHUD(); if(sel) renderCard(); if(activeTab==='people') renderPeople(); else if(activeTab && activeTab!=='feed' && activeTab!=='races' && activeTab!=='chats') renderPane(); feedDirty=true; renderFeed(); }
 setInterval(()=>{ if(!S.meta||document.hidden) return; const gm=gmNow(); $('clockTime').textContent=fmtClock(gm); },250);
 setInterval(()=>{ if(document.hidden) return; feedDirty=true; renderFeed(); if(sel) renderCard(); if(activeTab==='people'&&document.activeElement!==$('search')) renderPeople(); refreshHUD(); },4000);
 setInterval(settle, 30000);

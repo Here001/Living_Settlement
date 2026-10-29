@@ -141,6 +141,15 @@ These live on a signed-in colonist's own card, under **Home**, **Bank** and **Ca
   - The Colony Log says who gifted whom, but not the amount.
 - **New buildings.** A **Gym** and an outdoor **Fitness park**, under Parks → Sports.
 
+## Chats and who's online
+
+- **Who can chat.** Verified colonists (claimed, signed in) can message each other privately.
+  - Tap **💬 Message** on a verified colonist's card, or open the **Chats** tab, which only signed-in players see.
+  - The Chats tab lists your conversations with unread counts, plus an **Online now** row.
+- **Delivery.** Messages arrive live, with a pop-up and an unread badge, and go only to the two people's own screens, never to anyone else.
+- **Limits.** Messages are up to 500 characters, with a short pause between sends. The last 500 messages of each chat are kept.
+- **Online status.** A colonist is online while they're signed in with the colony open. Verified colonists show a green dot and "● Online now" or "Last seen 5 min ago" on their card, in the Colonists list and in chats.
+
 ## Creature races
 
 - **The creatures.** Six native creatures race: Starcrest, Dustrunner, Skyskimmer, Mudgulper, Ironshell and Glimmerhop (`shared/creatures.js`). Each has a speed, a level of unpredictability, and likes and dislikes for the weather.
@@ -164,7 +173,7 @@ Without Docker: install Node 20+ and Postgres, copy `.env.example` to `.env`, fi
 
 | Command | What it does |
 |---|---|
-| `npm test` | 62 end-to-end checks against a running server. **Throwaway database only:** it founds a test town. |
+| `npm test` | About 285 end-to-end checks against a running server. **Throwaway database only:** it founds a test town. Start that server with `ALLOW_TEST_ROUTES=1 RATE_PER_MIN=5000` so the payday check runs and the test isn't rate-limited. |
 | `npm run check` | Recounts every total from scratch and compares it with the running totals. Read-only, safe on the live database. |
 | `npm run loadtest` | Floods a running server with 200,000 followers, webhooks, towers and viewers. **Throwaway database only.** |
 

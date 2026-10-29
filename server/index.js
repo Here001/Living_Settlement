@@ -10,7 +10,8 @@ import { pool, migrate } from './db.js';
 import { World, HttpError } from './world.js';
 import { createBus } from './bus.js';
 import { instagramRouter, igStatus, connectInstagram, loadIgStatus } from './instagram.js';
-import { playersRouter, sweepPlayers, playerFrom } from './players.js';
+import { playersRouter, sweepPlayers, playerFrom, playerByToken } from './players.js';
+import { Chat } from './chat.js';
 import { Races } from './races.js';
 import { Actions } from './actions.js';
 import { Lottery } from './lottery.js';
@@ -34,6 +35,7 @@ const world = new World(bus);
 const races = new Races(world); world.races = races;
 const lottery = new Lottery(world); world.lottery = lottery;
 const economy = new Economy(world); world.economy = economy;
+const chat = new Chat(bus); world.chat = chat;
 const actions = new Actions(world); world.actions = actions; world.blockedReason = c => actions.blockedReason(c);
 const app = express();
 app.disable('x-powered-by');
@@ -190,10 +192,25 @@ wss.on('connection', ws => {
   ws.on('message', raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (m?.type === 'sub' && Array.isArray(m.chunks)) ws.subs = new Set(m.chunks.filter(k => typeof k === 'string' && CHUNK_KEY.test(k)).slice(0, 100));
+    // A signed-in colonist identifies their connection, so private chats reach them and they show as online.
+    if (m?.type === 'auth') playerByToken(m.token).then(p => {
+      const was = ws.playerId; ws.playerId = p ? p.id : null;
+      if (was && was !== ws.playerId && !localOnline(was)) chat.gone(was).catch(() => {});
+      if (p) chat.seen([p.id]).catch(() => {});
+      ws.send(JSON.stringify({ type: 'authed', ok: !!p }));
+    }).catch(() => {});
   });
+  ws.on('close', () => { if (ws.playerId && !localOnline(ws.playerId)) chat.gone(ws.playerId).catch(() => {}); });
   ws.send(JSON.stringify({ type: 'hello', meta: world.publicMeta(), serverNow: Date.now() }));
 });
+const localOnline = id => [...wss.clients].some(w => w.readyState === 1 && w.playerId === id);
+// Every minute, everyone with the colony open is marked as seen (that's what "online" means).
+setInterval(() => { const ids = [...new Set([...wss.clients].filter(w => w.readyState === 1 && w.playerId).map(w => w.playerId))]; chat.seen(ids).catch(e => console.error('presence:', e.message)); }, 60000).unref();
 bus.on(ops => {
+  // Private chat messages go only to the two people's own connections.
+  const priv = ops.filter(o => o.private); if (priv.length) ops = ops.filter(o => !o.private);
+  for (const o of priv) { const msg = JSON.stringify({ type: 'dm', data: o.data }); for (const ws of wss.clients) if (ws.readyState === 1 && o.to.includes(ws.playerId)) { try { ws.send(msg); } catch {} } }
+  if (!ops.length) return;
   try { world.apply(ops); } catch (e) { console.error('applying update failed:', e); }
   for (const o of ops) o.json = JSON.stringify(o, (k, v) => k === 'json' ? undefined : v);
   for (const ws of wss.clients) {

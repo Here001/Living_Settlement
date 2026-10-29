@@ -137,6 +137,10 @@ const MIGRATIONS = [
    create index buildings_owner on buildings (owner_id) where owner_id is not null;`,
   // v21: gifts between colonists (how much each has sent today, for the daily limit)
   `alter table citizens add column gift_day int, add column gift_sent int not null default 0;`,
+  // v22: private chats between verified colonists, and when each was last online
+  `alter table citizens add column last_seen bigint;
+   create table dms (id text primary key, pair text not null, sender_id text not null, recipient_id text not null, text text not null, t bigint not null, read boolean not null default false);
+   create index dms_pair on dms (pair, t desc); create index dms_unread on dms (recipient_id) where not read;`,
 ];
 
 export async function migrate() {

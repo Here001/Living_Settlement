@@ -231,6 +231,14 @@ body.pane-max .composer textarea{height:70px}
 .dmmenu{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:4px 11px 8px}.dmmenu .hint{flex-basis:100%;font-size:11.5px}
 .dmshut{justify-content:center;font-size:13px;padding:10px 11px 12px}.blkrow{display:flex;justify-content:space-between;align-items:center;padding:6px 2px;border-bottom:1px solid var(--glass-line,rgba(0,0,0,.08));font-size:13px}
 .card .x.shr{font-size:17px}
+.dailyrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:2px 0 8px;font-size:13.5px;font-weight:600}.dailyrow .hint{font-weight:400;font-size:12px}
+.rsheet.daily{width:min(400px,100%);text-align:center}.rsheet.daily .shhead h3{font-size:18px}
+.dstrip{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:10px 0 12px}
+.dtile{border-radius:12px;padding:6px 2px;border:1px solid var(--glass-line,rgba(0,0,0,.12));background:rgba(255,255,255,.35);display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.dtile small{font-size:10px;opacity:.7}.dtile b{font-size:12.5px;white-space:nowrap}
+.dtile.done{background:rgba(94,127,69,.22);color:#3d5a2a}.dtile.now{border:2px solid #D9714A;background:rgba(217,113,74,.16);transform:scale(1.06)}
+.dtile.big b{color:#b4492c}.dstreak{font-weight:700;margin:6px 0 0}.dgot{font-size:22px;font-weight:800;color:#3d7a2a;margin:6px 0 0;animation:dpop .5s ease}
+.dclaim{width:100%;font-size:16px;padding:10px}@keyframes dpop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
 .rsheet.share{width:min(420px,100%);max-height:calc(100vh - 150px);max-height:calc(100dvh - 150px);margin-bottom:96px}.shhead{display:flex;align-items:center;justify-content:space-between}.shhead h3{margin:0}
 .shimg{display:block;width:100%;max-height:40vh;object-fit:contain;border-radius:14px;margin:8px 0;background:rgba(0,0,0,.06)}
 .shtext{width:100%;resize:none;font:inherit;font-size:14px;padding:8px 10px;border-radius:12px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:rgba(255,255,255,.55);color:inherit}
@@ -533,7 +541,7 @@ setInterval(loadMyMoney,60000);
 async function checkMe(){ if(!Me||!Me.token) return; try{ const r=await api('/api/me'); Me={...Me,handle:r.handle,genderChosen:!!r.genderChosen}; ls.set('settlement-player',Me); loadMyMoney(); }catch(e){ Me=null; ls.set('settlement-player',null); } }
 // Tell the live connection who we are (or that we signed out), so chats arrive and friends see us online.
 function wsAuth(){ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'auth',token:Me&&Me.token||null})); }catch(e){} }
-function signedIn(r){ Me={token:r.token,handle:r.handle,genderChosen:true}; setTimeout(()=>{ wsAuth(); buildToolbar(); Chats.load(); },50); checkMe().then(()=>renderCard(true)); ls.set('settlement-player',Me); ls.set('settlement-me',r.handle); ls.set('settlement-claim',null); auth=null; clearInterval(authPoll); }
+function signedIn(r){ Me={token:r.token,handle:r.handle,genderChosen:true}; setTimeout(()=>{ wsAuth(); buildToolbar(); Chats.load(); Daily.load(); },50); checkMe().then(()=>renderCard(true)); ls.set('settlement-player',Me); ls.set('settlement-me',r.handle); ls.set('settlement-claim',null); auth=null; clearInterval(authPoll); }
 // Every request gives up after a while (20 s by default), so a dropped mobile connection can never leave a screen waiting forever.
 async function api(path, opts={}){
   const ac=typeof AbortController!=='undefined'?new AbortController():null, timer=ac&&setTimeout(()=>ac.abort(), opts.timeout||20000);
@@ -618,7 +626,7 @@ function connect(){
   ws.onerror=()=>{ try{ me.close(); }catch(e){} };
   ws.onmessage=e=>{ lastMsgAt=Date.now(); let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
     if(m.type==='hello'){ S.meta=m.meta; skew=m.serverNow-Date.now();
-      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); Chats.load(); buildToolbar(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
+      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); Chats.load(); Daily.load(); buildToolbar(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
     else if(m.type==='ops'){ opBatch++; try{ for(const o of m.ops){ try{ applyOp(o); }catch(err){ console.error('Skipped an update:', err); } } } finally { opBatch--; } if(!opBatch&&batchChanged){ batchChanged=false; changed(); } }
     else if(m.type==='resync') reloadAll();
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
@@ -2304,6 +2312,36 @@ document.getElementById('card').addEventListener('input',e=>{ if(e.target&&e.tar
 // ---- Chats: private messages between verified colonists, delivered live ----
 const ago = t => { const s=Math.max(0,(Date.now()+skew-t)/1000); return s<90?'just now':s<3600?`${Math.round(s/60)} min ago`:s<86400?`${Math.round(s/3600)} h ago`:`${Math.round(s/86400)} days ago`; };
 const hhmm = t => { const d=new Date(t); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
+// ---- Daily rewards: collect once a real day; the longer the streak, the bigger (day 7 is the big one) ----
+var Daily={ info:null, busy:false, last:null,
+  async load(popup){ if(!(Me&&Me.token)){ this.info=null; return; } try{ this.info=await api('/api/me/daily'); }catch(e){ return; }
+    const own=sel&&sel.kind==='c'&&Me.handle&&sel.handle&&sel.handle.toLowerCase()===Me.handle.toLowerCase(); if(own) renderCard(true);
+    if(popup===false||this.info.claimed) return; const key=Me.handle+':'+this.info.resetsAt; if(ls.get('daily-seen')===key) return;
+    const tryShow=(n=0)=>{ if(document.getElementById('intro')||document.querySelector('.rsheet-bg, #card .gpick, #card input[type=password]')||/INPUT|TEXTAREA/.test((document.activeElement||{}).tagName||'')){ if(n<60) setTimeout(()=>tryShow(n+1),2000); return; }
+      if(!this.info||this.info.claimed) return; ls.set('daily-seen',key); this.sheet(); };
+    setTimeout(tryShow,1200); },
+  resetText(){ return this.info?new Date(this.info.resetsAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):''; },
+  left(){ const ms=this.info?this.info.resetsAt-Date.now():0, h=Math.floor(ms/3600000), m=Math.max(1,Math.ceil((ms%3600000)/60000)); return h?`${h}h ${m}m`:`${m} min`; },
+  row(){ const I=this.info; if(!I) return null;
+    if(!I.claimed) return el('div',{class:'dailyrow ready'}, el('span',{text:I.streak?`🔥 ${I.streak}-day streak`:'🎁 Daily reward'}), el('button',{class:'btn primary',text:`Collect +${fmt(I.reward)}`,onclick:()=>this.sheet()}));
+    return el('div',{class:'dailyrow'}, el('span',{text:`🔥 ${I.streak}-day streak`}), el('span',{class:'hint',text:`Next reward (+${fmt(I.reward)}) in ${this.left()}`})); },
+  sheet(){ const I=this.info; if(!I) return; document.querySelector('.rsheet-bg')?.remove();
+    const wrap=el('div',{class:'rsheet-bg'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
+    const box=el('div',{class:'rsheet inked daily',role:'dialog','aria-label':'Daily reward'}); wrap.append(box); document.body.append(wrap); this.fill(box); },
+  fill(box){ const I=this.info, got=this.last; box.innerHTML='';
+    const strip=el('div',{class:'dstrip'}); I.rewards.forEach((r,i)=>{ const d=i+1, done=I.claimed?d<=I.day:d<I.day, now=d===I.day;
+      strip.append(el('div',{class:'dtile'+(done?' done':'')+(now?' now':'')+(d===7?' big':'')}, el('small',{text:`Day ${d}`}), el('b',{text:done?'✓':(d===7?'🎁 ':'')+fmt(r)}))); });
+    box.append(el('div',{class:'shhead'}, el('h3',{text:I.claimed?'🔥 See you tomorrow':'🎁 Daily reward'}), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>box.closest('.rsheet-bg').remove()})));
+    if(got) box.append(el('p',{class:'dgot',text:got.short?(got.paid?`+${fmt(got.paid)} coins (the treasury was running low)`:'The treasury is empty today, but your streak still counts.'):`+${fmt(got.paid)} coins!`}));
+    box.append(el('p',{class:'dstreak',text:I.claimed?`${I.streak}-day streak`:I.streak?`You're on a ${I.streak}-day streak. Keep it going!`:I.missed?`You missed a day, so your ${I.missed}-day streak starts again.`:'Come back every day for bigger rewards.'}), strip);
+    if(!I.claimed) box.append(el('button',{class:'btn primary dclaim',text:this.busy?'Collecting…':`Collect ${fmt(I.reward)} coins`,disabled:this.busy,onclick:()=>this.claim(box)}));
+    box.append(el('p',{class:'hint',text:I.claimed?`Tomorrow: +${fmt(I.reward)} coins. A new day starts at ${this.resetText()} your time (in ${this.left()}). Miss a day and the streak starts over.`:`A new day starts at ${this.resetText()} your time. Miss a day and the streak starts over.${I.best>1?` Your best: ${I.best} days.`:''}`})); },
+  async claim(box){ if(this.busy) return; this.busy=true; this.fill(box);
+    try{ const r=await api('/api/me/daily',{method:'POST'}); this.last=r; myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD();
+      if(Me&&Me.handle){ const c=[...S.citizens.values()].find(x=>x.handle.toLowerCase()===Me.handle.toLowerCase()); const d=c&&detail.get(c.id); if(d) d.coins=r.coins; } }
+    catch(e){ toast(e.message); }
+    this.busy=false; try{ this.info=await api('/api/me/daily'); }catch(e){} if(box.isConnected) this.fill(box); this.last=null; renderCard(true); } };
+setInterval(()=>{ if(Daily.info&&Date.now()>Daily.info.resetsAt) Daily.load(); },60000);
 // ---- Blocking: a blocked colonist can't message you, and their Town Square posts are hidden from you ----
 var Blocks={ list:[], set:new Set(),
   has(h){ return !!h&&this.set.has(String(h).toLowerCase()); },
@@ -2361,7 +2399,7 @@ var Reports={ data:null, view:'open', open:undefined, t:0,
 setInterval(()=>{ if(!document.hidden&&Store.canWrite) Reports.load(); },60000);
 var Chats={ list:[], online:[], unread:0, with:null, thread:null, draft:'', busy:false, loadedAt:0,
   menu:false,
-  reset(){ this.list=[]; this.online=[]; this.unread=0; this.with=null; this.thread=null; this.draft=''; this.menu=false; Blocks.put([]); },
+  reset(){ this.list=[]; this.online=[]; this.unread=0; this.with=null; this.thread=null; this.draft=''; this.menu=false; Blocks.put([]); Daily.info=null; },
   async load(){ if(!(Me&&Me.token)) return; try{ const [l,o,b]=await Promise.all([api('/api/dm'),api('/api/online'),api('/api/blocks')]); this.list=l; this.online=o; this.loadedAt=Date.now(); this.count(); Blocks.put(b); }catch(e){} if(activeTab==='chats'&&!this.with) this.renderNow(); },
   // After blocking or unblocking someone: refresh the open chat with them (if any) and the list.
   async after(h){ if(this.with&&this.with.toLowerCase()===String(h).toLowerCase()){ try{ this.thread=await api('/api/dm/'+encodeURIComponent(this.with)); }catch(e){} this.menu=false; this.renderNow(); } this.load(); },
@@ -2566,7 +2604,7 @@ async function openMyTab(tab, panel){ if(!(Me&&Me.handle)) return; actTab=tab; a
   const show=()=>{ const box=panel&&document.querySelector('#card '+panel); if(box) box.scrollIntoView({block:'nearest',behavior:'smooth'}); };
   requestAnimationFrame(show); setTimeout(show,700); }
 const BUYABLE=new Set(['housing','shops','offices','industry']); // what players may own (matches the server)
-function actionTabs(c){ const wrap=el('div',null); const row=el('div',{class:'acttabs',role:'tablist'});
+function actionTabs(c){ const wrap=el('div',null); const dr=Daily.row(); if(dr) wrap.append(dr); const row=el('div',{class:'acttabs',role:'tablist'});
   for(const [id,nm] of [['work','Work'],['home','Home'],['bank','Bank'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['pet','Pet']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
   const P={ work:workPanel, home:homePanel, bank:bankPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, pet:petPanel }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }

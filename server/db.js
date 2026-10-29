@@ -149,6 +149,8 @@ const MIGRATIONS = [
      kind text not null, message_id text not null, text text not null, context jsonb, reason text not null, t bigint not null,
      status text not null default 'open', action text, resolved_at bigint, unique (reporter_id, message_id));
    create index reports_open on reports (t desc) where status = 'open';`,
+  // v24: daily rewards for coming back (the real-world day they last collected, and their streak)
+  `alter table citizens add column daily_day int, add column daily_streak int not null default 0, add column daily_best int not null default 0;`,
 ];
 
 export async function migrate() {

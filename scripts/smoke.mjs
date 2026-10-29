@@ -537,6 +537,28 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     wb.ws.close(); await sleep(600);
     ok(!(await call('GET', '/api/online', undefined, { auth: false })).json.some(p => p.h === 'jobfill_a'), 'closing the colony goes offline');
     wa.ws.close(); stranger.ws.close(); await pool.query("update citizens set pass_hash = null where handle = 'jobfill_a'"); }
+  // ---- daily rewards and streaks ----
+  { const day = Math.floor(Date.now() / 86400000), meta0 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.treasuryBase;
+    await pool.query("update citizens set daily_day = null, daily_streak = 0, daily_best = 0 where handle = 'zara_ng'");
+    ok((await call('GET', '/api/me/daily', undefined, { auth: false })).status === 401, 'daily rewards are for signed-in colonists');
+    const d0 = (await call('GET', '/api/me/daily', undefined, P)).json;
+    ok(d0.claimed === false && d0.streak === 0 && d0.reward === 50 && d0.day === 1 && d0.rewards.length === 7, 'a first-timer can collect day 1 (50 coins)', JSON.stringify(d0));
+    const c0 = (await whoDev('zara_ng')).coins, g1 = await call('POST', '/api/me/daily', {}, P);
+    ok(g1.status === 200 && g1.json.paid === 50 && g1.json.streak === 1 && (await whoDev('zara_ng')).coins === c0 + 50, 'collecting pays 50 coins', JSON.stringify(g1.json));
+    ok((await call('POST', '/api/me/daily', {}, P)).status === 409, 'only once a day');
+    const d1 = (await call('GET', '/api/me/daily', undefined, P)).json;
+    ok(d1.claimed && d1.streak === 1 && d1.reward === 75 && d1.day === 1, "after collecting, it shows tomorrow's 75", JSON.stringify(d1));
+    const t1 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.treasuryBase;
+    ok(meta0 === undefined || Math.round(meta0 - t1) === 50 || t1 < meta0, 'the coins come out of the treasury', `${meta0} → ${t1}`);
+    await pool.query("update citizens set daily_day = $1, daily_streak = 6 where handle = 'zara_ng'", [day - 1]);
+    const d6 = (await call('GET', '/api/me/daily', undefined, P)).json; ok(d6.streak === 6 && d6.reward === 400 && d6.day === 7, 'collecting yesterday keeps the streak: day 7 pays 400', JSON.stringify(d6));
+    const g7 = await call('POST', '/api/me/daily', {}, P); ok(g7.json.streak === 7 && g7.json.paid === 400, 'a 7-day streak collects 400');
+    await new Promise(r => setTimeout(r, 2100)); ok(((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).some(e => e.kind === 'streak' && /@zara_ng has come back 7 days in a row/.test(e.text)), 'a 7-day streak is in the Colony Log');
+    await pool.query("update citizens set daily_day = $1, daily_streak = 7 where handle = 'zara_ng'", [day - 1]);
+    ok((await call('GET', '/api/me/daily', undefined, P)).json.reward === 50, 'day 8 starts the cycle again at 50');
+    await pool.query("update citizens set daily_day = $1, daily_streak = 9 where handle = 'zara_ng'", [day - 3]);
+    const dm = (await call('GET', '/api/me/daily', undefined, P)).json; ok(dm.streak === 0 && dm.missed === 9 && dm.reward === 50, 'missing a day starts the streak over', JSON.stringify(dm));
+    ok((await call('GET', '/api/me/daily', undefined, P)).json.best === 7, 'your best streak is remembered'); }
   // ---- shared links get their own preview on X, WhatsApp… ----
   { const pg = await (await fetch(BASE + '/?c=zara_ng')).text();
     ok(/<meta property="og:title" content="[^"]*@zara_ng\)? on Resurgence"/.test(pg) && /og:url" content="[^"]*\?c=zara_ng"/.test(pg), 'a colonist link has their name in the link preview');

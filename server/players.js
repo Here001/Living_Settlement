@@ -145,6 +145,8 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/dm/:handle', limit, send(async req => world.chat.thread((await me(req)).id, req.params.handle)));
   r.post('/dm/:handle', limit, send(async req => world.chat.send(await me(req), req.params.handle, (req.body || {}).text)));
   r.post('/dm/:handle/read', limit, send(async req => world.chat.read((await me(req)).id, req.params.handle)));
+  r.get('/me/daily', limit, send(async req => world.economy.dailyInfo((await me(req)).id)));
+  r.post('/me/daily', limit, send(async req => world.economy.daily((await me(req)).id)));
   r.get('/me/gift', limit, send(async req => world.economy.giftInfo((await me(req)).id)));
   r.post('/me/gift', limit, send(async req => { const b = req.body || {}; return world.economy.gift((await me(req)).id, b.to, b.amount); }));
   r.get('/me/bank', limit, send(async req => world.economy.bankInfo((await me(req)).id)));

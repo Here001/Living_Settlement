@@ -12,6 +12,12 @@ export const BUSINESS_SHARE = 0.25;     // a business makes 25% of its wage bill
 // treasury can pay it: interest moves existing coins around, it never creates them.
 export const BANK_RATE = 0.001, BANK_CAP = 20;
 export const GIFT_DAILY = 2000; // the most coins one colonist can gift in a game day
+// Coming back every day: a reward once per real-world day (days start at midnight UTC), bigger the longer the streak,
+// paid from the treasury. A week of it is worth about one real day of wages. Missing a day starts the streak again.
+export const DAILY_REWARDS = [50, 75, 100, 125, 150, 200, 400];
+export const DAILY_MILESTONES = new Set([7, 14, 30, 50, 100, 200, 365]);
+const DAY_MS = 86400000, realDay = (t = Date.now()) => Math.floor(t / DAY_MS);
+export const dailyRewardFor = streak => DAILY_REWARDS[(Math.max(1, streak) - 1) % DAILY_REWARDS.length];
 export const MAX_CARS = 3, CAR_RESALE = 0.6, MAX_PROPERTIES = 5, PROPERTY_RESALE = 0.7;
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const nameOf = b => b.name || BUILDING_TYPES[b.type]?.name || 'a building';
@@ -36,6 +42,32 @@ export class Economy {
     return c;
   }
   bankOn(c, today) { return Number(c.bank || 0); }
+
+  // ---------- daily rewards ----------
+  // streak: days in a row so far (0 once a day is missed); reward: what collecting now pays (or tomorrow, once collected);
+  // day: where that collection falls in the 7-day cycle (1–7); missed: the streak that was lost by skipping a day.
+  dailyState(c, now = Date.now()) {
+    const today = realDay(now), last = c.daily_day ?? null, claimed = last === today, alive = last != null && last >= today - 1;
+    const streak = alive ? Number(c.daily_streak || 0) : 0, upcoming = streak + 1;
+    return { claimed, streak, best: Number(c.daily_best || 0), reward: dailyRewardFor(upcoming), day: ((claimed ? streak : upcoming) - 1) % 7 + 1,
+      rewards: DAILY_REWARDS, resetsAt: (today + 1) * DAY_MS, missed: !alive && last != null && Number(c.daily_streak || 0) > 1 ? Number(c.daily_streak) : 0 };
+  }
+  async dailyInfo(id) {
+    const c = (await pool.query('select daily_day, daily_streak, daily_best from citizens where id = $1', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
+    return this.dailyState(c);
+  }
+  async daily(id) {
+    return this.world.change(async ch => {
+      const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
+      const st = this.dailyState(c); if (st.claimed) throw new HttpError(409, `You've collected today's reward. Come back after midnight UTC for day ${st.streak + 1}.`);
+      const streak = st.streak + 1, want = dailyRewardFor(streak), t = Math.floor(R.treasuryOn(ch.meta, ch.today)), paid = Math.max(0, Math.min(want, t));
+      ch.coins(c); c.coins_base += paid; if (paid) treasuryAdd(ch, -paid);
+      ch.touch(c); await ch.saveCitizen(c);
+      await ch.q('update citizens set daily_day = $2, daily_streak = $3, daily_best = greatest(daily_best, $3) where id = $1', [c.id, realDay(), streak]);
+      if (DAILY_MILESTONES.has(streak)) await ch.event(`🔥 @${c.handle} has come back ${streak} days in a row.`, 'streak');
+      return { ok: true, streak, paid, wanted: want, short: paid < want, coins: c.coins_base, best: Math.max(Number(c.daily_best || 0), streak), next: dailyRewardFor(streak + 1), resetsAt: (realDay() + 1) * DAY_MS };
+    });
+  }
 
   // ---------- the Bank ----------
   async hasBank(db = pool) { return (await db.query("select 1 from buildings where type = 'bank' and done and not ruin limit 1")).rowCount > 0; }

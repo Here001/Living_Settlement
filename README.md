@@ -154,6 +154,17 @@ These live on a signed-in colonist's own card, under **Home**, **Bank** and **Ca
 - **Limits.** Messages are up to 500 characters, with a short pause between sends. The last 500 messages of each chat are kept.
 - **Online status.** A colonist is online while they're signed in with the colony open. Verified colonists show a green dot and "● Online now" or "Last seen 5 min ago" on their card, in the Colonists list and in chats.
 
+## Daily rewards and streaks
+
+- **Collecting.** Signed-in colonists collect a reward once per real-world day. A pop-up offers it when they open the colony, and it waits until any first-time setup is done. They can also collect it from **Collect +N** at the top of their own card.
+- **The 7-day cycle.** 50 → 75 → 100 → 125 → 150 → 200 → **400** on day 7, then it starts again at 50. The streak count keeps growing across cycles.
+  - A full week is 1,100 coins, about one real day of wages from a job, so it rewards coming back without flooding the economy.
+- **Streaks.** Collecting on consecutive days builds the streak. Missing a day starts it over, and the pop-up says what was lost.
+  - Days start at midnight UTC, which is 01:00 in Lagos. The pop-up shows the local time.
+  - Each colonist's best streak is remembered.
+- **Where the coins come from.** The treasury, like every other payout. If it runs low the reward is cut to what it holds, and the streak still counts.
+- **Colony Log.** Streaks of 7, 14, 30, 50, 100, 200 and 365 days are announced.
+
 ## Sharing to X, YouTube and anywhere else
 
 - **Where.** The **↗** button at the top of any colonist's or building's card, **↗ Share my win** after a casino win (50+ coins) or a race win, and **Share** on the pop-up when you win the lottery.

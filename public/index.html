@@ -2533,6 +2533,11 @@ function casinoPanel(c){ const box=el('div',{class:'authbox casino'}, el('h3',{t
   return box; }
 // ---- Your own card: Work · Go out · Casino · Crime · Pet, one at a time ----
 let actTab='work';
+// Jump to one of your own card's tabs (e.g. "Play here" on the casino opens the games straight away).
+async function openMyTab(tab, panel){ if(!(Me&&Me.handle)) return; actTab=tab; await openCitizen(Me.handle); actTab=tab;
+  if(tab==='casino'&&casino) casino.open=true; renderCard(true);
+  const show=()=>{ const box=panel&&document.querySelector('#card '+panel); if(box) box.scrollIntoView({block:'nearest',behavior:'smooth'}); };
+  requestAnimationFrame(show); setTimeout(show,700); }
 const BUYABLE=new Set(['housing','shops','offices','industry']); // what players may own (matches the server)
 function actionTabs(c){ const wrap=el('div',null); const row=el('div',{class:'acttabs',role:'tablist'});
   for(const [id,nm] of [['work','Work'],['home','Home'],['bank','Bank'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['pet','Pet']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
@@ -2739,7 +2744,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       if(!b.owner) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(price)}`,onclick:()=>toast(`Buy ${b.name||t.name} for ${fmt(price)} coins? You'll collect 80% of its rent or profit every game day.`,'Buy',async()=>{ const r=await meAction('/api/me/properties/buy',{buildingId:b.id},r=>`It's yours! About ${fmt(r.income)} coins a day.`); if(r){ b.owner=Me.handle; Money.at=0; renderCard(true); } })})));
       else if(b.owner.toLowerCase()===Me.handle.toLowerCase()) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
     if(b.type==='casino' && b.done!==false && !b.ruin && !Store.canWrite) card.append(el('div',{class:'row-actions'}, Me&&Me.token&&Me.handle
-      ? el('button',{class:'btn primary',text:'Play here',onclick:()=>{ casino={ ...(casino||{ game:'coin', pick:'heads', bet:10, last:null }), id:null, open:true }; openCitizen(Me.handle).then(()=>{ if(casino) casino.open=true; }); }})
+      ? el('button',{class:'btn primary',text:'Play here',onclick:()=>{ casino={ ...(casino||{ game:'coin', pick:'heads', bet:10, last:null }), id:null, open:true }; openMyTab('casino','.casino'); }})
       : el('span',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'})));
     if(Store.canWrite) card.append(el('div',{class:'row-actions'}, b.done===false?el('button',{class:'btn primary',text:'Finish now',onclick:async()=>{ try{ await api(`/api/admin/buildings/${encodeURIComponent(b.id)}/finish`,{method:'POST'}); toast(`${b.name||t.name} is finished`); }catch(e){ toast(e.message); } }}):null,
       el('button',{class:'btn',text:'Move',onclick:()=>{ setTool({kind:'move',id:b.id,rot:b.rot||0}); }}), el('button',{class:'btn',text:'⟲ Turn',onclick:()=>rotateBuilding(b.id)}), el('button',{class:'btn',text:'One more',onclick:()=>{ setTool({kind:'place',type:b.type}); }}), el('button',{class:'btn danger',text:'Demolish',onclick:()=>removeBuilding(b.id)})));

@@ -548,9 +548,12 @@ function citizenAt(c, gm){
 /* ---------------- rendering ---------------- */
 const cv=$('world'); let ctx=cv.getContext('2d');
 let dpr=1, cw=0, ch=0;
-const cam={ x:0, y:0, z:1.4 };
+// Opening view: the landing station in the middle, zoomed out so the colony and its surroundings fit on screen.
+const HOME_VIEW={ tile:[3,2], z:0.75 };
+const cam={ x:0, y:0, z:HOME_VIEW.z };
 const HW=32, HH=16;
 const iso=(x,y)=>({ x:(x-y)*HW, y:(x+y)*HH });
+{ const p=iso(...HOME_VIEW.tile); cam.x=p.x; cam.y=p.y-30; }
 const up=(p,h)=>({ x:p.x, y:p.y-h });
 const mid=(a,b)=>({ x:(a.x+b.x)/2, y:(a.y+b.y)/2 });
 const lerp=(a,b,u)=>({ x:a.x+(b.x-a.x)*u, y:a.y+(b.y-a.y)*u });
@@ -2167,7 +2170,7 @@ function afterLoad(){
 }
 $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
   try{ await api('/api/admin/found',{method:'POST',body:{name:$('setName').value,handle:$('setHandle').value}});
-    $('setup').hidden=true; const p=iso(1.5,1); cam.x=p.x; cam.y=p.y; cam.z=1.8; toast('Your colony has landed. Pick a menu below to build.'); }
+    $('setup').hidden=true; const p=iso(...HOME_VIEW.tile); cam.x=p.x; cam.y=p.y-30; cam.z=HOME_VIEW.z; toast('Your colony has landed. Pick a menu below to build.'); }
   catch(err){ toast(err.message); } });
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).

@@ -11,6 +11,7 @@ import { World, HttpError } from './world.js';
 import { createBus } from './bus.js';
 import { instagramRouter, igStatus, connectInstagram, loadIgStatus } from './instagram.js';
 import { playersRouter, sweepPlayers, playerFrom } from './players.js';
+import { Races } from './races.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -20,10 +21,14 @@ if (!process.env.ADMIN_TOKEN || process.env.ADMIN_TOKEN.length < 16) { console.e
 
 // Last line of defence: log anything that slipped through instead of taking the whole colony offline.
 process.on('unhandledRejection', e => console.error('unhandled rejection:', e));
-process.on('uncaughtException', e => { console.error('uncaught exception:', e); });
+// Before the server is up (database migration, first load), a failure must stop the process so the host restarts it
+// and the deploy shows as failed, rather than leaving a server that never answers.
+let started = false;
+process.on('uncaughtException', e => { console.error('uncaught exception:', e); if (!started) process.exit(1); });
 
 const bus = createBus();
 const world = new World(bus);
+const races = new Races(world); world.races = races;
 const app = express();
 app.disable('x-powered-by');
 app.use(compression()); // map data is very repetitive JSON; this shrinks it several times over
@@ -75,6 +80,9 @@ app.get('/api/citizens/:handle', limit, send(async req => {
   if (!admin.check(req) && !(me && me.id === c.id)) { delete c.coins; delete c.net; }
   return c;
 }));
+// ---------- creature races ----------
+app.get('/api/race', limit, send(async req => races.info((await playerFrom(req))?.id)));
+app.post('/api/admin/race/cup', admin, send(req => races.setCup((req.body || {}).bonus, (req.body || {}).name)));
 app.get('/health', (req, res) => res.json({ ok: true, founded: !!world.meta, population: world.meta?.population || 0, viewers: wss?.clients.size || 0, bus: bus.kind, leader: isLeader }));
 
 // Point a free pinger (cron-job.org, UptimeRobot) here every few minutes.
@@ -227,6 +235,7 @@ setInterval(tryLead, 10000);
 setInterval(drainLoop, 1000);
 let ticking = false; // never start a clock tick while the last one is still running (a slow database would pile them up)
 setInterval(async () => { if (!isLeader || ticking) return; ticking = true; try { await world.tick(); } catch (e) { console.error('tick failed:', e.message); } finally { ticking = false; } }, GAME_MIN_MS);
+setInterval(() => { if (isLeader) races.tick().catch(e => console.error('races:', e.message)); }, 2000); // announce, start and settle races
 
 await migrate();
 await loadIgStatus();
@@ -237,5 +246,5 @@ if (isLeader && await world.reanchor().catch(e => { console.error('reanchor fail
 if (isLeader) await world.upgradeCampfire().catch(e => console.error('landing station:', e.message));
 if (isLeader) await world.tick().catch(e => console.error('tick failed:', e.message)); // catch up on anything missed while off
 server.keepAliveTimeout = 65000; server.headersTimeout = 66000; // longer than the host's proxy, so it never reuses a closed connection
-server.listen(PORT, () => console.log(`City running on :${PORT} with ${world.meta?.population || 0} citizens (bus: ${bus.kind})`));
+server.listen(PORT, () => { started = true; console.log(`City running on :${PORT} with ${world.meta?.population || 0} citizens (bus: ${bus.kind})`); });
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { server.close(); process.exit(0); });

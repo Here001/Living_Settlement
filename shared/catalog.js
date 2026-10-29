@@ -109,6 +109,7 @@ export const BUILDING_TYPES = {
   solar:      { name:'Solar field', cat:'utilities', size:[2,2], style:'solar', outdoor:true, cost:2600 },
   pylon:      { name:'Power pylon', cat:'utilities', size:[1,1], style:'pylon', cost:200 },
   // ---------- parks
+  racetrack:  { name:'Racetrack', cat:'parks', size:[5,3], style:'racetrack', colors:{grass:'#7DB656', dirt:'#C9A06A', stand:'#B5523B'}, work:{title:'Creature keeper', slots:4, salary:26}, leisure:true, visitors:150, outdoor:true, cost:9000 },
   park:       { name:'Park', cat:'parks', size:[2,2], style:'park', colors:{grass:'#7DB656'}, leisure:true, visitors:60, outdoor:true, cost:700 },
   garden:     { name:'Flower garden', cat:'parks', size:[2,2], style:'garden', leisure:true, visitors:50, outdoor:true, cost:800 },
   playground: { name:'Playground', cat:'parks', size:[2,2], style:'playground', leisure:true, visitors:40, outdoor:true, cost:900 },
@@ -303,7 +304,7 @@ const SUB_OF = {
   sewage:['outfall','treatment','treatponds','sewageplant'],
   garbage:['landfill','recycling','incinerator'],
   squares:['park','garden','playground','square','fountain','fountainsquare','transitsquare','gazebo','allotments','botanical'],
-  sports:['football','tennis','basketball','stadium'],
+  sports:['racetrack','football','tennis','basketball','stadium'],
   trees:['tree','pine','birch','cherry','maple','poplar','palm'],
   fields:['wheat','sunflowers','vegetables','vineyard','orchard','lavender','pasture'],
   rocks:['bush','rocks'],

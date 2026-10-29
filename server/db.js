@@ -117,6 +117,12 @@ const MIGRATIONS = [
   `alter table citizens add column job_changed_day int;`,
   // v15: a short visit somewhere (the casino), so everyone sees the colonist inside while it lasts
   `alter table citizens add column visit_id text, add column visit_until bigint, add column visit_cx int, add column visit_cy int;`,
+  // v16: creature races and bets
+  `create table races (n int primary key, start_at bigint not null, weather text not null, odds jsonb not null, result jsonb, cup jsonb,
+     announced boolean not null default false, settled boolean not null default false);
+   create table race_bets (id text primary key, n int not null, citizen_id text not null, handle text not null, creature text not null,
+     amount int not null, pays real not null, payout int, t bigint not null);
+   create index race_bets_n on race_bets (n); create index race_bets_citizen on race_bets (citizen_id, n);`,
 ];
 
 export async function migrate() {

@@ -190,6 +190,22 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .uname{margin:0;color:var(--muted);font-size:13px;font-weight:500}
 .namebox{margin-top:10px;display:flex;flex-direction:column;gap:4px}
 .namebox label{font-size:12px;font-weight:700;color:var(--muted)}
+.rlist{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.rrow{display:flex;align-items:center;gap:10px;text-align:left;padding:6px 10px 6px 6px;border-radius:12px;border:1.6px solid transparent;background:rgba(0,0,0,.04);font:inherit;color:inherit;cursor:pointer}
+.rrow.on{border-color:var(--accent,#D9714A);background:rgba(217,113,74,.12)}
+.rrow .rthumb{width:44px;height:44px;border-radius:10px;background:#9CCD6F;flex:none}
+.rrow .rtx{flex:1;min-width:0;display:flex;flex-direction:column;font-size:12.5px;line-height:1.3}.rrow .rtx b{font-size:14px}.rrow .rform{opacity:.7}
+.rrow .rpays{font-weight:800;font-size:16px;min-width:46px;text-align:right}
+.rnext h3,.rlive h3,.rlast h3{margin:6px 0 2px}.rcount{font-weight:600;color:var(--accent,#D9714A);margin-left:4px}
+.rcup{margin:4px 0;font-weight:700}.rmine{font-weight:600;margin:6px 0}.rmine.win{color:#2E7D4F}
+.rbet{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}.rbet input{width:84px;padding:6px 8px;border-radius:10px;border:1.4px solid var(--soft);font:inherit}
+.rbet .pill,.rlast .pill{cursor:pointer;border:1.4px solid var(--ink,#2B2621);background:transparent;padding:5px 10px;border-radius:999px;font:inherit;font-size:13px}
+.rlast ol{margin:4px 0 8px;padding-left:20px}.rlast li{display:flex;align-items:center;gap:6px;margin:2px 0}.rlast li img{border-radius:6px;background:#9CCD6F}
+.rlive{padding:8px 10px;border-radius:14px;background:rgba(242,179,61,.18);margin-bottom:8px}
+.lanes{display:flex;flex-direction:column;gap:3px;margin:6px 0}
+.lane{position:relative;height:34px;border-radius:8px;background:repeating-linear-gradient(90deg,#C9A06A 0 18px,#BF9660 18px 36px);border-right:4px solid #2B2621}
+.lane .lname{position:absolute;left:6px;top:9px;font-size:11px;opacity:.55;font-weight:700}
+.lane img{position:absolute;top:2px;left:0;width:30px;height:30px;transition:left .25s linear}
 .casino .ctabs,.casino .cpicks{display:flex;flex-wrap:wrap;gap:6px}
 .casino .pill{cursor:pointer;border:1.4px solid var(--ink,#2B2621);background:transparent;padding:5px 10px;border-radius:999px;font:inherit;font-size:13px}
 .casino .pill.on{background:var(--accent,#D9714A);color:#fff;border-color:var(--accent,#D9714A)}
@@ -333,6 +349,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 <script type="module">
 import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, roadClears } from '/shared/catalog.js';
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES } from '/shared/casino.js';
+import { CREATURES, CREATURE_IDS } from '/shared/creatures.js';
 import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
@@ -395,7 +412,8 @@ function applyOp(o){
     for(const k of o.chunks) if(loading.has(k)){ if(!buffered.has(k)) buffered.set(k,[]); buffered.get(k).push(o); return; }
     if(o.op!=='citizen'&&o.op!=='citizenGone') return; }
   switch(o.op){
-  case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&activeTab!=='feed'&&activeTab!=='people') renderPane(); break;
+  case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&!PLAYER_TABS.has(activeTab)) renderPane(); break;
+  case 'race': raceSoon(o.data); break;
   case 'building': putBuilding(o.data); changed(); break;
   case 'removeBuilding': { const b=S.buildings.get(o.id); if(b && ck(b.cx,b.cy)===o.chunks[0]){ S.chunks.get(o.chunks[0])?.buildings.delete(o.id); S.buildings.delete(o.id); changed(); } break; }
   case 'roads': { const slot=S.chunks.get(o.chunks[0]); for(const k in o.set){ S.roads.set(k,o.set[k]); slot?.roads.add(k); } for(const k of o.remove){ S.roads.delete(k); slot?.roads.delete(k); } changed(); break; }
@@ -454,7 +472,7 @@ function connect(){
   ws.onerror=()=>{ try{ me.close(); }catch(e){} };
   ws.onmessage=e=>{ lastMsgAt=Date.now(); let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
     if(m.type==='hello'){ S.meta=m.meta; skew=m.serverNow-Date.now();
-      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
+      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
     else if(m.type==='ops'){ opBatch++; try{ for(const o of m.ops){ try{ applyOp(o); }catch(err){ console.error('Skipped an update:', err); } } } finally { opBatch--; } if(!opBatch&&batchChanged){ batchChanged=false; changed(); } }
     else if(m.type==='resync') reloadAll();
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now(); };
@@ -799,7 +817,7 @@ function drawTreeAt(p,leaf,s,seed){ seed=seed||7;
   const parts=[[0,-36,11,1],[-8,-27,10,0.94],[8,-28,10,0.9],[0,-22,9,1.04]];
   parts.forEach(([dx,dy,r,f],i)=>blob(p.x+dx*s,p.y+dy*s,r*s,shade2(leaf,f),seed+i*31)); }
 function shade2(hex,f){ const n=parseInt(hex.slice(1),16); const c=v=>Math.max(0,Math.min(255,Math.round(v*f))).toString(16).padStart(2,'0'); return '#'+c((n>>16)&255)+c((n>>8)&255)+c(n&255); }
-const SHADOW_H = { starport:()=>110, house:t=>(t.height||24)+(t.roofH||18)*0.5, block:t=>t.height||40, tower:t=>t.height+20, watertower:t=>t.height, tent:()=>20, stall:()=>24, well:()=>22, statue:()=>30, fountain:()=>10, tree:()=>38, pine:()=>40, lamp:()=>34, bench:()=>4 };
+const SHADOW_H = { racetrack:()=>12, starport:()=>110, house:t=>(t.height||24)+(t.roofH||18)*0.5, block:t=>t.height||40, tower:t=>t.height+20, watertower:t=>t.height, tent:()=>20, stall:()=>24, well:()=>22, statue:()=>30, fountain:()=>10, tree:()=>38, pine:()=>40, lamp:()=>34, bench:()=>4 };
 function hull(pts){ pts=pts.slice().sort((a,b)=>a.x-b.x||a.y-b.y); const cr=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x); const lo=[],hi=[]; for(const p of pts){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); } for(const p of pts.slice().reverse()){ while(hi.length>=2&&cr(hi[hi.length-2],hi[hi.length-1],p)<=0) hi.pop(); hi.push(p); } return lo.slice(0,-1).concat(hi.slice(0,-1)); }
 function addShadow(P,b){ const t=T(b), fn=SHADOW_H[t.style]; if(!fn) return; const h=fn(t); const ox=-0.62*h, oy=0.3*h;
   if(['tree','pine','lamp','statue','well','birch','bush','turbine','pylon','obelisk','windmill','rocks'].includes(t.style)){ const c=iso(b.x+0.5,b.y+0.5); const pts=[]; const rx=t.style==='lamp'?3:12, ry=t.style==='lamp'?2:6; for(let i=0;i<10;i++){ const a=i/10*Math.PI*2; pts.push({x:c.x+Math.cos(a)*rx,y:c.y+Math.sin(a)*ry},{x:c.x+ox+Math.cos(a)*rx*1.1,y:c.y+oy+Math.sin(a)*ry*1.1}); } const hp=hull(pts); P.moveTo(hp[0].x,hp[0].y); hp.slice(1).forEach(p=>P.lineTo(p.x,p.y)); P.closePath(); return; }
@@ -873,6 +891,29 @@ function drawCitizen(c, st, selected, ghost){
   if(c.founder) put('star',L.style==='bun'?34:31,0,x,y);
   if(st.act && st.act.startsWith('Sleeping')){ ctx.fillStyle='rgba(255,255,255,.9)'; ctx.font='600 8px "Bricolage Grotesque",sans-serif'; ctx.fillText('z',x+6,y-26); ctx.fillText('Z',x+10,y-32); }
 }
+// ---- The native creatures of Gliese 12 b, drawn at (x,y) = their feet, facing right. s = size, t = time (ms) for legs and wings.
+function drawCreature(kind, x, y, s=1, t=0, run=false){ const C=CREATURES[kind]; if(!C) return; const col=C.color, acc=C.accent, ph=t/90;
+  const E=(cx,cy,rx,ry,f,a)=>{ ctx.beginPath(); ctx.ellipse(x+cx*s,y+cy*s,rx*s,ry*s,a||0,0,7); if(f){ ctx.fillStyle=f; ctx.fill(); } ctx.stroke(); };
+  const L=(x1,y1,x2,y2,w)=>{ ctx.lineWidth=(w||1.2)*s; ctx.beginPath(); ctx.moveTo(x+x1*s,y+y1*s); ctx.lineTo(x+x2*s,y+y2*s); ctx.stroke(); ctx.lineWidth=0.9*s; };
+  const eye=(cx,cy,r)=>{ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x+cx*s,y+cy*s,r*s,0,7); ctx.fill(); ctx.stroke(); ctx.fillStyle=INK; ctx.beginPath(); ctx.arc(x+(cx+r*0.3)*s,y+cy*s,r*0.5*s,0,7); ctx.fill(); };
+  ctx.save(); ctx.strokeStyle=INK; ctx.lineWidth=0.9*s; ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.fillStyle='rgba(30,40,70,.22)'; ctx.beginPath(); ctx.ellipse(x,y+0.5*s,9*s,2.6*s,0,0,7); ctx.fill();
+  const st=run?Math.sin(ph):0, st2=run?Math.sin(ph+Math.PI):0;
+  if(kind==='starcrest'){ L(-2,-8,-2+st*3,0,1.4); L(2,-8,2+st2*3,0,1.4); E(0,-10,6,4,col); ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(x+3*s,y-12*s); ctx.quadraticCurveTo(x+6*s,y-20*s,x+7*s,y-24*s); ctx.lineTo(x+9*s,y-23*s); ctx.quadraticCurveTo(x+8*s,y-18*s,x+5*s,y-10*s); ctx.closePath(); ctx.fill(); ctx.stroke();
+    E(9,-24.5,3,2.2,col); eye(9.6,-25,1.1); ctx.fillStyle=acc; ctx.beginPath(); ctx.moveTo(x+7*s,y-26*s); ctx.lineTo(x+5*s,y-31*s); ctx.lineTo(x+8.5*s,y-27*s); ctx.lineTo(x+8.5*s,y-32*s); ctx.lineTo(x+10*s,y-26.5*s); ctx.closePath(); ctx.fill(); ctx.stroke(); L(-6,-11,-10,-13,1.4); }
+  else if(kind==='dustrunner'){ for(let i=0;i<3;i++){ const lx=-5+i*5, a=(i%2?st:st2)*2; L(lx,-4,lx-2+a,0,1.1); L(lx,-4,lx+2-a,0,1.1); } ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(x-8*s,y-5*s); ctx.quadraticCurveTo(x-15*s,y-4*s,x-17*s,y-1*s); ctx.quadraticCurveTo(x-13*s,y-6*s,x-8*s,y-7*s); ctx.closePath(); ctx.fill(); ctx.stroke();
+    E(0,-5.5,8.5,3,col); E(9,-6.5,3.5,2.3,col); eye(9.6,-7.4,1); ctx.fillStyle=acc; for(const sx of [-4,0,4]){ ctx.beginPath(); ctx.arc(x+sx*s,y-7.5*s,0.9*s,0,7); ctx.fill(); } }
+  else if(kind==='skyskimmer'){ const flap=run?Math.sin(ph*1.6)*0.7:0.3, hy=run?-4-Math.abs(Math.sin(ph*0.8))*3:0; ctx.globalAlpha=0.85; for(const side of [1,-1]){ ctx.fillStyle=acc; ctx.beginPath(); ctx.moveTo(x-1*s,y+(hy-9)*s); ctx.quadraticCurveTo(x-6*s,y+(hy-9-10*flap*side-4)*s,x-11*s,y+(hy-9-6*flap*side)*s); ctx.quadraticCurveTo(x-6*s,y+(hy-7)*s,x+1*s,y+(hy-8)*s); ctx.closePath(); ctx.fill(); ctx.stroke(); } ctx.globalAlpha=1;
+    L(-1,hy-6,-2,hy-1+(run?0:1),1); L(2,hy-6,2,hy-1+(run?0:1),1); E(0,hy-8,6,2.8,col); E(6,hy-9,2.6,2.2,col); eye(6.6,hy-9.4,0.9); L(7.5,hy-11,9,hy-14,0.8); L(6.5,hy-11,7,hy-14.5,0.8); }
+  else if(kind==='mudgulper'){ const hop=run?Math.abs(Math.sin(ph*0.7))*4:0; E(-2,-1-hop,4,1.6,shade(col,0.85)); E(5,-1-hop,4,1.6,shade(col,0.85)); E(1,-6-hop,9,6,col); E(1,-3.5-hop,6,2.5,acc); eye(-2,-12-hop,1.8); eye(4,-12-hop,1.8); ctx.beginPath(); ctx.moveTo(x+2*s,y+(-6-hop)*s); ctx.quadraticCurveTo(x+7*s,y+(-5-hop)*s,x+9.5*s,y+(-7.5-hop)*s); ctx.stroke(); }
+  else if(kind==='ironshell'){ const roll=run?t/120:0; ctx.fillStyle=shade(col,0.8); for(const lx of [-5,5]) { ctx.beginPath(); ctx.ellipse(x+lx*s,y-1.2*s,2*s,1.2*s,0,0,7); ctx.fill(); ctx.stroke(); }
+    ctx.fillStyle=col; ctx.beginPath(); ctx.ellipse(x,y-6*s,9*s,6.5*s,0,Math.PI,0); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.strokeStyle=acc; for(let i=-2;i<=2;i++){ const a=Math.PI*(0.5+i*0.18)+Math.sin(roll)*0.05; ctx.beginPath(); ctx.moveTo(x,y-1.5*s); ctx.lineTo(x+Math.cos(a)*9*s,y-6*s-Math.sin(a)*6.5*s); ctx.stroke(); } ctx.strokeStyle=INK;
+    E(9.5,-3.2,2.6,2,shade(col,0.9)); eye(10.2,-3.8,0.8); }
+  else if(kind==='glimmerhop'){ const hop=run?Math.abs(Math.sin(ph*0.9))*7:0; ctx.globalAlpha=0.35; ctx.fillStyle=acc; ctx.beginPath(); ctx.arc(x,y-(8+hop)*s,11*s,0,7); ctx.fill(); ctx.globalAlpha=1;
+    L(-3,-4-hop,-5,0-hop*0.4,1.4); L(3,-4-hop,5,0-hop*0.4,1.4); E(0,-8-hop,6,5.5,col); E(-2.5,-15-hop,1.6,4,col,-0.3); E(2.5,-15-hop,1.6,4,col,0.3); eye(-2,-9-hop,1.9); eye(2.2,-9-hop,1.9); ctx.fillStyle=acc; ctx.beginPath(); ctx.arc(x,y-(5-0)*s-hop*s,1*s,0,7); ctx.fill(); }
+  ctx.restore(); }
+const creatureThumbs={};
+function creatureThumb(kind){ if(creatureThumbs[kind]) return creatureThumbs[kind]; const c=document.createElement('canvas'); c.width=c.height=96; const keep=ctx; ctx=c.getContext('2d'); try{ drawCreature(kind,46,84,2.3,0,false); } finally { ctx=keep; } return creatureThumbs[kind]=c.toDataURL(); }
 // A glow for street lights and windows: one soft disc per colour, scaled and faded as needed.
 const glowCache=new Map();
 function glowSprite(col){ let c=glowCache.get(col); if(c) return c; c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d');
@@ -1196,6 +1237,18 @@ Object.assign(DRAW, {
       for(const u of [0,1]){ const a=P(u,0.38), c2=P(u,0.62); line(a,up(a,10),'#F4F4F0',2); line(c2,up(c2,10),'#F4F4F0',2); line(up(a,10),up(c2,10),'#F4F4F0',2); } }
     else if(kind==='tennis'){ line(P(0.5,0),P(0.5,1),'#F4F4F0',1.2); line(P(0,0.5),P(1,0.5),'#F4F4F0',1); line(up(P(0.5,0),6),up(P(0.5,1),6),INK,1.4); line(P(0.5,0),up(P(0.5,0),6),INK,1.2); line(P(0.5,1),up(P(0.5,1),6),INK,1.2); }
     else { const c=P(0.5,0.5); ctx.strokeStyle='#F4F4F0'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.ellipse(c.x,c.y,12,6,0,0,7); ctx.stroke(); line(P(0.5,0),P(0.5,1),'#F4F4F0',1.2); for(const u of [0.04,0.96]){ const p=P(u,0.5); line(p,up(p,22),INK,1.6); poly([up(p,22),{x:p.x+5,y:p.y-24},{x:p.x+5,y:p.y-30},up(p,28)],'#F4F4F0'); } } },
+  racetrack(b,t){ const [w,d]=t.size, x=b.x, y=b.y, c=t.colors;
+    poly([iso(x,y),iso(x+w,y),iso(x+w,y+d),iso(x,y+d)], c.grass, INK, 1.1);
+    ctx.save(); ctx.transform(HW,HH,-HW,HH,0,0); const cx=x+w/2, cy=y+d/2;
+    ctx.beginPath(); ctx.ellipse(cx,cy,w/2-0.12,d/2-0.12,0,0,7); ctx.ellipse(cx,cy,w/2-0.8,d/2-0.76,0,0,7); ctx.fillStyle=c.dirt; ctx.fill('evenodd');
+    ctx.strokeStyle='#F4F1E8'; ctx.lineWidth=0.05; ctx.beginPath(); ctx.ellipse(cx,cy,w/2-0.12,d/2-0.12,0,0,7); ctx.stroke(); ctx.beginPath(); ctx.ellipse(cx,cy,w/2-0.8,d/2-0.76,0,0,7); ctx.stroke();
+    ctx.strokeStyle='rgba(122,86,48,.35)'; ctx.lineWidth=0.02; for(let i=1;i<6;i++){ ctx.beginPath(); ctx.ellipse(cx,cy,w/2-0.12-i*0.113,d/2-0.12-i*0.107,0,0,7); ctx.stroke(); }
+    ctx.strokeStyle='#F4F1E8'; ctx.lineWidth=0.08; ctx.beginPath(); ctx.moveTo(cx,cy+d/2-0.12); ctx.lineTo(cx,cy+d/2-0.8); ctx.stroke(); ctx.restore();
+    // the grandstand along the back edge, with a striped roof and a crowd
+    const s0=iso(x+0.7,y+0.05), s1=iso(x+w-0.7,y+0.05), h=11; poly([s0,s1,up(s1,h),up(s0,h)], shade(c.stand,0.85));
+    for(let i=0;i<14;i++){ const p=lerp(s0,s1,(i+0.5)/14); ctx.fillStyle=SHIRTS[(i*7+b.x)%SHIRTS.length]; ctx.beginPath(); ctx.arc(p.x,p.y-h*0.45-(i%2)*2.5,1.6,0,7); ctx.fill(); }
+    const r0=up(s0,h), r1=up(s1,h); poly([r0,r1,{x:r1.x+6,y:r1.y-6},{x:r0.x+6,y:r0.y-6}], c.stand); for(let i=1;i<6;i++){ const a=lerp(r0,r1,i/6); line(a,{x:a.x+6,y:a.y-6},'#F4EDE0',1.2); }
+    const fl=iso(x+w/2,y+d-0.12); line(fl,up(fl,20),INK,1.4); poly([up(fl,20),{x:fl.x+9,y:fl.y-17},up(fl,14)],'#D9544A'); },
   stadium(b,t){ const [w,d]=t.size, c=iso(b.x+w/2,b.y+d/2), rx=(w+d)*HW*0.48, ry=(w+d)*HH*0.48, h=34;
     ctx.fillStyle='#B9B5AB'; ctx.strokeStyle=INK; ctx.lineWidth=1.2; ctx.beginPath(); ctx.ellipse(c.x,c.y,rx,ry,0,0,Math.PI); ctx.lineTo(c.x-rx,c.y-h); ctx.ellipse(c.x,c.y-h,rx,ry,0,Math.PI,0,true); ctx.closePath(); ctx.fill(); ctx.stroke();
     for(let i=1;i<6;i++){ ctx.strokeStyle=i%2?'#C8382E':'#2F4A7A'; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(c.x,c.y-h+i*1.2,rx*(1-i*0.06),ry*(1-i*0.06),0,0,7); ctx.stroke(); }
@@ -1593,7 +1646,7 @@ function drawFrame(ts){
   { let wk=0, dr=0; for(const i of items){ if(i.c) wk++; else if(i.veh&&!i.veh.id) dr++; } frameStats={ crowd:crowd.length, walking:wk, driving:dr, citizens:S.citizens.size, quality:Quality.level, dpr }; }
   items.sort((a,b)=>a.k-b.k);
   for(const it of items){ if(it.fn) it.fn(); else if(it.veh){ const v=it.veh; const hd=(v.st.dx||v.st.dy)?[v.st.dx||0,v.st.dy||0]:[1,0]; drawVehicle(v.st.x,v.st.y,hd[0],hd[1],v.V,v.col,v.siren); if(sel&&sel.kind==='v'&&sel.id===v.id){ const p=iso(v.st.x,v.st.y); ctx.strokeStyle='#F2B33D'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,16,8,0,0,7); ctx.stroke(); } }
-    else if(it.b){ const t=T(it.b); if(it.b.draft||it.b.draftDel){ draftMark(it.b); ctx.globalAlpha=it.b.draftDel?0.4:0.78; drawB(it.b,t); ctx.globalAlpha=1; } else if(it.b.ruin) drawRuin(it.b,t); else if(it.b.done===false) drawConstruction(it.b,t); else drawB(it.b,t); } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
+    else if(it.b){ const t=T(it.b); if(it.b.draft||it.b.draftDel){ draftMark(it.b); ctx.globalAlpha=it.b.draftDel?0.4:0.78; drawB(it.b,t); ctx.globalAlpha=1; } else if(it.b.ruin) drawRuin(it.b,t); else if(it.b.done===false) drawConstruction(it.b,t); else { drawB(it.b,t); if(it.b.type==='racetrack'&&!it.b.ruin) drawRunners(it.b); } } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
   drawDisasters();
   if(Quality.ghosts){ ctx.globalAlpha=0.38; for(const it of hiddenPeople(items)) drawCitizen(it.c,it.st,false,true); ctx.globalAlpha=1; }
   if(areaSel){ const ax=Math.min(areaSel.a[0],areaSel.b[0]), bx=Math.max(areaSel.a[0],areaSel.b[0])+1, ay=Math.min(areaSel.a[1],areaSel.b[1]), by=Math.max(areaSel.a[1],areaSel.b[1])+1; poly([iso(ax,ay),iso(bx,ay),iso(bx,by),iso(ax,by)],'rgba(184,67,58,.28)','#B8433A',2.5); }
@@ -1850,6 +1903,7 @@ async function moveBuilding(id,x,y){ const b=D.buildings.get(id); if(!b){ setToo
 const I=(body)=>`<svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="${INK}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${body}</svg>`;
 const ICONS={
   feed: I('<path d="M5 7h22v14H14l-6 5v-5H5z" fill="#9CC4E4"/><path d="M10 12h12M10 16h8"/>'),
+  races: I('<path d="M8 27V5"/><path d="M8 6h16l-3 5 3 5H8z" fill="#F4EDE0"/><path d="M8 6h4v5H8zM16 6h4v5h-4zM12 11h4v5h-4zM20 11h4v5h-4z" fill="#2B2621" stroke="none"/>'),
   people: I('<circle cx="12" cy="11" r="4" fill="#E8A07A"/><circle cx="21" cy="12" r="3.5" fill="#F2C9A8"/><path d="M4 25c0-5 4-8 8-8s8 3 8 8z" fill="#E8A07A"/><path d="M17 25c0-4 2-7 5-7s6 3 6 7z" fill="#F2C9A8"/>'),
   roads: I('<path d="M12 5h8l5 22H7z" fill="#A3A3A0"/><path d="M16 8v3M16 15v3M16 22v3" stroke="#fff"/>'),
   utilities: I('<path d="M18 3 8 18h7l-2 11 11-16h-7z" fill="#F2C94C"/>'),
@@ -1883,7 +1937,7 @@ async function rotateBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
 function setTool(t){ tool=t; ghost=null; roadStart=null; setTimeout(refreshTurn); const chip=$('toolchip');
   if(t.kind==='pan'){ chip.hidden=true; setMini(false); }
   else { chip.hidden=false; $('toolLabel').textContent = t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} onto a road` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
-  if(activeTab && activeTab!=='feed' && activeTab!=='people') renderPane(); }
+  if(activeTab && !PLAYER_TABS.has(activeTab)) renderPane(); }
 $('toolDone').onclick=()=>setTool({kind:'pan'});
 // Minimise: tuck the menus away while keeping the chosen tool, so the whole map is free to build on.
 let mini=false;
@@ -1896,13 +1950,14 @@ addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==
 addEventListener('keydown',e=>{ if((e.key==='m'||e.key==='M') && !/INPUT|TEXTAREA/.test((e.target.tagName||'')) && tool.kind!=='pan') setMini(!mini); if(e.key==='Escape' && tool.kind!=='pan') setTool({kind:'pan'}); });
 
 let activeTab=null, feedMode='posts';
+const PLAYER_TABS=new Set(['feed','people','races']); // everyone's tabs; the rest are the developer's build menus
 function buildToolbar(){ const row=$('toolsRow'); row.innerHTML='';
-  const tabs=[{id:'feed',name:'Town Square'},{id:'people',name:'Colonists'}];
+  const tabs=[{id:'feed',name:'Town Square'},{id:'people',name:'Colonists'},{id:'races',name:'Races'}];
   const all = Store.canWrite ? tabs.concat([{sep:true}],CATS) : tabs;
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
     const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(activeTab===c.id),onclick:()=>openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); row.append(btn); } }
-function openTab(name){ activeTab=name; if((name==='feed'||name==='people'||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
-function applyPermissions(){ buildToolbar(); refreshHUD(); refreshUndo(); refreshDraftBar(); if(Store.canWrite && !draftLoaded){ draftLoaded=true; loadDraft(); } $('spawnBoxNote')&&0; if(!Store.canWrite && activeTab && activeTab!=='feed' && activeTab!=='people') openTab(null); }
+function openTab(name){ activeTab=name; if((PLAYER_TABS.has(name)||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
+function applyPermissions(){ buildToolbar(); refreshHUD(); refreshUndo(); refreshDraftBar(); if(Store.canWrite && !draftLoaded){ draftLoaded=true; loadDraft(); } $('spawnBoxNote')&&0; if(!Store.canWrite && activeTab && !PLAYER_TABS.has(activeTab)) openTab(null); }
 
 const subTab={}; let brushSize=2;
 async function setWeather(kind){ try{ await api('/api/admin/weather',{method:'PUT',body:{kind}}); toast(kind?`Weather pinned to ${WEATHER_TYPES[kind].name.toLowerCase()}`:'Weather is automatic again'); }catch(e){ toast(e.message); } }
@@ -1933,6 +1988,7 @@ function renderPane(){
   if(activeTab==='feed'){
     const seg=el('div',{class:'seg',role:'tablist'}); for(const [id,nm] of [['posts','Posts'],['log','Daily log'],['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
     p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
+  if(activeTab==='races'){ p.append(paneHead('Races')); const body=el('div',{class:'pane-body',id:'raceBody'}); p.append(body); renderRaces(true); return; }
   if(activeTab==='people'){ p.append(paneHead('Colonists')); const body=el('div',{class:'pane-body'});
     const s=el('input',{class:'search',id:'search',type:'search',placeholder:'Search a username',autocomplete:'off'}); s.value=peopleQuery; s.oninput=()=>{ peopleQuery=s.value; renderPeople(); };
     body.append(s, el('div',{id:'peopleList'}));
@@ -2032,6 +2088,75 @@ function cardBusy(){ const card=$('card'); if(!card||card.hidden) return false; 
   if(a&&card.contains(a)&&/INPUT|TEXTAREA/.test(a.tagName)) return true; return [...card.querySelectorAll('input,textarea')].some(i=>i.dataset.edited&&i.value); }
 document.getElementById('card').addEventListener('input',e=>{ if(e.target&&e.target.dataset) e.target.dataset.edited='1'; });
 // Change the name shown on an avatar. Colonists edit their own; the developer can edit anyone's.
+// ---- Creature races: the Races tab, the live race on the track, and the 2½-minute call ----
+const Race={ info:null, skew:0, pick:null, amount:10, busy:false, loadAt:0, toastN:0 };
+const raceNow = () => Date.now()+Race.skew;
+let raceTimer=null;
+function raceSoon(d){ clearTimeout(raceTimer); raceTimer=setTimeout(()=>loadRace(d),400); }
+async function loadRace(d){ try{ const r=await api('/api/race'); Race.info=r; Race.skew=r.now-Date.now(); Race.loadAt=Date.now(); }catch(e){ return; }
+  const nx=Race.info.next;
+  // The call to the track, a couple of minutes before the gates open.
+  if(nx && Race.info.track && Race.toastN!==nx.n){ const left=nx.start-raceNow(); if(left>0 && left<=Race.info.announce+5000){ Race.toastN=nx.n; toast(`🏁 Race #${nx.no} starts in ${Math.max(1,Math.floor(left/60000))} minute${left<120000?'':'s'}. Pick your creature!`,'Races',()=>openTab('races')); } }
+  if(d&&d.stage==='settled'&&Race.info.last&&Race.info.last.result){ const w=CREATURES[Race.info.last.result.order[0]].name; if(activeTab!=='races') toast(`🏆 ${w} won Race #${Race.info.last.no}!`,'Results',()=>openTab('races')); }
+  renderRaces(); }
+setInterval(()=>{ if(!document.hidden && Date.now()-Race.loadAt>60000) loadRace(); },10000);
+// Where the race is now: each creature's share of the lap, eased so leaders pull away near the end.
+function raceProgress(r, id, el){ const tm=r.result.times[id], e=Math.max(0,el), i=CREATURE_IDS.indexOf(id);
+  if(e>=tm) return 1; const f=e/tm; return Math.min(1, Math.max(0, f*f*(3-2*f)*0.15+f*0.85 + Math.sin(e*1.3+i*1.7)*0.008*(1-f))); }
+const liveRace = () => { const r=Race.info&&Race.info.last; if(!r||!r.result) return null; const el=(raceNow()-r.start)/1000; return el>=-1&&el<=Race.info.len/1000+20 ? { r, el } : null; };
+const fmtLeft = ms => { const s=Math.max(0,Math.ceil(ms/1000)); return s>=3600?`${Math.floor(s/3600)}h ${Math.floor(s%3600/60)}m`:`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; };
+function raceRow(id, odds, form){ const C=CREATURES[id]; const im=el('img',{class:'rthumb',alt:'',src:creatureThumb(id),width:'44',height:'44'});
+  const f=form&&form[id]; const formTxt=f&&f.last.length?`Last: ${f.last.map(n=>n===1?'1st':n===2?'2nd':n===3?'3rd':n+'th').join(', ')}`:'No races yet';
+  return el('button',{class:'rrow'+(Race.pick===id?' on':''),'aria-pressed':String(Race.pick===id),onclick:()=>{ Race.pick=id; renderRaces(true); }},
+    im, el('span',{class:'rtx'}, el('b',{text:C.name}), el('span',{text:C.blurb}), el('span',{class:'rform',text:formTxt+(f&&f.wins?` · ${f.wins} win${f.wins>1?'s':''}`:'')})),
+    el('span',{class:'rpays',text:odds?`${odds.pays}×`:''})); }
+function renderRaces(force){ const body=$('raceBody'); if(!body||activeTab!=='races') return;
+  if(!force && body.contains(document.activeElement) && document.activeElement.tagName==='INPUT') return; // don't wipe a bet being typed
+  const I=Race.info, hadLanes=!!$('raceLanes'), keep=body.scrollTop; body.innerHTML='';
+  if(!I){ body.append(el('p',{class:'hint',text:'Loading the races…'})); if(!Race.loadAt) loadRace(); return; }
+  const live=liveRace();
+  if(live && live.el<=I.len/1000+2){ const box=el('div',{class:'rlive'}, el('h3',{text:`Race #${live.r.no} is running!`}));
+    const lanes=el('div',{class:'lanes',id:'raceLanes'}); for(const id of CREATURE_IDS){ const ln=el('div',{class:'lane'}); const im=el('img',{alt:CREATURES[id].name,src:creatureThumb(id),'data-id':id}); ln.append(el('span',{class:'lname',text:CREATURES[id].name}), im); lanes.append(ln); }
+    box.append(lanes); if(I.track) box.append(el('button',{class:'btn',text:'Watch on the map',onclick:()=>watchTrack()})); body.append(box); updateLanes(); }
+  requestAnimationFrame(()=>{ body.scrollTop = live&&!hadLanes&&live.el<=I.len/1000+2 ? 0 : keep; }); // jump up to the race when it starts
+  else if(I.last && I.last.result){ const o=I.last.result.order; body.append(el('div',{class:'rlast'}, el('h3',{text:`Race #${I.last.no} result${I.last.cup?' · '+I.last.cup.name:''}`}),
+      el('ol',null,...o.slice(0,3).map(id=>el('li',null, el('img',{alt:'',src:creatureThumb(id),width:'28',height:'28'}), CREATURES[id].name))))); }
+  if(!I.track){ body.append(el('p',{class:'hint',text:"The colony doesn't have a Racetrack yet. Once one is built, a race runs every 30 minutes."})); return; }
+  const nx=I.next; if(!nx){ body.append(el('p',{class:'hint',text:'The next race is being set up…'})); return; }
+  const left=nx.start-raceNow(), open=left>1000;
+  body.append(el('div',{class:'rnext'}, el('h3',null, `Race #${nx.no}${nx.cup?' · '+nx.cup.name:''} `, el('span',{class:'rcount',id:'raceCount',text:open?`starts in ${fmtLeft(left)}`:'gates closed'})),
+    el('p',{class:'hint',text:`${nx.weather[0].toUpperCase()+nx.weather.slice(1)} track. Weather changes who's fast: pays are what you get back for each coin if your creature wins.`}),
+    nx.cup?el('p',{class:'rcup',text:`🏆 ${nx.cup.name}: a ${fmt(nx.cup.bonus)}-coin bonus shared by everyone who backs the winner.`}):''));
+  const list=el('div',{class:'rlist'}); for(const id of CREATURE_IDS.slice().sort((a,b)=>nx.odds[a].pays-nx.odds[b].pays)) list.append(raceRow(id, nx.odds[id], I.form)); body.append(list);
+  const mine=(I.myBets||[]).find(b=>b.n===nx.n), lastMine=I.last&&(I.myBets||[]).find(b=>b.n===I.last.n);
+  if(lastMine && I.last.settled) body.append(el('p',{class:'rmine '+(lastMine.payout?'win':''),text:lastMine.payout?`You won ${fmt(lastMine.payout)} coins on ${CREATURES[lastMine.creature].name} in Race #${I.last.no}!`:`Your ${fmt(lastMine.amount)} on ${CREATURES[lastMine.creature].name} in Race #${I.last.no} didn't come in.`}));
+  if(!(Me&&Me.token)) body.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to bet on a race.'}));
+  else if(mine) body.append(el('p',{class:'rmine',text:`Your bet: ${fmt(mine.amount)} coins on ${CREATURES[mine.creature].name} at ${mine.pays}×. Win and you get ${fmt(Math.floor(mine.amount*mine.pays))}.`}));
+  else if(open){ const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Bet',value:String(Race.amount)}); inp.oninput=()=>{ Race.amount=inp.value; };
+    const q=(t,v)=>el('button',{class:'pill',text:t,onclick:()=>{ Race.amount=v; renderRaces(true); }});
+    body.append(el('div',{class:'rbet'}, el('span',{text:Race.pick?`Bet on ${CREATURES[Race.pick].name}:`:'Tap a creature above, then bet:'}), inp, q('10',10), q('50',50), q('100',100),
+      el('button',{class:'btn primary',text:Race.busy?'Placing…':'Place bet',disabled:!Race.pick||Race.busy,onclick:placeRaceBet}))); }
+  if(Store.canWrite){ const bi=el('input',{type:'number',min:'0',step:'100',placeholder:'Bonus coins','aria-label':'Cup bonus'}), ni=el('input',{type:'text',maxlength:'40',placeholder:"Founders' Cup",'aria-label':'Cup name'});
+    body.append(el('div',{class:'authbox'}, el('h3',{text:'Make the next race a Cup'}), el('p',{class:'hint',text:'The bonus comes out of the treasury and is shared by everyone who backs the winner. If nobody does, it goes back.'}), ni, bi,
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Announce the Cup',onclick:async()=>{ try{ await api('/api/admin/race/cup',{method:'POST',body:{bonus:Number(bi.value||0),name:ni.value}}); toast('Cup announced.'); loadRace(); }catch(e){ toast(e.message); } }})))); } }
+async function placeRaceBet(){ if(!Race.pick||Race.busy) return; Race.busy=true; renderRaces(true);
+  try{ const r=await api('/api/me/race/bet',{method:'POST',body:{creature:Race.pick,amount:Math.floor(Number(Race.amount))}}); toast(`Bet placed: ${fmt(r.amount)} on ${CREATURES[r.creature].name} at ${r.pays}×. Good luck!`); myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
+  catch(e){ toast(e.message); }
+  Race.busy=false; await loadRace(); }
+function updateLanes(){ const L=$('raceLanes'), live=liveRace(); if(!L||!live) return; for(const im of L.querySelectorAll('img')){ const p=raceProgress(live.r, im.dataset.id, live.el); im.style.left=`calc(${(p*100).toFixed(1)}% - ${(p*30).toFixed(1)}px)`; } }
+setInterval(()=>{ if(document.hidden||activeTab!=='races'||!Race.info) return; updateLanes(); const c=$('raceCount'), nx=Race.info.next;
+  if(c&&nx){ const left=nx.start-raceNow(); c.textContent=left>1000?`starts in ${fmtLeft(left)}`:'gates closed'; }
+  const live=liveRace(), lr=Race.info.last; if((nx&&raceNow()>=nx.start&&raceNow()<nx.start+3000) || (live&&!$('raceLanes')&&live.el<Race.info.len/1000) || (lr&&!lr.settled&&live&&live.el>Race.info.len/1000+3&&Date.now()-Race.loadAt>4000)) loadRace(); },250);
+function watchTrack(){ const t=Race.info&&Race.info.track&&D.buildings.get(Race.info.track.id); if(!t){ toast('The Racetrack is off-screen. Scroll to it on the map.'); return; } const [w,d]=T(t).size, p=iso(t.x+w/2,t.y+d/2); cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.4); follow=null; openTab(null); }
+// The track's oval in tile space; runners go once round, starting at the front straight.
+function trackPoint(b, lane, p){ const rot=!!b.rot, t0=BUILDING_TYPES[b.type], [w,d]=t0.size, bx=rot?b.y:b.x, by=rot?b.x:b.y;
+  const rx=w/2-0.46+(lane-2.5)*0.075, ry=d/2-0.44+(lane-2.5)*0.075, a=Math.PI/2-p*Math.PI*2, px=bx+w/2+Math.cos(a)*rx, py=by+d/2+Math.sin(a)*ry;
+  return rot?[py,px]:[px,py]; }
+function drawRunners(b){ const live=liveRace(); if(!live) return; const order=[];
+  CREATURE_IDS.forEach((id,i)=>{ const p=raceProgress(live.r,id,live.el), [x,y]=trackPoint(b,i,p), [x2,y2]=trackPoint(b,i,Math.min(1,p+0.01)); const P=iso(x,y), Q=iso(x2,y2); order.push({id,P,dir:Q.x>=P.x?1:-1,run:p<1&&live.el>=0}); });
+  order.sort((a,b2)=>a.P.y-b2.P.y);
+  for(const o of order){ ctx.save(); ctx.translate(o.P.x,o.P.y); ctx.scale(o.dir,1); drawCreature(o.id,0,0,0.8,T_NOW+CREATURE_IDS.indexOf(o.id)*137,o.run); ctx.restore(); } }
+
 // ---- Casino: three games against the house, played from your own card ----
 let casino=null; // { id, info, open, game, pick, bet, last, busy, at }
 const DICE='⚀⚁⚂⚃⚄⚅', ICON=Object.fromEntries(SLOT_SYMBOLS.map(x=>[x.id,x.icon]));
@@ -2417,7 +2542,7 @@ function refreshHUD(){
     $('chips').hidden=false; }
   const mb=$('musicBtn'); mb.setAttribute('aria-pressed',String(Music.on)); $('musicIcon').textContent=Music.on?'❚❚':'▶'; $('musicLabel').textContent=Music.on?'Music on':'Music';
 }
-function refreshUI(){ refreshHUD(); if(sel) renderCard(); if(activeTab==='people') renderPeople(); else if(activeTab && activeTab!=='feed') renderPane(); feedDirty=true; renderFeed(); }
+function refreshUI(){ refreshHUD(); if(sel) renderCard(); if(activeTab==='people') renderPeople(); else if(activeTab && activeTab!=='feed' && activeTab!=='races') renderPane(); feedDirty=true; renderFeed(); }
 setInterval(()=>{ if(!S.meta||document.hidden) return; const gm=gmNow(); $('clockTime').textContent=fmtClock(gm); },250);
 setInterval(()=>{ if(document.hidden) return; feedDirty=true; renderFeed(); if(sel) renderCard(); if(activeTab==='people'&&document.activeElement!==$('search')) renderPeople(); refreshHUD(); },4000);
 setInterval(settle, 30000);
@@ -2438,7 +2563,7 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
 let frameStats={};
-window.__dbg={ nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>frameStats, Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+window.__dbg={ creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>frameStats, Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

@@ -119,6 +119,11 @@ export function playersRouter({ limit, send, admin, world }) {
     const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
     return world.setName(p.id, (req.body || {}).name);
   }));
+  // Creature races: one bet per race, before the gates close.
+  r.post('/me/race/bet', limit, send(async req => {
+    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    const b = req.body || {}; return world.races.bet(p.id, String(b.creature || ''), b.amount, world.blockedReason?.bind(world));
+  }));
   // The casino: what's available, and one bet at a time (a short pause between bets stops scripted spam).
   const lastBet = new Map();
   setInterval(() => { const now = Date.now(); for (const [k, t] of lastBet) if (now - t > 60000) lastBet.delete(k); }, 60000).unref();

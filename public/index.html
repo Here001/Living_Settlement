@@ -1634,7 +1634,8 @@ function drawStreetLamp(p){ line(p,up(p,26),INK,2.4); line(p,up(p,26),'#3E5148',
   if(LAMPS>0){ windowQuads.push([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}]); lights.push({x:q.x,y:q.y-2,r:19,col:'255,218,150',a:1.15},{x:p.x,y:p.y,r:34,col:'255,214,140',a:0.55}); } }
 function roadExtras(x,y,R,has,pushDeco){ const k=x+','+y, hx=has(x-1,y)||has(x+1,y), hy=has(x,y-1)||has(x,y+1), C=iso(x+0.5,y+0.5), hh=hash(k);
   const straight=hx!==hy;
-  if(straight && R.lanes && cam.z>=0.5){ // lane markings only when close enough to see them const along=(t)=>hx?iso(x+t,y+0.5):iso(x+0.5,y+t), off=(t,s)=>hx?iso(x+t,y+0.5+s):iso(x+0.5+s,y+t);
+  if(straight && R.lanes && cam.z>=0.5){ // lane markings only when close enough to see them
+    const along=(t)=>hx?iso(x+t,y+0.5):iso(x+0.5,y+t), off=(t,s)=>hx?iso(x+t,y+0.5+s):iso(x+0.5+s,y+t);
     if(R.lanes==='one1'||R.lanes==='one2'){ const a=along(0.3), b=along(0.7); line(a,b,'#F1EFE7',1.4); const dir=hx?((y%2===0)?1:-1):((x%2===0)?1:-1); const tip=dir>0?b:a, base=dir>0?a:b; const dx=(tip.x-base.x)*0.25, dy=(tip.y-base.y)*0.25; line(tip,{x:tip.x-dx+dy*0.8,y:tip.y-dy-dx*0.4},'#F1EFE7',1.4); line(tip,{x:tip.x-dx-dy*0.8,y:tip.y-dy+dx*0.4},'#F1EFE7',1.4);
       if(R.lanes==='one2') for(const s of [-0.16,0.16]) line(off(0.1,s),off(0.4,s),'#F1EFE7',1); }
     if(R.lanes==='four'){ line(off(0,-0.025),off(1,-0.025),'#E6C35C',1.1); line(off(0,0.025),off(1,0.025),'#E6C35C',1.1); for(const s of [-0.2,0.2]) line(off(0.15,s),off(0.55,s),'#F1EFE7',1.1); }
@@ -1852,8 +1853,9 @@ function paintGround(g, W, H, wx0, wy0, rz){
     const hasRoad=(a,b)=>D.roads.has(a+','+b);
     { const wl=[]; for(const w of tileList(D.water)){ const x=w.x, y=w.y; if(x<tminX-1||x>tmaxX+1||y<tminY-1||y>tmaxY+1) continue; wl.push([x,y,w.v]); } drawWaterTiles(wl,'base'); }
     for(const r of tileList(D.roads)){ const x=r.x, y=r.y, k=r.k, type=r.v; if(x<tminX||x>tmaxX||y<tminY||y>tmaxY) continue; const R=ROAD_TYPES[type]||ROAD_TYPES.dirt; tx=x; ty=y;
-      if(R.kind==='highway') drawHighwayTile(x,y,R,hasRoad); else drawRoadTile(x,y,R,hasRoad,pushDeco);
-      roadExtras(x,y,R,hasRoad,pushDeco); if(D.water.has(k)) drawBridge(x,y,R,hasRoad); } // street lights at every zoom
+      try{ if(R.kind==='highway') drawHighwayTile(x,y,R,hasRoad); else drawRoadTile(x,y,R,hasRoad,pushDeco);
+        roadExtras(x,y,R,hasRoad,pushDeco); if(D.water.has(k)) drawBridge(x,y,R,hasRoad); } // street lights at every zoom
+      catch(e){ if(!paintGround.warned){ paintGround.warned=true; console.error('A road tile failed to draw (the rest still do):', e); } } } // one bad tile never blanks the whole map
     { const P=new Path2D(); for(const b of D.buildings.values()){ const [w,d]=T(b).size; if(b.x+w<tminX-4||b.x>tmaxX+2||b.y+d<tminY-2||b.y>tmaxY+4) continue; addShadow(P,b); } ctx.fillStyle='rgba(38,52,86,.2)'; ctx.fill(P,'nonzero'); }
   } finally { ctx=keep; } }
 // People drawn faintly on top only where a building drawn after them covers them, so they stay visible behind it.

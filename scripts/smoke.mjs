@@ -452,6 +452,8 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
   // ---- gifts ----
   { const set = (h, sql) => pool.query(`update citizens set ${sql} where handle = $1`, [h]);
     await set('zara_ng', 'coins_base = 3000, coins_day = 0, net = 0, gift_day = null, gift_sent = 0, jailed_until = null'); await set('jobfill_a', 'coins_base = 100, coins_day = 0, net = 0');
+    ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 10 }, P)).status === 403, "unverified avatars can't receive gifts");
+    await pool.query("update citizens set pass_hash = 'x' where handle = 'jobfill_a'"); // pretend they verified
     ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 10 }, { auth: false })).status === 401, 'only signed-in colonists can gift');
     ok((await call('POST', '/api/me/gift', { to: 'zara_ng', amount: 10 }, P)).status === 400, "can't gift yourself");
     ok((await call('POST', '/api/me/gift', { to: 'nobody_here', amount: 10 }, P)).status === 404, 'the friend must exist');
@@ -461,8 +463,11 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await call('GET', '/api/me/gift', undefined, P)).json.left === 500, 'and the card knows how much is left');
     const ev = ((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).find(e => e.kind === 'gift');
     ok(ev && /@zara_ng sent @jobfill_a a gift/.test(ev.text) && !/1,500|1500/.test(ev.text), "the Colony Log says who, not how much", ev?.text);
-    await set('zara_ng', 'coins_base = 100, gift_day = null, gift_sent = 0');
-    ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 200 }, P)).status === 400, "can't gift more than you carry"); }
+    await set('zara_ng', 'coins_base = 100, bank = 50, gift_day = null, gift_sent = 0');
+    ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 200 }, P)).status === 400, "can't gift more than your pocket and bank together");
+    const gb = await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 130 }, P), zz = await whoDev('zara_ng');
+    ok(gb.status === 200 && gb.json.fromPocket === 100 && gb.json.fromBank === 30 && zz.coins === 0 && zz.bank === 20, 'pocket first, then the bank', JSON.stringify(gb.json));
+    await pool.query("update citizens set pass_hash = null where handle = 'jobfill_a'"); }
   const hut = await call('POST', '/api/admin/buildings', { type: 'house', x: 906, y: 906 });
   ok(hut.status === 200 && (await call('POST', '/api/me/job', { buildingId: hut.json.building?.id }, P)).status === 400, 'homes are not jobs', JSON.stringify(hut.json));
   ok((await call('POST', '/api/me/job/quit', {}, P)).status === 200 && (await call('POST', '/api/me/job/quit', {}, P)).status === 400, 'cannot quit with no job'); }

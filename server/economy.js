@@ -63,8 +63,9 @@ export class Economy {
   }
 
   // ---------- gifts ----------
-  // A colonist sends coins from their pocket to another colonist. At most GIFT_DAILY a game day, so nobody can pour
-  // a stack of accounts into one. The Colony Log says who gifted whom, never how much (balances are private).
+  // A colonist sends coins to another verified colonist: from their pocket first, and the rest from their bank savings.
+  // At most GIFT_DAILY a game day, so nobody can pour a stack of accounts into one. Only avatars that have been claimed
+  // (verified with a password) can receive. The Colony Log says who gifted whom, never how much (balances are private).
   async giftInfo(id) {
     const c = (await pool.query('select gift_day, gift_sent from citizens where id = $1', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
     const today = this.world.meta ? R.gameDay(Date.now(), this.world.meta.epoch) : 0;
@@ -78,14 +79,18 @@ export class Economy {
       const r = (await ch.q('select * from citizens where lower(handle) = lower($1) for update', [h])).rows[0];
       if (!r) throw new HttpError(404, `There's no colonist called @${h}.`);
       if (r.id === c.id) throw new HttpError(400, "You can't send a gift to yourself.");
+      if (!r.pass_hash) throw new HttpError(403, `@${r.handle} hasn't verified their avatar yet, so they can't receive gifts.`);
       const sent = c.gift_day === ch.today ? c.gift_sent : 0, left = GIFT_DAILY - sent;
       if (amount > left) throw new HttpError(429, left > 0 ? `You can gift ${fmt(left)} more coins today (${fmt(GIFT_DAILY)} a day).` : `You've gifted ${fmt(GIFT_DAILY)} coins today. You can send more tomorrow (game time).`);
-      ch.coins(c); if (c.coins_base < amount) throw new HttpError(400, `You only have ${fmt(c.coins_base)} coins on you${c.bank ? ' (withdraw from the bank first)' : ''}.`);
-      ch.coins(r); c.coins_base -= amount; r.coins_base += amount;
+      ch.coins(c); const bank = Number(c.bank || 0);
+      if (c.coins_base + bank < amount) throw new HttpError(400, `You have ${fmt(c.coins_base)} coins on you and ${fmt(bank)} in the bank, ${fmt(c.coins_base + bank)} in all.`);
+      const fromPocket = Math.min(c.coins_base, amount), fromBank = amount - fromPocket;
+      ch.coins(r); c.coins_base -= fromPocket; r.coins_base += amount;
       ch.touch(c); ch.touch(r); await ch.saveCitizen(c); await ch.saveCitizen(r);
+      if (fromBank) await ch.q('update citizens set bank = bank - $2 where id = $1', [c.id, fromBank]);
       await ch.q('update citizens set gift_day = $2, gift_sent = $3 where id = $1', [c.id, ch.today, sent + amount]);
       await ch.event(`🎁 @${c.handle} sent @${r.handle} a gift.`, 'gift');
-      return { ok: true, to: r.handle, amount, coins: c.coins_base, left: left - amount };
+      return { ok: true, to: r.handle, amount, fromPocket, fromBank, coins: c.coins_base, bank: bank - fromBank, left: left - amount };
     });
   }
 

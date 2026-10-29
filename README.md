@@ -135,7 +135,9 @@ These live on a signed-in colonist's own card, under **Home**, **Bank** and **Ca
   - Every game day owners are paid automatically: 80% of the rent their residents pay, or 80% of a business's profit (25% of its wage bill). The treasury keeps 20%.
   - Buildings sell back to the colony for 70%. If the developer knocks one down, the owner gets back what they paid.
 - **Gifts.** Signed-in colonists can send coins to each other, with **Send a gift** on another colonist's card or **Gift coins** in the Bank section.
-  - Gifts come from the coins you carry, up to 2,000 a game day, so nobody can funnel a stack of accounts into one.
+  - Gifts come from your pocket first, with the rest taken from your bank savings.
+  - Each colonist can send up to 2,000 a game day, so nobody can funnel a stack of accounts into one.
+  - Only verified avatars (claimed, with a password) can receive gifts.
   - The Colony Log says who gifted whom, but not the amount.
 - **New buildings.** A **Gym** and an outdoor **Fitness park**, under Parks → Sports.
 

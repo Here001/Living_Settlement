@@ -22,7 +22,7 @@ const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_c
 // The compact citizen record viewers receive. Coordinates travel with it so a viewer can draw a commute
 // even when the workplace is in a part of the map they haven't loaded.
 const CITIZEN_SELECT = `
-  select c.id, c.seq, c.handle, c.joined_at, c.founder, c.gender, c.display_name,
+  select c.id, c.seq, c.handle, c.joined_at, c.founder, c.gender, c.display_name, c.pet,
          c.home_cx, c.home_cy, c.job_cx, c.job_cy, c.hang_cx, c.hang_cy, c.visit_cx, c.visit_cy, c.visit_until,
          h.id hid, h.type ht, h.x hx, h.y hy, j.id jid, j.type jt, j.x jx, j.y jy, g.id gid, g.type gt, g.x gx, g.y gy, v.id vid, v.type vt, v.x vx, v.y vy
   from citizens c
@@ -30,7 +30,7 @@ const CITIZEN_SELECT = `
   left join buildings v on v.id = c.visit_id`;
 export const cOut = r => ({ id: r.id, s: r.seq, h: r.handle, t: r.joined_at, f: r.founder ? 1 : 0, g: r.gender || 'm', n: r.display_name || '',
   home: r.hid ? [r.hid, r.ht, r.hx, r.hy] : null, job: r.jid ? [r.jid, r.jt, r.jx, r.jy] : null, hang: r.gid ? [r.gid, r.gt, r.gx, r.gy] : null,
-  visit: r.vid && Number(r.visit_until) > Date.now() ? [r.vid, r.vt, r.vx, r.vy, Number(r.visit_until)] : null });
+  visit: r.vid && Number(r.visit_until) > Date.now() ? [r.vid, r.vt, r.vx, r.vy, Number(r.visit_until)] : null, pet: r.pet || null });
 
 // One world change. Holds the database connection inside the global world lock and records everything that changed,
 // so the right viewers can be told afterwards.
@@ -316,10 +316,11 @@ export class World {
     return rows.map(cOut);
   }
   async citizenDetail(handle) {
-    const r = (await pool.query(`${CITIZEN_SELECT.replace('select c.id,', 'select c.coins_base, c.coins_day, c.net, c.pass_hash is not null has_pw, c.id,')} where lower(c.handle) = lower($1)`, [R.cleanHandle(handle)])).rows[0];
+    const r = (await pool.query(`${CITIZEN_SELECT.replace('select c.id,', 'select c.coins_base, c.coins_day, c.net, c.pass_hash is not null has_pw, c.jailed_until, c.id,')} where lower(c.handle) = lower($1)`, [R.cleanHandle(handle)])).rows[0];
     if (!r) return null;
     const out = cOut(r); const today = this.meta ? R.gameDay(Date.now(), this.meta.epoch) : 0;
     out.coins = R.balanceOn(r.coins_base, r.coins_day, r.net, today); out.net = r.net; out.claimed = !!r.has_pw;
+    out.jailedUntil = Number(r.jailed_until || 0) > Date.now() ? Number(r.jailed_until) : 0;
     if (!r.hid) out.queue = Number((await pool.query('select count(*) n from citizens where home_id is null and seq < $1', [r.seq])).rows[0].n) + 1;
     return out;
   }
@@ -667,6 +668,7 @@ export class World {
       if (!c) throw new HttpError(404, 'No such citizen.');
       if (!c.home_id) throw new HttpError(400, "You're still in cryosleep. The casino is for colonists who have woken up.");
       const cas = await this.casinoFor(c); if (!cas) throw new HttpError(409, "The colony doesn't have a casino yet.");
+      const why = this.blockedReason && await this.blockedReason(c); if (why) throw new HttpError(409, why);
       const hx = c.hx, hy = c.hy; delete c.hx; delete c.hy;
       ch.coins(c); if (c.coins_base < bet) throw new HttpError(400, c.coins_base ? `You only have ${fmt(c.coins_base)} coins.` : "You don't have any coins yet. Get a job first.");
       const round = playRound(game, String(pick), bet, n => crypto.randomInt(n));

@@ -12,6 +12,7 @@ import { createBus } from './bus.js';
 import { instagramRouter, igStatus, connectInstagram, loadIgStatus } from './instagram.js';
 import { playersRouter, sweepPlayers, playerFrom } from './players.js';
 import { Races } from './races.js';
+import { Actions } from './actions.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -29,6 +30,7 @@ process.on('uncaughtException', e => { console.error('uncaught exception:', e); 
 const bus = createBus();
 const world = new World(bus);
 const races = new Races(world); world.races = races;
+const actions = new Actions(world); world.actions = actions; world.blockedReason = c => actions.blockedReason(c);
 const app = express();
 app.disable('x-powered-by');
 app.use(compression()); // map data is very repetitive JSON; this shrinks it several times over

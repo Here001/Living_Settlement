@@ -123,6 +123,8 @@ const MIGRATIONS = [
    create table race_bets (id text primary key, n int not null, citizen_id text not null, handle text not null, creature text not null,
      amount int not null, pays real not null, payout int, t bigint not null);
    create index race_bets_n on race_bets (n); create index race_bets_citizen on race_bets (citizen_id, n);`,
+  // v17: crime (last attempt, jail time) and pets
+  `alter table citizens add column crime_at bigint, add column jailed_until bigint, add column pet jsonb;`,
 ];
 
 export async function migrate() {

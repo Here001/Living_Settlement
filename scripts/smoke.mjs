@@ -5,6 +5,10 @@ import crypto from 'node:crypto';
 import WebSocket from 'ws';
 import pg from 'pg';
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 }); // a few checks need to set up state directly
+// The page's script must at least parse: a syntax slip there would leave players with a blank screen.
+{ const fs = await import('node:fs'), vm = await import('node:vm');
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8'), m = html.match(/<script type="module">([\s\S]*?)<\/script>/);
+  try { new vm.SourceTextModule(m[1]); console.log('  ✓ the page script parses'); } catch (e) { if (e instanceof SyntaxError) { console.log('  ✗ the page script has a syntax error:', e.message); process.exit(1); } else { new Function(m[1].replace(/^\s*import .*$/mg, '')); console.log('  ✓ the page script parses'); } } }
 
 const BASE = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
 const TOKEN = process.env.ADMIN_TOKEN;
@@ -353,6 +357,47 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(sl.status === 200 && sl.json.result.length === 3, 'slots spin three reels');
     await sleep(1300); const dc = await call('POST', '/api/me/casino', { game: 'dice', pick: '3', bet: 10 }, P);
     ok(dc.status === 200 && (dc.json.won ? dc.json.result === '3' && dc.json.payout === 57 : dc.json.payout === 0), 'dice pays 5.7× on the right number'); }
+  // ---- crime, going out, pets ----
+  { const sleep = ms => new Promise(r => setTimeout(r, ms)), set = (h, sql, v = []) => pool.query(`update citizens set ${sql} where handle = $1`, [h, ...v]);
+    const coins = async h => (await whoDev(h)).coins;
+    ok((await call('POST', '/api/me/crime', { kind: 'rob' }, { auth: false })).status === 401, 'only signed-in colonists can commit crimes');
+    await set('zara_ng', 'coins_base = 1000, net = 0, coins_day = 0, crime_at = null, jailed_until = null'); await set('jobfill_a', 'coins_base = 500, net = 0, coins_day = 0');
+    ok((await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'zara_ng' }, P)).status === 400, "can't pick your own pocket");
+    ok((await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'nobody_here' }, P)).status === 404, 'the victim must exist');
+    const k = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P);
+    const z1 = await coins('zara_ng'), v1 = await coins('jobfill_a');
+    ok(k.status === 200 && (k.json.caught ? z1 === 1000 - k.json.fine && v1 === 500 : z1 === 1000 + k.json.loot && v1 === 500 - k.json.loot), `a pickpocket ${k.json.caught ? 'is caught and fined' : 'gets away with it'}, and the coins add up`, JSON.stringify(k.json));
+    ok((await call('POST', '/api/me/crime', { kind: 'rob' }, P)).status === 429 || (await whoDev('zara_ng')).jailedUntil, 'one crime every 10 minutes');
+    // police near the victim and a jail: keep trying until caught (each try is ~80% likely to be caught)
+    let policeId = null;
+    for (const [t, x, y] of [['police', 930, 900], ['police', 930, 903], ['police', 933, 900], ['jail', 933, 903]]) { const b = await call('POST', '/api/admin/buildings', { type: t, x, y }); policeId = policeId || b.json.building?.id; await call('POST', `/api/admin/buildings/${b.json.building?.id}/finish`); }
+    let caught = null;
+    for (let i = 0; i < 30 && !caught; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 1000'); const r = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P); if (r.json.caught) caught = r.json; }
+    ok(caught && caught.jailed && caught.fine >= 25, 'caught near the police: fined and sent to jail', JSON.stringify(caught));
+    const zj = await who('zara_ng');
+    ok(zj.visit && (await call('GET', '/api/me/crime', undefined, P)).json.jailedFor > 0, 'a jailed colonist is seen in the Jail');
+    await sleep(1300); { const r = await call('POST', '/api/me/casino', { game: 'coin', pick: 'heads', bet: 1 }, P); ok(r.status === 409, 'no casino from jail', JSON.stringify(r)); }
+    ok((await call('POST', '/api/me/visit', { friend: 'jobfill_a' }, P)).status === 409, 'no going out from jail');
+    ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop' }, P)).status === 409, 'no adopting from jail');
+    await set('zara_ng', 'jailed_until = null, visit_id = null, visit_until = null');
+    // going out
+    const pl = (await call('GET', '/api/me/places', undefined, P)).json;
+    ok(pl.housed && pl.places.length > 0, 'a colonist sees places to go', JSON.stringify(pl).slice(0, 120));
+    const go = await call('POST', '/api/me/visit', { buildingId: pl.places[0].id }, P);
+    ok(go.status === 200 && (await who('zara_ng')).visit?.[0] === pl.places[0].id, 'and goes there, for everyone to see');
+    ok((await call('POST', '/api/me/visit', { friend: 'jobfill_a' }, P)).status === 200 && (await who('zara_ng')).visit?.[0] === (await who('jobfill_a')).home[0], "visiting a friend's home");
+    ok(policeId && (await call('POST', '/api/me/visit', { buildingId: policeId }, P)).status === 400, "can't just walk into a police station");
+    ok((await call('POST', '/api/me/visit/end', {}, P)).status === 200 && !(await who('zara_ng')).visit, 'and comes home');
+    // pets
+    await set('zara_ng', 'coins_base = 150'); ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip' }, P)).status === 400, 'a pet costs 200 coins');
+    await set('zara_ng', 'coins_base = 500');
+    ok((await call('POST', '/api/me/pet', { kind: 'unicorn' }, P)).status === 400, 'only native creatures');
+    const pet = await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip' }, P);
+    ok(pet.status === 200 && (await who('zara_ng')).pet?.k === 'glimmerhop' && (await coins('zara_ng')) === 300, 'adopting a pet everyone can see', JSON.stringify(pet.json));
+    ok((await call('POST', '/api/me/pet', { kind: 'starcrest' }, P)).status === 409, 'one pet at a time');
+    ok((await call('PUT', '/api/me/pet', { name: 'Zippy' }, P)).status === 200 && (await who('zara_ng')).pet.n === 'Zippy', 'renaming the pet');
+    ok((await call('PUT', '/api/me/pet', { name: '<b>' }, P)).status === 400, 'pet names are letters only');
+    ok((await call('DELETE', '/api/me/pet', undefined, P)).status === 200 && !(await who('zara_ng')).pet, 'letting it go'); }
   const hut = await call('POST', '/api/admin/buildings', { type: 'house', x: 906, y: 906 });
   ok(hut.status === 200 && (await call('POST', '/api/me/job', { buildingId: hut.json.building?.id }, P)).status === 400, 'homes are not jobs', JSON.stringify(hut.json));
   ok((await call('POST', '/api/me/job/quit', {}, P)).status === 200 && (await call('POST', '/api/me/job/quit', {}, P)).status === 400, 'cannot quit with no job'); }

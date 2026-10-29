@@ -119,6 +119,16 @@ export function playersRouter({ limit, send, admin, world }) {
     const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
     return world.setName(p.id, (req.body || {}).name);
   }));
+  // Crime, going somewhere, and pets.
+  const me = async req => { const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.'); return p; };
+  r.get('/me/crime', limit, send(async req => world.actions.crimeInfo((await me(req)).id)));
+  r.post('/me/crime', limit, send(async req => { const b = req.body || {}; return world.actions.crime((await me(req)).id, { kind: b.kind, target: b.target }); }));
+  r.get('/me/places', limit, send(async req => world.actions.places((await me(req)).id)));
+  r.post('/me/visit', limit, send(async req => { const b = req.body || {}; return world.actions.visit((await me(req)).id, { buildingId: b.buildingId, friend: b.friend }); }));
+  r.post('/me/visit/end', limit, send(async req => world.actions.visit((await me(req)).id, {})));
+  r.post('/me/pet', limit, send(async req => { const b = req.body || {}; return world.actions.adopt((await me(req)).id, { kind: b.kind, name: b.name }); }));
+  r.put('/me/pet', limit, send(async req => world.actions.renamePet((await me(req)).id, (req.body || {}).name)));
+  r.delete('/me/pet', limit, send(async req => world.actions.release((await me(req)).id)));
   // Creature races: one bet per race, before the gates close.
   r.post('/me/race/bet', limit, send(async req => {
     const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');

@@ -231,6 +231,18 @@ body.pane-max .composer textarea{height:70px}
 .dmmenu{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:4px 11px 8px}.dmmenu .hint{flex-basis:100%;font-size:11.5px}
 .dmshut{justify-content:center;font-size:13px;padding:10px 11px 12px}.blkrow{display:flex;justify-content:space-between;align-items:center;padding:6px 2px;border-bottom:1px solid var(--glass-line,rgba(0,0,0,.08));font-size:13px}
 .card .x.shr{font-size:17px}
+.earn .esec{padding:10px 0;border-top:1px solid var(--glass-line,rgba(0,0,0,.08));display:flex;flex-direction:column;gap:6px}.earn .ehead{display:flex;gap:10px;align-items:flex-start}
+.earn .eicon{font-size:22px;line-height:1.2;flex:none}.earn .ehead .hint{font-size:12.5px}.earn .esec>.btn,.earn .esec>.row-actions{align-self:flex-start}
+.egig{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,.35);border:1px solid var(--glass-line,rgba(0,0,0,.08))}.egig.on{background:rgba(217,113,74,.14)}
+.egig .hint{font-size:12px}.cdown{font-variant-numeric:tabular-nums;font-weight:700}.cdown.big{font-size:18px}
+.egame{position:relative;height:96px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;overflow:hidden}
+.egame.pond{background:radial-gradient(ellipse at 50% 70%,#7cc3e0,#3b7fa8)}.egame.wood{background:radial-gradient(ellipse at 50% 70%,#9bd07a,#4f7d39)}
+.ebob{font-size:34px;animation:ebob 1.6s ease-in-out infinite}.ebite{color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.4)}.egame.bite{animation:eshake .25s linear infinite}.egame.bite .ebite{font-size:20px;color:#FFE27A}
+@keyframes ebob{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}@keyframes eshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+.ereel{width:100%;font-size:17px;padding:12px}.eloot summary{cursor:pointer;font-size:12.5px;opacity:.8}.emore{margin:0;padding-left:18px;font-size:13px;display:grid;gap:3px}
+.trackpills{display:flex;gap:6px;overflow-x:auto;padding:0 0 8px;scrollbar-width:none}.trackpills::-webkit-scrollbar{display:none}
+.trackpills .pill{flex:none;display:flex;flex-direction:column;align-items:flex-start;line-height:1.15;padding:5px 12px}.trackpills .tpl{font-size:11px;opacity:.75;font-variant-numeric:tabular-nums}.trackpills .tpl.live{color:#c0392b;opacity:1;font-weight:700}
+.rstyle{font-size:10.5px;font-weight:600;margin-left:6px;padding:1px 6px;border-radius:8px;background:rgba(94,127,69,.16);color:#3d5a2a}
 .toppills{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}.toppills::-webkit-scrollbar{display:none}.toppills .pill{flex:none;white-space:nowrap}
 .tophead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}.tophead h3{margin:4px 0 0}.tunit{margin:2px 0 6px;font-size:12px}
 .tchamp{font-size:13px;font-weight:600;margin:4px 0 8px;padding:6px 10px;border-radius:10px;background:rgba(226,177,60,.18)}
@@ -300,6 +312,13 @@ body.pane-max .composer textarea{height:70px}
 .casino .pill{cursor:pointer;border:1.4px solid var(--ink,#2B2621);background:transparent;padding:5px 10px;border-radius:999px;font:inherit;font-size:13px}
 .casino .pill.on{background:var(--accent,#D9714A);color:#fff;border-color:var(--accent,#D9714A)}
 .casino .crule{margin:0;font-size:13px}
+.casino .pill:disabled{opacity:.4}.casino .pill.rred.on{background:#C0392B;border-color:#C0392B}.casino .pill.rblack.on{background:#2B2621;border-color:#2B2621}
+.bj{display:flex;flex-direction:column;gap:8px}.bjrow{display:flex;align-items:center;gap:10px}.bjlab{width:86px;font-size:12.5px;font-weight:700;flex:none}
+.bjcards{display:flex;gap:5px;flex-wrap:wrap}.pcard{display:inline-grid;place-items:center;min-width:38px;height:52px;padding:0 4px;border-radius:7px;background:#fff;color:#1d1d1d;border:1px solid rgba(0,0,0,.2);font-weight:800;font-size:15px;box-shadow:0 2px 5px rgba(0,0,0,.15)}.pcard.deal{animation:cpop .3s ease-out both}
+.pcard.red{color:#C0392B}.pcard.back{background:linear-gradient(135deg,#5E7F45,#3d5a2a);color:#fff;font-size:26px}
+.rksky{position:relative;height:150px;border-radius:14px;overflow:hidden;background:linear-gradient(180deg,#0b1430,#1d3a6b 70%,#e98f5f);display:flex;align-items:flex-end;justify-content:center}
+.rkship{font-size:44px;margin-bottom:10px;transition:transform .1s linear;display:block}.rkmult{position:absolute;top:12px;left:0;right:0;text-align:center;color:#fff;font-size:30px;font-weight:800;text-shadow:0 2px 10px rgba(0,0,0,.5);font-variant-numeric:tabular-nums}
+.rkcash{font-size:16px;min-width:180px}
 .casino .cbet{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.casino .cbet input{width:90px;padding:6px 8px;border-radius:10px;border:1.4px solid var(--soft);font:inherit}
 .cresult{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px;border-radius:12px;background:rgba(0,0,0,.04);animation:cpop .35s ease-out}
 .cresult .roll{font-size:30px;letter-spacing:4px}.cresult.win{background:rgba(242,179,61,.22)}
@@ -513,8 +532,8 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 </div>
 <script type="module">
 import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears } from '/shared/catalog.js';
-import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES } from '/shared/casino.js';
-import { CREATURES, CREATURE_IDS } from '/shared/creatures.js';
+import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt } from '/shared/casino.js';
+import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
 import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE } from '/shared/rules.js';
 
@@ -583,7 +602,7 @@ function applyOp(o){
   case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&!PLAYER_TABS.has(activeTab)&&activeTab!=='reports') renderPane(); break;
   case 'race': raceSoon(o.data); break;
   case 'lottery': lotterySoon(o.data); break;
-  case 'building': putBuilding(o.data); changed(); break;
+  case 'building': putBuilding(o.data); changed(); if(o.data&&o.data.type==='racetrack') setTimeout(()=>raceSoon(),6000); break;
   case 'removeBuilding': { const b=S.buildings.get(o.id); if(b && ck(b.cx,b.cy)===o.chunks[0]){ S.chunks.get(o.chunks[0])?.buildings.delete(o.id); S.buildings.delete(o.id); changed(); } break; }
   case 'roads': { const slot=S.chunks.get(o.chunks[0]); for(const k in o.set){ S.roads.set(k,o.set[k]); slot?.roads.add(k); } for(const k of o.remove){ S.roads.delete(k); slot?.roads.delete(k); } changed(); break; }
   case 'citizen': { const c=normC(o.data); if(keepCitizen(c)) S.citizens.set(c.id,c); else S.citizens.delete(c.id); detail.delete(c.id); changed(true); break; }
@@ -2331,6 +2350,87 @@ document.getElementById('card').addEventListener('input',e=>{ if(e.target&&e.tar
 // ---- Chats: private messages between verified colonists, delivered live ----
 const ago = t => { const s=Math.max(0,(Date.now()+skew-t)/1000); return s<90?'just now':s<3600?`${Math.round(s/60)} min ago`:s<86400?`${Math.round(s/3600)} h ago`:`${Math.round(s/86400)} days ago`; };
 const hhmm = t => { const d=new Date(t); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
+// ---- Earn: every way to make coins, with the ones you can do right now ----
+var Earn={ data:null, at:0, loading:false, skew:0, busy:false, msg:null, cast:null,
+  async load(force){ if(!(Me&&Me.token)||this.loading) return; if(!force&&this.data&&Date.now()-this.at<15000) return; this.loading=true;
+    try{ const t0=Date.now(); this.data=await api('/api/me/earn'); this.at=Date.now(); this.skew=this.data.now-(t0+this.at)/2; }catch(e){} this.loading=false; if(actTab==='earn') renderCard(true); },
+  now(){ return Date.now()+this.skew; },
+  coins(r){ if(r&&typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); const c=Me&&[...S.citizens.values()].find(x=>x.handle.toLowerCase()===Me.handle.toLowerCase()); const d=c&&detail.get(c.id); if(d) d.coins=r.coins; } },
+  paidText(r,what){ return r.short?(r.paid?`${what}: +${fmt(r.paid)} coins (the treasury was running low).`:`${what}, but the treasury is empty right now.`):`${what}: +${fmt(r.paid)} coins!`; },
+  async act(path,body,done){ if(this.busy) return; this.busy=true; renderCard(true);
+    try{ const r=await api(path,{method:'POST',body}); this.coins(r); if(done) done(r); }catch(e){ toast(e.message); }
+    this.busy=false; await this.load(true); },
+  left(t){ const ms=Math.max(0,t-this.now()); return ms>=60000?`${Math.floor(ms/60000)}:${String(Math.floor(ms%60000/1000)).padStart(2,'0')}`:`${Math.ceil(ms/1000)} s`; },
+  // Fishing and foraging: cast, wait for the bite, tap in time.
+  async startCatch(kind){ if(this.busy) return; this.busy=true; this.msg=null; const t0=Date.now();
+    try{ const r=await api('/api/me/earn/catch',{method:'POST',body:{kind}}); const t1=Date.now(); this.cast={kind,biteAt:(t0+t1)/2+r.biteIn,shown:false}; }catch(e){ toast(e.message); }
+    this.busy=false; renderCard(true); },
+  async reel(){ if(!this.cast||this.busy) return; this.busy=true; const kind=this.cast.kind; this.cast=null;
+    try{ const r=await api('/api/me/earn/catch',{method:'POST',body:{action:'reel'}}); this.coins(r);
+      this.msg=r.result==='early'?{kind,text:kind==='fish'?'Too early! The fish swam off.':'Too hasty, it slipped away.'}:r.result==='late'?{kind,text:kind==='fish'?'Too slow! It got away.':'Too slow, a critter got there first.'}
+        :{kind,icon:r.item.icon,text:r.item.pay?this.paidText(r,r.item.name):`${r.item.name}. Worth nothing, sadly.`,good:r.item.pay>0}; }
+    catch(e){ toast(e.message); } this.busy=false; await this.load(true); },
+  section(icon,title,desc,...kids){ return el('div',{class:'esec'}, el('div',{class:'ehead'}, el('span',{class:'eicon',text:icon}), el('div',null, el('b',{text:title}), el('div',{class:'hint',text:desc}))), ...kids); },
+  panel(c){ const box=el('div',{class:'authbox earn'}); this.load(); const D0=this.data;
+    box.append(el('h3',{text:'💰 Ways to earn'}));
+    if(!D0){ box.append(el('p',{class:'hint',text:'Loading…'})); return box; }
+    if(!D0.housed){ box.append(el('p',{class:'hint',text:"You're still in cryosleep aboard the ark. Once you wake up and get a home, you can work, do deliveries, fish and more."})); }
+    const B=this.busy;
+    // 1. Job
+    box.append(this.section('💼','Your job',D0.salary?`Pays ${fmt(D0.salary)} coins a game day (every 30 minutes), automatically. Rent comes out of it.`:'A job pays you automatically every game day (every 30 minutes). It\'s the steadiest income.',
+      D0.salary?'':el('button',{class:'btn primary',text:'Find a job',onclick:()=>{ actTab='work'; renderCard(true); }})));
+    // 2. Extra shift
+    const sh=D0.shift, shReady=this.now()>=sh.readyAt;
+    box.append(this.section('⏱️','Extra shift',sh.job?`Work overtime at ${sh.job} for ${fmt(sh.pay)} coins at once. ${sh.left} of ${D0.limits.shift.perDay} left today.`:'Get a job first, then work overtime for a lump sum.',
+      sh.job&&sh.left>0?(shReady?el('button',{class:'btn primary',text:B?'Working…':`Work a shift (+${fmt(sh.pay)})`,disabled:B,onclick:()=>this.act('/api/me/earn/shift',{},r=>toast(this.paidText(r,'Shift done')))})
+        :el('p',{class:'hint'},'Next shift in ',el('span',{class:'cdown','data-until':sh.readyAt,text:this.left(sh.readyAt)}))):''));
+    // 3. Delivery gigs
+    const G=D0.gigs, gsec=this.section('📦','Delivery gigs',`Take a parcel across town. Your colonist walks, drives or takes a cab there, and you're paid on arrival. ${G.left} left today.`);
+    if(G.active){ const a=G.active, done=this.now()>=a.until-1000;
+      gsec.append(el('div',{class:'egig on'}, el('div',null, el('b',{text:`To ${a.to.name}`}), el('div',{class:'hint',text:`From ${a.from.name} · +${fmt(a.pay)} coins`})),
+        done?el('button',{class:'btn primary',text:B?'…':`Get paid +${fmt(a.pay)}`,disabled:B,onclick:()=>this.act('/api/me/earn/gig',{action:'deliver'},r=>toast(this.paidText(r,`Delivered to ${r.to}`)))})
+          :el('span',{class:'cdown big','data-until':a.until,text:this.left(a.until)})));
+      if(!done) gsec.append(el('button',{class:'linkb',text:'Give up this delivery',onclick:()=>this.act('/api/me/earn/gig',{action:'drop'})}),
+        el('button',{class:'linkb',text:'Watch me go',onclick:()=>{ if(Me) openCitizen(Me.handle); if(innerWidth<900) openTab(null); }})); }
+    else if(G.left>0&&D0.housed){ if(!G.offers.length) gsec.append(el('p',{class:'hint',text:'No parcels right now. The colony needs a few more buildings first.'}));
+      for(const g of G.offers) gsec.append(el('div',{class:'egig'}, el('div',null, el('b',{text:`${g.from.name} → ${g.to.name}`}), el('div',{class:'hint',text:`About ${g.mins} min · ${g.dist} tiles`})),
+        el('button',{class:'btn',text:`+${fmt(g.pay)}`,disabled:B,onclick:()=>this.act('/api/me/earn/gig',{action:'take',id:g.id},r=>toast(`On your way to ${r.gig.to.name}!`))}))); }
+    box.append(gsec);
+    // 4. Fishing and foraging
+    const left=D0.fishing.left, cat=this.section('🎣','Fishing & foraging',`Wait for a bite, then tap fast. Sell what you catch at the market. ${left} of ${D0.limits.catch.perDay} catches left today.`);
+    if(this.cast){ const C=this.cast, bite=C.shown, fish=C.kind==='fish'; // the card can redraw mid-game, so draw whatever stage we're at
+      const play=el('div',{class:'egame'+(fish?' pond':' wood')+(bite?' bite':''),id:'eGame'},
+        el('span',{class:'ebob',id:'eBob',text:fish?'🎣':'🔍'}), el('b',{class:'ebite',id:'eBite',text:bite?(fish?'❗ BITE! Reel in!':'❗ There! Grab it!'):(fish?'Waiting for a bite…':'Looking around…')}));
+      cat.append(play, el('button',{class:'btn primary ereel',id:'eReel',text:this.cast.kind==='fish'?'Reel in!':'Grab it!',onclick:()=>this.reel()})); }
+    else { if(this.msg) cat.append(el('div',{class:'cresult '+(this.msg.good?'win':'lose')}, this.msg.icon?el('span',{class:'roll',text:this.msg.icon}):'', el('b',{text:this.msg.text})));
+      cat.append(el('div',{class:'row-actions'},
+        el('button',{class:'btn primary',text:'🎣 Go fishing',disabled:B||!D0.housed||!D0.fishing.ok||left<=0,title:D0.fishing.ok?'':'The colony has no water yet',onclick:()=>this.startCatch('fish')}),
+        el('button',{class:'btn primary',text:'🌿 Go foraging',disabled:B||!D0.housed||!D0.foraging.ok||left<=0,title:D0.foraging.ok?'':'The colony has no parks yet',onclick:()=>this.startCatch('forage')})));
+      if(!D0.fishing.ok||!D0.foraging.ok) cat.append(el('p',{class:'hint',text:[!D0.fishing.ok?'Fishing needs a lake or river.':'',!D0.foraging.ok?'Foraging needs a park or garden.':''].filter(Boolean).join(' ')}));
+      cat.append(el('details',{class:'eloot'}, el('summary',{text:'What you can find'}), el('div',{class:'hint',text:'🎣 '+D0.loot.fish.map(x=>`${x.icon} ${x.name} ${x.pay}`).join(' · ')}), el('div',{class:'hint',text:'🌿 '+D0.loot.forage.map(x=>`${x.icon} ${x.name} ${x.pay}`).join(' · ')}))); }
+    box.append(cat);
+    // 5. Scavenging
+    const sc=D0.scavenge, ssec=this.section('🛰️','Scavenge the drop pods',`Search the old drop pods by the landing station for 2 minutes. Usually scrap, sometimes treasure. ${sc.left} left today.`);
+    if(sc.active){ const done=this.now()>=sc.active.until-1000; ssec.append(done?el('button',{class:'btn primary',text:B?'…':'See what you found',disabled:B,onclick:()=>this.act('/api/me/earn/scavenge',{action:'collect'},r=>toast(r.item.pay?this.paidText(r,`${r.item.icon} ${r.item.name}`):`${r.item.icon} ${r.item.name}. Better luck next time.`))})
+        :el('p',{class:'hint'},'Searching… ',el('span',{class:'cdown big','data-until':sc.active.until,text:this.left(sc.active.until)}))); }
+    else if(sc.ok&&sc.left>0&&D0.housed){ ssec.append(this.now()>=sc.readyAt?el('button',{class:'btn primary',text:'Start searching',disabled:B,onclick:()=>this.act('/api/me/earn/scavenge',{action:'start'})})
+        :el('p',{class:'hint'},'You can search again in ',el('span',{class:'cdown','data-until':sc.readyAt,text:this.left(sc.readyAt)}))); }
+    else if(!sc.ok) ssec.append(el('p',{class:'hint',text:'The colony has no landing station.'}));
+    box.append(ssec);
+    // 6. Everything else
+    box.append(this.section('✨','More ways','',el('ul',{class:'emore'},
+      el('li',null,'🎁 ',el('b',{text:'Daily reward'}),': up to 400 coins for coming back every day.'),
+      el('li',null,'🏠 ',el('b',{text:'Be a landlord'}),': buy a building (Home tab) and collect rent and profits every day.'),
+      el('li',null,'🏦 ',el('b',{text:'Bank'}),': savings earn a little interest.'),
+      el('li',null,'🎁 ',el('b',{text:'Gifts'}),': friends can send you coins.'),
+      el('li',null,'🏁🎰 ',el('b',{text:'Races & casino'}),': big wins, but you can lose too.'),
+      el('li',null,'🦹 ',el('b',{text:'Crime'}),": risky. Get caught and you're fined and jailed."))));
+    return box; } };
+setInterval(()=>{ if(document.hidden||actTab!=='earn') return; let expired=false;
+  for(const sp of document.querySelectorAll('#card .cdown')){ const u=Number(sp.dataset.until); if(Earn.now()>=u-1000) expired=true; else sp.textContent=Earn.left(u); }
+  const C=Earn.cast; if(C){ const g=$('eGame'), t=$('eBite'), now=Date.now(); if(g&&now>=C.biteAt&&!C.shown){ C.shown=true; g.classList.add('bite'); t.textContent=C.kind==='fish'?'❗ BITE! Reel in!':'❗ There! Grab it!'; }
+    if(C.shown&&now>C.biteAt+1700){ Earn.cast=null; Earn.msg={kind:C.kind,text:C.kind==='fish'?'Too slow! It got away.':'Too slow, a critter got there first.'}; api('/api/me/earn/catch',{method:'POST',body:{action:'reel'}}).catch(()=>{}).finally(()=>Earn.load(true)); renderCard(true); } }
+  if(expired){ document.querySelectorAll('#card .cdown').forEach(x=>x.classList.remove('cdown')); renderCard(true); } },120);
 // ---- Leaderboards: four weekly boards (reset Monday 00:00 UTC) and four all-time standings ----
 const TOP_BOARDS=[['racer','🏁','Racer'],['casino','🎰','Luckiest'],['wanted','🦹','Wanted'],['generous','🎁','Generous'],['richest','💰','Richest'],['landlord','🏙️','Landlord'],['streak','🔥','Streak'],['badges','🏅','Badges']];
 var Top={ board:'racer', data:{}, busy:false,
@@ -2527,7 +2627,7 @@ var Chats={ list:[], online:[], unread:0, with:null, thread:null, draft:'', busy
 setInterval(()=>{ if(!document.hidden && Me&&Me.token && Date.now()-Chats.loadedAt>45000) Chats.load(); },15000);
 
 // ---- Creature races: the Races tab, the live race on the track, and the 2½-minute call ----
-const Race={ info:null, skew:0, pick:null, amount:10, busy:false, loadAt:0, toastN:0 };
+const Race={ info:null, skew:0, pick:null, amount:10, busy:false, loadAt:0, track:null, toasted:new Set() };
 const raceNow = () => Date.now()+Race.skew;
 let raceTimer=null;
 function raceSoon(d){ clearTimeout(raceTimer); raceTimer=setTimeout(()=>loadRace(d),400); }
@@ -2554,22 +2654,29 @@ function lotteryBox(){ const L=Lotto.info&&Lotto.info.lottery; if(!L) return nul
   box.append(el('div',{class:'cbet'}, el('span',{text:'Buy'}), ...[1,3,5,10].filter(n=>n<=room).map(q), el('button',{class:'btn primary',text:Lotto.busy?'Buying…':`Buy ${Math.min(Lotto.count,room)} for ${fmt(Math.min(Lotto.count,room)*L.price)}`,disabled:Lotto.busy,onclick:async()=>{
     Lotto.busy=true; renderRaces(true); try{ const r=await api('/api/me/lottery',{method:'POST',body:{count:Math.min(Lotto.count,room)}}); toast(`You now have ${r.tickets} ticket${r.tickets===1?'':'s'}. Good luck!`); myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }catch(e){ toast(e.message); } Lotto.busy=false; loadLottery(); }})));
   return box; }
-async function loadRace(d){ try{ const r=await api('/api/race'); Race.info=r; Race.skew=r.now-Date.now(); Race.loadAt=Date.now(); }catch(e){ return; }
-  const nx=Race.info.next;
-  // The call to the track, a couple of minutes before the gates open.
-  if(nx && Race.info.track && Race.toastN!==nx.n){ const left=nx.start-raceNow(); if(left>0 && left<=Race.info.announce+5000){ Race.toastN=nx.n; toast(`🏁 Race #${nx.no} starts in ${Math.max(1,Math.floor(left/60000))} minute${left<120000?'':'s'}. Pick your creature!`,'Races',()=>openTab('races')); } }
-  if(d&&d.stage==='settled'&&Race.info.last&&Race.info.last.result){ const w=CREATURES[Race.info.last.result.order[0]].name; if(activeTab!=='races') toast(`🏆 ${w} won Race #${Race.info.last.no}!`,'Results',()=>openTab('races')); }
+async function loadRace(d){ try{ const r=await api('/api/race'+(Race.track?'?track='+encodeURIComponent(Race.track):'')); Race.info=r; Race.skew=r.now-Date.now(); Race.loadAt=Date.now(); Race.track=r.track?r.track.id:null; }catch(e){ return; }
+  const I=Race.info, many=(I.tracks||[]).length>1, at=t=>many?` at ${t.name}`:'';
+  // The call to the track, a couple of minutes before the gates open (for every track).
+  for(const t of I.tracks||[]){ const nx=t.next; if(!nx) continue; const key=t.id+':'+nx.n, left=nx.start-raceNow();
+    if(!Race.toasted.has(key) && left>0 && left<=I.announce+5000){ Race.toasted.add(key); toast(`🏁 Race #${nx.no}${at(t)} starts in ${Math.max(1,Math.floor(left/60000))} minute${left<120000?'':'s'}. Pick your creature!`,'Races',()=>{ Race.track=t.id; openTab('races'); loadRace(); }); } }
+  if(d&&d.stage==='settled'){ const t=(I.tracks||[]).find(x=>x.id===d.track), lr=t&&t.live; if(lr&&lr.result&&activeTab!=='races') toast(`🏆 ${CREATURES[lr.result.order[0]].name} won Race #${lr.no}${at(t)}!`,'Results',()=>{ Race.track=t.id; openTab('races'); loadRace(); }); }
   renderRaces(); }
 setInterval(()=>{ if(!document.hidden && Date.now()-Race.loadAt>60000){ loadRace(); loadLottery(); } },10000);
-// Where the race is now: each creature's share of the lap, eased so leaders pull away near the end.
-function raceProgress(r, id, el){ const tm=r.result.times[id], e=Math.max(0,el), i=CREATURE_IDS.indexOf(id);
-  if(e>=tm) return 1; const f=e/tm; return Math.min(1, Math.max(0, f*f*(3-2*f)*0.15+f*0.85 + Math.sin(e*1.3+i*1.7)*0.008*(1-f))); }
-const liveRace = () => { const r=Race.info&&Race.info.last; if(!r||!r.result) return null; const el=(raceNow()-r.start)/1000; return el>=-1&&el<=Race.info.len/1000+20 ? { r, el } : null; };
+// Where the race is now: each creature's share of the lap. The order at the line is the server's; how they get there
+// follows each creature's racing style plus this race's luck (same for every viewer), so leads change hands.
+const paceCache=new Map();
+function raceProgress(r, id, el){ const tm=r.result&&r.result.times[id]; if(tm==null) return 0; const e=Math.max(0,el); if(e>=tm) return 1;
+  const key=(r.track||'')+':'+r.n+':'+id; let c=paceCache.get(key); if(!c){ if(paceCache.size>300) paceCache.clear(); c=paceCurve(id,(r.n^hashStr(r.track||''))>>>0); paceCache.set(key,c); }
+  const f=e/tm*10, k=Math.min(9,Math.floor(f)), u=f-k; return c[k]+(c[k+1]-c[k])*(u*u*(3-2*u)*0.3+u*0.7); }
+const fieldOf = r => r.field || Object.keys(r.odds||r.result.times);
+const liveOfRace = r => { if(!r||!r.result||!Race.info) return null; const el=(raceNow()-r.start)/1000; return el>=-1&&el<=Race.info.len/1000+20 ? { r, el } : null; };
+const liveRace = () => liveOfRace(Race.info&&Race.info.last);
+const liveOnTrack = id => { const t=Race.info&&(Race.info.tracks||[]).find(x=>x.id===id); return t?liveOfRace(t.live):null; };
 const fmtLeft = ms => { const s=Math.max(0,Math.ceil(ms/1000)); return s>=3600?`${Math.floor(s/3600)}h ${Math.floor(s%3600/60)}m`:`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; };
 function raceRow(id, odds, form){ const C=CREATURES[id]; const im=el('img',{class:'rthumb',alt:'',src:creatureThumb(id),width:'44',height:'44'});
   const f=form&&form[id]; const formTxt=f&&f.last.length?`Last: ${f.last.map(n=>n===1?'1st':n===2?'2nd':n===3?'3rd':n+'th').join(', ')}`:'No races yet';
   return el('button',{class:'rrow'+(Race.pick===id?' on':''),'aria-pressed':String(Race.pick===id),onclick:()=>{ Race.pick=id; renderRaces(true); }},
-    im, el('span',{class:'rtx'}, el('b',{text:C.name}), el('span',{text:C.blurb}), el('span',{class:'rform',text:formTxt+(f&&f.wins?` · ${f.wins} win${f.wins>1?'s':''}`:'')})),
+    im, el('span',{class:'rtx'}, el('b',null,C.name, el('span',{class:'rstyle',text:STYLES[id]?STYLES[id].name:''})), el('span',{text:C.blurb}), el('span',{class:'rform',text:formTxt+(f&&f.wins?` · ${f.wins} win${f.wins>1?'s':''}`:'')})),
     el('span',{class:'rpays',text:odds?`${odds.pays}×`:''})); }
 function renderRaces(force){ const body=$('raceBody'); if(!body||activeTab!=='races') return;
   if(!force && body.contains(document.activeElement) && document.activeElement.tagName==='INPUT') return; // don't wipe a bet being typed
@@ -2580,22 +2687,28 @@ function renderRaces(force){ const body=$('raceBody'); if(!body||activeTab!=='ra
     body.append(el('details',{class:'authbox'}, el('summary',{text:'Start a lottery'}), el('div',{class:'cbet'}, el('span',{text:'Draw in (minutes)'}), mi), el('div',{class:'cbet'}, el('span',{text:'Ticket price'}), pi), el('div',{class:'cbet'}, el('span',{text:'Bonus from treasury'}), bi),
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Start the lottery',onclick:async()=>{ try{ await api('/api/admin/lottery',{method:'POST',body:{minutes:Number(mi.value),price:Number(pi.value),bonus:Number(bi.value)}}); toast('Lottery started.'); loadLottery(); }catch(e){ toast(e.message); } }})))); }
   if(!I){ body.append(el('p',{class:'hint',text:'Loading the races…'})); if(!Race.loadAt) loadRace(); return; }
+  const tracks=I.tracks||[], many=tracks.length>1, at=many&&I.track?` · ${I.track.name}`:'';
+  if(many){ const row=el('div',{class:'trackpills'}); for(const t of tracks){ const lv=liveOfRace(t.live), left=t.next?t.next.start-raceNow():0;
+      row.append(el('button',{class:'pill'+(I.track&&I.track.id===t.id?' on':''),'aria-pressed':String(!!(I.track&&I.track.id===t.id)),onclick:()=>{ Race.track=t.id; Race.pick=null; loadRace(); }},
+        el('b',{text:t.name}), el('span',{class:'tpl'+(lv&&lv.el<=I.len/1000?' live':''),'data-start':t.next?t.next.start:'',text:lv&&lv.el<=I.len/1000?'● Live':left>0?fmtLeft(left):'…'}))); }
+    body.append(row); }
   const live=liveRace();
-  if(live && live.el<=I.len/1000+2){ const box=el('div',{class:'rlive'}, el('h3',{text:`Race #${live.r.no} is running!`}));
-    const lanes=el('div',{class:'lanes',id:'raceLanes'}); for(const id of CREATURE_IDS){ const ln=el('div',{class:'lane'}); const im=el('img',{alt:CREATURES[id].name,src:creatureThumb(id),'data-id':id}); ln.append(el('span',{class:'lname',text:CREATURES[id].name}), im); lanes.append(ln); }
+  if(live && live.el<=I.len/1000+2){ const box=el('div',{class:'rlive'}, el('h3',{text:`Race #${live.r.no}${at} is running!`}));
+    const lanes=el('div',{class:'lanes',id:'raceLanes'}); for(const id of fieldOf(live.r)){ const ln=el('div',{class:'lane'}); const im=el('img',{alt:CREATURES[id].name,src:creatureThumb(id),'data-id':id}); ln.append(el('span',{class:'lname',text:CREATURES[id].name}), im); lanes.append(ln); }
     box.append(lanes); if(I.track) box.append(el('button',{class:'btn',text:'Watch on the map',onclick:()=>watchTrack()})); body.append(box); updateLanes(); }
-  else if(I.last && I.last.result){ const o=I.last.result.order; body.append(el('div',{class:'rlast'}, el('h3',{text:`Race #${I.last.no} result${I.last.cup?' · '+I.last.cup.name:''}`}),
+  else if(I.last && I.last.result){ const o=I.last.result.order; body.append(el('div',{class:'rlast'}, el('h3',{text:`Race #${I.last.no}${at} result${I.last.cup?' · '+I.last.cup.name:''}`}),
       el('ol',null,...o.slice(0,3).map(id=>el('li',null, el('img',{alt:'',src:creatureThumb(id),width:'28',height:'28'}), CREATURES[id].name))))); }
-  if(!I.track){ body.append(el('p',{class:'hint',text:"The colony doesn't have a Racetrack yet. Once one is built, a race runs every 30 minutes."})); return; }
+  if(!I.track){ body.append(el('p',{class:'hint',text:"The colony doesn't have a Racetrack yet. Once one is built, it runs a race every 30 minutes (and each extra Racetrack adds its own races)."})); return; }
   const nx=I.next; if(!nx){ body.append(el('p',{class:'hint',text:'The next race is being set up…'})); return; }
   const left=nx.start-raceNow(), open=left>1000;
-  body.append(el('div',{class:'rnext'}, el('h3',null, `Race #${nx.no}${nx.cup?' · '+nx.cup.name:''} `, el('span',{class:'rcount',id:'raceCount',text:open?`starts in ${fmtLeft(left)}`:'gates closed'})),
-    el('p',{class:'hint',text:`${nx.weather[0].toUpperCase()+nx.weather.slice(1)} track. Weather changes who's fast: pays are what you get back for each coin if your creature wins.`}),
+  body.append(el('div',{class:'rnext'}, el('h3',null, `Race #${nx.no}${at}${nx.cup?' · '+nx.cup.name:''} `, el('span',{class:'rcount',id:'raceCount',text:open?`starts in ${fmtLeft(left)}`:'gates closed'})),
+    el('p',{class:'hint',text:`${nx.weather[0].toUpperCase()+nx.weather.slice(1)} track, ${fieldOf(nx).length} runners${fieldOf(nx).length<CREATURE_IDS.length?` (${CREATURE_IDS.filter(x=>!fieldOf(nx).includes(x)).map(x=>CREATURES[x].name).join(', ')} sits this one out)`:''}. Weather changes who's fast: pays are what you get back for each coin if your creature wins.`}),
     nx.cup?el('p',{class:'rcup',text:`🏆 ${nx.cup.name}: a ${fmt(nx.cup.bonus)}-coin bonus shared by everyone who backs the winner.`}):''));
-  const list=el('div',{class:'rlist'}); for(const id of CREATURE_IDS.slice().sort((a,b)=>nx.odds[a].pays-nx.odds[b].pays)) list.append(raceRow(id, nx.odds[id], I.form)); body.append(list);
-  const mine=(I.myBets||[]).find(b=>b.n===nx.n), lastMine=I.last&&(I.myBets||[]).find(b=>b.n===I.last.n);
+  if(Race.pick&&!nx.odds[Race.pick]) Race.pick=null;
+  const list=el('div',{class:'rlist'}); for(const id of fieldOf(nx).slice().sort((a,b)=>nx.odds[a].pays-nx.odds[b].pays)) list.append(raceRow(id, nx.odds[id], I.form)); body.append(list);
+  const mineOf=r=>r&&(I.myBets||[]).find(b=>b.n===r.n&&(b.track||'')===(r.track||'')), mine=mineOf(nx), lastMine=mineOf(I.last);
   if(lastMine && I.last.settled) body.append(el('p',{class:'rmine '+(lastMine.payout?'win':''),text:lastMine.payout?`You won ${fmt(lastMine.payout)} coins on ${CREATURES[lastMine.creature].name} in Race #${I.last.no}!`:`Your ${fmt(lastMine.amount)} on ${CREATURES[lastMine.creature].name} in Race #${I.last.no} didn't come in.`}));
-  if(lastMine && I.last.settled && lastMine.payout){ const tr=[...D.buildings.values()].find(b=>b.type==='racetrack'); const cn=CREATURES[lastMine.creature].name;
+  if(lastMine && I.last.settled && lastMine.payout){ const tr=D.buildings.get(I.track.id)||[...D.buildings.values()].find(b=>b.type==='racetrack'); const cn=CREATURES[lastMine.creature].name;
     body.append(el('button',{class:'linkb',text:'↗ Share my win',onclick:()=>Share.win(`Won ${fmt(lastMine.payout)} coins!`,`Backed ${cn} in Race #${I.last.no}`,`${cn} won Race #${I.last.no} and I won ${fmt(lastMine.payout)} coins on Resurgence 🏁`,tr?[tr.x+2,tr.y+2]:null)})); }
   if(!(Me&&Me.token)) body.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to bet on a race.'}));
   else if(mine) body.append(el('p',{class:'rmine',text:`Your bet: ${fmt(mine.amount)} coins on ${CREATURES[mine.creature].name} at ${mine.pays}×. Win and you get ${fmt(Math.floor(mine.amount*mine.pays))}.`}));
@@ -2605,32 +2718,36 @@ function renderRaces(force){ const body=$('raceBody'); if(!body||activeTab!=='ra
       el('button',{class:'btn primary',text:Race.busy?'Placing…':'Place bet',disabled:!Race.pick||Race.busy,onclick:placeRaceBet}))); }
   if(Store.canWrite){ const bi=el('input',{type:'number',min:'0',step:'100',placeholder:'Bonus coins','aria-label':'Cup bonus'}), ni=el('input',{type:'text',maxlength:'40',placeholder:"Founders' Cup",'aria-label':'Cup name'});
     body.append(el('div',{class:'authbox'}, el('h3',{text:'Make the next race a Cup'}), el('p',{class:'hint',text:'The bonus comes out of the treasury and is shared by everyone who backs the winner. If nobody does, it goes back.'}), ni, bi,
-      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Announce the Cup',onclick:async()=>{ try{ await api('/api/admin/race/cup',{method:'POST',body:{bonus:Number(bi.value||0),name:ni.value}}); toast('Cup announced.'); loadRace(); }catch(e){ toast(e.message); } }})))); } }
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Announce the Cup',onclick:async()=>{ try{ await api('/api/admin/race/cup',{method:'POST',body:{bonus:Number(bi.value||0),name:ni.value,track:I.track.id}}); toast('Cup announced.'); loadRace(); }catch(e){ toast(e.message); } }})))); } }
 async function placeRaceBet(){ if(!Race.pick||Race.busy) return; Race.busy=true; renderRaces(true);
-  try{ const r=await api('/api/me/race/bet',{method:'POST',body:{creature:Race.pick,amount:Math.floor(Number(Race.amount))}}); toast(`Bet placed: ${fmt(r.amount)} on ${CREATURES[r.creature].name} at ${r.pays}×. Good luck!`); myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
+  try{ const r=await api('/api/me/race/bet',{method:'POST',body:{creature:Race.pick,amount:Math.floor(Number(Race.amount)),track:Race.info&&Race.info.track?Race.info.track.id:null}}); toast(`Bet placed: ${fmt(r.amount)} on ${CREATURES[r.creature].name} at ${r.pays}×. Good luck!`); myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
   catch(e){ toast(e.message); }
   Race.busy=false; await loadRace(); }
 function updateLanes(){ const L=$('raceLanes'), live=liveRace(); if(!L||!live) return; for(const im of L.querySelectorAll('img')){ const p=raceProgress(live.r, im.dataset.id, live.el); im.style.left=`calc(${(p*100).toFixed(1)}% - ${(p*30).toFixed(1)}px)`; } }
 setInterval(()=>{ if(document.hidden||activeTab!=='races'||!Race.info) return; updateLanes(); const c=$('raceCount'), nx=Race.info.next;
   if(c&&nx){ const left=nx.start-raceNow(); c.textContent=left>1000?`starts in ${fmtLeft(left)}`:'gates closed'; }
   const lc=$('lottoCount'), L=Lotto.info&&Lotto.info.lottery; if(lc&&L) lc.textContent=fmtLeft(L.drawAt-raceNow());
-  const live=liveRace(), lr=Race.info.last; if((nx&&raceNow()>=nx.start&&raceNow()<nx.start+3000) || (live&&!$('raceLanes')&&live.el<Race.info.len/1000) || (lr&&!lr.settled&&live&&live.el>Race.info.len/1000+3&&Date.now()-Race.loadAt>4000)) loadRace(); },250);
-function watchTrack(){ const t=Race.info&&Race.info.track&&D.buildings.get(Race.info.track.id); if(!t){ toast('The Racetrack is off-screen. Scroll to it on the map.'); return; } const [w,d]=T(t).size, p=iso(t.x+w/2,t.y+d/2); cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.4); follow=null; openTab(null); }
+  for(const sp of document.querySelectorAll('.trackpills .tpl:not(.live)')){ const st=Number(sp.dataset.start); if(st) sp.textContent=st-raceNow()>0?fmtLeft(st-raceNow()):'…'; }
+  const anyStart=(Race.info.tracks||[]).some(t=>t.next&&raceNow()>=t.next.start&&raceNow()<t.next.start+3000);
+  const live=liveRace(), lr=Race.info.last; if(anyStart||(nx&&raceNow()>=nx.start&&raceNow()<nx.start+3000) || (live&&!$('raceLanes')&&live.el<Race.info.len/1000) || (lr&&!lr.settled&&live&&live.el>Race.info.len/1000+3&&Date.now()-Race.loadAt>4000)) loadRace(); },250);
+function watchTrack(){ const I=Race.info&&Race.info.track; if(!I) return; const t=D.buildings.get(I.id)||{type:'racetrack',x:I.x,y:I.y}; const [w,d]=T(t).size, p=iso(t.x+w/2,t.y+d/2); cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.4); follow=null; openTab(null); }
 // The track's oval in tile space; runners go once round, starting at the front straight.
 function trackPoint(b, lane, p){ const rot=!!b.rot, t0=BUILDING_TYPES[b.type], [w,d]=t0.size, bx=rot?b.y:b.x, by=rot?b.x:b.y;
   const rx=w/2-0.46+(lane-2.5)*0.075, ry=d/2-0.44+(lane-2.5)*0.075, a=Math.PI/2-p*Math.PI*2, px=bx+w/2+Math.cos(a)*rx, py=by+d/2+Math.sin(a)*ry;
   return rot?[py,px]:[px,py]; }
-function drawRunners(b){ const live=liveRace(); if(!live) return; const order=[];
-  CREATURE_IDS.forEach((id,i)=>{ const p=raceProgress(live.r,id,live.el), [x,y]=trackPoint(b,i,p), [x2,y2]=trackPoint(b,i,Math.min(1,p+0.01)); const P=iso(x,y), Q=iso(x2,y2); order.push({id,P,dir:Q.x>=P.x?1:-1,run:p<1&&live.el>=0}); });
+function drawRunners(b){ const live=liveOnTrack(b.id); if(!live) return; const order=[];
+  fieldOf(live.r).forEach((id,i)=>{ const p=raceProgress(live.r,id,live.el), [x,y]=trackPoint(b,i,p), [x2,y2]=trackPoint(b,i,Math.min(1,p+0.01)); const P=iso(x,y), Q=iso(x2,y2); order.push({id,P,dir:Q.x>=P.x?1:-1,run:p<1&&live.el>=0}); });
   order.sort((a,b2)=>a.P.y-b2.P.y);
   for(const o of order){ ctx.save(); ctx.translate(o.P.x,o.P.y); ctx.scale(o.dir,1); drawCreature(o.id,0,0,0.8,T_NOW+CREATURE_IDS.indexOf(o.id)*137,o.run); ctx.restore(); } }
 
-// ---- Casino: three games against the house, played from your own card ----
+// ---- Casino: six games against the house, played from your own card (Blackjack and Rocket at their own tables) ----
 let casino=null; // { id, info, open, game, pick, bet, last, busy, at }
 const DICE='⚀⚁⚂⚃⚄⚅', ICON=Object.fromEntries(SLOT_SYMBOLS.map(x=>[x.id,x.icon]));
 async function loadCasino(c){ const prev=casino||{}, same=prev.id===c.id;
   casino={ id:c.id, game:prev.game||'coin', pick:prev.pick||'heads', bet:prev.bet||10, last:same?prev.last:null, open:!!prev.open, info:same?prev.info:null, busy:false, loading:true, at:Date.now() };
-  try{ casino.info=await api('/api/me/casino'); }catch(e){} casino.loading=false; if(sel&&sel.id===c.id) renderCard(true); }
+  try{ casino.info=await api('/api/me/casino'); }catch(e){} casino.loading=false;
+  const tb=casino.info&&casino.info.table; if(tb){ casino.open=true; casino.game=tb.game; if(tb.game==='blackjack') casino.bj=tb; else Rocket.track(tb); }
+  if(sel&&sel.id===c.id) renderCard(true); }
 async function casinoPlay(c){ if(casino.busy) return; const bet=Math.floor(Number(casino.bet));
   if(!(bet>=1)){ toast('Bet at least 1 coin.'); return; }
   casino.busy=true; renderCard(true);
@@ -2640,10 +2757,63 @@ async function casinoPlay(c){ if(casino.busy) return; const bet=Math.floor(Numbe
   catch(e){ toast(e.message); }
   casino.busy=false; renderCard(true); }
 function resultLine(r){ const g=r.result;
-  const shown = Array.isArray(g) ? g.map(x=>ICON[x]||x).join(' ') : casino.game==='dice' ? `${DICE[Number(g)-1]} ${g}` : (g==='heads'?'🪙 Heads':'🪙 Tails');
+  const shown = Array.isArray(g) ? g.map(x=>ICON[x]||x).join(' ') : casino.game==='dice' ? `${DICE[Number(g)-1]} ${g}` : casino.game==='roulette' ? `${g===0?'🟩':ROULETTE_RED.has(g)?'🟥':'⬛'} ${g}` : (g==='heads'?'🪙 Heads':'🪙 Tails');
   const cb=r.casino&&D.buildings.get(r.casino.id), gname=GAMES[casino.game].name;
   const brag=r.won&&r.payout>=50?el('button',{class:'linkb',text:'↗ Share my win',onclick:()=>Share.win(`Won ${fmt(r.payout)} coins!`,`${gname} at ${r.casino?r.casino.name:'the casino'}`,`I just won ${fmt(r.payout)} coins on ${gname.toLowerCase()} at the casino in ${S.meta?S.meta.name:'my colony'} on Resurgence 🎰`,cb?[cb.x+1,cb.y+1]:null)}):null;
   return el('div',{class:'cresult '+(r.won?'win':'lose')}, el('span',{class:'roll',text:shown}), el('b',{text:r.won?`You won ${fmt(r.payout)} coins!`:`No luck. You lost ${fmt(r.bet)}.`}), brag); }
+// Blackjack: deal, then hit / stand / double. The dealer's second card stays face down until you stand.
+// Only cards that weren't on the table at the last redraw get the deal animation (the card redraws often).
+const bjSeen=new Set();
+const cardEl=(c,i,side)=>{ if(c==='??') return el('span',{class:'pcard back',text:'🂠'}); const red=/[♥♦]/.test(c), key=side+i+c, fresh=!bjSeen.has(key); bjSeen.add(key);
+  return el('span',{class:'pcard'+(red?' red':'')+(fresh?' deal':''),style:fresh?`animation-delay:${(i%2)*0.08}s`:'',text:c}); };
+async function bjMove(c,action){ if(casino.busy) return; casino.busy=true; renderCard(true);
+  try{ const r=await api('/api/me/casino/blackjack',{method:'POST',body:{action,bet:Math.floor(Number(casino.bet))}}); casino.bj=r; if(typeof r.coins==='number'){ casino.info={...casino.info,coins:r.coins}; myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); const dd=detail.get(c.id); if(dd) dd.coins=r.coins; } }
+  catch(e){ toast(e.message); }
+  casino.busy=false; renderCard(true); }
+function blackjackTable(c,info){ const t=el('div',{class:'bj'}), h=casino.bj;
+  if(h){ t.append(el('div',{class:'bjrow'}, el('span',{class:'bjlab',text:`Dealer${h.done?` · ${h.dealerValue}`:''}`}), el('div',{class:'bjcards'}, ...h.dealer.map((x,i)=>cardEl(x,i,'d')))),
+      el('div',{class:'bjrow'}, el('span',{class:'bjlab',text:`You · ${h.playerValue}`}), el('div',{class:'bjcards'}, ...h.player.map((x,i)=>cardEl(x,i,'p'))))); }
+  if(h&&!h.done){ t.append(el('p',{class:'hint',text:`Bet ${fmt(h.bet)}${h.doubled?' (doubled)':''}.`}), el('div',{class:'row-actions'},
+      el('button',{class:'btn primary',text:'Hit',disabled:casino.busy,onclick:()=>bjMove(c,'hit')}), el('button',{class:'btn',text:'Stand',disabled:casino.busy,onclick:()=>bjMove(c,'stand')}),
+      h.canDouble?el('button',{class:'btn',text:`Double (+${fmt(h.bet)})`,disabled:casino.busy||info.coins<h.bet,onclick:()=>bjMove(c,'double')}):'')); return t; }
+  if(h&&h.done){ const O={ blackjack:'Blackjack! 🎉', win:'You win!', 'dealer-bust':'The dealer went bust. You win!', push:'Push: your bet comes back.', lose:'The dealer wins.', bust:'Bust! Over 21.', 'dealer-blackjack':'The dealer has blackjack.' };
+    const won=h.payout>h.bet*(h.doubled?2:1); t.append(el('div',{class:'cresult '+(won?'win':h.outcome==='push'?'':'lose')}, el('b',{text:O[h.outcome]||''}), el('span',{text:h.payout?`You get ${fmt(h.payout)} coins.`:`You lost ${fmt(h.bet*(h.doubled?2:1))}.`}))); }
+  const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Bet',value:String(casino.bet)}); inp.oninput=()=>{ casino.bet=inp.value; };
+  const quick=(label,v)=>el('button',{class:'pill',text:label,onclick:()=>{ casino.bet=Math.max(1,Math.floor(v)); renderCard(true); }});
+  t.append(el('div',{class:'cbet'}, el('span',{text:'Bet'}), inp, quick('10',10), quick('100',100), quick('Half',info.coins/2)),
+    el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:casino.busy?'Dealing…':h?'Deal again':'Deal',disabled:casino.busy||info.coins<1,onclick:()=>{ casino.bj=null; bjSeen.clear(); bjMove(c,'deal'); }}), el('button',{class:'linkb',text:'Leave',onclick:()=>{ casino.open=false; casino.bj=null; renderCard(true); }})));
+  return t; }
+// Rocket: the multiplier climbs from 1× after a 3-second countdown; cash out before it blows up.
+var Rocket={ g:null, skew:0, timer:null, polling:false, auto:'',
+  track(g){ this.g=g; this.skew=(g.now||Date.now())-Date.now(); clearInterval(this.timer); if(!g.done) this.timer=setInterval(()=>this.tick(),100); },
+  mult(){ const g=this.g; if(!g) return 1; return rocketAt((Date.now()+this.skew-g.start)/1000); },
+  tick(){ const g=this.g; if(!g||g.done){ clearInterval(this.timer); return; } const now=Date.now()+this.skew, m=this.mult();
+    const mEl=$('rkMult'), bEl=$('rkCash'), sh=$('rkShip');
+    if(mEl) mEl.textContent=now<g.start?`Lift-off in ${Math.ceil((g.start-now)/1000)}…`:`${m.toFixed(2)}×`;
+    if(bEl) bEl.textContent=now<g.start?'Get ready…':`Cash out ${fmt(Math.floor(g.bet*m))}`, bEl&&(bEl.disabled=now<g.start);
+    if(sh) sh.style.transform=`translateY(${-Math.min(120,Math.log(m)*42)}px) rotate(${Math.sin(now/90)*2}deg)`;
+    if(now>=g.start&&!this.polling&&(!this.lastPoll||Date.now()-this.lastPoll>450)){ this.lastPoll=Date.now(); this.polling=true;
+      api('/api/me/casino/rocket',{method:'POST',body:{action:'status'}}).then(r=>{ if(r.done) this.finish(r); }).catch(()=>{}).finally(()=>{ this.polling=false; }); } },
+  finish(r){ this.g=r; clearInterval(this.timer); if(typeof r.coins==='number'){ casino.info={...casino.info,coins:r.coins}; myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } else loadMyMoney().then(refreshHUD); renderCard(true); },
+  async launch(c){ if(casino.busy) return; casino.busy=true; renderCard(true);
+    try{ const r=await api('/api/me/casino/rocket',{method:'POST',body:{action:'launch',bet:Math.floor(Number(casino.bet)),auto:this.auto?Number(this.auto):null}}); this.track(r);
+      if(typeof r.coins==='number'){ casino.info={...casino.info,coins:r.coins}; myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } }
+    catch(e){ toast(e.message); } casino.busy=false; renderCard(true); },
+  async cashout(){ const b=$('rkCash'); if(b) b.disabled=true; try{ const r=await api('/api/me/casino/rocket',{method:'POST',body:{action:'cashout'}}); this.finish(r); }catch(e){ toast(e.message); if(b) b.disabled=false; } },
+  table(c,info){ const t=el('div',{class:'rk'}), g=this.g;
+    if(g&&!g.done){ t.append(el('div',{class:'rksky'}, el('span',{class:'rkship',id:'rkShip',text:'🚀'}), el('b',{class:'rkmult',id:'rkMult',text:'…'})),
+        el('p',{class:'hint',text:`Bet ${fmt(g.bet)}${g.auto?` · cashing out automatically at ${g.auto}×`:''}.`}),
+        el('div',{class:'row-actions'}, el('button',{class:'btn primary rkcash',id:'rkCash',text:'Get ready…',onclick:()=>this.cashout()})));
+      requestAnimationFrame(()=>this.tick()); return t; }
+    if(g&&g.done){ const won=g.payout>0; t.append(el('div',{class:'cresult '+(won?'win':'lose')}, el('span',{class:'roll',text:won?'🪂':'💥'}),
+        el('b',{text:won?`Cashed out at ${g.cashed}×: you get ${fmt(g.payout)} coins!`:`It blew up at ${g.crash}×. You lost ${fmt(g.bet)}.`}), won?el('span',{class:'hint',text:`It would have blown up at ${g.crash}×.`}):'')); }
+    const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Bet',value:String(casino.bet)}); inp.oninput=()=>{ casino.bet=inp.value; };
+    const au=el('input',{type:'number',min:'1.1',step:'0.1',inputmode:'decimal','aria-label':'Auto cash-out',placeholder:'e.g. 2',value:this.auto}); au.oninput=()=>{ this.auto=au.value; };
+    const quick=(label,v)=>el('button',{class:'pill',text:label,onclick:()=>{ casino.bet=Math.max(1,Math.floor(v)); renderCard(true); }});
+    t.append(el('div',{class:'cbet'}, el('span',{text:'Bet'}), inp, quick('10',10), quick('100',100), quick('Half',info.coins/2)),
+      el('div',{class:'cbet'}, el('span',{text:'Auto cash-out at'}), au, el('span',{class:'hint',text:'× (optional)'})),
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:casino.busy?'Launching…':g?'Launch again':'Launch 🚀',disabled:casino.busy||info.coins<1,onclick:()=>this.launch(c)}), el('button',{class:'linkb',text:'Leave',onclick:()=>{ casino.open=false; this.g=null; renderCard(true); }})));
+    return t; } };
 function casinoPanel(c){ const box=el('div',{class:'authbox casino'}, el('h3',{text:'Casino'}));
   if(!casino||casino.id!==c.id||(!casino.loading&&Date.now()-casino.at>30000)) loadCasino(c);
   const info=casino&&casino.id===c.id?casino.info:null;
@@ -2651,8 +2821,16 @@ function casinoPanel(c){ const box=el('div',{class:'authbox casino'}, el('h3',{t
   if(!info.housed){ box.append(el('p',{class:'hint',text:'The casino is for colonists who have woken up and have a home.'})); return box; }
   if(!info.casino){ box.append(el('p',{class:'hint',text:"The colony doesn't have a casino yet. Once one is built, you can play here."})); return box; }
   if(!casino.open){ box.append(el('p',{class:'hint',text:`${info.casino.name} is open. You have ${fmt(info.coins)} coins.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Go to the casino',onclick:()=>{ casino.open=true; renderCard(true); }}))); return box; }
-  const tabs=el('div',{class:'ctabs'}); for(const k of Object.keys(GAMES)) tabs.append(el('button',{class:'pill'+(casino.game===k?' on':''),'aria-pressed':String(casino.game===k),text:GAMES[k].name,onclick:()=>{ casino.game=k; casino.pick=GAMES[k].picks?GAMES[k].picks[0]:null; casino.last=null; renderCard(true); }}));
+  const busyTable=(casino.bj&&!casino.bj.done)||(Rocket.g&&!Rocket.g.done);
+  const tabs=el('div',{class:'ctabs'}); for(const k of Object.keys(GAMES)) tabs.append(el('button',{class:'pill'+(casino.game===k?' on':''),'aria-pressed':String(casino.game===k),text:GAMES[k].name,disabled:busyTable&&casino.game!==k,onclick:()=>{ casino.game=k; casino.pick=GAMES[k].picks?GAMES[k].picks[0]:k==='roulette'?'red':null; casino.last=null; renderCard(true); }}));
   box.append(el('p',{class:'hint',text:`You have ${fmt(info.coins)} coins.`}), tabs, el('p',{class:'crule',text:GAMES[casino.game].rule}));
+  if(casino.game==='blackjack'){ box.append(blackjackTable(c,info)); return box; }
+  if(casino.game==='rocket'){ box.append(Rocket.table(c,info)); return box; }
+  if(casino.game==='roulette'){ if(!casino.pick||!(casino.pick in ROULETTE_BETS||/^n\d+$/.test(casino.pick))) casino.pick='red';
+    const row=el('div',{class:'cpicks'}); for(const [k,nm] of Object.entries(ROULETTE_BETS)) row.append(el('button',{class:'pill'+(casino.pick===k?' on':'')+(k==='red'?' rred':k==='black'?' rblack':''),'aria-pressed':String(casino.pick===k),text:nm,onclick:()=>{ casino.pick=k; renderCard(true); }}));
+    const num=el('input',{type:'number',min:'0',max:'36',step:'1',inputmode:'numeric','aria-label':'Number',placeholder:'0–36',value:/^n\d+$/.test(casino.pick)?casino.pick.slice(1):''});
+    num.oninput=()=>{ const v=Math.floor(Number(num.value)); if(num.value!==''&&v>=0&&v<=36){ casino.pick='n'+v; for(const b of row.children) b.classList.remove('on'); } };
+    box.append(row, el('div',{class:'cbet'}, el('span',{text:'Or one number (36×):'}), num)); }
   if(casino.game==='slots') box.append(el('p',{class:'hint',text:SLOT_SYMBOLS.slice().reverse().map(x=>`${x.icon}${x.icon}${x.icon} ${SLOT_PAYS[x.id]}×`).join(' · ')+` · 🍒🍒 ${SLOT_TWO_CHERRIES}×`}));
   const g=GAMES[casino.game]; if(g.picks){ const row=el('div',{class:'cpicks'}); for(const p of g.picks) row.append(el('button',{class:'pill'+(casino.pick===p?' on':''),'aria-pressed':String(casino.pick===p),text:casino.game==='coin'?(p==='heads'?'Heads':'Tails'):`${DICE[Number(p)-1]} ${p}`,onclick:()=>{ casino.pick=p; renderCard(true); }})); box.append(row); }
   const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Bet',value:String(casino.bet)}); inp.oninput=()=>{ casino.bet=inp.value; };
@@ -2663,7 +2841,7 @@ function casinoPanel(c){ const box=el('div',{class:'authbox casino'}, el('h3',{t
   if(casino.last) box.append(resultLine(casino.last));
   return box; }
 // ---- Your own card: Work · Go out · Casino · Crime · Pet, one at a time ----
-let actTab='work';
+let actTab='earn';
 // Jump to one of your own card's tabs (e.g. "Play here" on the casino opens the games straight away).
 async function openMyTab(tab, panel){ if(!(Me&&Me.handle)) return; actTab=tab; await openCitizen(Me.handle); actTab=tab;
   if(tab==='casino'&&casino) casino.open=true; renderCard(true);
@@ -2671,8 +2849,8 @@ async function openMyTab(tab, panel){ if(!(Me&&Me.handle)) return; actTab=tab; a
   requestAnimationFrame(show); setTimeout(show,700); }
 const BUYABLE=new Set(['housing','shops','offices','industry']); // what players may own (matches the server)
 function actionTabs(c){ const wrap=el('div',null); const dr=Daily.row(); if(dr) wrap.append(dr); const row=el('div',{class:'acttabs',role:'tablist'});
-  for(const [id,nm] of [['work','Work'],['home','Home'],['bank','Bank'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['pet','Pet'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
-  const P={ work:workPanel, home:homePanel, bank:bankPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, pet:petPanel, badges:c=>Badges.panel(c) }[actTab]||workPanel;
+  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['bank','Bank'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['pet','Pet'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
+  const P={ work:workPanel, home:homePanel, bank:bankPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, pet:petPanel, badges:c=>Badges.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
 // ---- Home (rent or move, and the buildings you own), Bank, Cars ----
 const Money={ id:null, at:0, homes:null, props:null, bank:null, busy:false };

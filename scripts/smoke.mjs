@@ -356,7 +356,50 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     await sleep(1300); const sl = await call('POST', '/api/me/casino', { game: 'slots', bet: 10 }, P);
     ok(sl.status === 200 && sl.json.result.length === 3, 'slots spin three reels');
     await sleep(1300); const dc = await call('POST', '/api/me/casino', { game: 'dice', pick: '3', bet: 10 }, P);
-    ok(dc.status === 200 && (dc.json.won ? dc.json.result === '3' && dc.json.payout === 57 : dc.json.payout === 0), 'dice pays 5.7× on the right number'); }
+    ok(dc.status === 200 && (dc.json.won ? dc.json.result === '3' && dc.json.payout === 57 : dc.json.payout === 0), 'dice pays 5.7× on the right number');
+    // Roulette
+    await sleep(1300); ok((await call('POST', '/api/me/casino', { game: 'roulette', pick: 'n37', bet: 10 }, P)).status === 400, 'roulette numbers go 0 to 36');
+    await sleep(1300); const ro = await call('POST', '/api/me/casino', { game: 'roulette', pick: 'red', bet: 10 }, P);
+    const RED = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+    ok(ro.status === 200 && ro.json.result >= 0 && ro.json.result <= 36 && ro.json.payout === (RED.includes(ro.json.result) ? 20 : 0), 'roulette: red pays 2× when the ball lands on red', JSON.stringify(ro.json));
+    await sleep(1300); const rn = await call('POST', '/api/me/casino', { game: 'roulette', pick: 'n17', bet: 10 }, P);
+    ok(rn.status === 200 && rn.json.payout === (rn.json.result === 17 ? 360 : 0), 'a single number pays 36×');
+    await sleep(1300); ok((await call('POST', '/api/me/casino', { game: 'blackjack', bet: 10 }, P)).status === 400, 'blackjack is played at its own table');
+    // Blackjack: deal, play the hand out, and the coins add up
+    await pool.query("update citizens set coins_base = 1000, net = 0, coins_day = 0, casino_game = null where handle = 'zara_ng'");
+    const bj = async (action, bet) => { await sleep(300); return call('POST', '/api/me/casino/blackjack', { action, bet }, P); };
+    ok((await bj('hit')).status === 409, 'no hand, no hitting');
+    let h = (await bj('deal', 100)).json;
+    ok(h.player?.length === 2 && h.dealer?.length === 2 && (h.done || h.dealer[1] === '??'), "a hand is dealt with the dealer's second card hidden", JSON.stringify(h));
+    if (!h.done) { ok((await bj('deal', 100)).json.resumed === true, 'dealing again resumes the hand in play'); h = (await bj('stand')).json; }
+    ok(h.done && h.dealer.every(c => c !== '??') && ['win', 'lose', 'push', 'bust', 'dealer-bust', 'blackjack', 'dealer-blackjack'].includes(h.outcome), 'standing finishes the hand', JSON.stringify(h));
+    const expect = { win: 200, 'dealer-bust': 200, push: 100, lose: 0, bust: 0, blackjack: 250, 'dealer-blackjack': 0 }[h.outcome];
+    ok(h.payout === expect && (await whoDev('zara_ng')).coins === 900 + expect, `the hand pays out right (${h.outcome}: ${expect})`, JSON.stringify(h));
+    ok(!h.done || (h.dealerValue >= 17 || h.outcome === 'bust' || h.outcome === 'blackjack' || h.outcome === 'dealer-blackjack'), 'the dealer draws to 17');
+    // Double: force a hand of 5 + 6 against the dealer, then double for one card
+    await pool.query("update citizens set coins_base = 1000, casino_game = $1 where handle = 'zara_ng'", [JSON.stringify({ game: 'blackjack', bet: 50, deck: ['2♣', '3♣', '10♠'], player: ['5♠', '6♥'], dealer: ['10♣', '7♦'], at: Date.now() })]);
+    const dbl = (await bj('double')).json;
+    ok(dbl.done && dbl.doubled && dbl.player.length === 3 && dbl.player[2] === '10♠' && dbl.playerValue === 21 && dbl.outcome === 'win' && dbl.payout === 200, 'doubling takes one card and doubles the stake', JSON.stringify(dbl));
+    ok((await whoDev('zara_ng')).coins === 1000 - 50 + 200, 'a doubled win pays 2× the doubled bet');
+    // Rocket: launch, then cash out in time (we peek at the crash point), or watch it blow up
+    await pool.query("update citizens set coins_base = 1000, casino_game = null where handle = 'zara_ng'");
+    const rk = async (action, extra = {}) => { await sleep(300); return call('POST', '/api/me/casino/rocket', { action, ...extra }, P); };
+    const L = (await rk('launch', { bet: 100 })).json;
+    ok(L.start > Date.now() && !L.done && L.crash === null && (await whoDev('zara_ng')).coins === 900, 'a rocket launches after a countdown, with the crash point secret', JSON.stringify(L));
+    ok((await rk('cashout')).status === 409, "can't cash out before lift-off");
+    let gm = (await pool.query("select casino_game from citizens where handle = 'zara_ng'")).rows[0].casino_game;
+    await pool.query("update citizens set casino_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...gm, crash: 5 })]);
+    while (Date.now() < gm.start + 6200) await sleep(200); // about 2.1× after 6.2 s
+    const co = (await rk('cashout')).json;
+    ok(co.done && co.cashed >= 2 && co.cashed < 2.3 && co.payout === Math.floor(100 * co.cashed) && co.crash === 5, 'cashing out pays the multiplier at that moment', JSON.stringify(co));
+    const L2 = (await rk('launch', { bet: 100 })).json; gm = (await pool.query("select casino_game from citizens where handle = 'zara_ng'")).rows[0].casino_game;
+    await pool.query("update citizens set casino_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...gm, crash: 1.2 })]);
+    while (Date.now() < gm.start + 2200) await sleep(200);
+    const st = (await rk('status')).json; ok(st.done && st.payout === 0 && st.crash === 1.2, 'waiting too long: it blows up and the bet is lost', JSON.stringify(st));
+    const L3 = (await rk('launch', { bet: 100, auto: 1.5 })).json; gm = (await pool.query("select casino_game from citizens where handle = 'zara_ng'")).rows[0].casino_game;
+    await pool.query("update citizens set casino_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...gm, crash: 3 })]);
+    while (Date.now() < gm.start + 3700) await sleep(200);
+    const au = (await rk('status')).json; ok(au.done && au.cashed === 1.5 && au.payout === 150, 'an automatic cash-out pays at its target', JSON.stringify(au)); }
   // ---- crime, going out, pets ----
   { const sleep = ms => new Promise(r => setTimeout(r, ms)), set = (h, sql, v = []) => pool.query(`update citizens set ${sql} where handle = $1`, [h, ...v]);
     const coins = async h => (await whoDev(h)).coins;
@@ -559,6 +602,54 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     await pool.query("update citizens set daily_day = $1, daily_streak = 9 where handle = 'zara_ng'", [day - 3]);
     const dm = (await call('GET', '/api/me/daily', undefined, P)).json; ok(dm.streak === 0 && dm.missed === 9 && dm.reward === 50, 'missing a day starts the streak over', JSON.stringify(dm));
     ok((await call('GET', '/api/me/daily', undefined, P)).json.best === 7, 'your best streak is remembered'); }
+  // ---- more ways to earn ----
+  { const sleep = ms => new Promise(r => setTimeout(r, ms)), zid = (await whoDev('zara_ng')).id, coins = async () => (await whoDev('zara_ng')).coins;
+    await pool.query("update citizens set coins_base = 100, net = 0, coins_day = 0, earn = null, jailed_until = null where id = $1", [zid]);
+    ok((await call('GET', '/api/me/earn', undefined, { auth: false })).status === 401, 'earning is for signed-in colonists');
+    let E = (await call('GET', '/api/me/earn', undefined, P)).json;
+    ok(E.housed && E.shift && E.gigs && E.fishing && E.foraging && E.scavenge, 'the Earn tab lists every way to earn', JSON.stringify(E).slice(0, 200));
+    // Extra shift
+    const job = (await whoDev('zara_ng')).job;
+    if (job) { const s1 = await call('POST', '/api/me/earn/shift', {}, P);
+      ok(s1.status === 200 && s1.json.paid === E.shift.pay && s1.json.paid > 0 && (await coins()) === 100 + s1.json.paid, `an extra shift pays ${E.shift.pay} at once`, JSON.stringify(s1.json));
+      ok((await call('POST', '/api/me/earn/shift', {}, P)).status === 429, 'then you need a rest before the next one');
+      await pool.query(`update citizens set earn = jsonb_set(earn, '{shiftAt}', '0') where id = $1`, [zid]);
+      ok((await call('POST', '/api/me/earn/shift', {}, P)).status === 200, 'after the rest, another shift'); }
+    else ok(false, 'zara_ng should have a job for the shift test');
+    // Delivery gig
+    E = (await call('GET', '/api/me/earn', undefined, P)).json; const g = E.gigs.offers[0];
+    ok(E.gigs.offers.length >= 1 && g.pay >= 30 && g.mins >= 1, 'parcels are offered, paying more for longer trips', JSON.stringify(E.gigs.offers));
+    const tk = await call('POST', '/api/me/earn/gig', { action: 'take', id: g.id }, P);
+    ok(tk.status === 200 && tk.json.gig.until > Date.now() && (await who('zara_ng')).visit?.[0] === g.to.id, 'taking one sends the colonist to the address', JSON.stringify(tk.json));
+    ok((await call('POST', '/api/me/earn/gig', { action: 'take', id: E.gigs.offers[1]?.id || 'x' }, P)).status === 409, 'one delivery at a time');
+    ok((await call('POST', '/api/me/earn/gig', { action: 'deliver' }, P)).status === 409, "you're paid on arrival, not before");
+    await pool.query(`update citizens set earn = jsonb_set(earn, '{gig,until}', to_jsonb($2::bigint)) where id = $1`, [zid, Date.now() - 1]);
+    const c0 = await coins(), dv = await call('POST', '/api/me/earn/gig', { action: 'deliver' }, P);
+    ok(dv.status === 200 && dv.json.paid === g.pay && (await coins()) === c0 + g.pay, 'arriving pays the delivery fee', JSON.stringify(dv.json));
+    // Fishing: too early, then just right
+    const cast = async kind => (await call('POST', '/api/me/earn/catch', { kind }, P)).json, reel = async () => (await call('POST', '/api/me/earn/catch', { action: 'reel' }, P)).json;
+    const f1 = await cast('fish'); ok(f1.biteIn >= 2500 && f1.biteIn <= 7500, 'casting a line: a bite comes in a few seconds', JSON.stringify(f1));
+    ok((await reel()).result === 'early', 'reeling in before the bite loses it');
+    await pool.query(`update citizens set earn = jsonb_set(earn, '{castAt}', '0') where id = $1`, [zid]);
+    const f2 = await cast('fish'), bite = (await pool.query('select earn from citizens where id = $1', [zid])).rows[0].earn.cast.bite;
+    while (Date.now() < bite + 100) await sleep(100);
+    const c1 = await coins(), got = await reel();
+    ok(got.result === 'caught' && got.item?.name && (await coins()) === c1 + got.paid, `reeling in on the bite catches something (${got.item?.name}, ${got.paid})`, JSON.stringify(got));
+    await pool.query(`update citizens set earn = jsonb_set(earn, '{castAt}', '0') where id = $1`, [zid]);
+    const fr = await call('POST', '/api/me/earn/catch', { kind: 'forage' }, P);
+    ok(fr.status === 200 || (fr.status === 409 && /parks/.test(fr.json.error)), 'foraging needs a park', JSON.stringify(fr.json));
+    if (fr.status === 200) await reel();
+    // Scavenging
+    const sv = await call('POST', '/api/me/earn/scavenge', { action: 'start' }, P);
+    ok(sv.status === 200 && sv.json.scav.until - Date.now() > 100000, 'scavenging takes two minutes', JSON.stringify(sv.json));
+    ok((await call('POST', '/api/me/earn/scavenge', { action: 'collect' }, P)).status === 409, "you can't collect before you've finished searching");
+    await pool.query(`update citizens set earn = jsonb_set(earn, '{scav,until}', to_jsonb($2::bigint)) where id = $1`, [zid, Date.now() - 1]);
+    const c2 = await coins(), sc = await call('POST', '/api/me/earn/scavenge', { action: 'collect' }, P);
+    ok(sc.status === 200 && sc.json.item?.name && (await coins()) === c2 + sc.json.paid, `searching turns up ${sc.json.item?.name}`, JSON.stringify(sc.json));
+    ok((await call('POST', '/api/me/earn/scavenge', { action: 'start' }, P)).status === 429, 'then others are picking over it for a while');
+    // Daily limits
+    await pool.query(`update citizens set earn = jsonb_set(earn, '{shifts}', '4'), stats = stats where id = $1`, [zid]); await pool.query(`update citizens set earn = jsonb_set(earn, '{shiftAt}', '0') where id = $1`, [zid]);
+    ok((await call('POST', '/api/me/earn/shift', {}, P)).status === 429, 'four extra shifts a day at most'); }
   // ---- badges ----
   { const sleep = ms => new Promise(r => setTimeout(r, ms)), zid = (await whoDev('zara_ng')).id;
     ok((await call('GET', '/api/me/badges', undefined, { auth: false })).status === 401, 'badges are for signed-in colonists');

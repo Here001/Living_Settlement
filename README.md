@@ -95,6 +95,12 @@ They comment it on any of your Instagram posts **from their own account**. After
   - **Coin flip:** pick heads or tails, win 1.9×.
   - **Dice:** pick 1 to 6, win 5.7×.
   - **Slots:** three in a row pays 5× (🍒) up to 100× (🚀🚀🚀); two 🍒 pays 1.5×.
+  - **Roulette:** a European wheel (0–36). Red/black, odd/even and 1–18/19–36 pay 2×, a dozen pays 3×, and a single number pays 36×. The house edge is 2.7%.
+  - **Blackjack:** deal, then **Hit**, **Stand**, or **Double** on your first two cards. One deck per hand and no splits. The dealer stands on 17. A win pays 2×, blackjack 2.5×, and a push returns the bet.
+  - **Rocket:** after a 3-second countdown the multiplier climbs from 1× (2× at about 6 s, 10× at about 19 s, up to 100×). **Cash out** before it blows up, or set an automatic cash-out target.
+    - It reaches m× with probability 0.97/m, a 3% house edge on every target.
+    - The crash point is decided on the server at launch and only revealed afterwards.
+- **Table games.** Blackjack and Rocket each have their own table (`server/tables.js`). A game in progress is kept in `citizens.casino_game`, so it survives a reload. Only one table game can be in progress at a time.
 - **Odds and fairness.**
   - Every game pays back about 95% over time.
   - The house edge goes into the colony treasury, and wins are paid from it.
@@ -153,6 +159,26 @@ These live on a signed-in colonist's own card, under **Home**, **Bank** and **Ca
 - **Delivery.** Messages arrive live, with a pop-up and an unread badge, and go only to the two people's own screens, never to anyone else.
 - **Limits.** Messages are up to 500 characters, with a short pause between sends. The last 500 messages of each chat are kept.
 - **Online status.** A colonist is online while they're signed in with the colony open. Verified colonists show a green dot and "● Online now" or "Last seen 5 min ago" on their card, in the Colonists list and in chats.
+
+## Ways to earn
+
+- **Where.** The **💰 Earn** tab, the first tab on your own card, lists every way to make coins and lets you do the active ones right there (`server/earn.js`).
+- **Rules for all of them.**
+  - Everything is paid from the treasury; if it runs low, pay shrinks to what it holds.
+  - Daily limits reset at midnight UTC. Together they're worth roughly as much as a job, so a job stays the main income.
+- **💼 Your job.** Paid automatically every game day. If you have no job, **Find a job** opens the Work tab.
+- **⏱️ Extra shift.** Overtime at your job pays 8× your daily salary at once. Your colonist goes to work for a few minutes. Up to 4 a day, with a 45-minute rest in between.
+- **📦 Delivery gigs.**
+  - Three parcels are offered at a time (refreshed every 10 minutes), each between two buildings in town.
+  - Taking one sends your colonist to the address, walking, driving or by cab like any trip. You're paid on arrival (1–5 minutes later): 30–260 coins depending on distance. Up to 8 a day.
+- **🎣 Fishing and 🌿 foraging.**
+  - Fishing needs water in the colony; foraging needs a park or garden.
+  - Cast, wait 2½–7½ seconds for the bite (the screen shakes), then tap **Reel in!** within about 1½ seconds. Too early or too late and it gets away.
+  - Catches sell for 0–1,000 coins: Glowfin 15 up to a rare leviathan scale 1,000; Sunberries 12 up to a crystal shard 300. Up to 30 catches a day.
+  - The bite time is set on the server, so it can't be faked.
+- **🛰️ Scavenging.** Search the old drop pods by the landing station for 2 minutes and find nothing, scrap or treasure (the captain's lost log is worth 1,200). Up to 10 a day, 15 minutes apart.
+- **Colony Log.** Rare finds and big deliveries are announced.
+- **More ways.** The tab also points to the daily reward, being a landlord, bank interest, gifts, races and the casino, and crime (risky).
 
 ## Daily rewards and streaks
 
@@ -219,10 +245,16 @@ These live on a signed-in colonist's own card, under **Home**, **Bank** and **Ca
 ## Creature races
 
 - **The creatures.** Six native creatures race: Starcrest, Dustrunner, Skyskimmer, Mudgulper, Ironshell and Glimmerhop (`shared/creatures.js`). Each has a speed, a level of unpredictability, and likes and dislikes for the weather.
-- **When.** While the colony has a finished **Racetrack** (Parks → Sports), a race runs every 30 real minutes, on the hour and half hour.
+- **When.** Every finished **Racetrack** (Parks → Sports) runs its own race every 30 real minutes.
+  - The first track races on the hour and half hour. Each extra track is staggered by 5-minute steps, so more tracks mean more races.
+  - Each track has its own field (usually five of the six creatures; a different one sits out), odds, bets and Cup.
+  - With several tracks, the Races tab has a track picker showing each one's countdown or "● Live". Tracks are named "Racetrack 1", "Racetrack 2" unless the developer names them.
 - **Announcement.** The Colony Log announces each race **2½ minutes before it starts**, and everyone watching gets a pop-up.
 - **Betting.** Signed-in colonists open the **Races** tab and place one bet per race until the gates close. The odds come from form and the weather at race time, and the house keeps about 10%.
 - **The race.** The server decides the result when the gates open. Everyone watches the same ~45 s race, in the tab and on the track itself. Winners are paid at the finish, and the Colony Log names the winner.
+- **How they run.** Each creature has a racing style: Starcrest is a front-runner, Dustrunner a sprinter, Skyskimmer a glider, Mudgulper a closer, Ironshell steady, and Glimmerhop unpredictable (it stalls and leaps).
+  - Each race adds its own luck to those styles, seeded by the race, so everyone sees the same race (`paceCurve` in `shared/creatures.js`).
+  - Leads change hands during the race, but the finishing order is always the server's.
 - **Cups.** In developer mode, **Make the next race a Cup** adds a bonus from the treasury, shared by everyone who backs the winner. If nobody does, it goes back to the treasury.
 
 ## Lottery

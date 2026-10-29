@@ -10,6 +10,9 @@ export const GAMES = {
   coin: { name: 'Coin flip', rule: 'Pick heads or tails. Win 1.9× your bet.', picks: ['heads', 'tails'], pays: 1.9 },
   dice: { name: 'Dice', rule: 'Pick a number from 1 to 6. Win 5.7× your bet.', picks: ['1', '2', '3', '4', '5', '6'], pays: 5.7 },
   slots: { name: 'Slots', rule: 'Three in a row pays 5× to 100× (🚀🚀🚀). Two 🍒 pays 1.5×.', picks: null },
+  roulette: { name: 'Roulette', rule: 'Bet on a colour, odd/even, low/high (2×), a dozen (3×) or one number (36×). One green zero.', picks: null },
+  blackjack: { name: 'Blackjack', rule: 'Get closer to 21 than the dealer without going over. A win pays 2×, blackjack 2.5×. The dealer stands on 17.', picks: null, table: true },
+  rocket: { name: 'Rocket', rule: 'The multiplier climbs as the rocket rises. Cash out before it blows up: 2× or more about half the time, 10× about 1 time in 10.', picks: null, table: true },
 };
 export const MAX_BET = 100000;
 // What a slot spin pays, as a multiple of the bet.
@@ -19,10 +22,43 @@ export function slotMultiple(reels) {
   const cherries = reels.filter(r => r === 'cherry').length;
   return cherries === 2 ? SLOT_TWO_CHERRIES : 0;
 }
+// ---- Roulette: European wheel, 0–36 ----
+export const ROULETTE_RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+export const ROULETTE_BETS = { red: 'Red', black: 'Black', odd: 'Odd', even: 'Even', low: '1–18', high: '19–36', d1: '1st 12', d2: '2nd 12', d3: '3rd 12' };
+export const validRoulette = pick => pick in ROULETTE_BETS || /^n([0-9]|[12][0-9]|3[0-6])$/.test(String(pick));
+// What a roulette bet returns (as a multiple of the bet, stake included) when the ball lands on n.
+export function rouletteMultiple(pick, n) {
+  if (pick.startsWith('n')) return Number(pick.slice(1)) === n ? 36 : 0;
+  if (n === 0) return 0;
+  switch (pick) {
+    case 'red': return ROULETTE_RED.has(n) ? 2 : 0; case 'black': return ROULETTE_RED.has(n) ? 0 : 2;
+    case 'odd': return n % 2 ? 2 : 0; case 'even': return n % 2 ? 0 : 2;
+    case 'low': return n <= 18 ? 2 : 0; case 'high': return n >= 19 ? 2 : 0;
+    case 'd1': return n <= 12 ? 3 : 0; case 'd2': return n >= 13 && n <= 24 ? 3 : 0; case 'd3': return n >= 25 ? 3 : 0;
+  }
+  return 0;
+}
+// ---- Blackjack: one deck per hand, no splits; the dealer stands on all 17s ----
+export const SUITS = ['♠', '♥', '♦', '♣'], RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+export function handValue(cards) {
+  let v = 0, aces = 0;
+  for (const c of cards) { const r = c.slice(0, -1); if (r === 'A') { aces++; v += 11; } else v += ['J', 'Q', 'K'].includes(r) ? 10 : Number(r); }
+  while (v > 21 && aces) { v -= 10; aces--; }
+  return v;
+}
+export const isBlackjack = cards => cards.length === 2 && handValue(cards) === 21;
+// ---- Rocket: the multiplier after t seconds of flight, and how long it takes to reach m ----
+export const ROCKET_RATE = 0.12, ROCKET_MAX = 100, ROCKET_COUNTDOWN = 3000;
+export const rocketAt = t => Math.max(1, Math.floor(100 * Math.exp(ROCKET_RATE * Math.max(0, t))) / 100);
+export const rocketTime = m => Math.log(Math.max(1, m)) / ROCKET_RATE;
+// Where the rocket blows up: P(it reaches m) = 0.97 / m, so every cash-out target keeps a 3% house edge. u is 0..1.
+export const rocketCrash = u => Math.min(ROCKET_MAX, Math.max(1, Math.floor(97 / Math.max(1e-9, 1 - u)) / 100));
+
 // Play one round. rand(n) must return a whole number from 0 to n-1 (the server passes a secure one).
 export function playRound(game, pick, bet, rand) {
   const g = GAMES[game]; if (!g) return null;
   if (game === 'coin') { const result = g.picks[rand(2)]; const won = result === pick; return { result, won, payout: won ? Math.floor(bet * g.pays) : 0 }; }
+  if (game === 'roulette') { const result = rand(37), m = rouletteMultiple(String(pick), result); return { result, won: m > 0, payout: Math.floor(bet * m) }; }
   if (game === 'dice') { const result = String(rand(6) + 1); const won = result === String(pick); return { result, won, payout: won ? Math.floor(bet * g.pays) : 0 }; }
   const total = SLOT_SYMBOLS.reduce((s, x) => s + x.weight, 0);
   const spin = () => { let r = rand(total); for (const s of SLOT_SYMBOLS) { if ((r -= s.weight) < 0) return s.id; } return SLOT_SYMBOLS[0].id; };

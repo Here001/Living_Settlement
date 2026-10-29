@@ -171,7 +171,7 @@ export function playersRouter({ limit, send, admin, world }) {
   // Creature races: one bet per race, before the gates close.
   r.post('/me/race/bet', limit, send(async req => {
     const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
-    const b = req.body || {}; return world.races.bet(p.id, String(b.creature || ''), b.amount, world.blockedReason?.bind(world));
+    const b = req.body || {}; return world.races.bet(p.id, String(b.creature || ''), b.amount, world.blockedReason?.bind(world), typeof b.track === 'string' ? b.track : null);
   }));
   // The casino: what's available, and one bet at a time (a short pause between bets stops scripted spam).
   const lastBet = new Map();
@@ -186,6 +186,18 @@ export function playersRouter({ limit, send, admin, world }) {
     lastBet.set(p.id, now);
     const b = req.body || {}; return world.casinoPlay(p.id, { game: b.game, pick: b.pick, bet: b.bet });
   }));
+  // More ways to earn: extra shifts, delivery gigs, fishing and foraging, scavenging.
+  r.get('/me/earn', limit, send(async req => world.earn.info((await me(req)).id)));
+  r.post('/me/earn/shift', limit, send(async req => world.earn.shift((await me(req)).id)));
+  r.post('/me/earn/gig', limit, send(async req => { const b = req.body || {}, id = (await me(req)).id;
+    return b.action === 'take' ? world.earn.takeGig(id, String(b.id || '')) : b.action === 'deliver' ? world.earn.deliver(id) : b.action === 'drop' ? world.earn.dropGig(id) : Promise.reject(new HttpError(400, 'Take, deliver or drop.')); }));
+  r.post('/me/earn/catch', limit, send(async req => { const b = req.body || {}, id = (await me(req)).id; return b.action === 'reel' ? world.earn.reel(id) : world.earn.cast(id, String(b.kind || '')); }));
+  r.post('/me/earn/scavenge', limit, send(async req => world.earn.scavenge((await me(req)).id, String((req.body || {}).action || ''))));
+  // Table games: Blackjack (deal / hit / stand / double) and Rocket (launch / cashout / status).
+  const lastMove = new Map();
+  const tableMove = async (req, fn) => { const p = await me(req), now = Date.now(); if (now - (lastMove.get(p.id) || 0) < 250) throw new HttpError(429, 'One move at a time.'); lastMove.set(p.id, now); if (lastMove.size > 5000) lastMove.clear(); return fn(p, req.body || {}); };
+  r.post('/me/casino/blackjack', limit, send(req => tableMove(req, (p, b) => world.tables.blackjack(p.id, String(b.action || ''), b.bet))));
+  r.post('/me/casino/rocket', limit, send(req => tableMove(req, (p, b) => world.tables.rocket(p.id, String(b.action || ''), b.bet, b.auto))));
   // The job board: openings near home, take one (once per game day), or quit.
   r.get('/me/jobs', limit, send(async req => {
     const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');

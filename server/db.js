@@ -159,6 +159,17 @@ const MIGRATIONS = [
   `create table scores (week int not null, key text not null, citizen_id text not null, value bigint not null default 0, primary key (week, key, citizen_id));
    create table weekly_champions (week int not null, board text not null, citizen_id text not null, handle text not null, value bigint not null, primary key (week, board));
    create table weekly_done (week int primary key);`,
+  // v27: every Racetrack runs its own races (races and bets belong to a track)
+  `alter table races add column track_id text not null default '';
+   alter table race_bets add column track_id text not null default '';
+   update races set track_id = coalesce((select id from buildings where type = 'racetrack' and done and not ruin order by built_at, id limit 1), '');
+   update race_bets b set track_id = r.track_id from races r where r.n = b.n;
+   alter table races drop constraint races_pkey; alter table races add primary key (track_id, n);
+   create index race_bets_track on race_bets (track_id, n);`,
+  // v28: a casino table game in progress (Blackjack hand or Rocket flight)
+  `alter table citizens add column casino_game jsonb;`,
+  // v29: extra ways to earn (shifts, deliveries, fishing, foraging, scavenging): each colonist's progress today
+  `alter table citizens add column earn jsonb;`,
 ];
 
 export async function migrate() {

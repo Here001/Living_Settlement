@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { pool, worldTx } from './db.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
-import { playRound, GAMES, MAX_BET } from '../shared/casino.js';
+import { playRound, GAMES, MAX_BET, validRoulette } from '../shared/casino.js';
 import { BUILDING_TYPES, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, roadClears } from '../shared/catalog.js';
 import * as R from '../shared/rules.js';
 const changeScope = new AsyncLocalStorage();
@@ -664,12 +664,15 @@ export class World {
     const c = (await pool.query('select c.*, h.x hx, h.y hy from citizens c left join buildings h on h.id = c.home_id where c.id = $1', [id])).rows[0];
     if (!c) throw new HttpError(404, 'No such citizen.');
     const today = this.meta ? R.gameDay(Date.now(), this.meta.epoch) : 0, cas = c.home_id ? await this.casinoFor(c) : null;
-    return { housed: !!c.home_id, casino: cas ? { id: cas.id, name: cas.name || BUILDING_TYPES.casino.name } : null, coins: R.balanceOn(c.coins_base, c.coins_day, c.net, today) };
+    const table = c.home_id && cas && this.tables ? await this.tables.current(id) : null;
+    return { housed: !!c.home_id, casino: cas ? { id: cas.id, name: cas.name || BUILDING_TYPES.casino.name } : null, coins: R.balanceOn(c.coins_base, c.coins_day, c.net, today), table };
   }
   // One bet. The server rolls; winnings come from the colony treasury and losses go into it.
   // While playing (and for 10 minutes after the last game) the colonist is inside the casino for everyone to see.
   async casinoPlay(id, { game, pick, bet }) {
     if (!GAMES[game]) throw new HttpError(400, 'Pick a game: coin flip, dice or slots.');
+    if (GAMES[game].table) throw new HttpError(400, `${GAMES[game].name} is played at its own table.`);
+    if (game === 'roulette' && !validRoulette(String(pick))) throw new HttpError(400, 'Pick a bet: a colour, odd or even, low or high, a dozen, or a number from 0 to 36.');
     if (GAMES[game].picks && !GAMES[game].picks.includes(String(pick))) throw new HttpError(400, game === 'coin' ? 'Pick heads or tails.' : 'Pick a number from 1 to 6.');
     bet = Math.floor(Number(bet)); if (!Number.isFinite(bet) || bet < 1) throw new HttpError(400, 'Bet at least 1 coin.');
     if (bet > MAX_BET) throw new HttpError(400, `The most you can bet at once is ${fmt(MAX_BET)} coins.`);

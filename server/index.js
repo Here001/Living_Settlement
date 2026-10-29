@@ -14,6 +14,8 @@ import { playersRouter, sweepPlayers, playerFrom, playerByToken } from './player
 import { Chat } from './chat.js';
 import { Achievements } from './achievements.js';
 import { Leaderboards } from './leaderboards.js';
+import { CasinoTables } from './tables.js';
+import { Earn } from './earn.js';
 import { Races } from './races.js';
 import { Actions } from './actions.js';
 import { Lottery } from './lottery.js';
@@ -42,6 +44,8 @@ const economy = new Economy(world); world.economy = economy;
 const chat = new Chat(bus); world.chat = chat;
 const achievements = new Achievements(world, bus); world.achievements = achievements;
 const leaderboards = new Leaderboards(world); world.leaderboards = leaderboards;
+world.tables = new CasinoTables(world);
+world.earn = new Earn(world);
 setInterval(() => { if (isLeader && world.meta) leaderboards.rollover().catch(e => console.error('leaderboards:', e.message)); }, 60000).unref();
 const actions = new Actions(world); world.actions = actions; world.blockedReason = c => actions.blockedReason(c);
 const app = express();
@@ -96,13 +100,13 @@ app.get('/api/citizens/:handle', limit, send(async req => {
   return c;
 }));
 // ---------- creature races ----------
-app.get('/api/race', limit, send(async req => races.info((await playerFrom(req))?.id)));
+app.get('/api/race', limit, send(async req => races.info((await playerFrom(req))?.id, typeof req.query.track === 'string' ? req.query.track : null)));
 // Test servers only (ALLOW_TEST_ROUTES=1, never set on the live colony): run the daily payday on demand.
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/rollover', admin, send(async () => ({ winners: await leaderboards.rollover() })));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/payday', admin, send(() => world.change(ch => economy.day(ch, 1))));
 app.get('/api/lottery', limit, send(async req => lottery.info((await playerFrom(req))?.id)));
 app.post('/api/admin/lottery', admin, send(req => lottery.start(req.body || {})));
-app.post('/api/admin/race/cup', admin, send(req => races.setCup((req.body || {}).bonus, (req.body || {}).name)));
+app.post('/api/admin/race/cup', admin, send(req => races.setCup((req.body || {}).bonus, (req.body || {}).name, (req.body || {}).track)));
 app.get('/health', (req, res) => res.json({ ok: true, founded: !!world.meta, population: world.meta?.population || 0, viewers: wss?.clients.size || 0, bus: bus.kind, leader: isLeader }));
 
 // Point a free pinger (cron-job.org, UptimeRobot) here every few minutes.

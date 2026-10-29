@@ -26,3 +26,30 @@ export function oddsFor(ids, weather, seed) {
   for (const id of ids) { const p = Math.max(0.01, wins[id] / N); out[id] = { chance: p, pays: Math.max(1.2, Math.min(40, Math.floor(0.9 / p * 10) / 10)) }; }
   return out;
 }
+
+// ---- How a race looks while it's run (the result is already decided; this only shapes the running) ----
+// Each kind has a racing style: its relative speed through ten stretches of the lap. Each race adds its own luck,
+// so leads change hands: front-runners fade, closers come late, Glimmerhop stalls and leaps.
+export const STYLES = {
+  starcrest:  { name: 'Front-runner', pace: [1.35, 1.3, 1.2, 1.1, 1.0, 0.95, 0.9, 0.88, 0.85, 0.85], luck: 0.12 },
+  dustrunner: { name: 'Sprinter',     pace: [1.0, 1.05, 1.3, 0.85, 1.25, 0.8, 1.2, 0.9, 1.15, 1.1], luck: 0.18 },
+  skyskimmer: { name: 'Glider',       pace: [0.9, 1.2, 0.85, 1.25, 0.85, 1.25, 0.9, 1.2, 0.95, 1.1], luck: 0.15 },
+  mudgulper:  { name: 'Closer',       pace: [0.7, 0.75, 0.8, 0.85, 0.95, 1.0, 1.1, 1.25, 1.4, 1.5], luck: 0.12 },
+  ironshell:  { name: 'Steady',       pace: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1], luck: 0.05 },
+  glimmerhop: { name: 'Unpredictable', pace: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1], luck: 0.6 },
+};
+export function seeded(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+export const hashStr = str => { let h = 2166136261; for (const ch of String(str)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+// The share of the lap covered at the end of each of the ten stretches (0 … 1), for one runner in one race.
+export function paceCurve(id, seed) {
+  const S = STYLES[id] || STYLES.ironshell, rand = seeded(seed ^ hashStr(id)), out = [0]; let sum = 0;
+  const v = S.pace.map(p => { let x = p * (1 + (rand() * 2 - 1) * S.luck); if (S.luck > 0.4 && rand() < 0.18) x *= 0.25; if (S.luck > 0.4 && rand() < 0.15) x *= 1.9; return Math.max(0.15, x); });
+  for (const x of v) { sum += x; out.push(sum); }
+  return out.map(d => d / sum);
+}
+// Which creatures run in a race: usually five of the six (a different one sits out each time), sometimes all six.
+export function fieldFor(seed) {
+  const rand = seeded(seed ^ 0x51ed), ids = CREATURE_IDS.slice();
+  if (rand() < 0.3) return ids;
+  ids.splice(Math.floor(rand() * ids.length), 1); return ids;
+}

@@ -14,6 +14,15 @@ export const typeOf = b => BUILDING_TYPES[b.type] || BUILDING_TYPES.tent;
 export const blocks = b => !typeOf(b).outdoor;
 export const gameMinutes = (t, epoch) => (t - epoch) / GAME_MIN_MS;
 export const gameDay = (t, epoch) => Math.floor(gameMinutes(t, epoch) / 1440);
+// Roughly where a colonist is at a minute of the game day, by their routine: asleep or relaxing at home (before ~07:45 and
+// after ~21:40), at work (~07:50–11:40 and ~13:10–16:15, if they have a job), or out and about (lunch, commuting, evenings,
+// job hunting). The map shows each person's exact day; these windows are slightly generous towards being home or at work.
+export function routineAt(minute, hasJob) {
+  const m = ((minute % 1440) + 1440) % 1440;
+  if (m < 465 || m >= 1300) return 'home';
+  if (hasJob && ((m >= 470 && m < 700) || (m >= 790 && m < 975))) return 'work';
+  return 'out';
+}
 export const cleanHandle = s => String(s || '').trim().replace(/^@+/, '').replace(/[^A-Za-z0-9._]/g, '').slice(0, 30);
 export const chunkOf = (x, y) => [Math.floor(x / CHUNK), Math.floor(y / CHUNK)];
 export const chunkKey = (cx, cy) => `${cx}_${cy}`;

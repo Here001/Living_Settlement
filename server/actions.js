@@ -43,6 +43,17 @@ export class Actions {
     const before = ch.citizens.get(c.id) || []; ch.touch(c);
     if (b) ch.citizens.set(c.id, [...new Set([...before, ...(ch.citizens.get(c.id) || []), R.chunkKey(b.cx, b.cy)])]);
   }
+  // Where a colonist is now, for pickpocketing: 'home', 'work', 'jail' or 'out'.
+  async whereIs(ch, c, now = Date.now()) {
+    if (Number(c.jailed_until || 0) > now) return 'jail';
+    if (c.visit_id && Number(c.visit_until || 0) > now && Number(c.visit_from || 0) <= now) { // on a trip they chose
+      const b = (await ch.q('select type from buildings where id = $1', [c.visit_id])).rows[0];
+      if (!b) return 'out'; if (b.type === 'jail') return 'jail'; if (BUILDING_TYPES[b.type]?.home) return 'home';
+      return c.job_id && c.visit_id === c.job_id ? 'work' : 'out';
+    }
+    const meta = this.world.meta; if (!meta) return 'out';
+    return R.routineAt(R.gameMinutes(now, meta.epoch), !!c.job_id);
+  }
   async policeNear(ch, x, y) {
     return Number((await ch.q(`select count(*) n from buildings where type = any($3) and done and not ruin and abs(x - $1::int) + abs(y - $2::int) <= 40`, [x, y, POLICE])).rows[0].n);
   }
@@ -70,6 +81,11 @@ export class Actions {
         if (!victim) throw new HttpError(404, `There's no colonist called @${h}.`);
         if (victim.id === c.id) throw new HttpError(400, "You can't pick your own pocket.");
         if (!victim.home_id) throw new HttpError(400, `@${victim.handle} is still in cryosleep.`);
+        // Only someone out and about can have their pocket picked: not at home, and not at work, unless you work there too.
+        const where = await this.whereIs(ch, victim, now);
+        if (where === 'home') throw new HttpError(409, `@${victim.handle} is safe at home right now. Wait until they're out and about.`);
+        if (where === 'jail') throw new HttpError(409, `@${victim.handle} is locked up in the Jail.`);
+        if (where === 'work' && victim.job_id !== c.job_id) throw new HttpError(409, `@${victim.handle} is at work, and only their workmates can get close. Catch them on their lunch break or after work.`);
         px = victim.hx; py = victim.hy; delete victim.hx; delete victim.hy;
         ch.coins(victim); if (victim.coins_base < 5) throw new HttpError(400, `@${victim.handle}'s pockets are empty.`);
         loot = Math.max(1, Math.min(300, Math.floor(victim.coins_base * (0.1 + rand() * 0.15))));

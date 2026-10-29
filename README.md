@@ -120,6 +120,10 @@ A signed-in colonist with a home sees these on their own card. They see one at a
   - Anyone caught for a crime is driven to the Jail in a police car with its lights on.
 - **Crime.** Crimes can be tried once every 10 minutes.
   - **Pickpocket:** steal 10–25% of a colonist's coins, up to 300. Other colonists' cards have **Pick their pocket**.
+    - Only someone **out and about** can be pickpocketed: on their lunch break, commuting, out in the evening, job hunting, or on a trip somewhere that isn't a home.
+    - Nobody can be pickpocketed at home (asleep or relaxing, roughly 21:40–07:45 game time), while visiting someone's home, or in the Jail.
+    - At work (roughly 07:50–11:40 and 13:10–16:15), only a workmate at the same building can try.
+    - The server checks this (`routineAt` in `shared/rules.js`, `whereIs` in `server/actions.js`). The card shows "🛡️ … is safe at home right now" instead of the button when it isn't possible.
   - **Rob the nearest shop:** 60–400 coins from the till, which the treasury pays.
   - **Chances:** 55% for a pickpocket and 40% for a robbery. Each Police station within 40 tiles cuts that by 12 points, to no lower than 15%.
   - **Getting caught:** a fine of twice the amount they tried to take, at least 25, which goes to the treasury.

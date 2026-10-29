@@ -407,6 +407,21 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     await set('zara_ng', 'coins_base = 1000, net = 0, coins_day = 0, crime_at = null, jailed_until = null'); await set('jobfill_a', 'coins_base = 500, net = 0, coins_day = 0');
     ok((await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'zara_ng' }, P)).status === 400, "can't pick your own pocket");
     ok((await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'nobody_here' }, P)).status === 404, 'the victim must exist');
+    // Where the victim is matters: not at home, not at work (unless you work there too).
+    const at = async (h, bid) => pool.query('update citizens set visit_id = $2, visit_from = $3, visit_until = $4 where handle = $1', [h, bid, Date.now() - 1000, Date.now() + 3600000]);
+    const va = (await pool.query("select id, home_id, job_id from citizens where handle = 'jobfill_a'")).rows[0], zj0 = (await pool.query("select job_id from citizens where handle = 'zara_ng'")).rows[0].job_id;
+    const work = (await pool.query("select id from buildings where type = any($1) and done and not ruin limit 1", [['shop', 'office', 'cafe', 'supermarket', 'stall', 'police', 'school', 'clinic']])).rows[0]?.id || zj0;
+    const landing = (await pool.query("select id from buildings where type = 'landing' limit 1")).rows[0].id;
+    const pp = () => call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P);
+    await at('jobfill_a', va.home_id); let r0 = await pp();
+    ok(r0.status === 409 && /safe at home/.test(r0.json.error), "nobody's pocket can be picked while they're at home", JSON.stringify(r0.json));
+    await pool.query("update citizens set job_id = $1 where handle = 'jobfill_a'", [work]); await pool.query("update citizens set job_id = null where handle = 'zara_ng'"); await at('jobfill_a', work); r0 = await pp();
+    ok(r0.status === 409 && /workmates/.test(r0.json.error), 'or at work', JSON.stringify(r0.json));
+    await pool.query("update citizens set job_id = $1 where handle = 'zara_ng'", [work]); await set('jobfill_a', 'coins_base = 500'); r0 = await pp();
+    ok(r0.status === 200, 'but a workmate at the same place can try', JSON.stringify(r0.json));
+    await pool.query("update citizens set job_id = $1 where handle = 'zara_ng'", [zj0]); await pool.query("update citizens set job_id = $1 where handle = 'jobfill_a'", [va.job_id]);
+    await set('zara_ng', 'coins_base = 1000, net = 0, coins_day = 0, crime_at = null, jailed_until = null, visit_id = null, visit_until = null'); await set('jobfill_a', 'coins_base = 500, net = 0, coins_day = 0');
+    await at('jobfill_a', landing); // out and about at the landing station
     const k = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P);
     const z1 = await coins('zara_ng'), v1 = await coins('jobfill_a');
     ok(k.status === 200 && (k.json.caught ? z1 === 1000 - k.json.fine && v1 === 500 : z1 === 1000 + k.json.loot && v1 === 500 - k.json.loot), `a pickpocket ${k.json.caught ? 'is caught and fined' : 'gets away with it'}, and the coins add up`, JSON.stringify(k.json));

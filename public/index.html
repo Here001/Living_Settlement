@@ -68,7 +68,7 @@ input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text;-webk
 .chips[hidden]{display:none}
 .chip{pointer-events:auto;display:flex;align-items:center;gap:6px;padding:4px 11px 4px 6px;font-size:13px;border-radius:999px}
 .chip b{font-size:15px;font-variant-numeric:tabular-nums}
-.chip small{color:#3F8A4E;font-weight:600}
+.chip small{color:var(--pos);font-weight:600}
 .chip .lbl{color:var(--muted)}
 @media (max-width:480px){ .chip .lbl{display:none} }
 .viewbtns{position:fixed;z-index:6;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 104px);display:flex;flex-direction:column;gap:8px}
@@ -94,7 +94,7 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .chip button{border:0;background:none;padding:0;display:flex;align-items:center;gap:6px;font-weight:600}
 .mi{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:10px;border:1.5px solid #2B2621}
 .cevent{position:fixed;z-index:5;top:calc(env(safe-area-inset-top,0px) + 152px);left:10px;display:flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;font:inherit;font-size:13px;cursor:pointer;animation:cepulse 2.4s ease-in-out infinite;max-width:calc(100% - 20px);white-space:nowrap;overflow:hidden}
-.cevent #ceIcon{font-size:17px}.cevent #ceShort{opacity:.8}.cevent .cetime{font-variant-numeric:tabular-nums;font-weight:700;color:#b4492c}
+.cevent #ceIcon{font-size:17px}.cevent #ceShort{opacity:.8}.cevent .cetime{font-variant-numeric:tabular-nums;font-weight:700;color:var(--warm)}
 @keyframes cepulse{0%,100%{box-shadow:0 0 0 0 rgba(226,177,60,.0)}50%{box-shadow:0 0 0 5px rgba(226,177,60,.35)}}
 .news{position:fixed;z-index:5;top:calc(env(safe-area-inset-top,0px) + 108px);left:10px;max-width:min(560px,calc(100% - 20px));text-align:left;padding:5px 14px 8px;display:flex;flex-direction:column;font-family:'Newsreader',Georgia,'Times New Roman',serif}
 .news[hidden]{display:none}
@@ -213,11 +213,11 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .namebox label{font-size:12px;font-weight:700;color:var(--muted)}
 .lotto{background:rgba(242,179,61,.12)}.lotto summary,.authbox summary{cursor:pointer;font-weight:700}
 .ava.on{position:relative}.ava.on::after{content:'';position:absolute;right:-1px;bottom:-1px;width:30%;height:30%;min-width:9px;min-height:9px;border-radius:50%;background:#34C759;box-shadow:0 0 0 2px var(--panel),0 0 6px rgba(52,199,89,.8)}
-dd.online{color:#2E9D4F;font-weight:700}
+dd.online{color:var(--pos);font-weight:700}
 .tb{position:relative}.tbadge{position:absolute;top:1px;right:6px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:#E4572E;color:#fff;font-size:10.5px;line-height:17px;text-align:center;font-weight:800}
 .dmrow{position:relative;align-items:center}.dmrow .dmtxt{flex:1;min-width:0}.dmrow .what{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dmrow .tbadge{position:static}.dmrow.unread .who{font-weight:800}
 .onlinerow{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}.onl{display:flex;flex-direction:column;align-items:center;gap:2px;border:0;background:none;font-size:11px;max-width:64px;flex:none}.onl span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:64px}
-.onl-now{color:#2E9D4F!important;font-weight:700}
+.onl-now{color:var(--pos)!important;font-weight:700}
 .pane-head .maxb{margin-left:auto;display:grid;place-items:center} .pane-head .maxb+.x{margin-left:0} .dmhead .maxb{margin-left:0}
 body.pane-max .bar{top:calc(env(safe-area-inset-top,0px) + 8px)}
 body.pane-max .bar>.pane:not([hidden]){flex:1 1 auto;max-height:none;min-height:0}
@@ -246,8 +246,8 @@ body.pane-max .composer textarea{height:70px}
 @keyframes ebob{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}@keyframes eshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
 .ereel{width:100%;font-size:17px;padding:12px}.eloot summary{cursor:pointer;font-size:12.5px;opacity:.8}.emore{margin:0;padding-left:18px;font-size:13px;display:grid;gap:3px}
 .trackpills{display:flex;gap:6px;overflow-x:auto;padding:0 0 8px;scrollbar-width:none}.trackpills::-webkit-scrollbar{display:none}
-.trackpills .pill{flex:none;display:flex;flex-direction:column;align-items:flex-start;line-height:1.15;padding:5px 12px}.trackpills .tpl{font-size:11px;opacity:.75;font-variant-numeric:tabular-nums}.trackpills .tpl.live{color:#c0392b;opacity:1;font-weight:700}
-.rstyle{font-size:10.5px;font-weight:600;margin-left:6px;padding:1px 6px;border-radius:8px;background:rgba(94,127,69,.16);color:#3d5a2a}
+.trackpills .pill{flex:none;display:flex;flex-direction:column;align-items:flex-start;line-height:1.15;padding:5px 12px}.trackpills .tpl{font-size:11px;opacity:.75;font-variant-numeric:tabular-nums}.trackpills .tpl.live{color:var(--warm);opacity:1;font-weight:700}
+.rstyle{font-size:10.5px;font-weight:600;margin-left:6px;padding:1px 6px;border-radius:8px;background:rgba(94,127,69,.2);color:var(--leaf)}
 .toppills{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}.toppills::-webkit-scrollbar{display:none}.toppills .pill{flex:none;white-space:nowrap}
 .tophead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}.tophead h3{margin:4px 0 0}.tunit{margin:2px 0 6px;font-size:12px}
 .tchamp{font-size:13px;font-weight:600;margin:4px 0 8px;padding:6px 10px;border-radius:10px;background:rgba(226,177,60,.18)}
@@ -261,15 +261,15 @@ body.pane-max .composer textarea{height:70px}
 .bprog{height:8px;border-radius:4px;background:rgba(0,0,0,.08);overflow:hidden;margin:4px 0 6px}.bprog i{display:block;height:100%;background:linear-gradient(90deg,#E2B13C,#D9714A)}
 .bgroup{margin:12px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;opacity:.65}
 .brow{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--glass-line,rgba(0,0,0,.06))}.brow:not(.got) .bdg{filter:grayscale(1);opacity:.45}.brow:not(.got) b{opacity:.7}
-.btxt{min-width:0}.btxt .hint{font-size:12.5px}.bmeta{font-size:11px;opacity:.6;margin-top:1px}
-.btier{font-size:10px;font-weight:700;margin-left:6px;padding:1px 6px;border-radius:8px;background:rgba(192,132,87,.18);color:#8a5a33}.btier.t2{background:rgba(169,180,190,.25);color:#5d6872}.btier.t3{background:rgba(226,177,60,.22);color:#8a6a10}
+.btxt{min-width:0}.btxt .hint{font-size:12.5px}.bmeta{font-size:11px;color:var(--muted);margin-top:1px}
+.btier{font-size:10px;font-weight:700;margin-left:6px;padding:1px 6px;border-radius:8px;background:var(--t1bg);color:var(--t1)}.btier.t2{background:var(--t2bg);color:var(--t2)}.btier.t3{background:var(--t3bg);color:var(--t3)}
 .dailyrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:2px 0 8px;font-size:13.5px;font-weight:600}.dailyrow .hint{font-weight:400;font-size:12px}
 .rsheet.daily{width:min(400px,100%);text-align:center}.rsheet.daily .shhead h3{font-size:18px}
 .dstrip{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:10px 0 12px}
 .dtile{border-radius:12px;padding:6px 2px;border:1px solid var(--glass-line,rgba(0,0,0,.12));background:rgba(255,255,255,.35);display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
 .dtile small{font-size:10px;opacity:.7}.dtile b{font-size:12.5px;white-space:nowrap}
-.dtile.done{background:rgba(94,127,69,.22);color:#3d5a2a}.dtile.now{border:2px solid #D9714A;background:rgba(217,113,74,.16);transform:scale(1.06)}
-.dtile.big b{color:#b4492c}.dstreak{font-weight:700;margin:6px 0 0}.dgot{font-size:22px;font-weight:800;color:#3d7a2a;margin:6px 0 0;animation:dpop .5s ease}
+.dtile.done{background:rgba(94,127,69,.24);color:var(--leaf)}.dtile.now{border:2px solid #D9714A;background:rgba(217,113,74,.16);transform:scale(1.06)}
+.dtile.big b{color:var(--warm)}.dstreak{font-weight:700;margin:6px 0 0}.dgot{font-size:22px;font-weight:800;color:var(--pos);margin:6px 0 0;animation:dpop .5s ease}
 .dclaim{width:100%;font-size:16px;padding:10px}@keyframes dpop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
 .rsheet.share{width:min(420px,100%);max-height:calc(100vh - 150px);max-height:calc(100dvh - 150px);margin-bottom:96px}.shhead{display:flex;align-items:center;justify-content:space-between}.shhead h3{margin:0}
 .shimg{display:block;width:100%;max-height:40vh;object-fit:contain;border-radius:14px;margin:8px 0;background:rgba(0,0,0,.06)}
@@ -284,7 +284,7 @@ body.pane-max .composer textarea{height:70px}
 .rsheet blockquote,.rep blockquote{margin:6px 0;padding:6px 10px;border-left:3px solid #E8836B;background:rgba(0,0,0,.04);border-radius:6px;font-size:13px;white-space:pre-wrap;word-wrap:break-word}
 .rreasons{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.rblock{display:flex;align-items:center;gap:6px;font-size:13px;margin:8px 0}
 .rep{padding:10px 0;border-bottom:1px solid var(--glass-line,rgba(0,0,0,.1))}.rep .ph{display:flex;gap:8px;align-items:center}.rep .ph time{margin-left:auto;font-size:11px;opacity:.7}
-.rtag{font-size:11px;padding:1px 7px;border-radius:9px;background:rgba(232,131,107,.18);color:#b4492c}.rmuted{font-size:12.5px;color:#b4492c;margin:4px 0}
+.rtag{font-size:11px;padding:1px 7px;border-radius:9px;background:rgba(232,131,107,.2);color:var(--warm)}.rmuted{font-size:12.5px;color:var(--warm);margin:4px 0}
 .rctx{font-size:12.5px;margin:6px 0;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.04);display:grid;gap:3px}.rctx div{word-wrap:break-word}.rctx .hit{background:rgba(232,131,107,.22);border-radius:5px;padding:1px 4px}
 .rep .row-actions{flex-wrap:wrap}
 .dmbar{display:flex;gap:6px;padding:6px 11px 10px;align-items:flex-end}.dmbar textarea{flex:1;resize:none;min-height:34px;max-height:90px;padding:7px 10px;border-radius:14px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:var(--glass-2,var(--paper));font:13.5px/1.35 'Bricolage Grotesque',system-ui,sans-serif;color:var(--ink)}
@@ -423,7 +423,8 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 
 /* ---------- Liquid glass: clear, frosted panels and bubble buttons that let the colony show through ---------- */
 :root{
-  --glass:rgba(255,255,255,.30); --glass-2:rgba(255,255,255,.26); --glass-edge:rgba(255,255,255,.78); --glass-line:rgba(255,255,255,.55);
+  --glass:rgba(255,255,255,.58); --glass-2:rgba(255,255,255,.42); --glass-edge:rgba(255,255,255,.82); --glass-line:rgba(255,255,255,.6);
+  --muted:#575047; --pos:#1E7A39; --warm:#A63E22; --leaf:#2F5A1F; --t1:#8A5426; --t2:#4E5A65; --t3:#7A5A00; --t1bg:rgba(192,132,87,.22); --t2bg:rgba(150,165,178,.28); --t3bg:rgba(226,177,60,.28);
   --glass-sheen:linear-gradient(135deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,.10) 32%,rgba(255,255,255,0) 58%,rgba(255,255,255,.16) 100%);
   --glass-shadow:0 14px 34px rgba(20,30,50,.22), inset 0 1px 0 rgba(255,255,255,.9), inset 0 -1px 0 rgba(255,255,255,.25), inset 0 0 22px rgba(255,255,255,.18);
   --gbtn:linear-gradient(180deg,rgba(255,255,255,.62),rgba(255,255,255,.18)); --gbtn-edge:rgba(255,255,255,.85);
@@ -432,14 +433,16 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
   --gbtn-primary:linear-gradient(180deg,rgba(244,150,112,.92),rgba(217,113,74,.78));
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-  --glass:rgba(22,24,30,.34); --glass-2:rgba(255,255,255,.08); --glass-edge:rgba(255,255,255,.26); --glass-line:rgba(255,255,255,.16);
+  --glass:rgba(20,22,27,.72); --glass-2:rgba(255,255,255,.07); --glass-edge:rgba(255,255,255,.22); --glass-line:rgba(255,255,255,.14);
+  --muted:#D3C9B7; --pos:#8FE6A2; --warm:#FFB49A; --leaf:#C4E9AE; --t1:#F3C49B; --t2:#DCE4EB; --t3:#F7D774; --t1bg:rgba(192,132,87,.30); --t2bg:rgba(170,185,198,.22); --t3bg:rgba(226,177,60,.26);
   --glass-sheen:linear-gradient(135deg,rgba(255,255,255,.20) 0%,rgba(255,255,255,.04) 32%,rgba(255,255,255,0) 58%,rgba(255,255,255,.07) 100%);
   --glass-shadow:0 14px 36px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.28), inset 0 -1px 0 rgba(255,255,255,.06), inset 0 0 22px rgba(255,255,255,.05);
   --gbtn:linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,.06)); --gbtn-edge:rgba(255,255,255,.34);
   --gbtn-shadow:inset 0 1px 0 rgba(255,255,255,.4), inset 0 -3px 8px rgba(255,255,255,.06), 0 3px 10px rgba(0,0,0,.35);
   --gbtn-on:linear-gradient(180deg,rgba(240,140,100,.55),rgba(217,113,74,.28)); } }
 :root[data-theme="dark"]{
-  --glass:rgba(22,24,30,.34); --glass-2:rgba(255,255,255,.08); --glass-edge:rgba(255,255,255,.26); --glass-line:rgba(255,255,255,.16);
+  --glass:rgba(20,22,27,.72); --glass-2:rgba(255,255,255,.07); --glass-edge:rgba(255,255,255,.22); --glass-line:rgba(255,255,255,.14);
+  --muted:#D3C9B7; --pos:#8FE6A2; --warm:#FFB49A; --leaf:#C4E9AE; --t1:#F3C49B; --t2:#DCE4EB; --t3:#F7D774; --t1bg:rgba(192,132,87,.30); --t2bg:rgba(170,185,198,.22); --t3bg:rgba(226,177,60,.26);
   --glass-sheen:linear-gradient(135deg,rgba(255,255,255,.20) 0%,rgba(255,255,255,.04) 32%,rgba(255,255,255,0) 58%,rgba(255,255,255,.07) 100%);
   --glass-shadow:0 14px 36px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.28), inset 0 -1px 0 rgba(255,255,255,.06), inset 0 0 22px rgba(255,255,255,.05);
   --gbtn:linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,.06)); --gbtn-edge:rgba(255,255,255,.34);
@@ -448,7 +451,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 @supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   /* panels: clear glass with a sheen across the top-left, strong frost behind */
   .inked{background:var(--glass-sheen),var(--glass);border:1px solid var(--glass-edge);box-shadow:var(--glass-shadow);
-    -webkit-backdrop-filter:blur(26px) saturate(190%) brightness(1.04);backdrop-filter:blur(26px) saturate(190%) brightness(1.04)}
+    -webkit-backdrop-filter:blur(26px) saturate(115%);backdrop-filter:blur(26px) saturate(115%)}
   .post,.rrow,.joblist li,.petb,.cresult,.lane,.post.gz,.authbox{background:var(--glass-2);border:1px solid var(--glass-line)}
   .person{background:none}
   .composer textarea,.fields input,.search,.spawn input,.authbox input,.rbet input,.casino .cbet input,.cardb{background:var(--glass-2);border:1px solid var(--glass-line);
@@ -542,7 +545,7 @@ import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DIS
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
-import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE } from '/shared/rules.js';
+import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
@@ -2481,6 +2484,18 @@ var Top={ board:'racer', data:{}, busy:false,
     if(D0.me&&D0.me.rank>10) body.append(el('div',{class:'tgap',text:'⋯'}), this.row(D0.me,D0));
     else if(!D0.me&&Me&&Me.token) body.append(el('p',{class:'hint',text:`You're not on this board yet. ${D0.players?`${fmt(D0.players)} colonist${D0.players===1?' is':'s are'} on it.`:''}`}));
     else if(!(Me&&Me.token)) body.append(el('p',{class:'hint',text:'Sign in to your colonist to see where you rank. Only verified colonists are ranked.'})); } };
+// Pickpocketing: only someone out and about (not at home, not at work unless you work there too). Same rule as the server.
+function pocketWhy(c){ const now=Date.now()+skew, v=c.visit;
+  let where; if(v&&v[4]>now&&(v[5]||0)<=now){ const b=bOf(v), t=b&&T(b); where=t&&t.home?'home':b&&b.type==='jail'?'jail':(c.job&&c.job[0]===v[0]?'work':'out'); }
+  else where=routineAt(gmNow(), !!c.job);
+  const me=Me&&Me.handle&&[...S.citizens.values()].find(x=>x.handle.toLowerCase()===Me.handle.toLowerCase()), sameJob=me&&me.job&&c.job&&me.job[0]===c.job[0];
+  if(where==='home') return `@${c.handle} is safe at home right now.`;
+  if(where==='jail') return `@${c.handle} is in the Jail.`;
+  if(where==='work'&&!sameJob) return `@${c.handle} is at work. Only workmates can get close.`;
+  return null; }
+function pocketBtn(c){ const why=pocketWhy(c);
+  return why?el('span',{class:'hint pockethint',text:`🛡️ ${why} No pickpocketing.`})
+    :el('button',{class:'btn',text:'Pick their pocket',onclick:()=>toast(`Try to pick @${c.handle}'s pocket? If you're caught you'll be fined, and jailed if the colony has a Jail.`,'Do it',()=>doCrime('pickpocket',c.handle))}); }
 // ---- Badges: earned by playing; shown on every colonist's card, and in full in your own Badges tab ----
 const mineCard=c=>!!(Me&&Me.handle&&c&&c.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase());
 var Badges={ data:null, at:0, loading:false,
@@ -2514,7 +2529,7 @@ var Daily={ info:null, busy:false, last:null,
       if(!this.info||this.info.claimed) return; ls.set('daily-seen',key); this.sheet(); };
     setTimeout(tryShow,1200); },
   resetText(){ return this.info?new Date(this.info.resetsAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):''; },
-  left(){ const ms=this.info?this.info.resetsAt-Date.now():0, h=Math.floor(ms/3600000), m=Math.max(1,Math.ceil((ms%3600000)/60000)); return h?`${h}h ${m}m`:`${m} min`; },
+  left(){ const ms=this.info?this.info.resetsAt-Date.now():0, all=Math.max(1,Math.ceil(ms/60000)), h=Math.floor(all/60), m=all%60; return h?`${h}h ${m}m`:`${m} min`; },
   row(){ const I=this.info; if(!I) return null;
     if(!I.claimed) return el('div',{class:'dailyrow ready'}, el('span',{text:I.streak?`🔥 ${I.streak}-day streak`:'🎁 Daily reward'}), el('button',{class:'btn primary',text:`Collect +${fmt(I.reward)}`,onclick:()=>this.sheet()}));
     return el('div',{class:'dailyrow'}, el('span',{text:`🔥 ${I.streak}-day streak`}), el('span',{class:'hint',text:`Next reward (+${fmt(I.reward)}) in ${this.left()}`})); },
@@ -3051,7 +3066,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       // Already signed in as someone else: one person, one colonist, so no "This is me" on other cards.
       else if(Me&&Me.token&&Me.handle){ card.append(el('div',{class:'row-actions'}, el('span',{class:'hint',text:`You're signed in as @${Me.handle}.`}), el('button',{class:'linkb',text:'Go to my colonist',onclick:()=>findMe()})));
         if(c.home) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Visit their home',onclick:()=>meAction('/api/me/visit',{friend:c.handle},r=>`You're on your way to ${r.place}.`)}),
-          el('button',{class:'btn',text:'Pick their pocket',onclick:()=>toast(`Try to pick @${c.handle}'s pocket? If you're caught you'll be fined, and jailed if the colony has a Jail.`,'Do it',()=>doCrime('pickpocket',c.handle))})));
+          pocketBtn(c)));
         if(c.claimed) card.append(el('div',{class:'row-actions'}, Blocks.has(c.handle)?'':el('button',{class:'btn primary',text:'💬 Message',onclick:()=>Chats.open(c.handle)}),
           Blocks.has(c.handle)?el('button',{class:'btn',text:'Unblock',onclick:()=>Blocks.unblock(c.handle)}):el('button',{class:'btn',text:'🚫 Block',onclick:()=>Blocks.ask(c.handle)})));
         if(c.claimed) card.append(giftBox(c.handle)); else card.append(el('p',{class:'hint',text:`@${c.handle} hasn't verified their avatar yet, so they can't receive gifts.`})); }

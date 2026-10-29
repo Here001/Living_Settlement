@@ -119,6 +119,20 @@ export function playersRouter({ limit, send, admin, world }) {
     const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
     return world.setName(p.id, (req.body || {}).name);
   }));
+  // The job board: openings near home, take one (once per game day), or quit.
+  r.get('/me/jobs', limit, send(async req => {
+    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    return world.jobBoard(p.id);
+  }));
+  r.post('/me/job', limit, send(async req => {
+    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    const id = String((req.body || {}).buildingId || ''); if (!id) throw new HttpError(400, 'Pick a job first.');
+    return world.playerJob(p.id, id);
+  }));
+  r.post('/me/job/quit', limit, send(async req => {
+    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    return world.playerJob(p.id, null);
+  }));
   r.post('/me/gender', limit, send(async req => {
     const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
     const g = (req.body || {}).gender; if (g !== 'm' && g !== 'f') throw new HttpError(400, 'Choose man or woman.');

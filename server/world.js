@@ -639,6 +639,63 @@ export class World {
       return { ok: true };
     });
   }
+  // ---------- the job board: a signed-in colonist choosing their own work ----------
+  // Openings are jobs in finished buildings, nearest the colonist's home first, with the pay they'd actually take home
+  // (salary minus their rent). Claimed colonists get priority: a full workplace still counts as open if one of its places
+  // is held by someone the game placed automatically who hasn't claimed their avatar. Claimed colonists and anyone the
+  // developer placed by hand are never pushed out.
+  async jobBoard(id) {
+    const c = (await pool.query(`select c.*, h.x hx, h.y hy, h.type htype, j.type jtype, j.name jname, j.x jx, j.y jy
+      from citizens c left join buildings h on h.id = c.home_id left join buildings j on j.id = c.job_id where c.id = $1`, [id])).rows[0];
+    if (!c) throw new HttpError(404, 'No such citizen.');
+    const today = this.meta ? R.gameDay(Date.now(), this.meta.epoch) : 0;
+    const out = { housed: !!c.home_id, choosing: !!c.manual, canTakeToday: c.job_changed_day !== today, current: null, openings: [] };
+    if (!c.home_id) return out;
+    const rent = R.capacities(c.htype).rent, dist = (x, y, t) => { const [w, d] = BUILDING_TYPES[t]?.size || [1, 1]; return Math.abs(x + Math.floor(w / 2) - c.hx) + Math.abs(y + Math.floor(d / 2) - c.hy); };
+    out.rent = rent;
+    if (c.job_id) { const t = BUILDING_TYPES[c.jtype]; out.current = { id: c.job_id, title: t?.work?.title || 'Worker', place: c.jname || t?.name || '', salary: t?.work?.salary || 0, takeHome: R.netOf(t?.work?.salary || 0, rent), dist: dist(c.jx, c.jy, c.jtype) }; }
+    const rows = (await pool.query(`select b.id, b.type, b.name, b.x, b.y, b.job_cap - b.job_used free from buildings b
+      where b.done and b.job_cap > 0 and b.id is distinct from $3
+        and (b.job_used < b.job_cap or exists (select 1 from citizens w where w.job_id = b.id and not w.manual and w.pass_hash is null))
+      order by (b.x - $1::int) * (b.x - $1::int) + (b.y - $2::int) * (b.y - $2::int), b.id limit 40`, [c.hx, c.hy, c.job_id])).rows;
+    for (const b of rows) { const t = BUILDING_TYPES[b.type]; if (!t?.work) continue;
+      out.openings.push({ id: b.id, title: t.work.title, place: b.name || t.name, salary: t.work.salary, takeHome: R.netOf(t.work.salary, rent), dist: dist(b.x, b.y, b.type), free: b.free }); }
+    return out;
+  }
+  // Take an open job (jobId) or quit (null). Taking a job is limited to once per game day; quitting is always allowed.
+  // Either way the colonist is now choosing for themself, so the automatic hiring leaves them alone.
+  async playerJob(id, jobId) {
+    return this.change(async ch => {
+      const c = (await ch.q('select c.*, h.type htype, j.type jtype from citizens c left join buildings h on h.id = c.home_id left join buildings j on j.id = c.job_id where c.id = $1 for update of c', [id])).rows[0];
+      if (!c) throw new HttpError(404, 'No such citizen.');
+      const homeType = c.htype, jobType = c.jtype; delete c.htype; delete c.jtype;
+      if (!c.home_id) throw new HttpError(400, "You're still in cryosleep. You can work once you have a home.");
+      if (!jobId) {
+        if (!c.job_id) throw new HttpError(400, "You don't have a job right now.");
+        await ch.leaveJob(c, jobType, homeType); c.manual = true; await ch.saveCitizen(c);
+        await ch.event(`@${c.handle} quit their job`, 'career'); await ch.fillVacancies();
+        return { ok: true };
+      }
+      const j = (await ch.q('select * from buildings where id = $1 for update', [jobId])).rows[0];
+      if (!j || !BUILDING_TYPES[j.type]?.work) throw new HttpError(400, 'That place has no jobs.');
+      if (!j.done) throw new HttpError(409, 'That building is still being built.');
+      if (c.job_id === j.id) return { ok: true };
+      if (c.job_changed_day === ch.today) throw new HttpError(429, "You've already changed jobs today. You can take another tomorrow (game time).");
+      if (c.job_id) await ch.leaveJob(c, jobType, homeType);
+      if (j.job_used >= j.job_cap) {
+        // Full: the newest automatically placed worker who hasn't claimed their avatar goes back to looking for work.
+        const out = (await ch.q(`select w.*, h.type htype from citizens w left join buildings h on h.id = w.home_id
+          where w.job_id = $1 and not w.manual and w.pass_hash is null order by w.seq desc limit 1 for update of w`, [j.id])).rows[0];
+        if (!out) throw new HttpError(409, 'Those jobs are all taken by colonists who chose them. Pick another one.');
+        const ht = out.htype; delete out.htype; await ch.leaveJob(out, j.type, ht); await ch.saveCitizen(out);
+      }
+      await ch.takeJob(c, j, homeType); c.manual = true; await ch.saveCitizen(c);
+      await ch.q('update citizens set job_changed_day = $2 where id = $1', [c.id, ch.today]);
+      await ch.event(`@${c.handle} is now working as ${BUILDING_TYPES[j.type].work.title.toLowerCase()} at ${j.name || BUILDING_TYPES[j.type].name}`, 'career');
+      await ch.fillVacancies();
+      return { ok: true };
+    });
+  }
   async setName(id, name) {
     const n = R.cleanName(name); if (n === null) throw new HttpError(400, 'Use letters only: your first name, or first and last name (up to 40 characters).');
     return this.change(async ch => {

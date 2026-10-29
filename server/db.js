@@ -113,6 +113,8 @@ const MIGRATIONS = [
   `alter table citizens add column display_name text;`,
   // v13: official posts from the developer, and pinned posts at the top of the Town Square.
   `alter table messages add column official boolean not null default false, add column pinned boolean not null default false;`,
+  // v14: the game day a colonist last took a job themselves (one new job per game day)
+  `alter table citizens add column job_changed_day int;`,
 ];
 
 export async function migrate() {

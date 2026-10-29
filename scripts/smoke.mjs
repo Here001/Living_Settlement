@@ -3,6 +3,8 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import WebSocket from 'ws';
+import pg from 'pg';
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 }); // a few checks need to set up state directly
 
 const BASE = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
 const TOKEN = process.env.ADMIN_TOKEN;
@@ -295,7 +297,40 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
   ok((await call('PUT', `/api/admin/square/${off.json.id}/pin`, { pinned: false })).status === 200 && !(await call('GET', '/api/square', undefined, { auth: false })).json.find(x => x.id === off.json.id).p, 'and can unpin it');
   for (let i = 0; i < 3; i++) await call('POST', '/api/admin/square', { text: 'pin ' + i, pin: true });
   ok((await call('POST', '/api/admin/square', { text: 'one too many', pin: true })).status === 409, 'at most 3 pinned posts');
-  ok((await call('POST', '/api/square', { text: 'see www.spam.com' }, { auth: false, headers: P.headers })).status === 400, 'links are refused'); }
+  ok((await call('POST', '/api/square', { text: 'see www.spam.com' }, { auth: false, headers: P.headers })).status === 400, 'links are refused');
+  // ---- the job board ----
+  ok((await call('GET', '/api/me/jobs', undefined, { auth: false })).status === 401, 'only a signed-in colonist sees their job board');
+  const w1 = await call('POST', '/api/admin/buildings', { type: 'deptstore', x: 903, y: 900 }), w2 = await call('POST', '/api/admin/buildings', { type: 'factory', x: 900, y: 904 });
+  await call('POST', `/api/admin/buildings/${w1.json.building?.id}/finish`); await call('POST', `/api/admin/buildings/${w2.json.building?.id}/finish`);
+  let board = (await call('GET', '/api/me/jobs', undefined, P)).json;
+  ok(board.housed && board.openings.length + (board.current ? 1 : 0) >= 2, 'the board lists open jobs', JSON.stringify(board).slice(0, 160));
+  if (board.current) ok((await call('POST', '/api/me/job/quit', {}, P)).status === 200 && !(await whoDev('zara_ng')).job, 'a colonist can quit');
+  ok((await whoDev('zara_ng')).net === 0, 'no job, no daily coins');
+  board = (await call('GET', '/api/me/jobs', undefined, P)).json; const [o1, o2] = board.openings;
+  ok(o1 && o1.takeHome === o1.salary - board.rent && typeof o1.dist === 'number', 'each opening shows take-home pay after rent and distance');
+  ok(board.openings.every((o, i, a) => i === 0 || a[i - 1].dist <= o.dist + 3), 'nearest openings first');
+  await call('GET', `/api/cron/tick?key=${encodeURIComponent(process.env.CRON_KEY)}`, undefined, { auth: false });
+  ok(!(await whoDev('zara_ng')).job, 'after quitting, automatic hiring leaves them alone');
+  ok((await call('POST', '/api/me/job', { buildingId: o1.id }, P)).status === 200 && (await whoDev('zara_ng')).job?.[0] === o1.id, 'a colonist takes a job of their choice');
+  ok((await whoDev('zara_ng')).net === o1.takeHome, 'and earns its take-home pay each day');
+  ok((await call('POST', '/api/me/job', { buildingId: o2.id }, P)).status === 429, 'only one new job per game day');
+  ok((await call('POST', '/api/me/job/quit', {}, P)).status === 200, 'quit again');
+  ok((await call('POST', '/api/me/job', { buildingId: o2.id }, P)).status === 429, 'quitting does not reset the daily limit');
+  // Claimed colonists get priority over automatically placed newcomers
+  { const shop = await call('POST', '/api/admin/buildings', { type: 'stall', x: 910, y: 910 }); await call('POST', `/api/admin/buildings/${shop.json.building?.id}/finish`);
+    const bed = await call('POST', '/api/admin/buildings', { type: 'house', x: 913, y: 910 }); await call('POST', `/api/admin/buildings/${bed.json.building?.id}/finish`);
+    for (const h of ['jobfill_a', 'jobfill_b']) await call('POST', '/api/admin/citizens', { handle: h });
+    const auto = (await whoDev('jobfill_a')); if (auto.job?.[0] !== shop.json.building?.id) await call('PATCH', `/api/admin/citizens/${auto.id}`, { jobId: shop.json.building?.id });
+    await pool.query('update citizens set manual = false where handle = $1', ['jobfill_a']);
+    { const a = await whoDev('jobfill_a'); ok(a.job?.[0] === shop.json.building?.id, 'a newcomer fills the one-person stall', JSON.stringify({ home: a.home, job: a.job })); }
+    const listed = (await call('GET', '/api/me/jobs', undefined, P)).json.openings.some(o => o.id === shop.json.building?.id);
+    ok(listed, 'a full workplace held by an unclaimed newcomer still shows as open');
+    await pool.query('update citizens set job_changed_day = null where handle = $1', ['zara_ng']);
+    ok((await call('POST', '/api/me/job', { buildingId: shop.json.building?.id }, P)).status === 200 && (await whoDev('zara_ng')).job?.[0] === shop.json.building?.id, 'a claimed colonist takes it');
+    ok((await whoDev('jobfill_a')).job?.[0] !== shop.json.building?.id, 'and the newcomer goes back to looking for work'); }
+  const hut = await call('POST', '/api/admin/buildings', { type: 'house', x: 906, y: 906 });
+  ok(hut.status === 200 && (await call('POST', '/api/me/job', { buildingId: hut.json.building?.id }, P)).status === 400, 'homes are not jobs', JSON.stringify(hut.json));
+  ok((await call('POST', '/api/me/job/quit', {}, P)).status === 200 && (await call('POST', '/api/me/job/quit', {}, P)).status === 400, 'cannot quit with no job'); }
 ok((await call('POST', `/api/claim/${claim.claimId}/password`, { password: 'secret2' }, { auth: false })).status === 404, 'a code works only once');
 ok((await call('GET', '/api/me', undefined, { auth: false, headers: { 'x-player': tok1 } })).json.handle === 'zara_ng', 'the session knows who you are');
 ok((await who('zara_ng')).claimed === true, 'the card shows the avatar is claimed');

@@ -76,6 +76,14 @@ They comment it on any of your Instagram posts **from their own account**. After
 - **Before Instagram is connected, or to settle a dispute:** on a citizen's card, developer view has **Copy setup link**, a one-time link (valid 24 hours) that lets that person set a password directly. **Clear password** locks an avatar until its owner proves it again.
 - Passwords are stored hashed (scrypt). After 8 wrong guesses, a username is locked for 15 minutes.
 
+## Jobs
+
+- **Automatic jobs.** Colonists start with 0 coins. When they move into a home, the game gives them the nearest free job. Each game day they earn their salary minus their rent.
+- **The Work box.** A signed-in colonist's own card has a Work box. It shows their job and take-home pay, a **Quit** button, and **Find a job**: a list of open jobs nearest their home, each with take-home pay and distance.
+- **Taking a job.** Colonists can take a new job once per game day. Quitting is always allowed, but doesn't reset that limit.
+- **After quitting.** Automatic hiring leaves them alone until they choose another job. If their workplace is demolished, automatic hiring takes over again.
+- **Claimed colonists get priority.** A full workplace still counts as open if a place in it is held by an automatically placed colonist who hasn't claimed their avatar. That colonist goes back to looking for work. Claimed colonists and anyone the developer placed by hand are never pushed out.
+
 ## Run it on your computer
 
 With Docker: `docker compose up --build`, then open http://localhost:3000/#builder (token `local-dev-token-please-change`).

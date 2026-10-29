@@ -190,6 +190,10 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .uname{margin:0;color:var(--muted);font-size:13px;font-weight:500}
 .namebox{margin-top:10px;display:flex;flex-direction:column;gap:4px}
 .namebox label{font-size:12px;font-weight:700;color:var(--muted)}
+.joblist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:230px;overflow-y:auto}
+.joblist li{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:10px;background:var(--paper2,rgba(0,0,0,.04))}
+.joblist .jt{flex:1;min-width:0;font-size:13px;line-height:1.3}.joblist .jt b{display:block}.joblist .jt span{opacity:.75}
+.jobnow{font-size:14px;line-height:1.35}.jobnow .pay{font-weight:700}
 .authbox{margin-top:10px;padding:10px 12px;border:1.6px dashed var(--soft);border-radius:14px;display:flex;flex-direction:column;gap:6px}
 .authbox h3{margin:0;font-size:15px}
 .authbox input{padding:8px 10px;border-radius:12px;border:1.6px solid var(--soft);background:var(--paper);font-size:15px}
@@ -2016,6 +2020,32 @@ function cardBusy(){ const card=$('card'); if(!card||card.hidden) return false; 
   if(a&&card.contains(a)&&/INPUT|TEXTAREA/.test(a.tagName)) return true; return [...card.querySelectorAll('input,textarea')].some(i=>i.dataset.edited&&i.value); }
 document.getElementById('card').addEventListener('input',e=>{ if(e.target&&e.target.dataset) e.target.dataset.edited='1'; });
 // Change the name shown on an avatar. Colonists edit their own; the developer can edit anyone's.
+// ---- Work: a signed-in colonist's own job, and the board of open jobs near home ----
+let jobBoard=null; // { id, data, open, busy }
+async function loadJobs(c, open){ const same=jobBoard&&jobBoard.id===c.id; jobBoard={ id:c.id, data:same?jobBoard.data:null, open:open??(same&&jobBoard.open), busy:true, at:Date.now() };
+  try{ jobBoard.data=await api('/api/me/jobs'); }catch(e){ if(open!==undefined) toast(e.message); } jobBoard.busy=false; if(sel&&sel.id===c.id) renderCard(true); }
+async function jobAction(c, path, body, msg){ try{ await api(path,{method:'POST',body}); toast(msg); detail.delete(c.id); loadDetail(c.handle).then(()=>{ if(sel&&sel.id===c.id) renderCard(true); }); loadMyMoney(); await loadJobs(c,false); }catch(e){ toast(e.message); loadJobs(c); } }
+const perDay = n => `${n>0?'+':''}${fmt(n)} a day`;
+function workPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Work'}));
+  // load once, then refresh in the background every 20 s while the card is open (openings change as others take them)
+  if(!jobBoard||jobBoard.id!==c.id||(!jobBoard.busy&&Date.now()-jobBoard.at>20000)) loadJobs(c);
+  const d=jobBoard&&jobBoard.id===c.id?jobBoard.data:null;
+  if(!d){ box.append(el('p',{class:'hint',text:'Loading jobs…'})); return box; }
+  if(!d.housed){ box.append(el('p',{class:'hint',text:'You can work once you wake up and have a home.'})); return box; }
+  if(d.current){ const j=d.current; box.append(el('p',{class:'jobnow'}, `${j.title} at ${j.place}. You take home `, el('span',{class:'pay',text:perDay(j.takeHome)}), ` (${fmt(j.salary)} pay − ${fmt(d.rent)} rent).`)); }
+  else box.append(el('p',{class:'jobnow',text:d.choosing?"No job. You chose to look for yourself, so you won't be given one automatically. Pick one below.":'No job yet. Pick one below, or wait to be given the nearest one.'}));
+  const row=el('div',{class:'row-actions'});
+  row.append(el('button',{class:'btn primary',text:jobBoard.open?'Hide jobs':(d.current?'Find a different job':'Find a job'),onclick:()=>{ jobBoard.open=!jobBoard.open; if(jobBoard.open) loadJobs(c,true); else renderCard(true); }}));
+  if(d.current) row.append(el('button',{class:'btn danger',text:'Quit',onclick:()=>toast(`Quit as ${d.current.title.toLowerCase()}? Your coins stop growing until you take another job.`,'Quit',()=>jobAction(c,'/api/me/job/quit',{},'You quit. Your coins will stay as they are until your next job.'))}));
+  box.append(row);
+  if(jobBoard.open){
+    if(!d.canTakeToday) box.append(el('p',{class:'hint',text:"You've changed jobs today already. You can take another one tomorrow (game time)."}));
+    if(!d.openings.length) box.append(el('p',{class:'hint',text:'No open jobs right now. New workplaces bring new jobs.'}));
+    else { const ul=el('ul',{class:'joblist'});
+      for(const o of d.openings.slice(0,15)){ ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:`${o.title} · ${perDay(o.takeHome)}`}), el('span',{text:`${o.place}, ${o.dist} ${o.dist===1?'tile':'tiles'} from home${o.free>1?` · ${o.free} places`:''}`})),
+        el('button',{class:'btn',text:'Take',disabled:!d.canTakeToday,onclick:()=>toast(`Work as ${o.title.toLowerCase()} at ${o.place} for ${perDay(o.takeHome)}?${d.current?' You can only change jobs once a day.':''}`,'Take it',()=>jobAction(c,'/api/me/job',{buildingId:o.id},`You're now working as ${o.title.toLowerCase()} at ${o.place}.`))}))); }
+      box.append(ul); } }
+  return box; }
 function nameEditor(c,who){ const inp=el('input',{type:'text',maxlength:'40',placeholder:'First name, or first and last name',autocomplete:'name','aria-label':'Name shown on your avatar'}); inp.value=c.name||'';
   const save=async()=>{ const v=inp.value.trim(); try{ const r=who==='me'?await api('/api/me/name',{method:'POST',body:{name:v}}):await api('/api/admin/citizens/'+encodeURIComponent(c.id),{method:'PATCH',body:{name:v}});
       const x=S.citizens.get(c.id); if(x) x.name=(r&&r.name!==undefined)?r.name:v; const d=detail.get(c.id); if(d) d.n=x?x.name:v; delete inp.dataset.edited; inp.blur(); toast(v?`Saved. Your avatar now shows “${v}”.`.replace('Your avatar',who==='me'?'Your avatar':'Their avatar'):'Name removed. The username shows instead.'); renderCard(true); }
@@ -2050,6 +2080,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
         const mk=g=>{ const L=look({...c,gender:g}); const b=el('button',{class:'gpick',onclick:()=>toast(`Choose ${g==='f'?'woman':'man'}? You can only pick once.`,'Yes',()=>pick(g))}); const a=el('span',{class:'ava'}); a.innerHTML=avatarSVG({...c,gender:g}); b.append(a, el('span',{text:g==='f'?'Woman':'Man'})); return b; };
         card.append(el('div',{class:'authbox'}, el('h3',{text:'Choose your colonist'}), el('p',{class:'hint',text:'Pick once. After this, only the developer can change it.'}), el('div',{class:'row-actions'}, mk('m'), mk('f')))); }
       if(mine) card.append(nameEditor(c,'me'));
+      if(mine) card.append(workPanel(c));
       if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; myMoney=null; ls.set('settlement-player',null); refreshHUD(); toast('Logged out.'); renderCard(true); }})));
       else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
       // Already signed in as someone else: one person, one colonist, so no "This is me" on other cards.

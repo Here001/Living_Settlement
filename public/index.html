@@ -1906,6 +1906,8 @@ function renderCard(force){ if(!force && cardBusy()) return;
         card.append(el('div',{class:'authbox'}, el('h3',{text:'Choose your colonist'}), el('p',{class:'hint',text:'Pick once. After this, only the developer can change it.'}), el('div',{class:'row-actions'}, mk('m'), mk('f')))); }
       if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; myMoney=null; ls.set('settlement-player',null); refreshHUD(); toast('Logged out.'); renderCard(true); }})));
       else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
+      // Already signed in as someone else: one person, one colonist, so no "This is me" on other cards.
+      else if(Me&&Me.token&&Me.handle) card.append(el('div',{class:'row-actions'}, el('span',{class:'hint',text:`You're signed in as @${Me.handle}.`}), el('button',{class:'linkb',text:'Go to my colonist',onclick:()=>findMe()})));
       else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}))); }
   } else if(sel.kind==='v'){ const v=D.vehicles.get(sel.id); if(!v){ closeCard(); return; } const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car;
     const head=el('div',{class:'chead'}); head.append(el('img',{class:'cthumb',alt:'',src:vehicleThumb(v.type)}), el('div',null, el('h2',{text:V.name}), el('p',{class:'now',text:'Driving around the neighbourhood'})));

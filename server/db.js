@@ -131,6 +131,10 @@ const MIGRATIONS = [
    create table lottery_tickets (lottery_id int not null, citizen_id text not null, handle text not null, count int not null, primary key (lottery_id, citizen_id));`,
   // v19: when a visit started, so every viewer can draw the same trip there (walk, drive, cab or police car)
   `alter table citizens add column visit_from bigint;`,
+  // v20: the Bank, cars, moving home, and owning buildings
+  `alter table citizens add column bank bigint not null default 0, add column cars jsonb, add column car_active text, add column home_changed_day int;
+   alter table buildings add column owner_id text, add column owner_handle text, add column bought_at bigint, add column price int;
+   create index buildings_owner on buildings (owner_id) where owner_id is not null;`,
 ];
 
 export async function migrate() {

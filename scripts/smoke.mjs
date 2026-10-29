@@ -398,6 +398,56 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await call('PUT', '/api/me/pet', { name: 'Zippy' }, P)).status === 200 && (await who('zara_ng')).pet.n === 'Zippy', 'renaming the pet');
     ok((await call('PUT', '/api/me/pet', { name: '<b>' }, P)).status === 400, 'pet names are letters only');
     ok((await call('DELETE', '/api/me/pet', undefined, P)).status === 200 && !(await who('zara_ng')).pet, 'letting it go'); }
+  // ---- the Bank, cars, moving home, owning buildings ----
+  { const set = (h, sql, v = []) => pool.query(`update citizens set ${sql} where handle = $1`, [h, ...v]), money = async () => { const d = await whoDev('zara_ng'); return { wallet: d.coins, bank: d.bank }; };
+    const build = async (type, x, y) => { const b = await call('POST', '/api/admin/buildings', { type, x, y }); await call('POST', `/api/admin/buildings/${b.json.building?.id}/finish`); return b.json.building?.id; };
+    await set('zara_ng', 'coins_base = 500, coins_day = 0, net = 0, bank = 0, jailed_until = null');
+    ok((await call('POST', '/api/me/bank/deposit', { amount: 100 }, P)).status === 409, 'no Bank, no deposits');
+    await build('bank', 940, 900);
+    const dep = await call('POST', '/api/me/bank/deposit', { amount: 300 }, P);
+    ok(dep.status === 200 && dep.json.wallet === 200 && dep.json.bank === 300, 'deposit 300 into the Bank', JSON.stringify(dep.json));
+    ok((await call('POST', '/api/me/bank/withdraw', { amount: 400 }, P)).status === 400, "can't withdraw more than you saved");
+    ok((await call('POST', '/api/me/bank/withdraw', { amount: 100 }, P)).json.bank === 200, 'withdraw 100');
+    ok((await who('zara_ng')).bank === undefined && (await whoDev('zara_ng')).bank === 200, 'bank balances are private');
+    // cars
+    ok((await call('POST', '/api/me/cars', { model: 'hatch', color: '#D9544A' }, P)).status === 400, "can't afford a car with 300 coins on you");
+    await set('zara_ng', 'coins_base = 10000');
+    const c1 = await call('POST', '/api/me/cars', { model: 'hatch', color: '#5B8DB8' }, P);
+    ok(c1.status === 200 && c1.json.coins === 8500, 'buy a hatchback for 1,500', JSON.stringify(c1.json));
+    ok(JSON.stringify((await who('zara_ng')).car) === JSON.stringify(['hatch', '#5B8DB8']), 'everyone sees which car they drive');
+    const c2 = await call('POST', '/api/me/cars', { model: 'sedan', color: '#2F4A7A' }, P);
+    ok((await call('PUT', '/api/me/cars/active', { id: c2.json.car.id }, P)).status === 200 && (await who('zara_ng')).car[0] === 'sedan', 'switch to driving the sedan');
+    await call('POST', '/api/me/cars', { model: 'hatch' }, P);
+    ok((await call('POST', '/api/me/cars', { model: 'hatch' }, P)).status === 409, 'the garage holds 3 cars');
+    const sold = await call('DELETE', `/api/me/cars/${c1.json.car.id}`, undefined, P);
+    ok(sold.status === 200 && sold.json.back === 900, 'sell a car for 60%');
+    ok((await call('POST', '/api/me/cars', { model: 'tank' }, P)).status === 400, 'only cars the dealer sells');
+    // moving home
+    const spare = await build('house', 950, 900);
+    const hl = (await call('GET', '/api/me/homes', undefined, P)).json;
+    ok(hl.housed && hl.homes.some(h => h.id === spare), 'homes with space are listed', JSON.stringify(hl).slice(0, 160));
+    ok((await call('POST', '/api/me/home', { buildingId: spare }, P)).status === 200 && (await who('zara_ng')).home[0] === spare, 'rent and move into a new home');
+    ok((await call('POST', '/api/me/home', { buildingId: hl.current.id }, P)).status === 429, 'one move per game day');
+    // owning buildings
+    await set('zara_ng', 'coins_base = 500');
+    ok((await call('POST', '/api/me/properties/buy', { buildingId: spare }, P)).status === 400, "can't buy what you can't afford");
+    await set('zara_ng', 'coins_base = 50000');
+    const police = await build('police', 960, 900);
+    ok((await call('POST', '/api/me/properties/buy', { buildingId: police }, P)).status === 400, "public buildings aren't for sale");
+    const buy = await call('POST', '/api/me/properties/buy', { buildingId: spare }, P);
+    ok(buy.status === 200 && (await whoDev('zara_ng')).coins === 50000 - buy.json.price, 'buy the house you live in', JSON.stringify(buy.json));
+    ok((await call('POST', '/api/me/properties/buy', { buildingId: spare }, P)).status === 409, "can't buy it twice");
+    const props = (await call('GET', '/api/me/properties', undefined, P)).json;
+    ok(props.list.length === 1 && props.list[0].id === spare, 'it shows in your buildings');
+    const t0 = await money(), pd = await call('POST', '/api/admin/test/payday', {});
+    if (pd.status === 404) console.log('  (payday route only on test servers; start the server with ALLOW_TEST_ROUTES=1 to check paydays)');
+    else { const t1 = await money();
+      const inc = props.list[0].income; ok(pd.status === 200 && t1.wallet - t0.wallet === inc && t1.bank - t0.bank === Math.min(200, Math.floor(t0.bank * 0.01)), `payday: ${inc} rent to the owner, interest on savings`, JSON.stringify({ t0, t1, inc, pd: pd.json })); }
+    const shop = await build('stall', 965, 900); await call('POST', '/api/me/properties/buy', { buildingId: shop }, P);
+    const before = (await money()).wallet; await call('DELETE', `/api/admin/buildings/${shop}`);
+    ok((await money()).wallet === before + 500, 'if the developer knocks it down, the owner gets their money back');
+    const sl = await call('POST', '/api/me/properties/sell', { buildingId: spare }, P);
+    ok(sl.status === 200 && sl.json.back === Math.floor(buy.json.price * 0.7), 'sell a building back for 70%'); }
   const hut = await call('POST', '/api/admin/buildings', { type: 'house', x: 906, y: 906 });
   ok(hut.status === 200 && (await call('POST', '/api/me/job', { buildingId: hut.json.building?.id }, P)).status === 400, 'homes are not jobs', JSON.stringify(hut.json));
   ok((await call('POST', '/api/me/job/quit', {}, P)).status === 200 && (await call('POST', '/api/me/job/quit', {}, P)).status === 400, 'cannot quit with no job'); }

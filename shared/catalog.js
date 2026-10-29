@@ -109,6 +109,8 @@ export const BUILDING_TYPES = {
   solar:      { name:'Solar field', cat:'utilities', size:[2,2], style:'solar', outdoor:true, cost:2600 },
   pylon:      { name:'Power pylon', cat:'utilities', size:[1,1], style:'pylon', cost:200 },
   // ---------- parks
+  gym:        { name:'Gym', cat:'parks', size:[2,2], style:'block', height:30, sign:'#D9544A', label:'GYM', colors:{wall:'#3E4A5C', roof:'#2B3340', trim:'#D9544A'}, work:{title:'Trainer', slots:4, salary:24}, leisure:true, visitors:80, cost:3500 },
+  fitpark:    { name:'Fitness park', cat:'parks', size:[2,2], style:'fitpark', colors:{grass:'#7DB656'}, leisure:true, visitors:40, outdoor:true, cost:900 },
   racetrack:  { name:'Racetrack', cat:'parks', size:[5,3], style:'racetrack', colors:{grass:'#7DB656', dirt:'#C9A06A', stand:'#B5523B'}, work:{title:'Creature keeper', slots:4, salary:26}, leisure:true, visitors:150, outdoor:true, cost:9000 },
   park:       { name:'Park', cat:'parks', size:[2,2], style:'park', colors:{grass:'#7DB656'}, leisure:true, visitors:60, outdoor:true, cost:700 },
   garden:     { name:'Flower garden', cat:'parks', size:[2,2], style:'garden', leisure:true, visitors:50, outdoor:true, cost:800 },
@@ -304,7 +306,7 @@ const SUB_OF = {
   sewage:['outfall','treatment','treatponds','sewageplant'],
   garbage:['landfill','recycling','incinerator'],
   squares:['park','garden','playground','square','fountain','fountainsquare','transitsquare','gazebo','allotments','botanical'],
-  sports:['racetrack','football','tennis','basketball','stadium'],
+  sports:['racetrack','gym','fitpark','football','tennis','basketball','stadium'],
   trees:['tree','pine','birch','cherry','maple','poplar','palm'],
   fields:['wheat','sunflowers','vegetables','vineyard','orchard','lavender','pasture'],
   rocks:['bush','rocks'],
@@ -328,6 +330,15 @@ export const VEHICLE_TYPES = {
   police:    { name:'Police car', note:'patrols the city', len:0.66, wid:0.3, h:6, colors:['#F4F4F0'], stripe:'#2F4A7A', siren:'#4A7BD9' },
   firetruck: { name:'Fire engine', note:'answers fires', len:1.05, wid:0.34, h:10, colors:['#C8382E'], ladder:true, siren:'#FF5544' },
   ambulance: { name:'Ambulance', note:'answers emergencies', len:0.8, wid:0.32, h:9, colors:['#F4F4F0'], stripe:'#D9544A', siren:'#FF5544' },
+};
+
+// Cars a colonist can buy from the dealer. They draw like the car above, in the size and colour of the model.
+export const CAR_MODELS = {
+  hatch:  { name:'Hatchback',  price:1500,  len:0.54, wid:0.28, h:6, colors:['#D9544A','#5B8DB8','#E6C35C','#3E7A4B','#F2F0EA','#2B2621'] },
+  sedan:  { name:'Sedan',      price:3000,  len:0.64, wid:0.3,  h:6, colors:['#7C8288','#2F4A7A','#F2F0EA','#8C2F1B','#2B2621','#3E7A4B'] },
+  pickup: { name:'Pickup',     price:5000,  len:0.72, wid:0.32, h:7, cargo:'#8C7B66', colors:['#C8382E','#2F4A7A','#E2A23B','#F2F0EA','#4A5A44'] },
+  suv:    { name:'SUV',        price:6500,  len:0.7,  wid:0.33, h:8, colors:['#2B2621','#F2F0EA','#5E7C99','#8C2F1B','#7C8288'] },
+  sports: { name:'Sports car', price:14000, len:0.66, wid:0.3,  h:5, colors:['#E4572E','#F2B33D','#2E5E8C','#F2F0EA','#2B2621'] },
 };
 
 export const DISASTER_TYPES = {

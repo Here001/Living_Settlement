@@ -129,6 +129,18 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/pet', limit, send(async req => { const b = req.body || {}; return world.actions.adopt((await me(req)).id, { kind: b.kind, name: b.name }); }));
   r.put('/me/pet', limit, send(async req => world.actions.renamePet((await me(req)).id, (req.body || {}).name)));
   r.delete('/me/pet', limit, send(async req => world.actions.release((await me(req)).id)));
+  // The Bank, cars, moving home, and owning buildings.
+  r.get('/me/bank', limit, send(async req => world.economy.bankInfo((await me(req)).id)));
+  r.post('/me/bank/deposit', limit, send(async req => world.economy.bank((await me(req)).id, 'deposit', (req.body || {}).amount)));
+  r.post('/me/bank/withdraw', limit, send(async req => world.economy.bank((await me(req)).id, 'withdraw', (req.body || {}).amount)));
+  r.post('/me/cars', limit, send(async req => { const b = req.body || {}; return world.economy.buyCar((await me(req)).id, String(b.model || ''), String(b.color || '')); }));
+  r.delete('/me/cars/:id', limit, send(async req => world.economy.sellCar((await me(req)).id, req.params.id)));
+  r.put('/me/cars/active', limit, send(async req => world.economy.driveCar((await me(req)).id, String((req.body || {}).id || ''))));
+  r.get('/me/homes', limit, send(async req => world.economy.homes((await me(req)).id)));
+  r.post('/me/home', limit, send(async req => world.economy.moveHome((await me(req)).id, (req.body || {}).buildingId)));
+  r.get('/me/properties', limit, send(async req => world.economy.properties((await me(req)).id)));
+  r.post('/me/properties/buy', limit, send(async req => world.economy.buy((await me(req)).id, (req.body || {}).buildingId)));
+  r.post('/me/properties/sell', limit, send(async req => world.economy.sell((await me(req)).id, (req.body || {}).buildingId)));
   r.post('/me/lottery', limit, send(async req => world.lottery.buy((await me(req)).id, (req.body || {}).count, world.blockedReason?.bind(world))));
   // Creature races: one bet per race, before the gates close.
   r.post('/me/race/bet', limit, send(async req => {

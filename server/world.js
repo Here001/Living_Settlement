@@ -13,7 +13,7 @@ export class HttpError extends Error { constructor(status, msg) { super(msg); th
 // ---------- row shapes ----------
 export const bRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, name: r.name, requestedBy: r.requested_by,
   builtAt: r.built_at, builtDay: r.built_day, rot: r.rot || 0, homeUsed: r.home_used, jobUsed: r.job_used, hangUsed: r.hang_used,
-  done: r.done !== false, readyAt: r.ready_at || 0, ruin: !!r.ruin, ruinedAt: r.ruined_at || 0 });
+  done: r.done !== false, readyAt: r.ready_at || 0, ruin: !!r.ruin, ruinedAt: r.ruined_at || 0, owner: r.owner_handle || null });
 const vRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, placedAt: r.placed_at });
 const tileKeys = keys => keys.filter(k => /^-?\d{1,7},-?\d{1,7}$/.test(k));
 const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_cy], [c.hang_cx, c.hang_cy], [c.visit_cx, c.visit_cy]]
@@ -22,7 +22,7 @@ const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_c
 // The compact citizen record viewers receive. Coordinates travel with it so a viewer can draw a commute
 // even when the workplace is in a part of the map they haven't loaded.
 const CITIZEN_SELECT = `
-  select c.id, c.seq, c.handle, c.joined_at, c.founder, c.gender, c.display_name, c.pet,
+  select c.id, c.seq, c.handle, c.joined_at, c.founder, c.gender, c.display_name, c.pet, c.cars, c.car_active, (c.pass_hash is not null) claimed,
          c.home_cx, c.home_cy, c.job_cx, c.job_cy, c.hang_cx, c.hang_cy, c.visit_cx, c.visit_cy, c.visit_until, c.visit_from,
          h.id hid, h.type ht, h.x hx, h.y hy, j.id jid, j.type jt, j.x jx, j.y jy, g.id gid, g.type gt, g.x gx, g.y gy, v.id vid, v.type vt, v.x vx, v.y vy
   from citizens c
@@ -31,7 +31,9 @@ const CITIZEN_SELECT = `
 export const cOut = r => ({ id: r.id, s: r.seq, h: r.handle, t: r.joined_at, f: r.founder ? 1 : 0, g: r.gender || 'm', n: r.display_name || '',
   home: r.hid ? [r.hid, r.ht, r.hx, r.hy] : null, job: r.jid ? [r.jid, r.jt, r.jx, r.jy] : null, hang: r.gid ? [r.gid, r.gt, r.gx, r.gy] : null,
   // A visit: [building, type, x, y, until, from]. Kept for 20 minutes after it ends so viewers can draw the trip back.
-  visit: r.vid && Number(r.visit_until) > Date.now() - VISIT_TAIL ? [r.vid, r.vt, r.vx, r.vy, Number(r.visit_until), Number(r.visit_from || r.visit_until - 300000)] : null, pet: r.pet || null });
+  visit: r.vid && Number(r.visit_until) > Date.now() - VISIT_TAIL ? [r.vid, r.vt, r.vx, r.vy, Number(r.visit_until), Number(r.visit_from || r.visit_until - 300000)] : null, pet: r.pet || null,
+  // claimed colonists drive only the car they bought (car: [model, colour]); everyone else follows the old 50/50 rule
+  k: r.claimed ? 1 : 0, car: (() => { const a = Array.isArray(r.cars) && (r.cars.find(x => x.id === r.car_active) || r.cars[0]); return a ? [a.m, a.col] : null; })() });
 export const VISIT_TAIL = 20 * 60 * 1000;
 
 // One world change. Holds the database connection inside the global world lock and records everything that changed,
@@ -318,11 +320,12 @@ export class World {
     return rows.map(cOut);
   }
   async citizenDetail(handle) {
-    const r = (await pool.query(`${CITIZEN_SELECT.replace('select c.id,', 'select c.coins_base, c.coins_day, c.net, c.pass_hash is not null has_pw, c.jailed_until, c.id,')} where lower(c.handle) = lower($1)`, [R.cleanHandle(handle)])).rows[0];
+    const r = (await pool.query(`${CITIZEN_SELECT.replace('select c.id,', 'select c.coins_base, c.coins_day, c.net, c.pass_hash is not null has_pw, c.jailed_until, c.bank, c.id,')} where lower(c.handle) = lower($1)`, [R.cleanHandle(handle)])).rows[0];
     if (!r) return null;
     const out = cOut(r); const today = this.meta ? R.gameDay(Date.now(), this.meta.epoch) : 0;
     out.coins = R.balanceOn(r.coins_base, r.coins_day, r.net, today); out.net = r.net; out.claimed = !!r.has_pw;
     out.jailedUntil = Number(r.jailed_until || 0) > Date.now() ? Number(r.jailed_until) : 0;
+    out.bank = Number(r.bank || 0); out.cars = Array.isArray(r.cars) ? r.cars : []; out.carActive = r.car_active || null;
     if (!r.hid) out.queue = Number((await pool.query('select count(*) n from citizens where home_id is null and seq < $1', [r.seq])).rows[0].n) + 1;
     return out;
   }
@@ -458,6 +461,7 @@ export class World {
   }
 
   async demolishIn(ch, b) {
+    if (this.economy) await this.economy.refundDemolished(ch, b); // an owner gets back what they paid
     await this.evict(ch, b);
     await ch.q('delete from buildings where id = $1', [b.id]);
     ch.buildings.delete(b.id); ch.removedBuildings.set(b.id, R.chunkKey(b.cx, b.cy));
@@ -1007,6 +1011,7 @@ export class World {
         ch.meta.newsDay = today;
         await ch.event(days === 1 ? `Day ${today + 1} begins. The treasury now earns ${fmt(ch.meta.income)} coins a day.`
           : `${days} days passed. The treasury earned ${fmt(days * ch.meta.income)} coins.`, 'day');
+        if (this.economy) await this.economy.day(ch, days); // owners collect rent and profits; savings earn interest
       }
       await ch.fillVacancies();
       return { days };

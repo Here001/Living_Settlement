@@ -191,6 +191,8 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .namebox{margin-top:10px;display:flex;flex-direction:column;gap:4px}
 .namebox label{font-size:12px;font-weight:700;color:var(--muted)}
 .lotto{background:rgba(242,179,61,.12)}.lotto summary,.authbox summary{cursor:pointer;font-weight:700}
+.swatches{display:flex;gap:6px;flex-wrap:wrap}.sw{width:26px;height:26px;border-radius:999px;border:2px solid var(--glass-edge,#fff);box-shadow:0 0 0 1px rgba(0,0,0,.25);cursor:pointer}.sw.on{box-shadow:0 0 0 2.5px var(--accent)}
+.joblist li img{flex:none}
 .acttabs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .acttabs .pill,.authbox .pill{cursor:pointer;border:1.4px solid var(--ink,#2B2621);background:transparent;padding:5px 11px;border-radius:999px;font:inherit;font-size:13px}
 .acttabs .pill.on{background:var(--accent,#D9714A);color:#fff;border-color:var(--accent,#D9714A)}
@@ -393,7 +395,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
   </form>
 </div>
 <script type="module">
-import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, roadClears } from '/shared/catalog.js';
+import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears } from '/shared/catalog.js';
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS } from '/shared/creatures.js';
 import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE } from '/shared/rules.js';
@@ -443,7 +445,7 @@ async function api(path, opts={}){
   try{ r=await fetch(path,{ method:opts.method||'GET', signal:ac?ac.signal:undefined, headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{}), ...(Me&&Me.token?{'x-player':Me.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined }); }
   catch(e){ clearTimeout(timer); throw new Error(e&&e.name==='AbortError'?'The connection is slow. Please try again.':'Can\'t reach the colony right now. Check your connection.'); }
   try{ const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`); return j; } finally { clearTimeout(timer); } }
-const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang, visit:c.visit||null, pet:c.pet||null });
+const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang, visit:c.visit||null, pet:c.pet||null, claimed:!!c.k, car:c.car||null });
 const visiting = c => c.visit && Date.now()+skew < c.visit[4]+20*60000 ? c.visit : null; // [buildingId, type, x, y, until, from]: kept a while after it ends for the trip back
 const placeChunks = c => [c.home,c.job,c.hang,visiting(c)].filter(Boolean).map(p=>ckTile(p[2],p[3]));
 const keepCitizen = c => c.id===pinned || placeChunks(c).some(k=>S.chunks.has(k));
@@ -620,10 +622,12 @@ function wanderNear(b, r){
   return { tile:[x0,y0], pos:[x0+0.5,y0+0.5], indoor:false, bid:null, name:'the street' };
 }
 // About half the town owns a car; car owners drive trips longer than 8 tiles when there are roads at both ends.
-const hasCar = c => hash(c.id+':car')%100 < 50;
+const hasCar = c => c.claimed ? !!(c.car&&CAR_MODELS[c.car[0]]) : hash(c.id+':car')%100 < 50;
+// The car someone drives: the one they bought (model and colour), or an ordinary car in a colour picked by their name.
+const carOf = c => (c.car&&CAR_MODELS[c.car[0]]) ? { V:CAR_MODELS[c.car[0]], col:c.car[1] } : { V:VEHICLE_TYPES.car, col:VEHICLE_TYPES.car.colors[hash(c.id)%VEHICLE_TYPES.car.colors.length] };
 function carTrip(c,a,b,kind){ if(!hasCar(c)||kind==='lunch') return null; const [ax,ay]=a.tile, [bx,by]=b.tile; if(Math.abs(ax-bx)+Math.abs(ay-by)<9) return null;
   const s=nearestRoad(ax,ay,3), e=nearestRoad(bx,by,3); if(!s||!e) return null; const path=findRoadPath(s[0],s[1],e[0],e[1]); if(!path||path.length<3) return null;
-  const V=VEHICLE_TYPES.car; return { path, dur:pathTime(path)+2, V, col:V.colors[hash(c.id)%V.colors.length] }; }
+  const { V, col }=carOf(c); return { path, dur:pathTime(path)+2, V, col }; }
 function getPlan(c, day){
   const key=c.id+'|'+day+'|'+(c.home?c.home[0]:'')+'|'+(c.job?c.job[0]:'')+'|'+(c.hang?c.hang[0]:''); const hit=planCache.get(key);
   if(hit&&hit.gen===planGen) return hit.plan;
@@ -682,9 +686,9 @@ function placeOf(st, name){ // a stop on a trip, from where someone is at a mome
 function tripLeg(c, fromP, toP, start, kind){
   const [ax,ay]=fromP.tile, [bx,by]=toP.tile, far=Math.abs(ax-bx)+Math.abs(ay-by)>=TRIP_DRIVE;
   if(kind==='police'||far){ const s=nearestRoad(ax,ay,6), e=nearestRoad(bx,by,6), path=s&&e?findRoadPath(s[0],s[1],e[0],e[1],true):null;
-    if(path&&path.length>=2){ const V=kind==='police'?VEHICLE_TYPES.police:hasCar(c)?VEHICLE_TYPES.car:VEHICLE_TYPES.taxi;
+    if(path&&path.length>=2){ const own=kind!=='police'&&hasCar(c)?carOf(c):null, V=kind==='police'?VEHICLE_TYPES.police:own?own.V:VEHICLE_TYPES.taxi;
       const verb=kind==='police'?'Being driven to the Jail':V===VEHICLE_TYPES.taxi?`Taking a cab to ${toP.name}`:`Driving to ${toP.name}`;
-      const dur=pathTime(path, V.speed||1)+2; return { type:'move', mode:'car', from:start, to:start+dur, path, fromP, toP, V, col:V===VEHICLE_TYPES.car?V.colors[hash(c.id)%V.colors.length]:V.colors[0], siren:kind==='police', verb }; } }
+      const dur=pathTime(path, V.speed||1)+2; return { type:'move', mode:'car', from:start, to:start+dur, path, fromP, toP, V, col:own?own.col:V.colors[0], siren:kind==='police', verb }; } }
   if(ax===bx&&ay===by) return null;
   const path=findPath(ax,ay,bx,by), cum=[0];
   for(let k=1;k<path.length;k++) cum.push(cum[k-1]+(path.length===2?Math.abs(path[1][0]-path[0][0])+Math.abs(path[1][1]-path[0][1]):stepCost(path[k][0],path[k][1]))/(path.length===2?0.7:1));
@@ -881,6 +885,12 @@ const DRAW = {
     drawTreeAt(iso(x+0.5,y+0.5),'#6FAE45',0.75,hash(b.id||'p1')); drawTreeAt(iso(x+w-0.5,y+0.55),'#7DBA4F',0.65,hash((b.id||'p')+'2'));
     DRAW.bench({x:x+w/2-0.5,y:y+d*0.62});
   },
+  // An outdoor fitness park: rubber mat, pull-up bars, parallel bars and a bench
+  fitpark(b,t){ const [w,d]=t.size, x=b.x, y=b.y; poly([iso(x,y),iso(x+w,y),iso(x+w,y+d),iso(x,y+d)], t.colors.grass);
+    poly([iso(x+0.25,y+0.25),iso(x+w-0.25,y+0.25),iso(x+w-0.25,y+d-0.25),iso(x+0.25,y+d-0.25)], '#B5523B', INK, 0.8);
+    const bar=(p,q,h,col)=>{ line(p,up(p,h),INK,2.6); line(p,up(p,h),col,1.4); line(q,up(q,h),INK,2.6); line(q,up(q,h),col,1.4); line(up(p,h),up(q,h),INK,2.4); line(up(p,h),up(q,h),'#C9CED2',1.2); };
+    bar(iso(x+0.5,y+0.6),iso(x+1.3,y+0.6),22,'#2F4A7A'); bar(iso(x+0.6,y+1.3),iso(x+0.6,y+1.8),12,'#E2A23B'); bar(iso(x+0.9,y+1.3),iso(x+0.9,y+1.8),12,'#E2A23B');
+    DRAW.bench({x:x+w-1,y:y+d-0.75}); drawTreeAt(iso(x+w-0.4,y+0.4),'#6FAE45',0.55,hash(b.id||'f')); },
   lamp(b){ const p=iso(b.x+0.5,b.y+0.5); line(p,{x:p.x,y:p.y-30},INK,3.2); line(p,{x:p.x,y:p.y-30},'#3E5148',1.8);
     const q=[{x:p.x-3.5,y:p.y-30},{x:p.x+3.5,y:p.y-30},{x:p.x+2.6,y:p.y-38},{x:p.x-2.6,y:p.y-38}]; poly(q,lampGlass()); poly([{x:p.x-4,y:p.y-38},{x:p.x+4,y:p.y-38},{x:p.x,y:p.y-42}],'#3E5148');
     if(LAMPS>0){ windowQuads.push(q); lights.push({ x:p.x, y:p.y-30, r:22, col:'255,220,150', a:1.15 },{ x:p.x, y:p.y, r:30, col:'255,214,140', a:0.5 }); }
@@ -2309,9 +2319,57 @@ function casinoPanel(c){ const box=el('div',{class:'authbox casino'}, el('h3',{t
   return box; }
 // ---- Your own card: Work · Go out · Casino · Crime · Pet, one at a time ----
 let actTab='work';
+const BUYABLE=new Set(['housing','shops','offices','industry']); // what players may own (matches the server)
 function actionTabs(c){ const wrap=el('div',null); const row=el('div',{class:'acttabs',role:'tablist'});
-  for(const [id,nm] of [['work','Work'],['out','Go out'],['casino','Casino'],['crime','Crime'],['pet','Pet']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
-  wrap.append(row, actTab==='work'?workPanel(c):actTab==='casino'?casinoPanel(c):actTab==='out'?outPanel(c):actTab==='crime'?crimePanel(c):petPanel(c)); return wrap; }
+  for(const [id,nm] of [['work','Work'],['home','Home'],['bank','Bank'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['pet','Pet']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
+  const P={ work:workPanel, home:homePanel, bank:bankPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, pet:petPanel }[actTab]||workPanel;
+  wrap.append(row, P(c)); return wrap; }
+// ---- Home (rent or move, and the buildings you own), Bank, Cars ----
+const Money={ id:null, at:0, homes:null, props:null, bank:null, busy:false };
+async function loadMoney(c){ Money.id=c.id; Money.at=Date.now(); Money.busy=true;
+  try{ const [h,p,b]=await Promise.all([api('/api/me/homes'),api('/api/me/properties'),api('/api/me/bank')]); Money.homes=h; Money.props=p; Money.bank=b; }catch(e){} Money.busy=false; if(sel&&sel.id===c.id) renderCard(true); }
+const moneyFor = c => { if(Money.id!==c.id||(!Money.busy&&Date.now()-Money.at>15000)) loadMoney(c); return Money.id===c.id?Money:null; };
+async function moneyAction(c, path, body, ok, method){ const r=await meAction(path, body, ok, method); if(r){ Money.at=0; loadMoney(c); } return r; }
+function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Home'})); const M=moneyFor(c), H=M&&M.homes, Pp=M&&M.props;
+  if(!H){ box.append(el('p',{class:'hint',text:'Checking the listings…'})); return box; }
+  if(!H.housed){ box.append(el('p',{class:'hint',text:"You're still in cryosleep. You'll get a home when one is free."})); }
+  else { box.append(el('p',{class:'jobnow',text:`You live at ${H.current.name}. Rent: ${fmt(H.current.rent)} a day, taken from your wages.`}));
+    if(!H.canMoveToday) box.append(el('p',{class:'hint',text:"You've moved today already. You can move again tomorrow (game time)."}));
+    const ul=el('ul',{class:'joblist'}); for(const h of H.homes.slice(0,12)) ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:`${h.name}${h.mine?' · yours':''}`}), el('span',{text:`${fmt(h.rent)} a day rent · ${h.dist} tiles away${h.space>0?` · ${h.space} free`:' · full'}${h.owner&&!h.mine?` · owned by @${h.owner}`:''}`})),
+      el('button',{class:'btn',text:h.mine?'Move in':'Rent',disabled:!H.canMoveToday,onclick:()=>toast(`Move to ${h.name}? Rent there is ${fmt(h.rent)} a day.${h.mine&&h.space<=0?' The newest tenant who hasn’t claimed their avatar will move out.':''}`,'Move',()=>moneyAction(c,'/api/me/home',{buildingId:h.id},r=>`Welcome home to ${r.home||h.name}.`))})));
+    if(H.homes.length) box.append(ul); else box.append(el('p',{class:'hint',text:'No other homes have space right now.'})); }
+  if(Pp){ box.append(el('h3',{text:`Buildings you own (${Pp.list.length} of ${Pp.max})`}));
+    if(!Pp.list.length) box.append(el('p',{class:'hint',text:`Buy a home or business from its card on the map. Each game day you collect ${100-Math.round(Pp.cut*100)}% of its rent or profit; the treasury keeps ${Math.round(Pp.cut*100)}%.`}));
+    else { const ul=el('ul',{class:'joblist'}); for(const p of Pp.list) ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:p.name}), el('span',{text:p.ruin?'In ruins: no income until rebuilt':`About ${fmt(p.income)} coins a day`})),
+        el('button',{class:'btn',text:'Go see',onclick:()=>{ const b=D.buildings.get(p.id); if(b){ const [w,d]=T(b).size, q=iso(b.x+w/2,b.y+d/2); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.2); } sel={kind:'b',id:p.id}; renderCard(true); }}),
+        el('button',{class:'linkb',text:`Sell (${fmt(p.sell)})`,onclick:()=>toast(`Sell ${p.name} back to the colony for ${fmt(p.sell)} coins?`,'Sell',()=>moneyAction(c,'/api/me/properties/sell',{buildingId:p.id},r=>`Sold for ${fmt(r.back)} coins.`))}))); box.append(ul); } }
+  return box; }
+function bankPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Bank'})); const M=moneyFor(c), B=M&&M.bank;
+  if(!B){ box.append(el('p',{class:'hint',text:'Opening your account…'})); return box; }
+  box.append(el('p',{class:'jobnow'}, 'On you: ', el('b',{text:`${fmt(B.wallet)} coins`}), ' · In the bank: ', el('b',{text:`${fmt(B.bank)} coins`})),
+    el('p',{class:'hint',text:`Money in the bank can't be pickpocketed, and grows ${Math.round(B.rate*100)}% a game day (up to ${fmt(B.cap)} a day)${B.bank?`: about ${fmt(B.interest)} tomorrow`:''}.`}));
+  const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Amount',placeholder:'Amount'});
+  const amt=()=>Math.floor(Number(inp.value)||0);
+  if(!B.hasBank) box.append(el('p',{class:'hint',text:"The colony doesn't have a Bank yet, so you can't deposit. You can still take out what you saved."}));
+  box.append(el('div',{class:'cbet'}, inp, el('button',{class:'btn primary',text:'Deposit',disabled:!B.hasBank,onclick:()=>moneyAction(c,'/api/me/bank/deposit',{amount:amt()},r=>`Deposited. ${fmt(r.bank)} coins in the bank.`)}),
+    el('button',{class:'btn',text:'Withdraw',onclick:()=>moneyAction(c,'/api/me/bank/withdraw',{amount:amt()},r=>`Withdrawn. ${fmt(r.wallet)} coins on you.`)})),
+    el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Deposit everything',disabled:!B.hasBank||!B.wallet,onclick:()=>moneyAction(c,'/api/me/bank/deposit',{amount:B.wallet},'All your coins are safe in the bank.')}))); return box; }
+let carPick={ m:'hatch', col:null };
+function carThumb(m,col){ const k='car:'+m+':'+col; if(creatureThumbs[k]) return creatureThumbs[k]; const cv2=document.createElement('canvas'); cv2.width=96; cv2.height=64; const keep=ctx; ctx=cv2.getContext('2d');
+  try{ ctx.setTransform(2.2,0,0,2.2,48,40); drawVehicle(0,0,1,0,CAR_MODELS[m],col,false,1); } finally { ctx=keep; } return creatureThumbs[k]=cv2.toDataURL(); }
+function carsPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cars'})); const d=detail.get(c.id); const cars=(d&&d.cars)||[], active=d&&d.carActive;
+  if(!c.home){ box.append(el('p',{class:'hint',text:'You need a home before you buy a car.'})); return box; }
+  if(cars.length){ const ul=el('ul',{class:'joblist'}); for(const car of cars){ const M=CAR_MODELS[car.m]; if(!M) continue;
+      ul.append(el('li',null, el('img',{src:carThumb(car.m,car.col),alt:'',width:'48',height:'32'}), el('div',{class:'jt'}, el('b',{text:M.name+(car.id===active?' · driving':'')}), el('span',{text:`Sells for ${fmt(Math.floor(M.price*0.6))}`})),
+        car.id===active?'':el('button',{class:'btn',text:'Drive',onclick:()=>meAction('/api/me/cars/active',{id:car.id},`You're driving the ${M.name.toLowerCase()} now.`,'PUT')}),
+        el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell your ${M.name.toLowerCase()} for ${fmt(Math.floor(M.price*0.6))} coins?`,'Sell',()=>meAction(`/api/me/cars/${car.id}`,null,r=>`Sold for ${fmt(r.back)} coins.`,'DELETE'))}))); }
+    box.append(el('p',{class:'hint',text:`Your garage (${cars.length} of 3). You drive on longer trips; without a car you take a cab.`}), ul); }
+  else box.append(el('p',{class:'hint',text:"You don't have a car, so you take cabs on longer trips. Buy one below."}));
+  if(cars.length>=3) return box;
+  const M=CAR_MODELS[carPick.m]; if(!carPick.col||!M.colors.includes(carPick.col)) carPick.col=M.colors[0];
+  const g=el('div',{class:'petgrid'}); for(const [k,m] of Object.entries(CAR_MODELS)) g.append(el('button',{class:'petb'+(carPick.m===k?' on':''),'aria-pressed':String(carPick.m===k),onclick:()=>{ carPick={m:k,col:null}; renderCard(true); }}, el('img',{src:carThumb(k,k===carPick.m?carPick.col:m.colors[0]),alt:'',width:'54',height:'36'}), el('span',{text:`${m.name}`}), el('span',{class:'hint',text:`${fmt(m.price)}`})));
+  const sw=el('div',{class:'swatches'}); for(const col of M.colors) sw.append(el('button',{class:'sw'+(carPick.col===col?' on':''),style:`background:${col}`,'aria-label':'Colour','aria-pressed':String(carPick.col===col),onclick:()=>{ carPick.col=col; renderCard(true); }}));
+  box.append(el('h3',{text:'Dealer'}), g, sw, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy the ${M.name.toLowerCase()} for ${fmt(M.price)}`,onclick:()=>meAction('/api/me/cars',{model:carPick.m,color:carPick.col},r=>`Enjoy your new ${M.name.toLowerCase()}!`)}))); return box; }
 async function meAction(path, body, ok, method){ try{ const r=await api(path,{method:method||'POST',body}); if(ok) toast(typeof ok==='function'?ok(r):ok); if(r&&typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
     if(Me&&Me.handle){ const dd=[...detail.values()].find(x=>x.h&&x.h.toLowerCase()===Me.handle.toLowerCase()); if(dd) detail.delete(dd.id); }
     Acts.at=0; if(sel) { const c=S.citizens.get(sel.id); if(c) loadDetail(c.handle).then(()=>renderCard(true)); } return r; }catch(e){ toast(e.message); return null; } }
@@ -2439,7 +2497,13 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(t.work) add('Workers',`${fmt(b.jobUsed||0)} of ${fmt(t.work.slots)}${list('job',b.jobUsed||0)}`);
     if(t.work) add('Pay',`${t.work.salary} coins a day`);
     add('Here now', inside.length?inside.join(', '):'Nobody');
+    const forSale=BUYABLE.has(t.cat)&&(t.home||t.work), price=Math.max(500,t.cost||0);
+    if(b.owner) add('Owner', `@${b.owner}`); else if(forSale&&b.done!==false&&!b.ruin) add('For sale', `${fmt(price)} coins`);
+    if(forSale&&b.done!==false){ const gross=(t.home?(b.homeUsed||0)*(t.home.rent||0):0)+(t.work?(b.jobUsed||0)*(t.work.salary||0)*0.25:0); add('Earns', `About ${fmt(Math.floor(gross*0.8))} a day for its owner`); }
     card.append(close, head, dl);
+    if(forSale && !Store.canWrite && b.done!==false && !b.ruin && Me&&Me.token&&Me.handle){
+      if(!b.owner) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(price)}`,onclick:()=>toast(`Buy ${b.name||t.name} for ${fmt(price)} coins? You'll collect 80% of its rent or profit every game day.`,'Buy',async()=>{ const r=await meAction('/api/me/properties/buy',{buildingId:b.id},r=>`It's yours! About ${fmt(r.income)} coins a day.`); if(r){ b.owner=Me.handle; Money.at=0; renderCard(true); } })})));
+      else if(b.owner.toLowerCase()===Me.handle.toLowerCase()) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
     if(b.type==='casino' && b.done!==false && !b.ruin && !Store.canWrite) card.append(el('div',{class:'row-actions'}, Me&&Me.token&&Me.handle
       ? el('button',{class:'btn primary',text:'Play here',onclick:()=>{ casino={ ...(casino||{ game:'coin', pick:'heads', bet:10, last:null }), id:null, open:true }; openCitizen(Me.handle).then(()=>{ if(casino) casino.open=true; }); }})
       : el('span',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'})));

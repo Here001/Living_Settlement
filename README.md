@@ -117,6 +117,25 @@ A signed-in colonist with a home sees these on their own card. They see one at a
   - **News:** successes are reported anonymously in the Colony Log; arrests name the culprit.
 - **Pet.** Adopt one of the six native creatures for 200 coins, name it, and it walks beside you on the map. You can rename it or let it go.
 
+## Money: the Bank, cars, homes and buildings
+
+These live on a signed-in colonist's own card, under **Home**, **Bank** and **Cars**.
+
+- **Bank.**
+  - Deposits need a Bank in the colony ("Colonnaded bank", under Offices). Withdrawals always work.
+  - Money in the bank can't be pickpocketed.
+  - Savings grow 1% each game day, up to 200 coins a day, paid by the treasury.
+- **Cars.**
+  - The dealer sells five models (Hatchback 1,500, Sedan 3,000, Pickup 5,000, SUV 6,500, Sports car 14,000), each in a choice of colours.
+  - Colonists keep up to 3 in their garage, pick which one they drive, and can sell for 60% back.
+  - Signed-in colonists drive their own car on longer trips and commutes; without one they take a cab. Everyone else keeps the old rule, where about half own a car.
+- **Moving home.** Rent any home with free space and move there, once per game day. Rent comes out of wages as before. You can always move into a home you own, and if it's full, the newest tenant who hasn't claimed their avatar moves out.
+- **Owning buildings.**
+  - A home or business (housing, shops, offices, industry) can be bought from its card on the map, up to 5 per colonist. Public buildings, parks, landmarks and utilities stay the colony's.
+  - Every game day owners are paid automatically: 80% of the rent their residents pay, or 80% of a business's profit (25% of its wage bill). The treasury keeps 20%.
+  - Buildings sell back to the colony for 70%. If the developer knocks one down, the owner gets back what they paid.
+- **New buildings.** A **Gym** and an outdoor **Fitness park**, under Parks → Sports.
+
 ## Creature races
 
 - **The creatures.** Six native creatures race: Starcrest, Dustrunner, Skyskimmer, Mudgulper, Ironshell and Glimmerhop (`shared/creatures.js`). Each has a speed, a level of unpredictability, and likes and dislikes for the weather.

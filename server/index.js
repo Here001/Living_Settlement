@@ -14,6 +14,7 @@ import { playersRouter, sweepPlayers, playerFrom } from './players.js';
 import { Races } from './races.js';
 import { Actions } from './actions.js';
 import { Lottery } from './lottery.js';
+import { Economy } from './economy.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -32,6 +33,7 @@ const bus = createBus();
 const world = new World(bus);
 const races = new Races(world); world.races = races;
 const lottery = new Lottery(world); world.lottery = lottery;
+const economy = new Economy(world); world.economy = economy;
 const actions = new Actions(world); world.actions = actions; world.blockedReason = c => actions.blockedReason(c);
 const app = express();
 app.disable('x-powered-by');
@@ -81,11 +83,13 @@ app.get('/api/citizens/:handle', limit, send(async req => {
   const c = await world.citizenDetail(req.params.handle); if (!c) throw new HttpError(404, 'No citizen with that name.');
   // Coins are private: only the colonist themself (signed in) and the developer see them.
   const me = admin.check(req) ? null : await playerFrom(req);
-  if (!admin.check(req) && !(me && me.id === c.id)) { delete c.coins; delete c.net; }
+  if (!admin.check(req) && !(me && me.id === c.id)) { delete c.coins; delete c.net; delete c.bank; }
   return c;
 }));
 // ---------- creature races ----------
 app.get('/api/race', limit, send(async req => races.info((await playerFrom(req))?.id)));
+// Test servers only (ALLOW_TEST_ROUTES=1, never set on the live colony): run the daily payday on demand.
+if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/payday', admin, send(() => world.change(ch => economy.day(ch, 1))));
 app.get('/api/lottery', limit, send(async req => lottery.info((await playerFrom(req))?.id)));
 app.post('/api/admin/lottery', admin, send(req => lottery.start(req.body || {})));
 app.post('/api/admin/race/cup', admin, send(req => races.setCup((req.body || {}).bonus, (req.body || {}).name)));

@@ -217,6 +217,7 @@ body.pane-max .composer textarea{height:70px}
 .dmbar{display:flex;gap:6px;padding:6px 11px 10px;align-items:flex-end}.dmbar textarea{flex:1;resize:none;min-height:34px;max-height:90px;padding:7px 10px;border-radius:14px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:var(--glass-2,var(--paper));font:13.5px/1.35 'Bricolage Grotesque',system-ui,sans-serif;color:var(--ink)}
 .swatches{display:flex;gap:6px;flex-wrap:wrap}.sw{width:26px;height:26px;border-radius:999px;border:2px solid var(--glass-edge,#fff);box-shadow:0 0 0 1px rgba(0,0,0,.25);cursor:pointer}.sw.on{box-shadow:0 0 0 2.5px var(--accent)}
 .joblist li img{flex:none}
+.devcoins{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}.devcoins input{width:96px;padding:6px 8px;border-radius:10px;border:1px solid var(--glass-line,var(--soft));background:var(--glass-2,var(--paper));font:inherit;color:inherit}.devcoins-hint{margin:2px 0 4px}
 .acttabs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .acttabs .pill,.authbox .pill{cursor:pointer;border:1.4px solid var(--ink,#2B2621);background:transparent;padding:5px 11px;border-radius:999px;font:inherit;font-size:13px}
 .acttabs .pill.on{background:var(--accent,#D9714A);color:#fff;border-color:var(--accent,#D9714A)}
@@ -2597,17 +2598,17 @@ function renderCard(force){ if(!force && cardBusy()) return;
       ...(c.pet&&CREATURES[c.pet.k]?[el('dt',{text:'Pet'}), el('dd',{text:`${c.pet.n}, a ${CREATURES[c.pet.k].name.toLowerCase()}`})]:[]),
       ...(d&&d.jailedUntil>Date.now()+skew?[el('dt',{text:'Status'}), el('dd',{text:`In jail for ${Math.max(1,Math.ceil((d.jailedUntil-Date.now()-skew)/60000))} more min`})]:[]),
       el('dt',{text:'Joined'}), el('dd',{text:`Day ${Math.max(1,Math.floor(gmAt(c.joinedAt)/1440)+1)}, arrival #${fmt(c.seq||0)}`})));
-    if(Store.canWrite){ card.append(nameEditor(c,'dev')); card.append(el('div',{class:'row-actions'},
+    if(Store.canWrite){
+      { const ci=el('input',{type:'number',step:'1',inputmode:'numeric','aria-label':'Coins',placeholder:'Coins'});
+        const go=async sign=>{ const n=Math.floor(Math.abs(Number(ci.value)||0)); if(!n){ toast('Enter an amount.'); return; } try{ const r=await api(`/api/admin/citizens/${c.id}/coins`,{method:'POST',body:{amount:sign*n}}); toast(`${sign>0?'Added':'Took away'} ${fmt(n)} coins. @${c.handle} now has ${fmt(r.coins)}; the treasury has ${fmt(r.treasury)}.`); detail.delete(c.id); loadDetail(c.handle).then(()=>renderCard(true)); refreshHUD(); }catch(e){ toast(e.message); } };
+        card.append(el('div',{class:'cbet devcoins'}, el('b',{text:'Coins'}), ci, el('button',{class:'btn primary',text:'＋ Add',onclick:()=>go(1)}), el('button',{class:'btn danger',text:'− Take away',onclick:()=>go(-1)})), el('p',{class:'hint devcoins-hint',text:'Added coins come out of the treasury; coins taken away go back into it.'})); }
+      card.append(nameEditor(c,'dev')); card.append(el('div',{class:'row-actions'},
         el('button',{class:'btn',text:c.gender==='f'?'Make a man':'Make a woman',onclick:()=>setGender(c,c.gender==='f'?'m':'f')}),
         el('button',{class:'btn',text:'Change job',onclick:()=>openPicker('job',c)}), el('button',{class:'btn',text:'Change home',onclick:()=>openPicker('home',c)}),
         c.founder?null:el('button',{class:'btn danger',text:'Remove',onclick:()=>removeCitizen(c)})));
       card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Copy setup link',title:'A link that lets this person set a password without the Instagram code',onclick:async()=>{ try{ const r=await api(`/api/admin/citizens/${c.id}/setup-link`,{method:'POST'}); const link=`${location.origin}/?claim=${encodeURIComponent(r.claimId)}`; try{ await navigator.clipboard.writeText(link); toast(`Setup link for @${c.handle} copied. It works once, for 24 hours.`); }catch(e){ prompt('Setup link (works once, for 24 hours):',link); } }catch(e){ toast(e.message); } }}),
         d&&d.claimed?el('button',{class:'btn danger',text:'Clear password',onclick:()=>toast(`Clear @${c.handle}'s password? They'll need a new code to get back in.`,'Clear',async()=>{ try{ await api(`/api/admin/citizens/${c.id}/password`,{method:'DELETE'}); d.claimed=false; toast('Password cleared.'); renderCard(); }catch(e){ toast(e.message); } })}):null,
         el('span',{class:'hint',text:d?(d.claimed?'Has a password':'No password yet'):''})));
-      { const ci=el('input',{type:'number',step:'1',inputmode:'numeric','aria-label':'Coins',placeholder:'Coins'});
-        const go=async sign=>{ const n=Math.floor(Math.abs(Number(ci.value)||0)); if(!n){ toast('Enter an amount.'); return; } try{ const r=await api(`/api/admin/citizens/${c.id}/coins`,{method:'POST',body:{amount:sign*n}}); toast(`${sign>0?'Added':'Took away'} ${fmt(n)} coins. @${c.handle} now has ${fmt(r.coins)}; the treasury has ${fmt(r.treasury)}.`); detail.delete(c.id); loadDetail(c.handle).then(()=>renderCard(true)); refreshHUD(); }catch(e){ toast(e.message); } };
-        card.append(el('div',{class:'authbox'}, el('h3',{text:'Coins'}), el('p',{class:'hint',text:'Added coins come out of the treasury; coins taken away go back into it.'}),
-          el('div',{class:'cbet'}, ci, el('button',{class:'btn primary',text:'Add',onclick:()=>go(1)}), el('button',{class:'btn danger',text:'Take away',onclick:()=>go(-1)})))); }
       if(sel.picker) card.append(renderPicker(c)); }
     else { const mine=Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase();
       if(mine && Me.genderChosen===false){ const pick=async g=>{ try{ await api('/api/me/gender',{method:'POST',body:{gender:g}}); Me.genderChosen=true; ls.set('settlement-player',Me); const x=S.citizens.get(c.id); if(x) x.gender=g; const dd=detail.get(c.id); if(dd) dd.g=g; toast(g==='f'?'Welcome to Gliese 12 b. She’s all yours.':'Welcome to Gliese 12 b. He’s all yours.'); renderCard(true); }catch(e){ toast(e.message); } };

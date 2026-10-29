@@ -105,6 +105,8 @@ const MIGRATIONS = [
   // v11: messages colonists post in the Town Square.
   `create table messages (id text primary key, citizen_id text not null, handle text not null, gender char(1) not null default 'm', text text not null, t bigint not null);
    create index messages_t on messages (t desc);`,
+  // v12: a colonist's display name (first and last, or just one), shown on their avatar. The username stays for search.
+  `alter table citizens add column display_name text;`,
 ];
 
 export async function migrate() {

@@ -104,6 +104,7 @@ app.post('/api/admin/citizens/bulk', admin, send(req => world.spawnBulk((req.bod
 app.patch('/api/admin/citizens/:id', admin, send(async req => {
   const b = req.body || {};
   if ('gender' in b) await world.setGender(req.params.id, b.gender);
+  if ('name' in b) await world.setName(req.params.id, b.name);
   if ('homeId' in b) await world.setHome(req.params.id, b.homeId);
   if ('jobId' in b) await world.setJob(req.params.id, b.jobId);
   return { ok: true };

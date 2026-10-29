@@ -91,3 +91,12 @@ export const randomGender = () => (Math.random() < 0.5 ? 'm' : 'f');
 // A building's footprint: turned buildings (rot 1) swap width and depth.
 export const footprint = (size, rot) => (rot ? [size[1], size[0]] : [size[0], size[1]]);
 export const cleanRot = r => (Number(r) === 1 ? 1 : 0);
+
+// A display name: one to three words of letters (any language), with spaces, hyphens, apostrophes or dots. '' clears it.
+export function cleanName(n) {
+  const v = String(n ?? '').normalize('NFC').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!v) return '';
+  if (v.length > 40) return null;
+  if (!/^[\p{L}\p{M}][\p{L}\p{M}'’.\- ]*$/u.test(v) || v.split(' ').length > 3) return null;
+  return v;
+}

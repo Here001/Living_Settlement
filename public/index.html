@@ -180,6 +180,9 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .post.said{border-color:var(--accent)}
 .post.said .saidt{font-size:15px}
 .vbadge{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;background:#3F7FE0;color:#fff;font-size:9px;font-weight:800;margin:0 4px}
+.uname{margin:0;color:var(--muted);font-size:13px;font-weight:500}
+.namebox{margin-top:10px;display:flex;flex-direction:column;gap:4px}
+.namebox label{font-size:12px;font-weight:700;color:var(--muted)}
 .authbox{margin-top:10px;padding:10px 12px;border:1.6px dashed var(--soft);border-radius:14px;display:flex;flex-direction:column;gap:6px}
 .authbox h3{margin:0;font-size:15px}
 .authbox input{padding:8px 10px;border-radius:12px;border:1.6px solid var(--soft);background:var(--paper);font-size:15px}
@@ -351,7 +354,7 @@ function signedIn(r){ Me={token:r.token,handle:r.handle,genderChosen:true}; chec
 async function api(path, opts={}){
   const r=await fetch(path,{ method:opts.method||'GET', headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{}), ...(Me&&Me.token?{'x-player':Me.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined });
   const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`); return j; }
-const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', home:c.home, job:c.job, hang:c.hang });
+const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang });
 const placeChunks = c => [c.home,c.job,c.hang].filter(Boolean).map(p=>ckTile(p[2],p[3]));
 const keepCitizen = c => c.id===pinned || placeChunks(c).some(k=>S.chunks.has(k));
 // A big change in a district: forget it and download it again.
@@ -433,6 +436,8 @@ setInterval(()=>syncChunks(),400);
 // A turned building (rot 1) uses its type with width and depth swapped; drawB draws it mirrored so it faces the other way.
 const rotCache=new Map();
 const rotType = t => { let r=rotCache.get(t); if(!r){ r={...t, size:[t.size[1],t.size[0]], base:t}; rotCache.set(t,r); } return r; };
+// What to call someone on screen: their chosen name, or @username until they set one.
+const nameOf = c => (c && c.name) ? c.name : '@'+(c&&c.handle);
 const T = b => { const t=BUILDING_TYPES[b.type] || BUILDING_TYPES.tent; return b.rot ? rotType(t) : t; };
 const sizeOf = (type,rot) => footprint(BUILDING_TYPES[type].size, rot);
 function drawB(b,t){ if(!b.rot){ (DRAW[t.style]||DRAW.house)(b,t); return; }
@@ -1467,7 +1472,7 @@ function frame(ts){
   { const placed=[], tags=[]; for(const [id,st] of states){ if(!st.visible||st.car) continue; const c=S.citizens.get(id); const isSel=sel&&sel.kind==='c'&&sel.id===id; const p=iso(st.x,st.y);
       if(isSel||(c.founder&&cam.z>=1.2)||cam.z>=2.2) tags.push({c,p,isSel,pri:isSel?-2:c.founder?-1:Math.hypot(p.x-cam.x,p.y-cam.y)}); }
     tags.sort((a,b)=>a.pri-b.pri);
-    for(const t of tags){ const lk=Math.min(1,1.25/cam.z), y=t.p.y-(t.c.founder?36:30), w=((t.c.handle.length+1)*6+12)*lk; if(t.pri>=0&&(placed.length>=12||placed.some(q=>Math.abs(q.x-t.p.x)<(q.w+w)/2&&Math.abs(q.y-y)<18*lk))) continue; placed.push({x:t.p.x,y,w}); label('@'+t.c.handle, t.p.x, y, t.isSel); } }
+    for(const t of tags){ const lk=Math.min(1,1.25/cam.z), y=t.p.y-(t.c.founder?36:30), w=((nameOf(t.c).length)*6+12)*lk; if(t.pri>=0&&(placed.length>=12||placed.some(q=>Math.abs(q.x-t.p.x)<(q.w+w)/2&&Math.abs(q.y-y)<18*lk))) continue; placed.push({x:t.p.x,y,w}); label(nameOf(t.c), t.p.x, y, t.isSel); } }
   requestAnimationFrame(frame);
 }
 
@@ -1876,7 +1881,15 @@ async function resumeClaim(){ const q=new URLSearchParams(location.search).get('
   auth={mode:'claim',...st,status}; await openCitizen(st.handle); if(status==='waiting') pollClaim(); }
 // Don't rebuild the card under someone's fingers: if they're typing in it (or have typed something), the timed refreshes wait.
 function cardBusy(){ const card=$('card'); if(!card||card.hidden) return false; const a=document.activeElement;
-  if(a&&card.contains(a)&&/INPUT|TEXTAREA/.test(a.tagName)) return true; return [...card.querySelectorAll('input,textarea')].some(i=>i.value); }
+  if(a&&card.contains(a)&&/INPUT|TEXTAREA/.test(a.tagName)) return true; return [...card.querySelectorAll('input,textarea')].some(i=>i.dataset.edited&&i.value); }
+document.getElementById('card').addEventListener('input',e=>{ if(e.target&&e.target.dataset) e.target.dataset.edited='1'; });
+// Change the name shown on an avatar. Colonists edit their own; the developer can edit anyone's.
+function nameEditor(c,who){ const inp=el('input',{type:'text',maxlength:'40',placeholder:'First name, or first and last name',autocomplete:'name','aria-label':'Name shown on your avatar'}); inp.value=c.name||'';
+  const save=async()=>{ const v=inp.value.trim(); try{ const r=who==='me'?await api('/api/me/name',{method:'POST',body:{name:v}}):await api('/api/admin/citizens/'+encodeURIComponent(c.id),{method:'PATCH',body:{name:v}});
+      const x=S.citizens.get(c.id); if(x) x.name=(r&&r.name!==undefined)?r.name:v; const d=detail.get(c.id); if(d) d.n=x?x.name:v; delete inp.dataset.edited; inp.blur(); toast(v?`Saved. Your avatar now shows “${v}”.`.replace('Your avatar',who==='me'?'Your avatar':'Their avatar'):'Name removed. The username shows instead.'); renderCard(true); }
+    catch(e){ toast(e.message); } };
+  inp.addEventListener('keydown',e=>{ if(e.key==='Enter') save(); });
+  return el('div',{class:'namebox'}, el('label',{text:who==='me'?'Your name':'Name'}), el('div',{class:'spawn'}, inp, el('button',{class:'btn',text:'Save',onclick:save}))); }
 function renderCard(force){ if(!force && cardBusy()) return;
   const card=$('card'); if(!sel){ card.hidden=true; return; } card.innerHTML='';
   const close=el('button',{class:'x','aria-label':'Close',onclick:closeCard,text:'×'});
@@ -1884,7 +1897,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(!d && !detailLoading.has(c.id)){ detailLoading.add(c.id); const id=c.id; loadDetail(c.handle).finally(()=>{ detailLoading.delete(id); if(sel&&sel.id===id&&detail.has(id)) renderCard(); }); }
     const h=bOf(c.home), j=bOf(c.job); const st=h?citizenAt(c,gmNow()):null;
     const now = !h ? (d&&d.queue ? `In cryosleep aboard the ark, #${fmt(d.queue)} in line to wake` : 'In cryosleep aboard the ark') : st ? st.act : 'Arriving soon';
-    const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,'@'+c.handle, el('span',{class:'gsym',title:c.gender==='f'?'Woman':'Man',text:c.gender==='f'?' ♀':' ♂'})); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); head.append(av, el('div',null,title, el('p',{class:'now',text:now})));
+    const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,nameOf(c), el('span',{class:'gsym',title:c.gender==='f'?'Woman':'Man',text:c.gender==='f'?' ♀':' ♂'})); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); head.append(av, el('div',null,title, c.name?el('p',{class:'uname',text:'@'+c.handle}):'', el('p',{class:'now',text:now})));
     const nm=b=>(D.buildings.get(b.id)||b).name||T(b).name;
     card.append(close, head, el('dl',null,
       el('dt',{text:'Gender'}), el('dd',{text:c.gender==='f'?'Woman':'Man'}),
@@ -1892,7 +1905,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       el('dt',{text:'Job'}), el('dd',{text:j?`${T(j).work.title} at ${nm(j)}`:h?'Looking for work':'Gets one after moving in'}),
       ...((Store.canWrite||(Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase()))?[el('dt',{text:'Coins'}), el('dd',{text:d?(d.net?`${fmt(d.coins)}, ${d.net>0?'+':''}${d.net} per day`:`${fmt(d.coins)}, no job yet`):'…'})]:[]),
       el('dt',{text:'Joined'}), el('dd',{text:`Day ${Math.max(1,Math.floor(gmAt(c.joinedAt)/1440)+1)}, arrival #${fmt(c.seq||0)}`})));
-    if(Store.canWrite){ card.append(el('div',{class:'row-actions'},
+    if(Store.canWrite){ card.append(nameEditor(c,'dev')); card.append(el('div',{class:'row-actions'},
         el('button',{class:'btn',text:c.gender==='f'?'Make a man':'Make a woman',onclick:()=>setGender(c,c.gender==='f'?'m':'f')}),
         el('button',{class:'btn',text:'Change job',onclick:()=>openPicker('job',c)}), el('button',{class:'btn',text:'Change home',onclick:()=>openPicker('home',c)}),
         c.founder?null:el('button',{class:'btn danger',text:'Remove',onclick:()=>removeCitizen(c)})));
@@ -1904,6 +1917,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       if(mine && Me.genderChosen===false){ const pick=async g=>{ try{ await api('/api/me/gender',{method:'POST',body:{gender:g}}); Me.genderChosen=true; ls.set('settlement-player',Me); const x=S.citizens.get(c.id); if(x) x.gender=g; const dd=detail.get(c.id); if(dd) dd.g=g; toast(g==='f'?'Welcome to Gliese 12 b. She’s all yours.':'Welcome to Gliese 12 b. He’s all yours.'); renderCard(true); }catch(e){ toast(e.message); } };
         const mk=g=>{ const L=look({...c,gender:g}); const b=el('button',{class:'gpick',onclick:()=>toast(`Choose ${g==='f'?'woman':'man'}? You can only pick once.`,'Yes',()=>pick(g))}); const a=el('span',{class:'ava'}); a.innerHTML=avatarSVG({...c,gender:g}); b.append(a, el('span',{text:g==='f'?'Woman':'Man'})); return b; };
         card.append(el('div',{class:'authbox'}, el('h3',{text:'Choose your colonist'}), el('p',{class:'hint',text:'Pick once. After this, only the developer can change it.'}), el('div',{class:'row-actions'}, mk('m'), mk('f')))); }
+      if(mine) card.append(nameEditor(c,'me'));
       if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; myMoney=null; ls.set('settlement-player',null); refreshHUD(); toast('Logged out.'); renderCard(true); }})));
       else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
       // Already signed in as someone else: one person, one colonist, so no "This is me" on other cards.
@@ -1940,7 +1954,7 @@ function renderPeople(){
   const list=$('peopleList'); if(!list) return; const q=cleanHandle(peopleQuery).toLowerCase(); const gm=gmNow();
   const show=(cits,empty)=>{ list.innerHTML=''; if(!cits.length){ list.append(el('p',{class:'hint',text:empty})); return; }
     for(const c of cits){ const st=c.home?citizenAt(c,gm):null; const av=el('span',{class:'ava sm'}); av.innerHTML=avatarSVG(c);
-      list.append(el('button',{class:'person',onclick:()=>openCitizen(c.handle)}, av, el('span',null, el('div',{class:'who',text:'@'+c.handle+(c.founder?' ★':'')}), el('div',{class:'what',text:!c.home?'In cryosleep aboard the arkrts':st?st.act:'Arriving soon'})))); } };
+      list.append(el('button',{class:'person',onclick:()=>openCitizen(c.handle)}, av, el('span',null, el('div',{class:'who',text:(c.name?c.name+' · @'+c.handle:'@'+c.handle)+(c.founder?' ★':'')}), el('div',{class:'what',text:!c.home?'In cryosleep aboard the arkrts':st?st.act:'Arriving soon'})))); } };
   if(!q){ const near=[...S.citizens.values()].sort((a,b)=>(b.founder?1:0)-(a.founder?1:0)||a.handle.localeCompare(b.handle)).slice(0,60);
     show(near, S.meta&&S.meta.population?'Nobody lives in this part of town. Search for a name.':'Nobody lives here yet.');
     if(near.length && S.meta) list.prepend(el('p',{class:'hint',text:`People near you. Search to find anyone among ${fmt(S.meta.population)} citizens.`})); return; }
@@ -2083,9 +2097,9 @@ function renderFeed(force){
   if(!S.meta){ body.append(el('p',{class:'hint',text:'The story starts once the colony is founded.'})); return; }
   if(feedMode==='posts'){ const items=postItems(); if(!items.length){ body.append(el('p',{class:'hint',text:'Quiet so far. Check back in a few minutes.'})); return; }
     for(const it of items){
-      if(it.msg){ const m=it.msg, mineMsg=Me&&Me.handle&&Me.handle.toLowerCase()===m.h.toLowerCase(); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG({handle:m.h,gender:m.g});
+      if(it.msg){ const m=it.msg, mineMsg=Me&&Me.handle&&Me.handle.toLowerCase()===m.h.toLowerCase(); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG({handle:m.h,gender:m.g,name:m.n});
         const del=(Store.canWrite||mineMsg)?el('button',{class:'show',text:'Delete',onclick:()=>toast('Delete this message?','Delete',async()=>{ try{ await api('/api/square/'+encodeURIComponent(m.id),{method:'DELETE'}); }catch(e){ toast(e.message); } })}):null;
-        body.append(el('article',{class:'post said'}, av, el('div',null, el('div',{class:'ph'}, el('b',null,'@'+m.h, el('span',{class:'vbadge',title:'Verified colonist',text:'✓'})), el('time',{text:when(it.g)})), el('p',{class:'saidt',text:m.text}),
+        body.append(el('article',{class:'post said'}, av, el('div',null, el('div',{class:'ph'}, el('b',null,m.n||('@'+m.h), el('span',{class:'vbadge',title:'Verified colonist',text:'✓'}), m.n?el('span',{class:'uname',text:' @'+m.h}):''), el('time',{text:when(it.g)})), el('p',{class:'saidt',text:m.text}),
           el('div',{class:'pf'}, el('button',{class:'show',text:'Show on map',onclick:()=>{ openCitizen(m.h); if(innerWidth<900) openTab(null); }}), del)))); continue; }
       if(it.gazette){ body.append(el('article',{class:'post gz'}, el('div',null, el('div',{class:'ph'}, el('b',{text:`${S.meta.name} Colony Log`}), el('time',{text:when(it.g)})), el('p',{class:'gzt',text:it.text})))); continue; }
       const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(it.c);

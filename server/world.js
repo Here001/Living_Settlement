@@ -21,12 +21,12 @@ const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_c
 // The compact citizen record viewers receive. Coordinates travel with it so a viewer can draw a commute
 // even when the workplace is in a part of the map they haven't loaded.
 const CITIZEN_SELECT = `
-  select c.id, c.seq, c.handle, c.joined_at, c.founder, c.gender,
+  select c.id, c.seq, c.handle, c.joined_at, c.founder, c.gender, c.display_name,
          c.home_cx, c.home_cy, c.job_cx, c.job_cy, c.hang_cx, c.hang_cy,
          h.id hid, h.type ht, h.x hx, h.y hy, j.id jid, j.type jt, j.x jx, j.y jy, g.id gid, g.type gt, g.x gx, g.y gy
   from citizens c
   left join buildings h on h.id = c.home_id left join buildings j on j.id = c.job_id left join buildings g on g.id = c.hang_id`;
-export const cOut = r => ({ id: r.id, s: r.seq, h: r.handle, t: r.joined_at, f: r.founder ? 1 : 0, g: r.gender || 'm',
+export const cOut = r => ({ id: r.id, s: r.seq, h: r.handle, t: r.joined_at, f: r.founder ? 1 : 0, g: r.gender || 'm', n: r.display_name || '',
   home: r.hid ? [r.hid, r.ht, r.hx, r.hy] : null, job: r.jid ? [r.jid, r.jt, r.jx, r.jy] : null, hang: r.gid ? [r.gid, r.gt, r.gx, r.gy] : null });
 
 // One world change. Holds the database connection inside the global world lock and records everything that changed,
@@ -637,6 +637,14 @@ export class World {
       await ch.event(j ? `@${c.handle} is now working as ${BUILDING_TYPES[j.type].work.title.toLowerCase()} at ${j.name || BUILDING_TYPES[j.type].name}` : `@${c.handle} left their job`, 'career');
       await ch.fillVacancies();
       return { ok: true };
+    });
+  }
+  async setName(id, name) {
+    const n = R.cleanName(name); if (n === null) throw new HttpError(400, 'Use letters only: your first name, or first and last name (up to 40 characters).');
+    return this.change(async ch => {
+      const c = (await ch.q('update citizens set display_name = $2 where id = $1 returning *', [id, n || null])).rows[0];
+      if (!c) throw new HttpError(404, 'No such citizen.');
+      ch.touch(c); return { ok: true, name: n };
     });
   }
   async setGender(id, gender) {

@@ -277,6 +277,11 @@ ok((await call('POST', '/api/me/gender', { gender: 'f' }, { auth: false })).stat
 ok((await call('POST', '/api/me/gender', { gender: 'f' }, { auth: false, headers: { 'x-player': r.json.token } })).status === 200 && (await who('zara_ng')).g === 'f', 'the colonist chooses once');
 ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers: { 'x-player': r.json.token } })).status === 409, 'and cannot choose again');
 { const P = { auth: false, headers: { 'x-player': r.json.token } };
+  ok((await call('POST', '/api/me/name', { name: 'Zara Okafor' }, P)).status === 200 && (await who('zara_ng')).n === 'Zara Okafor', 'a colonist sets their first and last name');
+  ok((await call('POST', '/api/me/name', { name: 'Zara' }, P)).status === 200 && (await who('zara_ng')).n === 'Zara', 'or just one name');
+  ok((await call('POST', '/api/me/name', { name: 'Zara99 <b>' }, P)).status === 400, 'names are letters only');
+  ok((await call('POST', '/api/me/name', { name: 'Zara' }, { auth: false })).status === 401, 'only the colonist can set their name');
+  ok((await call('GET', '/api/citizens?q=zara_', undefined, { auth: false })).json.some(x => x.h === 'zara_ng'), 'search still works by username');
   ok((await call('POST', '/api/square', { text: 'hello colony' }, { auth: false })).status === 401, 'only signed-in colonists can post in the Town Square');
   const m1 = await call('POST', '/api/square', { text: 'Hello Gliese 12 b!' }, P);
   ok(m1.status === 200 && m1.json.h === 'zara_ng', 'a verified colonist posts a message');

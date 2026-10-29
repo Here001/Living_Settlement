@@ -123,7 +123,7 @@ const page = (title, body) => `<!doctype html><html lang="en"><head><meta charse
 const contact = () => process.env.CONTACT_EMAIL ? `email <a href="mailto:${process.env.CONTACT_EMAIL}">${process.env.CONTACT_EMAIL}</a> or send us a direct message on Instagram` : 'send us a direct message on Instagram';
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const townName = () => esc(world.meta?.name || 'The Living Settlement');
-app.get('/privacy', (req, res) => res.send(page('Privacy policy', `<h1>Privacy policy</h1><p>${townName()} is a game: a shared city where followers who comment on our Instagram posts become citizens.</p>
+app.get('/privacy', (req, res) => res.send(page('Privacy policy', `<h1>Privacy policy</h1><p>${townName()} is RESURGENCE, a game set on the planet Gliese 12 b: a shared colony where followers who comment on our Instagram posts become colonists.</p>
 <h2>What we collect</h2><ul><li>Your public Instagram username, and the text of comments you leave on our posts, received through Instagram's official API.</li>
 <li>Game data about your citizen: home, job, coins and activity in the city.</li><li>If you set a password, we store only a one-way scrambled form of it (scrypt hash), never the password itself.</li>
 <li>A login token kept in your browser so you stay signed in.</li></ul>
@@ -136,7 +136,7 @@ app.get('/terms', (req, res) => res.send(page('Terms', `<h1>Terms</h1><p>${townN
 The operator may change, reset or remove anything in the game. Be kind in comments; we may remove citizens for abuse.</p>`)));
 
 // ---------- players: prove an avatar is yours, set a password, log in ----------
-app.use('/api', playersRouter({ limit, send, admin }));
+app.use('/api', playersRouter({ limit, send, admin, world }));
 setInterval(() => { if (isLeader) sweepPlayers().catch(e => console.error('sweep:', e.message)); }, 3600 * 1000).unref();
 
 // ---------- the city in the browser ----------
@@ -211,6 +211,7 @@ await bus.start();
 await world.load();
 await tryLead();
 if (isLeader && await world.reanchor().catch(e => { console.error('reanchor failed:', e.message); return false; })) console.log('Switched the clock to 30 real minutes per game day.');
+if (isLeader) await world.upgradeCampfire().catch(e => console.error('landing station:', e.message));
 if (isLeader) await world.tick().catch(e => console.error('tick failed:', e.message)); // catch up on anything missed while off
 server.listen(PORT, () => console.log(`City running on :${PORT} with ${world.meta?.population || 0} citizens (bus: ${bus.kind})`));
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { server.close(); process.exit(0); });

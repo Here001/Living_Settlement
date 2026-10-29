@@ -1,4 +1,6 @@
-# The Living Settlement
+# RESURGENCE
+
+A living colony on Gliese 12 b, built by your followers. (Codebase: The Living Settlement.)
 
 An always-on city where every follower becomes a citizen. The server owns the world and keeps its clock running 24/7, and everyone who opens the page sees the same city, live. It's built to take millions of followers: see [ARCHITECTURE.md](ARCHITECTURE.md) for how, and for measured numbers.
 
@@ -41,10 +43,16 @@ Open the site with `#builder` and enter your `ADMIN_TOKEN`. As the developer you
 - **Trigger disasters.** **Disasters** (fire, tornado, earthquake, flood, meteor) hit where you tap. Damaged buildings become ruins and their people lose that home or job until you **Rebuild** them. **Clear ruins** removes all rubble.
 - **Go full screen.** Use the buttons above the toolbar for full screen (F) and to hide the interface for streaming (H). On iPhone, use Share → Add to Home Screen to open the city full screen.
 
+## The story and the intro
+
+New visitors see an opening when they first arrive. Put a narrated video at `public/intro.mp4` (H.264 MP4, ideally under 40 MB) and it plays full screen with a **Begin** button (so sound is allowed) and **Skip**; until then, the story plays as title cards. Anyone can replay it from **Town Square → The story**, which also holds the full story text.
+
+The colony is themed around the story: new followers **arrive aboard the ark and wait in cryosleep** until there's a home, colonists land at the **landing station** (it replaced the old campfire automatically), and the news is the **Colony Log**.
+
 ## Players: prove it's you, then set a password
 
 A follower opens the city, finds their citizen and taps **This is me**. The site gives them a one-time code like `CLAIM 482913`.
-They comment it on any of your Instagram posts **from their own account**. The webhook sees the comment, checks it came from that exact username, and the page moves on by itself to "Choose a password". From then on they log in with that password, and it's what will unlock special actions like the casino or crime.
+They comment it on any of your Instagram posts **from their own account**. After setting a password, they choose their colonist's gender, once (the developer can still change it later). The webhook sees the comment, checks it came from that exact username, and the page moves on by itself to "Choose a password". From then on they log in with that password, and it's what will unlock special actions like the casino or crime.
 
 - The code is public, but useless to anyone else: it only counts when the avatar's own account posts it, and only the browser that asked for it can then set the password.
 - **Forgot password:** the same steps reset it, and old logins are signed out.

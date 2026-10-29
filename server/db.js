@@ -100,6 +100,8 @@ const MIGRATIONS = [
    create index sessions_citizen on sessions (citizen_id);`,
   // v9: small settings that must survive restarts (like which Instagram account is connected).
   `create table settings (key text primary key, value jsonb not null);`,
+  // v10: a colonist may choose their gender once, after claiming their avatar.
+  `alter table citizens add column gender_chosen boolean not null default false;`,
 ];
 
 export async function migrate() {

@@ -60,7 +60,7 @@ export const CATS = [
 
 export const BUILDING_TYPES = {
   // ---------- housing
-  tent:       { name:'Tent', cat:'housing', size:[1,1], style:'tent', colors:{wall:'#EFE4C6', roof:'#C8623F'}, home:{capacity:2, rent:0}, cost:0 },
+  tent:       { name:'Shelter tent', cat:'housing', size:[1,1], style:'tent', colors:{wall:'#EFE4C6', roof:'#C8623F'}, home:{capacity:2, rent:0}, cost:0 },
   cabin:      { name:'Log cabin', cat:'housing', size:[2,2], style:'house', height:22, roofH:18, colors:{wall:'#A0704A', roof:'#5C4A3B', trim:'#4E3420'}, chimney:true, home:{capacity:3, rent:4}, cost:400 },
   cottage:    { name:'Cottage', cat:'housing', size:[1,1], style:'house', height:18, roofH:16, colors:{wall:'#F2E6C9', roof:'#C9653F', trim:'#6E4F3A'}, chimney:true, home:{capacity:3, rent:3}, cost:500 },
   house:      { name:'House', cat:'housing', size:[2,2], style:'house', height:28, roofH:22, colors:{wall:'#EDE3CC', roof:'#C9653F', trim:'#6E4F3A'}, chimney:true, home:{capacity:4, rent:8}, cost:900 },
@@ -121,6 +121,7 @@ export const BUILDING_TYPES = {
   hedge:      { name:'Hedge', cat:'decor', size:[1,1], style:'hedge', outdoor:true, cost:20 },
   flowers:    { name:'Flower bed', cat:'decor', size:[1,1], style:'flowers', outdoor:true, cost:30 },
   // ---------- landmarks
+  landing:    { name:'Landing station', note:'where colonists arrive from the ark', cat:'landmarks', size:[2,2], style:'starport', leisure:true, visitors:30, outdoor:true, cost:0, unique:true },
   campfire:   { name:'Campfire', cat:'landmarks', size:[1,1], style:'campfire', leisure:true, visitors:20, outdoor:true, cost:0 },
   well:       { name:'Well', cat:'landmarks', size:[1,1], style:'well', colors:{wall:'#B2B1A9', roof:'#8E5A3A'}, leisure:true, visitors:10, outdoor:true, cost:300 },
   statue:     { name:'Statue', cat:'landmarks', size:[1,1], style:'statue', colors:{wall:'#D2CEC2'}, leisure:true, visitors:15, outdoor:true, cost:2000 },

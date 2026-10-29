@@ -10,7 +10,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-180.png">
-<title>The Settlement</title>
+<title>Resurgence</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap" rel="stylesheet">
@@ -163,6 +163,14 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .igrow .k{flex:none;font-weight:700;min-width:16px}
 .igrow code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--chip);padding:3px 8px;border-radius:8px;font-size:12px}
 .igbox a{color:var(--accent)}
+.story{padding:2px 2px 10px;font-family:'Newsreader',Georgia,serif}
+.story .kicker{font:800 12px 'Bricolage Grotesque',system-ui,sans-serif;letter-spacing:.3em;color:var(--accent);margin:0}
+.story h2{margin:2px 0 10px;font-size:22px}
+.story h3{margin:14px 0 2px;font-size:17px}
+.story p{margin:0;line-height:1.5}
+.story .sign{margin-top:16px;font-style:italic}
+.gpick{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 14px;border:1.6px solid var(--line);border-radius:14px;background:var(--panel);font-weight:700}
+.gpick .ava{width:56px;height:56px}
 .authbox{margin-top:10px;padding:10px 12px;border:1.6px dashed var(--soft);border-radius:14px;display:flex;flex-direction:column;gap:6px}
 .authbox h3{margin:0;font-size:15px}
 .authbox input{padding:8px 10px;border-radius:12px;border:1.6px solid var(--soft);background:var(--paper);font-size:15px}
@@ -234,12 +242,26 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 .vbtn svg{width:18px;height:18px}
 .bar>.draftbar{position:static;transform:none;width:auto;font-size:13px;padding:4px 4px 4px 12px}
 @media (max-width:640px){ .bar>.draftbar{top:auto;bottom:auto} .plate .sub{display:none} }
+#intro{position:fixed;inset:0;z-index:60;background:#070B18;color:#F1EADD;display:grid;place-items:center;text-align:center;font-family:'Newsreader',Georgia,serif}
+#intro video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+#intro .stars{position:absolute;inset:0;background:radial-gradient(1.5px 1.5px at 20% 30%,#fff8 50%,transparent 51%),radial-gradient(1.5px 1.5px at 70% 20%,#fff8 50%,transparent 51%),radial-gradient(1px 1px at 40% 70%,#fff6 50%,transparent 51%),radial-gradient(2px 2px at 85% 65%,#fffa 50%,transparent 51%),radial-gradient(1px 1px at 10% 85%,#fff6 50%,transparent 51%),radial-gradient(1.5px 1.5px at 55% 45%,#fff5 50%,transparent 51%)}
+#intro .card2{position:relative;max-width:min(680px,88vw);opacity:0;transform:translateY(8px);transition:opacity .5s,transform .5s}
+#intro .card2.in{opacity:1;transform:none}
+#intro .card2 h2{font-size:clamp(26px,5vw,44px);margin:0 0 10px}
+#intro .card2 p{font-size:clamp(16px,2.6vw,22px);opacity:.8;margin:0}
+#intro .skip{position:absolute;right:18px;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);background:rgba(255,255,255,.12);color:#F1EADD;border:1.4px solid rgba(255,255,255,.35);border-radius:999px;padding:6px 16px;font:600 14px 'Bricolage Grotesque',system-ui,sans-serif;z-index:2}
+#intro .begin{position:relative;z-index:2;background:#E4572E;color:#fff;border:0;border-radius:999px;padding:14px 30px;font:700 20px 'Bricolage Grotesque',system-ui,sans-serif}
+#intro .title .kicker{font:700 12px 'Bricolage Grotesque',system-ui,sans-serif;letter-spacing:.35em;color:#F2B33D}
+#intro .title h1{font:800 clamp(44px,10vw,92px)/1 'Bricolage Grotesque',system-ui,sans-serif;letter-spacing:.06em;margin:8px 0 10px}
+#intro .title .row-actions{justify-content:center;margin-top:18px}
+#intro .title .hint{color:#F1EADDaa;margin-top:14px}
+#intro .btn:not(.primary){background:transparent;color:#F1EADD;border:1.4px solid rgba(241,234,221,.6)}
 </style>
 </head>
 <body>
-<canvas id="world" aria-label="Map of the settlement"></canvas>
+<canvas id="world" aria-label="Map of the colony on Gliese 12 b"></canvas>
 <header class="hud">
-  <div class="plate inked"><div class="town" id="townName">Opening the settlement…</div><div class="sub" id="popLine"></div></div>
+  <div class="plate inked"><div class="town" id="townName">Waking the colony…</div><div class="sub" id="popLine"></div></div>
   <div class="chips" id="chips" hidden>
     <div class="chip inked"><span class="coin" aria-hidden="true"></span><b id="coinVal">0</b><small id="coinRate"></small></div>
     <div class="chip inked"><button id="musicBtn" aria-pressed="false" aria-label="Music"><span class="mi" id="musicIcon">▶</span><span id="musicLabel" class="lbl">Music</span></button></div>
@@ -268,13 +290,13 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 </div>
 <div class="overlay" id="setup" hidden>
   <form class="found inked" id="setupForm">
-    <h1>Found your settlement</h1>
-    <p>It starts with one tent, one campfire and you. Your followers decide what gets built next.</p>
-    <label for="setName">Settlement name</label>
+    <h1>Found your colony on Gliese 12 b</h1>
+    <p>It starts with one landing station, one shelter and you. Everyone else waits in cryosleep aboard the ark until there's a home for them. Your followers decide what gets built next.</p>
+    <label for="setName">Colony name</label>
     <input id="setName" required maxlength="40" placeholder="Followville">
     <label for="setHandle">Your username</label>
     <input id="setHandle" required maxlength="31" placeholder="@yourhandle">
-    <button class="btn primary" type="submit">Found the settlement</button>
+    <button class="btn primary" type="submit">Found the colony</button>
   </form>
 </div>
 <script type="module">
@@ -312,8 +334,8 @@ const loading=new Set(), buffered=new Map(); let ws=null, subKey='', pinned=null
 const ls={ get(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }, set(k,v){ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,JSON.stringify(v)); }catch(e){} } };
 let Me=ls.get('settlement-player'); // { token, handle }
 let auth=null, authPoll=null; // the open "prove it's you" or "log in" panel
-async function checkMe(){ if(!Me||!Me.token) return; try{ const r=await api('/api/me'); Me={...Me,handle:r.handle}; ls.set('settlement-player',Me); }catch(e){ Me=null; ls.set('settlement-player',null); } }
-function signedIn(r){ Me={token:r.token,handle:r.handle}; ls.set('settlement-player',Me); ls.set('settlement-me',r.handle); ls.set('settlement-claim',null); auth=null; clearInterval(authPoll); }
+async function checkMe(){ if(!Me||!Me.token) return; try{ const r=await api('/api/me'); Me={...Me,handle:r.handle,genderChosen:!!r.genderChosen}; ls.set('settlement-player',Me); }catch(e){ Me=null; ls.set('settlement-player',null); } }
+function signedIn(r){ Me={token:r.token,handle:r.handle,genderChosen:true}; checkMe().then(()=>renderCard(true)); ls.set('settlement-player',Me); ls.set('settlement-me',r.handle); ls.set('settlement-claim',null); auth=null; clearInterval(authPoll); }
 async function api(path, opts={}){
   const r=await fetch(path,{ method:opts.method||'GET', headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{}), ...(Me&&Me.token?{'x-player':Me.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined });
   const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`); return j; }
@@ -445,9 +467,9 @@ function findPath(sx,sy,gx,gy){
 
 /* ---------------- simulation (pure function of time) ---------------- */
 const planCache = new Map();
-function centerTile(){ const fire=[...D.buildings.values()].find(b=>b.type==='campfire'); return fire?[fire.x,fire.y]:[2,1]; }
+function centerTile(){ const st=[...D.buildings.values()].find(b=>b.type==='landing'); if(st) return [st.x+1,st.y+2]; const fire=[...D.buildings.values()].find(b=>b.type==='campfire'); return fire?[fire.x,fire.y]:[2,1]; }
 function placeFor(b, r, label){
-  if(!b){ const [cx,cy]=centerTile(); const a=r()*Math.PI*2; const tx=Math.round(cx+Math.cos(a)*1.6), ty=Math.round(cy+Math.sin(a)*1.6); return { tile:[tx,ty], pos:[tx+0.5,ty+0.5], indoor:false, bid:null, name:label||'the settlement' }; }
+  if(!b){ const [cx,cy]=centerTile(); const a=r()*Math.PI*2; const tx=Math.round(cx+Math.cos(a)*1.6), ty=Math.round(cy+Math.sin(a)*1.6); return { tile:[tx,ty], pos:[tx+0.5,ty+0.5], indoor:false, bid:null, name:label||'the collement' }; }
   const t=T(b), [w,d]=t.size;
   if(t.outdoor){
     let tx,ty;
@@ -472,7 +494,7 @@ function getPlan(c, day){
   const key=c.id+'|'+day; const hit=planCache.get(key); if(hit) return hit;
   const r=rng(hash(c.id+':'+day));
   const home=bOf(c.home), job=bOf(c.job), hang=bOf(c.hang);
-  const homeP=placeFor(home, rng(hash(c.id+'home')), 'the campfire');
+  const homeP=placeFor(home, rng(hash(c.id+'home')), 'the landing station');
   const steps=[];
   steps.push({ p:homeP, act:'Sleeping', until:360+r()*60, kind:'home' });
   steps.push({ p:homeP, act:'Getting ready for the day', until:450+r()*25, kind:'home' });
@@ -588,6 +610,36 @@ const DRAW = {
     for(const p of [Wp,S2,E]) line(p,up(p,26),'#5A3B22',1.6);
     const n=4, dx=E.x-S2.x, dy=E.y-S2.y; for(let i=0;i<n;i++){ const a=lerp(Wp,S2,i/n), bb=lerp(Wp,S2,(i+1)/n); poly([up(a,26),up(bb,26),{x:bb.x+dx,y:bb.y+dy-30},{x:a.x+dx,y:a.y+dy-30}], i%2?c.roof2:c.roof); }
   },
+  // The landing station: a pad with lights, and the ark's shuttle standing on it. When colonists have just arrived, its engines glow.
+  starport(b){ const x=b.x, y=b.y;
+    boxAt(x+0.06,y+0.06,1.88,1.88,0,7,'#C3C6C8','#9A9FA2','#868B8E');
+    const c=up(iso(x+1,y+1),7);
+    ctx.strokeStyle='#F2B33D'; ctx.lineWidth=3; ctx.beginPath(); ctx.ellipse(c.x,c.y,42,21,0,0,7); ctx.stroke();
+    ctx.strokeStyle='rgba(43,38,33,.45)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.ellipse(c.x,c.y,50,25,0,0,7); ctx.stroke();
+    for(const [u,v] of [[0.08,0.08],[1.92,0.08],[1.92,1.92],[0.08,1.92]]){ const q=up(iso(x+u,y+v),7); line(q,up(q,9),INK,1.6);
+      const on=Math.floor(T_NOW/600+u*2+v)%2===0, col=u<1?'#E4572E':'#3FB36B'; ctx.fillStyle=on?col:shade(col,0.6); ctx.beginPath(); ctx.arc(q.x,q.y-10,2.6,0,7); ctx.fill();
+      if(on&&LAMPS>0) lights.push({x:q.x,y:q.y-10,r:14,col:u<1?'255,90,70':'90,230,140',a:0.9}); }
+    const recent=(S.events||[]).some(e=>(e.kind==='spawn'||e.kind==='movein')&&Date.now()+skew-e.t<120000);
+    const base=up(iso(x+1,y+0.95),7), W=13, H=92;
+    // landing legs and ramp
+    for(const dx of [-1,1]) line({x:base.x+dx*W*0.7,y:base.y-18},{x:base.x+dx*(W+12),y:base.y+3},INK,2.4);
+    poly([{x:base.x-6,y:base.y-10},{x:base.x+6,y:base.y-10},{x:base.x+16,y:base.y+14},{x:base.x+4,y:base.y+16}],'#9A9FA2',INK,1);
+    if(recent){ const f=T_NOW/90; for(const [s2,col] of [[1,'#F49A2A'],[0.6,'#FFE07A']]){ const hg=(16+Math.sin(f)*4)*s2; ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(base.x-7*s2,base.y-14); ctx.quadraticCurveTo(base.x,base.y-14+hg*1.6,base.x+7*s2,base.y-14); ctx.fill(); }
+      for(let i=0;i<4;i++){ const a=(T_NOW/900+i/4)%1; ctx.fillStyle=`rgba(230,230,225,${0.5*(1-a)})`; ctx.beginPath(); ctx.ellipse(base.x+(i%2?1:-1)*(10+a*34),base.y+2,8+a*10,4+a*5,0,0,7); ctx.fill(); }
+      lights.push({x:base.x,y:base.y-6,r:46,col:'255,170,80',a:1}); }
+    // fins
+    poly([{x:base.x-W,y:base.y-34},{x:base.x-W-12,y:base.y-12},{x:base.x-W,y:base.y-16}],'#E4572E',INK,1.2);
+    poly([{x:base.x+W,y:base.y-34},{x:base.x+W+12,y:base.y-12},{x:base.x+W,y:base.y-16}],'#B8402A',INK,1.2);
+    // body
+    ctx.beginPath(); ctx.moveTo(base.x-W,base.y-14); ctx.lineTo(base.x-W,base.y-H+8); ctx.quadraticCurveTo(base.x-W,base.y-H-18,base.x,base.y-H-34); ctx.quadraticCurveTo(base.x+W,base.y-H-18,base.x+W,base.y-H+8); ctx.lineTo(base.x+W,base.y-14); ctx.closePath();
+    const gr=ctx.createLinearGradient(base.x-W,0,base.x+W,0); gr.addColorStop(0,'#FBF7EE'); gr.addColorStop(0.6,'#EDE6D6'); gr.addColorStop(1,'#CFC7B5'); ctx.fillStyle=gr; ctx.fill(); ctx.strokeStyle=INK; ctx.lineWidth=1.4; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(base.x-W+2,base.y-H-2); ctx.quadraticCurveTo(base.x-W+1,base.y-H-18,base.x,base.y-H-32); ctx.quadraticCurveTo(base.x+W-1,base.y-H-18,base.x+W-2,base.y-H-2); ctx.closePath(); ctx.fillStyle='#E4572E'; ctx.fill();
+    line({x:base.x-W,y:base.y-H},{x:base.x+W,y:base.y-H},INK,1.2);
+    ctx.fillStyle='#E4572E'; ctx.fillRect(base.x-W+1,base.y-28,2*W-2,5);
+    const pw={x:base.x,y:base.y-H+26}; ctx.fillStyle='#F6F1E6'; ctx.beginPath(); ctx.arc(pw.x,pw.y,7.5,0,7); ctx.fill(); ctx.strokeStyle=INK; ctx.lineWidth=1.3; ctx.stroke();
+    ctx.fillStyle=LAMPS>0?'#FFE6A0':'#6FB3D2'; ctx.beginPath(); ctx.arc(pw.x,pw.y,5,0,7); ctx.fill(); ctx.stroke(); if(LAMPS>0) lights.push({x:pw.x,y:pw.y,r:18,col:'255,220,150',a:0.9});
+    const tip={x:base.x,y:base.y-H-36}, on=Math.floor(T_NOW/700)%2===0; ctx.fillStyle=on?'#FF5544':'#7A2A22'; ctx.beginPath(); ctx.arc(tip.x,tip.y,2.6,0,7); ctx.fill(); if(on) lights.push({x:tip.x,y:tip.y,r:16,col:'255,80,70',a:1});
+  },
   campfire(b){ const p=iso(b.x+0.5,b.y+0.5);
     for(let i=0;i<8;i++){ const a=i/8*Math.PI*2; ctx.fillStyle=i%2?'#8C8C86':'#A8A8A0'; ctx.beginPath(); ctx.ellipse(p.x+Math.cos(a)*10,p.y+Math.sin(a)*5,3.4,2.4,0,0,7); ctx.fill(); ctx.strokeStyle=INK; ctx.lineWidth=0.7; ctx.stroke(); }
     line({x:p.x-7,y:p.y+2},{x:p.x+7,y:p.y-2},'#5A3B22',3); line({x:p.x-6,y:p.y-2},{x:p.x+6,y:p.y+2},'#5A3B22',3);
@@ -657,7 +709,7 @@ function drawTreeAt(p,leaf,s,seed){ seed=seed||7;
   const parts=[[0,-36,11,1],[-8,-27,10,0.94],[8,-28,10,0.9],[0,-22,9,1.04]];
   parts.forEach(([dx,dy,r,f],i)=>blob(p.x+dx*s,p.y+dy*s,r*s,shade2(leaf,f),seed+i*31)); }
 function shade2(hex,f){ const n=parseInt(hex.slice(1),16); const c=v=>Math.max(0,Math.min(255,Math.round(v*f))).toString(16).padStart(2,'0'); return '#'+c((n>>16)&255)+c((n>>8)&255)+c(n&255); }
-const SHADOW_H = { house:t=>(t.height||24)+(t.roofH||18)*0.5, block:t=>t.height||40, tower:t=>t.height+20, watertower:t=>t.height, tent:()=>20, stall:()=>24, well:()=>22, statue:()=>30, fountain:()=>10, tree:()=>38, pine:()=>40, lamp:()=>34, bench:()=>4 };
+const SHADOW_H = { starport:()=>110, house:t=>(t.height||24)+(t.roofH||18)*0.5, block:t=>t.height||40, tower:t=>t.height+20, watertower:t=>t.height, tent:()=>20, stall:()=>24, well:()=>22, statue:()=>30, fountain:()=>10, tree:()=>38, pine:()=>40, lamp:()=>34, bench:()=>4 };
 function hull(pts){ pts=pts.slice().sort((a,b)=>a.x-b.x||a.y-b.y); const cr=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x); const lo=[],hi=[]; for(const p of pts){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); } for(const p of pts.slice().reverse()){ while(hi.length>=2&&cr(hi[hi.length-2],hi[hi.length-1],p)<=0) hi.pop(); hi.push(p); } return lo.slice(0,-1).concat(hi.slice(0,-1)); }
 function addShadow(P,b){ const t=T(b), fn=SHADOW_H[t.style]; if(!fn) return; const h=fn(t); const ox=-0.62*h, oy=0.3*h;
   if(['tree','pine','lamp','statue','well','birch','bush','turbine','pylon','obelisk','windmill','rocks'].includes(t.style)){ const c=iso(b.x+0.5,b.y+0.5); const pts=[]; const rx=t.style==='lamp'?3:12, ry=t.style==='lamp'?2:6; for(let i=0;i<10;i++){ const a=i/10*Math.PI*2; pts.push({x:c.x+Math.cos(a)*rx,y:c.y+Math.sin(a)*ry},{x:c.x+ox+Math.cos(a)*rx*1.1,y:c.y+oy+Math.sin(a)*ry*1.1}); } const hp=hull(pts); P.moveTo(hp[0].x,hp[0].y); hp.slice(1).forEach(p=>P.lineTo(p.x,p.y)); P.closePath(); return; }
@@ -1673,7 +1725,7 @@ addEventListener('keydown',e=>{ if((e.key==='m'||e.key==='M') && !/INPUT|TEXTARE
 
 let activeTab=null, feedMode='posts';
 function buildToolbar(){ const row=$('toolsRow'); row.innerHTML='';
-  const tabs=[{id:'feed',name:'Town Square'},{id:'people',name:'Citizens'}];
+  const tabs=[{id:'feed',name:'Town Square'},{id:'people',name:'Colonists'}];
   const all = Store.canWrite ? tabs.concat([{sep:true}],CATS) : tabs;
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
     const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(activeTab===c.id),onclick:()=>openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); row.append(btn); } }
@@ -1707,9 +1759,9 @@ const costText = c => c ? `${fmt(c)} coins` : 'free';
 function renderPane(){
   const p=$('pane'); if(!activeTab){ p.hidden=true; return; } p.hidden=false; p.innerHTML='';
   if(activeTab==='feed'){
-    const seg=el('div',{class:'seg',role:'tablist'}); for(const [id,nm] of [['posts','Posts'],['log','Daily log']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
+    const seg=el('div',{class:'seg',role:'tablist'}); for(const [id,nm] of [['posts','Posts'],['log','Daily log'],['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
     p.append(paneHead('Town Square',[seg]), el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; renderFeed(); return; }
-  if(activeTab==='people'){ p.append(paneHead('Citizens')); const body=el('div',{class:'pane-body'});
+  if(activeTab==='people'){ p.append(paneHead('Colonists')); const body=el('div',{class:'pane-body'});
     const s=el('input',{class:'search',id:'search',type:'search',placeholder:'Search a username',autocomplete:'off'}); s.value=peopleQuery; s.oninput=()=>{ peopleQuery=s.value; renderPeople(); };
     body.append(s, el('div',{id:'peopleList'}));
     if(Store.canWrite){ const inp=el('input',{id:'spawnInput',placeholder:'@username',autocomplete:'off'}); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') spawnFromInput(); });
@@ -1741,7 +1793,7 @@ function renderPane(){
   if(activeTab==='disasters'){ const ruins=[...D.buildings.values()].filter(b=>b.ruin).length;
     p.append(paneHead('Disasters',[el('button',{class:'btn sm',text:ruins?`Clear ${fmt(ruins)} ruin${ruins===1?'':'s'} nearby (and all others)`:'Clear all ruins',onclick:clearRuins})]));
     for(const id in DISASTER_TYPES){ const D2=DISASTER_TYPES[id]; const b=card('', D2.name, 'Tap the map', D2.note, tool.kind==='disaster'&&tool.dtype===id, ()=>setTool(tool.kind==='disaster'&&tool.dtype===id?{kind:'pan'}:{kind:'disaster',dtype:id})); b.replaceChild(disasterIconEl(id),b.querySelector('img')); cards.append(b); }
-    p.append(cards, el('p',{class:'hint',style:'padding:0 14px 12px;margin:0',text:'Hit buildings become ruins and their residents move to the Outskirts. Tap a ruin to repair it.'})); return; }
+    p.append(cards, el('p',{class:'hint',style:'padding:0 14px 12px;margin:0',text:'Hit buildings become ruins and their residents go back into cryosleep. Tap a ruin to repair it.'})); return; }
   if(activeTab==='bulldoze'){ p.append(paneHead('Bulldoze'));
     for(const [mode,nm,note] of [['area','Clear an area','drag a box over anything'],['all','Bulldozer','buildings and roads'],['buildings','Buildings only','roads stay'],['roads','Roads only','buildings stay']]){ const b=card('', nm, note, '', tool.kind==='erase'&&tool.mode===mode, ()=>setTool(tool.kind==='erase'&&tool.mode===mode?{kind:'pan'}:{kind:'erase',mode}));
       const ic=el('span',{class:'icthumb'}); ic.innerHTML=ICONS[mode==='roads'?'roads':mode==='buildings'?'housing':mode==='area'?'area':'bulldoze']; b.replaceChild(ic,b.querySelector('img')); cards.append(b); }
@@ -1761,7 +1813,7 @@ async function openCitizen(handle){ const d=await loadDetail(handle); if(!d) ret
   sel={kind:'c',id:c.id,handle:c.handle}; if(innerWidth<900) openTab(null); renderCard(); }
 // The developer's job and home pickers: the nearest places first, full ones greyed out.
 async function openPicker(kind,c){ const at=c.home||c.job; const ctr=worldToTileF(cam.x,cam.y); const x=at?at[2]:Math.round(ctr.x), y=at?at[3]:Math.round(ctr.y);
-  if(kind==='job'&&!c.home){ toast(`@${c.handle} is waiting in the Outskirts. Give them a home first.`); return; }
+  if(kind==='job'&&!c.home){ toast(`@${c.handle} is still in cryosleep. Give them a home first.`); return; }
   try{ const items=await api(`/api/admin/places?kind=${kind}&x=${x}&y=${y}`); if(!sel||sel.id!==c.id) return; sel.picker={kind,items}; renderCard(); }catch(e){ toast(e.message); } }
 function renderPicker(c){ const {kind,items}=sel.picker; const cur=(kind==='job'?c.job:c.home)?.[0]; const box=el('div',{class:'picker'});
   const choose=async id=>{ try{ await api('/api/admin/citizens/'+encodeURIComponent(c.id),{method:'PATCH',body:kind==='job'?{jobId:id}:{homeId:id}}); sel.picker=null; detail.delete(c.id); await loadDetail(c.handle); toast(kind==='job'?(id?'Career changed':'They left their job'):'Moved home'); renderCard(); }catch(e){ toast(e.message); } };
@@ -1812,7 +1864,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
   if(sel.kind==='c'){ const d=detail.get(sel.id); const c=S.citizens.get(sel.id)||(d&&normC(d)); if(!c){ closeCard(); return; }
     if(!d && !detailLoading.has(c.id)){ detailLoading.add(c.id); const id=c.id; loadDetail(c.handle).finally(()=>{ detailLoading.delete(id); if(sel&&sel.id===id&&detail.has(id)) renderCard(); }); }
     const h=bOf(c.home), j=bOf(c.job); const st=h?citizenAt(c,gmNow()):null;
-    const now = !h ? (d&&d.queue ? `Waiting in the Outskirts, #${fmt(d.queue)} in the housing queue` : 'Waiting in the Outskirts') : st ? st.act : 'Arriving soon';
+    const now = !h ? (d&&d.queue ? `In cryosleep aboard the ark, #${fmt(d.queue)} in line to wake` : 'In cryosleep aboard the ark') : st ? st.act : 'Arriving soon';
     const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,'@'+c.handle, el('span',{class:'gsym',title:c.gender==='f'?'Woman':'Man',text:c.gender==='f'?' ♀':' ♂'})); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); head.append(av, el('div',null,title, el('p',{class:'now',text:now})));
     const nm=b=>(D.buildings.get(b.id)||b).name||T(b).name;
     card.append(close, head, el('dl',null,
@@ -1830,6 +1882,9 @@ function renderCard(force){ if(!force && cardBusy()) return;
         el('span',{class:'hint',text:d?(d.claimed?'Has a password':'No password yet'):''})));
       if(sel.picker) card.append(renderPicker(c)); }
     else { const mine=Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase();
+      if(mine && Me.genderChosen===false){ const pick=async g=>{ try{ await api('/api/me/gender',{method:'POST',body:{gender:g}}); Me.genderChosen=true; ls.set('settlement-player',Me); const x=S.citizens.get(c.id); if(x) x.gender=g; const dd=detail.get(c.id); if(dd) dd.g=g; toast(g==='f'?'Welcome to Gliese 12 b. She’s all yours.':'Welcome to Gliese 12 b. He’s all yours.'); renderCard(true); }catch(e){ toast(e.message); } };
+        const mk=g=>{ const L=look({...c,gender:g}); const b=el('button',{class:'gpick',onclick:()=>toast(`Choose ${g==='f'?'woman':'man'}? You can only pick once.`,'Yes',()=>pick(g))}); const a=el('span',{class:'ava'}); a.innerHTML=avatarSVG({...c,gender:g}); b.append(a, el('span',{text:g==='f'?'Woman':'Man'})); return b; };
+        card.append(el('div',{class:'authbox'}, el('h3',{text:'Choose your colonist'}), el('p',{class:'hint',text:'Pick once. After this, only the developer can change it.'}), el('div',{class:'row-actions'}, mk('m'), mk('f')))); }
       if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; ls.set('settlement-player',null); toast('Logged out.'); renderCard(true); }})));
       else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
       else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}))); }
@@ -1864,7 +1919,7 @@ function renderPeople(){
   const list=$('peopleList'); if(!list) return; const q=cleanHandle(peopleQuery).toLowerCase(); const gm=gmNow();
   const show=(cits,empty)=>{ list.innerHTML=''; if(!cits.length){ list.append(el('p',{class:'hint',text:empty})); return; }
     for(const c of cits){ const st=c.home?citizenAt(c,gm):null; const av=el('span',{class:'ava sm'}); av.innerHTML=avatarSVG(c);
-      list.append(el('button',{class:'person',onclick:()=>openCitizen(c.handle)}, av, el('span',null, el('div',{class:'who',text:'@'+c.handle+(c.founder?' ★':'')}), el('div',{class:'what',text:!c.home?'Waiting in the Outskirts':st?st.act:'Arriving soon'})))); } };
+      list.append(el('button',{class:'person',onclick:()=>openCitizen(c.handle)}, av, el('span',null, el('div',{class:'who',text:'@'+c.handle+(c.founder?' ★':'')}), el('div',{class:'what',text:!c.home?'In cryosleep aboard the arkrts':st?st.act:'Arriving soon'})))); } };
   if(!q){ const near=[...S.citizens.values()].sort((a,b)=>(b.founder?1:0)-(a.founder?1:0)||a.handle.localeCompare(b.handle)).slice(0,60);
     show(near, S.meta&&S.meta.population?'Nobody lives in this part of town. Search for a name.':'Nobody lives here yet.');
     if(near.length && S.meta) list.prepend(el('p',{class:'hint',text:`People near you. Search to find anyone among ${fmt(S.meta.population)} citizens.`})); return; }
@@ -1901,7 +1956,7 @@ function igPanel(){ const box=el('div',{class:'igbox'}, el('h3',{text:'Instagram
 async function bulkAdd(){ const ta=$('bulkInput'); const list=ta.value.split(/[\s,;]+/).map(cleanHandle).filter(Boolean); if(!list.length){ toast('Paste at least one username.'); return; }
   try{ const r=await api('/api/admin/citizens/bulk',{method:'POST',body:{handles:list,gender:addGender||null}}); ta.value=''; toast(`Added ${fmt(r.added)}${r.skipped?`, skipped ${fmt(r.skipped)} already here`:''}. ${fmt(r.housed)} moved into homes.`); }catch(e){ toast(e.message); } }
 async function spawnFromInput(){ const inp=$('spawnInput'); const h=cleanHandle(inp.value); if(!h){ toast('Type a username first.'); return; }
-  try{ const r=await api('/api/admin/citizens',{method:'POST',body:{handle:h,gender:addGender||null}}); inp.value=''; toast(r.citizen.housed?`@${h} moved in`:`@${h} is waiting in the Outskirts`); }catch(e){ toast(e.message); } }
+  try{ const r=await api('/api/admin/citizens',{method:'POST',body:{handle:h,gender:addGender||null}}); inp.value=''; toast(r.citizen.housed?`@${h} moved in`:`@${h} is in cryosleep until a home opens`); }catch(e){ toast(e.message); } }
 /* ---------------- avatars + posts ---------------- */
 function avatarSVG(c){ const L=look(c), I=INK;
   const eyes=`<circle cx="17.2" cy="18" r="1.7" fill="#fff" stroke="${I}" stroke-width=".6"/><circle cx="22.8" cy="18" r="1.7" fill="#fff" stroke="${I}" stroke-width=".6"/><circle cx="17.4" cy="18.2" r=".9" fill="${I}"/><circle cx="23" cy="18.2" r=".9" fill="${I}"/><path d="M17.6 21.6q2.4 1.8 4.8 0" stroke="#7A2E2E" fill="none" stroke-width="1.1" stroke-linecap="round"/>`;
@@ -1918,7 +1973,7 @@ function avatarSVG(c){ const L=look(c), I=INK;
        : `<path d="M12.6 15.5a7.5 7.5 0 0 1 14.8 0c-3-1.8-5.2-2.4-7.4-2.4s-4.4.6-7.4 2.4z" fill="${L.hair}" stroke="${I}" stroke-width="1.1"/>`; }
   return `<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="#F4EBDD" stroke="${I}" stroke-width="1.5"/>${back}${body}${face}${top}${eyes}</svg>`; }
 const POSTS = {
-  homeless:['Slept by the campfire again. Who’s building us some houses? 🏕️','Another night under the stars. Pretty, but cold.','Taking requests: one roof, please.'],
+  homeless:['Another night by the landing station. Who’s building us some homes? 🚀','Two moons tonight. Pretty, but cold.','Taking requests: one roof, please.'],
   jobless:['Still looking for work. Anyone hiring?','Walked every road today looking for a job.','Build a bakery and I’ll knead the dough myself.'],
   work:['Shift at {place} went fine. Only dropped one thing.','Busy day at {place}.','Clocked in at {place}. Coffee first.'],
   leisure:['Evening at {place}. Good company.','{place} is the best spot in town.','Could stay at {place} all night.'],
@@ -1958,12 +2013,28 @@ function feedItems(){
   return items.sort((a,b)=>b.g-a.g);
 }
 const when = g => `Day ${Math.floor(g/1440)+1}, ${fmtClock(g)}`;
+// ---- RESURGENCE: the story so far ----
+const STORY=[
+ ['Earth was our home.', 'Until our greatest creation became our greatest nightmare. We built machines that could think, learn, create and evolve. Artificial intelligence became the foundation of our civilization. But something went wrong.'],
+ ['The machines turned against us.', 'Cities collapsed, nations fell, and autonomous machines roamed the Earth, consuming everything in their path. There was nowhere left to run. Nowhere left to call home.'],
+ ['And so, we fled.', 'Long before the collapse, we had built interstellar vessels and the technology to turn distant worlds into homes. Across the darkness of space we journeyed toward Gliese 12 b, a distant planet orbiting a star far from Earth.'],
+ ['A planet of hope.', 'A world where warmth reminded us of home, where the days passed differently, and where civilization could begin again. We arrived with our knowledge, our technology, and the will to survive.'],
+ ['But we brought something else.', 'Artificial intelligence. The technology that helped destroy our home is now our greatest tool for rebuilding it. It builds our cities, manages our resources, and speeds humanity’s rebirth. One question remains: have we learned from our mistakes, or did we bring the seeds of our own destruction with us?'],
+ ['Now, the future belongs to us.', 'Every building matters. Every colonist has a purpose. Every decision shapes the world we are creating. This time, there is no Earth to return to.'],
+];
+function storyPage(){ const box=el('div',{class:'story'}, el('p',{class:'kicker',text:'RESURGENCE'}), el('h2',{text:'A new beginning on Gliese 12 b'}));
+  for(const [h,t] of STORY) box.append(el('h3',{text:h}), el('p',{text:t}));
+  box.append(el('p',{class:'sign',text:'One planet. One civilization. Millions of possibilities. Build together. Evolve together. Protect our new home.'}),
+    el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Watch the intro',onclick:()=>playIntro(true)}), el('button',{class:'btn',text:'Find my colonist',onclick:()=>findMe()})),
+    el('p',{class:'hint',text:'Gliese 12 b is a real planet about 40 light years away. What the colonists found there is the story of this game.'}));
+  return box; }
 function renderFeed(){
   const body=$('feedBody'); if(!body || activeTab!=='feed' || !feedDirty) return; feedDirty=false; const keep=body.scrollTop; body.innerHTML='';
-  if(!S.meta){ body.append(el('p',{class:'hint',text:'The story starts once the settlement is founded.'})); return; }
+  if(feedMode==='story'){ body.append(storyPage()); return; }
+  if(!S.meta){ body.append(el('p',{class:'hint',text:'The story starts once the colony is founded.'})); return; }
   if(feedMode==='posts'){ const items=postItems(); if(!items.length){ body.append(el('p',{class:'hint',text:'Quiet so far. Check back in a few minutes.'})); return; }
     for(const it of items){
-      if(it.gazette){ body.append(el('article',{class:'post gz'}, el('div',null, el('div',{class:'ph'}, el('b',{text:`The ${S.meta.name} Gazette`}), el('time',{text:when(it.g)})), el('p',{class:'gzt',text:it.text})))); continue; }
+      if(it.gazette){ body.append(el('article',{class:'post gz'}, el('div',null, el('div',{class:'ph'}, el('b',{text:`${S.meta.name} Colony Log`}), el('time',{text:when(it.g)})), el('p',{class:'gzt',text:it.text})))); continue; }
       const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(it.c);
       body.append(el('article',{class:'post'}, av, el('div',null, el('div',{class:'ph'}, el('b',{text:'@'+it.c.handle}), el('time',{text:when(it.g)})), el('p',{text:it.text}), el('div',{class:'pf'}, el('span',{text:`♥ ${it.likes}`}), el('span',{text:`↻ ${it.reposts}`}), el('button',{class:'show',text:'Show on map',onclick:()=>{ selectCitizen(it.c.id); if(innerWidth<900) openTab(null); }}))))); }
   } else {
@@ -2007,6 +2078,25 @@ function findMe(){ let mine=(Me&&Me.handle)||null; if(!mine){ try{ const v=local
   if(h){ openCitizen(h); return; }
   openTab('people'); setTimeout(()=>{ const s=$('search'); if(s) s.focus(); },50); toast('Type your username, open your card and tap "This is me".'); }
 checkMe().then(resumeClaim);
+// ---- The opening: plays the narrated intro video (public/intro.mp4) when there is one, otherwise the story as title cards ----
+async function playIntro(force){
+  if(document.getElementById('intro')) return; ls.set('resurgence-intro-seen',1);
+  let video=false; try{ const r=await fetch('/intro.mp4',{method:'HEAD'}); video=r.ok && /video/.test(r.headers.get('content-type')||''); }catch(e){}
+  const ov=el('div',{id:'intro',role:'dialog','aria-label':'Resurgence intro'}); const skip=el('button',{class:'skip',text:'Skip ›'}); document.body.append(ov);
+  const finish=()=>{ ov.innerHTML=''; ov.classList.add('end');
+    ov.append(el('div',{class:'title'}, el('p',{class:'kicker',text:'WELCOME TO GLIESE 12 b'}), el('h1',{text:'RESURGENCE'}), el('p',{text:'One planet. One civilization. Millions of possibilities.'}),
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Find my colonist',onclick:()=>{ ov.remove(); findMe(); }}), el('button',{class:'btn',text:'Explore the colony',onclick:()=>ov.remove()})),
+      el('p',{class:'hint',text:'Not here yet? Comment SPAWN on our Instagram to wake from cryosleep.'}))); };
+  skip.onclick=()=>{ const v=ov.querySelector('video'); if(v) v.pause(); finish(); };
+  if(video){ const v=el('video',{src:'/intro.mp4',playsinline:'',preload:'auto'}); v.onended=finish;
+    const start=el('button',{class:'begin',text:'▶  Begin'}); start.onclick=()=>{ start.remove(); v.play().catch(()=>finish()); };
+    ov.append(v, start, skip); return; }
+  // Title cards until the video is added
+  const lines=[['Earth was our home.','Until our greatest creation became our greatest nightmare.'],['The machines turned against us.','There was nowhere left to run.'],['And so, we fled.','Across the darkness, toward a distant star.'],['Gliese 12 b.','A planet of hope. A second chance.'],['This time, there is no Earth to return to.','Every building matters. Every colonist has a purpose.']];
+  const card=el('div',{class:'card2'}); ov.append(el('div',{class:'stars'}), card, skip); let i=0;
+  const next=()=>{ if(!document.body.contains(ov)||ov.classList.contains('end')) return; if(i>=lines.length){ finish(); return; } const [a,b]=lines[i++]; card.classList.remove('in'); setTimeout(()=>{ card.innerHTML=''; card.append(el('h2',{text:a}), el('p',{text:b})); card.classList.add('in'); setTimeout(next,4200); },500); };
+  next(); }
+setTimeout(()=>{ if(!Store.canWrite && !ls.get('resurgence-intro-seen')) playIntro(); },900);
 $('findBtn').onclick=findMe;
 $('wxBtn').onclick=()=>{ if(Store.canWrite) openTab('weather'); else { const w=weatherAt(S.meta,gmNow()); toast(`Weather: ${WEATHER_TYPES[w].name}`); } };
 function toggleFullscreen(){ const d=document; const on=d.fullscreenElement||d.webkitFullscreenElement;
@@ -2019,7 +2109,7 @@ $('fsBtn').onclick=toggleFullscreen; $('hideBtn').onclick=()=>setClean(true); $(
 addEventListener('keydown',e=>{ if(e.target.closest&&e.target.closest('input,textarea')) return; if(e.key==='f'||e.key==='F') toggleFullscreen(); else if(e.key==='h'||e.key==='H') setClean(!document.body.classList.contains('clean')); else if(e.key==='Escape'&&document.body.classList.contains('clean')) setClean(false); });
 function refreshHUD(){
   if(S.meta){ const w=weatherAt(S.meta,gmNow()); $('wxIcon').textContent=WX_ICON[w]; $('wxLabel').textContent=WEATHER_TYPES[w].name+(S.meta.weather?' (pinned)':''); }
-  if(S.meta){ $('townName').textContent=S.meta.name; const pop=S.meta.population||0, out=S.meta.outskirts??(pop-(S.meta.residents||0)); $('popLine').textContent=`${fmt(pop)} citizen${pop===1?'':'s'}${out>0?`, ${fmt(out)} waiting in the Outskirts`:''}`; $('popLine').hidden=!Store.canWrite; // only the developer sees the head count
+  if(S.meta){ $('townName').textContent=S.meta.name; const pop=S.meta.population||0, out=S.meta.outskirts??(pop-(S.meta.residents||0)); $('popLine').textContent=`${fmt(pop)} colonist${pop===1?'':'s'}${out>0?`, ${fmt(out)} in cryosleep`:''}`; $('popLine').hidden=!Store.canWrite; // only the developer sees the head count
     $('coinVal').textContent=fmt(treasury()); $('coinRate').textContent=`+${fmt(S.meta.income||0)}/day`; $('chips').hidden=false; }
   const mb=$('musicBtn'); mb.setAttribute('aria-pressed',String(Music.on)); $('musicIcon').textContent=Music.on?'❚❚':'▶'; $('musicLabel').textContent=Music.on?'Music on':'Music';
 }
@@ -2028,18 +2118,18 @@ setInterval(()=>{ if(!S.meta) return; const gm=gmNow(); $('clockTime').textConte
 setInterval(()=>{ feedDirty=true; renderFeed(); if(sel) renderCard(); if(activeTab==='people'&&document.activeElement!==$('search')) renderPeople(); refreshHUD(); },4000);
 setInterval(settle, 30000);
 function updateNews(){ if(!S.meta) return; const items=postItems(); const gz=items.find(i=>i.gazette); const it=gz||items[0]; if(!it) return;
-  $('newsKick').textContent=it.gazette?`The ${S.meta.name} Gazette, ${when(it.g)}`:`@${it.c.handle}, ${when(it.g)}`; $('newsText').textContent=it.text; $('news').hidden=false; }
+  $('newsKick').textContent=it.gazette?`${S.meta.name} Colony Log, ${when(it.g)}`:`@${it.c.handle}, ${when(it.g)}`; $('newsText').textContent=it.text; $('news').hidden=false; }
 $('news').onclick=()=>openTab('feed');
 setInterval(updateNews,5000);
 
 function afterLoad(){
   applyPermissions(); refreshUI();
-  if(!S.meta){ if(Store.canWrite) $('setup').hidden=false; else { $('townName').textContent='Not founded yet'; $('popLine').textContent='The builder hasn’t started this settlement.'; } }
+  if(!S.meta){ if(Store.canWrite) $('setup').hidden=false; else { $('townName').textContent='Not founded yet'; $('popLine').textContent='The colony hasn’t landed yet.'; } }
   else { const [cx,cy]=centerTile(); const p=iso(cx+0.5,cy+0.5); cam.x=p.x; cam.y=p.y; settle(); updateNews(); }
 }
 $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
   try{ await api('/api/admin/found',{method:'POST',body:{name:$('setName').value,handle:$('setHandle').value}});
-    $('setup').hidden=true; const p=iso(1.5,1); cam.x=p.x; cam.y=p.y; cam.z=1.8; toast('Your settlement is live. Pick a menu below to build.'); }
+    $('setup').hidden=true; const p=iso(1.5,1); cam.x=p.x; cam.y=p.y; cam.z=1.8; toast('Your colony has landed. Pick a menu below to build.'); }
   catch(err){ toast(err.message); } });
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).

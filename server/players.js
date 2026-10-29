@@ -61,17 +61,17 @@ export async function checkClaimComment(username, text) {
 // Who is calling: a player session token in the X-Player header (or null).
 export async function playerFrom(req) {
   const t = req.get('x-player'); if (!t) return null;
-  const s = (await pool.query(`select s.citizen_id, s.last_seen, c.handle from sessions s join citizens c on c.id = s.citizen_id where s.token_hash = $1`, [sha(t)])).rows[0];
+  const s = (await pool.query(`select s.citizen_id, s.last_seen, c.handle, c.gender, c.gender_chosen from sessions s join citizens c on c.id = s.citizen_id where s.token_hash = $1`, [sha(t)])).rows[0];
   if (!s || Date.now() - Number(s.last_seen) > SESSION_TTL) return null;
   if (Date.now() - Number(s.last_seen) > 3600 * 1000) pool.query('update sessions set last_seen = $2 where token_hash = $1', [sha(t), Date.now()]).catch(() => {});
-  return { id: s.citizen_id, handle: s.handle };
+  return { id: s.citizen_id, handle: s.handle, gender: s.gender, genderChosen: !!s.gender_chosen };
 }
 // For later features (casino, crime, special tasks): routes that need a signed-in player.
 export const requirePlayer = async (req, res, next) => {
   try { const p = await playerFrom(req); if (!p) return res.status(401).json({ error: 'Log in to your citizen first.' }); req.player = p; next(); } catch (e) { next(e); }
 };
 
-export function playersRouter({ limit, send, admin }) {
+export function playersRouter({ limit, send, admin, world }) {
   const r = express.Router();
 
   // Start proving an avatar is yours. Works for first-time setup and for a forgotten password.
@@ -113,6 +113,15 @@ export function playersRouter({ limit, send, admin }) {
     return { token: await newSession(c.id), handle: c.handle };
   }));
   r.get('/me', limit, send(async req => { const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Not logged in.'); return p; }));
+  // Once their avatar is claimed, a colonist picks man or woman, one time only. (The developer can still change it.)
+  r.post('/me/gender', limit, send(async req => {
+    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    const g = (req.body || {}).gender; if (g !== 'm' && g !== 'f') throw new HttpError(400, 'Choose man or woman.');
+    const lock = await pool.query('update citizens set gender_chosen = true where id = $1 and not gender_chosen returning id', [p.id]);
+    if (!lock.rowCount) throw new HttpError(409, 'You have already chosen. Ask the developer if it needs changing.');
+    await world.setGender(p.id, g);
+    return { ok: true, gender: g };
+  }));
   r.delete('/session', limit, send(async req => { const t = req.get('x-player'); if (t) await pool.query('delete from sessions where token_hash = $1', [sha(t)]); return { ok: true }; }));
 
   // Developer: a pre-verified setup link for one citizen (before Instagram is connected, or to settle a dispute),

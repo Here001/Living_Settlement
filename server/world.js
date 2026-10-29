@@ -179,8 +179,8 @@ class Change {
     for (const [bid, handles] of this.moved) {
       const b = (await this.q('select type, name from buildings where id = $1', [bid])).rows[0]; if (!b) continue;
       const nm = b.name || BUILDING_TYPES[b.type]?.name || 'a new home';
-      await this.event(handles.length === 1 ? `@${handles[0]} moved out of the Outskirts into ${nm}` :
-        `${fmt(handles.length)} people moved out of the Outskirts into ${nm}`, 'movein');
+      await this.event(handles.length === 1 ? `@${handles[0]} woke from cryosleep and moved into ${nm}` :
+        `${fmt(handles.length)} colonists woke from cryosleep and moved into ${nm}`, 'movein');
     }
     this.moved.clear();
     return { moved, hired };
@@ -199,6 +199,28 @@ export class World {
     for (const r of (await pool.query('select x, y, kind from water')).rows) this.putW(`${r.x},${r.y}`, r.kind);
     for (const r of (await pool.query('select * from vehicles')).rows) this.putV(vRow(r));
     this.founderHandle = (await pool.query('select handle from citizens where founder order by seq limit 1')).rows[0]?.handle || null;
+  }
+  // Colonies founded before the landing station existed started around a campfire. Swap it for the station,
+  // using the first 2×2 spot around it that's clear. Runs once, on the leader, at startup.
+  async upgradeCampfire() {
+    if (!this.meta) return null;
+    return this.change(async ch => {
+      const fire = (await ch.q("select * from buildings where type = 'campfire' order by built_at limit 1 for update")).rows[0];
+      if (!fire || (await ch.q("select 1 from buildings where type = 'landing'")).rowCount) return null;
+      for (const [x, y] of [[fire.x, fire.y], [fire.x - 1, fire.y], [fire.x, fire.y - 1], [fire.x - 1, fire.y - 1]]) {
+        try { await this.assertFree(ch, 'landing', x, y, fire.id); } catch { continue; }
+        const [cx, cy] = R.chunkOf(x, y);
+        if (cx !== fire.cx || cy !== fire.cy) ch.removedBuildings.set(fire.id, R.chunkKey(fire.cx, fire.cy));
+        const cap = R.capacities('landing');
+        await ch.q(`update buildings set type = 'landing', x = $2, y = $3, w = 2, d = 2, cx = $4, cy = $5, name = 'The landing station', hang_cap = $6 where id = $1`, [fire.id, x, y, cx, cy, cap.hangCap]);
+        for (const [col, cxc, cyc] of [['hang_id', 'hang_cx', 'hang_cy']]) await ch.q(`update citizens set ${cxc} = $2, ${cyc} = $3 where ${col} = $1`, [fire.id, cx, cy]);
+        ch.buildings.add(fire.id);
+        await ch.event(`A landing station now stands where the first fire burned. Colonists arriving from the ark land here`, 'build');
+        return { x, y };
+      }
+      console.log('No clear 2×2 spot next to the campfire for the landing station; the developer can place one by hand.');
+      return null;
+    });
   }
   slot(key) { let c = this.chunks.get(key); if (!c) this.chunks.set(key, c = { buildings: new Map(), roads: {}, water: {}, vehicles: new Map() }); return c; }
   putW(k, t) { const [x, y] = k.split(',').map(Number); this.water.set(k, t); this.slot(R.chunkKeyOfTile(x, y)).water[k] = t; }
@@ -222,7 +244,7 @@ export class World {
       else if (o.op === 'removeVehicle') this.delV(o.id);
     }
   }
-  requireFounded() { if (!this.meta) throw new HttpError(409, 'Found the settlement first.'); }
+  requireFounded() { if (!this.meta) throw new HttpError(409, 'Found the colony first.'); }
   publicMeta() {
     if (!this.meta) return null;
     const m = this.meta; const pop = m.population || 0, res = m.residents || 0;
@@ -235,7 +257,7 @@ export class World {
     const outer = changeScope.getStore(); if (outer) return fn(outer);
     const result = await worldTx(async db => {
       const row = (await db.query('select data from meta where id = 1 for update')).rows[0];
-      if (!row && !allowUnfounded) throw new HttpError(409, 'Found the settlement first.');
+      if (!row && !allowUnfounded) throw new HttpError(409, 'Found the colony first.');
       const ch = new Change(db, row ? row.data : null);
       const r = await changeScope.run(ch, () => fn(ch));
       if (ch.meta) await db.query('insert into meta (id, data) values (1, $1) on conflict (id) do update set data = $1', [ch.meta]);
@@ -300,12 +322,12 @@ export class World {
   // ---------- builder actions ----------
   async found({ name, handle, gender }) {
     return this.change(async ch => {
-      if (ch.meta) throw new HttpError(409, 'This settlement is already founded.');
+      if (ch.meta) throw new HttpError(409, 'This colony is already founded.');
       const now = Date.now(); name = String(name || '').trim().slice(0, 40) || 'Followville'; handle = R.cleanHandle(handle) || 'founder';
       ch.meta = { name, epoch: now - 7 * 60 * R.GAME_MIN_MS, createdAt: now, treasuryBase: R.START_FUNDS, treasuryDay: 0, income: R.GRANT,
         population: 0, residents: 0, employed: 0, newsDay: 0, buildPostId: null, founder: handle, minMs: R.GAME_MIN_MS, weather: null };
       ch.today = 0;
-      const starter = [['tent', 0, 0, ''], ['campfire', 2, 1, 'The first fire'], ['tree', -3, -2], ['pine', 4, -3], ['birch', -2, 4], ['pine', 5, 3], ['tree', -4, 1], ['bush', 3, -1], ['rocks', -1, -3]];
+      const starter = [['tent', 0, 0, ''], ['landing', 2, 1, 'The landing station'], ['tree', -3, -2], ['pine', 4, -3], ['birch', -2, 4], ['pine', 5, 3], ['tree', -4, 1], ['bush', 3, -1], ['rocks', -1, -3]];
       let i = 0; for (const [type, x, y, nm] of starter) await this.insertBuilding(ch, { type, x, y, name: nm || '', builtAt: now + i++ });
       await this.insertCitizens(ch, [handle], 'founder', true, gender);
       await ch.event(`@${handle} founded ${name}`, 'found');
@@ -554,7 +576,7 @@ export class World {
       if (!rows.length) throw new HttpError(409, `@${h} already lives here.`);
       await ch.fillVacancies();
       const housed = (await ch.q('select home_id from citizens where id = $1', [rows[0].id])).rows[0].home_id;
-      if (!housed) await ch.event(`@${h} arrived and is waiting in the Outskirts`, 'spawn');
+      if (!housed) await ch.event(`@${h} arrived aboard the ark and is waiting in cryosleep`, 'spawn');
       return { citizen: { id: rows[0].id, handle: h, housed: !!housed } };
     });
   }
@@ -566,8 +588,8 @@ export class World {
       if (!rows.length) return { added: 0 };
       const { moved } = await ch.fillVacancies();
       const waiting = rows.length - Math.min(rows.length, moved);
-      if (waiting === 1 && rows.length === 1) await ch.event(`@${rows[0].handle} arrived and is waiting in the Outskirts`, 'spawn');
-      else if (waiting > 0) await ch.event(`${fmt(rows.length)} new followers arrived. ${fmt(ch.meta.population - ch.meta.residents)} are waiting in the Outskirts`, 'spawn');
+      if (waiting === 1 && rows.length === 1) await ch.event(`@${rows[0].handle} arrived aboard the ark and is waiting in cryosleep`, 'spawn');
+      else if (waiting > 0) await ch.event(`${fmt(rows.length)} new colonists arrived aboard the ark. ${fmt(ch.meta.population - ch.meta.residents)} are waiting in cryosleep`, 'spawn');
       return { added: rows.length };
     });
   }
@@ -592,7 +614,7 @@ export class World {
       const c = (await ch.q('select c.*, h.type htype, j.type jtype from citizens c left join buildings h on h.id = c.home_id left join buildings j on j.id = c.job_id where c.id = $1 for update of c', [id])).rows[0];
       if (!c) throw new HttpError(404, 'No such citizen.');
       const homeType = c.htype, jobType = c.jtype; delete c.htype; delete c.jtype;
-      if (!c.home_id) throw new HttpError(400, `@${c.handle} is waiting in the Outskirts. Give them a home first.`);
+      if (!c.home_id) throw new HttpError(400, `@${c.handle} is still in cryosleep. Give them a home first.`);
       let j = null;
       if (jobId) {
         j = (await ch.q('select * from buildings where id = $1 for update', [jobId])).rows[0];

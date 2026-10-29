@@ -1817,14 +1817,29 @@ function tileList(m){ let e=tileLists.get(m); if(e&&e.gen===tileListGen&&e.n===m
 function tileBounds(wx0,wy0,wx1,wy1){ const cs=[[wx0,wy0],[wx1,wy0],[wx0,wy1],[wx1,wy1]].map(([x,y])=>worldToTileF(x,y));
   return { tminX:Math.floor(Math.min(...cs.map(c=>c.x)))-1, tmaxX:Math.ceil(Math.max(...cs.map(c=>c.x)))+1, tminY:Math.floor(Math.min(...cs.map(c=>c.y)))-1, tmaxY:Math.ceil(Math.max(...cs.map(c=>c.y)))+1 }; }
 const Ground={ cv:null, g:null, wx0:0, wy0:0, ww:0, wh:0, rz:0, dpr:0, gen:-1, deco:[], lastZ:0, zoomAt:0 };
+// The cached ground picture is sized in 128-pixel steps and only ever grows, so zooming reuses the same canvas instead
+// of allocating a new one each time (iOS Safari caps total canvas memory and silently stops drawing a canvas past it,
+// which left the colony with buildings but no roads). If the picture still comes out blank, it's retried at half
+// resolution, and failing that the ground is drawn straight onto the map every frame.
 function renderGround(wx0,wy0,wx1,wy1,rz){
-  const W=Math.max(1,Math.min(4096,Math.ceil((wx1-wx0)*rz))), H=Math.max(1,Math.min(4096,Math.ceil((wy1-wy0)*rz)));
-  if(!Ground.cv){ Ground.cv=document.createElement('canvas'); Ground.g=Ground.cv.getContext('2d'); }
-  if(Ground.cv.width!==W||Ground.cv.height!==H){ Ground.cv.width=W; Ground.cv.height=H; }
-  Ground.renders=(Ground.renders||0)+1; Object.assign(Ground,{ wx0, wy0, ww:W/rz, wh:H/rz, rz, dpr, gen:tileListGen, deco:[] });
-  const {tminX,tmaxX,tminY,tmaxY}=tileBounds(wx0,wy0,wx0+W/rz,wy0+H/rz), keep=ctx; ctx=Ground.g;
+  if(Ground.direct) return;
+  const step=v=>Math.max(128,Math.min(4096,Math.ceil(v/128)*128));
+  let W=step((wx1-wx0)*rz), H=step((wy1-wy0)*rz);
+  if(Ground.half){ rz/=2; W=step(W/2); H=step(H/2); }
+  if(!Ground.cv||!Ground.g){ Ground.cv=document.createElement('canvas'); Ground.g=Ground.cv.getContext('2d'); }
+  if(!Ground.g){ Ground.direct=true; return; }
+  if(Ground.cv.width<W||Ground.cv.height<H){ Ground.cv.width=Math.max(W,Ground.cv.width); Ground.cv.height=Math.max(H,Ground.cv.height); }
+  W=Ground.cv.width; H=Ground.cv.height;
+  Ground.renders=(Ground.renders||0)+1; Object.assign(Ground,{ wx0, wy0, ww:W/rz, wh:H/rz, rz:Ground.half?rz*2:rz, drawRz:rz, dpr, gen:tileListGen, deco:[] });
+  paintGround(Ground.g, W, H, wx0, wy0, rz);
+  // Did it really paint? (The ground is opaque, so a blank pixel means the browser refused the canvas.)
+  let ok=true; try{ ok=Ground.g.getImageData(W>>1,H>>1,1,1).data[3]>0; }catch(e){}
+  if(!ok){ if(!Ground.half){ Ground.half=true; Ground.cv.width=Ground.cv.height=0; Ground.cv=null; Ground.g=null; return renderGround(wx0,wy0,wx1,wy1,rz*2); } Ground.direct=true; } }
+function paintGround(g, W, H, wx0, wy0, rz){
+  const {tminX,tmaxX,tminY,tmaxY}=tileBounds(wx0,wy0,wx0+W/rz,wy0+H/rz), keep=ctx; ctx=g;
   try{
-    ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,W,H); ctx.setTransform(rz,0,0,rz,-wx0*rz,-wy0*rz);
+    if(g===Ground.g){ ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,W,H); ctx.setTransform(rz,0,0,rz,-wx0*rz,-wy0*rz); }
+    else { ctx.fillStyle='#8FC463'; ctx.fillRect(wx0,wy0,W/rz,H/rz); } // drawing straight onto the map (already in world space)
     if(cam.z>=0.45 && (tmaxX-tminX)*(tmaxY-tminY)<60000){
       const dark=new Path2D(), light=new Path2D(), tuft=new Path2D();
       for(let x=tminX;x<=tmaxX;x++) for(let y=tminY;y<=tmaxY;y++){ const v=(Math.imul(x,73856093)^Math.imul(y,19349663))>>>0; const c=iso(x+0.5,y+0.5);
@@ -1878,7 +1893,8 @@ function drawFrame(ts){
   if(!covered||Ground.gen!==tileListGen||Ground.dpr!==dpr||ratio>1.6||ratio<0.6||(Ground.rz!==rz&&ts-Ground.zoomAt>180)){
     const mx=(v1.x-v0.x)*0.3, my=(v1.y-v0.y)*0.3; renderGround(v0.x-mx,v0.y-my,v1.x+mx,v1.y+my,rz); }
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  if(Ground.rz===rz){ ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(Ground.cv, Math.round((Ground.wx0-cam.x)*rz+dpr*(cw/2+shake.x)), Math.round((Ground.wy0-cam.y)*rz+dpr*(ch/2+shake.y))); worldT(); }
+  if(Ground.direct){ Ground.deco=[]; ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,cw,ch); worldT(); paintGround(ctx, Math.ceil((v1.x-v0.x)*rz), Math.ceil((v1.y-v0.y)*rz), v0.x, v0.y, rz); worldT(); }
+  else if(Ground.rz===rz&&!Ground.half){ ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(Ground.cv, Math.round((Ground.wx0-cam.x)*rz+dpr*(cw/2+shake.x)), Math.round((Ground.wy0-cam.y)*rz+dpr*(ch/2+shake.y))); worldT(); }
   else { ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,cw,ch); worldT(); ctx.drawImage(Ground.cv, Ground.wx0, Ground.wy0, Ground.ww, Ground.wh); }
   const items=[];
   { const wl=[]; for(const w of tileList(D.water)){ const x=w.x, y=w.y; if(x<tminX||x>tmaxX||y<tminY||y>tmaxY||D.roads.has(w.k)) continue; wl.push([x,y,w.v]); } drawWaterTiles(wl,'ripples'); }

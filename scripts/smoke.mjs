@@ -581,6 +581,25 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     const again = (await call('GET', '/api/me/badges', undefined, P)).json, again2 = (await call('GET', '/api/me/badges', undefined, P)).json;
     ok(again.earned >= b0.earned + 2 && again2.earned === again.earned && Number((await pool.query('select count(*) n from achievements where citizen_id = $1', [zid])).rows[0].n) === again.earned, 'each badge is earned once', `${b0.earned} → ${again.earned}`);
     ok((await who('jobfill_b')).badges.length === 0, "unverified colonists don't earn badges"); }
+  // ---- leaderboards ----
+  { const zid = (await whoDev('zara_ng')).id, WEEK = 7 * 86400000, wk = Math.floor((Date.now() - 4 * 86400000) / WEEK);
+    ok((await call('GET', '/api/leaderboards/nope', undefined, { auth: false })).status === 404, 'unknown boards are refused');
+    await pool.query('delete from scores'); await pool.query('delete from weekly_champions'); await pool.query('delete from weekly_done');
+    await pool.query("insert into scores (week, key, citizen_id, value) values ($1, 'casino_net', $2, 500), ($3, 'casino_net', $2, 9999)", [wk, zid, wk - 3]);
+    const cas = (await call('GET', '/api/leaderboards/casino', undefined, P)).json;
+    ok(cas.weekly && cas.top[0]?.h === 'zara_ng' && cas.top[0].v === 500 && cas.top[0].me && cas.top[0].rank === 1, "this week's casino winnings, with you marked", JSON.stringify(cas.top[0]));
+    ok(cas.resetsAt > Date.now() && cas.resetsAt - Date.now() <= WEEK && new Date(cas.resetsAt).getUTCDay() === 1 && new Date(cas.resetsAt).getUTCHours() === 0, 'weekly boards start over on Monday at 00:00 UTC');
+    const rich = (await call('GET', '/api/leaderboards/richest', undefined, { auth: false })).json;
+    ok(rich.top.length >= 1 && rich.top.every(r => r.v === undefined) && rich.top.some(r => r.h === 'zara_ng'), 'the richest board shows the order but not the amounts', JSON.stringify(rich.top.slice(0, 3)));
+    ok(!rich.top.some(r => r.h === 'jobfill_b'), "unverified colonists aren't ranked");
+    const bdg = (await call('GET', '/api/leaderboards/badges', undefined, P)).json; ok(bdg.me && bdg.me.v >= 1, 'badges are ranked too');
+    // A week ends: last week's champions are crowned once, and announced.
+    await pool.query("insert into scores (week, key, citizen_id, value) values ($1, 'casino_net', $2, 900)", [wk - 1, zid]);
+    const ro = (await call('POST', '/api/admin/test/rollover')).json, ro2 = (await call('POST', '/api/admin/test/rollover')).json;
+    ok(ro.winners?.some(([k, h]) => k === 'casino' && h === 'zara_ng') && ro2.winners === null, "last week's winners are crowned once", JSON.stringify([ro, ro2]));
+    await new Promise(r => setTimeout(r, 2100));
+    ok(((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).some(e => e.kind === 'champions' && /Luckiest @zara_ng/.test(e.text)), "and announced in the Colony Log");
+    ok((await call('GET', '/api/leaderboards/casino', undefined, P)).json.lastChampion?.h === 'zara_ng', "the board shows last week's champion"); }
   // ---- shared links get their own preview on X, WhatsApp… ----
   { const pg = await (await fetch(BASE + '/?c=zara_ng')).text();
     ok(/<meta property="og:title" content="[^"]*@zara_ng\)? on Resurgence"/.test(pg) && /og:url" content="[^"]*\?c=zara_ng"/.test(pg), 'a colonist link has their name in the link preview');

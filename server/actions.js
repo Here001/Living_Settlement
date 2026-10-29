@@ -2,6 +2,7 @@
 import crypto from 'node:crypto';
 import { pool } from './db.js';
 import { bump } from './achievements.js';
+import { score } from './leaderboards.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES } from '../shared/catalog.js';
@@ -81,7 +82,7 @@ export class Actions {
       await ch.q('update citizens set crime_at = $2 where id = $1', [c.id, now]);
       ch.coins(c);
       if (rand() < chance) {
-        c.coins_base += loot; ch.touch(c); await ch.saveCitizen(c); await bump(ch, c.id, { crimes: 1 });
+        c.coins_base += loot; ch.touch(c); await ch.saveCitizen(c); await bump(ch, c.id, { crimes: 1 }); await score(ch, c.id, 'crimes', 1);
         if (victim) { victim.coins_base -= loot; ch.touch(victim); await ch.saveCitizen(victim); await ch.event(`👛 Someone picked @${victim.handle}'s pocket and got away with ${fmt(loot)} coins!`, 'crime'); }
         else { treasuryAdd(ch, -loot); await ch.event(`🚨 ${nameOf(shop)} was robbed of ${fmt(loot)} coins! The thief got away.`, 'crime'); }
         return { ok: true, caught: false, loot, coins: c.coins_base, chance };

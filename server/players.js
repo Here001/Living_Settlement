@@ -150,6 +150,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/dm/:handle', limit, send(async req => world.chat.thread((await me(req)).id, req.params.handle)));
   r.post('/dm/:handle', limit, send(async req => world.chat.send(await me(req), req.params.handle, (req.body || {}).text)));
   r.post('/dm/:handle/read', limit, send(async req => world.chat.read((await me(req)).id, req.params.handle)));
+  r.get('/leaderboards/:board', limit, send(async req => { const p = await playerFrom(req); const b = await world.leaderboards.board(req.params.board, p?.id || null); if (!b) throw new HttpError(404, 'No such leaderboard.'); return b; }));
   r.get('/me/badges', limit, send(async req => world.achievements.list((await me(req)).id)));
   r.get('/me/daily', limit, send(async req => world.economy.dailyInfo((await me(req)).id)));
   r.post('/me/daily', limit, send(async req => world.economy.daily((await me(req)).id)));

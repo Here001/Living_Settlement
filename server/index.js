@@ -13,6 +13,7 @@ import { instagramRouter, igStatus, connectInstagram, loadIgStatus } from './ins
 import { playersRouter, sweepPlayers, playerFrom, playerByToken } from './players.js';
 import { Chat } from './chat.js';
 import { Achievements } from './achievements.js';
+import { Leaderboards } from './leaderboards.js';
 import { Races } from './races.js';
 import { Actions } from './actions.js';
 import { Lottery } from './lottery.js';
@@ -40,6 +41,8 @@ const lottery = new Lottery(world); world.lottery = lottery;
 const economy = new Economy(world); world.economy = economy;
 const chat = new Chat(bus); world.chat = chat;
 const achievements = new Achievements(world, bus); world.achievements = achievements;
+const leaderboards = new Leaderboards(world); world.leaderboards = leaderboards;
+setInterval(() => { if (isLeader && world.meta) leaderboards.rollover().catch(e => console.error('leaderboards:', e.message)); }, 60000).unref();
 const actions = new Actions(world); world.actions = actions; world.blockedReason = c => actions.blockedReason(c);
 const app = express();
 app.disable('x-powered-by');
@@ -95,6 +98,7 @@ app.get('/api/citizens/:handle', limit, send(async req => {
 // ---------- creature races ----------
 app.get('/api/race', limit, send(async req => races.info((await playerFrom(req))?.id)));
 // Test servers only (ALLOW_TEST_ROUTES=1, never set on the live colony): run the daily payday on demand.
+if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/rollover', admin, send(async () => ({ winners: await leaderboards.rollover() })));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/payday', admin, send(() => world.change(ch => economy.day(ch, 1))));
 app.get('/api/lottery', limit, send(async req => lottery.info((await playerFrom(req))?.id)));
 app.post('/api/admin/lottery', admin, send(req => lottery.start(req.body || {})));

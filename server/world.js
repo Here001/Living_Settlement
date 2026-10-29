@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { pool, worldTx } from './db.js';
 import { bump } from './achievements.js';
+import { score } from './leaderboards.js';
 import { playRound, GAMES, MAX_BET } from '../shared/casino.js';
 import { BUILDING_TYPES, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, roadClears } from '../shared/catalog.js';
 import * as R from '../shared/rules.js';
@@ -689,6 +690,7 @@ export class World {
       await ch.q('update citizens set visit_from = case when visit_id = $2 and visit_until > $6 then visit_from else $6 end, visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5 where id = $1', [c.id, cas.id, until, cas.cx, cas.cy, Date.now()]);
       ch.citizens.set(c.id, [...new Set([...(ch.citizens.get(c.id) || []), R.chunkKey(cas.cx, cas.cy)])]);
       const won = round.payout - bet;
+      await score(ch, c.id, 'casino_net', won);
       await bump(ch, c.id, won > 0 ? { casino_plays: 1, casino_wins: 1 } : { casino_plays: 1 }, won > 0 ? { casino_best: round.payout } : {});
       if (won >= 200 || (round.payout >= bet * 20 && won >= 50)) await ch.event(`@${c.handle} won ${fmt(round.payout)} coins on ${GAMES[game].name.toLowerCase()} at the ${cas.name || 'casino'}!`, 'casino');
       return { ...round, bet, coins: c.coins_base, casino: { id: cas.id, name: cas.name || BUILDING_TYPES.casino.name } };

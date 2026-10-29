@@ -6,6 +6,7 @@ import * as R from '../shared/rules.js';
 import { BUILDING_TYPES, CAR_MODELS } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
 import { bump } from './achievements.js';
+import { score } from './leaderboards.js';
 
 export const TREASURY_CUT = 0.2;        // the colony's share of every player business
 export const BUSINESS_SHARE = 0.25;     // a business makes 25% of its wage bill in profit
@@ -136,7 +137,7 @@ export class Economy {
       ch.touch(c); ch.touch(r); await ch.saveCitizen(c); await ch.saveCitizen(r);
       if (fromBank) await ch.q('update citizens set bank = bank - $2 where id = $1', [c.id, fromBank]);
       await ch.q('update citizens set gift_day = $2, gift_sent = $3 where id = $1', [c.id, ch.today, sent + amount]);
-      await ch.event(`🎁 @${c.handle} sent @${r.handle} a gift.`, 'gift'); await bump(ch, c.id, { gifts: 1 });
+      await ch.event(`🎁 @${c.handle} sent @${r.handle} a gift.`, 'gift'); await bump(ch, c.id, { gifts: 1 }); await score(ch, c.id, 'gifted', amount);
       return { ok: true, to: r.handle, amount, fromPocket, fromBank, coins: c.coins_base, bank: bank - fromBank, left: left - amount };
     });
   }

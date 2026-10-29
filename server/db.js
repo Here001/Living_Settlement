@@ -155,6 +155,10 @@ const MIGRATIONS = [
   `alter table citizens add column stats jsonb;
    create table achievements (citizen_id text not null, id text not null, t bigint not null, primary key (citizen_id, id));
    create index achievements_id on achievements (id);`,
+  // v26: weekly leaderboards (this week's scores, and each week's champions)
+  `create table scores (week int not null, key text not null, citizen_id text not null, value bigint not null default 0, primary key (week, key, citizen_id));
+   create table weekly_champions (week int not null, board text not null, citizen_id text not null, handle text not null, value bigint not null, primary key (week, board));
+   create table weekly_done (week int primary key);`,
 ];
 
 export async function migrate() {

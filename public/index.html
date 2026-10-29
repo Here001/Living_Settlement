@@ -231,6 +231,12 @@ body.pane-max .composer textarea{height:70px}
 .dmmenu{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:4px 11px 8px}.dmmenu .hint{flex-basis:100%;font-size:11.5px}
 .dmshut{justify-content:center;font-size:13px;padding:10px 11px 12px}.blkrow{display:flex;justify-content:space-between;align-items:center;padding:6px 2px;border-bottom:1px solid var(--glass-line,rgba(0,0,0,.08));font-size:13px}
 .card .x.shr{font-size:17px}
+.toppills{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}.toppills::-webkit-scrollbar{display:none}.toppills .pill{flex:none;white-space:nowrap}
+.tophead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}.tophead h3{margin:4px 0 0}.tunit{margin:2px 0 6px;font-size:12px}
+.tchamp{font-size:13px;font-weight:600;margin:4px 0 8px;padding:6px 10px;border-radius:10px;background:rgba(226,177,60,.18)}
+.toprow{display:flex;align-items:center;gap:8px;width:100%}.toprow .trank{width:30px;text-align:center;font-weight:700;font-size:13px;flex:none}.toprow.podium .trank{font-size:19px}
+.toprow .dmtxt{flex:1;min-width:0}.toprow .who{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.toprow .tval{font-variant-numeric:tabular-nums}
+.toprow.me{background:rgba(217,113,74,.14);border-radius:12px}.tgap{text-align:center;opacity:.5;line-height:1}
 .bstrip{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:2px 0 8px}.bstrip.tap{cursor:pointer}
 .bdg{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;font-size:14px;line-height:1;background:rgba(255,255,255,.55);border:2px solid #C08457}
 .bdg.t2{border-color:#A9B4BE}.bdg.t3{border-color:#E2B13C;box-shadow:0 0 0 2px rgba(226,177,60,.25)}.bdg.big{width:40px;height:40px;font-size:21px;flex:none}
@@ -2125,6 +2131,7 @@ async function moveBuilding(id,x,y){ const b=D.buildings.get(id); if(!b){ setToo
 const I=(body)=>`<svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="${INK}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${body}</svg>`;
 const ICONS={
   feed: I('<path d="M5 7h22v14H14l-6 5v-5H5z" fill="#9CC4E4"/><path d="M10 12h12M10 16h8"/>'),
+  top: I('<path d="M10 6h12v6a6 6 0 0 1-12 0z" fill="#E2B13C"/><path d="M10 8H6a4 4 0 0 0 4 5M22 8h4a4 4 0 0 1-4 5M16 18v4M11 26h10M13 22h6v4h-6z" fill="none"/>'),
   reports: I('<path d="M8 27V5" fill="none"/><path d="M8 6h15l-3 5 3 5H8z" fill="#E8836B"/>'),
   chats: I('<path d="M5 8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-7l-5 4v-4a3 3 0 0 1-3-3z" fill="#A8D5BA"/><path d="M11 21h7l5 4v-4a3 3 0 0 0 3-3v-6" fill="none"/>'),
   races: I('<path d="M8 27V5"/><path d="M8 6h16l-3 5 3 5H8z" fill="#F4EDE0"/><path d="M8 6h4v5H8zM16 6h4v5h-4zM12 11h4v5h-4zM20 11h4v5h-4z" fill="#2B2621" stroke="none"/>'),
@@ -2174,9 +2181,9 @@ addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==
 addEventListener('keydown',e=>{ if((e.key==='m'||e.key==='M') && !/INPUT|TEXTAREA/.test((e.target.tagName||'')) && tool.kind!=='pan') setMini(!mini); if(e.key==='Escape' && tool.kind!=='pan') setTool({kind:'pan'}); });
 
 let activeTab=null, feedMode='posts';
-const PLAYER_TABS=new Set(['feed','people','races','chats']); // everyone's tabs; the rest are the developer's build menus
+const PLAYER_TABS=new Set(['feed','people','races','top','chats']); // everyone's tabs; the rest are the developer's build menus
 function buildToolbar(){ const row=$('toolsRow'); row.innerHTML='';
-  const tabs=[{id:'feed',name:'Town Square'},{id:'people',name:'Colonists'},{id:'races',name:'Races'}].concat(Me&&Me.token?[{id:'chats',name:'Chats'}]:[]);
+  const tabs=[{id:'feed',name:'Town Square'},{id:'people',name:'Colonists'},{id:'races',name:'Races'},{id:'top',name:'Top'}].concat(Me&&Me.token?[{id:'chats',name:'Chats'}]:[]);
   const all = Store.canWrite ? tabs.concat([{id:'reports',name:'Reports'},{sep:true}],CATS) : tabs;
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
     const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(activeTab===c.id),onclick:()=>openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); if(c.id==='reports'&&typeof Reports!=='undefined'&&Reports.open) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Reports.open))})); row.append(btn); } }
@@ -2218,6 +2225,7 @@ function renderPane(){
     p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
   if(activeTab==='chats'){ Chats.render(p); return; }
   if(activeTab==='reports'){ Reports.render(p); return; }
+  if(activeTab==='top'){ Top.render(p); return; }
   if(activeTab==='races'){ p.append(paneHead('Races')); const body=el('div',{class:'pane-body',id:'raceBody'}); p.append(body); renderRaces(true); return; }
   if(activeTab==='people'){ p.append(paneHead('Colonists')); const body=el('div',{class:'pane-body'});
     const s=el('input',{class:'search',id:'search',type:'search',placeholder:'Search a username',autocomplete:'off'}); s.value=peopleQuery; s.oninput=()=>{ peopleQuery=s.value; renderPeople(); };
@@ -2323,6 +2331,29 @@ document.getElementById('card').addEventListener('input',e=>{ if(e.target&&e.tar
 // ---- Chats: private messages between verified colonists, delivered live ----
 const ago = t => { const s=Math.max(0,(Date.now()+skew-t)/1000); return s<90?'just now':s<3600?`${Math.round(s/60)} min ago`:s<86400?`${Math.round(s/3600)} h ago`:`${Math.round(s/86400)} days ago`; };
 const hhmm = t => { const d=new Date(t); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
+// ---- Leaderboards: four weekly boards (reset Monday 00:00 UTC) and four all-time standings ----
+const TOP_BOARDS=[['racer','🏁','Racer'],['casino','🎰','Luckiest'],['wanted','🦹','Wanted'],['generous','🎁','Generous'],['richest','💰','Richest'],['landlord','🏙️','Landlord'],['streak','🔥','Streak'],['badges','🏅','Badges']];
+var Top={ board:'racer', data:{}, busy:false,
+  async load(b){ b=b||this.board; try{ this.data[b]={...await api('/api/leaderboards/'+b),at:Date.now()}; }catch(e){ toast(e.message); } if(activeTab==='top'&&this.board===b) this.renderNow(); },
+  renderNow(){ if(activeTab!=='top') return; const p=$('pane'); if(p){ p.innerHTML=''; this.render(p); } },
+  left(t){ const ms=Math.max(0,t-Date.now()), d=Math.floor(ms/86400000), h=Math.floor(ms%86400000/3600000), m=Math.floor(ms%3600000/60000); return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m} min`; },
+  row(r,B){ const av=el('span',{class:'ava sm'}); av.innerHTML=avatarSVG({handle:r.h,gender:r.g,name:r.n});
+    const medal=r.rank===1?'🥇':r.rank===2?'🥈':r.rank===3?'🥉':'#'+r.rank;
+    return el('button',{class:'person toprow'+(r.me?' me':'')+(r.rank<=3?' podium':''),onclick:()=>{ openCitizen(r.h); if(innerWidth<900) openTab(null); }},
+      el('span',{class:'trank',text:medal}), av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:(r.n?`${r.n} · @${r.h}`:'@'+r.h)+(r.me?' (you)':'')})),
+      r.v!=null?el('b',{class:'tval',text:fmt(r.v)}):''); },
+  render(p){ const pills=el('div',{class:'toppills'});
+    for(const [id,ic,nm] of TOP_BOARDS) pills.append(el('button',{class:'pill'+(this.board===id?' on':''),'aria-pressed':String(this.board===id),onclick:()=>{ this.board=id; this.renderNow(); if(!this.data[id]||Date.now()-this.data[id].at>30000) this.load(id); }}, ic+' '+nm));
+    p.append(paneHead('Leaderboards')); const body=el('div',{class:'pane-body',id:'topBody'}); body.append(pills); p.append(body);
+    const D0=this.data[this.board]; if(!D0||Date.now()-D0.at>30000) this.load(); if(!D0){ body.append(el('p',{class:'hint',text:'Loading…'})); return; }
+    body.append(el('div',{class:'tophead'}, el('h3',{text:`${D0.icon} ${D0.name}`}), el('span',{class:'hint',text:D0.weekly?`This week · starts over in ${this.left(D0.resetsAt)}`:'All time'})));
+    body.append(el('p',{class:'hint tunit',text:D0.show?`Ranked by ${D0.unit}${D0.weekly?' this week':''}.`:`Ranked by ${D0.unit}${D0.weekly?' this week':''}. Amounts are private, so only the order is shown.`}));
+    if(D0.lastChampion) body.append(el('p',{class:'tchamp',text:`🏆 Last week's champion: @${D0.lastChampion.h}${D0.lastChampion.v!=null?` (${fmt(D0.lastChampion.v)})`:''}`}));
+    if(!D0.top.length){ body.append(el('p',{class:'hint',text:D0.weekly?'Nobody yet this week. You could be first!':'Nobody yet.'})); }
+    for(const r of D0.top) body.append(this.row(r,D0));
+    if(D0.me&&D0.me.rank>10) body.append(el('div',{class:'tgap',text:'⋯'}), this.row(D0.me,D0));
+    else if(!D0.me&&Me&&Me.token) body.append(el('p',{class:'hint',text:`You're not on this board yet. ${D0.players?`${fmt(D0.players)} colonist${D0.players===1?' is':'s are'} on it.`:''}`}));
+    else if(!(Me&&Me.token)) body.append(el('p',{class:'hint',text:'Sign in to your colonist to see where you rank. Only verified colonists are ranked.'})); } };
 // ---- Badges: earned by playing; shown on every colonist's card, and in full in your own Badges tab ----
 const mineCard=c=>!!(Me&&Me.handle&&c&&c.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase());
 var Badges={ data:null, at:0, loading:false,

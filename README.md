@@ -165,6 +165,19 @@ These live on a signed-in colonist's own card, under **Home**, **Bank** and **Ca
 - **Where the coins come from.** The treasury, like every other payout. If it runs low the reward is cut to what it holds, and the streak still counts.
 - **Colony Log.** Streaks of 7, 14, 30, 50, 100, 200 and 365 days are announced.
 
+## Leaderboards
+
+- **Where.** The **Top** tab, which everyone can see. Only verified colonists are ranked.
+- **Weekly boards.** These start over every **Monday at 00:00 UTC** (01:00 in Lagos), so newcomers can win:
+  - 🏁 Top racer (net race winnings)
+  - 🎰 Luckiest (net casino winnings)
+  - 🦹 Most wanted (crimes got away with)
+  - 🎁 Most generous (coins gifted)
+- **All-time boards.** 💰 Richest (pocket and bank), 🏙️ Biggest landlord (buildings owned), 🔥 Longest streak (current daily streak), 🏅 Most badges.
+- **Privacy.** Balances and gift amounts are private, so **Richest** and **Most generous** show the order only. The others show the numbers.
+- **The list.** Each board shows the top 10 with 🥇🥈🥉, your own place (even below the top 10), and when it starts over. Tapping someone opens their card.
+- **Champions.** When a week ends, its winners are crowned once, shown as "🏆 Last week's champion" on each weekly board, and announced in the Colony Log. Weekly scores are kept per week in `scores`, and winners in `weekly_champions`.
+
 ## Badges
 
 - **What they are.** 25 badges in 7 groups (`shared/achievements.js`): Settling in, Money, Things you own, Luck, Friends, Coming back, On the wrong side. Each is Bronze, Silver or Gold.

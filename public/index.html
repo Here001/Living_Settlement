@@ -312,6 +312,43 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 #intro .title .row-actions{justify-content:center;margin-top:18px}
 #intro .title .hint{color:#F1EADDaa;margin-top:14px}
 #intro .btn:not(.primary){background:transparent;color:#F1EADD;border:1.4px solid rgba(241,234,221,.6)}
+
+/* ---------- Liquid glass: frosted, see-through panels that let the colony show behind them ---------- */
+:root{ --glass:rgba(252,248,240,.66); --glass-2:rgba(255,255,255,.42); --glass-edge:rgba(255,255,255,.62); --glass-line:rgba(43,38,33,.14); --glass-shadow:0 10px 30px rgba(30,25,20,.20), inset 0 1px 0 rgba(255,255,255,.65); }
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --glass:rgba(28,25,21,.58); --glass-2:rgba(255,255,255,.07); --glass-edge:rgba(255,255,255,.16); --glass-line:rgba(255,255,255,.12); --glass-shadow:0 12px 34px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.10); } }
+:root[data-theme="dark"]{ --glass:rgba(28,25,21,.58); --glass-2:rgba(255,255,255,.07); --glass-edge:rgba(255,255,255,.16); --glass-line:rgba(255,255,255,.12); --glass-shadow:0 12px 34px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.10); }
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .inked{background:var(--glass);border:1px solid var(--glass-edge);box-shadow:var(--glass-shadow);-webkit-backdrop-filter:blur(22px) saturate(170%);backdrop-filter:blur(22px) saturate(170%)}
+  .post,.rrow,.joblist li,.cardb,.petb,.cresult,.lane,.person{background:var(--glass-2)}
+  .post{border:1px solid var(--glass-line)} .post.gz{background:var(--glass-2)}
+  .x,.btn:not(.primary):not(.danger){background:var(--glass-2);border-color:var(--glass-line)}
+  .composer textarea,.fields input,.search,.spawn input,.authbox input,.rbet input,.casino .cbet input{background:var(--glass-2);border-color:var(--glass-line)}
+  .seg{background:var(--glass-2)} .seg button[aria-pressed="true"]{background:var(--glass);box-shadow:0 0 0 1px var(--glass-edge)}
+  .authbox{border-color:var(--glass-line)} .tb[aria-pressed="true"]{background:var(--glass-2);border-color:var(--glass-edge)}
+}
+/* Official updates: readable in light and dark */
+.post.official{background:rgba(242,179,61,.16);border-color:rgba(242,179,61,.75)}
+.post.official .ph b,.post.official p{color:var(--ink)}
+.pinlabel{color:var(--accent)}
+/* ---------- Smaller panels, so the colony stays in view ---------- */
+.pane{max-height:min(34vh,330px)} @media (min-width:900px){ .pane{max-height:36vh} }
+#card{max-height:min(48vh, calc(100vh - 210px));max-height:min(48dvh, calc(100dvh - 210px))}
+.card{padding:9px 11px;font-size:13.5px}
+.card h2{font-size:17px} .card dl{font-size:13px;margin:6px 0} .chead{gap:9px} .chead .ava{width:40px;height:40px}
+.pane-head{padding:7px 11px 5px;gap:8px;flex-wrap:nowrap} .pane-title{font-size:17px;text-underline-offset:5px;white-space:nowrap;flex:none}
+.pane-head .seg{min-width:0;overflow-x:auto;scrollbar-width:none;flex:0 1 auto} .pane-head .seg::-webkit-scrollbar{display:none} .pane-head .seg button{white-space:nowrap}
+.pane-body{padding:0 11px 10px;font-size:13.5px}
+.seg button{padding:3px 9px;font-size:12px}
+.composer{padding:6px 11px 5px;gap:4px} .composer textarea{font-size:13.5px;padding:6px 9px;min-height:0;height:34px;transition:height .15s} .postas{font-size:12px}
+.composer textarea:focus,.composer textarea.filled{height:70px} /* one line until you start writing */
+.composer .row{gap:8px} .composer .row .btn{padding:4px 10px}
+.post{grid-template-columns:32px 1fr;gap:8px;padding:7px 9px;margin-bottom:6px;border-radius:13px;font-size:13px}
+.post .ava{width:32px;height:32px} .post p{margin:2px 0 4px} .post .gzt{font-size:14.5px} .post .ph time{font-size:11px}
+.btn{padding:5px 10px;font-size:13px;border-radius:10px} .hint{font-size:12px}
+.authbox{padding:8px 10px;gap:5px;border-radius:12px} .authbox h3{font-size:14px;margin:0}
+.rrow{padding:5px 8px 5px 5px} .rrow .rthumb{width:36px;height:36px} .rrow .rtx{font-size:11.5px} .rrow .rtx b{font-size:13px} .rrow .rpays{font-size:14px}
+.lane{height:28px} .lane img{width:26px;height:26px}
+.x{width:26px;height:26px;font-size:15px}
 </style>
 </head>
 <body>
@@ -1422,7 +1459,7 @@ function drawStreetLamp(p){ line(p,up(p,26),INK,2.4); line(p,up(p,26),'#3E5148',
   if(LAMPS>0){ windowQuads.push([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}]); lights.push({x:q.x,y:q.y-2,r:19,col:'255,218,150',a:1.15},{x:p.x,y:p.y,r:34,col:'255,214,140',a:0.55}); } }
 function roadExtras(x,y,R,has,pushDeco){ const k=x+','+y, hx=has(x-1,y)||has(x+1,y), hy=has(x,y-1)||has(x,y+1), C=iso(x+0.5,y+0.5), hh=hash(k);
   const straight=hx!==hy;
-  if(straight && R.lanes){ const along=(t)=>hx?iso(x+t,y+0.5):iso(x+0.5,y+t), off=(t,s)=>hx?iso(x+t,y+0.5+s):iso(x+0.5+s,y+t);
+  if(straight && R.lanes && cam.z>=0.5){ // lane markings only when close enough to see them const along=(t)=>hx?iso(x+t,y+0.5):iso(x+0.5,y+t), off=(t,s)=>hx?iso(x+t,y+0.5+s):iso(x+0.5+s,y+t);
     if(R.lanes==='one1'||R.lanes==='one2'){ const a=along(0.3), b=along(0.7); line(a,b,'#F1EFE7',1.4); const dir=hx?((y%2===0)?1:-1):((x%2===0)?1:-1); const tip=dir>0?b:a, base=dir>0?a:b; const dx=(tip.x-base.x)*0.25, dy=(tip.y-base.y)*0.25; line(tip,{x:tip.x-dx+dy*0.8,y:tip.y-dy-dx*0.4},'#F1EFE7',1.4); line(tip,{x:tip.x-dx-dy*0.8,y:tip.y-dy+dx*0.4},'#F1EFE7',1.4);
       if(R.lanes==='one2') for(const s of [-0.16,0.16]) line(off(0.1,s),off(0.4,s),'#F1EFE7',1); }
     if(R.lanes==='four'){ line(off(0,-0.025),off(1,-0.025),'#E6C35C',1.1); line(off(0,0.025),off(1,0.025),'#E6C35C',1.1); for(const s of [-0.2,0.2]) line(off(0.15,s),off(0.55,s),'#F1EFE7',1.1); }
@@ -1631,7 +1668,7 @@ function renderGround(wx0,wy0,wx1,wy1,rz){
     { const wl=[]; for(const w of tileList(D.water)){ const x=w.x, y=w.y; if(x<tminX-1||x>tmaxX+1||y<tminY-1||y>tmaxY+1) continue; wl.push([x,y,w.v]); } drawWaterTiles(wl,'base'); }
     for(const r of tileList(D.roads)){ const x=r.x, y=r.y, k=r.k, type=r.v; if(x<tminX||x>tmaxX||y<tminY||y>tmaxY) continue; const R=ROAD_TYPES[type]||ROAD_TYPES.dirt; tx=x; ty=y;
       if(R.kind==='highway') drawHighwayTile(x,y,R,hasRoad); else drawRoadTile(x,y,R,hasRoad,pushDeco);
-      if(cam.z>=0.5) roadExtras(x,y,R,hasRoad,pushDeco); if(D.water.has(k)) drawBridge(x,y,R,hasRoad); }
+      roadExtras(x,y,R,hasRoad,pushDeco); if(D.water.has(k)) drawBridge(x,y,R,hasRoad); } // street lights at every zoom
     { const P=new Path2D(); for(const b of D.buildings.values()){ const [w,d]=T(b).size; if(b.x+w<tminX-4||b.x>tmaxX+2||b.y+d<tminY-2||b.y>tmaxY+4) continue; addShadow(P,b); } ctx.fillStyle='rgba(38,52,86,.2)'; ctx.fill(P,'nonzero'); }
   } finally { ctx=keep; } }
 // People drawn faintly on top only where a building drawn after them covers them, so they stay visible behind it.
@@ -2566,11 +2603,12 @@ function composer(){ const box=el('div',{class:'composer'});
   const ta=el('textarea',{maxlength:'280',rows:'2',placeholder:`Say something to the colony, @${Me.handle}…`,'aria-label':'Message to the Town Square'}); const n=el('span',{class:'count',text:'280'});
   const post=el('button',{class:'btn primary',text:'Post'});
   const send=async()=>{ const t=ta.value.trim(); if(!t) return; post.disabled=true; try{ const m=await api('/api/square',{method:'POST',body:{text:t}}); if(!S.chat.some(x=>x.id===m.id)) S.chat.unshift(m); ta.value=''; n.textContent='280'; feedDirty=true; renderFeed(true); }catch(e){ toast(e.message); } post.disabled=false; };
-  ta.oninput=()=>{ n.textContent=String(280-ta.value.length); }; ta.addEventListener('blur',()=>setTimeout(()=>{ if(!composerBusy()){ feedDirty=true; renderFeed(); } },150)); ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } }); post.onclick=send;
+  ta.oninput=()=>{ n.textContent=String(280-ta.value.length); ta.classList.toggle('filled',!!ta.value); }; ta.addEventListener('blur',()=>setTimeout(()=>{ if(!composerBusy()){ feedDirty=true; renderFeed(); } },150)); ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } }); post.onclick=send;
   box.append(ta, el('div',{class:'row'}, n, post)); return box; }
 // While someone is typing a Town Square message the feed holds still (rebuilding 80 posts stalls typing on phones);
 // it catches up the moment they stop. Otherwise it only rebuilds when what it would show has changed.
 let feedKey='';
+document.addEventListener('input',e=>{ const t=e.target; if(t&&t.tagName==='TEXTAREA'&&t.closest&&t.closest('.composer')) t.classList.toggle('filled',!!t.value); });
 const composerBusy = () => { const a=document.activeElement; return !!(a && a.closest && a.closest('.composer')); };
 function renderFeed(force){
   const body=$('feedBody'); if(!body || activeTab!=='feed' || !feedDirty) return;

@@ -8,7 +8,9 @@ import { treasuryAdd } from './races.js';
 
 export const TREASURY_CUT = 0.2;        // the colony's share of every player business
 export const BUSINESS_SHARE = 0.25;     // a business makes 25% of its wage bill in profit
-export const BANK_RATE = 0.01, BANK_CAP = 200; // savings grow 1% a game day, at most 200 coins a day each
+// Savings grow 0.1% a game day (a game day is 30 real minutes), at most 20 coins a day each, and only while the
+// treasury can pay it: interest moves existing coins around, it never creates them.
+export const BANK_RATE = 0.001, BANK_CAP = 20;
 export const MAX_CARS = 3, CAR_RESALE = 0.6, MAX_PROPERTIES = 5, PROPERTY_RESALE = 0.7;
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const nameOf = b => b.name || BUILDING_TYPES[b.type]?.name || 'a building';
@@ -175,11 +177,15 @@ export class Economy {
     days = Math.max(1, Math.min(3, days)); let rent = 0, owners = 0, interest = 0;
     const own = (await ch.q('select * from buildings where owner_id is not null and done and not ruin')).rows, byOwner = new Map();
     for (const b of own) { const inc = dailyIncome(b).net * days; if (inc > 0) byOwner.set(b.owner_id, (byOwner.get(b.owner_id) || 0) + inc); }
-    const savers = (await ch.q('select id from citizens where bank > 0')).rows.map(r => r.id);
+    // Interest is paid only from what the treasury holds after rents and profits; if it can't cover everyone, everyone gets the same share.
+    const kitty = Math.max(0, R.treasuryOn(ch.meta, ch.today) - [...byOwner.values()].reduce((a, b) => a + b, 0));
+    const want = Number((await ch.q('select coalesce(sum(least($1::numeric, floor(bank * $2::numeric))), 0) w from citizens where bank > 0', [BANK_CAP, BANK_RATE])).rows[0].w) * days;
+    const share = want > 0 ? Math.min(1, kitty / want) : 0;
+    const savers = share > 0 ? (await ch.q('select id from citizens where bank > 0')).rows.map(r => r.id) : [];
     const ids = [...new Set([...byOwner.keys(), ...savers])];
     for (let i = 0; i < ids.length; i += 500) {
       for (const c of (await ch.q('select * from citizens where id = any($1) for update', [ids.slice(i, i + 500)])).rows) {
-        const inc = byOwner.get(c.id) || 0, intr = Math.min(BANK_CAP, Math.floor(Number(c.bank || 0) * BANK_RATE)) * days;
+        const inc = byOwner.get(c.id) || 0, intr = Math.floor(Math.min(BANK_CAP, Math.floor(Number(c.bank || 0) * BANK_RATE)) * days * share);
         if (!inc && !intr) continue;
         ch.coins(c); c.coins_base += inc; ch.touch(c); await ch.saveCitizen(c);
         if (intr) await ch.q('update citizens set bank = bank + $2 where id = $1', [c.id, intr]);

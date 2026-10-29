@@ -2347,7 +2347,7 @@ function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Home
 function bankPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Bank'})); const M=moneyFor(c), B=M&&M.bank;
   if(!B){ box.append(el('p',{class:'hint',text:'Opening your account…'})); return box; }
   box.append(el('p',{class:'jobnow'}, 'On you: ', el('b',{text:`${fmt(B.wallet)} coins`}), ' · In the bank: ', el('b',{text:`${fmt(B.bank)} coins`})),
-    el('p',{class:'hint',text:`Money in the bank can't be pickpocketed, and grows ${Math.round(B.rate*100)}% a game day (up to ${fmt(B.cap)} a day)${B.bank?`: about ${fmt(B.interest)} tomorrow`:''}.`}));
+    el('p',{class:'hint',text:`Money in the bank can't be pickpocketed, and earns ${+(B.rate*100).toFixed(2)}% a game day (up to ${fmt(B.cap)} coins a day)${B.bank?`: about ${fmt(B.interest)} at the next payday`:''}.`}));
   const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Amount',placeholder:'Amount'});
   const amt=()=>Math.floor(Number(inp.value)||0);
   if(!B.hasBank) box.append(el('p',{class:'hint',text:"The colony doesn't have a Bank yet, so you can't deposit. You can still take out what you saved."}));

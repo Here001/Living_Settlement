@@ -124,7 +124,7 @@ These live on a signed-in colonist's own card, under **Home**, **Bank** and **Ca
 - **Bank.**
   - Deposits need a Bank in the colony ("Colonnaded bank", under Offices). Withdrawals always work.
   - Money in the bank can't be pickpocketed.
-  - Savings grow 1% each game day, up to 200 coins a day, paid by the treasury.
+  - Savings grow 0.1% each game day, up to 20 coins a day. The treasury pays interest only when it can afford to, so the bank never creates coins.
 - **Cars.**
   - The dealer sells five models (Hatchback 1,500, Sedan 3,000, Pickup 5,000, SUV 6,500, Sports car 14,000), each in a choice of colours.
   - Colonists keep up to 3 in their garage, pick which one they drive, and can sell for 60% back.

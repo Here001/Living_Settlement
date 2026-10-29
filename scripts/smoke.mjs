@@ -439,10 +439,11 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await call('POST', '/api/me/properties/buy', { buildingId: spare }, P)).status === 409, "can't buy it twice");
     const props = (await call('GET', '/api/me/properties', undefined, P)).json;
     ok(props.list.length === 1 && props.list[0].id === spare, 'it shows in your buildings');
+    await set('zara_ng', 'bank = 50000');
     const t0 = await money(), pd = await call('POST', '/api/admin/test/payday', {});
     if (pd.status === 404) console.log('  (payday route only on test servers; start the server with ALLOW_TEST_ROUTES=1 to check paydays)');
     else { const t1 = await money();
-      const inc = props.list[0].income; ok(pd.status === 200 && t1.wallet - t0.wallet === inc && t1.bank - t0.bank === Math.min(200, Math.floor(t0.bank * 0.01)), `payday: ${inc} rent to the owner, interest on savings`, JSON.stringify({ t0, t1, inc, pd: pd.json })); }
+      const inc = props.list[0].income; ok(pd.status === 200 && t1.wallet - t0.wallet === inc && t1.bank - t0.bank === 20, `payday: ${inc} rent to the owner, interest on savings`, JSON.stringify({ t0, t1, inc, pd: pd.json })); }
     const shop = await build('stall', 965, 900); await call('POST', '/api/me/properties/buy', { buildingId: shop }, P);
     const before = (await money()).wallet; await call('DELETE', `/api/admin/buildings/${shop}`);
     ok((await money()).wallet === before + 500, 'if the developer knocks it down, the owner gets their money back');

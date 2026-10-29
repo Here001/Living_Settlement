@@ -141,6 +141,14 @@ const MIGRATIONS = [
   `alter table citizens add column last_seen bigint;
    create table dms (id text primary key, pair text not null, sender_id text not null, recipient_id text not null, text text not null, t bigint not null, read boolean not null default false);
    create index dms_pair on dms (pair, t desc); create index dms_unread on dms (recipient_id) where not read;`,
+  // v23: blocking, reports to the developer, and muting colonists who break the rules
+  `alter table citizens add column muted_until bigint;
+   create table blocks (blocker_id text not null, blocked_id text not null, t bigint not null, primary key (blocker_id, blocked_id));
+   create index blocks_blocked on blocks (blocked_id);
+   create table reports (id text primary key, reporter_id text not null, reporter_handle text not null, target_id text not null, target_handle text not null,
+     kind text not null, message_id text not null, text text not null, context jsonb, reason text not null, t bigint not null,
+     status text not null default 'open', action text, resolved_at bigint, unique (reporter_id, message_id));
+   create index reports_open on reports (t desc) where status = 'open';`,
 ];
 
 export async function migrate() {

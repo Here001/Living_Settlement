@@ -214,6 +214,17 @@ body.pane-max .composer textarea{height:70px}
 .dm p{margin:0;white-space:pre-wrap}.dm time{display:block;text-align:right;font-size:10px;opacity:.6;margin-top:1px}
 .dm.them{align-self:flex-start;background:var(--glass-2,rgba(0,0,0,.05));border-bottom-left-radius:5px}
 .dm.me{align-self:flex-end;background:linear-gradient(180deg,rgba(244,150,112,.92),rgba(217,113,74,.82));color:#fff;border-color:rgba(255,255,255,.5);border-bottom-right-radius:5px}
+.dm.them{cursor:pointer}.dmflag{display:none;margin-top:3px;border:0;background:none;padding:0;font:inherit;font-size:11px;color:var(--red,#c0392b);cursor:pointer}.dm.flagon .dmflag{display:block}
+.dmmenu{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:4px 11px 8px}.dmmenu .hint{flex-basis:100%;font-size:11.5px}
+.dmshut{justify-content:center;font-size:13px;padding:10px 11px 12px}.blkrow{display:flex;justify-content:space-between;align-items:center;padding:6px 2px;border-bottom:1px solid var(--glass-line,rgba(0,0,0,.08));font-size:13px}
+.rsheet-bg{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(10,20,15,.28);padding:16px}
+.rsheet{width:min(380px,100%);padding:14px 16px;max-height:86vh;overflow:auto}.rsheet h3{margin:0 0 8px;font-size:16px}
+.rsheet blockquote,.rep blockquote{margin:6px 0;padding:6px 10px;border-left:3px solid #E8836B;background:rgba(0,0,0,.04);border-radius:6px;font-size:13px;white-space:pre-wrap;word-wrap:break-word}
+.rreasons{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.rblock{display:flex;align-items:center;gap:6px;font-size:13px;margin:8px 0}
+.rep{padding:10px 0;border-bottom:1px solid var(--glass-line,rgba(0,0,0,.1))}.rep .ph{display:flex;gap:8px;align-items:center}.rep .ph time{margin-left:auto;font-size:11px;opacity:.7}
+.rtag{font-size:11px;padding:1px 7px;border-radius:9px;background:rgba(232,131,107,.18);color:#b4492c}.rmuted{font-size:12.5px;color:#b4492c;margin:4px 0}
+.rctx{font-size:12.5px;margin:6px 0;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.04);display:grid;gap:3px}.rctx div{word-wrap:break-word}.rctx .hit{background:rgba(232,131,107,.22);border-radius:5px;padding:1px 4px}
+.rep .row-actions{flex-wrap:wrap}
 .dmbar{display:flex;gap:6px;padding:6px 11px 10px;align-items:flex-end}.dmbar textarea{flex:1;resize:none;min-height:34px;max-height:90px;padding:7px 10px;border-radius:14px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:var(--glass-2,var(--paper));font:13.5px/1.35 'Bricolage Grotesque',system-ui,sans-serif;color:var(--ink)}
 .swatches{display:flex;gap:6px;flex-wrap:wrap}.sw{width:26px;height:26px;border-radius:999px;border:2px solid var(--glass-edge,#fff);box-shadow:0 0 0 1px rgba(0,0,0,.25);cursor:pointer}.sw.on{box-shadow:0 0 0 2.5px var(--accent)}
 .joblist li img{flex:none}
@@ -523,7 +534,7 @@ function applyOp(o){
     for(const k of o.chunks) if(loading.has(k)){ if(!buffered.has(k)) buffered.set(k,[]); buffered.get(k).push(o); return; }
     if(o.op!=='citizen'&&o.op!=='citizenGone') return; }
   switch(o.op){
-  case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&!PLAYER_TABS.has(activeTab)) renderPane(); break;
+  case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&!PLAYER_TABS.has(activeTab)&&activeTab!=='reports') renderPane(); break;
   case 'race': raceSoon(o.data); break;
   case 'lottery': lotterySoon(o.data); break;
   case 'building': putBuilding(o.data); changed(); break;
@@ -538,6 +549,7 @@ function applyOp(o){
   case 'chat': if(!S.chat.some(m=>m.id===o.data.id)){ S.chat.unshift(o.data); if(S.chat.length>200) S.chat.length=200; feedDirty=true; renderFeed(); } break;
   case 'chatPin': { const m=S.chat.find(x=>x.id===o.id); if(m){ m.p=o.pinned?1:0; feedDirty=true; renderFeed(); } break; }
   case 'chatGone': S.chat=S.chat.filter(m=>m.id!==o.id); feedDirty=true; renderFeed(); break;
+  case 'reports': Reports.soon(); break;
   case 'reset': location.reload(); break;
   case 'event': S.events.unshift(o.data); if(S.events.length>300) S.events.length=300; feedDirty=true; newsSoon(); break; } }
 let newsTimer=null; const newsSoon=()=>{ if(!newsTimer) newsTimer=setTimeout(()=>{ newsTimer=null; updateNews(); },300); }; // a burst of news updates the ticker once
@@ -588,7 +600,8 @@ function connect(){
     else if(m.type==='ops'){ opBatch++; try{ for(const o of m.ops){ try{ applyOp(o); }catch(err){ console.error('Skipped an update:', err); } } } finally { opBatch--; } if(!opBatch&&batchChanged){ batchChanged=false; changed(); } }
     else if(m.type==='resync') reloadAll();
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
-    else if(m.type==='dm' && m.data) Chats.incoming(m.data); };
+    else if(m.type==='dm' && m.data) Chats.incoming(m.data);
+    else if(m.type==='dmGone' && m.id) Chats.gone(m.id); };
   ws.onclose=()=>{ if(ws!==me) return; if(Store.online) toast('Reconnecting to the colony…'); Store.online=false; reconnectSoon(); };
 }
 setInterval(()=>{ if(!ws||document.hidden) return; if(ws.readyState===1&&Date.now()-lastMsgAt>20000){ lastMsgAt=Date.now(); try{ ws.close(); }catch(e){} reconnectSoon(true); } },5000);
@@ -2071,6 +2084,7 @@ async function moveBuilding(id,x,y){ const b=D.buildings.get(id); if(!b){ setToo
 const I=(body)=>`<svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="${INK}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${body}</svg>`;
 const ICONS={
   feed: I('<path d="M5 7h22v14H14l-6 5v-5H5z" fill="#9CC4E4"/><path d="M10 12h12M10 16h8"/>'),
+  reports: I('<path d="M8 27V5" fill="none"/><path d="M8 6h15l-3 5 3 5H8z" fill="#E8836B"/>'),
   chats: I('<path d="M5 8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-7l-5 4v-4a3 3 0 0 1-3-3z" fill="#A8D5BA"/><path d="M11 21h7l5 4v-4a3 3 0 0 0 3-3v-6" fill="none"/>'),
   races: I('<path d="M8 27V5"/><path d="M8 6h16l-3 5 3 5H8z" fill="#F4EDE0"/><path d="M8 6h4v5H8zM16 6h4v5h-4zM12 11h4v5h-4zM20 11h4v5h-4z" fill="#2B2621" stroke="none"/>'),
   people: I('<circle cx="12" cy="11" r="4" fill="#E8A07A"/><circle cx="21" cy="12" r="3.5" fill="#F2C9A8"/><path d="M4 25c0-5 4-8 8-8s8 3 8 8z" fill="#E8A07A"/><path d="M17 25c0-4 2-7 5-7s6 3 6 7z" fill="#F2C9A8"/>'),
@@ -2106,7 +2120,7 @@ async function rotateBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
 function setTool(t){ tool=t; ghost=null; roadStart=null; setTimeout(refreshTurn); const chip=$('toolchip');
   if(t.kind==='pan'){ chip.hidden=true; setMini(false); }
   else { chip.hidden=false; $('toolLabel').textContent = t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} onto a road` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
-  if(activeTab && !PLAYER_TABS.has(activeTab)) renderPane(); }
+  if(activeTab && !PLAYER_TABS.has(activeTab) && activeTab!=='reports') renderPane(); }
 $('toolDone').onclick=()=>setTool({kind:'pan'});
 // Minimise: tuck the menus away while keeping the chosen tool, so the whole map is free to build on.
 let mini=false;
@@ -2122,11 +2136,11 @@ let activeTab=null, feedMode='posts';
 const PLAYER_TABS=new Set(['feed','people','races','chats']); // everyone's tabs; the rest are the developer's build menus
 function buildToolbar(){ const row=$('toolsRow'); row.innerHTML='';
   const tabs=[{id:'feed',name:'Town Square'},{id:'people',name:'Colonists'},{id:'races',name:'Races'}].concat(Me&&Me.token?[{id:'chats',name:'Chats'}]:[]);
-  const all = Store.canWrite ? tabs.concat([{sep:true}],CATS) : tabs;
+  const all = Store.canWrite ? tabs.concat([{id:'reports',name:'Reports'},{sep:true}],CATS) : tabs;
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
-    const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(activeTab===c.id),onclick:()=>openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); row.append(btn); } }
+    const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(activeTab===c.id),onclick:()=>openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); if(c.id==='reports'&&typeof Reports!=='undefined'&&Reports.open) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Reports.open))})); row.append(btn); } }
 function openTab(name){ if(!name) document.body.classList.remove('pane-max'); activeTab=name; if((PLAYER_TABS.has(name)||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
-function applyPermissions(){ buildToolbar(); refreshHUD(); refreshUndo(); refreshDraftBar(); if(Store.canWrite && !draftLoaded){ draftLoaded=true; loadDraft(); } $('spawnBoxNote')&&0; if(!Store.canWrite && activeTab && !PLAYER_TABS.has(activeTab)) openTab(null); }
+function applyPermissions(){ buildToolbar(); refreshHUD(); refreshUndo(); refreshDraftBar(); if(Store.canWrite && !draftLoaded){ draftLoaded=true; loadDraft(); if(typeof Reports!=='undefined') Reports.load(); } $('spawnBoxNote')&&0; if(!Store.canWrite && activeTab && !PLAYER_TABS.has(activeTab)) openTab(null); }
 
 const subTab={}; let brushSize=2;
 async function setWeather(kind){ try{ await api('/api/admin/weather',{method:'PUT',body:{kind}}); toast(kind?`Weather pinned to ${WEATHER_TYPES[kind].name.toLowerCase()}`:'Weather is automatic again'); }catch(e){ toast(e.message); } }
@@ -2162,6 +2176,7 @@ function renderPane(){
     const seg=el('div',{class:'seg',role:'tablist'}); for(const [id,nm] of [['posts','Posts'],['log','Daily log'],['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
     p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
   if(activeTab==='chats'){ Chats.render(p); return; }
+  if(activeTab==='reports'){ Reports.render(p); return; }
   if(activeTab==='races'){ p.append(paneHead('Races')); const body=el('div',{class:'pane-body',id:'raceBody'}); p.append(body); renderRaces(true); return; }
   if(activeTab==='people'){ p.append(paneHead('Colonists')); const body=el('div',{class:'pane-body'});
     const s=el('input',{class:'search',id:'search',type:'search',placeholder:'Search a username',autocomplete:'off'}); s.value=peopleQuery; s.oninput=()=>{ peopleQuery=s.value; renderPeople(); };
@@ -2267,23 +2282,86 @@ document.getElementById('card').addEventListener('input',e=>{ if(e.target&&e.tar
 // ---- Chats: private messages between verified colonists, delivered live ----
 const ago = t => { const s=Math.max(0,(Date.now()+skew-t)/1000); return s<90?'just now':s<3600?`${Math.round(s/60)} min ago`:s<86400?`${Math.round(s/3600)} h ago`:`${Math.round(s/86400)} days ago`; };
 const hhmm = t => { const d=new Date(t); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
+// ---- Blocking: a blocked colonist can't message you, and their Town Square posts are hidden from you ----
+var Blocks={ list:[], set:new Set(),
+  has(h){ return !!h&&this.set.has(String(h).toLowerCase()); },
+  put(list){ const key=[...this.set].join(); this.list=list||[]; this.set=new Set(this.list.map(p=>p.h.toLowerCase())); if([...this.set].join()!==key){ feedDirty=true; renderFeed(true); if(sel&&sel.kind==='c') renderCard(true); } },
+  async load(){ if(!(Me&&Me.token)){ this.put([]); return; } try{ this.put(await api('/api/blocks')); }catch(e){} },
+  ask(h){ toast(`Block @${h}? They won't be able to message you, and you won't see their Town Square posts. They aren't told.`,'Block',()=>this.block(h)); },
+  async block(h){ try{ await api('/api/blocks/'+encodeURIComponent(h),{method:'POST'}); toast(`You blocked @${h}.`); await this.load(); Chats.after(h); }catch(e){ toast(e.message); } },
+  async unblock(h){ try{ await api('/api/blocks/'+encodeURIComponent(h),{method:'DELETE'}); toast(`Unblocked @${h}.`); await this.load(); Chats.after(h); }catch(e){ toast(e.message); } } };
+function shownMsg(m){ return m.o || typeof Blocks==='undefined' || !Blocks.has(m.h); }
+// ---- Reporting a private message or a Town Square post to the developer ----
+const REPORT_REASONS={ spam:'Spam', abuse:'Abuse or harassment', scam:'Scam or cheating', other:'Something else' };
+function reportSheet({kind,id,handle,text}){ document.querySelector('.rsheet-bg')?.remove(); let reason='';
+  const wrap=el('div',{class:'rsheet-bg'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
+  const send=el('button',{class:'btn danger',text:'Send report',disabled:true}), reasons=el('div',{class:'rreasons'});
+  for(const [k,v] of Object.entries(REPORT_REASONS)) reasons.append(el('button',{class:'pill',text:v,onclick:e=>{ reason=k; for(const b of reasons.children) b.classList.toggle('on',b===e.currentTarget); send.disabled=false; }}));
+  const cb=el('input',{type:'checkbox'}); cb.checked=kind==='dm';
+  send.onclick=async()=>{ if(!reason) return; send.disabled=true; send.textContent='Sending…';
+    try{ const r=await api('/api/report',{method:'POST',body:{kind,id,reason,block:cb.checked}}); wrap.remove();
+      toast(r.already?'You already reported that. Thanks.':`Thanks for reporting it. The developer will take a look${r.blocked?`, and you've blocked @${r.blocked}`:''}.`);
+      if(r.blocked){ await Blocks.load(); Chats.after(r.blocked); } }
+    catch(e){ toast(e.message); send.disabled=false; send.textContent='Send report'; } };
+  wrap.append(el('div',{class:'rsheet inked',role:'dialog','aria-label':'Report'},
+    el('h3',{text:kind==='dm'?`Report a message from @${handle}`:`Report @${handle}'s post`}),
+    text?el('blockquote',{text:text.length>200?text.slice(0,200)+'…':text}):'',
+    el('p',{class:'hint',text:`What's wrong with it? The developer sees ${kind==='dm'?'this message and the few before it':'this post'}. @${handle} isn't told who reported it.`}),
+    reasons, el('label',{class:'rblock'}, cb, ` Also block @${handle}`),
+    el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Cancel',onclick:()=>wrap.remove()}), send)));
+  document.body.append(wrap); }
+// ---- The developer's Reports tab: read what was reported and dismiss it, delete the message, or mute the colonist ----
+var Reports={ data:null, view:'open', open:undefined, t:0,
+  async load(){ if(!Store.canWrite) return; try{ this.data=await api('/api/admin/reports?status='+this.view); }catch(e){ return; }
+    const n=this.data.open; if(n!==this.open){ if(this.open!==undefined&&n>this.open&&activeTab!=='reports') toast(`⚑ New report: ${n} waiting`,'View',()=>openTab('reports')); this.open=n; buildToolbar(); }
+    if(activeTab==='reports') this.renderNow(); },
+  soon(){ if(!Store.canWrite) return; clearTimeout(this.t); this.t=setTimeout(()=>this.load(),600); },
+  renderNow(){ if(activeTab!=='reports') return; const p=$('pane'); if(p){ const keep=$('repBody')?.scrollTop||0; p.innerHTML=''; this.render(p); const b=$('repBody'); if(b) b.scrollTop=keep; } },
+  async act(r,action){ try{ const x=await api('/api/admin/reports/'+encodeURIComponent(r.id),{method:'POST',body:{action}}); toast(x.note); }catch(e){ toast(e.message); } this.load(); },
+  render(p){ const seg=el('div',{class:'seg',role:'tablist'}); for(const [id,nm] of [['open','Waiting'],['done','Settled']]) seg.append(el('button',{'aria-pressed':String(this.view===id),onclick:()=>{ this.view=id; this.data=null; this.renderNow(); this.load(); },text:nm}));
+    p.append(paneHead('Reports',[seg])); const body=el('div',{class:'pane-body',id:'repBody'}); p.append(body);
+    if(!this.data){ body.append(el('p',{class:'hint',text:'Loading…'})); if(!this.t) this.load(); return; }
+    const list=this.data.reports; if(!list.length){ body.append(el('p',{class:'hint',text:this.view==='open'?'Nothing to look at. When a colonist reports a message or a post, it shows up here.':'No settled reports yet.'})); return; }
+    const DONE={dismiss:'Dismissed',delete:'Message deleted',mute1:'Muted for a day',mute7:'Muted for a week'};
+    for(const r of list){ const card=el('article',{class:'rep'});
+      card.append(el('div',{class:'ph'}, el('b',{text:'@'+r.who}), el('span',{class:'rtag',text:r.reasonName}), el('time',{text:ago(r.t)})),
+        el('p',{class:'hint',text:`${r.kind==='dm'?'Private message':'Town Square post'}, reported by @${r.by}${r.times>1?` · @${r.who} has been reported ${r.times} times`:''}`}));
+      if(r.mutedUntil) card.append(el('p',{class:'rmuted'}, `Muted until ${new Date(r.mutedUntil).toLocaleString([], {weekday:'short',hour:'2-digit',minute:'2-digit'})} `, el('button',{class:'linkb',text:'Lift',onclick:()=>this.act(r,'unmute')})));
+      if(r.context&&r.context.length){ const tr=el('div',{class:'rctx'}); for(const m of r.context) tr.append(el('div',{class:m.text===r.text&&m.from===r.who?'hit':''}, el('b',{text:'@'+m.from+': '}), m.text)); card.append(tr); }
+      else card.append(el('blockquote',{text:r.text}));
+      if(this.view==='open') card.append(el('div',{class:'row-actions'},
+        el('button',{class:'btn',text:'Dismiss',onclick:()=>this.act(r,'dismiss')}),
+        el('button',{class:'btn',text:'Delete message',onclick:()=>this.act(r,'delete')}),
+        el('button',{class:'btn danger',text:'Mute 1 day',onclick:()=>this.act(r,'mute1')}),
+        el('button',{class:'btn danger',text:'Mute 1 week',onclick:()=>this.act(r,'mute7')})));
+      else card.append(el('p',{class:'hint',text:`${DONE[r.action]||r.action}${r.resolvedAt?' · '+ago(r.resolvedAt):''}`}));
+      body.append(card); } } };
+setInterval(()=>{ if(!document.hidden&&Store.canWrite) Reports.load(); },60000);
 var Chats={ list:[], online:[], unread:0, with:null, thread:null, draft:'', busy:false, loadedAt:0,
-  reset(){ this.list=[]; this.online=[]; this.unread=0; this.with=null; this.thread=null; this.draft=''; },
-  async load(){ if(!(Me&&Me.token)) return; try{ const [l,o]=await Promise.all([api('/api/dm'),api('/api/online')]); this.list=l; this.online=o; this.loadedAt=Date.now(); this.count(); }catch(e){} if(activeTab==='chats'&&!this.with) this.renderNow(); },
+  menu:false,
+  reset(){ this.list=[]; this.online=[]; this.unread=0; this.with=null; this.thread=null; this.draft=''; this.menu=false; Blocks.put([]); },
+  async load(){ if(!(Me&&Me.token)) return; try{ const [l,o,b]=await Promise.all([api('/api/dm'),api('/api/online'),api('/api/blocks')]); this.list=l; this.online=o; this.loadedAt=Date.now(); this.count(); Blocks.put(b); }catch(e){} if(activeTab==='chats'&&!this.with) this.renderNow(); },
+  // After blocking or unblocking someone: refresh the open chat with them (if any) and the list.
+  async after(h){ if(this.with&&this.with.toLowerCase()===String(h).toLowerCase()){ try{ this.thread=await api('/api/dm/'+encodeURIComponent(this.with)); }catch(e){} this.menu=false; this.renderNow(); } this.load(); },
+  gone(id){ if(this.thread){ this.thread.messages=this.thread.messages.filter(m=>m.id!==id); document.querySelector(`#dmBody [data-id="${CSS.escape(id)}"]`)?.remove(); } this.load(); },
   count(){ const n=this.list.reduce((a,c)=>a+c.unread,0); if(n!==this.unread){ this.unread=n; buildToolbar(); } },
-  async open(handle){ if(!(Me&&Me.token)){ toast('Sign in to your colonist to chat.'); return; } this.with=handle; this.thread=null; this.draft=''; closeCard(); openTab('chats');
+  async open(handle){ if(!(Me&&Me.token)){ toast('Sign in to your colonist to chat.'); return; } this.with=handle; this.thread=null; this.draft=''; this.menu=false; closeCard(); openTab('chats');
     try{ this.thread=await api('/api/dm/'+encodeURIComponent(handle)); const c=this.list.find(x=>x.with.h.toLowerCase()===handle.toLowerCase()); if(c){ c.unread=0; this.count(); } }catch(e){ toast(e.message); this.with=null; }
     this.renderNow(); },
-  back(){ this.with=null; this.thread=null; this.load(); this.renderNow(); },
-  incoming(m){ const meId=this.thread&&this.thread.with; const other=m.from.h.toLowerCase()===(Me&&Me.handle||'').toLowerCase()?m.to.h:m.from.h, mine=m.from.h.toLowerCase()===(Me&&Me.handle||'').toLowerCase();
-    if(this.with&&this.with.toLowerCase()===other.toLowerCase()&&this.thread&&activeTab==='chats'){ if(!this.thread.messages.some(x=>x.id===m.id)){ this.thread.messages.push({id:m.id,mine,text:m.text,t:m.t}); this.addBubble({mine,text:m.text,t:m.t}); } if(!mine) api('/api/dm/'+encodeURIComponent(other)+'/read',{method:'POST'}).catch(()=>{}); return; }
+  back(){ this.with=null; this.thread=null; this.menu=false; this.load(); this.renderNow(); },
+  incoming(m){ if(Blocks.has(m.from.h)) return; const meId=this.thread&&this.thread.with; const other=m.from.h.toLowerCase()===(Me&&Me.handle||'').toLowerCase()?m.to.h:m.from.h, mine=m.from.h.toLowerCase()===(Me&&Me.handle||'').toLowerCase();
+    if(this.with&&this.with.toLowerCase()===other.toLowerCase()&&this.thread&&activeTab==='chats'){ if(!this.thread.messages.some(x=>x.id===m.id)){ this.thread.messages.push({id:m.id,mine,text:m.text,t:m.t}); this.addBubble({id:m.id,mine,text:m.text,t:m.t}); } if(!mine) api('/api/dm/'+encodeURIComponent(other)+'/read',{method:'POST'}).catch(()=>{}); return; }
     let c=this.list.find(x=>x.with.h.toLowerCase()===other.toLowerCase()); if(!c){ c={ with:{h:other,n:mine?'':m.from.n,g:mine?'m':m.from.g,online:true}, last:null, unread:0 }; this.list.unshift(c); }
     c.last={text:m.text,t:m.t,mine}; if(!mine){ c.unread++; c.with.online=true; this.count(); toast(`💬 @${m.from.h}: ${m.text.length>60?m.text.slice(0,60)+'…':m.text}`,'Reply',()=>this.open(m.from.h)); }
     this.list.sort((a,b)=>(b.last?b.last.t:0)-(a.last?a.last.t:0)); if(activeTab==='chats'&&!this.with) this.renderNow(); },
   async send(){ const ta=$('dmText'); const text=(ta?ta.value:this.draft).trim(); if(!text||this.busy||!this.with) return; this.busy=true;
     try{ await api('/api/dm/'+encodeURIComponent(this.with),{method:'POST',body:{text}}); this.draft=''; if(ta){ ta.value=''; ta.focus(); } }catch(e){ toast(e.message); } this.busy=false; },
   addBubble(m){ const body=$('dmBody'); if(!body) return; const near=body.scrollHeight-body.scrollTop-body.clientHeight<60; body.append(this.bubble(m)); if(near||m.mine) body.scrollTop=body.scrollHeight; },
-  bubble(m){ return el('div',{class:'dm '+(m.mine?'me':'them')}, el('p',{text:m.text}), el('time',{text:hhmm(m.t)})); },
+  bubble(m){ const b=el('div',{class:'dm '+(m.mine?'me':'them'),'data-id':m.id||null}, el('p',{text:m.text}), el('time',{text:hhmm(m.t)}));
+    // Tap someone else's message to see "Report" under it.
+    if(!m.mine&&m.id){ b.title='Tap to report'; b.append(el('button',{class:'dmflag',text:'⚑ Report',onclick:e=>{ e.stopPropagation(); reportSheet({kind:'dm',id:m.id,handle:this.with,text:m.text}); }}));
+      b.onclick=()=>{ const on=!b.classList.contains('flagon'); document.querySelectorAll('.dm.flagon').forEach(x=>x.classList.remove('flagon')); b.classList.toggle('flagon',on); }; }
+    return b; },
   dot(p){ return el('span',{class:'odot'+(p&&p.online?' on':''),title:p&&p.online?'Online':'Offline'}); },
   renderNow(){ if(activeTab!=='chats') return; const p=$('pane'); if(p) { p.innerHTML=''; this.render(p); } },
   render(p){
@@ -2291,15 +2369,22 @@ var Chats={ list:[], online:[], unread:0, with:null, thread:null, draft:'', busy
     if(this.with){ const w=this.thread&&this.thread.with; const av=el('span',{class:'ava sm'+(w&&w.online?' on':'')}); if(w) av.innerHTML=avatarSVG({handle:w.h,id:w.id,gender:w.g});
       const head=el('div',{class:'pane-head dmhead'}, el('button',{class:'x',text:'‹','aria-label':'Back to chats',onclick:()=>this.back()}), av,
         el('div',{class:'dmwho'}, el('b',{text:w?(w.n||'@'+w.h):'@'+this.with}), el('span',{class:'hint'+(w&&w.online?' onl-now':''),text:w?(w.online?'● Online now':w.seen?`Last seen ${ago(w.seen)}`:'Offline'):'…'})),
+        el('button',{class:'x dmmore','aria-label':'More','aria-expanded':String(this.menu),text:'⋯',onclick:()=>{ this.menu=!this.menu; this.renderNow(); }}),
         maxBtn(), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>openTab(null)}));
+      const T=this.thread, lastTheirs=T&&[...T.messages].reverse().find(m=>!m.mine);
+      const menu=this.menu&&T?el('div',{class:'dmmenu'},
+        T.iBlocked?el('button',{class:'btn',text:`Unblock @${this.with}`,onclick:()=>Blocks.unblock(this.with)}):el('button',{class:'btn',text:`🚫 Block @${this.with}`,onclick:()=>Blocks.ask(this.with)}),
+        el('button',{class:'btn',text:'⚑ Report',disabled:!lastTheirs,title:lastTheirs?'Report their latest message':'They haven’t sent you anything to report',onclick:()=>reportSheet({kind:'dm',id:lastTheirs.id,handle:this.with,text:lastTheirs.text})}),
+        el('span',{class:'hint',text:'Or tap any of their messages to report that one.'})):null;
       const body=el('div',{class:'pane-body dmbody',id:'dmBody'});
       if(!this.thread) body.append(el('p',{class:'hint',text:'Opening the chat…'}));
       else if(!this.thread.messages.length) body.append(el('p',{class:'hint',text:`Say hello to @${this.with}. Only the two of you can see this chat.`}));
       else for(const m of this.thread.messages) body.append(this.bubble(m));
       const ta=el('textarea',{id:'dmText',rows:'1',maxlength:'500',placeholder:'Message…','aria-label':'Message'}); ta.value=this.draft; ta.oninput=()=>{ this.draft=ta.value; };
       ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); this.send(); } });
-      const bar=el('div',{class:'dmbar'}, ta, el('button',{class:'btn primary',text:'Send',onclick:()=>this.send()}));
-      p.append(head, body, bar); requestAnimationFrame(()=>{ body.scrollTop=body.scrollHeight; }); return; }
+      const bar=(!T||T.canSend)?el('div',{class:'dmbar'}, ta, el('button',{class:'btn primary',text:'Send',onclick:()=>this.send()}))
+        :el('div',{class:'dmbar dmshut'}, T.iBlocked?el('span',null,`You blocked @${this.with}. `, el('button',{class:'linkb',text:'Unblock',onclick:()=>Blocks.unblock(this.with)})):el('span',{class:'hint',text:T.with&&!T.with.verified?`@${this.with} hasn't verified their avatar yet, so they can't receive messages.`:`You can't reply to this chat.`}));
+      p.append(head); if(menu) p.append(menu); p.append(body, bar); requestAnimationFrame(()=>{ body.scrollTop=body.scrollHeight; }); return; }
     p.append(paneHead('Chats')); const body=el('div',{class:'pane-body'});
     const others=this.online.filter(o=>o.h.toLowerCase()!==Me.handle.toLowerCase());
     if(others.length){ body.append(el('h3',{text:`Online now (${others.length})`})); const row=el('div',{class:'onlinerow'});
@@ -2310,6 +2395,8 @@ var Chats={ list:[], online:[], unread:0, with:null, thread:null, draft:'', busy
     for(const c of this.list){ const av=el('span',{class:'ava sm'+(c.with.online?' on':'')}); av.innerHTML=avatarSVG({handle:c.with.h,id:c.with.id||c.with.h,gender:c.with.g});
       body.append(el('button',{class:'person dmrow'+(c.unread?' unread':''),onclick:()=>this.open(c.with.h)}, av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:c.with.n?`${c.with.n} · @${c.with.h}`:'@'+c.with.h}), el('div',{class:'what',text:c.last?(c.last.mine?'You: ':'')+c.last.text:''})),
         c.unread?el('b',{class:'tbadge',text:String(c.unread)}):el('time',{class:'hint',text:c.last?ago(c.last.t):''}))); }
+    if(Blocks.list.length){ body.append(el('h3',{text:`Blocked (${Blocks.list.length})`}), el('p',{class:'hint',text:'They can’t message you, and you don’t see their Town Square posts.'}));
+      for(const b of Blocks.list) body.append(el('div',{class:'blkrow'}, el('span',{text:b.n?`${b.n} · @${b.h}`:'@'+b.h}), el('button',{class:'linkb',text:'Unblock',onclick:()=>Blocks.unblock(b.h)}))); }
     p.append(body); if(Date.now()-this.loadedAt>8000) this.load(); } };
 setInterval(()=>{ if(!document.hidden && Me&&Me.token && Date.now()-Chats.loadedAt>45000) Chats.load(); },15000);
 
@@ -2622,7 +2709,8 @@ function renderCard(force){ if(!force && cardBusy()) return;
       else if(Me&&Me.token&&Me.handle){ card.append(el('div',{class:'row-actions'}, el('span',{class:'hint',text:`You're signed in as @${Me.handle}.`}), el('button',{class:'linkb',text:'Go to my colonist',onclick:()=>findMe()})));
         if(c.home) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Visit their home',onclick:()=>meAction('/api/me/visit',{friend:c.handle},r=>`You're on your way to ${r.place}.`)}),
           el('button',{class:'btn',text:'Pick their pocket',onclick:()=>toast(`Try to pick @${c.handle}'s pocket? If you're caught you'll be fined, and jailed if the colony has a Jail.`,'Do it',()=>doCrime('pickpocket',c.handle))})));
-        if(c.claimed) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'💬 Message',onclick:()=>Chats.open(c.handle)})));
+        if(c.claimed) card.append(el('div',{class:'row-actions'}, Blocks.has(c.handle)?'':el('button',{class:'btn primary',text:'💬 Message',onclick:()=>Chats.open(c.handle)}),
+          Blocks.has(c.handle)?el('button',{class:'btn',text:'Unblock',onclick:()=>Blocks.unblock(c.handle)}):el('button',{class:'btn',text:'🚫 Block',onclick:()=>Blocks.ask(c.handle)})));
         if(c.claimed) card.append(giftBox(c.handle)); else card.append(el('p',{class:'hint',text:`@${c.handle} hasn't verified their avatar yet, so they can't receive gifts.`})); }
       else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}))); }
   } else if(sel.kind==='v'){ const v=D.vehicles.get(sel.id); if(!v){ closeCard(); return; } const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car;
@@ -2756,7 +2844,7 @@ function postItems0(){ const gm=gmNow(); const today=Math.floor(gm/1440); const 
   const cits=[...S.citizens.values()].slice(0,300);
   for(const c of cits) for(let d=Math.max(0,today-1); d<=today; d++) out.push(...postsFor(c,d,gm));
   for(const e of S.events){ const g=gmAt(e.t); if(g<=gm && g>=(today-1)*1440) out.push({ g, gazette:true, text:e.text }); }
-  for(const m of S.chat) if(!m.p) out.push({ g:gmAt(m.t)+0.001, msg:m }); // pinned posts are shown separately, at the top
+  for(const m of S.chat) if(!m.p && shownMsg(m)) out.push({ g:gmAt(m.t)+0.001, msg:m }); // pinned posts are shown separately, at the top
   return out.sort((a,b)=>b.g-a.g).slice(0,80); }
 
 /* ---------------- storyboard log ---------------- */
@@ -2796,12 +2884,13 @@ function storyPage(){ const box=el('div',{class:'story'}, el('p',{class:'kicker'
 const LOGO_SVG='<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="19" fill="#1E2A4A"/><path d="M14 33 C13 36 16 38 17 39 C18 38 21 36 20 33Z" fill="#F49A2A"/><path d="M22 19 L25 19 Q28 24 31 30 L27 30 Q25 25 22 22Z" fill="#E4572E" stroke="#2B2621" stroke-width=".8"/><path d="M20 12 H24 A5 5 0 0 1 24 22 H20Z" fill="#E4572E" stroke="#2B2621" stroke-width=".8"/><circle cx="24.2" cy="17" r="2.1" fill="#6FB3D2" stroke="#2B2621" stroke-width=".7"/><path d="M14 32 V14 Q14 9 17 5 Q20 9 20 14 V32Z" fill="#F6F1E6" stroke="#2B2621" stroke-width=".9"/><path d="M14.6 11 Q15 8 17 5.5 Q19 8 19.4 11Z" fill="#E4572E"/></svg>';
 function msgPost(m,g){ const mineMsg=!m.o&&Me&&Me.handle&&Me.handle.toLowerCase()===m.h.toLowerCase(); const av=el('span',{class:'ava'}); av.innerHTML=m.o?LOGO_SVG:avatarSVG({handle:m.h,gender:m.g,name:m.n});
   const del=(Store.canWrite||mineMsg)?el('button',{class:'show',text:'Delete',onclick:()=>toast('Delete this message?','Delete',async()=>{ try{ await api('/api/square/'+encodeURIComponent(m.id),{method:'DELETE'}); }catch(e){ toast(e.message); } })}):null;
+  const flag=(!m.o&&!mineMsg&&Me&&Me.token)?el('button',{class:'show',text:'Report',onclick:()=>reportSheet({kind:'square',id:m.id,handle:m.h,text:m.text})}):null;
   const pin=Store.canWrite?el('button',{class:'show',text:m.p?'Unpin':'Pin',onclick:async()=>{ try{ await api(`/api/admin/square/${encodeURIComponent(m.id)}/pin`,{method:'PUT',body:{pinned:!m.p}}); m.p=m.p?0:1; feedDirty=true; renderFeed(true); }catch(e){ toast(e.message); } }}):null;
   const who=m.o?el('b',null,m.h, el('span',{class:'obadge',text:'Official'})):el('b',null,m.n||('@'+m.h), el('span',{class:'vbadge',title:'Verified colonist',text:'✓'}), m.n?el('span',{class:'uname',text:' @'+m.h}):'');
   return el('article',{class:'post said'+(m.o?' official':'')+(m.p?' pinned':'')}, av, el('div',null,
     m.p?el('div',{class:'pinlabel',text:'📌 Pinned'}):'',
     el('div',{class:'ph'}, who, el('time',{text:when(g??gmAt(m.t))})), el('p',{class:'saidt',text:m.text}),
-    el('div',{class:'pf'}, m.o?'':el('button',{class:'show',text:'Show on map',onclick:()=>{ openCitizen(m.h); if(innerWidth<900) openTab(null); }}), pin, del))); }
+    el('div',{class:'pf'}, m.o?'':el('button',{class:'show',text:'Show on map',onclick:()=>{ openCitizen(m.h); if(innerWidth<900) openTab(null); }}), pin, del, flag))); }
 function composer(){ const box=el('div',{class:'composer'});
   if(Store.canWrite){ const ta=el('textarea',{maxlength:'1000',rows:'3',placeholder:'Post an official update to every colonist…','aria-label':'Official update'}); const pinCb=el('input',{type:'checkbox'});
     const post=el('button',{class:'btn primary',text:'Post update'});
@@ -2827,7 +2916,7 @@ function renderFeed(force){
   feedDirty=false; const keep=body.scrollTop; body.innerHTML='';
   if(feedMode==='story'){ body.append(storyPage()); return; }
   if(!S.meta){ body.append(el('p',{class:'hint',text:'The story starts once the colony is founded.'})); return; }
-  if(feedMode==='posts'){ for(const m of S.chat.filter(m=>m.p).sort((a,b)=>b.t-a.t)) body.append(msgPost(m)); const items=postItems(); if(!items.length&&!S.chat.some(m=>m.p)){ body.append(el('p',{class:'hint',text:'Quiet so far. Check back in a few minutes.'})); return; }
+  if(feedMode==='posts'){ for(const m of S.chat.filter(m=>m.p&&shownMsg(m)).sort((a,b)=>b.t-a.t)) body.append(msgPost(m)); const items=postItems(); if(!items.length&&!S.chat.some(m=>m.p)){ body.append(el('p',{class:'hint',text:'Quiet so far. Check back in a few minutes.'})); return; }
     for(const it of items){
       if(it.msg){ body.append(msgPost(it.msg,it.g)); continue; }
       if(it.gazette){ body.append(el('article',{class:'post gz'}, el('div',null, el('div',{class:'ph'}, el('b',{text:`${S.meta.name} Colony Log`}), el('time',{text:when(it.g)})), el('p',{class:'gzt',text:it.text})))); continue; }

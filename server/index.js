@@ -210,7 +210,7 @@ setInterval(() => { const ids = [...new Set([...wss.clients].filter(w => w.ready
 bus.on(ops => {
   // Private chat messages go only to the two people's own connections.
   const priv = ops.filter(o => o.private); if (priv.length) ops = ops.filter(o => !o.private);
-  for (const o of priv) { const msg = JSON.stringify({ type: 'dm', data: o.data }); for (const ws of wss.clients) if (ws.readyState === 1 && o.to.includes(ws.playerId)) { try { ws.send(msg); } catch {} } }
+  for (const o of priv) { const msg = JSON.stringify({ type: o.op, data: o.data, id: o.id }); for (const ws of wss.clients) if (ws.readyState === 1 && o.to.includes(ws.playerId)) { try { ws.send(msg); } catch {} } }
   if (!ops.length) return;
   try { world.apply(ops); } catch (e) { console.error('applying update failed:', e); }
   for (const o of ops) o.json = JSON.stringify(o, (k, v) => k === 'json' ? undefined : v);

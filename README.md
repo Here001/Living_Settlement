@@ -154,6 +154,14 @@ These live on a signed-in colonist's own card, under **Home**, **Bank** and **Ca
 - **Limits.** Messages are up to 500 characters, with a short pause between sends. The last 500 messages of each chat are kept.
 - **Online status.** A colonist is online while they're signed in with the colony open. Verified colonists show a green dot and "● Online now" or "Last seen 5 min ago" on their card, in the Colonists list and in chats.
 
+## Blocking, reports and muting
+
+- **Block.** Tap **🚫 Block** on a colonist's card, or **⋯ → Block** in a chat. Neither of you can message the other, their chat leaves your list, they don't show as online to you, and their Town Square posts are hidden from you. They aren't told. Your blocked list is at the bottom of the Chats tab, with **Unblock** next to each name.
+- **Report.** Tap any message someone sent you and choose **⚑ Report**, or **Report** under someone's Town Square post. Pick a reason (spam, abuse, scam, something else); for messages, **Also block** is ticked by default. The reported person isn't told who reported them. Each colonist can send up to 20 reports a day, and reporting the same thing twice counts once.
+- **The developer's Reports tab.** In developer mode a **Reports** tab shows waiting reports with a badge and a pop-up when a new one arrives. Each shows who, why, who reported it, how many times that colonist has been reported, and, for private messages, the few messages before it.
+  - **Dismiss**, **Delete message**, **Mute 1 day** or **Mute 1 week**. Muting also deletes the message. A muted colonist can't send messages or post in the Town Square, and is told how long is left. **Lift** ends a mute early.
+  - Settled reports move to **Settled**, with what was done.
+
 ## Creature races
 
 - **The creatures.** Six native creatures race: Starcrest, Dustrunner, Skyskimmer, Mudgulper, Ironshell and Glimmerhop (`shared/creatures.js`). Each has a speed, a level of unpredictability, and likes and dislikes for the weather.

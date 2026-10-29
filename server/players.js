@@ -1,3 +1,4 @@
+import { assertNotMuted } from './chat.js';
 import express from 'express';
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
@@ -133,7 +134,13 @@ export function playersRouter({ limit, send, admin, world }) {
   r.delete('/me/pet', limit, send(async req => world.actions.release((await me(req)).id)));
   // The Bank, cars, moving home, and owning buildings.
   // Private chats between verified colonists, and who's online.
-  r.get('/online', limit, send(() => world.chat.online()));
+  r.get('/online', limit, send(async req => world.chat.online(60, (await playerFrom(req))?.id || null)));
+  r.get('/blocks', limit, send(async req => world.chat.blocks((await me(req)).id)));
+  r.post('/blocks/:handle', limit, send(async req => world.chat.block((await me(req)).id, req.params.handle)));
+  r.delete('/blocks/:handle', limit, send(async req => world.chat.unblock((await me(req)).id, req.params.handle)));
+  r.post('/report', limit, send(async req => world.chat.report(await me(req), req.body || {})));
+  r.get('/admin/reports', admin, send(req => world.chat.reports(req.query.status)));
+  r.post('/admin/reports/:id', admin, send(req => world.chat.resolve(req.params.id, (req.body || {}).action)));
   r.get('/dm', limit, send(async req => world.chat.conversations((await me(req)).id)));
   r.get('/dm/:handle', limit, send(async req => world.chat.thread((await me(req)).id, req.params.handle)));
   r.post('/dm/:handle', limit, send(async req => world.chat.send(await me(req), req.params.handle, (req.body || {}).text)));
@@ -205,6 +212,7 @@ export function playersRouter({ limit, send, admin, world }) {
     if (!text) throw new HttpError(400, 'Write something first.');
     if (text.length > 280) throw new HttpError(400, 'Keep it under 280 characters.');
     if (/(https?:\/\/|www\.)/i.test(text)) throw new HttpError(400, 'Links can’t be posted in the Town Square.');
+    await assertNotMuted(p.id);
     const now = Date.now(), last = lastPost.get(p.id) || 0;
     if (now - last < 15000) throw new HttpError(429, `Wait ${Math.ceil((15000 - (now - last)) / 1000)} seconds before posting again.`);
     const prev = (await pool.query('select text from messages where citizen_id = $1 order by t desc limit 1', [p.id])).rows[0];

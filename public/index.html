@@ -179,6 +179,13 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .composer .hint{margin:0}
 .post.said{border-color:var(--accent)}
 .post.said .saidt{font-size:15px}
+.post.official{background:#FFF7E6;border-color:#F2B33D}
+.obadge{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#F2B33D;color:#2B2621;font-size:10px;font-weight:800;letter-spacing:.04em;vertical-align:middle}
+.post.pinned{box-shadow:inset 3px 0 0 #E4572E}
+.pinlabel{font-size:11px;font-weight:700;color:#B8402A;margin-bottom:2px}
+.postas{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.postas svg{width:26px;height:26px}
+.saidt{white-space:pre-line}
 .vbadge{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;background:#3F7FE0;color:#fff;font-size:9px;font-weight:800;margin:0 4px}
 .uname{margin:0;color:var(--muted);font-size:13px;font-weight:500}
 .namebox{margin-top:10px;display:flex;flex-direction:column;gap:4px}
@@ -379,6 +386,7 @@ function applyOp(o){
   case 'removeVehicle': { S.vehicles.delete(o.id); S.chunks.get(o.chunks[0])?.vehicles.delete(o.id); if(sel&&sel.id===o.id) closeCard(); break; }
   case 'disaster': S.disasters.unshift(o.data); if(S.disasters.length>20) S.disasters.length=20; break;
   case 'chat': if(!S.chat.some(m=>m.id===o.data.id)){ S.chat.unshift(o.data); if(S.chat.length>200) S.chat.length=200; feedDirty=true; renderFeed(); } break;
+  case 'chatPin': { const m=S.chat.find(x=>x.id===o.id); if(m){ m.p=o.pinned?1:0; feedDirty=true; renderFeed(); } break; }
   case 'chatGone': S.chat=S.chat.filter(m=>m.id!==o.id); feedDirty=true; renderFeed(); break;
   case 'reset': location.reload(); break;
   case 'event': S.events.unshift(o.data); if(S.events.length>300) S.events.length=300; feedDirty=true; updateNews(); break; } }
@@ -2042,7 +2050,7 @@ function postItems(){ const gm=gmNow(); const today=Math.floor(gm/1440); const o
   const cits=[...S.citizens.values()].slice(0,300);
   for(const c of cits) for(let d=Math.max(0,today-1); d<=today; d++) out.push(...postsFor(c,d,gm));
   for(const e of S.events){ const g=gmAt(e.t); if(g<=gm && g>=(today-1)*1440) out.push({ g, gazette:true, text:e.text }); }
-  for(const m of S.chat) out.push({ g:gmAt(m.t)+0.001, msg:m });
+  for(const m of S.chat) if(!m.p) out.push({ g:gmAt(m.t)+0.001, msg:m }); // pinned posts are shown separately, at the top
   return out.sort((a,b)=>b.g-a.g).slice(0,80); }
 
 /* ---------------- storyboard log ---------------- */
@@ -2077,7 +2085,23 @@ function storyPage(){ const box=el('div',{class:'story'}, el('p',{class:'kicker'
     el('p',{class:'hint',text:'Gliese 12 b is a real planet about 40 light years away. What the colonists found there is the story of this game.'}));
   return box; }
 // Signed-in colonists can post in the Town Square.
+// The rocket-R logo, used as the picture for official posts.
+const LOGO_SVG='<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="19" fill="#1E2A4A"/><path d="M14 33 C13 36 16 38 17 39 C18 38 21 36 20 33Z" fill="#F49A2A"/><path d="M22 19 L25 19 Q28 24 31 30 L27 30 Q25 25 22 22Z" fill="#E4572E" stroke="#2B2621" stroke-width=".8"/><path d="M20 12 H24 A5 5 0 0 1 24 22 H20Z" fill="#E4572E" stroke="#2B2621" stroke-width=".8"/><circle cx="24.2" cy="17" r="2.1" fill="#6FB3D2" stroke="#2B2621" stroke-width=".7"/><path d="M14 32 V14 Q14 9 17 5 Q20 9 20 14 V32Z" fill="#F6F1E6" stroke="#2B2621" stroke-width=".9"/><path d="M14.6 11 Q15 8 17 5.5 Q19 8 19.4 11Z" fill="#E4572E"/></svg>';
+function msgPost(m,g){ const mineMsg=!m.o&&Me&&Me.handle&&Me.handle.toLowerCase()===m.h.toLowerCase(); const av=el('span',{class:'ava'}); av.innerHTML=m.o?LOGO_SVG:avatarSVG({handle:m.h,gender:m.g,name:m.n});
+  const del=(Store.canWrite||mineMsg)?el('button',{class:'show',text:'Delete',onclick:()=>toast('Delete this message?','Delete',async()=>{ try{ await api('/api/square/'+encodeURIComponent(m.id),{method:'DELETE'}); }catch(e){ toast(e.message); } })}):null;
+  const pin=Store.canWrite?el('button',{class:'show',text:m.p?'Unpin':'Pin',onclick:async()=>{ try{ await api(`/api/admin/square/${encodeURIComponent(m.id)}/pin`,{method:'PUT',body:{pinned:!m.p}}); m.p=m.p?0:1; feedDirty=true; renderFeed(true); }catch(e){ toast(e.message); } }}):null;
+  const who=m.o?el('b',null,m.h, el('span',{class:'obadge',text:'Official'})):el('b',null,m.n||('@'+m.h), el('span',{class:'vbadge',title:'Verified colonist',text:'✓'}), m.n?el('span',{class:'uname',text:' @'+m.h}):'');
+  return el('article',{class:'post said'+(m.o?' official':'')+(m.p?' pinned':'')}, av, el('div',null,
+    m.p?el('div',{class:'pinlabel',text:'📌 Pinned'}):'',
+    el('div',{class:'ph'}, who, el('time',{text:when(g??gmAt(m.t))})), el('p',{class:'saidt',text:m.text}),
+    el('div',{class:'pf'}, m.o?'':el('button',{class:'show',text:'Show on map',onclick:()=>{ openCitizen(m.h); if(innerWidth<900) openTab(null); }}), pin, del))); }
 function composer(){ const box=el('div',{class:'composer'});
+  if(Store.canWrite){ const ta=el('textarea',{maxlength:'1000',rows:'3',placeholder:'Post an official update to every colonist…','aria-label':'Official update'}); const pinCb=el('input',{type:'checkbox'});
+    const post=el('button',{class:'btn primary',text:'Post update'});
+    const send=async()=>{ const t=ta.value.trim(); if(!t) return; post.disabled=true; try{ const m=await api('/api/admin/square',{method:'POST',body:{text:t,pin:pinCb.checked}}); if(!S.chat.some(x=>x.id===m.id)) S.chat.unshift(m); ta.value=''; pinCb.checked=false; feedDirty=true; renderFeed(true); toast(m.p?'Posted and pinned to the top.':'Posted.'); }catch(e){ toast(e.message); } post.disabled=false; };
+    post.onclick=send; ta.addEventListener('blur',()=>setTimeout(()=>{ if(!composerBusy()){ feedDirty=true; renderFeed(); } },150));
+    const as=el('div',{class:'postas'}); as.innerHTML=LOGO_SVG; as.append(el('span',null,'Posting as ', el('b',{text:'Man Landing Updates'})));
+    box.append(as, ta, el('div',{class:'row'}, el('label',{class:'free'}, pinCb, ' Pin to top'), post)); return box; }
   if(!(Me&&Me.token)){ box.append(el('p',{class:'hint',text:'Claim your colonist to post in the Town Square.'}), el('button',{class:'btn',text:'Find my colonist',onclick:()=>findMe()})); return box; }
   const ta=el('textarea',{maxlength:'280',rows:'2',placeholder:`Say something to the colony, @${Me.handle}…`,'aria-label':'Message to the Town Square'}); const n=el('span',{class:'count',text:'280'});
   const post=el('button',{class:'btn primary',text:'Post'});
@@ -2091,16 +2115,13 @@ const composerBusy = () => { const a=document.activeElement; return !!(a && a.cl
 function renderFeed(force){
   const body=$('feedBody'); if(!body || activeTab!=='feed' || !feedDirty) return;
   if(!force && composerBusy()) return;
-  if(feedMode==='posts' && S.meta){ const items=postItems(); const key=feedMode+'|'+(Me&&Me.handle)+'|'+items.map(i=>(i.msg?i.msg.id:(i.gazette?'g':'@'+(i.c&&i.c.id)))+':'+Math.floor(i.g)).join(','); if(!force && key===feedKey){ feedDirty=false; return; } feedKey=key; } else feedKey='';
+  if(feedMode==='posts' && S.meta){ const items=postItems(); const key=feedMode+'|'+(Me&&Me.handle)+'|'+S.chat.filter(m=>m.p).map(m=>m.id).join(',')+'|'+items.map(i=>(i.msg?i.msg.id:(i.gazette?'g':'@'+(i.c&&i.c.id)))+':'+Math.floor(i.g)).join(','); if(!force && key===feedKey){ feedDirty=false; return; } feedKey=key; } else feedKey='';
   feedDirty=false; const keep=body.scrollTop; body.innerHTML='';
   if(feedMode==='story'){ body.append(storyPage()); return; }
   if(!S.meta){ body.append(el('p',{class:'hint',text:'The story starts once the colony is founded.'})); return; }
-  if(feedMode==='posts'){ const items=postItems(); if(!items.length){ body.append(el('p',{class:'hint',text:'Quiet so far. Check back in a few minutes.'})); return; }
+  if(feedMode==='posts'){ for(const m of S.chat.filter(m=>m.p).sort((a,b)=>b.t-a.t)) body.append(msgPost(m)); const items=postItems(); if(!items.length&&!S.chat.some(m=>m.p)){ body.append(el('p',{class:'hint',text:'Quiet so far. Check back in a few minutes.'})); return; }
     for(const it of items){
-      if(it.msg){ const m=it.msg, mineMsg=Me&&Me.handle&&Me.handle.toLowerCase()===m.h.toLowerCase(); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG({handle:m.h,gender:m.g,name:m.n});
-        const del=(Store.canWrite||mineMsg)?el('button',{class:'show',text:'Delete',onclick:()=>toast('Delete this message?','Delete',async()=>{ try{ await api('/api/square/'+encodeURIComponent(m.id),{method:'DELETE'}); }catch(e){ toast(e.message); } })}):null;
-        body.append(el('article',{class:'post said'}, av, el('div',null, el('div',{class:'ph'}, el('b',null,m.n||('@'+m.h), el('span',{class:'vbadge',title:'Verified colonist',text:'✓'}), m.n?el('span',{class:'uname',text:' @'+m.h}):''), el('time',{text:when(it.g)})), el('p',{class:'saidt',text:m.text}),
-          el('div',{class:'pf'}, el('button',{class:'show',text:'Show on map',onclick:()=>{ openCitizen(m.h); if(innerWidth<900) openTab(null); }}), del)))); continue; }
+      if(it.msg){ body.append(msgPost(it.msg,it.g)); continue; }
       if(it.gazette){ body.append(el('article',{class:'post gz'}, el('div',null, el('div',{class:'ph'}, el('b',{text:`${S.meta.name} Colony Log`}), el('time',{text:when(it.g)})), el('p',{class:'gzt',text:it.text})))); continue; }
       const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(it.c);
       body.append(el('article',{class:'post'}, av, el('div',null, el('div',{class:'ph'}, el('b',{text:'@'+it.c.handle}), el('time',{text:when(it.g)})), el('p',{text:it.text}), el('div',{class:'pf'}, el('span',{text:`♥ ${it.likes}`}), el('span',{text:`↻ ${it.reposts}`}), el('button',{class:'show',text:'Show on map',onclick:()=>{ selectCitizen(it.c.id); if(innerWidth<900) openTab(null); }}))))); }

@@ -131,8 +131,9 @@ export function playersRouter({ limit, send, admin, world }) {
 
   // ---------- Town Square: messages from verified colonists ----------
   const lastPost = new Map(); // citizen id → time of their last message (slows down spam)
-  const msgOut = m => ({ id: m.id, h: m.handle, n: m.display_name || '', g: m.gender, text: m.text, t: Number(m.t) });
-  r.get('/square', limit, send(async () => (await pool.query('select m.*, c.display_name from messages m left join citizens c on c.id = m.citizen_id order by m.t desc limit 80')).rows.map(msgOut)));
+  const msgOut = m => ({ id: m.id, h: m.handle, n: m.official ? m.handle : (m.display_name || ''), g: m.gender, text: m.text, t: Number(m.t), o: m.official ? 1 : 0, p: m.pinned ? 1 : 0 });
+  r.get('/square', limit, send(async () => (await pool.query(`(select m.*, c.display_name from messages m left join citizens c on c.id = m.citizen_id order by m.t desc limit 80)
+    union (select m.*, c.display_name from messages m left join citizens c on c.id = m.citizen_id where m.pinned) order by t desc`)).rows.map(msgOut)));
   r.post('/square', limit, send(async req => {
     const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Claim your colonist to post in the Town Square.');
     let text = String((req.body || {}).text ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -147,6 +148,27 @@ export function playersRouter({ limit, send, admin, world }) {
     const m = (await pool.query('insert into messages (id, citizen_id, handle, gender, text, t) values ($1, $2, $3, $4, $5, $6) returning *', [crypto.randomUUID(), p.id, p.handle, p.gender || 'm', text, now])).rows[0];
     m.display_name = p.name || ''; world.bus.publish([{ op: 'chat', data: msgOut(m) }]);
     return msgOut(m);
+  }));
+  // The developer posts officially (as the colony's updates account) and can pin any post to the top.
+  const OFFICIAL = 'Man Landing Updates';
+  r.post('/admin/square', admin, send(async req => {
+    const text = String((req.body || {}).text ?? '').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ').trim();
+    if (!text) throw new HttpError(400, 'Write something first.');
+    if (text.length > 1000) throw new HttpError(400, 'Keep it under 1000 characters.');
+    const pin = !!(req.body || {}).pin;
+    if (pin && Number((await pool.query('select count(*) n from messages where pinned')).rows[0].n) >= 3) throw new HttpError(409, 'Up to 3 posts can be pinned. Unpin one first.');
+    const m = (await pool.query('insert into messages (id, citizen_id, handle, gender, text, t, official, pinned) values ($1, $2, $3, $4, $5, $6, true, $7) returning *',
+      [crypto.randomUUID(), 'official', OFFICIAL, 'm', text, Date.now(), pin])).rows[0];
+    world.bus.publish([{ op: 'chat', data: msgOut(m) }]);
+    return msgOut(m);
+  }));
+  r.put('/admin/square/:id/pin', admin, send(async req => {
+    const pinned = !!(req.body || {}).pinned;
+    if (pinned && Number((await pool.query('select count(*) n from messages where pinned and id <> $1', [req.params.id])).rows[0].n) >= 3) throw new HttpError(409, 'Up to 3 posts can be pinned. Unpin one first.');
+    const m = (await pool.query('update messages set pinned = $2 where id = $1 returning id', [req.params.id, pinned])).rows[0];
+    if (!m) throw new HttpError(404, 'That message is gone.');
+    world.bus.publish([{ op: 'chatPin', id: req.params.id, pinned }]);
+    return { ok: true, pinned };
   }));
   r.delete('/square/:id', limit, send(async req => {
     const p = await playerFrom(req); const isAdmin = admin.check(req);

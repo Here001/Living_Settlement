@@ -288,6 +288,13 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
   ok((await call('POST', '/api/square', { text: 'again so soon' }, P)).status === 429, 'posting is slowed down to stop spam');
   ok((await call('GET', '/api/square', undefined, { auth: false })).json.some(x => x.id === m1.json.id), 'everyone can read the Town Square');
   ok((await call('DELETE', `/api/square/${m1.json.id}`)).status === 200, 'the developer can delete a message');
+  ok((await call('POST', '/api/admin/square', { text: 'Welcome!' }, { auth: false })).status === 401, 'only the developer posts official updates');
+  const off = await call('POST', '/api/admin/square', { text: 'Welcome to Gliese 12 b!', pin: true });
+  ok(off.status === 200 && off.json.o === 1 && off.json.p === 1 && off.json.h === 'Man Landing Updates', 'the developer posts a pinned official update', JSON.stringify(off.json));
+  ok((await call('GET', '/api/square', undefined, { auth: false })).json.some(x => x.id === off.json.id && x.p === 1), 'everyone sees the pinned update');
+  ok((await call('PUT', `/api/admin/square/${off.json.id}/pin`, { pinned: false })).status === 200 && !(await call('GET', '/api/square', undefined, { auth: false })).json.find(x => x.id === off.json.id).p, 'and can unpin it');
+  for (let i = 0; i < 3; i++) await call('POST', '/api/admin/square', { text: 'pin ' + i, pin: true });
+  ok((await call('POST', '/api/admin/square', { text: 'one too many', pin: true })).status === 409, 'at most 3 pinned posts');
   ok((await call('POST', '/api/square', { text: 'see www.spam.com' }, { auth: false, headers: P.headers })).status === 400, 'links are refused'); }
 ok((await call('POST', `/api/claim/${claim.claimId}/password`, { password: 'secret2' }, { auth: false })).status === 404, 'a code works only once');
 ok((await call('GET', '/api/me', undefined, { auth: false, headers: { 'x-player': tok1 } })).json.handle === 'zara_ng', 'the session knows who you are');

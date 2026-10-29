@@ -56,6 +56,8 @@ Colonists who have claimed their avatar (proved it's them and set a password) ca
 
 Colonists can set a **name** (first and last, or just one) on their own card; it shows on their avatar, card and posts, while the @username stays for search. The developer can change anyone's name from their card.
 
+In developer view, the Town Square box posts **official updates as Man Landing Updates** (logo picture, gold Official badge, up to 1000 characters). Tick **Pin to top** to keep it above everything; **Pin / Unpin** works on any post, up to 3 at a time.
+
 New colonists start with **0 coins** and earn from their job. Coins are private: a colonist sees only their own, and only the developer sees the colony treasury.
 
 ## The story and the intro

@@ -11,6 +11,7 @@ export const BUSINESS_SHARE = 0.25;     // a business makes 25% of its wage bill
 // Savings grow 0.1% a game day (a game day is 30 real minutes), at most 20 coins a day each, and only while the
 // treasury can pay it: interest moves existing coins around, it never creates them.
 export const BANK_RATE = 0.001, BANK_CAP = 20;
+export const GIFT_DAILY = 2000; // the most coins one colonist can gift in a game day
 export const MAX_CARS = 3, CAR_RESALE = 0.6, MAX_PROPERTIES = 5, PROPERTY_RESALE = 0.7;
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const nameOf = b => b.name || BUILDING_TYPES[b.type]?.name || 'a building';
@@ -58,6 +59,33 @@ export class Economy {
       }
       ch.touch(c); await ch.saveCitizen(c); await ch.q('update citizens set bank = $2 where id = $1', [c.id, c.bank]);
       return { ok: true, wallet: c.coins_base, bank: c.bank, coins: c.coins_base };
+    });
+  }
+
+  // ---------- gifts ----------
+  // A colonist sends coins from their pocket to another colonist. At most GIFT_DAILY a game day, so nobody can pour
+  // a stack of accounts into one. The Colony Log says who gifted whom, never how much (balances are private).
+  async giftInfo(id) {
+    const c = (await pool.query('select gift_day, gift_sent from citizens where id = $1', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
+    const today = this.world.meta ? R.gameDay(Date.now(), this.world.meta.epoch) : 0;
+    return { limit: GIFT_DAILY, left: GIFT_DAILY - (c.gift_day === today ? c.gift_sent : 0) };
+  }
+  async gift(id, to, amount) {
+    amount = Math.floor(Number(amount)); if (!(amount >= 1)) throw new HttpError(400, 'Gift at least 1 coin.');
+    const h = R.cleanHandle(to); if (!h) throw new HttpError(400, 'Who is the gift for? Type their username.');
+    return this.world.change(async ch => {
+      const c = await this.lockMe(ch, id);
+      const r = (await ch.q('select * from citizens where lower(handle) = lower($1) for update', [h])).rows[0];
+      if (!r) throw new HttpError(404, `There's no colonist called @${h}.`);
+      if (r.id === c.id) throw new HttpError(400, "You can't send a gift to yourself.");
+      const sent = c.gift_day === ch.today ? c.gift_sent : 0, left = GIFT_DAILY - sent;
+      if (amount > left) throw new HttpError(429, left > 0 ? `You can gift ${fmt(left)} more coins today (${fmt(GIFT_DAILY)} a day).` : `You've gifted ${fmt(GIFT_DAILY)} coins today. You can send more tomorrow (game time).`);
+      ch.coins(c); if (c.coins_base < amount) throw new HttpError(400, `You only have ${fmt(c.coins_base)} coins on you${c.bank ? ' (withdraw from the bank first)' : ''}.`);
+      ch.coins(r); c.coins_base -= amount; r.coins_base += amount;
+      ch.touch(c); ch.touch(r); await ch.saveCitizen(c); await ch.saveCitizen(r);
+      await ch.q('update citizens set gift_day = $2, gift_sent = $3 where id = $1', [c.id, ch.today, sent + amount]);
+      await ch.event(`🎁 @${c.handle} sent @${r.handle} a gift.`, 'gift');
+      return { ok: true, to: r.handle, amount, coins: c.coins_base, left: left - amount };
     });
   }
 

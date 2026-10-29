@@ -130,6 +130,8 @@ export function playersRouter({ limit, send, admin, world }) {
   r.put('/me/pet', limit, send(async req => world.actions.renamePet((await me(req)).id, (req.body || {}).name)));
   r.delete('/me/pet', limit, send(async req => world.actions.release((await me(req)).id)));
   // The Bank, cars, moving home, and owning buildings.
+  r.get('/me/gift', limit, send(async req => world.economy.giftInfo((await me(req)).id)));
+  r.post('/me/gift', limit, send(async req => { const b = req.body || {}; return world.economy.gift((await me(req)).id, b.to, b.amount); }));
   r.get('/me/bank', limit, send(async req => world.economy.bankInfo((await me(req)).id)));
   r.post('/me/bank/deposit', limit, send(async req => world.economy.bank((await me(req)).id, 'deposit', (req.body || {}).amount)));
   r.post('/me/bank/withdraw', limit, send(async req => world.economy.bank((await me(req)).id, 'withdraw', (req.body || {}).amount)));

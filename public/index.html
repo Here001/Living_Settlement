@@ -2353,7 +2353,19 @@ function bankPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Bank
   if(!B.hasBank) box.append(el('p',{class:'hint',text:"The colony doesn't have a Bank yet, so you can't deposit. You can still take out what you saved."}));
   box.append(el('div',{class:'cbet'}, inp, el('button',{class:'btn primary',text:'Deposit',disabled:!B.hasBank,onclick:()=>moneyAction(c,'/api/me/bank/deposit',{amount:amt()},r=>`Deposited. ${fmt(r.bank)} coins in the bank.`)}),
     el('button',{class:'btn',text:'Withdraw',onclick:()=>moneyAction(c,'/api/me/bank/withdraw',{amount:amt()},r=>`Withdrawn. ${fmt(r.wallet)} coins on you.`)})),
-    el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Deposit everything',disabled:!B.hasBank||!B.wallet,onclick:()=>moneyAction(c,'/api/me/bank/deposit',{amount:B.wallet},'All your coins are safe in the bank.')}))); return box; }
+    el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Deposit everything',disabled:!B.hasBank||!B.wallet,onclick:()=>moneyAction(c,'/api/me/bank/deposit',{amount:B.wallet},'All your coins are safe in the bank.')})));
+  const gto=el('input',{type:'text',placeholder:'@friend',autocomplete:'off','aria-label':'Gift to'}), gam=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Coins to gift',placeholder:'Coins'});
+  box.append(el('h3',{text:'🎁 Gift coins'}), el('p',{class:'hint',text:'Send coins from your pocket to another colonist, up to 2,000 a game day.'}), el('div',{class:'cbet'}, gto, gam, el('button',{class:'btn',text:'Send',onclick:()=>sendGift(gto.value, gam.value)}))); return box; }
+// Gifts: coins from your pocket to another colonist (up to 2,000 a game day).
+let giftOpen=null;
+async function sendGift(to, amount){ to=(to||'').trim().replace(/^@+/,''); const n=Math.floor(Number(amount)||0);
+  if(!to){ toast('Who is the gift for?'); return; } if(n<1){ toast('Gift at least 1 coin.'); return; }
+  toast(`Send @${to} ${fmt(n)} coins?`,'Send',async()=>{ const r=await meAction('/api/me/gift',{to,amount:n},r=>`🎁 Sent @${r.to} ${fmt(r.amount)} coins. You can gift ${fmt(r.left)} more today.`); if(r){ giftOpen=null; Money.at=0; renderCard(true); } }); }
+function giftBox(handle){ const wrap=el('div',{class:'row-actions'});
+  if(giftOpen!==handle){ wrap.append(el('button',{class:'btn',text:'🎁 Send a gift',onclick:()=>{ giftOpen=handle; renderCard(true); }})); return wrap; }
+  const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Coins to gift',placeholder:'Coins'});
+  return el('div',{class:'authbox'}, el('h3',{text:`Gift coins to @${handle}`}), el('p',{class:'hint',text:'From the coins you carry. Up to 2,000 a game day.'}),
+    el('div',{class:'cbet'}, inp, el('button',{class:'btn primary',text:'Send',onclick:()=>sendGift(handle, inp.value)}), el('button',{class:'linkb',text:'Cancel',onclick:()=>{ giftOpen=null; renderCard(true); }}))); }
 let carPick={ m:'hatch', col:null };
 function carThumb(m,col){ const k='car:'+m+':'+col; if(creatureThumbs[k]) return creatureThumbs[k]; const cv2=document.createElement('canvas'); cv2.width=96; cv2.height=64; const keep=ctx; ctx=cv2.getContext('2d');
   try{ ctx.setTransform(2.2,0,0,2.2,48,40); drawVehicle(0,0,1,0,CAR_MODELS[m],col,false,1); } finally { ctx=keep; } return creatureThumbs[k]=cv2.toDataURL(); }
@@ -2477,7 +2489,8 @@ function renderCard(force){ if(!force && cardBusy()) return;
       // Already signed in as someone else: one person, one colonist, so no "This is me" on other cards.
       else if(Me&&Me.token&&Me.handle){ card.append(el('div',{class:'row-actions'}, el('span',{class:'hint',text:`You're signed in as @${Me.handle}.`}), el('button',{class:'linkb',text:'Go to my colonist',onclick:()=>findMe()})));
         if(c.home) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Visit their home',onclick:()=>meAction('/api/me/visit',{friend:c.handle},r=>`You're on your way to ${r.place}.`)}),
-          el('button',{class:'btn',text:'Pick their pocket',onclick:()=>toast(`Try to pick @${c.handle}'s pocket? If you're caught you'll be fined, and jailed if the colony has a Jail.`,'Do it',()=>doCrime('pickpocket',c.handle))}))); }
+          el('button',{class:'btn',text:'Pick their pocket',onclick:()=>toast(`Try to pick @${c.handle}'s pocket? If you're caught you'll be fined, and jailed if the colony has a Jail.`,'Do it',()=>doCrime('pickpocket',c.handle))})));
+        card.append(giftBox(c.handle)); }
       else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}))); }
   } else if(sel.kind==='v'){ const v=D.vehicles.get(sel.id); if(!v){ closeCard(); return; } const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car;
     const head=el('div',{class:'chead'}); head.append(el('img',{class:'cthumb',alt:'',src:vehicleThumb(v.type)}), el('div',null, el('h2',{text:V.name}), el('p',{class:'now',text:'Driving around the neighbourhood'})));

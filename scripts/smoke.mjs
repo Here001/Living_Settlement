@@ -449,6 +449,20 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await money()).wallet === before + 500, 'if the developer knocks it down, the owner gets their money back');
     const sl = await call('POST', '/api/me/properties/sell', { buildingId: spare }, P);
     ok(sl.status === 200 && sl.json.back === Math.floor(buy.json.price * 0.7), 'sell a building back for 70%'); }
+  // ---- gifts ----
+  { const set = (h, sql) => pool.query(`update citizens set ${sql} where handle = $1`, [h]);
+    await set('zara_ng', 'coins_base = 3000, coins_day = 0, net = 0, gift_day = null, gift_sent = 0, jailed_until = null'); await set('jobfill_a', 'coins_base = 100, coins_day = 0, net = 0');
+    ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 10 }, { auth: false })).status === 401, 'only signed-in colonists can gift');
+    ok((await call('POST', '/api/me/gift', { to: 'zara_ng', amount: 10 }, P)).status === 400, "can't gift yourself");
+    ok((await call('POST', '/api/me/gift', { to: 'nobody_here', amount: 10 }, P)).status === 404, 'the friend must exist');
+    const g = await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 1500 }, P);
+    ok(g.status === 200 && (await whoDev('zara_ng')).coins === 1500 && (await whoDev('jobfill_a')).coins === 1600 && g.json.left === 500, 'gift 1,500 coins: it moves from one pocket to the other', JSON.stringify(g.json));
+    ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 600 }, P)).status === 429, 'at most 2,000 a game day');
+    ok((await call('GET', '/api/me/gift', undefined, P)).json.left === 500, 'and the card knows how much is left');
+    const ev = ((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).find(e => e.kind === 'gift');
+    ok(ev && /@zara_ng sent @jobfill_a a gift/.test(ev.text) && !/1,500|1500/.test(ev.text), "the Colony Log says who, not how much", ev?.text);
+    await set('zara_ng', 'coins_base = 100, gift_day = null, gift_sent = 0');
+    ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 200 }, P)).status === 400, "can't gift more than you carry"); }
   const hut = await call('POST', '/api/admin/buildings', { type: 'house', x: 906, y: 906 });
   ok(hut.status === 200 && (await call('POST', '/api/me/job', { buildingId: hut.json.building?.id }, P)).status === 400, 'homes are not jobs', JSON.stringify(hut.json));
   ok((await call('POST', '/api/me/job/quit', {}, P)).status === 200 && (await call('POST', '/api/me/job/quit', {}, P)).status === 400, 'cannot quit with no job'); }

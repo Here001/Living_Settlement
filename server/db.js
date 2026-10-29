@@ -135,6 +135,8 @@ const MIGRATIONS = [
   `alter table citizens add column bank bigint not null default 0, add column cars jsonb, add column car_active text, add column home_changed_day int;
    alter table buildings add column owner_id text, add column owner_handle text, add column bought_at bigint, add column price int;
    create index buildings_owner on buildings (owner_id) where owner_id is not null;`,
+  // v21: gifts between colonists (how much each has sent today, for the daily limit)
+  `alter table citizens add column gift_day int, add column gift_sent int not null default 0;`,
 ];
 
 export async function migrate() {

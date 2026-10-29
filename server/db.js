@@ -102,6 +102,9 @@ const MIGRATIONS = [
   `create table settings (key text primary key, value jsonb not null);`,
   // v10: a colonist may choose their gender once, after claiming their avatar.
   `alter table citizens add column gender_chosen boolean not null default false;`,
+  // v11: messages colonists post in the Town Square.
+  `create table messages (id text primary key, citizen_id text not null, handle text not null, gender char(1) not null default 'm', text text not null, t bigint not null);
+   create index messages_t on messages (t desc);`,
 ];
 
 export async function migrate() {

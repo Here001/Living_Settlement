@@ -124,6 +124,34 @@ export function playersRouter({ limit, send, admin, world }) {
   }));
   r.delete('/session', limit, send(async req => { const t = req.get('x-player'); if (t) await pool.query('delete from sessions where token_hash = $1', [sha(t)]); return { ok: true }; }));
 
+  // ---------- Town Square: messages from verified colonists ----------
+  const lastPost = new Map(); // citizen id → time of their last message (slows down spam)
+  const msgOut = m => ({ id: m.id, h: m.handle, g: m.gender, text: m.text, t: Number(m.t) });
+  r.get('/square', limit, send(async () => (await pool.query('select * from messages order by t desc limit 80')).rows.map(msgOut)));
+  r.post('/square', limit, send(async req => {
+    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Claim your colonist to post in the Town Square.');
+    let text = String((req.body || {}).text ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!text) throw new HttpError(400, 'Write something first.');
+    if (text.length > 280) throw new HttpError(400, 'Keep it under 280 characters.');
+    if (/(https?:\/\/|www\.)/i.test(text)) throw new HttpError(400, 'Links can’t be posted in the Town Square.');
+    const now = Date.now(), last = lastPost.get(p.id) || 0;
+    if (now - last < 15000) throw new HttpError(429, `Wait ${Math.ceil((15000 - (now - last)) / 1000)} seconds before posting again.`);
+    const prev = (await pool.query('select text from messages where citizen_id = $1 order by t desc limit 1', [p.id])).rows[0];
+    if (prev && prev.text === text) throw new HttpError(409, 'You just posted that.');
+    lastPost.set(p.id, now);
+    const m = (await pool.query('insert into messages (id, citizen_id, handle, gender, text, t) values ($1, $2, $3, $4, $5, $6) returning *', [crypto.randomUUID(), p.id, p.handle, p.gender || 'm', text, now])).rows[0];
+    world.bus.publish([{ op: 'chat', data: msgOut(m) }]);
+    return msgOut(m);
+  }));
+  r.delete('/square/:id', limit, send(async req => {
+    const p = await playerFrom(req); const isAdmin = admin.check(req);
+    const where = isAdmin ? 'id = $1' : 'id = $1 and citizen_id = $2';
+    const del = await pool.query(`delete from messages where ${where} returning id`, isAdmin ? [req.params.id] : [req.params.id, p?.id || '']);
+    if (!del.rowCount) throw new HttpError(404, 'That message is already gone, or isn’t yours.');
+    world.bus.publish([{ op: 'chatGone', id: req.params.id }]);
+    return { ok: true };
+  }));
+
   // Developer: a pre-verified setup link for one citizen (before Instagram is connected, or to settle a dispute),
   // or clear a password so nobody can use it until the owner proves it's them again.
   r.post('/admin/citizens/:id/setup-link', admin, send(async req => {

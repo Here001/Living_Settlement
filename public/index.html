@@ -171,6 +171,14 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .story .sign{margin-top:16px;font-style:italic}
 .gpick{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 14px;border:1.6px solid var(--line);border-radius:14px;background:var(--panel);font-weight:700}
 .gpick .ava{width:56px;height:56px}
+.composer{padding:8px 14px 6px;border-bottom:1.4px dashed var(--soft);display:flex;flex-direction:column;gap:6px}
+.composer textarea{width:100%;resize:none;padding:8px 10px;border-radius:12px;border:1.6px solid var(--soft);background:var(--paper);font:15px/1.35 'Bricolage Grotesque',system-ui,sans-serif;color:var(--ink)}
+.composer .row{display:flex;justify-content:flex-end;align-items:center;gap:10px}
+.composer .count{font-size:12px;color:var(--muted)}
+.composer .hint{margin:0}
+.post.said{border-color:var(--accent)}
+.post.said .saidt{font-size:15px}
+.vbadge{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;background:#3F7FE0;color:#fff;font-size:9px;font-weight:800;margin:0 4px}
 .authbox{margin-top:10px;padding:10px 12px;border:1.6px dashed var(--soft);border-radius:14px;display:flex;flex-direction:column;gap:6px}
 .authbox h3{margin:0;font-size:15px}
 .authbox input{padding:8px 10px;border-radius:12px;border:1.6px solid var(--soft);background:var(--paper);font-size:15px}
@@ -363,6 +371,8 @@ function applyOp(o){
   case 'vehicle': { const v=o.data, slot=S.chunks.get(ck(v.cx,v.cy)); if(slot){ S.vehicles.set(v.id,v); slot.vehicles.add(v.id); } break; }
   case 'removeVehicle': { S.vehicles.delete(o.id); S.chunks.get(o.chunks[0])?.vehicles.delete(o.id); if(sel&&sel.id===o.id) closeCard(); break; }
   case 'disaster': S.disasters.unshift(o.data); if(S.disasters.length>20) S.disasters.length=20; break;
+  case 'chat': if(!S.chat.some(m=>m.id===o.data.id)){ S.chat.unshift(o.data); if(S.chat.length>200) S.chat.length=200; feedDirty=true; renderFeed(); } break;
+  case 'chatGone': S.chat=S.chat.filter(m=>m.id!==o.id); feedDirty=true; renderFeed(); break;
   case 'event': S.events.unshift(o.data); if(S.events.length>300) S.events.length=300; feedDirty=true; updateNews(); break; } }
 
 // Which chunks the screen needs: everything visible plus a one-chunk margin, capped when zoomed far out.
@@ -392,7 +402,8 @@ async function syncChunks(){
     subscribe(); changed();
   } finally { syncing=false; } }
 function reloadAll(){ for(const k of [...S.chunks.keys()]) dropChunk(k); S.citizens.clear(); subKey=''; syncChunks(); }
-async function loadMeta(){ const r=await api('/api/meta'); S.meta=r.meta; S.events=r.events||[]; S.disasters=r.disasters||[]; skew=r.serverNow-Date.now(); }
+async function loadMeta(){ const r=await api('/api/meta'); S.meta=r.meta; S.events=r.events||[]; S.disasters=r.disasters||[]; skew=r.serverNow-Date.now(); loadChat(); }
+S.chat=[]; async function loadChat(){ try{ S.chat=await api('/api/square'); feedDirty=true; renderFeed(); }catch(e){} }
 function connect(){
   ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`);
   ws.onopen=()=>{ Store.online=true; subKey=''; };
@@ -1760,7 +1771,7 @@ function renderPane(){
   const p=$('pane'); if(!activeTab){ p.hidden=true; return; } p.hidden=false; p.innerHTML='';
   if(activeTab==='feed'){
     const seg=el('div',{class:'seg',role:'tablist'}); for(const [id,nm] of [['posts','Posts'],['log','Daily log'],['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
-    p.append(paneHead('Town Square',[seg]), el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; renderFeed(); return; }
+    p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; renderFeed(); return; }
   if(activeTab==='people'){ p.append(paneHead('Colonists')); const body=el('div',{class:'pane-body'});
     const s=el('input',{class:'search',id:'search',type:'search',placeholder:'Search a username',autocomplete:'off'}); s.value=peopleQuery; s.oninput=()=>{ peopleQuery=s.value; renderPeople(); };
     body.append(s, el('div',{id:'peopleList'}));
@@ -1995,7 +2006,8 @@ function postItems(){ const gm=gmNow(); const today=Math.floor(gm/1440); const o
   const cits=[...S.citizens.values()].slice(0,300);
   for(const c of cits) for(let d=Math.max(0,today-1); d<=today; d++) out.push(...postsFor(c,d,gm));
   for(const e of S.events){ const g=gmAt(e.t); if(g<=gm && g>=(today-1)*1440) out.push({ g, gazette:true, text:e.text }); }
-  return out.sort((a,b)=>b.g-a.g).slice(0,60); }
+  for(const m of S.chat) out.push({ g:gmAt(m.t)+0.001, msg:m });
+  return out.sort((a,b)=>b.g-a.g).slice(0,80); }
 
 /* ---------------- storyboard log ---------------- */
 let feedDirty=true;
@@ -2028,12 +2040,24 @@ function storyPage(){ const box=el('div',{class:'story'}, el('p',{class:'kicker'
     el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Watch the intro',onclick:()=>playIntro(true)}), el('button',{class:'btn',text:'Find my colonist',onclick:()=>findMe()})),
     el('p',{class:'hint',text:'Gliese 12 b is a real planet about 40 light years away. What the colonists found there is the story of this game.'}));
   return box; }
+// Signed-in colonists can post in the Town Square.
+function composer(){ const box=el('div',{class:'composer'});
+  if(!(Me&&Me.token)){ box.append(el('p',{class:'hint',text:'Claim your colonist to post in the Town Square.'}), el('button',{class:'btn',text:'Find my colonist',onclick:()=>findMe()})); return box; }
+  const ta=el('textarea',{maxlength:'280',rows:'2',placeholder:`Say something to the colony, @${Me.handle}…`,'aria-label':'Message to the Town Square'}); const n=el('span',{class:'count',text:'280'});
+  const post=el('button',{class:'btn primary',text:'Post'});
+  const send=async()=>{ const t=ta.value.trim(); if(!t) return; post.disabled=true; try{ const m=await api('/api/square',{method:'POST',body:{text:t}}); if(!S.chat.some(x=>x.id===m.id)) S.chat.unshift(m); ta.value=''; n.textContent='280'; feedDirty=true; renderFeed(); }catch(e){ toast(e.message); } post.disabled=false; };
+  ta.oninput=()=>{ n.textContent=String(280-ta.value.length); }; ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } }); post.onclick=send;
+  box.append(ta, el('div',{class:'row'}, n, post)); return box; }
 function renderFeed(){
   const body=$('feedBody'); if(!body || activeTab!=='feed' || !feedDirty) return; feedDirty=false; const keep=body.scrollTop; body.innerHTML='';
   if(feedMode==='story'){ body.append(storyPage()); return; }
   if(!S.meta){ body.append(el('p',{class:'hint',text:'The story starts once the colony is founded.'})); return; }
   if(feedMode==='posts'){ const items=postItems(); if(!items.length){ body.append(el('p',{class:'hint',text:'Quiet so far. Check back in a few minutes.'})); return; }
     for(const it of items){
+      if(it.msg){ const m=it.msg, mineMsg=Me&&Me.handle&&Me.handle.toLowerCase()===m.h.toLowerCase(); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG({handle:m.h,gender:m.g});
+        const del=(Store.canWrite||mineMsg)?el('button',{class:'show',text:'Delete',onclick:()=>toast('Delete this message?','Delete',async()=>{ try{ await api('/api/square/'+encodeURIComponent(m.id),{method:'DELETE'}); }catch(e){ toast(e.message); } })}):null;
+        body.append(el('article',{class:'post said'}, av, el('div',null, el('div',{class:'ph'}, el('b',null,'@'+m.h, el('span',{class:'vbadge',title:'Verified colonist',text:'✓'})), el('time',{text:when(it.g)})), el('p',{class:'saidt',text:m.text}),
+          el('div',{class:'pf'}, el('button',{class:'show',text:'Show on map',onclick:()=>{ openCitizen(m.h); if(innerWidth<900) openTab(null); }}), del)))); continue; }
       if(it.gazette){ body.append(el('article',{class:'post gz'}, el('div',null, el('div',{class:'ph'}, el('b',{text:`${S.meta.name} Colony Log`}), el('time',{text:when(it.g)})), el('p',{class:'gzt',text:it.text})))); continue; }
       const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(it.c);
       body.append(el('article',{class:'post'}, av, el('div',null, el('div',{class:'ph'}, el('b',{text:'@'+it.c.handle}), el('time',{text:when(it.g)})), el('p',{text:it.text}), el('div',{class:'pf'}, el('span',{text:`♥ ${it.likes}`}), el('span',{text:`↻ ${it.reposts}`}), el('button',{class:'show',text:'Show on map',onclick:()=>{ selectCitizen(it.c.id); if(innerWidth<900) openTab(null); }}))))); }

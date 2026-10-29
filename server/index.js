@@ -45,6 +45,7 @@ const admin = (req, res, next) => {
   if (!token || !safeEq(token, process.env.ADMIN_TOKEN)) return res.status(401).json({ error: 'Builder token required.' });
   next();
 };
+admin.check = req => { const t = (req.get('authorization') || '').replace(/^Bearer\s+/i, ''); return !!t && safeEq(t, process.env.ADMIN_TOKEN); };
 const send = fn => async (req, res) => {
   try { res.json(await fn(req) ?? { ok: true }); }
   catch (e) { const s = e instanceof HttpError ? e.status : 500; if (s === 500) console.error(e); res.status(s).json({ error: s === 500 ? 'Something went wrong on the server.' : e.message }); }

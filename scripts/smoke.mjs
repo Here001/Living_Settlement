@@ -275,6 +275,14 @@ ok((await call('GET', '/api/me', undefined, { auth: false, headers: { 'x-player'
 ok((await call('POST', '/api/me/gender', { gender: 'f' }, { auth: false })).status === 401, 'choosing needs a login');
 ok((await call('POST', '/api/me/gender', { gender: 'f' }, { auth: false, headers: { 'x-player': r.json.token } })).status === 200 && (await who('zara_ng')).g === 'f', 'the colonist chooses once');
 ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers: { 'x-player': r.json.token } })).status === 409, 'and cannot choose again');
+{ const P = { auth: false, headers: { 'x-player': r.json.token } };
+  ok((await call('POST', '/api/square', { text: 'hello colony' }, { auth: false })).status === 401, 'only signed-in colonists can post in the Town Square');
+  const m1 = await call('POST', '/api/square', { text: 'Hello Gliese 12 b!' }, P);
+  ok(m1.status === 200 && m1.json.h === 'zara_ng', 'a verified colonist posts a message');
+  ok((await call('POST', '/api/square', { text: 'again so soon' }, P)).status === 429, 'posting is slowed down to stop spam');
+  ok((await call('GET', '/api/square', undefined, { auth: false })).json.some(x => x.id === m1.json.id), 'everyone can read the Town Square');
+  ok((await call('DELETE', `/api/square/${m1.json.id}`)).status === 200, 'the developer can delete a message');
+  ok((await call('POST', '/api/square', { text: 'see www.spam.com' }, { auth: false, headers: P.headers })).status === 400, 'links are refused'); }
 ok((await call('POST', `/api/claim/${claim.claimId}/password`, { password: 'secret2' }, { auth: false })).status === 404, 'a code works only once');
 ok((await call('GET', '/api/me', undefined, { auth: false, headers: { 'x-player': tok1 } })).json.handle === 'zara_ng', 'the session knows who you are');
 ok((await who('zara_ng')).claimed === true, 'the card shows the avatar is claimed');
@@ -301,6 +309,10 @@ ok((await call('POST', '/api/admin/instagram/connect', { token: 'short' })).stat
 await call('POST', '/webhooks/instagram', undefined, { auth: false, raw: '{}', headers: { 'x-hub-signature-256': 'sha256=' + '0'.repeat(64) } });
 ok((await call('GET', '/api/admin/instagram')).json.rejected >= 1, 'refused signatures are counted for the panel');
 for (const path of ['/privacy', '/data-deletion', '/terms']) { const pr = await fetch(BASE + path); ok(pr.status === 200 && (await pr.text()).includes('<h1>'), `${path} page is up`); }
+
+console.log('Newcomers start with nothing');
+await call('POST', '/api/admin/citizens', { handle: 'broke_newbie' });
+ok((await who('broke_newbie')).coins === 0, 'a new colonist starts with 0 coins until they work');
 
 console.log('Men and women');
 await post(comment('c4', 'ada_f', 'spawn female 👩')); await post(comment('c5', 'bayo_m', 'Spawn me as a man'));

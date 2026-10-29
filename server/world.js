@@ -404,7 +404,7 @@ export class World {
     const gs = add.map(h => { const g = genders?.get?.(h.toLowerCase()) ?? (typeof genders === 'string' ? genders : null); return g === 'm' || g === 'f' ? g : R.randomGender(); });
     const rows = (await ch.q(`insert into citizens (id, handle, joined_at, founder, source, coins_base, coins_day, gender)
       select id, handle, $3, $4, $5, $6, $7, gender from unnest($1::text[], $2::text[], $8::text[]) with ordinality as t(id, handle, gender, ord) order by ord
-      returning *`, [ids, add, now, founder, source, founder ? 50 : 20, ch.today, gs])).rows;
+      returning *`, [ids, add, now, founder, source, founder ? 50 : 0, ch.today, gs])).rows; // newcomers start with nothing; coins come from a job
     for (const c of rows) ch.citizens.set(c.id, []);
     ch.meta.population = (ch.meta.population || 0) + rows.length;
     return rows;

@@ -1871,7 +1871,7 @@ function igPanel(){ const box=el('div',{class:'igbox'}, el('h3',{text:'Instagram
   const ago=t=>{ if(!t) return 'never'; const m=Math.round((Date.now()-t)/60000); return m<1?'just now':m<60?`${m} min ago`:m<1440?`${Math.round(m/60)} h ago`:`${Math.round(m/1440)} days ago`; };
   const copyRow=(label,val)=>el('div',{class:'igrow'}, el('span',{class:'k',text:label}), el('code',{text:val||'not set'}), val?el('button',{class:'btn',text:'Copy',onclick:()=>{ try{ navigator.clipboard.writeText(val); toast(`${label} copied`); }catch(e){ prompt(label,val); } }}):'');
   const tick=(ok,text)=>el('div',{class:'igrow'}, el('span',{class:'k',text:ok?'✓':'✗',style:`color:${ok?'#2F6E3B':'var(--danger)'}`}), el('span',{text}));
-  api('/api/admin/instagram').then(st=>{ box.innerHTML=''; const tokenIn=el('input',{type:'password',placeholder:'Paste the Instagram access token',autocomplete:'off','aria-label':'Instagram access token'});
+  api('/api/admin/instagram').then(st=>{ box.innerHTML=''; const tokenIn=el('input',{type:'password',placeholder:'Paste an Instagram or Facebook Page token',autocomplete:'off','aria-label':'Instagram access token'});
     const connect=async()=>{ try{ const r=await api('/api/admin/instagram/connect',{method:'POST',body:{token:tokenIn.value}}); toast(`Connected @${r.username}. Comments will now reach the city.`); box.replaceWith(igPanel()); }catch(e){ toast(e.message); } };
     box.append(el('h3',{text:'Instagram connection'}),
       el('p',{class:'hint',text:'In the Meta app dashboard, under Webhooks, paste these two:'}), copyRow('Callback URL',st.callbackUrl), copyRow('Verify token',st.verifyToken),

@@ -49,14 +49,32 @@ export function instagramRouter(world) {
 }
 
 // Connect the developer's Instagram account: check the token, then subscribe the account to comment webhooks.
+// Accepts either kind of token Meta hands out:
+//   - an Instagram user token (Instagram business login), used against graph.instagram.com
+//   - a Facebook Page token (Facebook login), for the Page linked to the Instagram professional account
 // The token is used once and not stored.
+const jget = (url, opts) => fetch(url, opts).then(r => r.json()).catch(() => null);
+const fail = msg => Object.assign(new Error(msg), { status: 400 });
 export async function connectInstagram(token) {
-  token = String(token || '').trim(); if (token.length < 20) throw Object.assign(new Error('Paste the access token from the Meta dashboard.'), { status: 400 });
-  const base = 'https://graph.instagram.com';
-  const me = await fetch(`${base}/me?fields=user_id,username,account_type&access_token=${encodeURIComponent(token)}`).then(r => r.json()).catch(() => null);
-  if (!me || me.error) throw Object.assign(new Error(`Instagram didn't accept that token${me?.error?.message ? ': ' + me.error.message : '.'}`), { status: 400 });
-  const sub = await fetch(`${base}/me/subscribed_apps?subscribed_fields=comments&access_token=${encodeURIComponent(token)}`, { method: 'POST' }).then(r => r.json()).catch(() => null);
-  if (!sub || !sub.success) throw Object.assign(new Error(`Couldn't subscribe @${me.username} to comments${sub?.error?.message ? ': ' + sub.error.message : '.'}`), { status: 400 });
-  igStatus.account = { username: me.username, type: me.account_type, at: Date.now() };
+  token = String(token || '').trim(); if (token.length < 20) throw fail('Paste the access token from the Meta dashboard.');
+  const t = encodeURIComponent(token);
+  // Instagram business login token?
+  const ig = await jget(`https://graph.instagram.com/me?fields=user_id,username,account_type&access_token=${t}`);
+  if (ig && !ig.error && ig.username) {
+    const sub = await jget(`https://graph.instagram.com/me/subscribed_apps?subscribed_fields=comments&access_token=${t}`, { method: 'POST' });
+    if (!sub || !sub.success) throw fail(`Couldn't subscribe @${ig.username} to comments${sub?.error?.message ? ': ' + sub.error.message : '.'}`);
+    igStatus.account = { username: ig.username, type: ig.account_type, via: 'Instagram login', at: Date.now() };
+    return igStatus.account;
+  }
+  // Facebook Page token (Facebook login route)?
+  const fb = 'https://graph.facebook.com';
+  const page = await jget(`${fb}/me?fields=id,name,instagram_business_account{id,username}&access_token=${t}`);
+  if (!page || page.error) throw fail(`Meta didn't accept that token${page?.error?.message ? ': ' + page.error.message : (ig?.error?.message ? ': ' + ig.error.message : '.')}`);
+  if (!page.instagram_business_account) throw fail(`That token is for "${page.name || 'a Facebook account'}", which has no Instagram professional account linked. Use a Page token for the Facebook Page connected to your Instagram, with instagram_basic and instagram_manage_comments allowed.`);
+  // Install the app on the Page so Meta delivers its Instagram webhooks (the field list is required; feed is the usual one).
+  let sub = await jget(`${fb}/${page.id}/subscribed_apps?subscribed_fields=feed&access_token=${t}`, { method: 'POST' });
+  if (!sub || !sub.success) sub = await jget(`${fb}/me/subscribed_apps?subscribed_fields=feed&access_token=${t}`, { method: 'POST' });
+  if (!sub || !sub.success) throw fail(`Couldn't connect the Page "${page.name}"${sub?.error?.message ? ': ' + sub.error.message : '.'} Check the token allows pages_manage_metadata.`);
+  igStatus.account = { username: page.instagram_business_account.username, type: 'via Facebook Page ' + page.name, via: 'Facebook login', at: Date.now() };
   return igStatus.account;
 }

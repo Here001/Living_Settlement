@@ -9,7 +9,7 @@ import { WebSocketServer } from 'ws';
 import { pool, migrate } from './db.js';
 import { World, HttpError } from './world.js';
 import { createBus } from './bus.js';
-import { instagramRouter } from './instagram.js';
+import { instagramRouter, igStatus, connectInstagram } from './instagram.js';
 import { playersRouter, sweepPlayers } from './players.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
 
@@ -110,6 +110,30 @@ app.post('/api/admin/citizens', admin, send(req => world.spawn((req.body || {}).
 app.delete('/api/admin/citizens/:id', admin, send(req => world.removeCitizen(req.params.id)));
 app.put('/api/admin/build-post', admin, send(req => world.setBuildPost((req.body || {}).mediaId)));
 app.get('/api/admin/requests', admin, send(() => world.buildRequests()));
+
+// ---------- Instagram connection panel (developer) ----------
+app.get('/api/admin/instagram', admin, send(async req => ({
+  callbackUrl: `${req.protocol}://${req.get('host')}/webhooks/instagram`, verifyToken: process.env.IG_VERIFY_TOKEN || null, secretSet: !!process.env.IG_APP_SECRET,
+  ...igStatus, comments: Number((await pool.query("select count(*) n from comments where source = 'instagram'")).rows[0].n) })));
+app.post('/api/admin/instagram/connect', admin, send(async req => { try { return await connectInstagram((req.body || {}).token); } catch (e) { throw new HttpError(e.status || 502, e.message); } }));
+
+// ---------- pages Meta asks for: privacy policy, data deletion, terms ----------
+const page = (title, body) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
+<style>body{font:16px/1.6 system-ui,sans-serif;max-width:720px;margin:0 auto;padding:24px 18px;color:#2B2621;background:#F6F1E6}h1{font-size:26px}h2{font-size:18px;margin-top:26px}a{color:#B5543E}</style></head><body>${body}</body></html>`;
+const contact = () => process.env.CONTACT_EMAIL ? `email <a href="mailto:${process.env.CONTACT_EMAIL}">${process.env.CONTACT_EMAIL}</a> or send us a direct message on Instagram` : 'send us a direct message on Instagram';
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const townName = () => esc(world.meta?.name || 'The Living Settlement');
+app.get('/privacy', (req, res) => res.send(page('Privacy policy', `<h1>Privacy policy</h1><p>${townName()} is a game: a shared city where followers who comment on our Instagram posts become citizens.</p>
+<h2>What we collect</h2><ul><li>Your public Instagram username, and the text of comments you leave on our posts, received through Instagram's official API.</li>
+<li>Game data about your citizen: home, job, coins and activity in the city.</li><li>If you set a password, we store only a one-way scrambled form of it (scrypt hash), never the password itself.</li>
+<li>A login token kept in your browser so you stay signed in.</li></ul>
+<h2>What we use it for</h2><p>Only to run the game: to add you as a citizen when you comment "spawn", to read build requests, and to confirm a citizen is yours when you comment a claim code. We don't sell or share your data, show ads, or send you messages.</p>
+<h2>Who can see it</h2><p>Your username and your citizen's life in the city are visible to everyone who opens the game. Comment text is seen only by the game's operator.</p>
+<h2>Deleting your data</h2><p>See <a href="/data-deletion">how to delete your data</a>.</p><h2>Contact</h2><p>To ask about your data, ${contact()}.</p>`)));
+app.get('/data-deletion', (req, res) => res.send(page('Delete your data', `<h1>Delete your data</h1><p>To remove your citizen and everything we hold about you from ${townName()}, ${contact()} from the Instagram account your citizen belongs to, saying "delete my citizen".</p>
+<p>We will remove your citizen, your stored comments, your password and your logins within 30 days, and confirm when it's done. Deleting the Instagram comments themselves is done on Instagram.</p>`)));
+app.get('/terms', (req, res) => res.send(page('Terms', `<h1>Terms</h1><p>${townName()} is a free game for fun. Coins and everything else in the game have no real-world value and can't be bought, sold or exchanged for money.
+The operator may change, reset or remove anything in the game. Be kind in comments; we may remove citizens for abuse.</p>`)));
 
 // ---------- players: prove an avatar is yours, set a password, log in ----------
 app.use('/api', playersRouter({ limit, send, admin }));

@@ -288,6 +288,15 @@ r = await call('POST', `/api/admin/citizens/${zara.id}/setup-link`);
 ok(r.status === 200 && (await call('POST', `/api/claim/${r.json.claimId}/password`, { password: 'linkpass1' }, { auth: false })).status === 200, 'a setup link lets them set a password directly');
 ok((await call('DELETE', `/api/admin/citizens/${zara.id}/password`)).status === 200 && (await who('zara_ng')).claimed === false, 'the developer can clear a password');
 
+console.log('Instagram panel and policy pages');
+r = await call('GET', '/api/admin/instagram');
+ok(r.status === 200 && r.json.callbackUrl.endsWith('/webhooks/instagram') && r.json.verifyToken && r.json.secretSet && r.json.lastWebhookAt > 0 && r.json.comments > 0, 'status shows webhook details and recent comments', JSON.stringify(r.json).slice(0, 200));
+ok((await call('GET', '/api/admin/instagram', undefined, { auth: false })).status === 401, 'players cannot see the Instagram panel');
+ok((await call('POST', '/api/admin/instagram/connect', { token: 'short' })).status === 400, 'connect refuses a bad token');
+await call('POST', '/webhooks/instagram', undefined, { auth: false, raw: '{}', headers: { 'x-hub-signature-256': 'sha256=' + '0'.repeat(64) } });
+ok((await call('GET', '/api/admin/instagram')).json.rejected >= 1, 'refused signatures are counted for the panel');
+for (const path of ['/privacy', '/data-deletion', '/terms']) { const pr = await fetch(BASE + path); ok(pr.status === 200 && (await pr.text()).includes('<h1>'), `${path} page is up`); }
+
 console.log('Men and women');
 await post(comment('c4', 'ada_f', 'spawn female 👩')); await post(comment('c5', 'bayo_m', 'Spawn me as a man'));
 let ada = null; for (let i = 0; i < 40 && !ada?.id; i++) { await sleep(100); ada = await who('ada_f'); }

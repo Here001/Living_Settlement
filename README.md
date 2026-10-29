@@ -74,15 +74,15 @@ When the audience grows, follow the growth stages in [ARCHITECTURE.md](ARCHITECT
 
 ## Connect Instagram (comment "spawn" to move in)
 
-You need an Instagram **Business or Creator** account.
+You need a **public** Instagram **Business or Creator** account. In developer view, **Citizens → Instagram connection** shows everything below and whether comments are arriving.
 
-1. developers.facebook.com → **Create app** → add the **Instagram** product (API setup with Instagram login).
-2. Permissions: `instagram_business_basic`, `instagram_business_manage_comments`.
-3. **Webhooks** → Callback URL `https://YOUR-APP/webhooks/instagram`, Verify token = your `IG_VERIFY_TOKEN`. Subscribe to the **comments** field.
-4. Put the app's **App secret** in `IG_APP_SECRET` and redeploy.
-5. Generate a token for your account in the dashboard so the app is subscribed to it.
+1. developers.facebook.com → **Create app** (Business type) → add **Instagram** → *API setup with Instagram business login*.
+2. **Webhooks:** paste the Callback URL and Verify token from the game's Instagram panel, verify, and subscribe to **comments**.
+3. Copy the **Instagram app secret** into Render → Environment as `IG_APP_SECRET` (you can put both the Meta and Instagram app secrets, separated by a comma).
+4. **Generate token** for your account in the Meta dashboard, paste it into the game's panel, and tap **Connect**. That subscribes your account to comment webhooks; the token isn't stored.
+5. Meta needs these pages for your app: `/privacy`, `/data-deletion`, `/terms` (set `CONTACT_EMAIL` to show an email on them).
 
-In Development mode, Meta only sends comments from accounts with a role on the app, which is fine for testing. Public comments need **App Review** with Advanced Access for `instagram_business_manage_comments`.
+In Development mode, Meta only sends comments from accounts with a role on the app (add a second account as an Instagram tester to try it). Comments from the public need **App Review** with Advanced Access for `instagram_business_manage_comments`, **Business Verification**, and the app switched to **Live**.
 
 **Build votes:** mark your "what should we build tomorrow?" post, then read its comments:
 `curl -X PUT https://YOUR-APP/api/admin/build-post -H "authorization: Bearer $ADMIN_TOKEN" -H "content-type: application/json" -d '{"mediaId":"1789..."}'` and `GET /api/admin/requests` · `POST /api/admin/buildings/:id/finish|repair` · `POST /api/admin/construction/finish-all` · `POST /api/admin/bulldoze` · `POST /api/admin/citizens/bulk` · `PATCH /api/admin/citizens/:id` · `POST /api/admin/water` · `POST|DELETE /api/admin/vehicles` · `POST /api/admin/disasters` · `POST /api/admin/ruins/clear` · `PUT /api/admin/weather`.
@@ -95,7 +95,8 @@ In Development mode, Meta only sends comments from accounts with a role on the a
 | `ADMIN_TOKEN` | yes | Your builder password (16+ characters) |
 | `CRON_KEY` | for the ping | Secret for `/api/cron/tick` |
 | `PGSSL` | on most clouds | `1` to connect to Postgres over SSL |
-| `IG_VERIFY_TOKEN`, `IG_APP_SECRET` | for Instagram | Webhook handshake and signature check |
+| `IG_VERIFY_TOKEN`, `IG_APP_SECRET` | for Instagram | Webhook handshake and signature check (`IG_APP_SECRET` may list two secrets, comma-separated) |
+| `CONTACT_EMAIL` | no | Shown on the privacy and data deletion pages |
 | `SPAWN_KEYWORD` | no | The comment word that moves people in (default `spawn`) |
 | `REDIS_URL` | when running 2+ servers | Shares live updates between servers |
 | `PG_POOL_SIZE` | no | Database connections per server (default 8) |

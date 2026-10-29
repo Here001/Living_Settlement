@@ -153,6 +153,12 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .card .now{margin:2px 0 0;color:var(--muted)}
 .chips2{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
 .pill{border:1.4px solid var(--line);border-radius:999px;padding:1px 8px;font-size:12px;font-weight:600}
+.igbox{margin-top:14px;padding:10px 12px;border:1.6px solid var(--soft);border-radius:14px;display:flex;flex-direction:column;gap:6px}
+.igbox h3{margin:0}
+.igrow{display:flex;align-items:center;gap:8px;font-size:13px;min-width:0}
+.igrow .k{flex:none;font-weight:700;min-width:16px}
+.igrow code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--chip);padding:3px 8px;border-radius:8px;font-size:12px}
+.igbox a{color:var(--accent)}
 .authbox{margin-top:10px;padding:10px 12px;border:1.6px dashed var(--soft);border-radius:14px;display:flex;flex-direction:column;gap:6px}
 .authbox h3{margin:0;font-size:15px}
 .authbox input{padding:8px 10px;border-radius:12px;border:1.6px solid var(--soft);background:var(--paper);font-size:15px}
@@ -1707,7 +1713,7 @@ function renderPane(){
       const gseg=el('div',{class:'seg',role:'radiogroup','aria-label':'Gender for new people'}); for(const [g,nm] of [['','Random'],['m','Man'],['f','Woman']]) gseg.append(el('button',{'aria-pressed':String(addGender===g),onclick:()=>{ addGender=g; renderPane(); }, text:nm}));
       body.append(el('h3',{text:'Add a person'}), gseg, el('div',{class:'spawn'}, inp, el('button',{class:'btn primary',text:'Add',onclick:spawnFromInput})),
         el('h3',{text:'Add many at once'}), bulk, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Add everyone',onclick:bulkAdd})),
-        el('p',{class:'hint',text:'Comments saying SPAWN on your Instagram posts add people automatically. Followers can write "spawn male" or "spawn female" to choose; otherwise it\'s a coin flip.'})); }
+        el('p',{class:'hint',text:'Comments saying SPAWN on your Instagram posts add people automatically. Followers can write "spawn male" or "spawn female" to choose; otherwise it\'s a coin flip.'}), igPanel()); }
     p.append(body); renderPeople(); return; }
   const cards=el('div',{class:'cards'});
   const subs=SUBS[activeTab]; let subNow=subs&&(subTab[activeTab]||subs[0][0]);
@@ -1860,6 +1866,24 @@ function renderPeople(){
 }
 let addGender='';
 async function setGender(c,g){ try{ await api('/api/admin/citizens/'+c.id,{method:'PATCH',body:{gender:g}}); const x=S.citizens.get(c.id); if(x) x.gender=g; const d=detail.get(c.id); if(d) d.g=g; renderCard(); }catch(e){ toast(e.message); } }
+// Developer: the Instagram connection, its webhook details to paste into Meta, and whether comments are arriving.
+function igPanel(){ const box=el('div',{class:'igbox'}, el('h3',{text:'Instagram connection'}), el('p',{class:'hint',text:'Checking…'}));
+  const ago=t=>{ if(!t) return 'never'; const m=Math.round((Date.now()-t)/60000); return m<1?'just now':m<60?`${m} min ago`:m<1440?`${Math.round(m/60)} h ago`:`${Math.round(m/1440)} days ago`; };
+  const copyRow=(label,val)=>el('div',{class:'igrow'}, el('span',{class:'k',text:label}), el('code',{text:val||'not set'}), val?el('button',{class:'btn',text:'Copy',onclick:()=>{ try{ navigator.clipboard.writeText(val); toast(`${label} copied`); }catch(e){ prompt(label,val); } }}):'');
+  const tick=(ok,text)=>el('div',{class:'igrow'}, el('span',{class:'k',text:ok?'✓':'✗',style:`color:${ok?'#2F6E3B':'var(--danger)'}`}), el('span',{text}));
+  api('/api/admin/instagram').then(st=>{ box.innerHTML=''; const tokenIn=el('input',{type:'password',placeholder:'Paste the Instagram access token',autocomplete:'off','aria-label':'Instagram access token'});
+    const connect=async()=>{ try{ const r=await api('/api/admin/instagram/connect',{method:'POST',body:{token:tokenIn.value}}); toast(`Connected @${r.username}. Comments will now reach the city.`); box.replaceWith(igPanel()); }catch(e){ toast(e.message); } };
+    box.append(el('h3',{text:'Instagram connection'}),
+      el('p',{class:'hint',text:'In the Meta app dashboard, under Webhooks, paste these two:'}), copyRow('Callback URL',st.callbackUrl), copyRow('Verify token',st.verifyToken),
+      tick(st.secretSet,st.secretSet?'App secret is set on the server':'App secret not set yet: add IG_APP_SECRET in Render → Environment'),
+      tick(!!st.account, st.account?`Comments subscribed for @${st.account.username}`:'Not subscribed yet: paste a token below and tap Connect'),
+      tick(!!st.lastWebhookAt, st.lastWebhookAt?`Last comment from Instagram ${ago(st.lastWebhookAt)}${st.lastComment?`: @${st.lastComment.username} “${st.lastComment.text}”`:''}`:'No comments received yet'),
+      st.rejected?tick(false,`${st.rejected} message${st.rejected===1?'':'s'} refused because the signature didn't match (last ${ago(st.lastRejectedAt)}). Check IG_APP_SECRET.`):'',
+      el('p',{class:'hint',text:`${fmt(st.comments)} Instagram comments received in total.`}),
+      el('div',{class:'spawn'}, tokenIn, el('button',{class:'btn primary',text:'Connect',onclick:connect})),
+      el('p',{class:'hint',text:'The token is used once to subscribe your account and is not saved. Meta needs these pages for your app: '}, el('a',{href:'/privacy',target:'_blank',text:'Privacy policy'}),' · ',el('a',{href:'/data-deletion',target:'_blank',text:'Data deletion'}),' · ',el('a',{href:'/terms',target:'_blank',text:'Terms'}))); })
+  .catch(e=>{ box.innerHTML=''; box.append(el('h3',{text:'Instagram connection'}), el('p',{class:'hint',text:e.message})); });
+  return box; }
 async function bulkAdd(){ const ta=$('bulkInput'); const list=ta.value.split(/[\s,;]+/).map(cleanHandle).filter(Boolean); if(!list.length){ toast('Paste at least one username.'); return; }
   try{ const r=await api('/api/admin/citizens/bulk',{method:'POST',body:{handles:list,gender:addGender||null}}); ta.value=''; toast(`Added ${fmt(r.added)}${r.skipped?`, skipped ${fmt(r.skipped)} already here`:''}. ${fmt(r.housed)} moved into homes.`); }catch(e){ toast(e.message); } }
 async function spawnFromInput(){ const inp=$('spawnInput'); const h=cleanHandle(inp.value); if(!h){ toast('Type a username first.'); return; }

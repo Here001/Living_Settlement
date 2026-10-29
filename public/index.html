@@ -155,6 +155,10 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .pill{border:1.4px solid var(--line);border-radius:999px;padding:1px 8px;font-size:12px;font-weight:600}
 .igbox{margin-top:14px;padding:10px 12px;border:1.6px solid var(--soft);border-radius:14px;display:flex;flex-direction:column;gap:6px}
 .igbox h3{margin:0}
+.igresult{padding:8px 10px;border-radius:10px;font-size:13px}
+.igresult p{margin:4px 0;word-break:break-word;user-select:text;-webkit-user-select:text}
+.igresult.ok{background:#E3F1E5;color:#1F4D2A}
+.igresult.bad{background:#F8E1DE;color:#7A2A22}
 .igrow{display:flex;align-items:center;gap:8px;font-size:13px;min-width:0}
 .igrow .k{flex:none;font-weight:700;min-width:16px}
 .igrow code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--chip);padding:3px 8px;border-radius:8px;font-size:12px}
@@ -1872,7 +1876,14 @@ function igPanel(){ const box=el('div',{class:'igbox'}, el('h3',{text:'Instagram
   const copyRow=(label,val)=>el('div',{class:'igrow'}, el('span',{class:'k',text:label}), el('code',{text:val||'not set'}), val?el('button',{class:'btn',text:'Copy',onclick:()=>{ try{ navigator.clipboard.writeText(val); toast(`${label} copied`); }catch(e){ prompt(label,val); } }}):'');
   const tick=(ok,text)=>el('div',{class:'igrow'}, el('span',{class:'k',text:ok?'✓':'✗',style:`color:${ok?'#2F6E3B':'var(--danger)'}`}), el('span',{text}));
   api('/api/admin/instagram').then(st=>{ box.innerHTML=''; const tokenIn=el('input',{type:'password',placeholder:'Paste an Instagram or Facebook Page token',autocomplete:'off','aria-label':'Instagram access token'});
-    const connect=async()=>{ try{ const r=await api('/api/admin/instagram/connect',{method:'POST',body:{token:tokenIn.value}}); toast(`Connected @${r.username}. Comments will now reach the city.`); box.replaceWith(igPanel()); }catch(e){ toast(e.message); } };
+    // The result stays on the panel (not a passing message), so Meta's exact answer can be read and copied.
+    const result=el('div',{class:'igresult',hidden:true,role:'status'});
+    const show=(ok,msg)=>{ result.hidden=false; result.className='igresult '+(ok?'ok':'bad'); result.innerHTML=''; result.append(el('b',{text:ok?'Connected':'Not connected yet'}), el('p',{text:msg}), el('div',{class:'row-actions'}, ok?'':el('button',{class:'btn',text:'Copy this message',onclick:()=>{ try{ navigator.clipboard.writeText(msg); toast('Copied'); }catch(e){ prompt('Message',msg); } }}), el('button',{class:'linkb',text:'Dismiss',onclick:()=>{ result.hidden=true; }}))); };
+    const connect=async()=>{ if(!tokenIn.value.trim()){ show(false,'Paste the token first.'); return; } btn.disabled=true; btn.textContent='Connecting…';
+      try{ const r=await api('/api/admin/instagram/connect',{method:'POST',body:{token:tokenIn.value}}); show(true,`Comments from @${r.username} (${r.type||r.via||'Instagram'}) will now reach the city. Send a Test from Meta's webhook page to check.`); tokenIn.value=''; }
+      catch(e){ show(false,e.message); }
+      btn.disabled=false; btn.textContent='Connect'; };
+    const btn=el('button',{class:'btn primary',text:'Connect',onclick:()=>connect()});
     box.append(el('h3',{text:'Instagram connection'}),
       el('p',{class:'hint',text:'In the Meta app dashboard, under Webhooks, paste these two:'}), copyRow('Callback URL',st.callbackUrl), copyRow('Verify token',st.verifyToken),
       tick(st.secretSet,st.secretSet?'App secret is set on the server':'App secret not set yet: add IG_APP_SECRET in Render → Environment'),
@@ -1880,7 +1891,7 @@ function igPanel(){ const box=el('div',{class:'igbox'}, el('h3',{text:'Instagram
       tick(!!st.lastWebhookAt, st.lastWebhookAt?`Last comment from Instagram ${ago(st.lastWebhookAt)}${st.lastComment?`: @${st.lastComment.username} “${st.lastComment.text}”`:''}`:'No comments received yet'),
       st.rejected?tick(false,`${st.rejected} message${st.rejected===1?'':'s'} refused because the signature didn't match (last ${ago(st.lastRejectedAt)}). Check IG_APP_SECRET.`):'',
       el('p',{class:'hint',text:`${fmt(st.comments)} Instagram comments received in total.`}),
-      el('div',{class:'spawn'}, tokenIn, el('button',{class:'btn primary',text:'Connect',onclick:connect})),
+      el('div',{class:'spawn'}, tokenIn, btn), result,
       el('p',{class:'hint',text:'The token is used once to subscribe your account and is not saved. Meta needs these pages for your app: '}, el('a',{href:'/privacy',target:'_blank',text:'Privacy policy'}),' · ',el('a',{href:'/data-deletion',target:'_blank',text:'Data deletion'}),' · ',el('a',{href:'/terms',target:'_blank',text:'Terms'}))); })
   .catch(e=>{ box.innerHTML=''; box.append(el('h3',{text:'Instagram connection'}), el('p',{class:'hint',text:e.message})); });
   return box; }

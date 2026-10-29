@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#5E7F45">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -30,6 +31,11 @@ body{background:#8FC463;color:var(--ink);overflow:hidden;font-family:'Bricolage 
 button,input{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+html{background:var(--edge-top,#5E7F45)} body{background:transparent}
+/* Safari colours its own top and bottom bars from the page's edges: these strips copy the map's colours there. */
+#edgeTop,#edgeBot{position:fixed;left:0;right:0;z-index:0;pointer-events:none}
+#edgeTop{top:0;height:2px;background:var(--edge-top,#5E7F45)}
+#edgeBot{bottom:0;height:2px;background:var(--edge-bot,#5E7F45)}
 #world{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100lvh;display:block;touch-action:none} /* the whole screen, behind the browser's bars too */
 /* Taps belong to the game: no page zoom on double tap, no text selection, magnifier or copy menu on long press */
 html,body{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
@@ -124,7 +130,7 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .post p{margin:3px 0 6px}
 .post .gzt{font-family:'Newsreader',Georgia,serif;font-weight:700;font-size:17px;line-height:1.25}
 .pf{display:flex;gap:14px;align-items:center;font-size:13px;color:var(--muted)}
-.pf span:first-child{color:#C24A6A}
+.pf span:first-child{color:#E0252F;font-weight:700} /* the like heart: red */
 .pf .show{margin-left:auto;border:0;background:none;color:var(--accent);font-weight:700;padding:0}
 .ava{width:42px;height:42px;display:block;flex:none}.ava svg{width:100%;height:100%}
 .ava.sm{width:32px;height:32px}
@@ -429,6 +435,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
   <button class="vbtn" id="hideBtn" aria-label="Hide the interface" title="Hide the interface (H)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg></button>
 </div>
 <button id="showUi" hidden>Show interface</button>
+<div id="edgeTop" aria-hidden="true"></div><div id="edgeBot" aria-hidden="true"></div>
 <div class="bar">
   <div class="draftbar inked" id="draftBar" hidden><span class="dot" aria-hidden="true"></span><span><b>Draft</b> · <span id="draftText"></span></span><button id="draftDiscard" class="btn">Discard</button><button id="draftPub" class="btn primary">Update live</button><button id="draftOff" class="x" aria-label="Leave draft mode" title="Leave draft mode">×</button></div>
   <div class="toolchip" id="toolchip" hidden><span id="toolLabel"></span><button id="toolTurn" class="ghostb" hidden title="Turn it to face the other way (R)">⟲ Turn</button><button id="toolUndo" class="ghostb" hidden>↶ Undo</button><button id="toolMin" class="ghostb" aria-pressed="false" title="Hide the menus but keep this tool (M)">Hide menu</button><button id="toolDone">Done</button></div>
@@ -798,6 +805,14 @@ const Quality={ level:0, slow:0, fast:0, last:0, avg:16,
     if(l<this.level) this.upAt=now; else if(now-this.upAt<20000) this.floor=l; // went up and had to come straight back down: stay here
     this.level=l; this.slow=this.fast=0; this.avg=24; resize(); } };
 function resize(){ dpr=Quality.dpr(); cw=cv.clientWidth||innerWidth; ch=cv.clientHeight||innerHeight; cv.width=Math.round(cw*dpr); cv.height=Math.round(ch*dpr); }
+// Every couple of seconds, take the map's colour along its top and bottom edges and paint the page's edges (and the
+// browser's theme colour) to match, so the phone's own bars blend into the colony instead of showing a flat band.
+const edgeMeta=document.querySelector('meta[name="theme-color"]'); let edgeLast='';
+function edgeColours(){ if(document.hidden||!cv.width) return;
+  try{ const g=cv.getContext('2d'), w=cv.width, h=cv.height, row=y=>{ const d=g.getImageData(0,y,w,1).data; let r=0,gg=0,b=0,n=0; for(let i=0;i<d.length;i+=4*Math.max(1,Math.floor(w/24))){ r+=d[i]; gg+=d[i+1]; b+=d[i+2]; n++; } return `rgb(${Math.round(r/n)},${Math.round(gg/n)},${Math.round(b/n)})`; };
+    const top=row(Math.min(h-1,2)), bot=row(Math.max(0,h-3)), key=top+bot; if(key===edgeLast) return; edgeLast=key;
+    const st=document.documentElement.style; st.setProperty('--edge-top',top); st.setProperty('--edge-bot',bot); if(edgeMeta) edgeMeta.setAttribute('content',top); }catch(e){} }
+setInterval(edgeColours, 2000); setTimeout(edgeColours, 1500);
 addEventListener('resize', resize); if(window.visualViewport) visualViewport.addEventListener('resize', resize); resize();
 function screenToWorld(sx,sy){ return { x:(sx-cw/2)/cam.z+cam.x, y:(sy-ch/2)/cam.z+cam.y }; }
 function worldToTileF(wx,wy){ return { x:(wx/HW + wy/HH)/2, y:(wy/HH - wx/HW)/2 }; }

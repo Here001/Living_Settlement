@@ -98,6 +98,8 @@ const MIGRATIONS = [
    create index claims_citizen on claims (citizen_id);
    create table sessions (token_hash text primary key, citizen_id text not null, created_at bigint not null, last_seen bigint not null);
    create index sessions_citizen on sessions (citizen_id);`,
+  // v9: small settings that must survive restarts (like which Instagram account is connected).
+  `create table settings (key text primary key, value jsonb not null);`,
 ];
 
 export async function migrate() {

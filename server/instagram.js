@@ -1,6 +1,7 @@
 import express from 'express';
 import crypto from 'node:crypto';
 import { checkClaimComment } from './players.js';
+import { pool } from './db.js';
 
 // Instagram comments webhook (Instagram API with Instagram Login, "comments" field).
 //   GET  /webhooks/instagram  → Meta's one-time verification handshake
@@ -12,6 +13,12 @@ const SPAWN_WORD = new RegExp(`\\b${(process.env.SPAWN_KEYWORD || 'spawn').repla
 
 // What the developer's Instagram panel shows: is the webhook being reached, and what arrived last.
 export const igStatus = { lastWebhookAt: 0, lastComment: null, rejected: 0, lastRejectedAt: 0, account: null };
+// The connected account and the last comment are kept in the database, so the panel is right after a restart.
+let savedAt = 0;
+const saveStatus = (force = false) => { if (!force && Date.now() - savedAt < 60000) return; savedAt = Date.now();
+  const v = { account: igStatus.account, lastWebhookAt: igStatus.lastWebhookAt, lastComment: igStatus.lastComment };
+  pool.query("insert into settings (key, value) values ('instagram', $1) on conflict (key) do update set value = $1", [JSON.stringify(v)]).catch(e => console.error('saving Instagram status:', e.message)); };
+export async function loadIgStatus() { try { const r = (await pool.query("select value from settings where key = 'instagram'")).rows[0]; if (r) Object.assign(igStatus, r.value); } catch (e) { console.error('loading Instagram status:', e.message); } }
 // Meta signs with the app's secret. The dashboard shows two (the Meta app secret and the Instagram app secret),
 // so IG_APP_SECRET may hold either, or both separated by a comma.
 const secrets = () => String(process.env.IG_APP_SECRET || '').split(',').map(x => x.trim()).filter(Boolean);
@@ -37,7 +44,7 @@ export function instagramRouter(world) {
       if (change.field !== 'comments') continue;
       const v = change.value || {}; const username = v.from?.username;
       if (!username || !v.id) continue;
-      igStatus.lastComment = { username, text: String(v.text || '').slice(0, 140), at: Date.now() };
+      igStatus.lastComment = { username, text: String(v.text || '').slice(0, 140), at: Date.now() }; saveStatus();
       saves.push(world.recordComment({ id: v.id, username, text: v.text, mediaId: v.media?.id, source: 'instagram', wantsSpawn: SPAWN_WORD.test(v.text || '') }));
       saves.push(checkClaimComment(username, v.text)); // "CLAIM 482913" from the avatar's own account proves it's theirs
     }
@@ -63,7 +70,7 @@ export async function connectInstagram(token) {
   if (ig && !ig.error && ig.username) {
     const sub = await jget(`https://graph.instagram.com/me/subscribed_apps?subscribed_fields=comments&access_token=${t}`, { method: 'POST' });
     if (!sub || !sub.success) throw fail(`Couldn't subscribe @${ig.username} to comments${sub?.error?.message ? ': ' + sub.error.message : '.'}`);
-    igStatus.account = { username: ig.username, type: ig.account_type, via: 'Instagram login', at: Date.now() };
+    igStatus.account = { username: ig.username, type: ig.account_type, via: 'Instagram login', at: Date.now() }; saveStatus(true);
     return igStatus.account;
   }
   // Facebook Page token (Facebook login route)?
@@ -75,6 +82,6 @@ export async function connectInstagram(token) {
   let sub = await jget(`${fb}/${page.id}/subscribed_apps?subscribed_fields=feed&access_token=${t}`, { method: 'POST' });
   if (!sub || !sub.success) sub = await jget(`${fb}/me/subscribed_apps?subscribed_fields=feed&access_token=${t}`, { method: 'POST' });
   if (!sub || !sub.success) throw fail(`Couldn't connect the Page "${page.name}"${sub?.error?.message ? ': ' + sub.error.message : '.'} Check the token allows pages_manage_metadata.`);
-  igStatus.account = { username: page.instagram_business_account.username, type: 'via Facebook Page ' + page.name, via: 'Facebook login', at: Date.now() };
+  igStatus.account = { username: page.instagram_business_account.username, type: 'via Facebook Page ' + page.name, via: 'Facebook login', at: Date.now() }; saveStatus(true);
   return igStatus.account;
 }

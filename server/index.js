@@ -9,7 +9,7 @@ import { WebSocketServer } from 'ws';
 import { pool, migrate } from './db.js';
 import { World, HttpError } from './world.js';
 import { createBus } from './bus.js';
-import { instagramRouter, igStatus, connectInstagram } from './instagram.js';
+import { instagramRouter, igStatus, connectInstagram, loadIgStatus } from './instagram.js';
 import { playersRouter, sweepPlayers } from './players.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
 
@@ -206,6 +206,7 @@ setInterval(drainLoop, 1000);
 setInterval(() => { if (isLeader) world.tick().catch(e => console.error('tick failed:', e.message)); }, GAME_MIN_MS);
 
 await migrate();
+await loadIgStatus();
 await bus.start();
 await world.load();
 await tryLead();

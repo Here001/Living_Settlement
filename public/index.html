@@ -315,18 +315,53 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 #intro .title .hint{color:#F1EADDaa;margin-top:14px}
 #intro .btn:not(.primary){background:transparent;color:#F1EADD;border:1.4px solid rgba(241,234,221,.6)}
 
-/* ---------- Liquid glass: frosted, see-through panels that let the colony show behind them ---------- */
-:root{ --glass:rgba(252,248,240,.66); --glass-2:rgba(255,255,255,.42); --glass-edge:rgba(255,255,255,.62); --glass-line:rgba(43,38,33,.14); --glass-shadow:0 10px 30px rgba(30,25,20,.20), inset 0 1px 0 rgba(255,255,255,.65); }
-@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --glass:rgba(28,25,21,.58); --glass-2:rgba(255,255,255,.07); --glass-edge:rgba(255,255,255,.16); --glass-line:rgba(255,255,255,.12); --glass-shadow:0 12px 34px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.10); } }
-:root[data-theme="dark"]{ --glass:rgba(28,25,21,.58); --glass-2:rgba(255,255,255,.07); --glass-edge:rgba(255,255,255,.16); --glass-line:rgba(255,255,255,.12); --glass-shadow:0 12px 34px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.10); }
+/* ---------- Liquid glass: clear, frosted panels and bubble buttons that let the colony show through ---------- */
+:root{
+  --glass:rgba(255,255,255,.30); --glass-2:rgba(255,255,255,.26); --glass-edge:rgba(255,255,255,.78); --glass-line:rgba(255,255,255,.55);
+  --glass-sheen:linear-gradient(135deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,.10) 32%,rgba(255,255,255,0) 58%,rgba(255,255,255,.16) 100%);
+  --glass-shadow:0 14px 34px rgba(20,30,50,.22), inset 0 1px 0 rgba(255,255,255,.9), inset 0 -1px 0 rgba(255,255,255,.25), inset 0 0 22px rgba(255,255,255,.18);
+  --gbtn:linear-gradient(180deg,rgba(255,255,255,.62),rgba(255,255,255,.18)); --gbtn-edge:rgba(255,255,255,.85);
+  --gbtn-shadow:inset 0 1px 0 rgba(255,255,255,.95), inset 0 -3px 8px rgba(255,255,255,.22), 0 3px 10px rgba(20,30,50,.16);
+  --gbtn-on:linear-gradient(180deg,rgba(255,196,170,.75),rgba(217,113,74,.35));
+  --gbtn-primary:linear-gradient(180deg,rgba(244,150,112,.92),rgba(217,113,74,.78));
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --glass:rgba(22,24,30,.34); --glass-2:rgba(255,255,255,.08); --glass-edge:rgba(255,255,255,.26); --glass-line:rgba(255,255,255,.16);
+  --glass-sheen:linear-gradient(135deg,rgba(255,255,255,.20) 0%,rgba(255,255,255,.04) 32%,rgba(255,255,255,0) 58%,rgba(255,255,255,.07) 100%);
+  --glass-shadow:0 14px 36px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.28), inset 0 -1px 0 rgba(255,255,255,.06), inset 0 0 22px rgba(255,255,255,.05);
+  --gbtn:linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,.06)); --gbtn-edge:rgba(255,255,255,.34);
+  --gbtn-shadow:inset 0 1px 0 rgba(255,255,255,.4), inset 0 -3px 8px rgba(255,255,255,.06), 0 3px 10px rgba(0,0,0,.35);
+  --gbtn-on:linear-gradient(180deg,rgba(240,140,100,.55),rgba(217,113,74,.28)); } }
+:root[data-theme="dark"]{
+  --glass:rgba(22,24,30,.34); --glass-2:rgba(255,255,255,.08); --glass-edge:rgba(255,255,255,.26); --glass-line:rgba(255,255,255,.16);
+  --glass-sheen:linear-gradient(135deg,rgba(255,255,255,.20) 0%,rgba(255,255,255,.04) 32%,rgba(255,255,255,0) 58%,rgba(255,255,255,.07) 100%);
+  --glass-shadow:0 14px 36px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.28), inset 0 -1px 0 rgba(255,255,255,.06), inset 0 0 22px rgba(255,255,255,.05);
+  --gbtn:linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,.06)); --gbtn-edge:rgba(255,255,255,.34);
+  --gbtn-shadow:inset 0 1px 0 rgba(255,255,255,.4), inset 0 -3px 8px rgba(255,255,255,.06), 0 3px 10px rgba(0,0,0,.35);
+  --gbtn-on:linear-gradient(180deg,rgba(240,140,100,.55),rgba(217,113,74,.28)); }
 @supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
-  .inked{background:var(--glass);border:1px solid var(--glass-edge);box-shadow:var(--glass-shadow);-webkit-backdrop-filter:blur(22px) saturate(170%);backdrop-filter:blur(22px) saturate(170%)}
-  .post,.rrow,.joblist li,.cardb,.petb,.cresult,.lane,.person{background:var(--glass-2)}
-  .post{border:1px solid var(--glass-line)} .post.gz{background:var(--glass-2)}
-  .x,.btn:not(.primary):not(.danger){background:var(--glass-2);border-color:var(--glass-line)}
-  .composer textarea,.fields input,.search,.spawn input,.authbox input,.rbet input,.casino .cbet input{background:var(--glass-2);border-color:var(--glass-line)}
-  .seg{background:var(--glass-2)} .seg button[aria-pressed="true"]{background:var(--glass);box-shadow:0 0 0 1px var(--glass-edge)}
-  .authbox{border-color:var(--glass-line)} .tb[aria-pressed="true"]{background:var(--glass-2);border-color:var(--glass-edge)}
+  /* panels: clear glass with a sheen across the top-left, strong frost behind */
+  .inked{background:var(--glass-sheen),var(--glass);border:1px solid var(--glass-edge);box-shadow:var(--glass-shadow);
+    -webkit-backdrop-filter:blur(26px) saturate(190%) brightness(1.04);backdrop-filter:blur(26px) saturate(190%) brightness(1.04)}
+  .post,.rrow,.joblist li,.petb,.cresult,.lane,.post.gz,.authbox{background:var(--glass-2);border:1px solid var(--glass-line)}
+  .person{background:none}
+  .composer textarea,.fields input,.search,.spawn input,.authbox input,.rbet input,.casino .cbet input,.cardb{background:var(--glass-2);border:1px solid var(--glass-line);
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.08)}
+  .seg{background:var(--glass-2);box-shadow:inset 0 1px 2px rgba(0,0,0,.10)}
+  /* buttons: bubbles of glass, bright on top, clearly raised */
+  .btn,.pill,.x,.vbtn,.gpick,.seg button[aria-pressed="true"],.tb[aria-pressed="true"],.toolchip .ghostb,#intro .skip{
+    background:var(--gbtn);border:1px solid var(--gbtn-edge);box-shadow:var(--gbtn-shadow);
+    -webkit-backdrop-filter:blur(14px) saturate(180%);backdrop-filter:blur(14px) saturate(180%)}
+  .btn.primary,#intro .begin{background:var(--gbtn-primary);color:#fff;border:1px solid rgba(255,255,255,.6);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.75), inset 0 -3px 8px rgba(120,40,10,.25), 0 4px 14px rgba(217,113,74,.35);text-shadow:0 1px 1px rgba(90,30,10,.35)}
+  .btn.danger{color:var(--danger)}
+  .pill.on,.acttabs .pill.on,.casino .pill.on,.petb.on,.rrow.on,.sw.on{background:var(--gbtn-on);color:var(--ink);border-color:rgba(255,255,255,.75)}
+  .tb[aria-pressed="true"]{border-color:var(--gbtn-edge)}
+  .btn,.pill,.x,.vbtn,.tb,.gpick,.petb,.rrow{transition:transform .12s ease, box-shadow .12s ease}
+  .btn:active,.pill:active,.x:active,.vbtn:active,.tb:active,.gpick:active,.petb:active,.rrow:active{transform:scale(.96)}
+  .btn[disabled]{opacity:.5}
+  .toast{background:rgba(32,28,24,.62);border:1px solid rgba(255,255,255,.22);box-shadow:0 10px 28px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.25);
+    -webkit-backdrop-filter:blur(18px) saturate(170%);backdrop-filter:blur(18px) saturate(170%)}
 }
 /* Official updates: readable in light and dark */
 .post.official{background:rgba(242,179,61,.16);border-color:rgba(242,179,61,.75)}

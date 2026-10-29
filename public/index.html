@@ -1776,10 +1776,10 @@ function closeCard(){ sel=null; follow=null; if(pinned){ const c=S.citizens.get(
 const CAT_NAME = id => (CATS.find(c=>c.id===id)||{}).name || 'Building';
 function levelOf(b){ const t=T(b); let lv=1; const res=b.homeUsed||0, wk=b.jobUsed||0; if((t.home&&res>=t.home.capacity)||(t.work&&wk>=t.work.slots)) lv++; if(gmNow()/1440-(b.builtDay||0)>=7) lv++; return lv; }
 function authPanel(c){ const box=el('div',{class:'authbox'}); const A=auth;
-  const err=A.err?el('p',{class:'autherr',text:A.err}):null; const set=(o)=>{ auth={...auth,...o}; renderCard(); };
+  const err=A.err?el('p',{class:'autherr',text:A.err}):null; const set=(o)=>{ auth={...auth,...o}; renderCard(true); };
   if(A.mode==='login'){ const pw=el('input',{type:'password',placeholder:'Your password',autocomplete:'current-password','aria-label':'Password'});
-    const go=async()=>{ try{ const r=await api('/api/login',{method:'POST',body:{handle:c.handle,password:pw.value}}); signedIn(r); toast(`Welcome back, @${r.handle}`); renderCard(); }catch(e){ set({err:e.message}); } };
-    pw.addEventListener('keydown',e=>{ if(e.key==='Enter') go(); }); setTimeout(()=>pw.focus(),30);
+    const go=async()=>{ try{ const r=await api('/api/login',{method:'POST',body:{handle:c.handle,password:pw.value}}); signedIn(r); toast(`Welcome back, @${r.handle}`); renderCard(true); }catch(e){ set({err:e.message}); } };
+    pw.addEventListener('keydown',e=>{ if(e.key==='Enter') go(); }); if(!auth.focused){ auth.focused=true; setTimeout(()=>pw.focus(),30); }
     box.append(el('h3',{text:`Log in as @${c.handle}`}), el('div',{class:'spawn'}, pw, el('button',{class:'btn primary',text:'Log in',onclick:go})), err||'', el('button',{class:'linkb',text:'Forgot your password?',onclick:()=>set({mode:'claim',err:null})})); return box; }
   if(A.mode==='claim' && !A.claimId){ const start=async()=>{ try{ const r=await api('/api/claim',{method:'POST',body:{handle:c.handle}}); const st={handle:r.handle,claimId:r.claimId,code:r.code,expiresAt:r.expiresAt,reset:r.reset}; ls.set('settlement-claim',st); set({...st,status:'waiting',err:null}); pollClaim(); }catch(e){ set({err:e.message}); } };
     box.append(el('h3',{text:A.reset||(detail.get(c.id)||{}).claimed?'Reset your password':'Prove this is you'}), el('p',{class:'hint',text:`We'll give you a short code. Comment it on any of our Instagram posts from @${c.handle}, and you can set a password. Nobody else can do this for you.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Get my code',onclick:start})), err||''); return box; }
@@ -1788,22 +1788,25 @@ function authPanel(c){ const box=el('div',{class:'authbox'}); const A=auth;
     box.append(el('h3',{text:'Comment this code on Instagram'}), el('div',{class:'codebig'}, el('span',{text:A.code}), copy),
       el('p',{class:'hint',text:A.status==='expired'?'This code expired. Get a new one.':`Post it as a comment on any of our posts, from the @${A.handle} account. This updates by itself within a few seconds of your comment. Code works for ${left} more minute${left===1?'':'s'}.`}),
       el('p',{class:'hint wait',text:A.status==='expired'?'':'Waiting for your comment…'}), err||'',
-      el('div',{class:'row-actions'}, A.status==='expired'?el('button',{class:'btn primary',text:'Get a new code',onclick:()=>set({claimId:null,status:null})}):'', el('button',{class:'linkb',text:'Cancel',onclick:()=>{ ls.set('settlement-claim',null); clearInterval(authPoll); auth=null; renderCard(); }}))); return box; }
+      el('div',{class:'row-actions'}, A.status==='expired'?el('button',{class:'btn primary',text:'Get a new code',onclick:()=>set({claimId:null,status:null})}):'', el('button',{class:'linkb',text:'Cancel',onclick:()=>{ ls.set('settlement-claim',null); clearInterval(authPoll); auth=null; renderCard(true); }}))); return box; }
   // verified: choose a password
   const p1=el('input',{type:'password',placeholder:'New password (6+ characters)',autocomplete:'new-password','aria-label':'New password'}), p2=el('input',{type:'password',placeholder:'Type it again',autocomplete:'new-password','aria-label':'Repeat password'});
-  const save=async()=>{ if(p1.value!==p2.value){ set({err:"Those passwords don't match."}); return; } try{ const r=await api(`/api/claim/${encodeURIComponent(A.claimId)}/password`,{method:'POST',body:{password:p1.value}}); signedIn(r); toast(`You're in, @${r.handle}. Keep your password safe: you'll need it for special actions.`); renderCard(); }catch(e){ set({err:e.message}); } };
-  p2.addEventListener('keydown',e=>{ if(e.key==='Enter') save(); }); setTimeout(()=>p1.focus(),30);
+  const save=async()=>{ if(p1.value!==p2.value){ set({err:"Those passwords don't match."}); return; } try{ const r=await api(`/api/claim/${encodeURIComponent(A.claimId)}/password`,{method:'POST',body:{password:p1.value}}); signedIn(r); toast(`You're in, @${r.handle}. Keep your password safe: you'll need it for special actions.`); renderCard(true); }catch(e){ set({err:e.message}); } };
+  p2.addEventListener('keydown',e=>{ if(e.key==='Enter') save(); }); if(!auth.focused){ auth.focused=true; setTimeout(()=>p1.focus(),30); }
   box.append(el('h3',{text:`It's you, @${A.handle}! Choose a password`}), el('p',{class:'hint',text:"You'll use it to control your citizen: special tasks, the casino and more."}), p1, p2, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Save password',onclick:save})), err||''); return box; }
 function pollClaim(){ clearInterval(authPoll); authPoll=setInterval(async()=>{ if(!auth||!auth.claimId){ clearInterval(authPoll); return; }
-  try{ const r=await api('/api/claim/'+encodeURIComponent(auth.claimId)); if(r.status!==auth.status){ auth={...auth,status:r.status}; if(r.status!=='waiting') clearInterval(authPoll); if(r.status==='verified') toast('Got it! Now choose a password.'); renderCard(); } }
-  catch(e){ clearInterval(authPoll); auth={...auth,status:'expired'}; renderCard(); } },4000); }
+  try{ const r=await api('/api/claim/'+encodeURIComponent(auth.claimId)); if(r.status!==auth.status){ auth={...auth,status:r.status}; if(r.status!=='waiting') clearInterval(authPoll); if(r.status==='verified') toast('Got it! Now choose a password.'); renderCard(true); } }
+  catch(e){ clearInterval(authPoll); auth={...auth,status:'expired'}; renderCard(true); } },4000); }
 // Resume a half-finished claim (people switch to Instagram and come back), or open a developer's setup link.
 async function resumeClaim(){ const q=new URLSearchParams(location.search).get('claim'); let st=ls.get('settlement-claim');
   if(q){ try{ const r=await api('/api/claim/'+encodeURIComponent(q)); st={handle:r.handle,claimId:q,code:'',expiresAt:Date.now()+3600e3}; window.history.replaceState(null,'',location.pathname+location.hash); if(r.status!=='verified'){ toast('That setup link has already been used or expired.'); return; } }catch(e){ toast(e.message); return; } }
   if(!st||!st.claimId) return; let status='waiting'; try{ status=(await api('/api/claim/'+encodeURIComponent(st.claimId))).status; }catch(e){ ls.set('settlement-claim',null); return; }
   if(status==='used'){ ls.set('settlement-claim',null); return; }
   auth={mode:'claim',...st,status}; await openCitizen(st.handle); if(status==='waiting') pollClaim(); }
-function renderCard(){
+// Don't rebuild the card under someone's fingers: if they're typing in it (or have typed something), the timed refreshes wait.
+function cardBusy(){ const card=$('card'); if(!card||card.hidden) return false; const a=document.activeElement;
+  if(a&&card.contains(a)&&/INPUT|TEXTAREA/.test(a.tagName)) return true; return [...card.querySelectorAll('input,textarea')].some(i=>i.value); }
+function renderCard(force){ if(!force && cardBusy()) return;
   const card=$('card'); if(!sel){ card.hidden=true; return; } card.innerHTML='';
   const close=el('button',{class:'x','aria-label':'Close',onclick:closeCard,text:'×'});
   if(sel.kind==='c'){ const d=detail.get(sel.id); const c=S.citizens.get(sel.id)||(d&&normC(d)); if(!c){ closeCard(); return; }
@@ -1827,9 +1830,9 @@ function renderCard(){
         el('span',{class:'hint',text:d?(d.claimed?'Has a password':'No password yet'):''})));
       if(sel.picker) card.append(renderPicker(c)); }
     else { const mine=Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase();
-      if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; ls.set('settlement-player',null); toast('Logged out.'); renderCard(); }})));
+      if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; ls.set('settlement-player',null); toast('Logged out.'); renderCard(true); }})));
       else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
-      else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(); }}))); }
+      else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}))); }
   } else if(sel.kind==='v'){ const v=D.vehicles.get(sel.id); if(!v){ closeCard(); return; } const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car;
     const head=el('div',{class:'chead'}); head.append(el('img',{class:'cthumb',alt:'',src:vehicleThumb(v.type)}), el('div',null, el('h2',{text:V.name}), el('p',{class:'now',text:'Driving around the neighbourhood'})));
     card.append(close, head); if(Store.canWrite) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:'Remove vehicle',onclick:async()=>{ if(draftOn){ draftEdit(`removing a ${V.name.toLowerCase()}`,d=>{ if(isDraftId(v.id)) d.vehicles=d.vehicles.filter(q=>q.tid!==v.id); else d.removeVehicles.push(v.id); }); closeCard(); return; } try{ await api('/api/admin/vehicles/'+encodeURIComponent(v.id),{method:'DELETE'}); closeCard(); toast(`Removed the ${V.name.toLowerCase()}`); }catch(e){ toast(e.message); } }})));

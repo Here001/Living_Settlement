@@ -75,12 +75,22 @@ export async function connectInstagram(token) {
   }
   // Facebook Page token (Facebook login route)?
   const fb = 'https://graph.facebook.com';
-  const page = await jget(`${fb}/me?fields=id,name,instagram_business_account{id,username}&access_token=${t}`);
-  if (!page || page.error) throw fail(`Meta didn't accept that token${page?.error?.message ? ': ' + page.error.message : (ig?.error?.message ? ': ' + ig.error.message : '.')}`);
-  if (!page.instagram_business_account) throw fail(`That token is for "${page.name || 'a Facebook account'}", which has no Instagram professional account linked. Use a Page token for the Facebook Page connected to your Instagram, with instagram_basic and instagram_manage_comments allowed.`);
+  let page = await jget(`${fb}/me?fields=id,name,instagram_business_account{id,username}&access_token=${t}`);
+  if (!page || (page.error && page.error.code !== 100)) throw fail(`Meta didn't accept that token${page?.error?.message ? ': ' + page.error.message : (ig?.error?.message ? ': ' + ig.error.message : '.')}`);
+  if (page.error || !page.instagram_business_account) {
+    // A personal (User) token: find the Pages this person manages and use the one linked to Instagram.
+    const pages = await jget(`${fb}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&limit=100&access_token=${t}`);
+    if (!pages || pages.error) throw fail(`Couldn't list your Facebook Pages${pages?.error?.message ? ': ' + pages.error.message : '.'} Make sure the token allows pages_show_list.`);
+    const linked = (pages.data || []).find(p => p.instagram_business_account && p.access_token);
+    if (!linked) throw fail((pages.data || []).length
+      ? `None of your Pages (${pages.data.map(p => p.name).join(', ')}) has an Instagram professional account linked, or the token wasn't allowed to see it. Link your Instagram to the Page, then generate the token again and tick both.`
+      : 'This token can’t see any Facebook Pages. When generating it, tick your Page (and your Instagram account) in the pop-up.');
+    page = linked; token = linked.access_token;
+  }
+  const t2 = encodeURIComponent(token);
   // Install the app on the Page so Meta delivers its Instagram webhooks (the field list is required; feed is the usual one).
-  let sub = await jget(`${fb}/${page.id}/subscribed_apps?subscribed_fields=feed&access_token=${t}`, { method: 'POST' });
-  if (!sub || !sub.success) sub = await jget(`${fb}/me/subscribed_apps?subscribed_fields=feed&access_token=${t}`, { method: 'POST' });
+  let sub = await jget(`${fb}/${page.id}/subscribed_apps?subscribed_fields=feed&access_token=${t2}`, { method: 'POST' });
+  if (!sub || !sub.success) sub = await jget(`${fb}/me/subscribed_apps?subscribed_fields=feed&access_token=${t2}`, { method: 'POST' });
   if (!sub || !sub.success) throw fail(`Couldn't connect the Page "${page.name}"${sub?.error?.message ? ': ' + sub.error.message : '.'} Check the token allows pages_manage_metadata.`);
   igStatus.account = { username: page.instagram_business_account.username, type: 'via Facebook Page ' + page.name, via: 'Facebook login', at: Date.now() }; saveStatus(true);
   return igStatus.account;

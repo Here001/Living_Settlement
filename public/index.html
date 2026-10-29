@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#8FC463">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -31,7 +30,7 @@ body{background:#8FC463;color:var(--ink);overflow:hidden;font-family:'Bricolage 
 button,input{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-#world{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#world{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100lvh;display:block;touch-action:none} /* the whole screen, behind the browser's bars too */
 /* Taps belong to the game: no page zoom on double tap, no text selection, magnifier or copy menu on long press */
 html,body{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
@@ -197,6 +196,12 @@ dd.online{color:#2E9D4F;font-weight:700}
 .dmrow{position:relative;align-items:center}.dmrow .dmtxt{flex:1;min-width:0}.dmrow .what{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dmrow .tbadge{position:static}.dmrow.unread .who{font-weight:800}
 .onlinerow{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}.onl{display:flex;flex-direction:column;align-items:center;gap:2px;border:0;background:none;font-size:11px;max-width:64px;flex:none}.onl span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:64px}
 .onl-now{color:#2E9D4F!important;font-weight:700}
+.pane-head .maxb{margin-left:auto;display:grid;place-items:center} .pane-head .maxb+.x{margin-left:0} .dmhead .maxb{margin-left:0}
+body.pane-max .bar{top:calc(env(safe-area-inset-top,0px) + 8px)}
+body.pane-max .bar>.pane:not([hidden]){flex:1 1 auto;max-height:none;min-height:0}
+body.pane-max .bar>#card{display:none!important}
+body.pane-max .bar>.tools-row,body.pane-max .bar>.toolchip,body.pane-max .bar>.draftbar{flex:none}
+body.pane-max .composer textarea{height:70px}
 .dmhead{gap:8px}.dmhead .x:first-child{font-size:20px;line-height:1}.dmwho{display:flex;flex-direction:column;min-width:0;flex:1}.dmwho b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dmwho .hint{margin:0}
 .dmbody{display:flex;flex-direction:column;gap:6px;padding-top:4px}
 .dm{max-width:78%;padding:6px 10px 4px;border-radius:16px;font-size:13.5px;line-height:1.35;word-wrap:break-word;border:1px solid var(--glass-line,rgba(0,0,0,.1))}
@@ -792,8 +797,8 @@ const Quality={ level:0, slow:0, fast:0, last:0, avg:16,
   set(l){ const now=performance.now();
     if(l<this.level) this.upAt=now; else if(now-this.upAt<20000) this.floor=l; // went up and had to come straight back down: stay here
     this.level=l; this.slow=this.fast=0; this.avg=24; resize(); } };
-function resize(){ dpr=Quality.dpr(); cw=innerWidth; ch=innerHeight; cv.width=Math.round(cw*dpr); cv.height=Math.round(ch*dpr); }
-addEventListener('resize', resize); resize();
+function resize(){ dpr=Quality.dpr(); cw=cv.clientWidth||innerWidth; ch=cv.clientHeight||innerHeight; cv.width=Math.round(cw*dpr); cv.height=Math.round(ch*dpr); }
+addEventListener('resize', resize); if(window.visualViewport) visualViewport.addEventListener('resize', resize); resize();
 function screenToWorld(sx,sy){ return { x:(sx-cw/2)/cam.z+cam.x, y:(sy-ch/2)/cam.z+cam.y }; }
 function worldToTileF(wx,wy){ return { x:(wx/HW + wy/HH)/2, y:(wy/HH - wx/HW)/2 }; }
 function tileAt(sx,sy){ const w=screenToWorld(sx,sy); const t=worldToTileF(w.x,w.y); return [Math.floor(t.x), Math.floor(t.y)]; }
@@ -2104,7 +2109,7 @@ function buildToolbar(){ const row=$('toolsRow'); row.innerHTML='';
   const all = Store.canWrite ? tabs.concat([{sep:true}],CATS) : tabs;
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
     const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(activeTab===c.id),onclick:()=>openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); row.append(btn); } }
-function openTab(name){ activeTab=name; if((PLAYER_TABS.has(name)||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
+function openTab(name){ if(!name) document.body.classList.remove('pane-max'); activeTab=name; if((PLAYER_TABS.has(name)||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
 function applyPermissions(){ buildToolbar(); refreshHUD(); refreshUndo(); refreshDraftBar(); if(Store.canWrite && !draftLoaded){ draftLoaded=true; loadDraft(); } $('spawnBoxNote')&&0; if(!Store.canWrite && activeTab && !PLAYER_TABS.has(activeTab)) openTab(null); }
 
 const subTab={}; let brushSize=2;
@@ -2117,7 +2122,11 @@ const disasterIconEl = k => { const s2=el('span',{class:'icthumb'}); s2.innerHTM
 function waterThumb(id){ return renderThumb('w:'+id, 2, 2, 8, ()=>{ const back=D.water; D.water=new Map([['0,0',id],['1,0',id],['0,1',id],['1,1',id]]); drawWaterTiles([...D.water.keys()].map(k=>{ const [x,y]=k.split(',').map(Number); return [x,y,id]; })); D.water=back; }); }
 function drainThumb(){ return renderThumb('drain', 2, 2, 8, ()=>{ poly([iso(0,0),iso(2,0),iso(2,2),iso(0,2)],'#8FC463','#6E9E48',1); poly([iso(1,0),iso(2,0),iso(2,1),iso(1,1)],'#6FB3D2',INK,1); }); }
 function vehicleThumb(id){ return renderThumb('v:'+id, 2, 1, 16, ()=>{ poly([iso(-0.2,0),iso(2.2,0),iso(2.2,1),iso(-0.2,1)],'#7E8185',INK,1); drawVehicle(1,0.5,1,0,VEHICLE_TYPES[id],VEHICLE_TYPES[id].colors[0],true,1.3); }); }
-function paneHead(title, extra){ const h=el('div',{class:'pane-head'}, el('h2',{class:'pane-title',text:title})); if(extra) h.append(...extra); h.append(el('button',{class:'x','aria-label':'Close panel',text:'×',onclick:()=>openTab(null)})); return h; }
+function paneHead(title, extra){ const h=el('div',{class:'pane-head'}, el('h2',{class:'pane-title',text:title})); if(extra) h.append(...extra); h.append(maxBtn(), el('button',{class:'x','aria-label':'Close panel',text:'×',onclick:()=>openTab(null)})); return h; }
+// Full screen ⇄ normal size for the open panel (remembered while the colony is open).
+const MAX_ICON='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>';
+const MIN_ICON='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10h-6V4M4 14h6v6M14 10l7-7M10 14l-7 7"/></svg>';
+function maxBtn(){ const on=document.body.classList.contains('pane-max'); const b=el('button',{class:'x maxb','aria-label':on?'Back to normal size':'Full screen','aria-pressed':String(on),title:on?'Back to normal size':'Full screen',onclick:()=>{ document.body.classList.toggle('pane-max'); const now=document.body.classList.contains('pane-max'); for(const x of document.querySelectorAll('.maxb')){ x.innerHTML=now?MIN_ICON:MAX_ICON; x.setAttribute('aria-pressed',String(now)); x.title=now?'Back to normal size':'Full screen'; } const fb=$('feedBody')||$('dmBody'); if(fb&&$('dmBody')) fb.scrollTop=fb.scrollHeight; }}); b.innerHTML=on?MIN_ICON:MAX_ICON; return b; }
 let instantBuild=true; try{ instantBuild=localStorage.getItem('settlement-instant')!=='0'; }catch(e){}
 const gameHours = type => buildMinutes(type)/60;
 const realTime = ms => { const m=Math.max(1,Math.round(ms/60000)); return m<60?`${m} min`:`${Math.floor(m/60)} h${m%60?` ${m%60} min`:''}`; };
@@ -2266,7 +2275,7 @@ var Chats={ list:[], online:[], unread:0, with:null, thread:null, draft:'', busy
     if(this.with){ const w=this.thread&&this.thread.with; const av=el('span',{class:'ava sm'+(w&&w.online?' on':'')}); if(w) av.innerHTML=avatarSVG({handle:w.h,id:w.id,gender:w.g});
       const head=el('div',{class:'pane-head dmhead'}, el('button',{class:'x',text:'‹','aria-label':'Back to chats',onclick:()=>this.back()}), av,
         el('div',{class:'dmwho'}, el('b',{text:w?(w.n||'@'+w.h):'@'+this.with}), el('span',{class:'hint'+(w&&w.online?' onl-now':''),text:w?(w.online?'● Online now':w.seen?`Last seen ${ago(w.seen)}`:'Offline'):'…'})),
-        el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>openTab(null)}));
+        maxBtn(), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>openTab(null)}));
       const body=el('div',{class:'pane-body dmbody',id:'dmBody'});
       if(!this.thread) body.append(el('p',{class:'hint',text:'Opening the chat…'}));
       else if(!this.thread.messages.length) body.append(el('p',{class:'hint',text:`Say hello to @${this.with}. Only the two of you can see this chat.`}));

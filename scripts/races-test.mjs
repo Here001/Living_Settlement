@@ -76,8 +76,9 @@ info = (await call('GET', '/api/race')).json;
 const [t1, t2] = info.tracks.length > 1 ? info.tracks : [info.tracks[0], {}];
 ok(info.tracks.length === 2 && t1.name === 'Racetrack 1' && t2.name === 'Racetrack 2', 'two Racetracks, named apart', JSON.stringify(info.tracks.map(t => t.name)));
 ok(t1.next && t2.next && t1.next.start !== t2.next.start && Math.abs(t1.next.start - t2.next.start) % Math.floor(70000 / 6) < 50, 'their races start at different times', `${t1.next?.start} ${t2.next?.start}`);
-const i2 = (await call('GET', `/api/race?track=${t2.id}`, undefined, players[0].P)).json;
-ok(i2.track.id === t2.id && i2.next.start === t2.next.start, 'the Races tab can show either track');
+let i2 = (await call('GET', `/api/race?track=${t2.id}`, undefined, players[0].P)).json;
+if (i2.next && i2.next.start - Date.now() < 5000) { await sleep(i2.next.start - Date.now() + 1500); i2 = (await call('GET', `/api/race?track=${t2.id}`, undefined, players[0].P)).json; } // its gates are about to close: use the next one
+ok(i2.track.id === t2.id && i2.next.start % 70000 === t2.next.start % 70000, 'the Races tab can show either track');
 const c2 = Object.keys(i2.next.odds)[0], b2 = await call('POST', '/api/me/race/bet', { creature: c2, amount: 10, track: t2.id }, players[0].P);
 ok(b2.status === 200 && b2.json.track === t2.id, 'a bet goes on the chosen track', JSON.stringify(b2.json));
 const i1 = (await call('GET', `/api/race?track=${t1.id}`, undefined, players[0].P)).json, c1 = Object.keys(i1.next.odds)[0];

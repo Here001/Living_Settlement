@@ -69,13 +69,11 @@ export async function playerByToken(t) {
   if (Date.now() - Number(s.last_seen) > 3600 * 1000) pool.query('update sessions set last_seen = $2 where token_hash = $1', [sha(t), Date.now()]).catch(() => {});
   return { id: s.citizen_id, handle: s.handle, name: s.display_name || '', gender: s.gender, genderChosen: !!s.gender_chosen };
 }
-// For later features (casino, crime, special tasks): routes that need a signed-in player.
-export const requirePlayer = async (req, res, next) => {
-  try { const p = await playerFrom(req); if (!p) return res.status(401).json({ error: 'Log in to your citizen first.' }); req.player = p; next(); } catch (e) { next(e); }
-};
 
 export function playersRouter({ limit, send, admin, world }) {
   const r = express.Router();
+  // The signed-in colonist making this request (or a 401 asking them to log in).
+  const me = async req => { const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.'); return p; };
   // Anything a signed-in colonist changes may earn a badge, so check them shortly after.
   r.use((req, res, next) => {
     if (req.method !== 'GET' && req.get('x-player') && world.achievements) res.on('finish', () => { if (res.statusCode < 300) playerFrom(req).then(p => p && world.achievements.soon(p.id)).catch(() => {}); });
@@ -120,15 +118,14 @@ export function playersRouter({ limit, send, admin, world }) {
     failures.delete(key);
     return { token: await newSession(c.id), handle: c.handle };
   }));
-  r.get('/me', limit, send(async req => { const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Not logged in.'); return p; }));
+  r.get('/me', limit, send(async req => { const p = await me(req); return p; }));
   // Once their avatar is claimed, a colonist picks man or woman, one time only. (The developer can still change it.)
   // A colonist's display name, changeable any time by its owner.
   r.post('/me/name', limit, send(async req => {
-    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    const p = await me(req);
     return world.setName(p.id, (req.body || {}).name);
   }));
   // Crime, going somewhere, and pets.
-  const me = async req => { const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.'); return p; };
   r.get('/me/crime', limit, send(async req => world.actions.crimeInfo((await me(req)).id)));
   r.post('/me/crime', limit, send(async req => { const b = req.body || {}; return world.actions.crime((await me(req)).id, { kind: b.kind, target: b.target }); }));
   r.get('/me/places', limit, send(async req => world.actions.places((await me(req)).id)));
@@ -170,18 +167,18 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/lottery', limit, send(async req => world.lottery.buy((await me(req)).id, (req.body || {}).count, world.blockedReason?.bind(world))));
   // Creature races: one bet per race, before the gates close.
   r.post('/me/race/bet', limit, send(async req => {
-    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    const p = await me(req);
     const b = req.body || {}; return world.races.bet(p.id, String(b.creature || ''), b.amount, world.blockedReason?.bind(world), typeof b.track === 'string' ? b.track : null);
   }));
   // The casino: what's available, and one bet at a time (a short pause between bets stops scripted spam).
   const lastBet = new Map();
   setInterval(() => { const now = Date.now(); for (const [k, t] of lastBet) if (now - t > 60000) lastBet.delete(k); }, 60000).unref();
   r.get('/me/casino', limit, send(async req => {
-    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    const p = await me(req);
     return world.casinoInfo(p.id);
   }));
   r.post('/me/casino', limit, send(async req => {
-    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    const p = await me(req);
     const now = Date.now(); if (now - (lastBet.get(p.id) || 0) < 1200) throw new HttpError(429, 'One bet at a time.');
     lastBet.set(p.id, now);
     const b = req.body || {}; return world.casinoPlay(p.id, { game: b.game, pick: b.pick, bet: b.bet });
@@ -201,20 +198,20 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/casino/rocket', limit, send(req => tableMove(req, (p, b) => world.tables.rocket(p.id, String(b.action || ''), b.bet, b.auto))));
   // The job board: openings near home, take one (once per game day), or quit.
   r.get('/me/jobs', limit, send(async req => {
-    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    const p = await me(req);
     return world.jobBoard(p.id);
   }));
   r.post('/me/job', limit, send(async req => {
-    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    const p = await me(req);
     const id = String((req.body || {}).buildingId || ''); if (!id) throw new HttpError(400, 'Pick a job first.');
     return world.playerJob(p.id, id);
   }));
   r.post('/me/job/quit', limit, send(async req => {
-    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    const p = await me(req);
     return world.playerJob(p.id, null);
   }));
   r.post('/me/gender', limit, send(async req => {
-    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.');
+    const p = await me(req);
     const g = (req.body || {}).gender; if (g !== 'm' && g !== 'f') throw new HttpError(400, 'Choose man or woman.');
     const lock = await pool.query('update citizens set gender_chosen = true where id = $1 and not gender_chosen returning id', [p.id]);
     if (!lock.rowCount) throw new HttpError(409, 'You have already chosen. Ask the developer if it needs changing.');
@@ -229,7 +226,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/square', limit, send(async () => (await pool.query(`(select m.*, c.display_name from messages m left join citizens c on c.id = m.citizen_id order by m.t desc limit 80)
     union (select m.*, c.display_name from messages m left join citizens c on c.id = m.citizen_id where m.pinned) order by t desc`)).rows.map(msgOut)));
   r.post('/square', limit, send(async req => {
-    const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Claim your colonist to post in the Town Square.');
+    const p = await me(req);
     let text = String((req.body || {}).text ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
     if (!text) throw new HttpError(400, 'Write something first.');
     if (text.length > 280) throw new HttpError(400, 'Keep it under 280 characters.');

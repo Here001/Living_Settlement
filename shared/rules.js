@@ -53,15 +53,6 @@ export const netOf = (salary, rent) => salary - rent;
 export const balanceOn = (base, fromDay, perDay, today) => Math.max(0, Number(base) + Math.max(0, today - fromDay) * perDay);
 export const treasuryOn = (meta, today) => meta ? balanceOn(meta.treasuryBase ?? START_FUNDS, meta.treasuryDay ?? 0, meta.income ?? GRANT, today) : 0;
 
-export function occupancy(buildings) {
-  const occ = new Map();
-  for (const b of buildings) {
-    const [w, d] = typeOf(b).size;
-    for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) occ.set(`${b.x + i},${b.y + j}`, b.id);
-  }
-  return occ;
-}
-
 export function canPlace(type, x, y, occ, roads, ignoreId) {
   const t = BUILDING_TYPES[type]; if (!t) return false;
   const [w, d] = t.size;

@@ -22,7 +22,7 @@ const secureRand = () => crypto.randomInt(0, 2 ** 32) / 2 ** 32;
 export const treasuryAdd = (ch, delta) => { ch.meta.treasuryBase = Math.max(0, R.treasuryOn(ch.meta, ch.today) + delta); ch.meta.treasuryDay = ch.today; };
 
 export class Races {
-  constructor(world) { this.world = world; this.tracksAt = 0; this.tracks = []; this.busy = false; }
+  constructor(world) { this.world = world; this.tracksAt = 0; this.tracks = []; this.busy = false; this.made = new Set(); }
   // Finished Racetracks, oldest first, each with a name, a stagger offset and its stretch of the clock.
   // The first-built track always has offset 0; later ones take the first free 5-minute slot from a slot picked by their id.
   async allTracks() {
@@ -47,7 +47,11 @@ export class Races {
   async ensure(t, n, db = pool) {
     const meta = this.world.meta; if (!meta) return null;
     const start = this.startOf(t, n), weather = R.weatherAt(meta, (start - meta.epoch) / R.GAME_MIN_MS) || 'sunny', seed = (n ^ hashStr(t.id)) >>> 0;
-    await db.query('insert into races (track_id, n, start_at, weather, odds) values ($1, $2, $3, $4, $5) on conflict (track_id, n) do nothing', [t.id, n, start, weather, JSON.stringify(oddsFor(fieldFor(seed), weather, seed))]);
+    const key = t.id + ':' + n;
+    if (!this.made.has(key)) { // create the row once (every server remembers it has), then it's just a read
+      await db.query('insert into races (track_id, n, start_at, weather, odds) values ($1, $2, $3, $4, $5) on conflict (track_id, n) do nothing', [t.id, n, start, weather, JSON.stringify(oddsFor(fieldFor(seed), weather, seed))]);
+      if (this.made.size > 2000) this.made.clear(); this.made.add(key);
+    }
     return (await db.query('select * from races where track_id = $1 and n = $2', [t.id, n])).rows[0];
   }
 

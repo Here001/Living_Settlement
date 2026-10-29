@@ -23,6 +23,12 @@ Everything below follows from keeping those two apart.
 - **The screen never freezes on a bad frame.** The draw loop books its next frame before drawing, so a drawing error is logged and the city keeps moving.
 - **Work is spread out.** People's daily plans get a few milliseconds per frame. After a map change, people keep their old plan until there's time to redo it. A burst of updates rebuilds the map once, and the news ticker refreshes once per burst. Test result: 150 changes in view used to freeze the screen for 4 s; now the longest frame is about 0.2 s.
 - **Cached drawing.** The ground (grass, water, roads, shadows) is one cached picture, redrawn only when the map changes, the view leaves it, or the zoom settles. People are stamped from an atlas of body parts. Light glows are cached images.
+- **Idle means 30 frames a second.** While nobody is touching the map, it draws about 30 frames a second (people walking look just as smooth). Any touch, drag, pinch, scroll or key returns to full speed for 2.5 s. Measured idle main-thread time on a crowded 3,000-person test town went from about 100% to 76%.
+- **Only real map changes redo routes.** A building update that only changes who lives or works there, or who owns it, doesn't rebuild the map or throw away everyone's planned routes. Only adding, moving, finishing or destroying something does.
+- **The open card isn't rebuilt every few seconds.** A timer updates just the line saying what the colonist is doing (and a building's construction progress). Measured: from 6–15 card rebuilds per 20 s to 0–2.
+- **Fewer pixel read-backs.** The page edges sample the map's colours every 5 s instead of every 2 s.
+- **Database indexes** cover private chats by sender and recipient, posts by author, who's online, race bets by time, and races still to run.
+- **Race rows are created once.** Each server remembers which race rows exist, so loading the Races tab is a plain read instead of an insert for every track.
 - **Slow phones adapt.** If frames drop below about 25 per second for 2.5 s, the canvas steps down in resolution, then drops the film grain and the "behind buildings" pass. It steps back up when there's headroom, and won't bounce between two levels.
 - **The connection heals itself.** Requests time out after 20 s. A live connection that goes silent for 20 s is replaced. Reconnects back off gently and happen at once when the phone wakes or comes back online.
 - **The server shrugs off database hiccups.**

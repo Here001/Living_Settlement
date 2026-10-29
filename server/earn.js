@@ -160,7 +160,7 @@ export class Earn {
   async reel(id) {
     return this.world.change(async ch => {
       const { c } = await this.lock(ch, id), e = this.stateOf(c), now = Date.now();
-      if (!e.cast) throw new HttpError(409, kindMsg());
+      if (!e.cast) throw new HttpError(409, 'Cast your line (or start looking) first.');
       const { kind, bite } = e.cast; e.cast = null;
       if (now < bite - 150) { await this.save(ch, c, e); return { ok: true, kind, result: 'early' }; }
       if (now > bite + EARN.catch.window) { await this.save(ch, c, e); return { ok: true, kind, result: 'late' }; }
@@ -198,4 +198,3 @@ export class Earn {
     });
   }
 }
-const kindMsg = () => 'Cast your line (or start looking) first.';

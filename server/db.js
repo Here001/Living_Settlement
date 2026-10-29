@@ -172,6 +172,14 @@ const MIGRATIONS = [
   `alter table citizens add column earn jsonb;`,
   // v30: colony events (festival, fishing frenzy, meteor shower, storm, crime wave, supply drop)
   `create table colony_events (id serial primary key, kind text not null, started_at bigint not null, ends_at bigint not null, data jsonb, ended boolean not null default false);`,
+  // v31: indexes for chats (by sender and recipient), Town Square posts by author, who's online, weekly race winnings,
+  // and the races still to run (checked every two seconds)
+  `create index if not exists dms_sender on dms (sender_id, recipient_id);
+   create index if not exists dms_recipient on dms (recipient_id, t desc);
+   create index if not exists messages_citizen on messages (citizen_id, t desc);
+   create index if not exists citizens_last_seen on citizens (last_seen) where last_seen is not null;
+   create index if not exists race_bets_t on race_bets (t);
+   create index if not exists races_unsettled on races (start_at) where not settled;`,
 ];
 
 export async function migrate() {

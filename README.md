@@ -43,6 +43,13 @@ Open the site with `#builder` and enter your `ADMIN_TOKEN`. As the developer you
 - **Trigger disasters.** **Disasters** (fire, tornado, earthquake, flood, meteor) hit where you tap. Damaged buildings become ruins and their people lose that home or job until you **Rebuild** them. **Clear ruins** removes all rubble.
 - **Go full screen.** Use the buttons above the toolbar for full screen (F) and to hide the interface for streaming (H). On iPhone, use Share → Add to Home Screen to open the city full screen.
 
+## Removing people and starting over
+
+In developer view, **Colonists** (at the bottom) has:
+- **Remove these**: paste usernames to remove several colonists at once. Their homes and jobs open up for others.
+- **Remove everyone except me**: clears all colonists but keeps the buildings.
+- **Reset colony**: type `RESET` to wipe the whole colony (map, colonists, news, Town Square messages, drafts) and return to "Found your colony". The Instagram connection is kept. Everyone watching is reloaded automatically.
+
 ## Town Square
 
 Colonists who have claimed their avatar (proved it's them and set a password) can post short messages (up to 280 characters) in **Town Square → Posts**; everyone sees them live with a blue ✓. One message per 15 seconds per colonist, no links. Colonists can delete their own; the developer can delete any.

@@ -108,6 +108,11 @@ app.patch('/api/admin/buildings/:id', admin, send(req => world.move(req.params.i
 app.delete('/api/admin/buildings/:id', admin, send(req => world.demolish(req.params.id, { refund: req.query.refund === '1' })));
 app.post('/api/admin/roads', admin, send(req => world.paintRoads(req.body || {})));
 app.post('/api/admin/citizens', admin, send(req => world.spawn((req.body || {}).handle, 'manual', (req.body || {}).gender)));
+app.post('/api/admin/citizens/remove', admin, send(req => world.removeMany(req.body || {})));
+app.post('/api/admin/reset', admin, send(async req => {
+  if ((req.body || {}).confirm !== 'RESET') throw new HttpError(400, 'Type RESET to confirm.');
+  const r = await world.resetColony(); eventsCache.t = 0; return r;
+}));
 app.delete('/api/admin/citizens/:id', admin, send(req => world.removeCitizen(req.params.id)));
 app.put('/api/admin/build-post', admin, send(req => world.setBuildPost((req.body || {}).mediaId)));
 app.get('/api/admin/requests', admin, send(() => world.buildRequests()));

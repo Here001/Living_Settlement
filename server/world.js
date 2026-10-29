@@ -235,7 +235,8 @@ export class World {
   // citizens stay in the database).
   apply(ops) {
     for (const o of ops) {
-      if (o.op === 'meta') this.meta = o.data;
+      if (o.op === 'reset') { this.meta = null; this.load().catch(e => console.error('reload after reset:', e.message)); }
+      else if (o.op === 'meta') this.meta = o.data;
       else if (o.op === 'building') this.putB(o.data);
       else if (o.op === 'removeBuilding') { const b = this.buildings.get(o.id); if (b && o.chunks[0] === R.chunkKey(b.cx, b.cy)) this.delB(o.id); }
       else if (o.op === 'roads') { for (const k in o.set) this.putR(k, o.set[k]); for (const k of o.remove) this.delR(k); }
@@ -694,6 +695,40 @@ export class World {
       await ch.fillVacancies();
       return { ok: true };
     });
+  }
+
+  // Remove many colonists at once: a list of usernames, or everyone except the founder (all = true).
+  async removeMany({ handles, all = false }) {
+    const list = Array.isArray(handles) ? handles : String(handles || '').split(/[\s,;]+/);
+    const names = [...new Set(list.map(h => R.cleanHandle(h).toLowerCase()).filter(Boolean))].slice(0, 5000);
+    if (!all && !names.length) throw new HttpError(400, 'Add at least one username.');
+    return this.change(async ch => {
+      const rows = (await ch.q(all ? 'select * from citizens where not founder order by seq limit 20000 for update'
+        : 'select * from citizens where lower(handle) = any($1) and not founder for update', all ? [] : [names])).rows;
+      const typeOf = async id => id ? (await ch.q('select type from buildings where id = $1', [id])).rows[0]?.type : null;
+      for (const c of rows) {
+        const chunks = chunksOfRow(c);
+        await ch.moveOut(c, { home: await typeOf(c.home_id), job: await typeOf(c.job_id) });
+        await ch.q('delete from citizens where id = $1', [c.id]);
+        await ch.q('delete from sessions where citizen_id = $1', [c.id]); await ch.q('delete from claims where citizen_id = $1', [c.id]);
+        ch.citizens.delete(c.id); ch.gone.set(c.id, chunks);
+      }
+      ch.meta.population = Math.max(0, (ch.meta.population || 0) - rows.length);
+      if (rows.length) await ch.event(rows.length === 1 ? `@${rows[0].handle} left ${ch.meta.name}` : `${fmt(rows.length)} colonists left ${ch.meta.name}`, 'leave');
+      await ch.fillVacancies();
+      return { removed: rows.length, notFound: all ? 0 : names.length - rows.length };
+    });
+  }
+
+  // Start over: wipe the whole colony (map, colonists, news, Town Square, drafts) back to the "found your colony" screen.
+  // The Instagram connection and its settings are kept.
+  async resetColony() {
+    await this.change(async ch => {
+      await ch.q(`truncate buildings, roads, water, vehicles, disasters, citizens, events, comments, messages, claims, sessions, draft`);
+      await ch.q('delete from meta where id = 1');
+      ch.meta = null; ch.extraOps.push({ op: 'reset' });
+    }, { allowUnfounded: true });
+    return { ok: true };
   }
 
   // ---------- the clock speed changed (30 real minutes = 1 game day) ----------

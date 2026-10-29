@@ -331,6 +331,19 @@ ok((await call('GET', '/api/cron/tick?key=wrong', undefined, { auth: false })).s
 r = await call('GET', `/api/cron/tick?key=${encodeURIComponent(process.env.CRON_KEY)}`, undefined, { auth: false });
 ok(r.status === 200 && r.json.ok, 'cron ping works', JSON.stringify(r.json));
 
+console.log('Removing people and starting over');
+await call('POST', '/api/admin/citizens/bulk', { handles: ['gone_a', 'gone_b', 'stay_c'] });
+r = await call('POST', '/api/admin/citizens/remove', { handles: ['gone_a', 'GONE_B', 'nobody_here'] });
+ok(r.status === 200 && r.json.removed === 2 && r.json.notFound === 1, 'remove a list of colonists', JSON.stringify(r.json));
+ok((await who('gone_a')).error && !(await who('stay_c')).error, 'only the listed ones are gone');
+r = await call('POST', '/api/admin/citizens/remove', { all: true });
+ok(r.status === 200 && r.json.removed > 0 && (await meta()).population === 1, 'remove everyone except the founder', JSON.stringify(r.json));
+ok((await call('POST', '/api/admin/reset', { confirm: 'nope' })).status === 400, 'reset needs the word RESET');
+ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' }, { auth: false })).status === 401, 'only the developer can reset');
+ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' })).status === 200 && !(await call('GET', '/api/meta', undefined, { auth: false })).json.meta, 'reset wipes the colony');
+ok((await call('POST', '/api/admin/found', { name: 'New Dawn', handle: 'builder' })).status === 200 && (await meta()).population === 1, 'found it again from scratch');
+await call('POST', '/api/admin/citizens/bulk', { handles: ['fresh_one', 'fresh_two'] });
+
 near.ws.close(); far.ws.close();
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -154,6 +154,23 @@ These live on a signed-in colonist's own card, under **Home**, **Bank** and **Ca
 - **Limits.** Messages are up to 500 characters, with a short pause between sends. The last 500 messages of each chat are kept.
 - **Online status.** A colonist is online while they're signed in with the colony open. Verified colonists show a green dot and "● Online now" or "Last seen 5 min ago" on their card, in the Colonists list and in chats.
 
+## Sharing to X, YouTube and anywhere else
+
+- **Where.** The **↗** button at the top of any colonist's or building's card, **↗ Share my win** after a casino win (50+ coins) or a race win, and **Share** on the pop-up when you win the lottery.
+- **The picture.** A 1080×1350 snapshot of the live map around that spot (no menus), framed with RESURGENCE, the colony's name, a caption card (with the colonist's face, if it's about a colonist) and playresurgence.com.
+- **Share options.**
+  - **Share…** uses the phone's own share menu, so you can pick X, Instagram, WhatsApp or anything else with the picture attached. It only shows where the browser supports it (most phones).
+  - **𝕏 Post on X** opens a ready-written post with the link.
+  - **Save picture** and **Copy link**.
+  - The caption can be edited first.
+- **YouTube Shorts.** **▶ Make a YouTube Short** records an 8-second vertical (720×1280) clip of the live map, slowly zooming in, with the same frame and caption. It's an mp4 where the browser can make one (Safari, recent Chrome), otherwise webm.
+  - **Share clip…** goes to the YouTube app (or TikTok, Reels, Status).
+  - **Save clip** and **Open YouTube** are there to upload it by hand.
+- **Links.**
+  - `playresurgence.com/?c=handle` opens that colonist's card.
+  - `/?b=<building id>&at=x,y` opens a building.
+  - Colonist links get their own title in link previews ("@handle on Resurgence"). Every link shows `og.jpg` (1200×630) as its preview picture.
+
 ## Blocking, reports and muting
 
 - **Block.** Tap **🚫 Block** on a colonist's card, or **⋯ → Block** in a chat. Neither of you can message the other, their chat leaves your list, they don't show as online to you, and their Town Square posts are hidden from you. They aren't told. Your blocked list is at the bottom of the Chats tab, with **Unblock** next to each name.

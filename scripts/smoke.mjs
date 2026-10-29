@@ -537,6 +537,12 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     wb.ws.close(); await sleep(600);
     ok(!(await call('GET', '/api/online', undefined, { auth: false })).json.some(p => p.h === 'jobfill_a'), 'closing the colony goes offline');
     wa.ws.close(); stranger.ws.close(); await pool.query("update citizens set pass_hash = null where handle = 'jobfill_a'"); }
+  // ---- shared links get their own preview on X, WhatsApp… ----
+  { const pg = await (await fetch(BASE + '/?c=zara_ng')).text();
+    ok(/<meta property="og:title" content="[^"]*@zara_ng\)? on Resurgence"/.test(pg) && /og:url" content="[^"]*\?c=zara_ng"/.test(pg), 'a colonist link has their name in the link preview');
+    ok(/og:title" content="Resurgence: a living colony/.test(await (await fetch(BASE + '/?c=nobody_here_xyz')).text()), 'an unknown colonist falls back to the normal preview');
+    ok(/og:title" content="Resurgence: a living colony/.test(await (await fetch(BASE + '/?c=%3Cscript%3E')).text()), 'odd links are ignored safely');
+    const og = await fetch(BASE + '/og.jpg'); ok(og.status === 200 && /image\/jpeg/.test(og.headers.get('content-type')), 'the preview picture is served'); }
   // ---- the developer adjusts coins ----
   { const zid = (await whoDev('zara_ng')).id; await pool.query("update citizens set coins_base = 100, coins_day = 0, net = 0 where handle = 'zara_ng'");
     const t0 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.treasuryBase;

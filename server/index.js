@@ -17,6 +17,8 @@ import { Actions } from './actions.js';
 import { Lottery } from './lottery.js';
 import { Economy } from './economy.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
+import * as R from '../shared/rules.js';
+import fs from 'node:fs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PORT = Number(process.env.PORT || 3000);
@@ -177,6 +179,20 @@ setInterval(() => { if (isLeader) sweepPlayers().catch(e => console.error('sweep
 
 // ---------- the city in the browser ----------
 app.use('/shared', express.static(path.join(root, 'shared'), { maxAge: '5m' }));
+// A shared colonist link (/?c=handle) gets its own title in link previews on X, WhatsApp and so on.
+app.get('/', async (req, res, next) => {
+  const h = typeof req.query.c === 'string' ? R.cleanHandle(req.query.c) : ''; if (!h) return next();
+  try {
+    const c = (await pool.query('select handle, display_name from citizens where lower(handle) = lower($1)', [h])).rows[0]; if (!c) return next();
+    const who = c.display_name ? `${c.display_name} (@${c.handle})` : `@${c.handle}`, title = `${who} on Resurgence`, desc = `${who} lives in ${world.meta?.name || 'the colony'} on Gliese 12 b. Come and find them, and claim your own colonist. Free to play.`;
+    const url = `https://${req.get('host')}/?c=${encodeURIComponent(c.handle)}`;
+    let html = await fs.promises.readFile(path.join(root, 'public', 'index.html'), 'utf8');
+    html = html.replace(/(<meta (?:property="og:title"|name="twitter:title") content=")[^"]*/g, `$1${esc(title)}`)
+      .replace(/(<meta (?:property="og:description"|name="twitter:description"|name="description") content=")[^"]*/g, `$1${esc(desc)}`)
+      .replace(/(<meta property="og:url" content=")[^"]*/, `$1${esc(url)}`);
+    res.set('cache-control', 'public, max-age=300').type('html').send(html);
+  } catch (e) { next(); }
+});
 app.use(express.static(path.join(root, 'public'), { maxAge: '5m' }));
 
 // ---------- live updates ----------

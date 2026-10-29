@@ -11,6 +11,19 @@
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <title>Resurgence</title>
+<meta name="description" content="A living colony on Gliese 12 b where every colonist is a real person. Claim yours, get a job, race creatures, and build a life. Free to play.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Resurgence">
+<meta property="og:title" content="Resurgence: a living colony on Gliese 12 b">
+<meta property="og:description" content="Every colonist is a real person. Claim yours, get a job, race creatures, and build a life. Free to play.">
+<meta property="og:url" content="https://playresurgence.com/">
+<meta property="og:image" content="https://playresurgence.com/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Resurgence: a living colony on Gliese 12 b">
+<meta name="twitter:description" content="Every colonist is a real person. Claim yours, get a job, race creatures, and build a life. Free to play.">
+<meta name="twitter:image" content="https://playresurgence.com/og.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap" rel="stylesheet">
@@ -217,7 +230,16 @@ body.pane-max .composer textarea{height:70px}
 .dm.them{cursor:pointer}.dmflag{display:none;margin-top:3px;border:0;background:none;padding:0;font:inherit;font-size:11px;color:var(--red,#c0392b);cursor:pointer}.dm.flagon .dmflag{display:block}
 .dmmenu{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:4px 11px 8px}.dmmenu .hint{flex-basis:100%;font-size:11.5px}
 .dmshut{justify-content:center;font-size:13px;padding:10px 11px 12px}.blkrow{display:flex;justify-content:space-between;align-items:center;padding:6px 2px;border-bottom:1px solid var(--glass-line,rgba(0,0,0,.08));font-size:13px}
-.rsheet-bg{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(10,20,15,.28);padding:16px}
+.card .x.shr{font-size:17px}
+.rsheet.share{width:min(420px,100%);max-height:calc(100vh - 150px);max-height:calc(100dvh - 150px);margin-bottom:96px}.shhead{display:flex;align-items:center;justify-content:space-between}.shhead h3{margin:0}
+.shimg{display:block;width:100%;max-height:40vh;object-fit:contain;border-radius:14px;margin:8px 0;background:rgba(0,0,0,.06)}
+.shtext{width:100%;resize:none;font:inherit;font-size:14px;padding:8px 10px;border-radius:12px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:rgba(255,255,255,.55);color:inherit}
+.shrow{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}.shx b,.shyt-b b{font-size:15px}
+.shyt{border-top:1px solid var(--glass-line,rgba(0,0,0,.1));margin-top:8px;padding-top:8px}.shyt-b b{color:#e53935}
+.shvid{display:block;max-height:34vh;max-width:100%;margin:8px auto 0;border-radius:14px;background:#000}
+.shprog{height:6px;border-radius:3px;background:rgba(0,0,0,.1);overflow:hidden;margin:8px 0}.shprog i{display:block;height:100%;width:0;background:#e53935;transition:width .2s linear}
+.rsheet-bg.recording{background:transparent;pointer-events:none}.rsheet-bg.recording .rsheet{opacity:.35}
+.rsheet-bg{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;background:rgba(10,20,15,.28);padding:16px}
 .rsheet{width:min(380px,100%);padding:14px 16px;max-height:86vh;overflow:auto}.rsheet h3{margin:0 0 8px;font-size:16px}
 .rsheet blockquote,.rep blockquote{margin:6px 0;padding:6px 10px;border-left:3px solid #E8836B;background:rgba(0,0,0,.04);border-radius:6px;font-size:13px;white-space:pre-wrap;word-wrap:break-word}
 .rreasons{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.rblock{display:flex;align-items:center;gap:6px;font-size:13px;margin:8px 0}
@@ -2412,7 +2434,8 @@ function lotterySoon(d){ clearTimeout(lottoTimer); lottoTimer=setTimeout(()=>loa
 async function loadLottery(d){ try{ Lotto.info=await api('/api/lottery'); }catch(e){ return; } const L=Lotto.info.lottery;
   if(d&&L&&d.stage==='announced'&&Lotto.toastId!==L.id){ Lotto.toastId=L.id; toast(`🎟️ The lottery draw is in 2 minutes! Prize: ${fmt(L.pot)} coins.`,'Tickets',()=>openTab('races')); }
   if(d&&L&&d.stage==='open') toast(`🎟️ A lottery just opened. Tickets ${fmt(L.price)} coins.`,'Tickets',()=>openTab('races'));
-  if(d&&L&&d.stage==='drawn'&&L.winner) toast(Me&&Me.handle&&Me.handle.toLowerCase()===L.winner.toLowerCase()?`🎉 You won the lottery: ${fmt(L.prize)} coins!`:`🎉 @${L.winner} won the lottery: ${fmt(L.prize)} coins!`);
+  if(d&&L&&d.stage==='drawn'&&L.winner){ if(Me&&Me.handle&&Me.handle.toLowerCase()===L.winner.toLowerCase()) toast(`🎉 You won the lottery: ${fmt(L.prize)} coins!`,'Share',()=>Share.win(`Won the lottery!`,`${fmt(L.prize)} coins`,`I just won the ${S.meta?S.meta.name:'colony'} lottery on Resurgence: ${fmt(L.prize)} coins 🎟️`,null));
+    else toast(`🎉 @${L.winner} won the lottery: ${fmt(L.prize)} coins!`); }
   if(d&&d.stage==='drawn'&&Me&&Me.handle) loadMyMoney();
   renderRaces(); }
 function lotteryBox(){ const L=Lotto.info&&Lotto.info.lottery; if(!L) return null; const box=el('div',{class:'authbox lotto'}, el('h3',{text:'🎟️ Lottery'}));
@@ -2468,6 +2491,8 @@ function renderRaces(force){ const body=$('raceBody'); if(!body||activeTab!=='ra
   const list=el('div',{class:'rlist'}); for(const id of CREATURE_IDS.slice().sort((a,b)=>nx.odds[a].pays-nx.odds[b].pays)) list.append(raceRow(id, nx.odds[id], I.form)); body.append(list);
   const mine=(I.myBets||[]).find(b=>b.n===nx.n), lastMine=I.last&&(I.myBets||[]).find(b=>b.n===I.last.n);
   if(lastMine && I.last.settled) body.append(el('p',{class:'rmine '+(lastMine.payout?'win':''),text:lastMine.payout?`You won ${fmt(lastMine.payout)} coins on ${CREATURES[lastMine.creature].name} in Race #${I.last.no}!`:`Your ${fmt(lastMine.amount)} on ${CREATURES[lastMine.creature].name} in Race #${I.last.no} didn't come in.`}));
+  if(lastMine && I.last.settled && lastMine.payout){ const tr=[...D.buildings.values()].find(b=>b.type==='racetrack'); const cn=CREATURES[lastMine.creature].name;
+    body.append(el('button',{class:'linkb',text:'↗ Share my win',onclick:()=>Share.win(`Won ${fmt(lastMine.payout)} coins!`,`Backed ${cn} in Race #${I.last.no}`,`${cn} won Race #${I.last.no} and I won ${fmt(lastMine.payout)} coins on Resurgence 🏁`,tr?[tr.x+2,tr.y+2]:null)})); }
   if(!(Me&&Me.token)) body.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to bet on a race.'}));
   else if(mine) body.append(el('p',{class:'rmine',text:`Your bet: ${fmt(mine.amount)} coins on ${CREATURES[mine.creature].name} at ${mine.pays}×. Win and you get ${fmt(Math.floor(mine.amount*mine.pays))}.`}));
   else if(open){ const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Bet',value:String(Race.amount)}); inp.oninput=()=>{ Race.amount=inp.value; };
@@ -2512,7 +2537,9 @@ async function casinoPlay(c){ if(casino.busy) return; const bet=Math.floor(Numbe
   casino.busy=false; renderCard(true); }
 function resultLine(r){ const g=r.result;
   const shown = Array.isArray(g) ? g.map(x=>ICON[x]||x).join(' ') : casino.game==='dice' ? `${DICE[Number(g)-1]} ${g}` : (g==='heads'?'🪙 Heads':'🪙 Tails');
-  return el('div',{class:'cresult '+(r.won?'win':'lose')}, el('span',{class:'roll',text:shown}), el('b',{text:r.won?`You won ${fmt(r.payout)} coins!`:`No luck. You lost ${fmt(r.bet)}.`})); }
+  const cb=r.casino&&D.buildings.get(r.casino.id), gname=GAMES[casino.game].name;
+  const brag=r.won&&r.payout>=50?el('button',{class:'linkb',text:'↗ Share my win',onclick:()=>Share.win(`Won ${fmt(r.payout)} coins!`,`${gname} at ${r.casino?r.casino.name:'the casino'}`,`I just won ${fmt(r.payout)} coins on ${gname.toLowerCase()} at the casino in ${S.meta?S.meta.name:'my colony'} on Resurgence 🎰`,cb?[cb.x+1,cb.y+1]:null)}):null;
+  return el('div',{class:'cresult '+(r.won?'win':'lose')}, el('span',{class:'roll',text:shown}), el('b',{text:r.won?`You won ${fmt(r.payout)} coins!`:`No luck. You lost ${fmt(r.bet)}.`}), brag); }
 function casinoPanel(c){ const box=el('div',{class:'authbox casino'}, el('h3',{text:'Casino'}));
   if(!casino||casino.id!==c.id||(!casino.loading&&Date.now()-casino.at>30000)) loadCasino(c);
   const info=casino&&casino.id===c.id?casino.info:null;
@@ -2681,7 +2708,8 @@ function renderCard(force){ if(!force && cardBusy()) return;
     const now = !h ? (d&&d.queue ? `In cryosleep aboard the ark, #${fmt(d.queue)} in line to wake` : 'In cryosleep aboard the ark') : st ? st.act : 'Arriving soon';
     const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,nameOf(c), el('span',{class:'gsym',title:c.gender==='f'?'Woman':'Man',text:c.gender==='f'?' ♀':' ♂'})); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); head.append(av, el('div',null,title, c.name?el('p',{class:'uname',text:'@'+c.handle}):'', el('p',{class:'now',text:now})));
     const nm=b=>(D.buildings.get(b.id)||b).name||T(b).name;
-    card.append(close, head, el('dl',null,
+    const shr=el('button',{class:'x shr','aria-label':'Share','title':'Share',text:'↗',onclick:()=>Share.colonist(c)});
+    card.append(close, shr, head, el('dl',null,
       el('dt',{text:'Gender'}), el('dd',{text:c.gender==='f'?'Woman':'Man'}),
       el('dt',{text:'Home'}), el('dd',{text:h?nm(h):d&&d.queue?`None yet. Moves in when ${fmt(d.queue)} more ${d.queue===1?'home is':'homes are'} built`:'None yet'}),
       el('dt',{text:'Job'}), el('dd',{text:j?`${T(j).work.title} at ${nm(j)}`:h?'Looking for work':'Gets one after moving in'}),
@@ -2739,7 +2767,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     const forSale=BUYABLE.has(t.cat)&&(t.home||t.work), price=Math.max(500,t.cost||0);
     if(b.owner) add('Owner', `@${b.owner}`); else if(forSale&&b.done!==false&&!b.ruin) add('For sale', `${fmt(price)} coins`);
     if(forSale&&b.done!==false){ const gross=(t.home?(b.homeUsed||0)*(t.home.rent||0):0)+(t.work?(b.jobUsed||0)*(t.work.salary||0)*0.25:0); add('Earns', `About ${fmt(Math.floor(gross*0.8))} a day for its owner`); }
-    card.append(close, head, dl);
+    card.append(close, el('button',{class:'x shr','aria-label':'Share','title':'Share',text:'↗',onclick:()=>Share.building(b)}), head, dl);
     if(forSale && !Store.canWrite && b.done!==false && !b.ruin && Me&&Me.token&&Me.handle){
       if(!b.owner) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(price)}`,onclick:()=>toast(`Buy ${b.name||t.name} for ${fmt(price)} coins? You'll collect 80% of its rent or profit every game day.`,'Buy',async()=>{ const r=await meAction('/api/me/properties/buy',{buildingId:b.id},r=>`It's yours! About ${fmt(r.income)} coins a day.`); if(r){ b.owner=Me.handle; Money.at=0; renderCard(true); } })})));
       else if(b.owner.toLowerCase()===Me.handle.toLowerCase()) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
@@ -3018,10 +3046,109 @@ function updateNews(){ if(!S.meta) return; const items=postItems(); const gz=ite
 $('news').onclick=()=>openTab('feed');
 setInterval(()=>{ if(!document.hidden) updateNews(); },5000);
 
+/* ---------------- Sharing: a picture or a short vertical clip of the colony, for X, YouTube Shorts and anywhere else ---------------- */
+const frames=n=>new Promise(r=>{ let k=0; const f=()=>{ if(++k>=n) r(); else requestAnimationFrame(f); }; requestAnimationFrame(f); setTimeout(r,600); });
+function rrect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+function wrapLines(g,text,max,maxLines){ const words=String(text||'').split(/\s+/).filter(Boolean), out=[]; let line='';
+  for(const w of words){ const t=line?line+' '+w:w; if(g.measureText(t).width<=max||!line) line=t; else { out.push(line); line=w; } }
+  if(line) out.push(line); if(out.length>maxLines){ out.length=maxLines; let l=out[maxLines-1]; while(l&&g.measureText(l+'…').width>max) l=l.slice(0,-1); out[maxLines-1]=l+'…'; } return out; }
+const Share={ o:null, pic:null, clipFile:null, busy:false,
+  link(q){ const u=new URL(location.origin+'/'); for(const k in (q||{})) if(q[k]!=null) u.searchParams.set(k,q[k]); return u.toString(); },
+  colony(){ return S.meta&&S.meta.name?`${S.meta.name} on Gliese 12 b`:'Gliese 12 b'; },
+  // A colonist's face for the picture, drawn on its own small canvas (skipped if the browser won't let us read it back).
+  async face(c){ if(!c) return null; try{ let svg=avatarSVG(c).replace('<svg ','<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" ');
+      const img=new Image(); img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg); await img.decode();
+      const k=document.createElement('canvas'); k.width=k.height=160; const g=k.getContext('2d'); g.drawImage(img,0,0,160,160); g.getImageData(0,0,1,1); return k; }catch(e){ return null; } },
+  // Draw the map (centre crop of what's on screen) plus the RESURGENCE frame and caption onto g, at W×H.
+  draw(g,W,H,o){ const u=Math.min(W,H)/1080, sw=cv.width, sh=cv.height, ar=W/H; let cw=sw, ch=cw/ar; if(ch>sh){ ch=sh; cw=ch*ar; }
+    g.fillStyle='#5E7F45'; g.fillRect(0,0,W,H); try{ g.drawImage(cv,(sw-cw)/2,(sh-ch)/2,cw,ch,0,0,W,H); }catch(e){}
+    let gr=g.createLinearGradient(0,0,0,260*u); gr.addColorStop(0,'rgba(18,26,16,.62)'); gr.addColorStop(1,'rgba(18,26,16,0)'); g.fillStyle=gr; g.fillRect(0,0,W,260*u);
+    g.textBaseline='alphabetic'; g.fillStyle='#fff'; g.shadowColor='rgba(0,0,0,.35)'; g.shadowBlur=12*u;
+    g.font=`800 ${70*u}px "Bricolage Grotesque", system-ui, sans-serif`; g.fillText('RESURGENCE',56*u,118*u);
+    g.font=`600 ${32*u}px "Bricolage Grotesque", system-ui, sans-serif`; g.globalAlpha=.92; g.fillText(this.colony(),60*u,166*u); g.globalAlpha=1; g.shadowBlur=0;
+    // The caption card at the bottom
+    const pad=44*u, inner=34*u, faceW=o.face?150*u:0, bw=W-2*pad, tx=pad+inner+(faceW?faceW+26*u:0), tw=bw-2*inner-(faceW?faceW+26*u:0);
+    g.font=`800 ${52*u}px "Bricolage Grotesque", system-ui, sans-serif`; const tl=wrapLines(g,o.title,tw,2);
+    g.font=`500 ${34*u}px "Bricolage Grotesque", system-ui, sans-serif`; const sl=o.sub?wrapLines(g,o.sub,tw,2):[];
+    const bh=Math.max(faceW+2*inner, inner*2+tl.length*60*u+sl.length*44*u+64*u), by=H-pad-bh-(o.tall?120*u:0);
+    g.shadowColor='rgba(0,0,0,.25)'; g.shadowBlur=30*u; g.fillStyle='rgba(251,248,241,.94)'; rrect(g,pad,by,bw,bh,36*u); g.fill(); g.shadowBlur=0;
+    g.fillStyle='#D9714A'; rrect(g,pad,by,12*u,bh,6*u); g.fill();
+    if(o.face){ const fx=pad+inner, fy=by+(bh-faceW)/2; g.save(); g.beginPath(); g.arc(fx+faceW/2,fy+faceW/2,faceW/2,0,Math.PI*2); g.fillStyle='#EFE7D8'; g.fill(); g.clip(); g.drawImage(o.face,fx,fy,faceW,faceW); g.restore(); }
+    let y=by+inner+50*u; g.fillStyle='#2B2621'; g.font=`800 ${52*u}px "Bricolage Grotesque", system-ui, sans-serif`; for(const l of tl){ g.fillText(l,tx,y); y+=60*u; }
+    g.fillStyle='#6E655A'; g.font=`500 ${34*u}px "Bricolage Grotesque", system-ui, sans-serif`; for(const l of sl){ g.fillText(l,tx,y-8*u); y+=44*u; }
+    g.fillStyle='#D9714A'; g.font=`700 ${32*u}px "Bricolage Grotesque", system-ui, sans-serif`; g.fillText('playresurgence.com · free to play',tx,by+bh-inner);
+  },
+  async picture(o){ try{ await document.fonts.load('800 40px "Bricolage Grotesque"'); }catch(e){}
+    const k=document.createElement('canvas'); k.width=1080; k.height=1350; this.draw(k.getContext('2d'),1080,1350,o);
+    const blob=await new Promise(r=>k.toBlob(r,'image/jpeg',0.9)); return blob&&new File([blob],'resurgence.jpg',{type:'image/jpeg'}); },
+  // A vertical 9:16 clip of the live map, slowly zooming in, for YouTube Shorts (and TikTok, Reels, Status…).
+  async clip(o,onStep){ const W=720,H=1280, k=document.createElement('canvas'); k.width=W; k.height=H; const g=k.getContext('2d');
+    if(!k.captureStream||typeof MediaRecorder==='undefined') throw new Error("This browser can't record clips. Try Chrome or Safari on your phone.");
+    const mime=['video/mp4;codecs=avc1.42E01E','video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(m=>{ try{ return MediaRecorder.isTypeSupported(m); }catch(e){ return false; } });
+    if(!mime) throw new Error("This browser can't record clips. Try Chrome or Safari on your phone.");
+    const stream=k.captureStream(30), rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:5e6}), parts=[]; rec.ondataavailable=e=>{ if(e.data&&e.data.size) parts.push(e.data); };
+    const DUR=8000, z0=cam.z, zA=Math.max(0.6,z0*0.8), zB=Math.min(3,z0*1.15), ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2; const done=new Promise(r=>{ rec.onstop=r; });
+    this.draw(g,W,H,{...o,tall:true}); rec.start(500); const t0=performance.now();
+    await new Promise(res=>{ const tick=()=>{ const t=Math.min(1,(performance.now()-t0)/DUR); cam.z=zA+(zB-zA)*ease(t); this.draw(g,W,H,{...o,tall:true}); onStep&&onStep(t); if(t<1) requestAnimationFrame(tick); else res(); }; requestAnimationFrame(tick); });
+    rec.stop(); await done; cam.z=z0; stream.getTracks().forEach(t=>t.stop());
+    const type=mime.split(';')[0], ext=type==='video/mp4'?'mp4':'webm'; return new File(parts,'resurgence-short.'+ext,{type}); },
+  canShare(f){ try{ return !!(navigator.canShare&&navigator.canShare({files:[f]})); }catch(e){ return false; } },
+  save(f){ const a=el('a',{href:URL.createObjectURL(f),download:f.name}); document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),60000); },
+  async native(f,text){ try{ await navigator.share({files:[f],text}); }catch(e){ if(e&&e.name!=='AbortError') toast('Sharing didn’t work here. Save it instead and post it yourself.'); } },
+  // Open the share sheet. o = { title, sub, text, link:{c|b|at}, at:[x,y] tile to centre on, who: citizen for the face }
+  async open(o){ if(this.busy) return; this.busy=true; this.o=o; this.clipFile=null;
+    try{ if(o.at){ const p=iso(o.at[0]+0.5,o.at[1]+0.5); if(!(o.who&&follow===o.who.id)) follow=null; cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.3); }
+      await frames(3); o.face=await this.face(o.who); this.pic=await this.picture(o); }
+    catch(e){ this.busy=false; toast('Couldn’t make the picture: '+e.message); return; }
+    this.busy=false; this.sheet(); },
+  sheet(){ const o=this.o; document.querySelector('.rsheet-bg')?.remove(); const url=this.link(o.link);
+    const wrap=el('div',{class:'rsheet-bg'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
+    const prev=el('img',{class:'shimg',alt:'Picture to share',src:URL.createObjectURL(this.pic)});
+    const ta=el('textarea',{class:'shtext',rows:'3',maxlength:'240','aria-label':'Caption'}); ta.value=o.text; const caption=()=>`${ta.value.trim()} ${url}`.trim();
+    const row=el('div',{class:'shrow'});
+    if(this.canShare(this.pic)) row.append(el('button',{class:'btn primary',text:'Share…',onclick:()=>this.native(this.pic,caption())}));
+    row.append(el('button',{class:'btn shx',onclick:()=>{ window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(ta.value.trim())+'&url='+encodeURIComponent(url),'_blank','noopener'); }}, el('b',{text:'𝕏'}), ' Post on X'),
+      el('button',{class:'btn',text:'Save picture',onclick:()=>this.save(this.pic)}),
+      el('button',{class:'btn',text:'Copy link',onclick:async()=>{ try{ await navigator.clipboard.writeText(caption()); toast('Copied. Paste it anywhere.'); }catch(e){ toast(url); } }}));
+    const yt=el('div',{class:'shyt'}), ytBtn=el('button',{class:'btn shyt-b',onclick:()=>this.record(yt,ytBtn,ta)}, el('b',{text:'▶'}), ' Make a YouTube Short');
+    yt.append(ytBtn, el('p',{class:'hint',text:'Records an 8-second vertical clip of the colony right now, with your caption. Post it as a Short, or on TikTok, Reels or your Status.'}));
+    wrap.append(el('div',{class:'rsheet inked share',role:'dialog','aria-label':'Share'},
+      el('div',{class:'shhead'}, el('h3',{text:'Share'}), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>wrap.remove()})),
+      prev, ta, row, el('p',{class:'hint',text:this.canShare(this.pic)?'“Share…” lets you pick X, Instagram, WhatsApp or any app, with the picture attached.':'On X, attach the saved picture to your post to show it off.'}), yt));
+    document.body.append(wrap); },
+  async record(box,btn,ta){ if(this.busy) return; this.busy=true; btn.disabled=true; const bar=el('div',{class:'shprog'},el('i')); box.append(bar);
+    const wrap=box.closest('.rsheet-bg'); if(wrap) wrap.classList.add('recording');
+    try{ const f=await this.clip({...this.o,text:ta.value},t=>{ bar.firstChild.style.width=Math.round(t*100)+'%'; btn.textContent=`Recording… ${Math.ceil(8-t*8)}s`; }); this.clipFile=f;
+      bar.remove(); btn.remove(); box.querySelector('.hint')?.remove(); if(wrap) wrap.classList.remove('recording');
+      const im=wrap&&wrap.querySelector('.shimg'); if(im) im.style.maxHeight='16vh';
+      const v=el('video',{class:'shvid',src:URL.createObjectURL(f),controls:'',playsinline:'',muted:'',loop:''}); v.muted=true; v.play().catch(()=>{});
+      const row=el('div',{class:'shrow'});
+      if(this.canShare(f)) row.append(el('button',{class:'btn primary',text:'Share clip…',onclick:()=>this.native(f,`${ta.value.trim()} ${this.link(this.o.link)} #Shorts`)}));
+      row.append(el('button',{class:'btn',text:'Save clip',onclick:()=>this.save(f)}), el('a',{class:'btn',href:'https://www.youtube.com/upload',target:'_blank',rel:'noopener',text:'Open YouTube'}));
+      box.append(v,row,el('p',{class:'hint',text:this.canShare(f)?'Tap “Share clip…” and pick YouTube to post it as a Short.':'Save the clip, then upload it in YouTube (it’s vertical and under a minute, so it becomes a Short).'})); }
+    catch(e){ toast(e.message); bar.remove(); btn.disabled=false; btn.textContent='▶ Make a YouTube Short'; if(wrap) wrap.classList.remove('recording'); }
+    this.busy=false; },
+  // Ready-made shares
+  colonist(c){ const mine=Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase(), d=detail.get(c.id), h=bOf(c.home), j=bOf(c.job);
+    const jobT=j?`${T(j).work.title} at ${(D.buildings.get(j.id)||j).name||T(j).name}`:h?'Looking for work':'Still asleep aboard the ark';
+    this.open({ who:c, title:nameOf(c)+(c.name?` · @${c.handle}`:''), sub:jobT,
+      text:mine?`I'm a colonist on Resurgence! Come and find me in ${S.meta?S.meta.name:'the colony'} 🚀`:`Meet ${nameOf(c)}, a colonist in ${S.meta?S.meta.name:'the colony'} on Resurgence 🚀`,
+      link:{c:c.handle}, at:c.home?[c.home[2],c.home[3]]:null }); },
+  building(b){ const t=T(b), nm=b.name||t.name, [w,dd]=t.size;
+    this.open({ title:nm, sub:b.name?`${t.name} in ${S.meta?S.meta.name:'the colony'}`:`In ${S.meta?S.meta.name:'the colony'}`, text:`Check out ${nm} in ${S.meta?S.meta.name:'our colony'} on Resurgence 🏙️`,
+      link:{b:b.id,at:`${b.x},${b.y}`}, at:[b.x+(w-1)/2,b.y+(dd-1)/2] }); },
+  win(title,sub,text,at){ const me=Me&&Me.handle?[...S.citizens.values()].find(c=>c.handle.toLowerCase()===Me.handle.toLowerCase()):null;
+    this.open({ who:me, title, sub, text, link:Me&&Me.handle?{c:Me.handle}:{}, at }); } };
+// Links like /?c=handle open that colonist; /?b=id&at=x,y go to that building.
+function openSharedLink(){ const q=new URLSearchParams(location.search), c=q.get('c'), b=q.get('b'), at=(q.get('at')||'').split(',').map(Number);
+  if(!c&&!b) return; q.delete('c'); q.delete('b'); q.delete('at'); try{ window.history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:'')+location.hash); }catch(e){}
+  if(c){ openCitizen(c).catch(()=>{}); return; }
+  if(at.length===2&&at.every(Number.isFinite)){ const p=iso(at[0]+1,at[1]+1); follow=null; cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.4); }
+  let n=0; const tryB=()=>{ if(S.buildings.has(b)) selectBuilding(b); else if(++n<20) setTimeout(tryB,500); }; tryB(); }
 function afterLoad(){
   applyPermissions(); refreshUI();
   if(!S.meta){ if(Store.canWrite) $('setup').hidden=false; else { $('townName').textContent='Not founded yet'; $('popLine').textContent='The colony hasn’t landed yet.'; } }
-  else { const [cx,cy]=centerTile(); const p=iso(cx+0.5,cy+0.5); cam.x=p.x; cam.y=p.y; settle(); updateNews(); }
+  else { const [cx,cy]=centerTile(); const p=iso(cx+0.5,cy+0.5); cam.x=p.x; cam.y=p.y; settle(); updateNews(); openSharedLink(); }
 }
 $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
   try{ await api('/api/admin/found',{method:'POST',body:{name:$('setName').value,handle:$('setHandle').value}});

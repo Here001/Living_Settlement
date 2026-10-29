@@ -1779,7 +1779,7 @@ function renderPane(){
   const p=$('pane'); if(!activeTab){ p.hidden=true; return; } p.hidden=false; p.innerHTML='';
   if(activeTab==='feed'){
     const seg=el('div',{class:'seg',role:'tablist'}); for(const [id,nm] of [['posts','Posts'],['log','Daily log'],['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
-    p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; renderFeed(); return; }
+    p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
   if(activeTab==='people'){ p.append(paneHead('Colonists')); const body=el('div',{class:'pane-body'});
     const s=el('input',{class:'search',id:'search',type:'search',placeholder:'Search a username',autocomplete:'off'}); s.value=peopleQuery; s.oninput=()=>{ peopleQuery=s.value; renderPeople(); };
     body.append(s, el('div',{id:'peopleList'}));
@@ -2067,11 +2067,18 @@ function composer(){ const box=el('div',{class:'composer'});
   if(!(Me&&Me.token)){ box.append(el('p',{class:'hint',text:'Claim your colonist to post in the Town Square.'}), el('button',{class:'btn',text:'Find my colonist',onclick:()=>findMe()})); return box; }
   const ta=el('textarea',{maxlength:'280',rows:'2',placeholder:`Say something to the colony, @${Me.handle}…`,'aria-label':'Message to the Town Square'}); const n=el('span',{class:'count',text:'280'});
   const post=el('button',{class:'btn primary',text:'Post'});
-  const send=async()=>{ const t=ta.value.trim(); if(!t) return; post.disabled=true; try{ const m=await api('/api/square',{method:'POST',body:{text:t}}); if(!S.chat.some(x=>x.id===m.id)) S.chat.unshift(m); ta.value=''; n.textContent='280'; feedDirty=true; renderFeed(); }catch(e){ toast(e.message); } post.disabled=false; };
-  ta.oninput=()=>{ n.textContent=String(280-ta.value.length); }; ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } }); post.onclick=send;
+  const send=async()=>{ const t=ta.value.trim(); if(!t) return; post.disabled=true; try{ const m=await api('/api/square',{method:'POST',body:{text:t}}); if(!S.chat.some(x=>x.id===m.id)) S.chat.unshift(m); ta.value=''; n.textContent='280'; feedDirty=true; renderFeed(true); }catch(e){ toast(e.message); } post.disabled=false; };
+  ta.oninput=()=>{ n.textContent=String(280-ta.value.length); }; ta.addEventListener('blur',()=>setTimeout(()=>{ if(!composerBusy()){ feedDirty=true; renderFeed(); } },150)); ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } }); post.onclick=send;
   box.append(ta, el('div',{class:'row'}, n, post)); return box; }
-function renderFeed(){
-  const body=$('feedBody'); if(!body || activeTab!=='feed' || !feedDirty) return; feedDirty=false; const keep=body.scrollTop; body.innerHTML='';
+// While someone is typing a Town Square message the feed holds still (rebuilding 80 posts stalls typing on phones);
+// it catches up the moment they stop. Otherwise it only rebuilds when what it would show has changed.
+let feedKey='';
+const composerBusy = () => { const a=document.activeElement; return !!(a && a.closest && a.closest('.composer')); };
+function renderFeed(force){
+  const body=$('feedBody'); if(!body || activeTab!=='feed' || !feedDirty) return;
+  if(!force && composerBusy()) return;
+  if(feedMode==='posts' && S.meta){ const items=postItems(); const key=feedMode+'|'+(Me&&Me.handle)+'|'+items.map(i=>(i.msg?i.msg.id:(i.gazette?'g':'@'+(i.c&&i.c.id)))+':'+Math.floor(i.g)).join(','); if(!force && key===feedKey){ feedDirty=false; return; } feedKey=key; } else feedKey='';
+  feedDirty=false; const keep=body.scrollTop; body.innerHTML='';
   if(feedMode==='story'){ body.append(storyPage()); return; }
   if(!S.meta){ body.append(el('p',{class:'hint',text:'The story starts once the colony is founded.'})); return; }
   if(feedMode==='posts'){ const items=postItems(); if(!items.length){ body.append(el('p',{class:'hint',text:'Quiet so far. Check back in a few minutes.'})); return; }

@@ -81,10 +81,22 @@ export async function connectInstagram(token) {
     // A personal (User) token: find the Pages this person manages and use the one linked to Instagram.
     const pages = await jget(`${fb}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&limit=100&access_token=${t}`);
     if (!pages || pages.error) throw fail(`Couldn't list your Facebook Pages${pages?.error?.message ? ': ' + pages.error.message : '.'} Make sure the token allows pages_show_list.`);
-    const linked = (pages.data || []).find(p => p.instagram_business_account && p.access_token);
-    if (!linked) throw fail((pages.data || []).length
+    let linked = (pages.data || []).find(p => p.instagram_business_account && p.access_token);
+    // Some Pages (new Pages experience, or Pages in a business portfolio) don't show up in /me/accounts.
+    // Ask Meta what this token was granted, and try each granted Page by its ID.
+    const dbg = await jget(`${fb}/debug_token?input_token=${t}&access_token=${t}`);
+    const info = dbg?.data || {};
+    const scopes = info.scopes || [];
+    const pageIds = [...new Set((info.granular_scopes || []).filter(g => /^pages_/.test(g.scope)).flatMap(g => g.target_ids || []))];
+    if (!linked) for (const id of pageIds) {
+      const p = await jget(`${fb}/${id}?fields=id,name,access_token,instagram_business_account{id,username}&access_token=${t}`);
+      if (p && !p.error && p.instagram_business_account && p.access_token) { linked = p; break; }
+    }
+    const report = `\n\nWhat Meta says about this token: app ${info.application || '?'} (${info.app_id || '?'}); permissions: ${scopes.join(', ') || 'none'}; Pages granted: ${pageIds.join(', ') || 'none'}.`;
+    if (!linked && !scopes.includes('pages_show_list')) throw fail('This token is missing the pages_show_list permission, so it can’t reach your Page. Add pages_show_list (and pages_read_engagement) in the Explorer before generating.' + report);
+    if (!linked) throw fail(((pages.data || []).length
       ? `None of your Pages (${pages.data.map(p => p.name).join(', ')}) has an Instagram professional account linked, or the token wasn't allowed to see it. Link your Instagram to the Page, then generate the token again and tick both.`
-      : 'This token can’t see any Facebook Pages. When generating it, tick your Page (and your Instagram account) in the pop-up.');
+      : 'This token can’t see any Facebook Pages. When generating it, tick your Page (and your Instagram account) in the pop-up.') + report);
     page = linked; token = linked.access_token;
   }
   const t2 = encodeURIComponent(token);

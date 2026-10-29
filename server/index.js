@@ -16,6 +16,7 @@ import { Achievements } from './achievements.js';
 import { Leaderboards } from './leaderboards.js';
 import { CasinoTables } from './tables.js';
 import { Earn } from './earn.js';
+import { ColonyEvents } from './colonyevents.js';
 import { Races } from './races.js';
 import { Actions } from './actions.js';
 import { Lottery } from './lottery.js';
@@ -46,6 +47,8 @@ const achievements = new Achievements(world, bus); world.achievements = achievem
 const leaderboards = new Leaderboards(world); world.leaderboards = leaderboards;
 world.tables = new CasinoTables(world);
 world.earn = new Earn(world);
+const cevents = new ColonyEvents(world, bus); world.cevents = cevents;
+setInterval(() => { if (isLeader && world.meta) cevents.tick().catch(e => console.error('colony events:', e.message)); }, 30000).unref();
 setInterval(() => { if (isLeader && world.meta) leaderboards.rollover().catch(e => console.error('leaderboards:', e.message)); }, 60000).unref();
 const actions = new Actions(world); world.actions = actions; world.blockedReason = c => actions.blockedReason(c);
 const app = express();
@@ -128,6 +131,9 @@ app.post('/api/admin/water', admin, send(req => world.paintWater(req.body || {})
 app.post('/api/admin/vehicles', admin, send(req => world.placeVehicle(req.body || {})));
 app.delete('/api/admin/vehicles/:id', admin, send(req => world.removeVehicle(req.params.id)));
 app.post('/api/admin/disasters', admin, send(async req => { const r = await world.disaster(req.body || {}); eventsCache.t = 0; return r; }));
+app.get('/api/colony-event', limit, send(async () => ({ event: await cevents.current() })));
+app.post('/api/admin/colony-event', admin, send(req => cevents.start(String((req.body || {}).kind || ''), (req.body || {}).mins)));
+app.delete('/api/admin/colony-event', admin, send(async () => ({ ended: await cevents.end('over') })));
 app.put('/api/admin/weather', admin, send(req => world.setWeather((req.body || {}).kind)));
 app.get('/api/admin/draft', admin, send(async () => ({ draft: await world.getDraft() })));
 app.put('/api/admin/draft', admin, send(req => world.saveDraft((req.body || {}).data)));

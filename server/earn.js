@@ -9,6 +9,7 @@ import * as R from '../shared/rules.js';
 import { BUILDING_TYPES } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
 import { bump } from './achievements.js';
+import { earnBoost } from '../shared/events.js';
 
 const fmt = n => Math.round(n).toLocaleString('en-US'), MIN = 60000, day = () => Math.floor(Date.now() / 86400000);
 const rnd = n => crypto.randomInt(n), chance = () => crypto.randomInt(0, 1e9) / 1e9;
@@ -43,7 +44,8 @@ export class Earn {
     const hx = c.hx ?? 0, hy = c.hy ?? 0; delete c.hx; delete c.hy; ch.coins(c); return { c, hx, hy };
   }
   // Pay from the treasury (as much as it holds), and keep a count for badges.
-  async pay(ch, c, want, stat) {
+  async pay(ch, c, want, stat, noBoost = false) {
+    if (!noBoost) want = Math.round(want * earnBoost(await this.event(), stat)); // a colony event can boost some earnings
     const t = Math.floor(R.treasuryOn(ch.meta, ch.today)), paid = Math.max(0, Math.min(want, t));
     if (paid) { c.coins_base += paid; treasuryAdd(ch, -paid); } ch.touch(c); await ch.saveCitizen(c);
     if (stat) await bump(ch, c.id, { [stat]: 1, earned: paid });
@@ -51,6 +53,7 @@ export class Earn {
   }
   async save(ch, c, e) { await ch.q('update citizens set earn = $2 where id = $1', [c.id, JSON.stringify(e)]); }
   async go(ch, c, b, until) { if (b && this.world.actions) await this.world.actions.setVisit(ch, c, b, until); }
+  async event() { return this.world.cevents ? this.world.cevents.kindNow() : null; }
   salary(job) { return BUILDING_TYPES[job?.type]?.work?.salary || 0; }
 
   // Everything the Earn tab shows.
@@ -61,7 +64,7 @@ export class Earn {
     const job = c.job_id ? (await pool.query('select id, type, name from buildings where id = $1', [c.job_id])).rows[0] : null;
     const water = Number((await pool.query('select count(*) n from water')).rows[0].n) > 0;
     const park = await this.parkNear(pool, c.hx ?? 0, c.hy ?? 0), landing = (await pool.query("select id, name from buildings where type = 'landing' and done and not ruin limit 1")).rows[0];
-    const today = this.world.meta ? R.gameDay(now, this.world.meta.epoch) : 0;
+    const today = this.world.meta ? R.gameDay(now, this.world.meta.epoch) : 0, ev = this.world.cevents ? await this.world.cevents.current() : null;
     return {
       housed: !!c.home_id, now, resetsAt: (day() + 1) * 86400000, salary: this.salary(job), net: Number(c.net || 0), coins: R.balanceOn(c.coins_base, c.coins_day, c.net, today),
       shift: { job: job ? (job.name || BUILDING_TYPES[job.type]?.name) : null, pay: this.salary(job) * EARN.shift.mult, left: EARN.shift.perDay - e.shifts, readyAt: (e.shiftAt || 0) + EARN.shift.cooldown },
@@ -69,7 +72,7 @@ export class Earn {
       fishing: { ok: water, left: EARN.catch.perDay - e.catches, cast: e.cast ? { kind: e.cast.kind, at: e.cast.at } : null },
       foraging: { ok: !!park, where: park ? (park.name || BUILDING_TYPES[park.type]?.name) : null, left: EARN.catch.perDay - e.catches },
       scavenge: { ok: !!landing, left: EARN.scavenge.perDay - e.scavDone, readyAt: (e.scavAt || 0) + EARN.scavenge.cooldown, active: e.scav },
-      loot: LOOT, limits: EARN,
+      loot: LOOT, limits: EARN, event: ev, supply: ev?.kind === 'supply' ? { left: ev.data.left || 0, claimed: (ev.data.claimed || []).includes(c.id) } : null,
     };
   }
   async parkNear(db, x, y) {
@@ -143,10 +146,12 @@ export class Earn {
       const { c, hx, hy } = await this.lock(ch, id), e = this.stateOf(c), now = Date.now();
       if (e.catches >= EARN.catch.perDay) throw new HttpError(429, `You've brought in ${EARN.catch.perDay} catches today. The market's full until tomorrow.`);
       if (now - (e.castAt || 0) < EARN.catch.gap) throw new HttpError(429, 'Catch your breath for a moment.');
+      const ev = await this.event(); if (ev === 'storm') throw new HttpError(409, "It's far too stormy to go out there. Try a delivery instead: they pay extra in a storm.");
       let spot = null;
       if (kind === 'fish') { if (!(await ch.q('select 1 from water limit 1')).rowCount) throw new HttpError(409, 'The colony has no water to fish in yet.'); spot = await this.parkNear(ch, hx, hy); }
       else { spot = await this.parkNear(ch, hx, hy); if (!spot) throw new HttpError(409, 'There are no parks or gardens to forage in yet.'); }
-      e.cast = { kind, at: now, bite: now + EARN.catch.biteMin + rnd(EARN.catch.biteMax - EARN.catch.biteMin) }; e.castAt = now;
+      const fast = ev === 'frenzy' && kind === 'fish', lo = fast ? 1200 : EARN.catch.biteMin, hi = fast ? 3500 : EARN.catch.biteMax;
+      e.cast = { kind, at: now, bite: now + lo + rnd(hi - lo) }; e.castAt = now;
       if (spot) await this.go(ch, c, spot, now + 5 * MIN);
       await this.save(ch, c, e);
       return { ok: true, kind, at: now, biteIn: e.cast.bite - now }; // the browser shows the bite when it comes
@@ -173,10 +178,11 @@ export class Earn {
       if (action === 'start') {
         if (e.scav) throw new HttpError(409, "You're already searching.");
         if (e.scavDone >= EARN.scavenge.perDay) throw new HttpError(429, "You've searched the wreckage enough for one day.");
-        if (now < (e.scavAt || 0) + EARN.scavenge.cooldown) throw new HttpError(429, `Others are picking over it right now. Try again in ${Math.ceil(((e.scavAt || 0) + EARN.scavenge.cooldown - now) / MIN)} min.`);
+        const meteor = (await this.event()) === 'meteor';
+        if (!meteor && now < (e.scavAt || 0) + EARN.scavenge.cooldown) throw new HttpError(429, `Others are picking over it right now. Try again in ${Math.ceil(((e.scavAt || 0) + EARN.scavenge.cooldown - now) / MIN)} min.`);
         const land = (await ch.q("select * from buildings where type = 'landing' and done and not ruin limit 1")).rows[0];
         if (!land) throw new HttpError(409, "There's no landing station to search around.");
-        e.scav = { at: now, until: now + EARN.scavenge.length }; e.scavAt = now;
+        e.scav = { at: now, until: now + EARN.scavenge.length / (meteor ? 2 : 1) }; e.scavAt = meteor ? 0 : now;
         await this.go(ch, c, land, e.scav.until + MIN); await this.save(ch, c, e);
         return { ok: true, scav: e.scav };
       }

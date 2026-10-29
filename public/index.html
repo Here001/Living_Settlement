@@ -93,6 +93,9 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .coin{width:18px;height:18px;border-radius:50%;background:var(--gold);border:1.5px solid #2B2621;box-shadow:inset 0 0 0 2.5px #F4D57A}
 .chip button{border:0;background:none;padding:0;display:flex;align-items:center;gap:6px;font-weight:600}
 .mi{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:10px;border:1.5px solid #2B2621}
+.cevent{position:fixed;z-index:5;top:calc(env(safe-area-inset-top,0px) + 152px);left:10px;display:flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;font:inherit;font-size:13px;cursor:pointer;animation:cepulse 2.4s ease-in-out infinite;max-width:calc(100% - 20px);white-space:nowrap;overflow:hidden}
+.cevent #ceIcon{font-size:17px}.cevent #ceShort{opacity:.8}.cevent .cetime{font-variant-numeric:tabular-nums;font-weight:700;color:#b4492c}
+@keyframes cepulse{0%,100%{box-shadow:0 0 0 0 rgba(226,177,60,.0)}50%{box-shadow:0 0 0 5px rgba(226,177,60,.35)}}
 .news{position:fixed;z-index:5;top:calc(env(safe-area-inset-top,0px) + 108px);left:10px;max-width:min(560px,calc(100% - 20px));text-align:left;padding:5px 14px 8px;display:flex;flex-direction:column;font-family:'Newsreader',Georgia,'Times New Roman',serif}
 .news[hidden]{display:none}
 .news .kick{font-size:12px;color:var(--muted);font-family:'Bricolage Grotesque',system-ui,sans-serif}
@@ -231,6 +234,8 @@ body.pane-max .composer textarea{height:70px}
 .dmmenu{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:4px 11px 8px}.dmmenu .hint{flex-basis:100%;font-size:11.5px}
 .dmshut{justify-content:center;font-size:13px;padding:10px 11px 12px}.blkrow{display:flex;justify-content:space-between;align-items:center;padding:6px 2px;border-bottom:1px solid var(--glass-line,rgba(0,0,0,.08));font-size:13px}
 .card .x.shr{font-size:17px}
+.evadmin{margin:0 11px 6px}.evadmin summary{cursor:pointer;font-weight:600;font-size:13px}.evadmin .pill{cursor:pointer;border:1.4px solid var(--ink,#2B2621);background:transparent;padding:4px 10px;border-radius:999px;font:inherit;font-size:12.5px}
+.eevent{padding:9px 11px;border-radius:12px;background:linear-gradient(135deg,rgba(226,177,60,.25),rgba(217,113,74,.18));display:flex;flex-direction:column;gap:5px;margin-bottom:6px}.eevent .btn{align-self:flex-start}
 .earn .esec{padding:10px 0;border-top:1px solid var(--glass-line,rgba(0,0,0,.08));display:flex;flex-direction:column;gap:6px}.earn .ehead{display:flex;gap:10px;align-items:flex-start}
 .earn .eicon{font-size:22px;line-height:1.2;flex:none}.earn .ehead .hint{font-size:12.5px}.earn .esec>.btn,.earn .esec>.row-actions{align-self:flex-start}
 .egig{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,.35);border:1px solid var(--glass-line,rgba(0,0,0,.08))}.egig.on{background:rgba(217,113,74,.14)}
@@ -385,6 +390,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 #wxIcon{font-size:13px!important}
 .clock{flex:none;min-width:0;padding:4px 10px;border-radius:14px}
 .clock .time{font-size:16px}
+.cevent{top:calc(env(safe-area-inset-top,0px) + 92px)}
 .news{top:calc(env(safe-area-inset-top,0px) + 52px);flex-direction:row;align-items:baseline;gap:8px;padding:3px 12px 4px;border-radius:12px;max-width:min(520px,calc(100% - 20px))}
 .news .kick{font-size:11px;white-space:nowrap}
 .news .head{font-size:13px}
@@ -504,6 +510,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
   </button>
 </header>
 <button class="news inked" id="news" hidden><span class="kick" id="newsKick"></span><span class="head" id="newsText"></span></button>
+<button class="cevent inked" id="cevent" hidden><span id="ceIcon"></span><b id="ceName"></b><span id="ceShort"></span><span class="cetime" id="ceTime"></span></button>
 <div class="toast" id="toast" hidden><span id="toastMsg"></span><button id="toastBtn" hidden>Undo</button></div>
 <div class="viewbtns" id="viewBtns">
   <button class="vbtn" id="undoBtn" aria-label="Undo" title="Undo (Ctrl+Z)" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
@@ -615,6 +622,7 @@ function applyOp(o){
   case 'chatPin': { const m=S.chat.find(x=>x.id===o.id); if(m){ m.p=o.pinned?1:0; feedDirty=true; renderFeed(); } break; }
   case 'chatGone': S.chat=S.chat.filter(m=>m.id!==o.id); feedDirty=true; renderFeed(); break;
   case 'reports': Reports.soon(); break;
+  case 'cevent': CEvent.set(o.data, true); break;
   case 'reset': location.reload(); break;
   case 'event': S.events.unshift(o.data); if(S.events.length>300) S.events.length=300; feedDirty=true; newsSoon(); break; } }
 let newsTimer=null; const newsSoon=()=>{ if(!newsTimer) newsTimer=setTimeout(()=>{ newsTimer=null; updateNews(); },300); }; // a burst of news updates the ticker once
@@ -661,7 +669,7 @@ function connect(){
   ws.onerror=()=>{ try{ me.close(); }catch(e){} };
   ws.onmessage=e=>{ lastMsgAt=Date.now(); let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
     if(m.type==='hello'){ S.meta=m.meta; skew=m.serverNow-Date.now();
-      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); Chats.load(); Daily.load(); buildToolbar(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
+      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); Chats.load(); Daily.load(); CEvent.load(); buildToolbar(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
     else if(m.type==='ops'){ opBatch++; try{ for(const o of m.ops){ try{ applyOp(o); }catch(err){ console.error('Skipped an update:', err); } } } finally { opBatch--; } if(!opBatch&&batchChanged){ batchChanged=false; changed(); } }
     else if(m.type==='resync') reloadAll();
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
@@ -2241,7 +2249,7 @@ function renderPane(){
   const p=$('pane'); if(!activeTab){ p.hidden=true; return; } p.hidden=false; p.innerHTML='';
   if(activeTab==='feed'){
     const seg=el('div',{class:'seg',role:'tablist'}); for(const [id,nm] of [['posts','Posts'],['log','Daily log'],['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
-    p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
+    p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); if(feedMode==='posts'&&Store.canWrite) p.append(eventAdmin()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
   if(activeTab==='chats'){ Chats.render(p); return; }
   if(activeTab==='reports'){ Reports.render(p); return; }
   if(activeTab==='top'){ Top.render(p); return; }
@@ -2350,6 +2358,24 @@ document.getElementById('card').addEventListener('input',e=>{ if(e.target&&e.tar
 // ---- Chats: private messages between verified colonists, delivered live ----
 const ago = t => { const s=Math.max(0,(Date.now()+skew-t)/1000); return s<90?'just now':s<3600?`${Math.round(s/60)} min ago`:s<86400?`${Math.round(s/3600)} h ago`:`${Math.round(s/86400)} days ago`; };
 const hhmm = t => { const d=new Date(t); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
+// The developer starts a colony event now (or ends the one that's on). They also start by themselves every 2–4 hours.
+const EVENT_KINDS=[['festival','🎉 Festival'],['frenzy','🐟 Fishing frenzy'],['meteor','☄️ Meteor shower'],['storm','⛈️ Great storm'],['crimewave','🦹 Crime wave'],['supply','📦 Supply drop']];
+function eventAdmin(){ const d=el('details',{class:'authbox evadmin'}, el('summary',{text:CEvent.ev?`⚡ Colony event: ${CEvent.ev.name} is on`:'⚡ Start a colony event'}));
+  const row=el('div',{class:'cpicks'}); for(const [k,nm] of EVENT_KINDS) row.append(el('button',{class:'pill',text:nm,onclick:async()=>{ try{ const r=await api('/api/admin/colony-event',{method:'POST',body:{kind:k}}); toast(`${r.icon} ${r.name} started for ${Math.round((r.end-r.start)/60000)} minutes.`); }catch(e){ toast(e.message); } }}));
+  d.append(el('p',{class:'hint',text:'Events also start by themselves every 2–4 hours. Starting one replaces any that is on.'}), row);
+  if(CEvent.ev) d.append(el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:'End it now',onclick:async()=>{ try{ await api('/api/admin/colony-event',{method:'DELETE'}); toast('Event ended.'); }catch(e){ toast(e.message); } }})));
+  return d; }
+// ---- Colony events: a banner while one is on (tap it to go and make the most of it) ----
+var CEvent={ ev:null, skew:0,
+  async load(){ try{ this.set((await api('/api/colony-event')).event); }catch(e){} },
+  set(ev, live){ const was=this.ev; this.ev=ev&&ev.end>Date.now()+skew?ev:null; this.show();
+    if(live&&this.ev&&(!was||was.id!==this.ev.id)) toast(`${this.ev.icon} ${this.ev.name}! ${this.ev.text}`,'Go',()=>this.go());
+    Earn.at=0; if(actTab==='earn'&&sel) Earn.load(true); },
+  show(){ const b=$('cevent'), E=this.ev; if(!b) return; b.hidden=!E; if(!E) return; $('ceIcon').textContent=E.icon; $('ceName').textContent=E.name; $('ceShort').textContent='· '+E.short+(E.kind==='supply'&&E.data&&E.data.left!=null?` (${E.data.left} left)`:''); this.tick(); },
+  tick(){ const E=this.ev; if(!E) return; const ms=E.end-(Date.now()+skew); if(ms<=0){ this.ev=null; this.show(); return; } const t=$('ceTime'); if(t) t.textContent=`${Math.floor(ms/60000)}:${String(Math.floor(ms%60000/1000)).padStart(2,'0')}`; },
+  go(){ const E=this.ev; if(!E) return; if(Me&&Me.token){ if(E.kind==='crimewave') openMyTab('crime'); else openMyTab('earn','.earn'); } else toast(`${E.icon} ${E.name}: ${E.text} Sign in to your colonist to join in.`); } };
+setInterval(()=>CEvent.tick(),1000);
+$('cevent').addEventListener('click',()=>CEvent.go());
 // ---- Earn: every way to make coins, with the ones you can do right now ----
 var Earn={ data:null, at:0, loading:false, skew:0, busy:false, msg:null, cast:null,
   async load(force){ if(!(Me&&Me.token)||this.loading) return; if(!force&&this.data&&Date.now()-this.at<15000) return; this.loading=true;
@@ -2374,8 +2400,9 @@ var Earn={ data:null, at:0, loading:false, skew:0, busy:false, msg:null, cast:nu
   panel(c){ const box=el('div',{class:'authbox earn'}); this.load(); const D0=this.data;
     box.append(el('h3',{text:'💰 Ways to earn'}));
     if(!D0){ box.append(el('p',{class:'hint',text:'Loading…'})); return box; }
+    const B=this.busy, EV=D0.event; if(EV&&EV.end>this.now()) box.append(el('div',{class:'eevent'}, el('b',null,`${EV.icon} ${EV.name} `,el('span',{class:'cdown','data-until':EV.end,text:this.left(EV.end)})), el('div',{class:'hint',text:EV.text}),
+      D0.supply?(D0.supply.claimed?el('p',{class:'hint',text:'You claimed your share. 📦'}):D0.supply.left>0&&D0.housed?el('button',{class:'btn primary',text:B?'…':`📦 Claim supplies (${D0.supply.left} left)`,disabled:B,onclick:()=>this.act('/api/me/earn/supply',{},r=>toast(this.paidText(r,'📦 Supplies claimed')))}):el('p',{class:'hint',text:'All claimed. Be quicker next time!'})):''));
     if(!D0.housed){ box.append(el('p',{class:'hint',text:"You're still in cryosleep aboard the ark. Once you wake up and get a home, you can work, do deliveries, fish and more."})); }
-    const B=this.busy;
     // 1. Job
     box.append(this.section('💼','Your job',D0.salary?`Pays ${fmt(D0.salary)} coins a game day (every 30 minutes), automatically. Rent comes out of it.`:'A job pays you automatically every game day (every 30 minutes). It\'s the steadiest income.',
       D0.salary?'':el('button',{class:'btn primary',text:'Find a job',onclick:()=>{ actTab='work'; renderCard(true); }})));

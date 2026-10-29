@@ -170,6 +170,8 @@ const MIGRATIONS = [
   `alter table citizens add column casino_game jsonb;`,
   // v29: extra ways to earn (shifts, deliveries, fishing, foraging, scavenging): each colonist's progress today
   `alter table citizens add column earn jsonb;`,
+  // v30: colony events (festival, fishing frenzy, meteor shower, storm, crime wave, supply drop)
+  `create table colony_events (id serial primary key, kind text not null, started_at bigint not null, ends_at bigint not null, data jsonb, ended boolean not null default false);`,
 ];
 
 export async function migrate() {

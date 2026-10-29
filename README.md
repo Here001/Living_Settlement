@@ -160,6 +160,23 @@ These live on a signed-in colonist's own card, under **Home**, **Bank** and **Ca
 - **Limits.** Messages are up to 500 characters, with a short pause between sends. The last 500 messages of each chat are kept.
 - **Online status.** A colonist is online while they're signed in with the colony open. Verified colonists show a green dot and "● Online now" or "Last seen 5 min ago" on their card, in the Colonists list and in chats.
 
+## Colony events
+
+- **When.** Something happens in the colony every 2–4 real hours, never two at once (`shared/events.js`, `server/colonyevents.js`). The first comes 20 minutes after the server starts.
+- **What happens when one starts.**
+  - It's announced in the Colony Log.
+  - Everyone gets a pop-up with **Go**.
+  - A pulsing banner under the news ticker shows the event and a countdown; tapping it opens the Earn tab (the Crime tab for a crime wave).
+  - When it's over, the Colony Log says so.
+- **The events:**
+  - 🎉 **Festival** (30 min): shifts, deliveries, fishing, foraging and scavenging all pay 1.5×.
+  - 🐟 **Fishing frenzy** (25 min, needs water): bites come in 1–3½ s instead of 2½–7½ s, and catches pay 2×.
+  - ☄️ **Meteor shower** (25 min, needs the landing station): searches take 1 minute with no wait between them, and finds pay 2×.
+  - ⛈️ **Great storm** (20 min): storm weather, so no fishing or foraging, but deliveries pay 1.5× hazard money. The weather goes back to how it was afterwards.
+  - 🦹 **Crime wave** (20 min): crimes succeed 15% more often.
+  - 📦 **Supply drop** (15 min, needs the landing station): the first 15 colonists to tap **Claim supplies** in the Earn tab get 100–300 coins each (from the treasury).
+- **Developer controls.** In developer mode, **⚡ Start a colony event** in the Town Square starts any of them now (replacing one that's on) or ends the current one.
+
 ## Ways to earn
 
 - **Where.** The **💰 Earn** tab, the first tab on your own card, lists every way to make coins and lets you do the active ones right there (`server/earn.js`).

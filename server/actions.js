@@ -78,7 +78,8 @@ export class Actions {
         if (!shop) throw new HttpError(409, 'There are no shops to rob.');
         px = shop.x; py = shop.y; loot = Math.max(1, Math.min(R.treasuryOn(ch.meta, ch.today), Math.floor(60 + rand() * 340)));
       }
-      const police = await this.policeNear(ch, px, py), chance = Math.max(0.15, (kind === 'rob' ? 0.4 : 0.55) - 0.12 * Math.min(3, police));
+      const wave = this.world.cevents && (await this.world.cevents.kindNow()) === 'crimewave' ? 0.15 : 0; // a crime wave: thieves get away more often
+      const police = await this.policeNear(ch, px, py), chance = Math.min(0.9, Math.max(0.15, (kind === 'rob' ? 0.4 : 0.55) - 0.12 * Math.min(3, police)) + wave);
       await ch.q('update citizens set crime_at = $2 where id = $1', [c.id, now]);
       ch.coins(c);
       if (rand() < chance) {

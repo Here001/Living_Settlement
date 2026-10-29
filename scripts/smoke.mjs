@@ -650,6 +650,41 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     // Daily limits
     await pool.query(`update citizens set earn = jsonb_set(earn, '{shifts}', '4'), stats = stats where id = $1`, [zid]); await pool.query(`update citizens set earn = jsonb_set(earn, '{shiftAt}', '0') where id = $1`, [zid]);
     ok((await call('POST', '/api/me/earn/shift', {}, P)).status === 429, 'four extra shifts a day at most'); }
+  // ---- colony events ----
+  { const sleep = ms => new Promise(r => setTimeout(r, ms)), zid = (await whoDev('zara_ng')).id, meta = async () => (await call('GET', '/api/meta', undefined, { auth: false })).json;
+    ok((await call('GET', '/api/colony-event', undefined, { auth: false })).json.event === null, 'no colony event to begin with');
+    ok((await call('POST', '/api/admin/colony-event', { kind: 'festival' }, { auth: false })).status === 401, 'only the developer starts events');
+    ok((await call('POST', '/api/admin/colony-event', { kind: 'party' })).status === 400, 'unknown events are refused');
+    const fe = (await call('POST', '/api/admin/colony-event', { kind: 'festival' })).json;
+    ok(fe.kind === 'festival' && fe.end - fe.start === 30 * 60000, 'the developer starts a festival (30 minutes)', JSON.stringify(fe));
+    ok((await call('GET', '/api/colony-event', undefined, { auth: false })).json.event?.kind === 'festival', 'everyone can see it');
+    await sleep(2100); ok(((await meta()).events || []).some(e => e.kind === 'cevent' && /Festival!/.test(e.text)), 'it is announced in the Colony Log');
+    await pool.query("update citizens set earn = null, coins_base = 0, net = 0, coins_day = 0 where id = $1", [zid]);
+    const E = (await call('GET', '/api/me/earn', undefined, P)).json, sh = await call('POST', '/api/me/earn/shift', {}, P);
+    ok(E.event?.kind === 'festival' && sh.json.paid === Math.round(E.shift.pay * 1.5), 'during a festival a shift pays 1.5×', `${E.shift.pay} → ${sh.json.paid}`);
+    // Storm: no fishing, weather pinned, then put back
+    await call('PUT', '/api/admin/weather', { kind: 'fog' });
+    await call('POST', '/api/admin/colony-event', { kind: 'storm' });
+    ok((await call('GET', '/api/colony-event', undefined, { auth: false })).json.event?.kind === 'storm', 'starting another event replaces the first');
+    ok((await meta()).meta.weather === 'storm', 'a great storm brings storm weather');
+    const fs = await call('POST', '/api/me/earn/catch', { kind: 'fish' }, P); ok(fs.status === 409 && /stormy/.test(fs.json.error), "it's too stormy to fish");
+    await call('DELETE', '/api/admin/colony-event');
+    ok((await call('GET', '/api/colony-event', undefined, { auth: false })).json.event === null && (await meta()).meta.weather === 'fog', 'when it ends, the weather goes back to how it was');
+    await call('PUT', '/api/admin/weather', { kind: null });
+    // Fishing frenzy: bites come quickly
+    await call('POST', '/api/admin/colony-event', { kind: 'frenzy' });
+    await pool.query(`update citizens set earn = jsonb_set(coalesce(earn, '{}'), '{castAt}', '0') where id = $1`, [zid]);
+    const fc = (await call('POST', '/api/me/earn/catch', { kind: 'fish' }, P)).json; ok(fc.biteIn >= 1200 && fc.biteIn <= 3500, 'in a fishing frenzy the bites come fast', JSON.stringify(fc));
+    await call('POST', '/api/me/earn/catch', { action: 'reel' }, P);
+    // Supply drop: first come, first served, once each
+    await call('POST', '/api/admin/colony-event', { kind: 'supply' });
+    await pool.query("update colony_events set data = jsonb_set(data, '{left}', '1') where not ended");
+    const c0 = (await whoDev('zara_ng')).coins, sp = await call('POST', '/api/me/earn/supply', {}, P);
+    ok(sp.status === 200 && sp.json.paid >= 100 && sp.json.paid <= 300 && (await whoDev('zara_ng')).coins === c0 + sp.json.paid, `claiming the supply drop pays ${sp.json.paid}`, JSON.stringify(sp.json));
+    ok((await call('POST', '/api/me/earn/supply', {}, P)).status === 409, 'once each');
+    ok((await call('GET', '/api/colony-event', undefined, { auth: false })).json.event.data.left === 0, 'and the supplies run out');
+    await call('DELETE', '/api/admin/colony-event');
+    ok((await call('POST', '/api/me/earn/supply', {}, P)).status === 409, 'no supply drop, nothing to claim'); }
   // ---- badges ----
   { const sleep = ms => new Promise(r => setTimeout(r, ms)), zid = (await whoDev('zara_ng')).id;
     ok((await call('GET', '/api/me/badges', undefined, { auth: false })).status === 401, 'badges are for signed-in colonists');

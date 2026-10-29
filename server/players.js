@@ -192,6 +192,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/earn/gig', limit, send(async req => { const b = req.body || {}, id = (await me(req)).id;
     return b.action === 'take' ? world.earn.takeGig(id, String(b.id || '')) : b.action === 'deliver' ? world.earn.deliver(id) : b.action === 'drop' ? world.earn.dropGig(id) : Promise.reject(new HttpError(400, 'Take, deliver or drop.')); }));
   r.post('/me/earn/catch', limit, send(async req => { const b = req.body || {}, id = (await me(req)).id; return b.action === 'reel' ? world.earn.reel(id) : world.earn.cast(id, String(b.kind || '')); }));
+  r.post('/me/earn/supply', limit, send(async req => world.cevents.claimSupply((await me(req)).id, world.earn)));
   r.post('/me/earn/scavenge', limit, send(async req => world.earn.scavenge((await me(req)).id, String((req.body || {}).action || ''))));
   // Table games: Blackjack (deal / hit / stand / double) and Rocket (launch / cashout / status).
   const lastMove = new Map();

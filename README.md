@@ -99,6 +99,35 @@ They comment it on any of your Instagram posts **from their own account**. After
 - **Visits.** While playing, and for 10 minutes after their last bet, the colonist is inside the Casino for everyone to see.
 - **Announcements.** Big wins (200+ coins of profit, or 20×+ on a small bet) go in the Colony Log.
 
+## Your own card: Work · Go out · Casino · Crime · Pet
+
+A signed-in colonist with a home sees these on their own card. They see one at a time.
+
+- **Go out.** Send your colonist to a park, shop, café, landmark or a friend's home for 4 game hours (about 5 real minutes). Everyone sees them there. Other colonists' cards have **Visit their home** too.
+- **Crime.** Crimes can be tried once every 10 minutes.
+  - **Pickpocket:** steal 10–25% of a colonist's coins, up to 300. Other colonists' cards have **Pick their pocket**.
+  - **Rob the nearest shop:** 60–400 coins from the till, which the treasury pays.
+  - **Chances:** 55% for a pickpocket and 40% for a robbery. Each Police station within 40 tiles cuts that by 12 points, to no lower than 15%.
+  - **Getting caught:** a fine of twice the amount they tried to take, at least 25, which goes to the treasury.
+  - **Jail:** if the colony has a Jail, 10 minutes in it, seen inside. A jailed colonist can't gamble, bet, go out, adopt or commit crimes.
+  - **News:** successes are reported anonymously in the Colony Log; arrests name the culprit.
+- **Pet.** Adopt one of the six native creatures for 200 coins, name it, and it walks beside you on the map. You can rename it or let it go.
+
+## Creature races
+
+- **The creatures.** Six native creatures race: Starcrest, Dustrunner, Skyskimmer, Mudgulper, Ironshell and Glimmerhop (`shared/creatures.js`). Each has a speed, a level of unpredictability, and likes and dislikes for the weather.
+- **When.** While the colony has a finished **Racetrack** (Parks → Sports), a race runs every 30 real minutes, on the hour and half hour.
+- **Announcement.** The Colony Log announces each race **2½ minutes before it starts**, and everyone watching gets a pop-up.
+- **Betting.** Signed-in colonists open the **Races** tab and place one bet per race until the gates close. The odds come from form and the weather at race time, and the house keeps about 10%.
+- **The race.** The server decides the result when the gates open. Everyone watches the same ~45 s race, in the tab and on the track itself. Winners are paid at the finish, and the Colony Log names the winner.
+- **Cups.** In developer mode, **Make the next race a Cup** adds a bonus from the treasury, shared by everyone who backs the winner. If nobody does, it goes back to the treasury.
+
+## Lottery
+
+- **Starting one.** In developer mode, open the Races tab and use **Start a lottery**: choose when it's drawn (5 minutes to 24 hours), the ticket price, and an optional bonus from the treasury.
+- **Tickets.** Colonists buy up to 10 tickets each.
+- **The draw.** It's announced 2½ minutes before it happens. One ticket wins the whole pot: every ticket's price plus the bonus.
+
 ## Run it on your computer
 
 With Docker: `docker compose up --build`, then open http://localhost:3000/#builder (token `local-dev-token-please-change`).

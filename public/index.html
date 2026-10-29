@@ -190,6 +190,7 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .uname{margin:0;color:var(--muted);font-size:13px;font-weight:500}
 .namebox{margin-top:10px;display:flex;flex-direction:column;gap:4px}
 .namebox label{font-size:12px;font-weight:700;color:var(--muted)}
+.lotto{background:rgba(242,179,61,.12)}.lotto summary,.authbox summary{cursor:pointer;font-weight:700}
 .acttabs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .acttabs .pill,.authbox .pill{cursor:pointer;border:1.4px solid var(--ink,#2B2621);background:transparent;padding:5px 11px;border-radius:999px;font:inherit;font-size:13px}
 .acttabs .pill.on{background:var(--accent,#D9714A);color:#fff;border-color:var(--accent,#D9714A)}
@@ -235,7 +236,9 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .card dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:10px 0 0;font-size:14px}
 .card dt{color:var(--muted)}
 .card dd{margin:0}
-.card .x{position:absolute;top:8px;right:8px}
+/* the card never grows past the screen: it scrolls inside, and its close button stays pinned at the top */
+#card{max-height:min(70vh, calc(100vh - 210px));max-height:min(70dvh, calc(100dvh - 210px));overflow-y:auto;overscroll-behavior:contain}
+.card .x{position:sticky;top:0;float:right;margin:-4px -6px 0 6px;z-index:2}
 .badge{display:inline-block;font-size:11px;font-weight:600;background:var(--gold);color:#2B2621;border-radius:999px;padding:1px 8px;vertical-align:3px;margin-left:6px}
 .row-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .toolchip{align-self:center;width:auto!important;background:#2B2621;color:#FBF8F1;border-radius:999px;padding:6px 6px 6px 14px;display:flex;gap:10px;align-items:center;box-shadow:var(--shadow);font-size:14px}
@@ -420,6 +423,7 @@ function applyOp(o){
   switch(o.op){
   case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&!PLAYER_TABS.has(activeTab)) renderPane(); break;
   case 'race': raceSoon(o.data); break;
+  case 'lottery': lotterySoon(o.data); break;
   case 'building': putBuilding(o.data); changed(); break;
   case 'removeBuilding': { const b=S.buildings.get(o.id); if(b && ck(b.cx,b.cy)===o.chunks[0]){ S.chunks.get(o.chunks[0])?.buildings.delete(o.id); S.buildings.delete(o.id); changed(); } break; }
   case 'roads': { const slot=S.chunks.get(o.chunks[0]); for(const k in o.set){ S.roads.set(k,o.set[k]); slot?.roads.add(k); } for(const k of o.remove){ S.roads.delete(k); slot?.roads.delete(k); } changed(); break; }
@@ -478,7 +482,7 @@ function connect(){
   ws.onerror=()=>{ try{ me.close(); }catch(e){} };
   ws.onmessage=e=>{ lastMsgAt=Date.now(); let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
     if(m.type==='hello'){ S.meta=m.meta; skew=m.serverNow-Date.now();
-      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
+      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
     else if(m.type==='ops'){ opBatch++; try{ for(const o of m.ops){ try{ applyOp(o); }catch(err){ console.error('Skipped an update:', err); } } } finally { opBatch--; } if(!opBatch&&batchChanged){ batchChanged=false; changed(); } }
     else if(m.type==='resync') reloadAll();
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now(); };
@@ -2042,6 +2046,8 @@ function renderPane(){
 }
 
 const detail=new Map(), detailLoading=new Set();
+// The card was loaded before signing in (coins are private then): fetch it again, once, now that the owner can see them.
+function coinsReload(c){ if(detailLoading.has(c.id)) return; detailLoading.add(c.id); loadDetail(c.handle).finally(()=>{ detailLoading.delete(c.id); if(sel&&sel.id===c.id&&typeof (detail.get(c.id)||{}).coins==='number') renderCard(true); }); }
 async function loadDetail(handle){ try{ const d=await api('/api/citizens/'+encodeURIComponent(handle)); detail.set(d.id,d); return d; }catch(e){ toast(e.message); return null; } }
 function selectCitizen(id){ const c=S.citizens.get(id); if(!c) return; if(auth&&auth.handle!==c.handle&&!auth.claimId) auth=null; sel={kind:'c',id,handle:c.handle}; follow=id; renderCard(); loadDetail(c.handle).then(()=>{ if(sel&&sel.id===id) renderCard(); }); }
 // Find anyone by name: residents fly the camera to their home; Outskirts residents show their place in the queue.
@@ -2102,13 +2108,35 @@ const Race={ info:null, skew:0, pick:null, amount:10, busy:false, loadAt:0, toas
 const raceNow = () => Date.now()+Race.skew;
 let raceTimer=null;
 function raceSoon(d){ clearTimeout(raceTimer); raceTimer=setTimeout(()=>loadRace(d),400); }
+// ---- The lottery (shown at the top of the Races tab while one is running) ----
+const Lotto={ info:null, count:1, busy:false, toastId:0 };
+let lottoTimer=null;
+function lotterySoon(d){ clearTimeout(lottoTimer); lottoTimer=setTimeout(()=>loadLottery(d),400); }
+async function loadLottery(d){ try{ Lotto.info=await api('/api/lottery'); }catch(e){ return; } const L=Lotto.info.lottery;
+  if(d&&L&&d.stage==='announced'&&Lotto.toastId!==L.id){ Lotto.toastId=L.id; toast(`🎟️ The lottery draw is in 2 minutes! Prize: ${fmt(L.pot)} coins.`,'Tickets',()=>openTab('races')); }
+  if(d&&L&&d.stage==='open') toast(`🎟️ A lottery just opened. Tickets ${fmt(L.price)} coins.`,'Tickets',()=>openTab('races'));
+  if(d&&L&&d.stage==='drawn'&&L.winner) toast(Me&&Me.handle&&Me.handle.toLowerCase()===L.winner.toLowerCase()?`🎉 You won the lottery: ${fmt(L.prize)} coins!`:`🎉 @${L.winner} won the lottery: ${fmt(L.prize)} coins!`);
+  if(d&&d.stage==='drawn'&&Me&&Me.handle) loadMyMoney();
+  renderRaces(); }
+function lotteryBox(){ const L=Lotto.info&&Lotto.info.lottery; if(!L) return null; const box=el('div',{class:'authbox lotto'}, el('h3',{text:'🎟️ Lottery'}));
+  if(L.drawn){ box.append(el('p',{class:'jobnow',text:L.winner?`@${L.winner} won ${fmt(L.prize)} coins!`:'Nobody bought a ticket, so there was no draw.'})); return box; }
+  const left=L.drawAt-raceNow();
+  box.append(el('p',{class:'jobnow'}, 'Prize: ', el('b',{text:`${fmt(L.pot)} coins`}), ` · draw in `, el('span',{class:'rcount',id:'lottoCount',text:fmtLeft(left)})),
+    el('p',{class:'hint',text:`${fmt(L.tickets)} ticket${L.tickets===1?'':'s'} sold to ${fmt(L.players)} colonist${L.players===1?'':'s'}. Tickets cost ${fmt(L.price)} each; one ticket wins the whole pot${L.bonus?` (including ${fmt(L.bonus)} bonus coins)`:''}.`}));
+  if(!(Me&&Me.token)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist to buy tickets.'})); return box; }
+  if(L.mine) box.append(el('p',{class:'rmine',text:`You have ${L.mine} ticket${L.mine===1?'':'s'}: a ${Math.round(100*L.mine/Math.max(1,L.tickets))}% chance right now.`}));
+  const room=Lotto.info.max-L.mine; if(room<=0||left<=1000) return box;
+  const q=n=>el('button',{class:'pill'+(Lotto.count===n?' on':''),text:String(n),onclick:()=>{ Lotto.count=n; renderRaces(true); }});
+  box.append(el('div',{class:'cbet'}, el('span',{text:'Buy'}), ...[1,3,5,10].filter(n=>n<=room).map(q), el('button',{class:'btn primary',text:Lotto.busy?'Buying…':`Buy ${Math.min(Lotto.count,room)} for ${fmt(Math.min(Lotto.count,room)*L.price)}`,disabled:Lotto.busy,onclick:async()=>{
+    Lotto.busy=true; renderRaces(true); try{ const r=await api('/api/me/lottery',{method:'POST',body:{count:Math.min(Lotto.count,room)}}); toast(`You now have ${r.tickets} ticket${r.tickets===1?'':'s'}. Good luck!`); myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }catch(e){ toast(e.message); } Lotto.busy=false; loadLottery(); }})));
+  return box; }
 async function loadRace(d){ try{ const r=await api('/api/race'); Race.info=r; Race.skew=r.now-Date.now(); Race.loadAt=Date.now(); }catch(e){ return; }
   const nx=Race.info.next;
   // The call to the track, a couple of minutes before the gates open.
   if(nx && Race.info.track && Race.toastN!==nx.n){ const left=nx.start-raceNow(); if(left>0 && left<=Race.info.announce+5000){ Race.toastN=nx.n; toast(`🏁 Race #${nx.no} starts in ${Math.max(1,Math.floor(left/60000))} minute${left<120000?'':'s'}. Pick your creature!`,'Races',()=>openTab('races')); } }
   if(d&&d.stage==='settled'&&Race.info.last&&Race.info.last.result){ const w=CREATURES[Race.info.last.result.order[0]].name; if(activeTab!=='races') toast(`🏆 ${w} won Race #${Race.info.last.no}!`,'Results',()=>openTab('races')); }
   renderRaces(); }
-setInterval(()=>{ if(!document.hidden && Date.now()-Race.loadAt>60000) loadRace(); },10000);
+setInterval(()=>{ if(!document.hidden && Date.now()-Race.loadAt>60000){ loadRace(); loadLottery(); } },10000);
 // Where the race is now: each creature's share of the lap, eased so leaders pull away near the end.
 function raceProgress(r, id, el){ const tm=r.result.times[id], e=Math.max(0,el), i=CREATURE_IDS.indexOf(id);
   if(e>=tm) return 1; const f=e/tm; return Math.min(1, Math.max(0, f*f*(3-2*f)*0.15+f*0.85 + Math.sin(e*1.3+i*1.7)*0.008*(1-f))); }
@@ -2123,6 +2151,10 @@ function renderRaces(force){ const body=$('raceBody'); if(!body||activeTab!=='ra
   if(!force && body.contains(document.activeElement) && document.activeElement.tagName==='INPUT') return; // don't wipe a bet being typed
   const I=Race.info, hadLanes=!!$('raceLanes'), keep=body.scrollTop; body.innerHTML='';
   requestAnimationFrame(()=>{ body.scrollTop = $('raceLanes')&&!hadLanes ? 0 : keep; }); // jump up to the race when it starts
+  const lb=lotteryBox(); if(lb) body.append(lb);
+  if(Store.canWrite && !(Lotto.info&&Lotto.info.lottery&&!Lotto.info.lottery.drawn)){ const mi=el('input',{type:'number',min:'5',max:'1440',value:'60','aria-label':'Minutes until the draw'}), pi=el('input',{type:'number',min:'1',value:'10','aria-label':'Ticket price'}), bi=el('input',{type:'number',min:'0',value:'0','aria-label':'Bonus coins'});
+    body.append(el('details',{class:'authbox'}, el('summary',{text:'Start a lottery'}), el('div',{class:'cbet'}, el('span',{text:'Draw in (minutes)'}), mi), el('div',{class:'cbet'}, el('span',{text:'Ticket price'}), pi), el('div',{class:'cbet'}, el('span',{text:'Bonus from treasury'}), bi),
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Start the lottery',onclick:async()=>{ try{ await api('/api/admin/lottery',{method:'POST',body:{minutes:Number(mi.value),price:Number(pi.value),bonus:Number(bi.value)}}); toast('Lottery started.'); loadLottery(); }catch(e){ toast(e.message); } }})))); }
   if(!I){ body.append(el('p',{class:'hint',text:'Loading the races…'})); if(!Race.loadAt) loadRace(); return; }
   const live=liveRace();
   if(live && live.el<=I.len/1000+2){ const box=el('div',{class:'rlive'}, el('h3',{text:`Race #${live.r.no} is running!`}));
@@ -2155,6 +2187,7 @@ async function placeRaceBet(){ if(!Race.pick||Race.busy) return; Race.busy=true;
 function updateLanes(){ const L=$('raceLanes'), live=liveRace(); if(!L||!live) return; for(const im of L.querySelectorAll('img')){ const p=raceProgress(live.r, im.dataset.id, live.el); im.style.left=`calc(${(p*100).toFixed(1)}% - ${(p*30).toFixed(1)}px)`; } }
 setInterval(()=>{ if(document.hidden||activeTab!=='races'||!Race.info) return; updateLanes(); const c=$('raceCount'), nx=Race.info.next;
   if(c&&nx){ const left=nx.start-raceNow(); c.textContent=left>1000?`starts in ${fmtLeft(left)}`:'gates closed'; }
+  const lc=$('lottoCount'), L=Lotto.info&&Lotto.info.lottery; if(lc&&L) lc.textContent=fmtLeft(L.drawAt-raceNow());
   const live=liveRace(), lr=Race.info.last; if((nx&&raceNow()>=nx.start&&raceNow()<nx.start+3000) || (live&&!$('raceLanes')&&live.el<Race.info.len/1000) || (lr&&!lr.settled&&live&&live.el>Race.info.len/1000+3&&Date.now()-Race.loadAt>4000)) loadRace(); },250);
 function watchTrack(){ const t=Race.info&&Race.info.track&&D.buildings.get(Race.info.track.id); if(!t){ toast('The Racetrack is off-screen. Scroll to it on the map.'); return; } const [w,d]=T(t).size, p=iso(t.x+w/2,t.y+d/2); cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.4); follow=null; openTab(null); }
 // The track's oval in tile space; runners go once round, starting at the front straight.
@@ -2290,7 +2323,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       el('dt',{text:'Gender'}), el('dd',{text:c.gender==='f'?'Woman':'Man'}),
       el('dt',{text:'Home'}), el('dd',{text:h?nm(h):d&&d.queue?`None yet. Moves in when ${fmt(d.queue)} more ${d.queue===1?'home is':'homes are'} built`:'None yet'}),
       el('dt',{text:'Job'}), el('dd',{text:j?`${T(j).work.title} at ${nm(j)}`:h?'Looking for work':'Gets one after moving in'}),
-      ...((Store.canWrite||(Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase()))?[el('dt',{text:'Coins'}), el('dd',{text:d?(d.net?`${fmt(d.coins)}, ${d.net>0?'+':''}${d.net} per day`:`${fmt(d.coins)}, no job yet`):'…'})]:[]),
+      ...((Store.canWrite||(Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase()))?[el('dt',{text:'Coins'}), el('dd',{text:d&&typeof d.coins==='number'?(d.net?`${fmt(d.coins)}, ${d.net>0?'+':''}${d.net} per day`:`${fmt(d.coins)}, no job yet`):(coinsReload(c),'…')})]:[]),
       ...(c.pet&&CREATURES[c.pet.k]?[el('dt',{text:'Pet'}), el('dd',{text:`${c.pet.n}, a ${CREATURES[c.pet.k].name.toLowerCase()}`})]:[]),
       ...(d&&d.jailedUntil>Date.now()+skew?[el('dt',{text:'Status'}), el('dd',{text:`In jail for ${Math.max(1,Math.ceil((d.jailedUntil-Date.now()-skew)/60000))} more min`})]:[]),
       el('dt',{text:'Joined'}), el('dd',{text:`Day ${Math.max(1,Math.floor(gmAt(c.joinedAt)/1440)+1)}, arrival #${fmt(c.seq||0)}`})));

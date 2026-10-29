@@ -13,6 +13,7 @@ import { instagramRouter, igStatus, connectInstagram, loadIgStatus } from './ins
 import { playersRouter, sweepPlayers, playerFrom } from './players.js';
 import { Races } from './races.js';
 import { Actions } from './actions.js';
+import { Lottery } from './lottery.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -30,6 +31,7 @@ process.on('uncaughtException', e => { console.error('uncaught exception:', e); 
 const bus = createBus();
 const world = new World(bus);
 const races = new Races(world); world.races = races;
+const lottery = new Lottery(world); world.lottery = lottery;
 const actions = new Actions(world); world.actions = actions; world.blockedReason = c => actions.blockedReason(c);
 const app = express();
 app.disable('x-powered-by');
@@ -84,6 +86,8 @@ app.get('/api/citizens/:handle', limit, send(async req => {
 }));
 // ---------- creature races ----------
 app.get('/api/race', limit, send(async req => races.info((await playerFrom(req))?.id)));
+app.get('/api/lottery', limit, send(async req => lottery.info((await playerFrom(req))?.id)));
+app.post('/api/admin/lottery', admin, send(req => lottery.start(req.body || {})));
 app.post('/api/admin/race/cup', admin, send(req => races.setCup((req.body || {}).bonus, (req.body || {}).name)));
 app.get('/health', (req, res) => res.json({ ok: true, founded: !!world.meta, population: world.meta?.population || 0, viewers: wss?.clients.size || 0, bus: bus.kind, leader: isLeader }));
 
@@ -238,6 +242,7 @@ setInterval(drainLoop, 1000);
 let ticking = false; // never start a clock tick while the last one is still running (a slow database would pile them up)
 setInterval(async () => { if (!isLeader || ticking) return; ticking = true; try { await world.tick(); } catch (e) { console.error('tick failed:', e.message); } finally { ticking = false; } }, GAME_MIN_MS);
 setInterval(() => { if (isLeader) races.tick().catch(e => console.error('races:', e.message)); }, 2000); // announce, start and settle races
+setInterval(() => { if (isLeader) lottery.tick().catch(e => console.error('lottery:', e.message)); }, 2000); // announce and draw the lottery
 
 await migrate();
 await loadIgStatus();

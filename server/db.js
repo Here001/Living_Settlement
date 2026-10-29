@@ -125,6 +125,10 @@ const MIGRATIONS = [
    create index race_bets_n on race_bets (n); create index race_bets_citizen on race_bets (citizen_id, n);`,
   // v17: crime (last attempt, jail time) and pets
   `alter table citizens add column crime_at bigint, add column jailed_until bigint, add column pet jsonb;`,
+  // v18: the lottery
+  `create table lotteries (id serial primary key, draw_at bigint not null, price int not null, bonus int not null default 0, created_at bigint not null,
+     announced boolean not null default false, drawn boolean not null default false, winner text, prize int);
+   create table lottery_tickets (lottery_id int not null, citizen_id text not null, handle text not null, count int not null, primary key (lottery_id, citizen_id));`,
 ];
 
 export async function migrate() {

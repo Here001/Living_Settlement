@@ -12,6 +12,7 @@ import { createBus } from './bus.js';
 import { instagramRouter, igStatus, connectInstagram, loadIgStatus } from './instagram.js';
 import { playersRouter, sweepPlayers, playerFrom, playerByToken } from './players.js';
 import { Chat } from './chat.js';
+import { Achievements } from './achievements.js';
 import { Races } from './races.js';
 import { Actions } from './actions.js';
 import { Lottery } from './lottery.js';
@@ -38,6 +39,7 @@ const races = new Races(world); world.races = races;
 const lottery = new Lottery(world); world.lottery = lottery;
 const economy = new Economy(world); world.economy = economy;
 const chat = new Chat(bus); world.chat = chat;
+const achievements = new Achievements(world, bus); world.achievements = achievements;
 const actions = new Actions(world); world.actions = actions; world.blockedReason = c => actions.blockedReason(c);
 const app = express();
 app.disable('x-powered-by');
@@ -222,7 +224,7 @@ wss.on('connection', ws => {
 });
 const localOnline = id => [...wss.clients].some(w => w.readyState === 1 && w.playerId === id);
 // Every minute, everyone with the colony open is marked as seen (that's what "online" means).
-setInterval(() => { const ids = [...new Set([...wss.clients].filter(w => w.readyState === 1 && w.playerId).map(w => w.playerId))]; chat.seen(ids).catch(e => console.error('presence:', e.message)); }, 60000).unref();
+setInterval(() => { const ids = [...new Set([...wss.clients].filter(w => w.readyState === 1 && w.playerId).map(w => w.playerId))]; chat.seen(ids).catch(e => console.error('presence:', e.message)); achievements.checkMany(ids).catch(() => {}); }, 60000).unref();
 bus.on(ops => {
   // Private chat messages go only to the two people's own connections.
   const priv = ops.filter(o => o.private); if (priv.length) ops = ops.filter(o => !o.private);

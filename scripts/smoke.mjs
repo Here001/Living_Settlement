@@ -559,6 +559,28 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     await pool.query("update citizens set daily_day = $1, daily_streak = 9 where handle = 'zara_ng'", [day - 3]);
     const dm = (await call('GET', '/api/me/daily', undefined, P)).json; ok(dm.streak === 0 && dm.missed === 9 && dm.reward === 50, 'missing a day starts the streak over', JSON.stringify(dm));
     ok((await call('GET', '/api/me/daily', undefined, P)).json.best === 7, 'your best streak is remembered'); }
+  // ---- badges ----
+  { const sleep = ms => new Promise(r => setTimeout(r, ms)), zid = (await whoDev('zara_ng')).id;
+    ok((await call('GET', '/api/me/badges', undefined, { auth: false })).status === 401, 'badges are for signed-in colonists');
+    await pool.query('delete from achievements where citizen_id = $1', [zid]);
+    await pool.query("update citizens set stats = null, coins_base = 1500, bank = 0, daily_best = 8 where id = $1", [zid]);
+    const b0 = (await call('GET', '/api/me/badges', undefined, P)).json, has = (l, id) => l.badges.find(x => x.id === id)?.t > 0;
+    ok(b0.total >= 20 && b0.badges.every(x => x.icon && x.name && x.desc && [1, 2, 3].includes(x.tier)), 'every badge has an icon, name, description and tier', JSON.stringify(b0).slice(0, 200));
+    ok(has(b0, 'verified') && has(b0, 'k1') && has(b0, 'streak7') && !has(b0, 'streak30') && !has(b0, 'k50'), 'badges are worked out from what you have', JSON.stringify(b0.badges.filter(x => x.t).map(x => x.id)));
+    ok(b0.badges.find(x => x.id === 'verified').pct > 0, 'and show how many colonists have each one');
+    ok(!has(b0, 'jackpot') && !has(b0, 'casino'), 'no casino badges before winning');
+    await pool.query(`update citizens set stats = '{"casino_wins": 1, "casino_best": 1200}'::jsonb where id = $1`, [zid]);
+    const sock = new WebSocket(BASE.replace(/^http/, 'ws') + '/ws'), msgs = []; sock.on('message', d => { try { msgs.push(JSON.parse(d)); } catch {} });
+    await new Promise(r => sock.on('open', r)); sock.send(JSON.stringify({ type: 'auth', token: P.headers['x-player'] })); await sleep(400);
+    await call('POST', '/api/me/name', { name: 'Zara' }, P); await sleep(1200);
+    const nb = msgs.find(m => m.type === 'badge'); ok(nb && nb.data.ids.includes('jackpot') && nb.data.ids.includes('casino'), 'doing something checks for new badges, and you hear about them live', JSON.stringify(nb));
+    sock.close();
+    ok((await who('zara_ng')).badges.includes('jackpot'), "they show on the colonist's card for everyone");
+    await new Promise(r => setTimeout(r, 2100));
+    ok(((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).some(e => e.kind === 'badge' && /@zara_ng earned the 🍒 Jackpot badge/.test(e.text)), 'gold badges are announced in the Colony Log');
+    const again = (await call('GET', '/api/me/badges', undefined, P)).json, again2 = (await call('GET', '/api/me/badges', undefined, P)).json;
+    ok(again.earned >= b0.earned + 2 && again2.earned === again.earned && Number((await pool.query('select count(*) n from achievements where citizen_id = $1', [zid])).rows[0].n) === again.earned, 'each badge is earned once', `${b0.earned} → ${again.earned}`);
+    ok((await who('jobfill_b')).badges.length === 0, "unverified colonists don't earn badges"); }
   // ---- shared links get their own preview on X, WhatsApp… ----
   { const pg = await (await fetch(BASE + '/?c=zara_ng')).text();
     ok(/<meta property="og:title" content="[^"]*@zara_ng\)? on Resurgence"/.test(pg) && /og:url" content="[^"]*\?c=zara_ng"/.test(pg), 'a colonist link has their name in the link preview');

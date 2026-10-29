@@ -5,6 +5,7 @@ import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES, CAR_MODELS } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
+import { bump } from './achievements.js';
 
 export const TREASURY_CUT = 0.2;        // the colony's share of every player business
 export const BUSINESS_SHARE = 0.25;     // a business makes 25% of its wage bill in profit
@@ -135,7 +136,7 @@ export class Economy {
       ch.touch(c); ch.touch(r); await ch.saveCitizen(c); await ch.saveCitizen(r);
       if (fromBank) await ch.q('update citizens set bank = bank - $2 where id = $1', [c.id, fromBank]);
       await ch.q('update citizens set gift_day = $2, gift_sent = $3 where id = $1', [c.id, ch.today, sent + amount]);
-      await ch.event(`🎁 @${c.handle} sent @${r.handle} a gift.`, 'gift');
+      await ch.event(`🎁 @${c.handle} sent @${r.handle} a gift.`, 'gift'); await bump(ch, c.id, { gifts: 1 });
       return { ok: true, to: r.handle, amount, fromPocket, fromBank, coins: c.coins_base, bank: bank - fromBank, left: left - amount };
     });
   }
@@ -150,7 +151,7 @@ export class Economy {
       if (cars.length >= MAX_CARS) throw new HttpError(409, `Your garage holds ${MAX_CARS} cars. Sell one first.`);
       ch.coins(c); if (c.coins_base < M.price) throw new HttpError(400, `The ${M.name} costs ${fmt(M.price)} coins. You have ${fmt(c.coins_base)} on you.`);
       c.coins_base -= M.price; treasuryAdd(ch, M.price);
-      const car = { id: crypto.randomUUID().slice(0, 8), m: model, col: color, at: Date.now() }; cars.push(car);
+      const car = { id: crypto.randomUUID().slice(0, 8), m: model, col: color, at: Date.now() }; cars.push(car); await bump(ch, c.id, { cars_bought: 1 });
       await ch.q('update citizens set cars = $2, car_active = coalesce(car_active, $3) where id = $1', [c.id, JSON.stringify(cars), car.id]);
       ch.touch(c); await ch.saveCitizen(c);
       await ch.event(`🚗 @${c.handle} drove a new ${M.name.toLowerCase()} out of the dealership.`, 'car');
@@ -228,7 +229,7 @@ export class Economy {
       const price = priceOf(b.type); ch.coins(c);
       if (c.coins_base < price) throw new HttpError(400, `It costs ${fmt(price)} coins. You have ${fmt(c.coins_base)} on you${c.bank ? ' (withdraw from the bank first)' : ''}.`);
       c.coins_base -= price; treasuryAdd(ch, price); ch.touch(c); await ch.saveCitizen(c);
-      await ch.q('update buildings set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [b.id, c.id, c.handle, Date.now(), price]); ch.buildings.add(b.id);
+      await ch.q('update buildings set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [b.id, c.id, c.handle, Date.now(), price]); ch.buildings.add(b.id); await bump(ch, c.id, { bought: 1 });
       await ch.event(`🏠 @${c.handle} bought ${nameOf(b)} for ${fmt(price)} coins.`, 'property');
       return { ok: true, price, coins: c.coins_base, income: dailyIncome(b).net };
     });

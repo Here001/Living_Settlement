@@ -151,6 +151,10 @@ const MIGRATIONS = [
    create index reports_open on reports (t desc) where status = 'open';`,
   // v24: daily rewards for coming back (the real-world day they last collected, and their streak)
   `alter table citizens add column daily_day int, add column daily_streak int not null default 0, add column daily_best int not null default 0;`,
+  // v25: badges, and running counts of things that leave no other trace (casino wins, gifts, crimes…)
+  `alter table citizens add column stats jsonb;
+   create table achievements (citizen_id text not null, id text not null, t bigint not null, primary key (citizen_id, id));
+   create index achievements_id on achievements (id);`,
 ];
 
 export async function migrate() {

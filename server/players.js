@@ -76,6 +76,11 @@ export const requirePlayer = async (req, res, next) => {
 
 export function playersRouter({ limit, send, admin, world }) {
   const r = express.Router();
+  // Anything a signed-in colonist changes may earn a badge, so check them shortly after.
+  r.use((req, res, next) => {
+    if (req.method !== 'GET' && req.get('x-player') && world.achievements) res.on('finish', () => { if (res.statusCode < 300) playerFrom(req).then(p => p && world.achievements.soon(p.id)).catch(() => {}); });
+    next();
+  });
 
   // Start proving an avatar is yours. Works for first-time setup and for a forgotten password.
   r.post('/claim', limit, send(async req => {
@@ -145,6 +150,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/dm/:handle', limit, send(async req => world.chat.thread((await me(req)).id, req.params.handle)));
   r.post('/dm/:handle', limit, send(async req => world.chat.send(await me(req), req.params.handle, (req.body || {}).text)));
   r.post('/dm/:handle/read', limit, send(async req => world.chat.read((await me(req)).id, req.params.handle)));
+  r.get('/me/badges', limit, send(async req => world.achievements.list((await me(req)).id)));
   r.get('/me/daily', limit, send(async req => world.economy.dailyInfo((await me(req)).id)));
   r.post('/me/daily', limit, send(async req => world.economy.daily((await me(req)).id)));
   r.get('/me/gift', limit, send(async req => world.economy.giftInfo((await me(req)).id)));

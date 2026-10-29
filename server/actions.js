@@ -1,6 +1,7 @@
 // What a signed-in colonist can do themself: commit a crime, go somewhere, and keep a pet.
 import crypto from 'node:crypto';
 import { pool } from './db.js';
+import { bump } from './achievements.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES } from '../shared/catalog.js';
@@ -80,7 +81,7 @@ export class Actions {
       await ch.q('update citizens set crime_at = $2 where id = $1', [c.id, now]);
       ch.coins(c);
       if (rand() < chance) {
-        c.coins_base += loot; ch.touch(c); await ch.saveCitizen(c);
+        c.coins_base += loot; ch.touch(c); await ch.saveCitizen(c); await bump(ch, c.id, { crimes: 1 });
         if (victim) { victim.coins_base -= loot; ch.touch(victim); await ch.saveCitizen(victim); await ch.event(`👛 Someone picked @${victim.handle}'s pocket and got away with ${fmt(loot)} coins!`, 'crime'); }
         else { treasuryAdd(ch, -loot); await ch.event(`🚨 ${nameOf(shop)} was robbed of ${fmt(loot)} coins! The thief got away.`, 'crime'); }
         return { ok: true, caught: false, loot, coins: c.coins_base, chance };
@@ -90,7 +91,7 @@ export class Actions {
       const jail = (await ch.q(`select * from buildings where type = 'jail' and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [px, py])).rows[0];
       const what = victim ? `pickpocketing @${victim.handle}` : `robbing ${nameOf(shop)}`;
       if (jail) {
-        const until = now + JAIL_TIME; await ch.q('update citizens set jailed_until = $2 where id = $1', [c.id, until]); await this.setVisit(ch, c, jail, until);
+        const until = now + JAIL_TIME; await ch.q('update citizens set jailed_until = $2 where id = $1', [c.id, until]); await bump(ch, c.id, { jailed: 1 }); await this.setVisit(ch, c, jail, until);
         await ch.event(`🚓 @${c.handle} was caught ${what}, fined ${fmt(fine)} coins and locked up for ${JAIL_TIME / 60000} minutes.`, 'crime');
       } else await ch.event(`🚓 @${c.handle} was caught ${what} and fined ${fmt(fine)} coins.`, 'crime');
       return { ok: true, caught: true, fine, jailed: !!jail, jailFor: jail ? JAIL_TIME : 0, coins: c.coins_base, chance };
@@ -138,7 +139,7 @@ export class Actions {
       if (c.pet) throw new HttpError(409, 'You already have a pet. Let it go first if you want a different one.');
       ch.coins(c); if (c.coins_base < PET_PRICE) throw new HttpError(400, `Adopting costs ${PET_PRICE} coins. You have ${fmt(c.coins_base)}.`);
       c.coins_base -= PET_PRICE; treasuryAdd(ch, PET_PRICE); ch.touch(c); await ch.saveCitizen(c);
-      const pet = { k: kind, n: n || CREATURES[kind].name }; await ch.q('update citizens set pet = $2 where id = $1', [c.id, JSON.stringify(pet)]);
+      const pet = { k: kind, n: n || CREATURES[kind].name }; await ch.q('update citizens set pet = $2 where id = $1', [c.id, JSON.stringify(pet)]); await bump(ch, c.id, { pets: 1 });
       await ch.event(`🐾 @${c.handle} adopted a ${CREATURES[kind].name.toLowerCase()} called ${pet.n}.`, 'pet');
       return { ok: true, pet, coins: c.coins_base };
     });

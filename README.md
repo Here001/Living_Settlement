@@ -165,6 +165,19 @@ These live on a signed-in colonist's own card, under **Home**, **Bank** and **Ca
 - **Where the coins come from.** The treasury, like every other payout. If it runs low the reward is cut to what it holds, and the streak still counts.
 - **Colony Log.** Streaks of 7, 14, 30, 50, 100, 200 and 365 days are announced.
 
+## Badges
+
+- **What they are.** 25 badges in 7 groups (`shared/achievements.js`): Settling in, Money, Things you own, Luck, Friends, Coming back, On the wrong side. Each is Bronze, Silver or Gold.
+- **Earning them.** Badges are worked out from what a colonist has: their home, coins, cars, buildings, race and lottery wins, chats, streaks and so on. Things that leave no other trace (casino wins, the biggest casino win, gifts, crimes, jail, cars bought, pets) are counted in `citizens.stats`.
+  - Only verified colonists earn them.
+  - A colonist is checked right after anything they do, and every minute while they have the colony open, so race and lottery wins count too.
+- **Showing them.**
+  - New badges pop up live ("🏅 New badge: …", with **See**).
+  - Gold ones are announced in the Colony Log.
+  - Every colonist's card shows a row of their badges, gold first, for anyone to see.
+  - Your own card has a **Badges** tab with all 25: earned or locked, how to earn each, and what share of colonists has it.
+- **Coins.** Badges are cosmetic and pay no coins.
+
 ## Sharing to X, YouTube and anywhere else
 
 - **Where.** The **↗** button at the top of any colonist's or building's card, **↗ Share my win** after a casino win (50+ coins) or a race win, and **Share** on the pop-up when you win the lottery.

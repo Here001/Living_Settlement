@@ -231,6 +231,15 @@ body.pane-max .composer textarea{height:70px}
 .dmmenu{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:4px 11px 8px}.dmmenu .hint{flex-basis:100%;font-size:11.5px}
 .dmshut{justify-content:center;font-size:13px;padding:10px 11px 12px}.blkrow{display:flex;justify-content:space-between;align-items:center;padding:6px 2px;border-bottom:1px solid var(--glass-line,rgba(0,0,0,.08));font-size:13px}
 .card .x.shr{font-size:17px}
+.bstrip{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:2px 0 8px}.bstrip.tap{cursor:pointer}
+.bdg{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;font-size:14px;line-height:1;background:rgba(255,255,255,.55);border:2px solid #C08457}
+.bdg.t2{border-color:#A9B4BE}.bdg.t3{border-color:#E2B13C;box-shadow:0 0 0 2px rgba(226,177,60,.25)}.bdg.big{width:40px;height:40px;font-size:21px;flex:none}
+.bcount{font-size:11.5px;opacity:.7;margin-left:2px}
+.bprog{height:8px;border-radius:4px;background:rgba(0,0,0,.08);overflow:hidden;margin:4px 0 6px}.bprog i{display:block;height:100%;background:linear-gradient(90deg,#E2B13C,#D9714A)}
+.bgroup{margin:12px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;opacity:.65}
+.brow{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--glass-line,rgba(0,0,0,.06))}.brow:not(.got) .bdg{filter:grayscale(1);opacity:.45}.brow:not(.got) b{opacity:.7}
+.btxt{min-width:0}.btxt .hint{font-size:12.5px}.bmeta{font-size:11px;opacity:.6;margin-top:1px}
+.btier{font-size:10px;font-weight:700;margin-left:6px;padding:1px 6px;border-radius:8px;background:rgba(192,132,87,.18);color:#8a5a33}.btier.t2{background:rgba(169,180,190,.25);color:#5d6872}.btier.t3{background:rgba(226,177,60,.22);color:#8a6a10}
 .dailyrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:2px 0 8px;font-size:13.5px;font-weight:600}.dailyrow .hint{font-weight:400;font-size:12px}
 .rsheet.daily{width:min(400px,100%);text-align:center}.rsheet.daily .shhead h3{font-size:18px}
 .dstrip{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:10px 0 12px}
@@ -500,6 +509,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears } from '/shared/catalog.js';
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS } from '/shared/creatures.js';
+import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
 import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
@@ -631,7 +641,8 @@ function connect(){
     else if(m.type==='resync') reloadAll();
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
-    else if(m.type==='dmGone' && m.id) Chats.gone(m.id); };
+    else if(m.type==='dmGone' && m.id) Chats.gone(m.id);
+    else if(m.type==='badge' && m.data) Badges.got(m.data.ids||[]); };
   ws.onclose=()=>{ if(ws!==me) return; if(Store.online) toast('Reconnecting to the colony…'); Store.online=false; reconnectSoon(); };
 }
 setInterval(()=>{ if(!ws||document.hidden) return; if(ws.readyState===1&&Date.now()-lastMsgAt>20000){ lastMsgAt=Date.now(); try{ ws.close(); }catch(e){} reconnectSoon(true); } },5000);
@@ -2312,6 +2323,30 @@ document.getElementById('card').addEventListener('input',e=>{ if(e.target&&e.tar
 // ---- Chats: private messages between verified colonists, delivered live ----
 const ago = t => { const s=Math.max(0,(Date.now()+skew-t)/1000); return s<90?'just now':s<3600?`${Math.round(s/60)} min ago`:s<86400?`${Math.round(s/3600)} h ago`:`${Math.round(s/86400)} days ago`; };
 const hhmm = t => { const d=new Date(t); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
+// ---- Badges: earned by playing; shown on every colonist's card, and in full in your own Badges tab ----
+const mineCard=c=>!!(Me&&Me.handle&&c&&c.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase());
+var Badges={ data:null, at:0, loading:false,
+  async load(force){ if(!(Me&&Me.token)||this.loading) return; if(!force&&this.data&&Date.now()-this.at<20000) return; this.loading=true;
+    try{ this.data=await api('/api/me/badges'); this.at=Date.now(); }catch(e){} this.loading=false; if(actTab==='badges') renderCard(true); },
+  got(ids){ ids=ids.filter(id=>BADGE[id]); if(!ids.length) return; this.at=0;
+    const b=BADGE[ids[0]], text=ids.length===1?`🏅 New badge: ${b.icon} ${b.name}`:`🏅 ${ids.length} new badges: ${ids.map(id=>BADGE[id].icon).join(' ')}`;
+    toast(text,'See',()=>openMyTab('badges','.badges'));
+    if(Me&&Me.handle){ const c=[...S.citizens.values()].find(x=>x.handle.toLowerCase()===Me.handle.toLowerCase()); const d=c&&detail.get(c.id); if(d){ d.badges=[...new Set([...(d.badges||[]),...ids])]; if(sel&&sel.id===c.id) renderCard(true); } } },
+  strip(ids,mine){ const row=el('div',{class:'bstrip',title:`${ids.length} badge${ids.length===1?'':'s'}`});
+    for(const id of [...ids].sort((a,b)=>BADGE[b]?.tier-BADGE[a]?.tier)){ const b=BADGE[id]; if(!b) continue; row.append(el('span',{class:'bdg t'+b.tier,title:`${b.name} (${TIER_NAMES[b.tier]}): ${b.desc}`,text:b.icon})); }
+    row.append(el('span',{class:'bcount',text:`${ids.length}/${ACHIEVEMENTS.length}`}));
+    if(mine){ row.classList.add('tap'); row.onclick=()=>{ actTab='badges'; renderCard(true); setTimeout(()=>document.querySelector('#card .badges')?.scrollIntoView({block:'nearest',behavior:'smooth'}),50); }; }
+    return row; },
+  panel(c){ const box=el('div',{class:'authbox badges'}); this.load(); const D0=this.data;
+    if(!D0){ box.append(el('h3',{text:'Badges'}), el('p',{class:'hint',text:'Loading your badges…'})); return box; }
+    box.append(el('h3',{text:`Badges: ${D0.earned} of ${D0.total}`}), el('div',{class:'bprog'}, el('i',{style:`width:${Math.round(100*D0.earned/D0.total)}%`})),
+      el('p',{class:'hint',text:'Earn them by playing. Everyone can see the ones you have on your card. Gold badges are announced in the Colony Log.'}));
+    const groups=new Map(); for(const b of D0.badges){ if(!groups.has(b.group)) groups.set(b.group,[]); groups.get(b.group).push(b); }
+    for(const [g,list] of groups){ box.append(el('h4',{class:'bgroup',text:g}));
+      for(const b of list){ box.append(el('div',{class:'brow'+(b.t?' got':'')}, el('span',{class:'bdg big t'+b.tier,text:b.icon}),
+        el('div',{class:'btxt'}, el('div',null, el('b',{text:b.name}), el('span',{class:'btier t'+b.tier,text:TIER_NAMES[b.tier]})), el('div',{class:'hint',text:b.desc}),
+          el('div',{class:'bmeta',text:(b.t?`Earned ${ago(b.t)} · `:'')+(b.pct?`${b.pct}% of colonists have it`:'Nobody has it yet')})))); } }
+    return box; } };
 // ---- Daily rewards: collect once a real day; the longer the streak, the bigger (day 7 is the big one) ----
 var Daily={ info:null, busy:false, last:null,
   async load(popup){ if(!(Me&&Me.token)){ this.info=null; return; } try{ this.info=await api('/api/me/daily'); }catch(e){ return; }
@@ -2605,8 +2640,8 @@ async function openMyTab(tab, panel){ if(!(Me&&Me.handle)) return; actTab=tab; a
   requestAnimationFrame(show); setTimeout(show,700); }
 const BUYABLE=new Set(['housing','shops','offices','industry']); // what players may own (matches the server)
 function actionTabs(c){ const wrap=el('div',null); const dr=Daily.row(); if(dr) wrap.append(dr); const row=el('div',{class:'acttabs',role:'tablist'});
-  for(const [id,nm] of [['work','Work'],['home','Home'],['bank','Bank'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['pet','Pet']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
-  const P={ work:workPanel, home:homePanel, bank:bankPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, pet:petPanel }[actTab]||workPanel;
+  for(const [id,nm] of [['work','Work'],['home','Home'],['bank','Bank'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['pet','Pet'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
+  const P={ work:workPanel, home:homePanel, bank:bankPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, pet:petPanel, badges:c=>Badges.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
 // ---- Home (rent or move, and the buildings you own), Bank, Cars ----
 const Money={ id:null, at:0, homes:null, props:null, bank:null, busy:false };
@@ -2747,7 +2782,8 @@ function renderCard(force){ if(!force && cardBusy()) return;
     const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,nameOf(c), el('span',{class:'gsym',title:c.gender==='f'?'Woman':'Man',text:c.gender==='f'?' ♀':' ♂'})); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); head.append(av, el('div',null,title, c.name?el('p',{class:'uname',text:'@'+c.handle}):'', el('p',{class:'now',text:now})));
     const nm=b=>(D.buildings.get(b.id)||b).name||T(b).name;
     const shr=el('button',{class:'x shr','aria-label':'Share','title':'Share',text:'↗',onclick:()=>Share.colonist(c)});
-    card.append(close, shr, head, el('dl',null,
+    const strip=d&&d.badges&&d.badges.length?Badges.strip(d.badges, mineCard(c)):null;
+    card.append(close, shr, head); if(strip) card.append(strip); card.append(el('dl',null,
       el('dt',{text:'Gender'}), el('dd',{text:c.gender==='f'?'Woman':'Man'}),
       el('dt',{text:'Home'}), el('dd',{text:h?nm(h):d&&d.queue?`None yet. Moves in when ${fmt(d.queue)} more ${d.queue===1?'home is':'homes are'} built`:'None yet'}),
       el('dt',{text:'Job'}), el('dd',{text:j?`${T(j).work.title} at ${nm(j)}`:h?'Looking for work':'Gets one after moving in'}),

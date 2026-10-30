@@ -207,6 +207,8 @@ const MIGRATIONS = [
    create table flows (day int not null, key text not null, n bigint not null default 0, coins bigint not null default 0, primary key (day, key));
    create table flow_players (day int not null, key text not null, citizen_id text not null, primary key (day, key, citizen_id));
    create table snapshots (day int primary key, data jsonb not null, t bigint not null);`,
+  // v40: the Game House: a game in progress there (penalties, darts, snooker practice) and the day of the last free wheel spin
+  `alter table citizens add column play_game jsonb, add column wheel_day int;`,
 ];
 
 export async function migrate() {

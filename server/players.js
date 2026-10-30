@@ -216,6 +216,17 @@ export function playersRouter({ limit, send, admin, world }) {
   const lastMove = new Map();
   const tableMove = async (req, fn) => { const p = await me(req), now = Date.now(); if (now - (lastMove.get(p.id) || 0) < 250) throw new HttpError(429, 'One move at a time.'); lastMove.set(p.id, now); if (lastMove.size > 5000) lastMove.clear(); return fn(p, req.body || {}); };
   r.post('/me/casino/blackjack', limit, send(req => tableMove(req, (p, b) => world.tables.blackjack(p.id, String(b.action || ''), b.bet))));
+  // The Game House: its games, played at a particular Game House (buildingId).
+  r.get('/me/games', limit, send(async req => world.gamehouse.info((await me(req)).id, req.query.building)));
+  r.post('/me/games/:game', limit, send(req => tableMove(req, (p, b) => { const gh = world.gamehouse, bid = b.buildingId;
+    switch (req.params.game) {
+      case 'wheel': return gh.wheel(p.id, bid, { free: !!b.free, bet: b.bet });
+      case 'scratch': return gh.scratch(p.id, bid, b.price);
+      case 'penalty': return gh.penalty(p.id, bid, { action: String(b.action || ''), bet: b.bet, spot: String(b.spot || '') });
+      case 'darts': return gh.darts(p.id, bid, { action: String(b.action || ''), bet: b.bet, x: b.x, y: b.y });
+      default: throw new HttpError(404, 'No such game.');
+    } })));
+  r.post('/me/casino/mines', limit, send(req => tableMove(req, (p, b) => world.tables.mines(p.id, String(b.action || ''), b.bet, b.mines, b.cell))));
   r.post('/me/casino/rocket', limit, send(req => tableMove(req, (p, b) => world.tables.rocket(p.id, String(b.action || ''), b.bet, b.auto, b.at))));
   // The job board: openings near home, take one (once per game day), or quit.
   r.get('/me/jobs', limit, send(async req => {

@@ -179,6 +179,7 @@ export const BUILDING_TYPES = {
   belletower: { name:'Belle époque tower', cat:'housing', size:[2,2], style:'block', height:150, mansard:true, colors:{wall:'#E8DCC2', roof:'#5B6672', trim:'#8A7F6A'}, home:{capacity:428, rent:16}, cost:18000 },
   // ---------- shops
   cornershop: { name:'Corner shop', cat:'shops', size:[1,1], style:'block', height:26, awning:'#3E7A4B', colors:{wall:'#EFE8D8', roof:'#8C7B66', trim:'#3E7A4B'}, work:{title:'Shopkeeper', slots:2, salary:16}, cost:700 },
+  gamehouse:  { name:'Game House', cat:'shops', size:[3,2], style:'block', height:32, sign:'#1F3A6B', label:'GAMES', neon:true, awning:'#4FA3E0', colors:{wall:'#2F4F7F', roof:'#1C2C47', trim:'#F2C94C'}, work:{title:'Game host', slots:8, salary:26}, leisure:true, visitors:180, cost:9000 },
   petstore:   { name:'Pet store', cat:'shops', size:[2,1], style:'block', height:24, sign:'#2E8A73', label:'PETS', awning:'#3FBFA0', colors:{wall:'#F4EDE0', roof:'#5E7C99', trim:'#3FBFA0'}, work:{title:'Pet keeper', slots:3, salary:20}, leisure:true, visitors:20, cost:1600 },
   florist:    { name:'Florist', cat:'shops', size:[1,1], style:'house', height:22, roofH:12, awning:'#B06FD8', colors:{wall:'#F4EDE0', roof:'#5E8F4E', trim:'#6E4F3A'}, work:{title:'Florist', slots:2, salary:16}, cost:800 },
   pharmacy:   { name:'Pharmacy', cat:'shops', size:[1,1], style:'block', height:28, cross:true, colors:{wall:'#F2F0EA', roof:'#7E7B78', trim:'#3E7A4B'}, work:{title:'Pharmacist', slots:3, salary:22}, cost:1200 },
@@ -306,7 +307,7 @@ const SUB_OF = {
   highrise:['apartment','aptower','gallery','altbau','pilotis','domedapt','cubetower','steppedtower','balconyblock','belletower'],
   small:['stall','bakery','cafe','bookshop','grocer','cornershop','florist','petstore','pharmacy','openmarket'],
   large:['supermarket','deptstore','markethall','arcade','mall','gasstation','hotel'],
-  going:['tavern','casino','diner','restaurant','cinema'],
+  going:['tavern','casino','gamehouse','diner','restaurant','cinema'],
   workshops:['lumber','workshop','garage','printshop','lumberyard','canalwarehouses','warehouse'],
   factories:['factory','chemplant','brickworks','chocolate','gasworks','porcelain','tireplant','carplant'],
   farms:['farm','windmill','silo','winery','greenhouse'],

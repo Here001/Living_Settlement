@@ -424,6 +424,48 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     await pool.query("update citizens set casino_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...gm, crash: 3 })]);
     while (Date.now() < gm.start + 3700) await sleep(200);
     const au = (await rk('status')).json; ok(au.done && au.cashed === 1.5 && au.payout === 150, 'an automatic cash-out pays at its target', JSON.stringify(au)); }
+  // ---- Mines and Plinko at the casino; the Game House ----
+  { const sleep = ms => new Promise(r => setTimeout(r, ms)), C = await import('../shared/casino.js'), G = await import('../shared/games.js');
+    await pool.query("update citizens set coins_base = 50000, net = 0, coins_day = 0, casino_game = null, play_game = null, wheel_day = null, jailed_until = null where handle = 'zara_ng'");
+    // Plinko: a path of 12 bounces, paid by the risk table; every table keeps the house a small edge
+    const pk = (await call('POST', '/api/me/casino', { game: 'plinko', pick: 'high', bet: 100 }, P)).json;
+    ok(pk.result?.path?.length === 12 && pk.result.slot === pk.result.path.reduce((a, b) => a + b, 0) && pk.payout === Math.floor(100 * C.PLINKO.high[pk.result.slot]), 'Plinko drops a ball through 12 rows and pays the slot it lands in', JSON.stringify(pk));
+    const binom = k => { let r = 1; for (let i = 1; i <= k; i++) r = r * (12 - k + i) / i; return r / 4096; };
+    ok(Object.values(C.PLINKO).every(t => t.length === 13 && t.reduce((s, m, i) => s + m * binom(i), 0) < 0.99), 'every Plinko table pays back less than it takes');
+    // Mines
+    await sleep(1300); const mn = async (b) => { await sleep(300); return call('POST', '/api/me/casino/mines', b, P); };
+    const m0 = (await mn({ action: 'start', bet: 100, mines: 3 })).json; ok(m0.game === 'mines' && !m0.done && !m0.layout, 'a Mines game starts with the mines hidden', JSON.stringify(m0));
+    const lay = (await pool.query("select casino_game from citizens where handle = 'zara_ng'")).rows[0].casino_game.layout, safe = [...Array(25).keys()].filter(i => !lay.includes(i));
+    const m1 = (await mn({ action: 'pick', cell: safe[0] })).json, m2 = (await mn({ action: 'pick', cell: safe[1] })).json;
+    ok(m2.picked.length === 2 && m2.mult === C.minesMultiple(3, 2) && m2.mult > m1.mult && m1.mult > 1, 'each gem raises the multiplier', JSON.stringify(m2));
+    const before = (await whoDev('zara_ng')).coins, mc = (await mn({ action: 'cashout' })).json;
+    ok(mc.done && mc.paid === Math.floor(100 * C.minesMultiple(3, 2)) && (await whoDev('zara_ng')).coins === before + mc.paid && mc.layout?.length === 3, 'cashing out pays the multiplier, and shows where the mines were', JSON.stringify(mc));
+    await mn({ action: 'start', bet: 100, mines: 3 }); const lay2 = (await pool.query("select casino_game from citizens where handle = 'zara_ng'")).rows[0].casino_game.layout;
+    const boom = (await mn({ action: 'pick', cell: lay2[0] })).json; ok(boom.done && boom.outcome === 'boom' && boom.paid === 0, 'hitting a mine loses the bet', JSON.stringify(boom));
+    ok((await mn({ action: 'start', bet: 100, mines: 7 })).status === 400, 'only the offered numbers of mines');
+    // The Game House
+    const gh = await call('POST', '/api/admin/buildings', { type: 'gamehouse', x: 820, y: 900 }); await call('POST', `/api/admin/buildings/${gh.json.building?.id}/finish`); const ghId = gh.json.building?.id;
+    ok(gh.status === 200 && (await call('GET', `/api/me/games?building=${(await pool.query("select id from buildings where type <> 'gamehouse' limit 1")).rows[0].id}`, undefined, P)).status === 409, "games are played at a Game House, not anywhere");
+    const gi = (await call('GET', `/api/me/games?building=${ghId}`, undefined, P)).json; ok(gi.freeSpin === true && gi.housed && gi.maxBet === G.GH_MAX_BET, 'the Game House: a free spin is waiting', JSON.stringify(gi));
+    const g = async (game, b) => { await sleep(300); return call('POST', `/api/me/games/${game}`, { ...b, buildingId: ghId }, P); };
+    const c0 = (await whoDev('zara_ng')).coins, fs = (await g('wheel', { free: true })).json;
+    ok(fs.free && G.WHEEL_FREE[fs.slot] === fs.prize && (await whoDev('zara_ng')).coins === c0 + fs.prize, 'the free daily spin pays coins', JSON.stringify(fs));
+    ok((await g('wheel', { free: true })).status === 409, 'one free spin a day');
+    const ps = (await g('wheel', { bet: 100 })).json; ok(ps.paid === Math.floor(100 * G.WHEEL_PAID[ps.slot]), 'paid spins pay the slice they land on', JSON.stringify(ps));
+    ok(G.WHEEL_PAID.reduce((a, b) => a + b, 0) / G.WHEEL_PAID.length < 1, 'the paid wheel keeps a house edge');
+    ok((await g('wheel', { bet: G.GH_MAX_BET + 1 })).status === 400, 'Game House bets are capped');
+    const sc = (await g('scratch', { price: 200 })).json; const cnt = sc.cells.reduce((m, k) => (m[k] = (m[k] || 0) + 1, m), {});
+    ok(sc.cells.length === 9 && sc.paid === 200 * sc.x && (sc.win ? cnt[sc.win] === 3 : Object.values(cnt).every(n => n <= 2)), 'a scratch card shows three of a kind only when it wins', JSON.stringify(sc));
+    ok((await g('scratch', { price: 300 })).status === 400, 'scratch cards come in set prices');
+    const p0 = (await g('penalty', { action: 'start', bet: 100 })).json; ok(p0.game === 'penalty' && p0.kicks.length === 0, 'a penalty shootout starts', JSON.stringify(p0));
+    ok((await g('darts', { action: 'start', bet: 100 })).status === 409, 'one game at a time at the Game House');
+    let pr; for (const s of ['ll', 'rh', 'cl', 'ch', 'rl']) pr = (await g('penalty', { action: 'kick', spot: s })).json;
+    ok(pr.done && pr.kicks.length === 5 && pr.goals === pr.kicks.filter(k => k.goal).length && pr.paid === Math.floor(100 * (G.PEN_PAYS[pr.goals] || 0)), 'five kicks, paid by goals scored', JSON.stringify({ goals: pr.goals, paid: pr.paid }));
+    const d0 = (await g('darts', { action: 'start', bet: 100 })).json; let dr; for (let i = 0; i < 3; i++) dr = (await g('darts', { action: 'throw', x: 0, y: 0.605 })).json;
+    ok(d0.game === 'darts' && dr.done && dr.throws.length === 3 && dr.total === dr.throws.reduce((s, t) => s + t.score, 0) && dr.paid === Math.floor(100 * G.dartsPays(dr.total)), 'three darts, scored where they land (with a wobble)', JSON.stringify({ total: dr.total, paid: dr.paid }));
+    ok(G.dartScore(0, 0.605).score === 60 && G.dartScore(0, 0).score === 50 && G.dartScore(0, 0.97).score === 40 && G.dartScore(2, 0).score === 0, 'the dartboard scores like a real one');
+    const st = await call('GET', '/api/admin/stats?days=7'); ok(st.json.flows['game:penalty:bet']?.today.coins >= 100 && st.json.flows['game:wheel:win'], 'Game House stakes and wins show in Stats');
+    await pool.query("update citizens set coins_base = 1000, casino_game = null, play_game = null where handle = 'zara_ng'"); }
   // ---- crime, going out, pets ----
   { const sleep = ms => new Promise(r => setTimeout(r, ms)), set = (h, sql, v = []) => pool.query(`update citizens set ${sql} where handle = $1`, [h, ...v]);
     const coins = async h => (await whoDev(h)).coins;

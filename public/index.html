@@ -390,6 +390,30 @@ body.pane-max .composer textarea{height:70px}
 .rkship{font-size:44px;margin-bottom:10px;transition:transform .1s linear;display:block}.rkmult{position:absolute;top:12px;left:0;right:0;text-align:center;color:#fff;font-size:30px;font-weight:800;text-shadow:0 2px 10px rgba(0,0,0,.5);font-variant-numeric:tabular-nums}
 .rkcash{font-size:16px;min-width:180px}
 .casino .cbet{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.casino .cbet input{width:90px;padding:6px 8px;border-radius:10px;border:1.4px solid var(--soft);font:inherit}
+.ghpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;margin:6px 0 10px}
+.ghpick button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:14px;border:1px solid var(--glass-line,rgba(0,0,0,.12));background:var(--gbtn,rgba(0,0,0,.04));color:inherit;font:inherit;font-size:12px;cursor:pointer}
+.ghpick button .gi{font-size:24px;line-height:1.1} .ghpick button.on{background:var(--gbtn-on,rgba(217,113,74,.25))} .ghpick button small{font-size:10px;color:var(--muted)}
+.ghstage{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+.ghsvg{width:100%;max-width:340px;margin:0 auto;display:block;touch-action:manipulation}
+.wheelwrap{position:relative;width:100%;max-width:300px;margin:0 auto}
+.wheelwrap svg{width:100%;display:block}
+.wheelwrap .ptr{position:absolute;left:50%;top:-4px;transform:translateX(-50%);font-size:22px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))}
+.scard{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:280px;margin:0 auto;width:100%}
+.scard button{aspect-ratio:1;border-radius:12px;font-size:30px;border:0;cursor:pointer;color:inherit;background:linear-gradient(135deg,#C9CED6,#9AA3AE);position:relative;overflow:hidden}
+.scard button.open{background:var(--glass-2,rgba(0,0,0,.05));border:1px solid var(--glass-line,rgba(0,0,0,.1));animation:cpop .3s ease-out}
+.scard button.hit{background:rgba(242,201,76,.35)}
+.scard button:not(.open)::after{content:'?';position:absolute;inset:0;display:grid;place-items:center;font-size:20px;color:rgba(255,255,255,.85);font-weight:800}
+.kicks{display:flex;gap:6px;justify-content:center;font-size:20px}
+.ghsvg .zone{fill:transparent;cursor:pointer} .ghsvg .zone:hover{fill:rgba(255,255,255,.18)}
+.ghsvg .dartzone{cursor:crosshair}
+.mgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;max-width:330px;margin:4px auto;width:100%}
+.mgrid button{aspect-ratio:1;border-radius:12px;font-size:22px;border:1px solid var(--glass-line,rgba(0,0,0,.12));background:var(--gbtn,rgba(0,0,0,.05));color:inherit;cursor:pointer;transition:transform .12s}
+.mgrid button:active{transform:scale(.92)} .mgrid button.gem{background:rgba(63,191,160,.28)} .mgrid button.mine{background:rgba(214,72,60,.35)} .mgrid button.dim{opacity:.45}
+.mgrid button[disabled]{cursor:default}
+.mstat{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-variant-numeric:tabular-nums}
+.plinko{width:100%;max-width:360px;margin:4px auto;display:block}
+.plinko .peg{fill:var(--muted)} .plinko .ball{fill:var(--accent)} .plinko .slot text{font-size:8px;fill:var(--ink);font-weight:700}
+.plinko .slot rect{fill:rgba(217,113,74,.18)} .plinko .slot.hot rect{fill:var(--accent)} .plinko .slot.hot text{fill:#fff}
 .cresult{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px;border-radius:12px;background:rgba(0,0,0,.04);animation:cpop .35s ease-out}
 .cresult .roll{font-size:30px;letter-spacing:4px}.cresult.win{background:rgba(242,179,61,.22)}
 @keyframes cpop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
@@ -629,7 +653,8 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 </div>
 <script type="module">
 import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank, carPaid } from '/shared/catalog.js';
-import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt } from '/shared/casino.js';
+import { GH_GAMES, GH_MAX_BET, WHEEL_PAID, WHEEL_FREE, SCRATCH_TIERS, SCRATCH_SYMBOLS, PEN_SPOTS, DART_ORDER, DART_RINGS } from '/shared/games.js';
+import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt, PLINKO, PLINKO_ROWS, MINES_TILES, MINES_CHOICES, minesMultiple } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
 import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS } from '/shared/rules.js';
@@ -3048,6 +3073,8 @@ const FLOW_NAMES={ 'earn:shifts':['source','Extra shifts'], 'earn:gigs':['source
   travel:['sink','Cab fares and fuel'], 'bills:car':['sink','Car maintenance'], 'bills:property':['sink','Property upkeep'], 'car:buy':['sink','Buying cars'], 'property:buy':['sink','Buying buildings'],
   pet:['sink','Pets'], 'crime:fine':['sink','Crime fines'], 'election:fee':['sink','Running for mayor'], 'casino:bet':['sink','Casino bets'], 'race:bet':['sink','Race bets'], 'lottery:ticket':['sink','Lottery tickets'],
   gift:['move','Gifts'], 'crime:pickpocket':['move','Pickpocketing'] };
+// A flow's [kind, name]: Game House games are 'game:<id>:bet' (coins in) and 'game:<id>:win' (coins out).
+const flowInfo=k=>{ if(FLOW_NAMES[k]) return FLOW_NAMES[k]; const m=/^game:(\w+):(bet|win)$/.exec(k); if(m) return [m[2]==='bet'?'sink':'source', `${(GH_GAMES[m[1]]||{name:m[1]}).name} ${m[2]==='bet'?'stakes':'winnings'}`]; return ['source',k]; };
 const EARN_KEYS=['earn:shifts','earn:gigs','earn:fish','earn:forage','earn:scavenged','daily','earn:supplies','crime:rob','casino:win','race:win','lottery:win'];
 var Stats={ data:null, days:30, busy:false, at:0,
   async load(){ if(!Store.canWrite||this.busy) return; this.busy=true; try{ this.data=await api('/api/admin/stats?days='+this.days); this.at=Date.now(); }catch(e){ toast(e.message); } this.busy=false; if(activeTab==='stats') this.renderNow(); },
@@ -3066,7 +3093,7 @@ var Stats={ data:null, days:30, busy:false, at:0,
     const top=mk('text',{x:0,y:-3,'text-anchor':'start'}); top.textContent=`max ${fmt(max)}`; svg.append(top);
     return svg; },
   flowTable(D, kind, wagesRow){
-    const rows=Object.entries(D.flows).filter(([k])=>(FLOW_NAMES[k]||['source'])[0]===kind).map(([k,f])=>({ k, name:(FLOW_NAMES[k]||[0,k])[1], ...f })).sort((a,b)=>b.range.coins-a.range.coins);
+    const rows=Object.entries(D.flows).filter(([k])=>flowInfo(k)[0]===kind).map(([k,f])=>({ k, name:flowInfo(k)[1], ...f })).sort((a,b)=>b.range.coins-a.range.coins);
     if(wagesRow) rows.unshift(wagesRow);
     if(!rows.length) return el('p',{class:'hint',text:'Nothing yet.'});
     const max=Math.max(1,...rows.map(r=>r.range.coins)), t=el('table',{class:'stbl'});
@@ -3091,7 +3118,7 @@ var Stats={ data:null, days:30, busy:false, at:0,
     const ms=D.series.map(s=>s.money?s.money.playerCash+s.money.playerBank:0);
     if(ms.some(Boolean)) body.append(el('div',{class:'sh'},"Players' coins over time", el('small',{text:'cash and savings, end of each day'})), this.bars(ms, D.series.map(s=>this.date(s.day)), i=>`${this.date(D.series[i].day)}: ${fmt(ms[i])} coins`));
     const wages=M.playerWagesPerGameDay*48, wagesRow={ k:'wages', name:'Wages (now, a real day)', est:true, range:{ coins:wages, n:0, players:0 } };
-    const earned=Object.entries(D.flows).filter(([k])=>(FLOW_NAMES[k]||['source'])[0]==='source').reduce((s,[,f])=>s+f.range.coins,0), spent=Object.entries(D.flows).filter(([k])=>(FLOW_NAMES[k]||[])[0]==='sink').reduce((s,[,f])=>s+f.range.coins,0);
+    const earned=Object.entries(D.flows).filter(([k])=>flowInfo(k)[0]==='source').reduce((s,[,f])=>s+f.range.coins,0), spent=Object.entries(D.flows).filter(([k])=>flowInfo(k)[0]==='sink').reduce((s,[,f])=>s+f.range.coins,0);
     body.append(el('div',{class:'sh'},'Where coins come from', el('small',{text:`last ${D.days} days · ${fmt(earned)} in, besides wages`})), this.flowTable(D,'source',wagesRow),
       el('div',{class:'sh'},'Where coins go', el('small',{text:`last ${D.days} days · ${fmt(spent)} out`})), this.flowTable(D,'sink'),
       el('div',{class:'sh'},'Between players', el('small',{text:`last ${D.days} days`})), this.flowTable(D,'move'));
@@ -3320,21 +3347,137 @@ const DICE='⚀⚁⚂⚃⚄⚅', ICON=Object.fromEntries(SLOT_SYMBOLS.map(x=>[x.
 async function loadCasino(c){ const prev=casino||{}, same=prev.id===c.id;
   casino={ id:c.id, game:prev.game||'coin', pick:prev.pick||'heads', bet:prev.bet||10, last:same?prev.last:null, open:!!prev.open, info:same?prev.info:null, busy:false, loading:true, at:Date.now() };
   try{ casino.info=await api('/api/me/casino'); }catch(e){} casino.loading=false;
-  const tb=casino.info&&casino.info.table; if(tb){ casino.open=true; casino.game=tb.game; if(tb.game==='blackjack') casino.bj=tb; else Rocket.track(tb); }
+  const tb=casino.info&&casino.info.table; if(tb){ casino.open=true; casino.game=tb.game; if(tb.game==='blackjack') casino.bj=tb; else if(tb.game==='mines') casino.mn=tb; else Rocket.track(tb); }
   if(sel&&sel.id===c.id) renderCard(true); }
 async function casinoPlay(c){ if(casino.busy) return; const bet=Math.floor(Number(casino.bet));
   if(!(bet>=1)){ toast('Bet at least 1 coin.'); return; }
   casino.busy=true; renderCard(true);
   try{ const r=await api('/api/me/casino',{method:'POST',body:{game:casino.game,pick:casino.pick,bet}});
-    casino.last=r; casino.info={...casino.info, coins:r.coins}; myMoney={...(myMoney||{}), coins:r.coins}; refreshHUD();
+    casino.last={...r, pick:casino.pick, at:Date.now()}; casino.info={...casino.info, coins:r.coins}; myMoney={...(myMoney||{}), coins:r.coins}; refreshHUD();
     const dd=detail.get(c.id); if(dd) dd.coins=r.coins; }
   catch(e){ toast(e.message); }
   casino.busy=false; renderCard(true); }
 function resultLine(r){ const g=r.result;
-  const shown = Array.isArray(g) ? g.map(x=>ICON[x]||x).join(' ') : casino.game==='dice' ? `${DICE[Number(g)-1]} ${g}` : casino.game==='roulette' ? `${g===0?'🟩':ROULETTE_RED.has(g)?'🟥':'⬛'} ${g}` : (g==='heads'?'🪙 Heads':'🪙 Tails');
+  const shown = g&&g.path ? `${g.m}×` : Array.isArray(g) ? g.map(x=>ICON[x]||x).join(' ') : casino.game==='dice' ? `${DICE[Number(g)-1]} ${g}` : casino.game==='roulette' ? `${g===0?'🟩':ROULETTE_RED.has(g)?'🟥':'⬛'} ${g}` : (g==='heads'?'🪙 Heads':'🪙 Tails');
   const cb=r.casino&&D.buildings.get(r.casino.id), gname=GAMES[casino.game].name;
   const brag=r.won&&r.payout>=50?el('button',{class:'linkb',text:'↗ Share my win',onclick:()=>Share.win(`Won ${fmt(r.payout)} coins!`,`${gname} at ${r.casino?r.casino.name:'the casino'}`,`I just won ${fmt(r.payout)} coins on ${gname.toLowerCase()} at the casino in ${S.meta?S.meta.name:'my colony'} on Resurgence 🎰`,cb?[cb.x+1,cb.y+1]:null)}):null;
   return el('div',{class:'cresult '+(r.won?'win':'lose')}, el('span',{class:'roll',text:shown}), el('b',{text:r.won?`You won ${fmt(r.payout)} coins!`:`No luck. You lost ${fmt(r.bet)}.`}), brag); }
+// ---- The Game House: a building full of games, played on its own card (full screen) ----
+const GH={ id:null, info:null, at:0, open:false, game:'wheel', bet:100, busy:false, last:null, tier:SCRATCH_TIERS[0], revealed:new Set(), spinTo:0,
+  async load(b){ this.id=b.id; this.at=Date.now(); try{ this.info=await api('/api/me/games?building='+encodeURIComponent(b.id)); const pg=this.info.playing; if(pg&&!pg.done){ this.game=pg.game; this.last=pg; } }catch(e){ this.info={error:e.message}; } if(sel&&sel.kind==='b'&&sel.id===b.id) renderCard(true); },
+  coins(r){ if(r&&typeof r.coins==='number'){ this.info={...this.info, coins:r.coins}; myMoney={...(myMoney||{}), coins:r.coins}; refreshHUD(); } },
+  async act(game, body, after){ if(this.busy) return null; this.busy=true; renderCard(true); let r=null;
+    try{ r=await api('/api/me/games/'+game,{method:'POST',body:{...body, buildingId:this.id}}); this.coins(r); if(after) after(r); }catch(e){ toast(e.message); }
+    this.busy=false; renderCard(true); return r; },
+  section(b){ const box=el('div',{class:'authbox casino gh'}, el('div',{class:'cas-head'}, el('h3',{text:'🎮 Game House'}), cardMax()));
+    if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'})); return box; }
+    if(!this.open||this.id!==b.id){ box.append(el('p',{class:'hint',text:'Lucky wheel, scratch cards, penalties, darts, snooker, Whot, Ludo and Ayo.'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎮 Play here',onclick:()=>{ this.open=true; this.id=b.id; this.info=null; this.last=null; document.body.classList.add('card-max'); openTab(null); this.load(b); renderCard(true); }}))); return box; }
+    if(!this.info||Date.now()-this.at>30000&&!this.busy){ if(!this.info){ box.append(el('p',{class:'hint',text:'Opening…'})); this.load(b); return box; } this.load(b); }
+    const I=this.info; if(I.error){ box.append(el('p',{class:'hint',text:I.error})); return box; }
+    if(!I.housed){ box.append(el('p',{class:'hint',text:'The Game House is for colonists who have woken up and have a home.'})); return box; }
+    const live=this.last&&!this.last.done&&this.last.game, pick=el('div',{class:'ghpick'});
+    for(const [k,g] of Object.entries(GH_GAMES)){ const soon=!this.views[k]; pick.append(el('button',{class:this.game===k?'on':'','aria-pressed':String(this.game===k),disabled:!!live&&live!==k,onclick:()=>{ this.game=k; this.last=null; this.revealed=new Set(); renderCard(true); }}, el('span',{class:'gi',text:g.icon}), g.name, soon?el('small',{text:'coming soon'}):'')); }
+    box.append(el('p',{class:'hint',text:`You have ${fmt(I.coins)} coins on you.`}), pick, el('p',{class:'crule',text:GH_GAMES[this.game].rule}));
+    const v=this.views[this.game]; box.append(v?v.call(this,b,I):el('p',{class:'hint',text:'This one is being built. Check back soon!'}));
+    box.append(el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Leave',onclick:()=>{ this.open=false; document.body.classList.remove('card-max'); renderCard(true); }})));
+    return box; },
+  betRow(I){ const inp=el('input',{type:'number',min:'1',max:String(GH_MAX_BET),step:'1',inputmode:'numeric','aria-label':'Bet',value:String(this.bet)}); inp.oninput=()=>{ this.bet=inp.value; };
+    const q=(l,v)=>el('button',{class:'pill',text:l,onclick:()=>{ this.bet=Math.max(1,Math.min(GH_MAX_BET,Math.floor(v))); renderCard(true); }});
+    return el('div',{class:'cbet'}, el('span',{text:'Bet'}), inp, q('100',100), q('1k',1000), q('Max',Math.min(GH_MAX_BET,I.coins))); },
+  // The wheel turns by the clock (eased over 3.2 s), so redrawing the card mid-spin doesn't restart it.
+  angle(){ const s=this.spin; if(!s) return this.spinTo||0; const u=Math.min(1,(performance.now()-s.t0)/3200), e=1-Math.pow(1-u,3); return s.from+(s.to-s.from)*e; },
+  turn(){ const step=()=>{ const svg=document.querySelector('#card .wheelwrap svg'); if(svg) svg.style.transform=`rotate(${this.angle()}deg)`; if(this.spin&&performance.now()-this.spin.t0<3200) requestAnimationFrame(step); else if(this.spin){ this.spinTo=this.spin.to; this.spin=null; } }; requestAnimationFrame(step); },
+  betOk(){ const b=Math.floor(Number(this.bet)); if(!(b>=1)){ toast('Bet at least 1 coin.'); return 0; } return b; },
+  svg(vb){ const ns='http://www.w3.org/2000/svg', s=document.createElementNS(ns,'svg'); s.setAttribute('viewBox',vb); s.setAttribute('class','ghsvg'); return s; },
+  mk(t,a,txt){ const e=document.createElementNS('http://www.w3.org/2000/svg',t); for(const k in a) e.setAttribute(k,a[k]); if(txt!=null) e.textContent=txt; return e; },
+  views:{
+    wheel(b,I){ const wrap=el('div',{class:'ghstage'}), free=I.freeSpin; if(this.wheelFree==null) this.wheelFree=!!free; const slices=this.wheelFree?WHEEL_FREE:WHEEL_PAID;
+      const n=slices.length, R0=100, svg=this.svg('-104 -104 208 208'), cols=['#D9714A','#F2C94C','#4FA3E0','#3FBFA0','#B07CC6','#E8836B'];
+      slices.forEach((m,i)=>{ const a0=(i/n)*2*Math.PI-Math.PI/2-Math.PI/n, a1=a0+2*Math.PI/n, p=(a)=>`${R0*Math.cos(a)} ${R0*Math.sin(a)}`;
+        svg.append(this.mk('path',{d:`M0 0 L${p(a0)} A${R0} ${R0} 0 0 1 ${p(a1)} Z`,fill:this.wheelFree?cols[i%cols.length]:(m===0?'#5E5A57':cols[i%cols.length]),stroke:'rgba(255,255,255,.7)','stroke-width':1}));
+        const am=(a0+a1)/2, t=this.mk('text',{x:72*Math.cos(am),y:72*Math.sin(am),'text-anchor':'middle','dominant-baseline':'middle','font-size':n>12?9:11,'font-weight':700,fill:'#fff',transform:`rotate(${am*180/Math.PI+90} ${72*Math.cos(am)} ${72*Math.sin(am)})`}, this.wheelFree?(m>=1000?`${m/1000}k`:m):(m?`${m}×`:'✕')); svg.append(t); });
+      svg.append(this.mk('circle',{r:14,fill:'#2B2621'}));
+      svg.style.transform=`rotate(${this.angle()}deg)`; const ww=el('div',{class:'wheelwrap'}, el('span',{class:'ptr',text:'▼'})); ww.append(svg); wrap.append(ww);
+      const res=this.last&&this.last.slot!=null&&!this.busy&&Date.now()-this.last.t>3200?this.last:null;
+      if(res) wrap.append(el('div',{class:'cresult '+((res.prize||res.paid)>0?'win':'lose')}, el('b',{text:res.free?`You won ${fmt(res.prize)} coins!`:res.paid?`${res.x}×: you won ${fmt(res.paid)} coins!`:`No luck. You lost ${fmt(res.bet)}.`})));
+      const spin=(free)=>{ const bet=free?0:this.betOk(); if(!free&&!bet) return; this.wheelFree=free;
+        this.act('wheel',{free,bet},r=>{ const nn=(free?WHEEL_FREE:WHEEL_PAID).length, target=360-(r.slot*360/nn); const from=this.angle(); this.spin={ from, to:(Math.ceil(from/360)+5)*360+target, t0:performance.now() }; this.spinTo=this.spin.to; this.turn(); this.last={...r,t:Date.now()}; if(free) this.info={...this.info,freeSpin:false}; setTimeout(()=>{ if(sel&&sel.kind==='b') renderCard(true); },3300); }); };
+      wrap.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:free?'🎁 Free spin':'Free spin used today',disabled:!free||this.busy,onclick:()=>spin(true)})), this.betRow(I),
+        el('div',{class:'row-actions'}, el('button',{class:'btn',text:this.busy?'…':'Spin for coins',disabled:this.busy,onclick:()=>spin(false)}), el('button',{class:'linkb',text:this.wheelFree?'Show paid wheel':'Show free wheel',onclick:()=>{ this.wheelFree=!this.wheelFree; this.spinTo=0; this.spin=null; this.last=null; renderCard(true); }})));
+      return wrap; },
+    scratch(b,I){ const wrap=el('div',{class:'ghstage'}), card=this.last&&this.last.cells?this.last:null;
+      const tiers=el('div',{class:'cpicks'}); for(const t of SCRATCH_TIERS) tiers.append(el('button',{class:'pill'+(this.tier===t?' on':''),'aria-pressed':String(this.tier===t),text:`${fmt(t)} card`,onclick:()=>{ this.tier=t; renderCard(true); }}));
+      if(card){ const grid=el('div',{class:'scard'}), all=this.revealed.size>=9;
+        card.cells.forEach((k,i)=>{ const open=this.revealed.has(i)||all; grid.append(el('button',{class:(open?'open':'')+(open&&all&&k===card.win?' hit':''),'aria-label':open?k:'Scratch',text:open?SCRATCH_SYMBOLS[k].icon:'',onclick:()=>{ this.revealed.add(i); renderCard(true); }})); });
+        wrap.append(grid);
+        if(all) wrap.append(el('div',{class:'cresult '+(card.paid?'win':'lose')}, el('b',{text:card.paid?`${SCRATCH_SYMBOLS[card.win].icon}×3: you won ${fmt(card.paid)} coins!`:'No match this time.'})));
+        else wrap.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Scratch them all',onclick:()=>{ for(let i=0;i<9;i++) this.revealed.add(i); renderCard(true); }}))); }
+      wrap.append(tiers, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':`Buy a ${fmt(this.tier)} card`,disabled:this.busy||(card&&this.revealed.size<9),onclick:()=>this.act('scratch',{price:this.tier},r=>{ this.last=r; this.revealed=new Set(); })})));
+      return wrap; },
+    penalty(b,I){ const wrap=el('div',{class:'ghstage'}), g=this.last&&this.last.game==='penalty'?this.last:null, live=g&&!g.done;
+      const svg=this.svg('0 0 300 170'); svg.append(this.mk('rect',{x:0,y:0,width:300,height:170,fill:'#5FA34A',rx:10}), this.mk('rect',{x:30,y:20,width:240,height:100,fill:'rgba(255,255,255,.18)',stroke:'#fff','stroke-width':4}));
+      for(let i=1;i<6;i++) svg.append(this.mk('line',{x1:30+i*40,y1:20,x2:30+i*40,y2:120,stroke:'rgba(255,255,255,.25)'}));
+      const zx={l:30,c:110,r:190}, zy={h:20,l:70}, last=g&&g.kicks.length?g.kicks[g.kicks.length-1]:null;
+      if(last){ const kx=zx[last.keeper[0]]+40, ky=zy[last.keeper[1]]+28; svg.append(this.mk('rect',{x:kx-16,y:ky-18,width:32,height:40,rx:8,fill:'#F2C94C',stroke:'#2B2621','stroke-width':2}), this.mk('text',{x:kx,y:ky+8,'text-anchor':'middle','font-size':16},'🧤'));
+        const bx=last.miss?(last.spot[0]==='l'?14:last.spot[0]==='r'?286:150):zx[last.spot[0]]+40, by=last.miss?(last.spot[1]==='h'?8:60):zy[last.spot[1]]+25; svg.append(this.mk('text',{x:bx,y:by+6,'text-anchor':'middle','font-size':20},'⚽')); }
+      else { svg.append(this.mk('rect',{x:134,y:62,width:32,height:52,rx:8,fill:'#F2C94C',stroke:'#2B2621','stroke-width':2}), this.mk('text',{x:150,y:94,'text-anchor':'middle','font-size':16},'🧤'), this.mk('text',{x:150,y:158,'text-anchor':'middle','font-size':20},'⚽')); }
+      if(live) for(const s of PEN_SPOTS){ const z=this.mk('rect',{x:zx[s[0]],y:zy[s[1]],width:80,height:50,class:'zone'}); z.addEventListener('click',()=>this.act('penalty',{action:'kick',spot:s},r=>{ this.last=r; if(r.done) toast(r.paid?`⚽ ${r.goals} goals: you won ${fmt(r.paid)}!`:`${r.goals} goals. Better luck next time.`); })); svg.append(z); }
+      wrap.append(svg);
+      if(g){ wrap.append(el('div',{class:'kicks'}, ...[0,1,2,3,4].map(i=>el('span',{text:g.kicks[i]?(g.kicks[i].goal?'✅':g.kicks[i].miss?'↗️':'🧤'):'⚪'})))); if(last) wrap.append(el('p',{class:'hint',style:'text-align:center',text:last.goal?'Goal!':last.miss?'Off target!':'Saved!'})); }
+      if(live) wrap.append(el('p',{class:'hint',style:'text-align:center',text:`Kick ${g.kicks.length+1} of 5: tap where to shoot.`}));
+      else { if(g&&g.done) wrap.append(el('div',{class:'cresult '+(g.paid?'win':'lose')}, el('b',{text:g.paid?`${g.goals} goals: you won ${fmt(g.paid)} coins!`:`${g.goals} goals. No prize this time.`})));
+        wrap.append(this.betRow(I), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Start a shootout',disabled:this.busy,onclick:()=>{ const bet=this.betOk(); if(bet) this.act('penalty',{action:'start',bet},r=>{ this.last=r; }); }}))); }
+      return wrap; },
+    darts(b,I){ const wrap=el('div',{class:'ghstage'}), g=this.last&&this.last.game==='darts'?this.last:null, live=g&&!g.done, R0=100;
+      const svg=this.svg('-110 -110 220 220'); svg.append(this.mk('circle',{r:108,fill:'#2B2621'}));
+      const ring=(r0,r1,i,col)=>{ const a0=(i*18-9-90)*Math.PI/180, a1=a0+18*Math.PI/180, P=(r,a)=>`${r*Math.cos(a)} ${r*Math.sin(a)}`; return this.mk('path',{d:`M${P(r0,a0)} L${P(r1,a0)} A${r1} ${r1} 0 0 1 ${P(r1,a1)} L${P(r0,a1)} A${r0} ${r0} 0 0 0 ${P(r0,a0)} Z`,fill:col}); };
+      for(let i=0;i<20;i++){ const dark=i%2===0; svg.append(ring(DART_RINGS.outer*R0,R0,i,dark?'#1E1E1E':'#F1E6C8'), ring(DART_RINGS.tripleIn*R0,DART_RINGS.tripleOut*R0,i,dark?'#C0392B':'#2E8B57'), ring(DART_RINGS.doubleIn*R0,R0,i,dark?'#C0392B':'#2E8B57'));
+        const a=(i*18-90)*Math.PI/180; svg.append(this.mk('text',{x:104*Math.cos(a)*0.985,y:104*Math.sin(a)*0.985+3,'text-anchor':'middle','font-size':8,fill:'#fff','font-weight':700},DART_ORDER[i])); }
+      svg.append(this.mk('circle',{r:DART_RINGS.outer*R0,fill:'#2E8B57'}), this.mk('circle',{r:DART_RINGS.bull*R0,fill:'#C0392B'}));
+      if(g) g.throws.forEach(t=>{ svg.append(this.mk('circle',{cx:t.hit[0]*R0,cy:-t.hit[1]*R0,r:3.2,fill:'#4FA3E0',stroke:'#fff','stroke-width':1.2})); });
+      if(live){ const hit=this.mk('circle',{r:110,fill:'transparent',class:'dartzone'}); hit.addEventListener('click',ev=>{ const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY; const q=pt.matrixTransform(svg.getScreenCTM().inverse());
+          this.act('darts',{action:'throw',x:q.x/R0,y:-q.y/R0},r=>{ this.last=r; const t=r.throws[r.throws.length-1]; toast(`🎯 ${t.label}${t.score?` · ${t.score}`:''}`); }); }); svg.append(hit); }
+      wrap.append(svg);
+      if(g) wrap.append(el('div',{class:'mstat'}, el('span',{text:g.throws.map(t=>t.label).join(' · ')||'Three darts'}), el('b',{text:`Total ${g.total}`})));
+      if(live) wrap.append(el('p',{class:'hint',style:'text-align:center',text:`Dart ${g.throws.length+1} of 3: tap where to aim.`}));
+      else { if(g&&g.done) wrap.append(el('div',{class:'cresult '+(g.paid?'win':'lose')}, el('b',{text:g.paid?`${g.total} points: you won ${fmt(g.paid)} coins!`:`${g.total} points. No prize this time.`})));
+        wrap.append(this.betRow(I), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Start a game',disabled:this.busy,onclick:()=>{ const bet=this.betOk(); if(bet) this.act('darts',{action:'start',bet},r=>{ this.last=r; }); }}))); }
+      return wrap; },
+  } };
+// Plinko: pick a risk, drop a ball. The server picks the path; the board shows it falling.
+const Plinko={ RISK:{low:'Low risk',mid:'Medium risk',high:'High risk'}, anim:null,
+  picker(){ const row=el('div',{class:'cpicks'}); for(const [k,nm] of Object.entries(this.RISK)) row.append(el('button',{class:'pill'+(casino.pick===k?' on':''),'aria-pressed':String(casino.pick===k),text:nm,onclick:()=>{ casino.pick=k; casino.last=null; renderCard(true); }})); return row; },
+  board(r){ const ns='http://www.w3.org/2000/svg', W=260, H=200, rows=PLINKO_ROWS, gap=W/(rows+3), svg=document.createElementNS(ns,'svg'); svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('class','plinko'); svg.setAttribute('role','img'); svg.setAttribute('aria-label','Plinko board');
+    const mk=(t,a)=>{ const e=document.createElementNS(ns,t); for(const k in a) e.setAttribute(k,a[k]); return e; }, x0=W/2, y0=10, dy=(H-40)/rows;
+    for(let i=0;i<rows;i++) for(let j=0;j<=i+1;j++) svg.append(mk('circle',{cx:x0+(j-(i+1)/2)*gap,cy:y0+(i+1)*dy,r:1.8,class:'peg'}));
+    const t=PLINKO[(r&&r.pick)||casino.pick]||PLINKO.low, hot=r&&r.result?r.result.slot:-1;
+    t.forEach((m,k)=>{ const g=mk('g',{class:'slot'+(k===hot?' hot':'')}), cx=x0+(k-rows/2)*gap; g.append(mk('rect',{x:cx-gap/2+1,y:H-24,width:gap-2,height:16,rx:3})); const tx=mk('text',{x:cx,y:H-13,'text-anchor':'middle'}); tx.textContent=m>=10?Math.round(m):m; g.append(tx); svg.append(g); });
+    if(r&&r.result&&r.result.path){ const pts=[[x0,y0]]; let pos=0; r.result.path.forEach((b,i)=>{ pos+=b; pts.push([x0+(pos-(i+1)/2)*gap, y0+(i+1)*dy]); }); pts.push([x0+(r.result.slot-rows/2)*gap, H-20]);
+      const ball=mk('circle',{r:4.5,class:'ball',cx:pts[0][0],cy:pts[0][1]}); svg.append(ball);
+      const key=r.at||(r.at=Date.now()), done=Date.now()-key>1600; if(done){ ball.setAttribute('cx',pts[pts.length-1][0]); ball.setAttribute('cy',pts[pts.length-1][1]); }
+      else { const t0=performance.now()-(Date.now()-key), dur=1500; const step=now=>{ if(!svg.isConnected) return; const u=Math.max(0,Math.min(1,(now-t0)/dur))*(pts.length-1), i=Math.floor(u), f=u-i, a=pts[i], b=pts[Math.min(i+1,pts.length-1)]; ball.setAttribute('cx',a[0]+(b[0]-a[0])*f); ball.setAttribute('cy',a[1]+(b[1]-a[1])*f-Math.sin(f*Math.PI)*3); if(u<pts.length-1) requestAnimationFrame(step); }; requestAnimationFrame(step); } }
+    return svg; } };
+// Mines: pick how many mines, then open tiles; every gem raises the multiplier. Cash out any time, or hit a mine and lose the bet.
+const Mines={ count:3,
+  async act(c, body){ if(casino.busy) return; casino.busy=true; renderCard(true);
+    try{ const r=await api('/api/me/casino/mines',{method:'POST',body}); casino.mn=r; if(typeof r.coins==='number'){ casino.info={...casino.info, coins:r.coins}; myMoney={...(myMoney||{}), coins:r.coins}; refreshHUD(); }
+      if(r.done) toast(r.outcome==='boom'?`💣 Boom! You lost ${fmt(r.bet)}.`:`💎 You won ${fmt(r.paid)} coins (${r.mult}×)!`); }
+    catch(e){ toast(e.message); } casino.busy=false; renderCard(true); },
+  table(c,info){ const t=el('div',{class:'bj'}), g=casino.mn, live=g&&!g.done;
+    if(!live){ const row=el('div',{class:'cpicks'}); for(const n of MINES_CHOICES) row.append(el('button',{class:'pill'+(this.count===n?' on':''),'aria-pressed':String(this.count===n),text:`${n} mine${n>1?'s':''}`,onclick:()=>{ this.count=n; renderCard(true); }}));
+      t.append(el('p',{class:'hint',text:`First gem pays ${minesMultiple(this.count,1)}×, five gems ${this.count<=20?minesMultiple(this.count,Math.min(5,MINES_TILES-this.count))+'×':''}.`}), row); }
+    const grid=el('div',{class:'mgrid'}), lay=new Set(g&&g.done?g.layout||[]:[]), picked=new Set(g?g.picked:[]);
+    for(let i=0;i<MINES_TILES;i++){ const isGem=picked.has(i), isMine=lay.has(i), shownMine=g&&g.done&&isMine, shownGem=isGem||(g&&g.done&&!isMine);
+      grid.append(el('button',{class:(isGem?'gem':shownMine?'mine':'')+(g&&g.done&&!isGem&&!isMine?' dim':''),'aria-label':`Tile ${i+1}`,text:isGem?'💎':shownMine?'💣':g&&g.done?'💎':'',disabled:!live||casino.busy||isGem,onclick:()=>this.act(c,{action:'pick',cell:i})})); }
+    t.append(grid);
+    if(live){ t.append(el('div',{class:'mstat'}, el('span',{text:`Bet ${fmt(g.bet)} · ${g.mines} mine${g.mines>1?'s':''}`}), el('span',{text:g.picked.length?`Now ${g.mult}× · next ${g.next}×`:`First gem ${g.next}×`})),
+        el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:g.picked.length?`Cash out ${fmt(Math.floor(g.bet*g.mult))}`:'Pick a tile',disabled:casino.busy||!g.picked.length,onclick:()=>this.act(c,{action:'cashout'})}))); return t; }
+    if(g&&g.done) t.append(el('div',{class:'cresult '+(g.paid>0?'win':'lose')}, el('b',{text:g.outcome==='boom'?`Boom! You lost ${fmt(g.bet)}.`:`You won ${fmt(g.paid)} coins (${g.mult}×)!`})));
+    const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Bet',value:String(casino.bet)}); inp.oninput=()=>{ casino.bet=inp.value; };
+    const quick=(label,v)=>el('button',{class:'pill',text:label,onclick:()=>{ casino.bet=Math.max(1,Math.floor(v)); renderCard(true); }});
+    t.append(el('div',{class:'cbet'}, el('span',{text:'Bet'}), inp, quick('10',10), quick('100',100), quick('Half',info.coins/2)),
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:casino.busy?'…':'Start',disabled:casino.busy||info.coins<1,onclick:()=>{ const bet=Math.floor(Number(casino.bet)); if(!(bet>=1)){ toast('Bet at least 1 coin.'); return; } this.act(c,{action:'start',bet,mines:this.count}); }})));
+    return t; } };
 // Blackjack: deal, then hit / stand / double. The dealer's second card stays face down until you stand.
 // Only cards that weren't on the table at the last redraw get the deal animation (the card redraws often).
 const bjSeen=new Set();
@@ -3397,18 +3540,20 @@ function casinoPanel(c){ const box=el('div',{class:'authbox casino'}, el('div',{
   if(!info.housed){ box.append(el('p',{class:'hint',text:'The casino is for colonists who have woken up and have a home.'})); return box; }
   if(!info.casino){ box.append(el('p',{class:'hint',text:"The colony doesn't have a casino yet. Once one is built, you can play here."})); return box; }
   if(!casino.open){ box.append(el('p',{class:'hint',text:`${info.casino.name} is open. You have ${fmt(info.coins)} coins.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Go to the casino',onclick:()=>{ casino.open=true; renderCard(true); }}))); return box; }
-  const busyTable=(casino.bj&&!casino.bj.done)||(Rocket.g&&!Rocket.g.done);
+  const busyTable=(casino.bj&&!casino.bj.done)||(Rocket.g&&!Rocket.g.done)||(casino.mn&&!casino.mn.done);
   const tabs=el('div',{class:'ctabs'}); for(const k of Object.keys(GAMES)) tabs.append(el('button',{class:'pill'+(casino.game===k?' on':''),'aria-pressed':String(casino.game===k),text:GAMES[k].name,disabled:busyTable&&casino.game!==k,onclick:()=>{ casino.game=k; casino.pick=GAMES[k].picks?GAMES[k].picks[0]:k==='roulette'?'red':null; casino.last=null; renderCard(true); }}));
   box.append(el('p',{class:'hint',text:`You have ${fmt(info.coins)} coins.`}), tabs, el('p',{class:'crule',text:GAMES[casino.game].rule}));
   if(casino.game==='blackjack'){ box.append(blackjackTable(c,info)); return box; }
   if(casino.game==='rocket'){ box.append(Rocket.table(c,info)); return box; }
+  if(casino.game==='mines'){ box.append(Mines.table(c,info)); return box; }
+  if(casino.game==='plinko'){ if(!PLINKO[casino.pick]) casino.pick='low'; box.append(Plinko.picker()); if(casino.last&&casino.last.result&&casino.last.result.path) box.append(Plinko.board(casino.last)); else box.append(Plinko.board(null)); }
   if(casino.game==='roulette'){ if(!casino.pick||!(casino.pick in ROULETTE_BETS||/^n\d+$/.test(casino.pick))) casino.pick='red';
     const row=el('div',{class:'cpicks'}); for(const [k,nm] of Object.entries(ROULETTE_BETS)) row.append(el('button',{class:'pill'+(casino.pick===k?' on':'')+(k==='red'?' rred':k==='black'?' rblack':''),'aria-pressed':String(casino.pick===k),text:nm,onclick:()=>{ casino.pick=k; renderCard(true); }}));
     const num=el('input',{type:'number',min:'0',max:'36',step:'1',inputmode:'numeric','aria-label':'Number',placeholder:'0–36',value:/^n\d+$/.test(casino.pick)?casino.pick.slice(1):''});
     num.oninput=()=>{ const v=Math.floor(Number(num.value)); if(num.value!==''&&v>=0&&v<=36){ casino.pick='n'+v; for(const b of row.children) b.classList.remove('on'); } };
     box.append(row, el('div',{class:'cbet'}, el('span',{text:'Or one number (36×):'}), num)); }
   if(casino.game==='slots') box.append(el('p',{class:'hint',text:SLOT_SYMBOLS.slice().reverse().map(x=>`${x.icon}${x.icon}${x.icon} ${SLOT_PAYS[x.id]}×`).join(' · ')+` · 🍒🍒 ${SLOT_TWO_CHERRIES}×`}));
-  const g=GAMES[casino.game]; if(g.picks){ const row=el('div',{class:'cpicks'}); for(const p of g.picks) row.append(el('button',{class:'pill'+(casino.pick===p?' on':''),'aria-pressed':String(casino.pick===p),text:casino.game==='coin'?(p==='heads'?'Heads':'Tails'):`${DICE[Number(p)-1]} ${p}`,onclick:()=>{ casino.pick=p; renderCard(true); }})); box.append(row); }
+  const g=GAMES[casino.game]; if(g.picks&&casino.game!=='plinko'){ const row=el('div',{class:'cpicks'}); for(const p of g.picks) row.append(el('button',{class:'pill'+(casino.pick===p?' on':''),'aria-pressed':String(casino.pick===p),text:casino.game==='coin'?(p==='heads'?'Heads':'Tails'):`${DICE[Number(p)-1]} ${p}`,onclick:()=>{ casino.pick=p; renderCard(true); }})); box.append(row); }
   const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Bet',value:String(casino.bet)}); inp.oninput=()=>{ casino.bet=inp.value; };
   const quick=(label,v)=>el('button',{class:'pill',text:label,onclick:()=>{ casino.bet=Math.max(1,Math.floor(v)); renderCard(true); }});
   box.append(el('div',{class:'cbet'}, el('span',{text:'Bet'}), inp, quick('10',10), quick('100',100), quick('Half',info.coins/2), quick('All',info.coins)));
@@ -3688,6 +3833,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(!Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin && canGoTo(b.type)) card.append(goHereRow(b));
     if(isBank(b.type) && b.done!==false && !b.ruin && !Store.canWrite) card.append(BankAcct.section(b));
     if(b.type==='petstore' && b.done!==false && !b.ruin && !Store.canWrite) card.append(PetStore.section(b));
+    if(b.type==='gamehouse' && b.done!==false && !b.ruin && !Store.canWrite) card.append(GH.section(b));
     if(b.type==='casino' && b.done!==false && !b.ruin && !Store.canWrite){ // the games are played right here, on the casino's own card
       if(!(Me&&Me.token&&Me.handle)) card.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'}));
       else if(casino&&casino.open&&casino.id===b.id) card.append(casinoPanel({id:b.id}));

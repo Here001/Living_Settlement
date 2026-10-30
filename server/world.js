@@ -679,7 +679,7 @@ export class World {
     if (!GAMES[game]) throw new HttpError(400, 'Pick a game: coin flip, dice or slots.');
     if (GAMES[game].table) throw new HttpError(400, `${GAMES[game].name} is played at its own table.`);
     if (game === 'roulette' && !validRoulette(String(pick))) throw new HttpError(400, 'Pick a bet: a colour, odd or even, low or high, a dozen, or a number from 0 to 36.');
-    if (GAMES[game].picks && !GAMES[game].picks.includes(String(pick))) throw new HttpError(400, game === 'coin' ? 'Pick heads or tails.' : 'Pick a number from 1 to 6.');
+    if (GAMES[game].picks && !GAMES[game].picks.includes(String(pick))) throw new HttpError(400, game === 'coin' ? 'Pick heads or tails.' : game === 'plinko' ? 'Pick low, medium or high risk.' : 'Pick a number from 1 to 6.');
     bet = Math.floor(Number(bet)); if (!Number.isFinite(bet) || bet < 1) throw new HttpError(400, 'Bet at least 1 coin.');
     if (bet > MAX_BET) throw new HttpError(400, `The most you can bet at once is ${fmt(MAX_BET)} coins.`);
     return this.change(async ch => {

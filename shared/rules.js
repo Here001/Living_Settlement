@@ -33,7 +33,7 @@ export const SHIFTS = {
   night: { name: 'Night shift', hours: '22:00–06:00' },
 };
 const DAY_ONLY = new Set(['townhall', 'school', 'library', 'postoffice', 'kindergarten', 'openschool', 'college', 'university', 'courthouse', 'museum']);
-const ROUND_CLOCK = new Set(['hotel', 'gasstation', 'casino', 'tavern', 'diner']);
+const ROUND_CLOCK = new Set(['hotel', 'gasstation', 'casino', 'gamehouse', 'tavern', 'diner']);
 export function hashStr(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 export function shiftOf(citizenId, jobId, jobType) {
   const t = jobId && BUILDING_TYPES[jobType]; if (!t || !t.work || DAY_ONLY.has(jobType)) return 'day';

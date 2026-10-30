@@ -8,7 +8,7 @@ import { track } from './stats.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES } from '../shared/catalog.js';
-import { MAX_BET, SUITS, RANKS, handValue, isBlackjack, rocketAt, rocketTime, rocketCrash, ROCKET_COUNTDOWN, ROCKET_MAX } from '../shared/casino.js';
+import { GAMES, MINES_TILES, MINES_CHOICES, minesMultiple, MAX_BET, SUITS, RANKS, handValue, isBlackjack, rocketAt, rocketTime, rocketCrash, ROCKET_COUNTDOWN, ROCKET_MAX } from '../shared/casino.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 
@@ -56,7 +56,7 @@ export class CasinoTables {
   async blackjack(id, action, bet) {
     return this.world.change(async ch => {
       const { c, cas } = await this.seat(ch, id), name = cas.name || BUILDING_TYPES.casino.name; let g = c.casino_game;
-      if (g && g.game !== 'blackjack') { if (action === 'deal') throw new HttpError(409, 'Finish your Rocket round first.'); g = null; }
+      if (g && g.game !== 'blackjack') { if (action === 'deal') throw new HttpError(409, `Finish your ${GAMES[g.game]?.name || 'other'} game first.`); g = null; }
       const draw = () => g.deck.pop();
       const finish = async () => {
         if (handValue(g.player) <= 21) while (handValue(g.dealer) < 17) g.dealer.push(draw());
@@ -94,6 +94,42 @@ export class CasinoTables {
     });
   }
 
+  // ---------- Mines ----------
+  // start (bet, mines) → pick tiles one at a time → cash out, or hit a mine and lose the bet. The mines are placed on
+  // the server when the game starts and only shown once it's over.
+  minesView(g, coins, extra = {}) {
+    const v = { game: 'mines', bet: g.bet, mines: g.mines, picked: g.picked, mult: minesMultiple(g.mines, g.picked.length), next: minesMultiple(g.mines, g.picked.length + 1), done: !!g.done, outcome: g.outcome || null, paid: g.paid || 0, ...extra };
+    if (g.done) v.layout = g.layout; if (coins !== undefined) v.coins = coins; return v; }
+  async mines(id, action, bet, mines, cell) {
+    return this.world.change(async ch => {
+      const { c, cas } = await this.seat(ch, id), name = cas.name || BUILDING_TYPES.casino.name; let g = c.casino_game;
+      if (g && g.game !== 'mines') { if (action === 'start') throw new HttpError(409, `Finish your ${GAMES[g.game]?.name || 'other'} game first.`); g = null; }
+      const end = async (outcome, paid) => { g.done = true; g.outcome = outcome; g.paid = paid; await this.payout(ch, c, 'mines', g.bet, paid, name, 'Mines'); await this.save(ch, c, null); };
+      if (action === 'start') {
+        if (g && !g.done) return this.minesView(g, c.coins_base, { resumed: true });
+        mines = Math.floor(Number(mines)); if (!MINES_CHOICES.includes(mines)) throw new HttpError(400, `Pick ${MINES_CHOICES.join(', ')} mines.`);
+        const stake = await this.stake(ch, c, cas, bet), cells = [...Array(MINES_TILES).keys()];
+        for (let i = cells.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [cells[i], cells[j]] = [cells[j], cells[i]]; }
+        g = { game: 'mines', bet: stake, mines, layout: cells.slice(0, mines).sort((a, b) => a - b), picked: [], at: Date.now() };
+        ch.touch(c); await ch.saveCitizen(c); await this.save(ch, c, g); return this.minesView(g, c.coins_base);
+      }
+      if (!g || g.done) throw new HttpError(409, 'Start a new game first.');
+      if (action === 'pick') {
+        cell = Math.floor(Number(cell)); if (!(cell >= 0 && cell < MINES_TILES)) throw new HttpError(400, 'Pick a tile.');
+        if (g.picked.includes(cell)) return this.minesView(g, c.coins_base);
+        if (g.layout.includes(cell)) { g.hit = cell; await end('boom', 0); return this.minesView(g, c.coins_base, { hit: cell }); }
+        g.picked.push(cell);
+        if (g.picked.length === MINES_TILES - g.mines) { await end('cleared', Math.floor(g.bet * minesMultiple(g.mines, g.picked.length))); return this.minesView(g, c.coins_base); }
+        await this.save(ch, c, g); return this.minesView(g, c.coins_base);
+      }
+      if (action === 'cashout') {
+        if (!g.picked.length) throw new HttpError(400, 'Find at least one gem before you cash out.');
+        await end('cashed', Math.floor(g.bet * minesMultiple(g.mines, g.picked.length))); return this.minesView(g, c.coins_base);
+      }
+      throw new HttpError(400, 'Start, pick or cash out.');
+    });
+  }
+
   // ---------- Rocket ----------
   // Settle a flight that's over by time alone: blown up (or cashed out automatically at the target).
   async rocketResolve(ch, c, g, now = Date.now()) {
@@ -115,7 +151,7 @@ export class CasinoTables {
     }
     return this.world.change(async ch => {
       const { c, cas } = await this.seat(ch, id), now = Date.now(); let g = c.casino_game;
-      if (g && g.game !== 'rocket') { if (action === 'launch') throw new HttpError(409, 'Finish your Blackjack hand first.'); g = null; }
+      if (g && g.game !== 'rocket') { if (action === 'launch') throw new HttpError(409, `Finish your ${GAMES[g.game]?.name || 'other'} game first.`); g = null; }
       if (g && !g.done && await this.rocketResolve(ch, c, g, now)) { if (action !== 'launch') return this.rocketView(g, c.coins_base, now); g = null; }
       if (action === 'launch') {
         if (g && !g.done) return { ...this.rocketView(g, c.coins_base, now), resumed: true };
@@ -145,6 +181,7 @@ export class CasinoTables {
   async current(id) {
     const g = (await pool.query('select casino_game from citizens where id = $1', [id])).rows[0]?.casino_game; if (!g || g.done) return null;
     if (g.game === 'rocket') { if (Date.now() >= g.start + rocketTime(g.crash) * 1000 || Date.now() - g.at > ABANDON) { try { const r = await this.rocket(id, 'status'); return r.done ? null : r; } catch { return null; } } return this.rocketView(g, undefined); }
+    if (g.game === 'mines') return this.minesView(g, undefined);
     return this.bjView(g, undefined);
   }
 }

@@ -196,6 +196,25 @@ They comment it on any of your Instagram posts **from their own account**. After
 - **Rocket cash-outs** count from the moment you tap (your phone sends it), not when the request reaches the server, so a slow connection never cashes you out higher than you saw, or after it blew up. A tap more than 1.2 seconds old isn't believed. The button reacts on touch, the multiplier freezes on screen at once, and the flight animates every frame.
 - **Announcements.** Big wins (200+ coins of profit, or 20×+ on a small bet) go in the Colony Log.
 
+
+### Mines and Plinko
+
+- **Mines:** pick 1, 3, 5, 10 or 20 mines hidden in 25 tiles, then open tiles one by one. Each gem raises the multiplier (the fair odds less 3%, `minesMultiple()` in `shared/casino.js`). Cash out any time; hit a mine and the bet is lost. The mines are placed on the server and only shown when the game ends.
+- **Plinko:** pick low, medium or high risk and drop a ball through 12 rows of pegs. The 13 slots pay 0.4×–10× (low), 0.3×–33× (medium) or 0.1×–170× (high), each table returning about 96–97% on average.
+
+## 🎮 Game House
+
+A new building (Shops → Going out, 3×2, 8 game hosts, 9,000 to build) where colonists play games. Tap a Game House on the map and press **🎮 Play here**: the games open full screen on the building's own card, never on the player card. Playing walks your avatar there for 10 minutes. The house is the colony treasury; Game House bets are capped at 20,000 (`server/gamehouse.js`, `shared/games.js`).
+
+| Game | How it works | Pays |
+|---|---|---|
+| 🎡 Lucky wheel | One free spin every real day (50 to 5,000 coins, about 650 on average). Paid spins: 24 slices from 0× to 8×. | about 94% back on paid spins |
+| 🎟️ Scratch cards | Cards at 200, 1,000 or 5,000. Scratch 9 boxes; three of a kind wins. | 🍀 1×, ⭐ 2×, 💎 5×, 🚀 20×, 👑 100× (about 88% back) |
+| ⚽ Penalty shootout | Five kicks: pick one of six spots each time. Corners are harder to save but easier to miss. The keeper dives in a fixed mix that makes every spot score about 69% of the time, so no way of shooting beats the house. | 5 goals 3.5×, 4 goals your bet back (about 91–93%) |
+| 🎯 Darts | Three darts at a real dartboard. Tap where to aim; the server adds a wobble. | 140+ 20×, 100+ 5×, 80+ 2×, 60+ 1.5× (about 89% for the best aim) |
+
+Snooker, Whot, Ludo and Ayo are listed as coming soon. Every stake and win is recorded in the developer's Stats tab (as "<game> stakes" and "<game> winnings").
+
 ## Your own card: Work · Crime · Go here
 
 A signed-in colonist with a home sees these on their own card. They see one at a time.

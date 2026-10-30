@@ -406,6 +406,23 @@ body.pane-max .composer textarea{height:70px}
 .scard button:not(.open)::after{content:'?';position:absolute;inset:0;display:grid;place-items:center;font-size:20px;color:rgba(255,255,255,.85);font-weight:800}
 .snk .aimrow{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}.snk input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
 .snk .pwr{display:flex;gap:8px;align-items:center;font-size:13px}
+#card.ghplay > dl, #card.ghplay > .row-actions, #card.ghplay > p.hint{display:none}
+.tbl{display:flex;flex-direction:column;gap:8px}
+.tbl .tlist{display:flex;flex-direction:column;gap:6px}.tbl .trow{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;background:var(--glass-2,rgba(0,0,0,.04));border:1px solid var(--glass-line,rgba(0,0,0,.08));font-size:13px}
+.tbl .trow .tl{flex:1;min-width:0}.tbl .trow b{display:block}
+.tbl .seats{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:12.5px}.tbl .seat{padding:4px 9px;border-radius:999px;background:var(--glass-2,rgba(0,0,0,.05));border:1px solid var(--glass-line,rgba(0,0,0,.08))}
+.tbl .seat.on{background:var(--gbtn-on,rgba(217,113,74,.25));font-weight:700}.tbl .seat.me{outline:2px solid var(--accent)}.tbl .seat.gone{opacity:.5;text-decoration:line-through}
+.tbl .tbar{display:flex;justify-content:space-between;align-items:center;font-size:13px;gap:8px}.tbl .timer{font-variant-numeric:tabular-nums;color:var(--muted)}
+.whand{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.wcard{width:56px;height:80px;border-radius:9px;background:#FBF8F1;color:#7A1F2B;border:2px solid #7A1F2B;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:13px;cursor:pointer;padding:0}
+.wcard .ws{font-size:26px;line-height:1}.wcard.whot{background:#7A1F2B;color:#FBF8F1}.wcard.no{opacity:.45;cursor:default}.wcard.big{width:76px;height:108px;font-size:16px}.wcard.big .ws{font-size:38px}
+.wtop{display:flex;align-items:center;justify-content:center;gap:16px}
+.ayo{display:grid;grid-template-columns:44px repeat(6,1fr) 44px;gap:6px;align-items:center;background:#8A5A33;border-radius:18px;padding:10px}
+.ayo .pit{aspect-ratio:1;border-radius:50%;background:#5E3A1E;color:#FBF1DC;display:grid;place-items:center;font-weight:800;font-size:16px;border:0;cursor:default;box-shadow:inset 0 3px 8px rgba(0,0,0,.45)}
+.ayo .pit.go{cursor:pointer;outline:3px solid #F2C94C}.ayo .pit.last{background:#7A4A26}
+.ayo .store{grid-row:span 2;height:100%;border-radius:22px;background:#5E3A1E;color:#FBF1DC;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:18px;box-shadow:inset 0 3px 8px rgba(0,0,0,.45)}
+.ayo .store small{font-size:9px;font-weight:600;opacity:.8}
+.pkcards{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
 .kicks{display:flex;gap:6px;justify-content:center;font-size:20px}
 .ghsvg .zone{fill:transparent;cursor:pointer} .ghsvg .zone:hover{fill:rgba(255,255,255,.18)}
 .ghsvg .dartzone{cursor:crosshair}
@@ -657,6 +674,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 <script type="module">
 import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank, carPaid } from '/shared/catalog.js';
 import { TABLE_W, TABLE_H, BALL_R, POCKETS } from '/shared/snooker.js';
+import { TABLE_GAMES, WHOT_SHAPES, LUDO_SAFE, RAKE, MAX_STAKE } from '/shared/boardgames.js';
 import { GH_GAMES, GH_MAX_BET, WHEEL_PAID, WHEEL_FREE, SCRATCH_TIERS, SCRATCH_SYMBOLS, PEN_SPOTS, DART_ORDER, DART_RINGS } from '/shared/games.js';
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt, PLINKO, PLINKO_ROWS, MINES_TILES, MINES_CHOICES, minesMultiple } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
@@ -3078,7 +3096,7 @@ const FLOW_NAMES={ 'earn:shifts':['source','Extra shifts'], 'earn:gigs':['source
   pet:['sink','Pets'], 'crime:fine':['sink','Crime fines'], 'election:fee':['sink','Running for mayor'], 'casino:bet':['sink','Casino bets'], 'race:bet':['sink','Race bets'], 'lottery:ticket':['sink','Lottery tickets'],
   gift:['move','Gifts'], 'crime:pickpocket':['move','Pickpocketing'] };
 // A flow's [kind, name]: Game House games are 'game:<id>:bet' (coins in) and 'game:<id>:win' (coins out).
-const flowInfo=k=>{ if(FLOW_NAMES[k]) return FLOW_NAMES[k]; const m=/^game:(\w+):(bet|win)$/.exec(k); if(m) return [m[2]==='bet'?'sink':'source', `${(GH_GAMES[m[1]]||{name:m[1]}).name} ${m[2]==='bet'?'stakes':'winnings'}`]; return ['source',k]; };
+const flowInfo=k=>{ if(FLOW_NAMES[k]) return FLOW_NAMES[k]; if(k==='table:rake') return ['sink','House share of table pots']; const tb=/^table:(\w+):(stake|win|refund)$/.exec(k); if(tb) return ['move', `${(TABLE_GAMES[tb[1]]||{name:tb[1]}).name} table ${tb[2]==='stake'?'stakes':tb[2]==='win'?'winnings':'refunds'}`]; const m=/^game:(\w+):(bet|win)$/.exec(k); if(m) return [m[2]==='bet'?'sink':'source', `${(GH_GAMES[m[1]]||{name:m[1]}).name} ${m[2]==='bet'?'stakes':'winnings'}`]; return ['source',k]; };
 const EARN_KEYS=['earn:shifts','earn:gigs','earn:fish','earn:forage','earn:scavenged','daily','earn:supplies','crime:rob','casino:win','race:win','lottery:win'];
 var Stats={ data:null, days:30, busy:false, at:0,
   async load(){ if(!Store.canWrite||this.busy) return; this.busy=true; try{ this.data=await api('/api/admin/stats?days='+this.days); this.at=Date.now(); }catch(e){ toast(e.message); } this.busy=false; if(activeTab==='stats') this.renderNow(); },
@@ -3383,7 +3401,7 @@ const GH={ id:null, info:null, at:0, open:false, game:'wheel', bet:100, busy:fal
     for(const [k,g] of Object.entries(GH_GAMES)){ const soon=!this.views[k]; pick.append(el('button',{class:this.game===k?'on':'','aria-pressed':String(this.game===k),disabled:!!live&&live!==k,onclick:()=>{ this.game=k; this.last=null; this.revealed=new Set(); renderCard(true); }}, el('span',{class:'gi',text:g.icon}), g.name, soon?el('small',{text:'coming soon'}):'')); }
     box.append(el('p',{class:'hint',text:`You have ${fmt(I.coins)} coins on you.`}), pick, el('p',{class:'crule',text:GH_GAMES[this.game].rule}));
     const v=this.views[this.game]; box.append(v?v.call(this,b,I):el('p',{class:'hint',text:'This one is being built. Check back soon!'}));
-    box.append(el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Leave',onclick:()=>{ this.open=false; document.body.classList.remove('card-max'); renderCard(true); }})));
+    box.append(el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Close the Game House',onclick:()=>{ this.open=false; document.body.classList.remove('card-max'); renderCard(true); }})));
     return box; },
   betRow(I){ const inp=el('input',{type:'number',min:'1',max:String(GH_MAX_BET),step:'1',inputmode:'numeric','aria-label':'Bet',value:String(this.bet)}); inp.oninput=()=>{ this.bet=inp.value; };
     const q=(l,v)=>el('button',{class:'pill',text:l,onclick:()=>{ this.bet=Math.max(1,Math.min(GH_MAX_BET,Math.floor(v))); renderCard(true); }});
@@ -3432,7 +3450,8 @@ const GH={ id:null, info:null, at:0, open:false, game:'wheel', bet:100, busy:fal
       else { if(g&&g.done) wrap.append(el('div',{class:'cresult '+(g.paid?'win':'lose')}, el('b',{text:g.paid?`${g.goals} goals: you won ${fmt(g.paid)} coins!`:`${g.goals} goals. No prize this time.`})));
         wrap.append(this.betRow(I), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Start a shootout',disabled:this.busy,onclick:()=>{ const bet=this.betOk(); if(bet) this.act('penalty',{action:'start',bet},r=>{ this.last=r; }); }}))); }
       return wrap; },
-    snooker(b,I){ const wrap=el('div',{class:'ghstage snk'}), g=this.last&&this.last.game==='snooker'?this.last:null, live=g&&!g.done;
+    snooker(b,I){ if(Tables.mine&&Tables.mine.game==='snooker'&&Tables.bid===b.id) return Tables.lobby('snooker', b.id);
+      const wrap=el('div',{class:'ghstage snk'}), g=this.last&&this.last.game==='snooker'?this.last:null, live=g&&!g.done;
       if(this.aim==null) this.aim=0; if(this.power==null) this.power=0.5;
       const svg=this.svg(`-0.09 -0.09 ${TABLE_W+0.18} ${TABLE_H+0.18}`); svg.style.maxWidth='520px';
       svg.append(this.mk('rect',{x:-0.09,y:-0.09,width:TABLE_W+0.18,height:TABLE_H+0.18,rx:0.06,fill:'#6B3E22'}), this.mk('rect',{x:0,y:0,width:TABLE_W,height:TABLE_H,fill:'#2E7D46'}),
@@ -3461,8 +3480,12 @@ const GH={ id:null, info:null, at:0, open:false, game:'wheel', bet:100, busy:fal
           el('div',{class:'pwr'}, el('span',{text:'Power'}), pw, pv), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'🎱 Shoot',disabled:this.busy,onclick:()=>this.act('snooker',{action:'shoot',angle:this.aim,power:this.power},r=>{ this.last=r; if(r.last&&r.last.frames) this.replay={ g:r, frames:r.last.frames, t0:performance.now() }; if(r.done) setTimeout(()=>toast(r.won?(r.paid?`🎱 You did it! ${fmt(r.paid)} coins (today's prize).`:'🎱 You did it! (Today’s prize is already won.)'):'Out of shots. Rack up again!'), Math.min(4000,(r.last?.frames?.length||0)*33)); })})));
         return wrap; }
       if(g&&g.done&&!replay) wrap.append(el('div',{class:'cresult '+(g.won?'win':'lose')}, el('b',{text:g.won?(g.paid?`Cleared! You won today's ${fmt(g.paid)}-coin prize.`:'Cleared! (Today’s prize is already won.)'):'Out of shots this time.'})));
-      if(!live&&!replay) wrap.append(el('p',{class:'hint',text:I.snookerPrize?`Today's prize for a win: ${fmt(300)} coins.`:'You’ve won today’s prize; practice is still free.'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'🎱 Rack up (free)',disabled:this.busy,onclick:()=>this.act('snooker',{action:'start'},r=>{ this.last=r; this.aim=0; })})));
+      if(!live&&!replay) wrap.append(el('h4',{class:'bgroup',text:'Practice'}), el('p',{class:'hint',text:I.snookerPrize?`Today's prize for a win: ${fmt(300)} coins.`:'You’ve won today’s prize; practice is still free.'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'🎱 Rack up (free)',disabled:this.busy,onclick:()=>this.act('snooker',{action:'start'},r=>{ this.last=r; this.aim=0; })})));
+      if(!live&&!replay) wrap.append(Tables.lobby('snooker', b.id));
       return wrap; },
+    whot(b){ return Tables.lobby('whot', b.id); },
+    ludo(b){ return Tables.lobby('ludo', b.id); },
+    ayo(b){ return Tables.lobby('ayo', b.id); },
     darts(b,I){ const wrap=el('div',{class:'ghstage'}), g=this.last&&this.last.game==='darts'?this.last:null, live=g&&!g.done, R0=100;
       const svg=this.svg('-110 -110 220 220'); svg.append(this.mk('circle',{r:108,fill:'#2B2621'}));
       const ring=(r0,r1,i,col)=>{ const a0=(i*18-9-90)*Math.PI/180, a1=a0+18*Math.PI/180, P=(r,a)=>`${r*Math.cos(a)} ${r*Math.sin(a)}`; return this.mk('path',{d:`M${P(r0,a0)} L${P(r1,a0)} A${r1} ${r1} 0 0 1 ${P(r1,a1)} L${P(r0,a1)} A${r0} ${r0} 0 0 0 ${P(r0,a0)} Z`,fill:col}); };
@@ -3478,6 +3501,117 @@ const GH={ id:null, info:null, at:0, open:false, game:'wheel', bet:100, busy:fal
       else { if(g&&g.done) wrap.append(el('div',{class:'cresult '+(g.paid?'win':'lose')}, el('b',{text:g.paid?`${g.total} points: you won ${fmt(g.paid)} coins!`:`${g.total} points. No prize this time.`})));
         wrap.append(this.betRow(I), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Start a game',disabled:this.busy,onclick:()=>{ const bet=this.betOk(); if(bet) this.act('darts',{action:'start',bet},r=>{ this.last=r; }); }}))); }
       return wrap; },
+  } };
+// ---- Tables: colonists playing each other (Whot, Ludo, Ayo, Snooker at a Game House; Hold'em at a Casino) ----
+const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, seats:2, quick:true, timer:null, sig:'', aim:0, power:0.55, replay:null, lastShotSig:'',
+  async load(game,bid,quiet){ this.game=game; this.bid=bid; try{ const r=await api(`/api/me/tables?building=${encodeURIComponent(bid)}&game=${game}`); const ls=JSON.stringify(r.tables.map(t=>[t.id,t.status,t.players.length])); const changed=ls!==this.listSig||this.set(r.mine); this.listSig=ls; this.list=r.tables; if(!quiet||changed) renderCard(true); }catch(e){ if(!quiet){ this.list=[]; toast(e.message); } } this.poll(); },
+  set(t){ const was=this.mine&&this.mine.status; this.mine=t; const sig=t?JSON.stringify({...t, now:0}):''; const changed=sig!==this.sig; this.sig=sig; if(t&&t.game==='snooker'&&t.view&&t.view.last){ const ls=JSON.stringify(t.view.last.potted)+t.view.log.length; if(ls!==this.lastShotSig){ this.lastShotSig=ls; if(this.lastShotSig&&t.view.last.frames) this.replay={ frames:t.view.last.frames, t0:performance.now() }; } } if(changed&&(was!==(t&&t.status))) this.poll(); return changed; },
+  // While a table is on screen: follow the game (every 1.5 s), or keep the list of open tables fresh (every 4 s).
+  poll(){ clearInterval(this.timer); const playing=this.mine&&this.mine.status!=='done';
+    this.timer=setInterval(async()=>{ if(!document.querySelector('#card .tbl')){ clearInterval(this.timer); this.timer=null; return; }
+      try{ if(playing){ const r=await api('/api/me/table'); if(this.set(r.table)) renderCard(true); else { const el2=document.querySelector('#card .tbl .timer'); if(el2&&this.mine) el2.textContent=this.left(); } }
+        else if(!this.busy) await this.load(this.game,this.bid,true); }catch(e){} }, playing?1500:4000); },
+  left(){ const t=this.mine; if(!t||t.status!=='playing') return ''; const s=Math.max(0,Math.ceil((t.turnAt-Date.now()-skew)/1000)); return `⏱ ${s}s`; },
+  async act(body){ if(this.busy) return; this.busy=true; renderCard(true);
+    try{ const r=await api('/api/me/tables',{method:'POST',body}); if(r&&r.id) this.set(r); else if(body.action==='leave'){ this.set(null); if(r.refunded) toast(`Your ${fmt(r.refunded)} coins are back.`); } myMoney=null; loadMyMoney&&loadMyMoney(); }
+    catch(e){ toast(e.message); } this.busy=false; if(body.action!=='move') await this.load(this.game,this.bid); else renderCard(true); },
+  move(m){ if(!this.mine) return; this.act({action:'move', id:this.mine.id, move:m}); },
+  lobby(game, bid){ const box=el('div',{class:'tbl'}), G=TABLE_GAMES[game];
+    if(this.game!==game||this.bid!==bid||!this.list){ if(!this.loading||this.loading!==game+bid){ this.loading=game+bid; this.load(game,bid).finally(()=>{ this.loading=null; }); } box.append(el('p',{class:'hint',text:'Finding tables…'})); return box; }
+    const t=this.mine&&this.mine.game===game?this.mine:null;
+    if(this.mine&&this.mine.game!==game&&this.mine.status!=='done'){ box.append(el('p',{class:'hint',text:`You're at a ${this.mine.name} table. Finish or leave that game first.`}), el('div',{class:'row-actions'}, el('button',{class:'btn',text:`Back to my ${this.mine.name} game`,onclick:()=>{ if(this.mine.game==='poker'){ toast('Your Hold’em game is at the Casino.'); return; } GH.game=this.mine.game; renderCard(true); }}))); return box; }
+    if(t) return this.table(t, box);
+    // the lobby: open tables, open one, or play the computer
+    const open=(this.list||[]).filter(x=>x.status==='waiting'), live=(this.list||[]).filter(x=>x.status==='playing');
+    box.append(el('h4',{class:'bgroup',text:`Play someone at ${G.name}`}));
+    if(open.length){ const L=el('div',{class:'tlist'}); for(const x of open) L.append(el('div',{class:'trow'}, el('div',{class:'tl'}, el('b',{text:`${x.stake?fmt(x.stake)+' coins':'Friendly'} · ${x.players.length} of ${x.seats}${x.opts.quick?' · quick':''}`}), el('span',{class:'hint',text:x.players.map(p=>'@'+p.handle).join(', ')})),
+        el('button',{class:'btn primary sm',text:x.stake?`Join (${fmt(x.stake)})`:'Join',disabled:this.busy,onclick:()=>this.act({action:'join',id:x.id})}))); box.append(L); }
+    else box.append(el('p',{class:'hint',text:'No open tables right now. Open one and others can join.'}));
+    if(live.length) box.append(el('p',{class:'hint',text:`${live.length} game${live.length>1?'s':''} being played here now.`}));
+    const st=el('input',{type:'number',min:'0',max:String(MAX_STAKE),step:'1',inputmode:'numeric','aria-label':'Stake',value:String(this.stake)}); st.oninput=()=>{ this.stake=st.value; };
+    const seatsRow=G.min===G.max?null:el('div',{class:'cpicks'}, ...Array.from({length:G.max-G.min+1},(_,i)=>G.min+i).map(n=>el('button',{class:'pill'+(Number(this.seats)===n?' on':''),text:`${n} players`,onclick:()=>{ this.seats=n; renderCard(true); }})));
+    if(Number(this.seats)<G.min||Number(this.seats)>G.max) this.seats=G.min;
+    box.append(el('h4',{class:'bgroup',text:'Open a table'}), el('div',{class:'cbet'}, el('span',{text:'Stake'}), st, el('button',{class:'pill',text:'Friendly',onclick:()=>{ this.stake=0; renderCard(true); }}), el('button',{class:'pill',text:'500',onclick:()=>{ this.stake=500; renderCard(true); }}), el('button',{class:'pill',text:'2k',onclick:()=>{ this.stake=2000; renderCard(true); }})));
+    if(seatsRow) box.append(seatsRow);
+    if(game==='ludo') box.append(el('div',{class:'cpicks'}, el('button',{class:'pill'+(this.quick?' on':''),text:'Quick (2 tokens)',onclick:()=>{ this.quick=true; renderCard(true); }}), el('button',{class:'pill'+(!this.quick?' on':''),text:'Classic (4 tokens)',onclick:()=>{ this.quick=false; renderCard(true); }})));
+    box.append(el('p',{class:'hint',text:`Everyone puts in the stake; the winner takes the pot less ${Math.round(RAKE*100)}% for the house. A draw splits it. Slow players get ${45} seconds a turn.`}),
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Open a table',disabled:this.busy,onclick:()=>this.act({action:'create',buildingId:bid,game,stake:Math.max(0,Math.floor(Number(this.stake)||0)),seats:Number(this.seats),quick:this.quick})}),
+        el('button',{class:'btn',text:'🤖 Play the computer (free)',disabled:this.busy,onclick:()=>this.act({action:'create',buildingId:bid,game,stake:0,seats:Number(this.seats)||G.min,quick:this.quick,computer:true})})));
+    return box; },
+  table(t, box){ const G=TABLE_GAMES[t.game], v=t.view, mine=t.seat;
+    box.append(el('div',{class:'tbar'}, el('b',{text:`${G.icon} ${G.name}${t.stake?` · pot ${fmt(t.pot)}`:' · friendly'}`}), el('span',{class:'timer',text:this.left()})));
+    const seats=el('div',{class:'seats'}); t.players.forEach((p,i)=>seats.append(el('span',{class:'seat'+(v&&v.turn===i?' on':'')+(i===mine?' me':'')+(p.left?' gone':''),text:`${p.bot?'🤖 ':''}${i===mine?'You':'@'+p.handle}${v&&v.counts?` · ${v.counts[i]}🂠`:''}${v&&v.store?` · ${v.store[i]}`:''}${v&&v.score?` · ${v.score[i]}`:''}`})));
+    for(let i=t.players.length;i<t.seats;i++) seats.append(el('span',{class:'seat',text:'empty seat'})); box.append(seats);
+    if(t.status==='waiting'){ box.append(el('p',{class:'hint',style:'text-align:center',text:`Waiting for ${t.seats-t.players.length} more player${t.seats-t.players.length>1?'s':''}…`}), el('div',{class:'row-actions'}, el('button',{class:'linkb',text:t.stake?`Leave and get ${fmt(t.stake)} back`:'Leave',onclick:()=>this.act({action:'leave'})}))); return box; }
+    box.append(this.boards[t.game].call(this,t,v));
+    if(t.status==='done'){ const R0=t.result||{}, won=R0.winners&&R0.winners.includes(Me&&Me.handle);
+      box.append(el('div',{class:'cresult '+(won?'win':'lose')}, el('b',{text:R0.winners&&R0.winners.length>1?`A draw!${R0.share?` You get ${fmt(R0.share)} back.`:''}`:won?(R0.share?`You won ${fmt(R0.share)} coins!`:'You won!'):`${R0.winners&&R0.winners[0]?'@'+R0.winners[0]:'They'} won.`})),
+        el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Back to the tables',onclick:()=>this.act({action:'leave'})}))); }
+    else box.append(el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Leave the game',onclick:()=>toast(t.stake?'Leave now? You lose your stake and the game plays on without you.':'Leave this game?','Leave',()=>this.act({action:'leave'}))})));
+    return box; },
+  boards:{
+    whot(t,v){ const w=el('div',{class:'ghstage'}), my=t.canMove, legal=new Set();
+      const card=(c,big,on)=>{ const [s,n]=c.split(':'); return el('button',{class:'wcard'+(s==='whot'?' whot':'')+(big?' big':'')+(on===false?' no':''),disabled:big||on===false||!my,onclick:()=>{ if(s==='whot'){ this.pickCall=c; renderCard(true); } else this.move({card:c}); }}, el('span',{class:'ws',text:s==='whot'?'W':WHOT_SHAPES[s]}), el('span',{text:n})); };
+      const top=v.top, [ts]=top.split(':'), topN=Number(top.split(':')[1]), shape=v.call||ts;
+      w.append(el('div',{class:'wtop'}, card(top,true,true), el('div',null, el('p',{text:`Market: ${v.market} cards`}), v.call?el('p',{text:`Called: ${WHOT_SHAPES[v.call]} ${v.call}`}):'', my?el('button',{class:'btn',text:'Draw from market',onclick:()=>this.move({draw:true})}):el('p',{class:'hint',text:'Their turn…'}))));
+      const can=c=>{ const [s,n]=c.split(':'); return s==='whot'||s===shape||(Number(n)===topN&&ts!=='whot'); };
+      w.append(el('div',{class:'whand'}, ...v.hand.map(c=>card(c,false,my?can(c):false))));
+      if(this.pickCall&&my) w.append(el('div',{class:'cpicks',style:'justify-content:center'}, el('span',{text:'Call a shape:'}), ...Object.entries(WHOT_SHAPES).map(([k,sym])=>el('button',{class:'pill',text:`${sym} ${k}`,onclick:()=>{ const c=this.pickCall; this.pickCall=null; this.move({card:c,call:k}); }}))));
+      const names=i=>i===t.seat?'You':(t.players[i]?.bot?'🤖 ':'')+'@'+(t.players[i]?.handle||'?');
+      if(v.log.length) w.append(el('p',{class:'hint',style:'text-align:center',text:v.log.slice(-3).map(([s,a,c,k])=>`${names(s)} ${a==='drew'?'drew':`played ${c?c.replace('whot:20','Whot').replace(/(\w+):(\d+)/,(m,a2,b2)=>`${WHOT_SHAPES[a2]||''}${b2}`):''}${k?` (called ${k})`:''}`}`).join(' · ')}));
+      return w; },
+    ayo(t,v){ const w=el('div',{class:'ghstage'}), me=t.seat<0?0:t.seat, my=t.canMove, board=el('div',{class:'ayo'});
+      const mineIdx=me===0?[0,1,2,3,4,5]:[6,7,8,9,10,11], theirs=me===0?[11,10,9,8,7,6]:[5,4,3,2,1,0];
+      const pit=i=>el('button',{class:'pit'+(my&&v.turn===me&&mineIdx.includes(i)&&v.pits[i]>0?' go':'')+(v.last===i?' last':''),'aria-label':`Pit with ${v.pits[i]} seeds`,text:String(v.pits[i]),disabled:!(my&&mineIdx.includes(i)&&v.pits[i]>0),onclick:()=>this.move({pit:i})});
+      board.append(el('div',{class:'store'}, String(v.store[1-me]), el('small',{text:'theirs'}))); theirs.forEach(i=>board.append(pit(i))); board.append(el('div',{class:'store'}, String(v.store[me]), el('small',{text:'yours'})));
+      mineIdx.forEach(i=>board.append(pit(i))); w.append(board, el('p',{class:'hint',style:'text-align:center',text:my?'Your turn: tap one of your pits (bottom row) to sow.':v.turn==null?'':'Their turn…'})); return w; },
+    ludo(t,v){ const w=el('div',{class:'ghstage'}), N=15, sz=20, svg=GH.svg(`0 0 ${N*sz} ${N*sz}`), mk=GH.mk.bind(GH), my=t.canMove;
+      const COL={0:'#D6483C',13:'#3FA65A',26:'#E8B92F',39:'#3E7CC9'};
+      const PATH=[[1,6],[2,6],[3,6],[4,6],[5,6],[6,5],[6,4],[6,3],[6,2],[6,1],[6,0],[7,0],[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[9,6],[10,6],[11,6],[12,6],[13,6],[14,6],[14,7],[14,8],[13,8],[12,8],[11,8],[10,8],[9,8],[8,9],[8,10],[8,11],[8,12],[8,13],[8,14],[7,14],[6,14],[6,13],[6,12],[6,11],[6,10],[6,9],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8],[0,7],[0,6]];
+      const HOMECOL={0:[[1,7],[2,7],[3,7],[4,7],[5,7]],13:[[7,1],[7,2],[7,3],[7,4],[7,5]],26:[[13,7],[12,7],[11,7],[10,7],[9,7]],39:[[7,13],[7,12],[7,11],[7,10],[7,9]]};
+      const YARD={0:[0,0],13:[9,0],26:[9,9],39:[0,9]};
+      svg.append(mk('rect',{x:0,y:0,width:N*sz,height:N*sz,fill:'#FBF8F1',rx:10}));
+      for(const [st,[yx,yy]] of Object.entries(YARD)){ svg.append(mk('rect',{x:yx*sz,y:yy*sz,width:6*sz,height:6*sz,fill:COL[st],rx:8}), mk('rect',{x:yx*sz+sz,y:yy*sz+sz,width:4*sz,height:4*sz,fill:'#FBF8F1',rx:6})); }
+      PATH.forEach(([x,y],i)=>svg.append(mk('rect',{x:x*sz+1,y:y*sz+1,width:sz-2,height:sz-2,fill:COL[i]||(LUDO_SAFE.includes(i)?'#EFE7D8':'#fff'),stroke:'#D8CFBF','stroke-width':1,rx:3})));
+      PATH.forEach(([x,y],i)=>{ if(LUDO_SAFE.includes(i)&&!COL[i]) svg.append(mk('text',{x:x*sz+sz/2,y:y*sz+sz*0.72,'text-anchor':'middle','font-size':11,fill:'#B9A985'},'★')); });
+      for(const [st,cells] of Object.entries(HOMECOL)) cells.forEach(([x,y])=>svg.append(mk('rect',{x:x*sz+1,y:y*sz+1,width:sz-2,height:sz-2,fill:COL[st],opacity:0.75,rx:3})));
+      svg.append(mk('polygon',{points:`${6*sz},${6*sz} ${9*sz},${6*sz} ${7.5*sz},${7.5*sz}`,fill:COL[13]}), mk('polygon',{points:`${9*sz},${6*sz} ${9*sz},${9*sz} ${7.5*sz},${7.5*sz}`,fill:COL[26]}), mk('polygon',{points:`${9*sz},${9*sz} ${6*sz},${9*sz} ${7.5*sz},${7.5*sz}`,fill:COL[39]}), mk('polygon',{points:`${6*sz},${9*sz} ${6*sz},${6*sz} ${7.5*sz},${7.5*sz}`,fill:COL[0]}));
+      const movable=new Set(my&&v.dice!=null?(t.view&&v.tokens[t.seat]||[]).map((p,i)=>{ if(p===56) return -1; if(p===-1) return v.dice===6?i:-1; return p+v.dice<=56?i:-1; }).filter(i=>i>=0):[]);
+      v.tokens.forEach((toks,seat)=>{ const st=v.starts[seat], [yx,yy]=YARD[st];
+        toks.forEach((p,i)=>{ let cx,cy; if(p===-1){ cx=(yx+1.5+(i%2)*3)*sz; cy=(yy+1.5+Math.floor(i/2)*3)*sz; } else if(p===56){ cx=(7.5+(i%2-0.5)*0.6)*sz; cy=(7.5+(Math.floor(i/2)-0.5)*0.6)*sz; }
+          else if(p>50){ const [x,y]=HOMECOL[st][p-51]; cx=(x+0.5)*sz; cy=(y+0.5)*sz; } else { const [x,y]=PATH[(st+p)%52]; cx=(x+0.5)*sz+(i-1.5)*1.5; cy=(y+0.5)*sz; }
+          const go=seat===t.seat&&movable.has(i), tok=mk('circle',{cx,cy,r:sz*0.36,fill:COL[st],stroke:go?'#2B2621':'#fff','stroke-width':go?3:2,style:go?'cursor:pointer':''});
+          if(go) tok.addEventListener('click',()=>this.move({token:i})); svg.append(tok); }); });
+      w.append(svg);
+      const dice=['⚀','⚁','⚂','⚃','⚄','⚅'];
+      w.append(el('div',{class:'row-actions',style:'justify-content:center;align-items:center'}, v.dice!=null?el('span',{style:'font-size:40px;line-height:1',text:dice[v.dice-1]}):'', my&&v.dice==null?el('button',{class:'btn primary',text:'🎲 Roll',onclick:()=>this.move({roll:true})}):el('span',{class:'hint',text:my?(movable.size?'Tap a token to move it.':'No move: passing…'):v.turn==null?'':'Their turn…'})));
+      const names=i=>i===t.seat?'You':(t.players[i]?.bot?'🤖 ':'')+'@'+(t.players[i]?.handle||'?');
+      if(v.log.length) w.append(el('p',{class:'hint',style:'text-align:center',text:v.log.slice(-3).map(([s,a,x])=>`${names(s)} ${a==='rolled'?`rolled ${x}`:a==='captured'?'captured a token!':a==='moved'?'moved':a}`).join(' · ')}));
+      return w; },
+    snooker(t,v){ const w=el('div',{class:'ghstage snk'}), my=t.canMove;
+      const svg=GH.svg(`-0.09 -0.09 ${TABLE_W+0.18} ${TABLE_H+0.18}`), mk=GH.mk.bind(GH); svg.style.maxWidth='520px';
+      svg.append(mk('rect',{x:-0.09,y:-0.09,width:TABLE_W+0.18,height:TABLE_H+0.18,rx:0.06,fill:'#6B3E22'}), mk('rect',{x:0,y:0,width:TABLE_W,height:TABLE_H,fill:'#2E7D46'}));
+      for(const [px,py,pr] of POCKETS) svg.append(mk('circle',{cx:px,cy:Math.min(TABLE_H,Math.max(0,py)),r:pr*0.85,fill:'#111'}));
+      const group=mk('g',{}); svg.append(group); const draw=pos=>{ group.innerHTML=''; for(const [id,[x,y]] of Object.entries(pos)) group.append(mk('circle',{cx:x,cy:y,r:BALL_R,fill:id==='c'?'#F7F3E8':'#C0392B',stroke:'rgba(0,0,0,.35)','stroke-width':0.004})); };
+      const rp=this.replay; if(rp){ const step=()=>{ if(!svg.isConnected||this.replay!==rp) return; const i=Math.min(rp.frames.length-1,Math.floor((performance.now()-rp.t0)/1000*30)); draw(rp.frames[i]); if(i<rp.frames.length-1) requestAnimationFrame(step); else { this.replay=null; renderCard(true); } }; draw(rp.frames[0]); requestAnimationFrame(step); }
+      else draw(Object.fromEntries(v.balls.map(b=>[b.id,[b.x,b.y]])));
+      const cue=v.balls.find(b=>b.id==='c');
+      if(my&&!rp&&cue){ const dx=Math.cos(this.aim), dy=Math.sin(this.aim); svg.append(mk('line',{x1:cue.x,y1:cue.y,x2:cue.x+dx*0.8,y2:cue.y+dy*0.8,stroke:'rgba(255,255,255,.7)','stroke-width':0.005,'stroke-dasharray':'0.02 0.015'}));
+        const zone=mk('rect',{x:-0.09,y:-0.09,width:TABLE_W+0.18,height:TABLE_H+0.18,fill:'transparent',style:'cursor:crosshair'}); zone.addEventListener('click',ev=>{ const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY; const q=pt.matrixTransform(svg.getScreenCTM().inverse()); this.aim=Math.atan2(q.y-cue.y,q.x-cue.x); renderCard(true); }); svg.append(zone); }
+      w.append(svg, el('div',{class:'mstat'}, el('span',{text:`First to ${v.race} reds`}), el('b',{text:`You ${v.score[t.seat]??0} · Them ${v.score[1-(t.seat<0?0:t.seat)]??0}`})));
+      if(v.last&&!rp) w.append(el('p',{class:'hint',style:'text-align:center',text:`${v.last.seat===t.seat?'You':'They'} ${v.last.foul?'fouled':v.last.potted.filter(x=>x!=='c').length?`potted ${v.last.potted.filter(x=>x!=='c').length}`:'missed'}.`}));
+      if(my&&!rp){ const nudge=(lab,d)=>el('button',{class:'pill',text:lab,onclick:()=>{ this.aim+=d*Math.PI/180; renderCard(true); }}); const pw=el('input',{type:'range',min:'5',max:'100',value:String(Math.round(this.power*100)),'aria-label':'Power'}); pw.oninput=()=>{ this.power=pw.value/100; };
+        w.append(el('div',{class:'aimrow'}, nudge('◀◀',-2), nudge('◀',-0.3), nudge('▶',0.3), nudge('▶▶',2)), el('div',{class:'pwr'}, el('span',{text:'Power'}), pw), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎱 Shoot',disabled:this.busy,onclick:()=>this.move({shot:true,angle:this.aim,power:this.power})}))); }
+      else if(!rp&&v.turn!=null) w.append(el('p',{class:'hint',style:'text-align:center',text:'Their shot…'}));
+      return w; },
+    poker(t,v){ const w=el('div',{class:'ghstage'}), card=c=>{ const red=/[♥♦]$/.test(c); return el('span',{class:'pcard'+(red?' red':''),text:c.replace('T','10')}); }, back=()=>el('span',{class:'pcard back',text:'🂠'});
+      w.append(el('p',{class:'hint',style:'text-align:center',text:['Before the flop','The flop','The turn','The river'][v.street]+` · pot ${fmt(v.put.reduce((a,b)=>a+b,0))}${t.stake?'':' chips'}`}),
+        el('div',{class:'pkcards'}, ...v.board.map(card), ...Array(5-v.board.length).fill(0).map(back)));
+      if(v.shown) for(const [s,x] of Object.entries(v.shown)) w.append(el('p',{class:'hint',style:'text-align:center'}, `${Number(s)===t.seat?'You':'@'+t.players[s].handle}: `, ...x.hole.map(card), ` ${x.hand}`));
+      if(v.hole) w.append(el('div',null, el('p',{class:'hint',style:'text-align:center',text:'Your cards'}), el('div',{class:'pkcards'}, ...v.hole.map(card))));
+      w.append(el('div',{class:'seats'}, ...t.players.map((p,i)=>el('span',{class:'seat'+(v.turn===i?' on':'')+(v.folded[i]?' gone':''),text:`${i===t.seat?'You':(p.bot?'🤖 ':'')+'@'+p.handle} · in ${fmt(v.put[i])}`}))));
+      if(t.canMove&&v.legal.length) w.append(el('div',{class:'row-actions',style:'justify-content:center'}, ...v.legal.map(m=>el('button',{class:'btn'+(m.act==='raise'||m.act==='bet'?' primary':''),text:`${m.act[0].toUpperCase()+m.act.slice(1)}${m.cost?` ${fmt(m.cost)}`:''}`,disabled:this.busy,onclick:()=>this.move({act:m.act})}))));
+      return w; },
   } };
 // Plinko: pick a risk, drop a ball. The server picks the path; the board shows it falling.
 const Plinko={ RISK:{low:'Low risk',mid:'Medium risk',high:'High risk'}, anim:null,
@@ -3595,6 +3729,8 @@ function casinoPanel(c){ const box=el('div',{class:'authbox casino'}, el('div',{
   if(!casino.open){ box.append(el('p',{class:'hint',text:`${info.casino.name} is open. You have ${fmt(info.coins)} coins.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Go to the casino',onclick:()=>{ casino.open=true; renderCard(true); }}))); return box; }
   const busyTable=(casino.bj&&!casino.bj.done)||(Rocket.g&&!Rocket.g.done)||(casino.mn&&!casino.mn.done)||(casino.hl&&!casino.hl.done);
   const tabs=el('div',{class:'ctabs'}); for(const k of Object.keys(GAMES)) tabs.append(el('button',{class:'pill'+(casino.game===k?' on':''),'aria-pressed':String(casino.game===k),text:GAMES[k].name,disabled:busyTable&&casino.game!==k,onclick:()=>{ casino.game=k; casino.pick=GAMES[k].picks?GAMES[k].picks[0]:k==='roulette'?'red':null; casino.last=null; renderCard(true); }}));
+  tabs.append(el('button',{class:'pill'+(casino.game==='holdem'?' on':''),'aria-pressed':String(casino.game==='holdem'),text:"Hold'em",disabled:busyTable,onclick:()=>{ casino.game='holdem'; renderCard(true); }}));
+  if(casino.game==='holdem'){ box.append(el('p',{class:'hint',text:`You have ${fmt(info.coins)} coins.`}), tabs, el('p',{class:'crule',text:"Texas Hold'em, one hand per table, fixed bets. Everyone antes the stake; a bet or raise is the stake (twice it on the turn and river), three raises a round. Best five cards wins the pot, less 5% for the house."}), Tables.lobby('poker', c.id)); return box; }
   box.append(el('p',{class:'hint',text:`You have ${fmt(info.coins)} coins.`}), tabs, el('p',{class:'crule',text:GAMES[casino.game].rule}));
   if(casino.game==='blackjack'){ box.append(blackjackTable(c,info)); return box; }
   if(casino.game==='rocket'){ box.append(Rocket.table(c,info)); return box; }
@@ -3811,6 +3947,8 @@ function cardNow(c, d){ const h=bOf(c.home), st=h?citizenAt(c,gmNow()):null;
   return !h ? (d&&d.queue ? `In cryosleep aboard the ark, #${fmt(d.queue)} in line to wake` : 'In cryosleep aboard the ark') : st ? st.act : 'Arriving soon'; }
 function renderCard(force){ if(!force && cardBusy()) return;
   const card=$('card'); if(!sel){ card.hidden=true; return; } card.innerHTML='';
+  // Playing at a Game House or Casino: the building's details step aside so the game fills the card.
+  card.classList.toggle('ghplay', sel.kind==='b' && !Store.canWrite && (()=>{ try{ return (GH.open&&GH.id===sel.id) || !!(casino&&casino.open&&casino.id===sel.id); }catch(e){ return false; } })());
   const close=el('button',{class:'x','aria-label':'Close',onclick:closeCard,text:'×'});
   if(sel.kind==='c'){ const d=detail.get(sel.id); const c=S.citizens.get(sel.id)||(d&&normC(d)); if(!c){ closeCard(); return; }
     if(!d && !detailLoading.has(c.id)){ detailLoading.add(c.id); const id=c.id; loadDetail(c.handle).finally(()=>{ detailLoading.delete(id); if(sel&&sel.id===id&&detail.has(id)) renderCard(); }); }

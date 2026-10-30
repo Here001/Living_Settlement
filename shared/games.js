@@ -8,7 +8,7 @@ export const GH_GAMES = {
   darts: { name: 'Darts', icon: '🎯', rule: 'Three darts. Tap where to aim; your hand wobbles a little. Score 140+ for 20×, 100+ for 5×, 80+ for 2×, 60+ for 1.5×.' },
   snooker: { name: 'Snooker', icon: '🎱', rule: 'Practice for free: pot 3 reds in 6 shots, and your first win each day pays 300 coins. Or challenge another player for a stake.' },
   whot: { name: 'Whot', icon: '🃏', rule: 'Match the shape or number of the card on the pile. First to empty their hand wins the pot.' },
-  ludo: { name: 'Ludo', icon: '🎲', rule: 'Race your four pieces home. Roll a 6 to come out. Land on someone to send them back.' },
+  ludo: { name: 'Ludo', icon: '🎲', rule: 'Race your pieces home (two each in a quick game, four in classic). Roll a 6 to come out, and again after a 6. Land on someone to send them back.' },
   ayo: { name: 'Ayo', icon: '🥥', rule: 'Sow seeds round the board; capture when your last seed makes two or three. Most seeds wins.' },
 };
 export const GH_MAX_BET = 20000; // skill games stay small-stakes

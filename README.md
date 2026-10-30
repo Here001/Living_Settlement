@@ -217,7 +217,21 @@ A new building (Shops → Going out, 3×2, 8 game hosts, 9,000 to build) where c
 
 - **🎱 Snooker practice** is free: six reds racked in a triangle, pot 3 in 6 shots. Tap the table to aim (a dotted line and ghost ball show where the cue ball meets the first ball, and a yellow line where that ball goes), fine-tune with the arrows, pick the power, and shoot. The server simulates the shot (`shared/snooker.js`, with a tiny wobble) and the phone replays it. The first practice win each real day pays 300 coins. It isn't staked, because a perfect-aim robot wins about 65% of the time; staked snooker is player against player.
 
-Whot, Ludo and Ayo (and snooker for a stake) are listed as coming soon. Every stake and win is recorded in the developer's Stats tab (as "<game> stakes" and "<game> winnings").
+### Tables: playing each other
+
+Whot, Ludo, Ayo and Snooker (at a Game House) and Texas Hold'em (on the Casino's **Hold'em** tab) are played between colonists at tables (`server/gametables.js`, rules in `shared/boardgames.js`).
+
+- **Open a table** with a stake (0 for a friendly game, up to 50,000) and, for Whot and Ludo, 2 to 4 players (Hold'em 2 to 6); Ludo can be quick (2 tokens each) or classic (4). Others see it in the list and **Join**; the game starts when every seat is taken. Leaving before it starts refunds your stake; an unfilled table closes and refunds after 15 minutes.
+- **Stakes are held by the table**, not the treasury. The winner takes the pot less 5% for the house (the treasury); a draw splits it. In Hold'em, bets and calls come out of your pocket as you make them.
+- **45 seconds a turn.** If you're slow, a sensible move is made for you (Whot: draw; Ludo: roll, then the best token; Ayo: the pit that captures most; Snooker: a gentle shot; Hold'em: check or fold). Leaving mid-game forfeits your stake, and the game plays your turns.
+- **🤖 Play the computer (free):** a friendly game against computer players starts at once. It never pays coins, so it can't be farmed.
+- **The games:**
+  - **Whot**: the Nigerian deck (circles, triangles, crosses, squares, stars and five Whot cards). Match the shape or number; 1 hold on, 2 pick two, 5 pick three, 8 suspension, 14 general market, 20 Whot (call a shape). First to empty their hand wins; if the cards run out (or after 300 moves) the lowest hand wins.
+  - **Ludo**: roll a 6 to come out and roll again after a 6 (three 6s in a row lose the turn). Land on a lone opponent off the star squares to send it home. All your tokens home wins.
+  - **Ayo**: six pits a side, four seeds each. Sow anticlockwise; capture 2s and 3s on the opponent's side (and the pits before them), but never all of their seeds at once, and leave them something to play. Over 24 wins; after 200 moves each player keeps the seeds on their side.
+  - **Snooker 1 v 1**: nine reds; pot a red and shoot again; potting the cue ball or missing every red is a foul and passes the turn. First to 5 reds wins.
+  - **Texas Hold'em**: one hand per table, fixed bets. Everyone antes the stake; a bet or raise is the stake (twice it on the turn and river), three raises a round. Best five of seven cards wins.
+- Every table's stakes, winnings and the house's share show in the developer's Stats tab. Every stake and win is recorded in the developer's Stats tab (as "<game> stakes" and "<game> winnings").
 
 ## Your own card: Work · Crime · Go here
 

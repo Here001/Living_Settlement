@@ -126,6 +126,8 @@ export function playersRouter({ limit, send, admin, world }) {
     return world.setName(p.id, (req.body || {}).name);
   }));
   // Crime, going somewhere, and pets.
+  r.get('/me/notices', limit, send(async req => world.actions.notices((await me(req)).id)));
+  r.post('/me/notices/:id/seen', limit, send(async req => world.actions.seenNotice((await me(req)).id, req.params.id)));
   r.get('/me/crime', limit, send(async req => world.actions.crimeInfo((await me(req)).id, req.query.target)));
   r.post('/me/crime', limit, send(async req => { const b = req.body || {}; return world.actions.crime((await me(req)).id, { kind: b.kind, target: b.target }); }));
   r.get('/me/places', limit, send(async req => world.actions.places((await me(req)).id)));

@@ -116,3 +116,8 @@ export function crimeOdds(kind, dist, wave = 0) {
   const band = dist == null || dist > CRIME_FAR ? 'high' : dist > CRIME_NEAR ? 'mid' : 'low';
   return { band, dist: dist == null ? null : dist, chance: Math.min(0.9, (CRIME_RATES[kind] || CRIME_RATES.rob)[band] + wave) };
 }
+
+// Distances players see are in game miles: 20 tiles to the mile.
+export const TILE_MILES = 0.05;
+export function miles(tiles) { const m = Math.max(0, Number(tiles) || 0) * TILE_MILES;
+  return m < 0.1 ? 'under 0.1 mi' : m < 10 ? `${Math.round(m * 10) / 10} mi` : `${Math.round(m)} mi`; }

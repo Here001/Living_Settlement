@@ -164,6 +164,11 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .ts-tabs::-webkit-scrollbar{display:none}
 .ts-tabs button{flex:1 0 auto;white-space:nowrap}
 .nf-lead{margin:6px 0 10px}
+.nt-h{margin:0 0 8px}
+.nt-list{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto}
+.nt-item{padding:10px 12px;border-radius:12px;border:1.4px solid var(--soft)}
+.nt-item p{margin:0 0 4px;font-size:15px;line-height:1.4}
+.nt-item time{color:var(--muted);font-size:12px}
 .bands{margin:4px 0 6px;padding-left:4px;list-style:none;font-size:14px;line-height:1.6}
 .nf-day{position:static;background:none;border-bottom:1.4px solid var(--soft)}
 .nf-day b{font-size:15px}
@@ -566,7 +571,7 @@ import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DIS
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
-import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt } from '/shared/rules.js';
+import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
@@ -606,7 +611,7 @@ setInterval(loadMyMoney,60000);
 async function checkMe(){ if(!Me||!Me.token) return; try{ const r=await api('/api/me'); Me={...Me,handle:r.handle,genderChosen:!!r.genderChosen}; ls.set('settlement-player',Me); loadMyMoney(); }catch(e){ Me=null; ls.set('settlement-player',null); } }
 // Tell the live connection who we are (or that we signed out), so chats arrive and friends see us online.
 function wsAuth(){ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'auth',token:Me&&Me.token||null})); }catch(e){} }
-function signedIn(r){ Me={token:r.token,handle:r.handle,genderChosen:true}; setTimeout(()=>{ wsAuth(); buildToolbar(); Chats.load(); Daily.load(); },50); checkMe().then(()=>renderCard(true)); ls.set('settlement-player',Me); ls.set('settlement-me',r.handle); ls.set('settlement-claim',null); auth=null; clearInterval(authPoll); }
+function signedIn(r){ Me={token:r.token,handle:r.handle,genderChosen:true}; setTimeout(()=>{ wsAuth(); buildToolbar(); Chats.load(); Daily.load(); Notices.load(); },50); checkMe().then(()=>renderCard(true)); ls.set('settlement-player',Me); ls.set('settlement-me',r.handle); ls.set('settlement-claim',null); auth=null; clearInterval(authPoll); }
 // Every request gives up after a while (20 s by default), so a dropped mobile connection can never leave a screen waiting forever.
 async function api(path, opts={}){
   const ac=typeof AbortController!=='undefined'?new AbortController():null, timer=ac&&setTimeout(()=>ac.abort(), opts.timeout||20000);
@@ -696,11 +701,12 @@ function connect(){
   ws.onerror=()=>{ try{ me.close(); }catch(e){} };
   ws.onmessage=e=>{ lastMsgAt=Date.now(); let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
     if(m.type==='hello'){ S.meta=m.meta; skew=m.serverNow-Date.now();
-      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); Chats.load(); Daily.load(); CEvent.load(); buildToolbar(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
+      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); Chats.load(); Daily.load(); Notices.load(); CEvent.load(); buildToolbar(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
     else if(m.type==='ops'){ opBatch++; try{ for(const o of m.ops){ try{ applyOp(o); }catch(err){ console.error('Skipped an update:', err); } } } finally { opBatch--; } if(!opBatch&&batchChanged){ batchChanged=false; changed(); } }
     else if(m.type==='resync') reloadAll();
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
+    else if(m.type==='notice' && m.data) Notices.incoming(m.data);
     else if(m.type==='dmGone' && m.id) Chats.gone(m.id);
     else if(m.type==='badge' && m.data) Badges.got(m.data.ids||[]); };
   ws.onclose=()=>{ if(ws!==me) return; if(Store.online) toast('Reconnecting to the colony…'); Store.online=false; reconnectSoon(); };
@@ -2007,7 +2013,8 @@ function drawRoadTile(x,y,R,has,pushDeco){ const k=TILEKEY||x+','+y;
 }
 
 /* ---------------- frame ---------------- */
-const CROWD_MAX=1500; let crowd=[], crowdAt=-1e9, areaSel=null;
+// Fewer people are simulated on a phone that's struggling (the quality level goes up when frames run slow).
+const crowdMax = () => [1500,1100,700,450][Quality.level]||450; let crowd=[], crowdAt=-1e9, areaSel=null;
 const progressOf = b => { const span=Math.max(1,(b.readyAt||0)-(b.builtAt||0)); return Math.max(0.03,Math.min(1,(Date.now()+skew-(b.builtAt||0))/span)); };
 // A building site: dug-out ground, a faint outline of what's coming, and scaffolding that rises as work goes on.
 function drawConstruction(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>drawConstruction(v,T(v))); }
@@ -2119,11 +2126,11 @@ function drawFrame(ts){
   if(selB){ const [w,d]=T(selB).size; poly([iso(selB.x,selB.y),iso(selB.x+w,selB.y),iso(selB.x+w,selB.y+d),iso(selB.x,selB.y+d)], 'rgba(217,113,74,.3)', '#D9714A', 2.5); }
   for(const b of D.buildings.values()){ if(tool.kind==='move'&&tool.id===b.id) continue; const [w,d]=T(b).size; if(b.x+w<tminX-3||b.x>tmaxX+3||b.y+d<tminY-3||b.y>tmaxY+3) continue; const r=VIEW?viewRect(b.x,b.y,w,d):{x:b.x,y:b.y,w,d}; items.push({ k:blocks(b)||b.ruin||b.done===false?r.x+r.w+r.y+r.d-0.5:r.x+r.y+0.2, b }); }
   const states=new Map(); lastStates=states;
-  // Only the people whose day happens near the screen are simulated, at most CROWD_MAX of them, nearest first.
+  // Only the people whose day happens near the screen are simulated, at most crowdMax() of them, nearest first.
   if(ts-crowdAt>500){ crowdAt=ts; const ctr=worldToTileF(cam.x,cam.y); const near=p=>p&&p[2]>=tminX-40&&p[2]<=tmaxX+40&&p[3]>=tminY-40&&p[3]<=tmaxY+40;
     const dist=c=>Math.min(...[c.home,c.job,c.hang,visiting(c)].filter(Boolean).map(p=>Math.abs(p[2]-ctr.x)+Math.abs(p[3]-ctr.y)));
     crowd=[...S.citizens.values()].filter(c=>c.id===follow||near(c.home)||near(c.job)||near(c.hang)||near(visiting(c)));
-    if(crowd.length>CROWD_MAX) crowd=crowd.map(c=>[dist(c),c]).sort((a,b)=>a[0]-b[0]).slice(0,CROWD_MAX).map(x=>x[1]);
+    { const CM=crowdMax(); if(crowd.length>CM) crowd=crowd.map(c=>[dist(c),c]).sort((a,b)=>a[0]-b[0]).slice(0,CM).map(x=>x[1]); }
     if(follow&&!crowd.some(c=>c.id===follow)&&S.citizens.has(follow)) crowd.push(S.citizens.get(follow)); }
   planBudgetEnd=performance.now()+6; // up to 6 ms a frame for working out new plans
   if(cam.z>=0.45) for(const c of crowd){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible) items.push(st.car?{ k:vdepth(st.x,st.y), veh:{V:st.V,col:st.col,st,siren:!!st.siren} }:{ k:vdepth(st.x,st.y), c, st }); }
@@ -2693,7 +2700,7 @@ var Earn={ data:null, at:0, loading:false, skew:0, busy:false, msg:null, cast:nu
       if(!done) gsec.append(el('button',{class:'linkb',text:'Give up this delivery',onclick:()=>this.act('/api/me/earn/gig',{action:'drop'})}),
         el('button',{class:'linkb',text:'Watch me go',onclick:()=>{ if(Me) openCitizen(Me.handle); if(innerWidth<900) openTab(null); }})); }
     else if(G.left>0&&D0.housed){ if(!G.offers.length) gsec.append(el('p',{class:'hint',text:'No parcels right now. The colony needs a few more buildings first.'}));
-      for(const g of G.offers) gsec.append(el('div',{class:'egig'}, el('div',null, el('b',{text:`${g.from.name} → ${g.to.name}`}), el('div',{class:'hint',text:`About ${g.mins} min · ${g.dist} tiles`})),
+      for(const g of G.offers) gsec.append(el('div',{class:'egig'}, el('div',null, el('b',{text:`${g.from.name} → ${g.to.name}`}), el('div',{class:'hint',text:`About ${g.mins} min · ${miles(g.dist)}`})),
         el('button',{class:'btn',text:`+${fmt(g.pay)}`,disabled:B,onclick:()=>this.act('/api/me/earn/gig',{action:'take',id:g.id},r=>toast(`On your way to ${r.gig.to.name}!`))}))); }
     box.append(gsec);
     // 4. Fishing and foraging
@@ -3178,7 +3185,7 @@ function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Home
   if(!H.housed){ box.append(el('p',{class:'hint',text:"You're still in cryosleep. You'll get a home when one is free."})); }
   else { box.append(el('p',{class:'jobnow',text:`You live at ${H.current.name}. Rent: ${fmt(H.current.rent)} a day, taken from your wages.`}));
     if(!H.canMoveToday) box.append(el('p',{class:'hint',text:"You've moved today already. You can move again tomorrow (game time)."}));
-    const ul=el('ul',{class:'joblist'}); for(const h of H.homes.slice(0,12)) ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:`${h.name}${h.mine?' · yours':''}`}), el('span',{text:`${fmt(h.rent)} a day rent · ${h.dist} tiles away${h.space>0?` · ${h.space} free`:' · full'}${h.owner&&!h.mine?` · owned by @${h.owner}`:''}`})),
+    const ul=el('ul',{class:'joblist'}); for(const h of H.homes.slice(0,12)) ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:`${h.name}${h.mine?' · yours':''}`}), el('span',{text:`${fmt(h.rent)} a day rent · ${miles(h.dist)} away${h.space>0?` · ${h.space} free`:' · full'}${h.owner&&!h.mine?` · owned by @${h.owner}`:''}`})),
       el('button',{class:'btn',text:h.mine?'Move in':'Rent',disabled:!H.canMoveToday,onclick:()=>toast(`Move to ${h.name}? Rent there is ${fmt(h.rent)} a day.${h.mine&&h.space<=0?' The newest tenant who hasn’t claimed their avatar will move out.':''}`,'Move',()=>moneyAction(c,'/api/me/home',{buildingId:h.id},r=>`Welcome home to ${r.home||h.name}.`))})));
     if(H.homes.length) box.append(ul); else box.append(el('p',{class:'hint',text:'No other homes have space right now.'})); }
   if(Pp){ box.append(el('h3',{text:`Buildings you own (${Pp.list.length} of ${Pp.max})`}));
@@ -3191,12 +3198,15 @@ function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Home
 // Bank: deposits and withdrawals happen on a Bank's own card, so you have to go to one (tap it on the map).
 function nearestBank(c){ let best=null, bd=1e9; const at=(c&&(c.home||c.job))||null; const ox=at?at[2]:0, oy=at?at[3]:0;
   for(const b of D.buildings.values()){ if(b.type!=='bank'||b.done===false||b.ruin) continue; const dd=Math.abs(b.x-ox)+Math.abs(b.y-oy); if(dd<bd){ bd=dd; best=b; } } return best; }
-function goToBuilding(b){ const [w,d]=T(b).size, q=iso(b.x+w/2,b.y+d/2); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.2); follow=null; sel={kind:'b',id:b.id}; renderCard(true); }
+// Fly to a building and open its card (loading that part of the map first if it isn't here yet).
+function goToBuilding(b){ const known=D.buildings.get(b.id), [w,d]=known?T(known).size:[2,2], q=iso(b.x+w/2,b.y+d/2); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.2); follow=null;
+  const open=()=>{ if(D.buildings.has(b.id)){ sel={kind:'b',id:b.id}; renderCard(true); return true; } return false; };
+  if(!open()){ Promise.resolve(syncChunks()).catch(()=>{}).then(()=>{ if(!open()) setTimeout(open,800); }); } }
 function walletPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'👛 Wallet'})); const M=moneyFor(c), B=M&&M.bank;
   if(!B){ box.append(el('p',{class:'hint',text:'Counting your coins…'})); return box; }
   box.append(el('p',{class:'jobnow'}, 'Cash on you: ', el('b',{text:`${fmt(B.wallet)} coins`}), ' · In the bank: ', el('b',{text:`${fmt(B.bank)} coins`})),
     el('p',{class:'hint',text:`Wages, rent and winnings are paid in cash, and cash can be pickpocketed. Take it to a Bank to keep it safe: savings earn ${+(B.rate*100).toFixed(2)}% a game day (up to ${fmt(B.cap)} a day). To deposit or withdraw, tap a Bank on the map.`}));
-  const nb=nearestBank(c);
+  const nb=nearestBank(c)||B.nearest;
   box.append(el('div',{class:'row-actions'}, nb?el('button',{class:'btn primary',text:'🏦 Go to the nearest Bank',onclick:()=>goToBuilding(nb)}):el('span',{class:'hint',text:B.hasBank?'Find a Bank on the map to deposit.':"The colony doesn't have a Bank yet."})));
   const gto=el('input',{type:'text',placeholder:'@friend',autocomplete:'off','aria-label':'Gift to'}), gam=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Coins to gift',placeholder:'Coins'});
   box.append(el('h3',{text:'🎁 Gift coins'}), el('p',{class:'hint',text:'Send cash to a verified colonist, up to 2,000 a game day. Gifts come out of the cash on you.'}), el('div',{class:'cbet'}, gto, gam, el('button',{class:'btn',text:'Send',onclick:()=>sendGift(gto.value, gam.value)}))); return box; }
@@ -3256,7 +3266,7 @@ function outPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Go ou
   if(P.jailed){ box.append(el('p',{class:'hint',text:"You're in jail. You can go out when you're released."})); return box; }
   if(P.visiting) box.append(el('div',{class:'row-actions'}, el('span',{text:`You're at ${P.visiting.name} for ${mins(P.visiting.until-Date.now())} more min.`}), el('button',{class:'linkb',text:'Go home',onclick:()=>meAction('/api/me/visit/end',{},'Heading home.')})));
   box.append(el('p',{class:'hint',text:'Send your colonist somewhere for a few hours (about 5 minutes). Everyone watching sees them there.'}));
-  const ul=el('ul',{class:'joblist'}); for(const pl of P.places) ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:pl.name}), el('span',{text:`${pl.dist} ${pl.dist===1?'tile':'tiles'} from home`})), el('button',{class:'btn',text:'Go',onclick:()=>meAction('/api/me/visit',{buildingId:pl.id},r=>`You're off to ${r.place}.`)})));
+  const ul=el('ul',{class:'joblist'}); for(const pl of P.places) ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:pl.name}), el('span',{text:`${miles(pl.dist)} from home`})), el('button',{class:'btn',text:'Go',onclick:()=>meAction('/api/me/visit',{buildingId:pl.id},r=>`You're off to ${r.place}.`)})));
   if(P.places.length) box.append(ul); else box.append(el('p',{class:'hint',text:'Nowhere to go yet. Parks, shops and cafés appear here once they are built.'}));
   const fi=el('input',{type:'text',placeholder:'@friend',autocomplete:'off','aria-label':"Friend's username"});
   box.append(el('div',{class:'cbet'}, el('span',{text:'Visit a friend:'}), fi, el('button',{class:'btn',text:'Go',onclick:()=>meAction('/api/me/visit',{friend:fi.value},r=>`You're on your way to ${r.place}.`)}))); return box; }
@@ -3264,7 +3274,7 @@ async function doCrime(kind, target){ const r=await meAction('/api/me/crime',{ki
   toast(r.caught ? (r.jailed?`🚓 Caught! You were fined ${fmt(r.fine)} coins and locked up for ${mins(r.jailFor)} minutes.`:`🚓 Caught! You were fined ${fmt(r.fine)} coins.`) : `💰 You got away with ${fmt(r.loot)} coins.`); }
 // Crime odds come in three bands, set by how far the nearest Police station is from where it happens.
 const BAND={ high:{ic:'🟢',nm:'High'}, mid:{ic:'🟡',nm:'Medium'}, low:{ic:'🔴',nm:'Low'} };
-const oddsText = o => `${BAND[o.band].ic} ${BAND[o.band].nm} chance, ${Math.round(o.chance*100)}% · ${o.dist==null?'no police station in the colony':`police ${o.dist} tile${o.dist===1?'':'s'} away`}`;
+const oddsText = o => `${BAND[o.band].ic} ${BAND[o.band].nm} chance, ${Math.round(o.chance*100)}% · ${o.dist==null?'no police station in the colony':`police ${miles(o.dist)} away`}`;
 async function tryPickpocket(target){ const h=(target||'').trim().replace(/^@+/,''); if(!h){ toast("Whose pocket? Type their username."); return; }
   let k; try{ k=await api('/api/me/crime?target='+encodeURIComponent(h)); }catch(e){ toast(e.message); return; } const P=k.pick;
   if(!P||P.error){ toast(P?P.error:'Couldn’t find them.'); return; }
@@ -3276,9 +3286,9 @@ function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cri
   if(K.jailedFor>0){ box.append(el('p',{class:'jobnow',text:`🔒 You're in jail for ${mins(K.jailedFor)} more minute${K.jailedFor>60000?'s':''}.`})); return box; }
   const Rt=K.rates||{pickpocket:{},rob:{}}, pct=v=>Math.round((v||0)*100)+'%';
   box.append(el('p',{class:'hint',text:'Crime pays… sometimes. Your chance of getting away depends on how far the nearest Police station is from where it happens:'}),
-    el('ul',{class:'bands'}, el('li',{text:`🟢 More than ${K.far} tiles away (or no police): pickpocket ${pct(Rt.pickpocket.high)}, robbery ${pct(Rt.rob.high)}`}),
-      el('li',{text:`🟡 ${K.near+1} to ${K.far} tiles: pickpocket ${pct(Rt.pickpocket.mid)}, robbery ${pct(Rt.rob.mid)}`}),
-      el('li',{text:`🔴 Within ${K.near} tiles: pickpocket ${pct(Rt.pickpocket.low)}, robbery ${pct(Rt.rob.low)}`})),
+    el('ul',{class:'bands'}, el('li',{text:`🟢 More than ${miles(K.far)} away (or no police): pickpocket ${pct(Rt.pickpocket.high)}, robbery ${pct(Rt.rob.high)}`}),
+      el('li',{text:`🟡 ${miles(K.near)} to ${miles(K.far)}: pickpocket ${pct(Rt.pickpocket.mid)}, robbery ${pct(Rt.rob.mid)}`}),
+      el('li',{text:`🔴 Within ${miles(K.near)}: pickpocket ${pct(Rt.pickpocket.low)}, robbery ${pct(Rt.rob.low)}`})),
     el('p',{class:'hint',text:`${K.wave?'🦹 A crime wave is on: +15% right now. ':''}Caught: a fine of twice what you tried to take (at least 25), and jail if the colony has one.`}));
   if(K.waitFor>0){ box.append(el('p',{class:'jobnow',text:`Lie low for ${mins(K.waitFor)} more minute${K.waitFor>60000?'s':''}.`})); return box; }
   const ti=el('input',{type:'text',placeholder:'@username',autocomplete:'off','aria-label':'Whose pocket'});
@@ -3319,7 +3329,7 @@ function workPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Work
     if(!d.canTakeToday) box.append(el('p',{class:'hint',text:"You've changed jobs today already. You can take another one tomorrow (game time)."}));
     if(!d.openings.length) box.append(el('p',{class:'hint',text:'No open jobs right now. New workplaces bring new jobs.'}));
     else { const ul=el('ul',{class:'joblist'});
-      for(const o of d.openings.slice(0,15)){ ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:`${o.title} · ${perDay(o.takeHome)}`}), el('span',{text:`${o.place}, ${o.dist} ${o.dist===1?'tile':'tiles'} from home${o.free>1?` · ${o.free} places`:''}`})),
+      for(const o of d.openings.slice(0,15)){ ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:`${o.title} · ${perDay(o.takeHome)}`}), el('span',{text:`${o.place}, ${miles(o.dist)} from home${o.free>1?` · ${o.free} places`:''}`})),
         el('button',{class:'btn',text:'Take',disabled:!d.canTakeToday,onclick:()=>toast(`Work as ${o.title.toLowerCase()} at ${o.place} for ${perDay(o.takeHome)}?${d.current?' You can only change jobs once a day.':''}`,'Take it',()=>jobAction(c,'/api/me/job',{buildingId:o.id},`You're now working as ${o.title.toLowerCase()} at ${o.place}.`))}))); }
       box.append(ul); } }
   return box; }
@@ -3515,6 +3525,22 @@ function postItems0(){ const gm=gmNow(); const today=Math.floor(gm/1440); const 
   for(const m of S.chat) if(!m.p && shownMsg(m)) out.push({ g:gmAt(m.t)+0.001, msg:m }); // pinned posts are shown separately, at the top
   return out.sort((a,b)=>b.g-a.g).slice(0,80); }
 
+
+
+/* ---------------- personal notices ---------------- */
+// Things that happened to you: "someone picked your pocket", or "@x picked your pocket but got caught: refunded".
+// Shown as a card the moment they happen; any you missed while away are shown the next time you open the game.
+var Notices={ shown:new Set(),
+  async load(){ if(!(Me&&Me.token)) return; try{ const r=await api('/api/me/notices'); const fresh=(r.notices||[]).filter(n=>!this.shown.has(n.id)); if(fresh.length) this.sheet(fresh, true); }catch(e){} },
+  incoming(n){ if(this.shown.has(n.id)) return; this.sheet([n], false); api(`/api/me/notices/${encodeURIComponent(n.id)}/seen`,{method:'POST'}).catch(()=>{});
+    if(n.kind==='pickpocket'){ Money.at=0; Acts.at=0; if(sel) renderCard(true); } },
+  sheet(list, away){ for(const n of list) this.shown.add(n.id);
+    const prev=document.querySelector('.rsheet-bg.notice'); let box=prev&&prev.querySelector('.rsheet');
+    if(!box){ const wrap=el('div',{class:'rsheet-bg notice'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
+      box=el('div',{class:'rsheet inked',role:'alertdialog','aria-label':'Notice'}); wrap.append(box); document.body.append(wrap);
+      box.append(el('h3',{class:'nt-h',text:away&&list.length>1?'While you were away':'Heads up'}), el('div',{class:'nt-list'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'OK',onclick:()=>wrap.remove()}))); }
+    const ul=box.querySelector('.nt-list'); for(const n of [...list].reverse()) ul.prepend(el('div',{class:'nt-item'}, el('p',{text:n.text}), el('time',{text:when(gmAt(n.t))})));
+    if(navigator.vibrate) try{ navigator.vibrate(120); }catch(e){} } };
 
 /* ---------------- News flash (Town Square) ---------------- */
 // Everything that's happened lately, newest first: gifts, new pets, big wins, races, arrests, streaks, badges, colony

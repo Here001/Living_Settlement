@@ -439,6 +439,10 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     for (let i = 0; i < 30 && !caught; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 1000'); const r = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P); if (r.json.caught) caught = r.json; }
     ok(caught && caught.jailed && caught.fine >= 25, 'caught near the police: fined and sent to jail', JSON.stringify(caught));
     ok(caught && caught.band === 'low' && caught.police <= 15, 'police a few tiles from the scene: the low-chance band', JSON.stringify(caught));
+    { const nts = (await pool.query("select n.text from notices n join citizens c on c.id = n.citizen_id where c.handle = 'jobfill_a' order by n.id")).rows.map(r => r.text);
+      ok(nts.some(t => /^🚓 @zara_ng picked your pocket but got caught by the police\. Your [\d,]+ coins have been refunded\.$/.test(t)), 'caught: the victim is told who it was, and refunded', JSON.stringify(nts.slice(-2)));
+      ok(nts.filter(t => /Someone just picked your pocket/.test(t)).every(t => !/@zara_ng/.test(t)), 'got away: the victim is told, but not who', JSON.stringify(nts.slice(0, 2)));
+      const mine = await call('GET', '/api/me/notices', undefined, P); ok(mine.status === 200 && Array.isArray(mine.json.notices), 'a colonist can read their own notices'); }
     { const R0 = await import('../shared/rules.js'); const o = R0.crimeOdds;
       ok(o('pickpocket', null).band === 'high' && o('pickpocket', 41).band === 'high' && o('rob', 40).band === 'mid' && o('rob', 16).band === 'mid' && o('pickpocket', 15).band === 'low', 'odds bands: over 40 tiles high, 16 to 40 mid, 15 or closer low');
       ok(o('pickpocket', null).chance > o('pickpocket', 30).chance && o('pickpocket', 30).chance > o('pickpocket', 5).chance && o('rob', 99, 0.15).chance === 0.75, 'farther from the police, better the odds (a crime wave adds 15%)'); }

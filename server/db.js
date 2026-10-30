@@ -186,6 +186,9 @@ const MIGRATIONS = [
   // v33: the Colony Log no longer lists purchases or small construction; clear the old ones out
   `delete from events where kind in ('car', 'pet') or (kind = 'property' and text like '%bought%')
      or (kind = 'build' and (text like '% update: %' or text like '%Tree%' or text like '%Road%' or text like '%Bench%' or text like '%Lamp%' or text like '%Flower%' or text like '%Bush%'));`,
+  // v34: personal notices (e.g. "someone picked your pocket"), kept until the colonist has seen them
+  `create table notices (id bigserial primary key, citizen_id text not null, t bigint not null, kind text, text text not null, seen boolean not null default false);
+   create index notices_unseen on notices (citizen_id, seen, t desc);`,
 ];
 
 export async function migrate() {

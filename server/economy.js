@@ -76,8 +76,9 @@ export class Economy {
   async bankInfo(id) {
     const c = (await pool.query('select * from citizens where id = $1', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
     const today = this.world.meta ? R.gameDay(Date.now(), this.world.meta.epoch) : 0;
-    const bank = Number(c.bank || 0);
-    return { hasBank: await this.hasBank(), wallet: R.balanceOn(c.coins_base, c.coins_day, c.net, today), bank, interest: Math.min(BANK_CAP, Math.floor(bank * BANK_RATE)), rate: BANK_RATE, cap: BANK_CAP };
+    const bank = Number(c.bank || 0), home = c.home_id ? (await pool.query('select x, y from buildings where id = $1', [c.home_id])).rows[0] : null;
+    const nb = (await pool.query("select id, x, y from buildings where type = 'bank' and done and not ruin order by abs(x - $1::int) + abs(y - $2::int), id limit 1", [home ? home.x : 0, home ? home.y : 0])).rows[0];
+    return { hasBank: !!nb, nearest: nb ? { id: nb.id, x: nb.x, y: nb.y } : null, wallet: R.balanceOn(c.coins_base, c.coins_day, c.net, today), bank, interest: Math.min(BANK_CAP, Math.floor(bank * BANK_RATE)), rate: BANK_RATE, cap: BANK_CAP };
   }
   // Deposits and withdrawals happen at a Bank: the player taps a Bank on the map and uses its card.
   async bank(id, kind, amount, bankId) {

@@ -67,6 +67,16 @@ export class Actions {
     const b = (visiting && await at(v.visit_id)) || (where === 'work' && await at(v.job_id)) || (where === 'out' && await at(v.hang_id)) || await at(v.home_id);
     return b ? { x: b.x, y: b.y, name: b.name || BUILDING_TYPES[b.type]?.name || 'town' } : { x: v.hx, y: v.hy, name: 'town' };
   }
+  // A personal notice: shown straight away if they're online, and kept until they've seen it.
+  async notify(ch, citizenId, kind, text) {
+    const t = Date.now(), id = (await ch.q('insert into notices (citizen_id, t, kind, text) values ($1, $2, $3, $4) returning id', [citizenId, t, kind, text])).rows[0].id;
+    ch.extraOps.push({ op: 'notice', private: true, to: [citizenId], data: { id: String(id), t, kind, text } });
+  }
+  async notices(id) {
+    const rows = (await pool.query('update notices set seen = true where id in (select id from notices where citizen_id = $1 and not seen order by t desc limit 20) returning id, t, kind, text', [id])).rows;
+    return { notices: rows.map(n => ({ ...n, id: String(n.id), t: Number(n.t) })).sort((a, b) => b.t - a.t) };
+  }
+  async seenNotice(id, noticeId) { await pool.query('update notices set seen = true where citizen_id = $1 and id = $2', [id, Number(noticeId) || 0]); return { ok: true }; }
   async waveNow() { return this.world.cevents && (await this.world.cevents.kindNow()) === 'crimewave' ? 0.15 : 0; }
 
   // ---------- crime ----------
@@ -121,7 +131,8 @@ export class Actions {
       ch.coins(c);
       if (rand() < chance) {
         c.coins_base += loot; ch.touch(c); await ch.saveCitizen(c); await bump(ch, c.id, { crimes: 1 }); await score(ch, c.id, 'crimes', 1);
-        if (victim) { victim.coins_base -= loot; ch.touch(victim); await ch.saveCitizen(victim); await ch.event(`👛 Someone picked @${victim.handle}'s pocket and got away with ${fmt(loot)} coins!`, 'crime'); }
+        if (victim) { victim.coins_base -= loot; ch.touch(victim); await ch.saveCitizen(victim); await ch.event(`👛 Someone picked @${victim.handle}'s pocket and got away with ${fmt(loot)} coins!`, 'crime');
+          await this.notify(ch, victim.id, 'pickpocket', `👛 Someone just picked your pocket and got away with ${fmt(loot)} coins. Keep your cash in a Bank to keep it safe.`); }
         else { treasuryAdd(ch, -loot); await ch.event(`🚨 ${nameOf(shop)} was robbed of ${fmt(loot)} coins! The thief got away.`, 'crime'); }
         return { ok: true, caught: false, loot, coins: c.coins_base, chance, band: odds.band, police: odds.dist };
       }
@@ -129,6 +140,7 @@ export class Actions {
       const fine = Math.min(c.coins_base, Math.max(25, loot * 2)); c.coins_base -= fine; treasuryAdd(ch, fine); ch.touch(c); await ch.saveCitizen(c);
       const jail = (await ch.q(`select * from buildings where type = 'jail' and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [px, py])).rows[0];
       const what = victim ? `pickpocketing @${victim.handle}` : `robbing ${nameOf(shop)}`;
+      if (victim) await this.notify(ch, victim.id, 'pickpocket', `🚓 @${c.handle} picked your pocket but got caught by the police. Your ${fmt(loot)} coins have been refunded.`);
       if (jail) {
         const until = now + JAIL_TIME; await ch.q('update citizens set jailed_until = $2 where id = $1', [c.id, until]); await bump(ch, c.id, { jailed: 1 }); await this.setVisit(ch, c, jail, until);
         await ch.event(`🚓 @${c.handle} was caught ${what}, fined ${fmt(fine)} coins and locked up for ${JAIL_TIME / 60000} minutes.`, 'crime');

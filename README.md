@@ -196,6 +196,13 @@ A signed-in colonist with a home sees these on their own card. They see one at a
   - **News:** successes are reported anonymously in the Colony Log; arrests name the culprit.
 - **Pet.** Adopt one of the six native creatures for 200 coins, name it, and it walks beside you on the map. You can rename it or let it go.
 
+## Notices and distances
+
+- **Personal notices.** When someone picks your pocket you get a notice straight away, or the next time you open the game if you were away ("While you were away"). Notices are kept in the `notices` table (migration 34) until seen.
+  - **If the thief got away:** "👛 Someone just picked your pocket and got away with N coins". Their name isn't revealed.
+  - **If they were caught:** "🚓 @thief picked your pocket but got caught by the police. Your N coins have been refunded". The thief is named only when caught, and you never actually lose the coins.
+- **Miles.** Distances players see (Go out, homes, jobs, delivery gigs, crime odds) are in game miles, at 20 tiles to the mile (`miles()` in `shared/rules.js`). The developer's build tools still count tiles.
+
 ## Money: the Bank, cars, homes and buildings
 
 These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** and **Cars**, and on a Bank's own card.

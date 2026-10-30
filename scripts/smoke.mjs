@@ -492,6 +492,10 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(dep.status === 200 && dep.json.wallet === 200 && dep.json.bank === 300, 'deposit 300 into the Bank', JSON.stringify(dep.json));
     ok((await call('POST', '/api/me/bank/withdraw', { amount: 400, buildingId: bankId }, P)).status === 400, "can't withdraw more than you saved");
     ok((await call('POST', '/api/me/bank/withdraw', { amount: 100, buildingId: bankId }, P)).json.bank === 200, 'withdraw 100 at the Bank');
+    { const mfb = await build('microbank', 1240, 1240), d2 = await call('POST', '/api/me/bank/deposit', { amount: 50, buildingId: mfb }, P);
+      ok(d2.status === 200 && d2.json.bank === 250, 'a Microfinance bank takes deposits into the same account', JSON.stringify(d2.json));
+      ok((await call('POST', '/api/me/bank/withdraw', { amount: 50, buildingId: mfb }, P)).json.bank === 200, 'and pays out withdrawals');
+      const C = await import('../shared/catalog.js'); ok(C.BANK_TYPES.length === 4 && C.BANK_TYPES.every(t => C.BUILDING_TYPES[t]) && C.BUILDING_TYPES.bank.work.slots === 24, 'four kinds of bank (microfinance, community, local, international); the Local bank has 24 jobs'); }
     ok((await who('zara_ng')).bank === undefined && (await whoDev('zara_ng')).bank === 200, 'bank balances are private');
     // cars
     ok((await call('POST', '/api/me/cars', { model: 'hatch', color: '#D9544A' }, P)).status === 400, "can't afford a car with 300 coins on you");

@@ -198,7 +198,14 @@ A signed-in colonist with a home sees these on their own card. They see one at a
 
 ## Finding a building to build
 
-Every building menu has a **search box** at the top that searches all buildings by name, by what they are, or by job title ("bank", "pets", "school", "banker"). Each result says which menu it lives in (for example "Shops → Small"), and tapping one picks it up to place, the same as in its own menu. The bank is now just called **Bank** (under Offices).
+Every building menu has a **search box** at the top that searches all buildings by name, by what they are, or by job title ("bank", "pets", "school", "banker"). Each result says which menu it lives in (for example "Shops → Small"), and tapping one picks it up to place, the same as in its own menu. There are four kinds of bank, all under Offices (`BANK_TYPES` in `shared/catalog.js`). Any of them takes deposits and pays out withdrawals from the same account.
+
+| Bank | Size | Look | Jobs | Cost |
+|---|---|---|---|---|
+| Microfinance bank | 1×1 | a small cream branch with a green "MFB" sign | 3 loan officers | 2,500 |
+| Community bank | 2×1 | a red-brick branch with a "COMMUNITY" sign | 8 tellers | 4,500 |
+| Local bank | 2×2 | the colonnaded classic (banks built before keep this look) | 24 bankers, down from 92 | 8,200 |
+| International bank | 3×3 | a tall glass tower with an "INTL BANK" sign | 40 investment bankers | 22,000 |
 
 ## Getting started guide
 
@@ -246,7 +253,7 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
 
 - **Bank.**
   - **All pay is cash.** Wages, rent, profits and winnings arrive as cash on you, and cash can be pickpocketed.
-  - **Deposits and withdrawals happen at a Bank.** Tap a Bank on the map ("Bank", under Offices; or type "bank" in the build menu search): its card has **🏦 Your account**, with Deposit, Withdraw and Deposit all my cash. The server refuses both unless the request names a finished Bank.
+  - **Deposits and withdrawals happen at a Bank.** Tap any bank on the map (Microfinance, Community, Local or International, all under Offices; or type "bank" in the build menu search): its card has **🏦 Your account**, with Deposit, Withdraw and Deposit all my cash. The server refuses both unless the request names a finished Bank.
   - The **👛 Wallet** tab on your own card shows your cash and savings, and has **Go to the nearest Bank**.
   - Money in the bank can't be pickpocketed.
   - Savings grow 0.1% each game day, up to 20 coins a day. The treasury pays interest only when it can afford to, so the bank never creates coins.

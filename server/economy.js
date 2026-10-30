@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { pool } from './db.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
-import { BUILDING_TYPES, CAR_MODELS } from '../shared/catalog.js';
+import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
@@ -72,20 +72,20 @@ export class Economy {
   }
 
   // ---------- the Bank ----------
-  async hasBank(db = pool) { return (await db.query("select 1 from buildings where type = 'bank' and done and not ruin limit 1")).rowCount > 0; }
+  async hasBank(db = pool) { return (await db.query('select 1 from buildings where type = any($1) and done and not ruin limit 1', [BANK_TYPES])).rowCount > 0; }
   async bankInfo(id) {
     const c = (await pool.query('select * from citizens where id = $1', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
     const today = this.world.meta ? R.gameDay(Date.now(), this.world.meta.epoch) : 0;
     const bank = Number(c.bank || 0), home = c.home_id ? (await pool.query('select x, y from buildings where id = $1', [c.home_id])).rows[0] : null;
-    const nb = (await pool.query("select id, x, y from buildings where type = 'bank' and done and not ruin order by abs(x - $1::int) + abs(y - $2::int), id limit 1", [home ? home.x : 0, home ? home.y : 0])).rows[0];
-    return { hasBank: !!nb, nearest: nb ? { id: nb.id, x: nb.x, y: nb.y } : null, wallet: R.balanceOn(c.coins_base, c.coins_day, c.net, today), bank, interest: Math.min(BANK_CAP, Math.floor(bank * BANK_RATE)), rate: BANK_RATE, cap: BANK_CAP };
+    const nb = (await pool.query('select id, x, y, type from buildings where type = any($3) and done and not ruin order by abs(x - $1::int) + abs(y - $2::int), id limit 1', [home ? home.x : 0, home ? home.y : 0, BANK_TYPES])).rows[0];
+    return { hasBank: !!nb, nearest: nb ? { id: nb.id, x: nb.x, y: nb.y, type: nb.type } : null, wallet: R.balanceOn(c.coins_base, c.coins_day, c.net, today), bank, interest: Math.min(BANK_CAP, Math.floor(bank * BANK_RATE)), rate: BANK_RATE, cap: BANK_CAP };
   }
   // Deposits and withdrawals happen at a Bank: the player taps a Bank on the map and uses its card.
   async bank(id, kind, amount, bankId) {
     amount = Math.floor(Number(amount)); if (!(amount >= 1)) throw new HttpError(400, 'Enter an amount of at least 1 coin.');
     if (!bankId) throw new HttpError(400, 'Go to a Bank to do that: tap any Bank on the map and use its card.');
     return this.world.change(async ch => {
-      const at = (await ch.q("select id from buildings where id = $1 and type = 'bank' and done and not ruin", [bankId])).rows[0];
+      const at = (await ch.q('select id from buildings where id = $1 and type = any($2) and done and not ruin', [bankId, BANK_TYPES])).rows[0];
       if (!at) throw new HttpError(409, "That isn't an open Bank. Tap a finished Bank on the map.");
       const c = await this.lockMe(ch, id); ch.coins(c);
       if (kind === 'deposit') {

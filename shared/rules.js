@@ -12,7 +12,7 @@ export const HANGOUT_RADIUS = 40;          // citizens hang out at the nearest l
 
 // Whether a building is big news for the Colony Log: industry, public services, landmarks and big venues always, and
 // anything else costing 4,000 coins or more. Trees, plants, decorations, small homes and small shops (and roads) aren't.
-const MAJOR_TYPES = new Set(['casino', 'racetrack', 'stadium', 'gym', 'bank', 'mall', 'cinema', 'hotel', 'supermarket', 'deptstore', 'markethall', 'arcade', 'exchange', 'powerplant', 'waterworks']);
+const MAJOR_TYPES = new Set(['casino', 'racetrack', 'stadium', 'gym', 'bank', 'communitybank', 'intlbank', 'mall', 'cinema', 'hotel', 'supermarket', 'deptstore', 'markethall', 'arcade', 'exchange', 'powerplant', 'waterworks']);
 export function majorBuilding(type) {
   const t = BUILDING_TYPES[type]; if (!t || t.cat === 'nature' || t.cat === 'decor' || type === 'campfire' || type === 'well') return false;
   return t.cat === 'industry' || t.cat === 'services' || t.cat === 'landmarks' || MAJOR_TYPES.has(type) || (t.cost || 0) >= 4000;

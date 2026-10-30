@@ -18,6 +18,10 @@
    TIME: 30 real minutes = 1 game day. The world is a pure function of the clock.
    ===================================================================== */
 
+// Every kind of bank: any of them takes deposits and pays out withdrawals (one account per colonist, shared by all).
+export const BANK_TYPES = ['microbank', 'communitybank', 'bank', 'intlbank'];
+export const isBank = type => BANK_TYPES.includes(type);
+
 export const ROAD_TYPES = {
   street:     { name:'Street', note:'two-way', sub:'streets', kind:'street', top:'#7E8185', walk:'#DCD8CE', cost:30, speed:2.0 },
   oneway1:    { name:'One-way street', note:'1 lane', sub:'streets', kind:'street', lanes:'one1', top:'#7E8185', walk:'#DCD8CE', cost:25, speed:2.1 },
@@ -192,7 +196,10 @@ export const BUILDING_TYPES = {
   bayoffice:  { name:'Bureau with bay windows', cat:'offices', size:[1,1], style:'block', height:62, bays:true, colors:{wall:'#D9C3A0', roof:'#5B6672', trim:'#6B5E4E'}, work:{title:'Clerk', slots:22, salary:30}, cost:3200 },
   belleoffice:{ name:'Belle époque office', cat:'offices', size:[2,2], style:'block', height:52, mansard:true, colors:{wall:'#EDE3CC', roof:'#5B6672', trim:'#8A7F6A'}, work:{title:'Secretary', slots:50, salary:32}, cost:5200 },
   slimtower:  { name:'Slim brick tower', cat:'offices', size:[1,1], style:'block', height:120, bands:true, colors:{wall:'#C7684F', roof:'#5E5A57', trim:'#EDE3CC'}, work:{title:'Broker', slots:88, salary:36}, cost:7500 },
-  bank:       { name:'Bank', cat:'offices', size:[2,2], style:'block', height:46, columns:true, colors:{wall:'#E3DCC8', roof:'#8C8783', trim:'#8A7F6A'}, work:{title:'Banker', slots:92, salary:40}, cost:8200 },
+  microbank:  { name:'Microfinance bank', cat:'offices', size:[1,1], style:'block', height:26, sign:'#2E8A73', label:'MFB', colors:{wall:'#EFE8D8', roof:'#7E7B78', trim:'#2E8A73'}, work:{title:'Loan officer', slots:3, salary:24}, cost:2500 },
+  communitybank:{ name:'Community bank', cat:'offices', size:[2,1], style:'block', height:30, sign:'#6E2F22', label:'COMMUNITY', colors:{wall:'#B5674A', roof:'#5E5A57', trim:'#EDE3CC'}, work:{title:'Teller', slots:8, salary:28}, cost:4500 },
+  bank:       { name:'Local bank', cat:'offices', size:[2,2], style:'block', height:46, columns:true, colors:{wall:'#E3DCC8', roof:'#8C8783', trim:'#8A7F6A'}, work:{title:'Banker', slots:24, salary:40}, cost:8200 },
+  intlbank:   { name:'International bank', cat:'offices', size:[3,3], style:'block', height:150, glass:true, sign:'#1E2A44', label:'INTL BANK', colors:{wall:'#7FA3BE', roof:'#3B4A5C', trim:'#C9A44C'}, work:{title:'Investment banker', slots:40, salary:52}, cost:22000 },
   block70s:   { name:'Seventies office block', cat:'offices', size:[2,2], style:'block', height:70, ribbon:true, colors:{wall:'#B9B2A3', roof:'#5D6F78', trim:'#2F3E46'}, work:{title:'Accountant', slots:114, salary:34}, cost:9000 },
   kontor:     { name:'Brick trade house', cat:'offices', size:[2,2], style:'block', height:84, colors:{wall:'#7A3A2E', roof:'#4E4A44', trim:'#2B2621'}, work:{title:'Trader', slots:120, salary:34}, cost:9500 },
   wavytower:  { name:'Wavy glass tower', cat:'offices', size:[2,2], style:'twist', height:110, colors:{wall:'#9FB6BE', roof:'#5D6F78'}, work:{title:'Architect', slots:132, salary:38}, cost:10500 },

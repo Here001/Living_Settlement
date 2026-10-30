@@ -166,7 +166,7 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .ts-tabs::-webkit-scrollbar{display:none}
 .ts-tabs button{flex:1 0 auto;white-space:nowrap}
 .nf-lead{margin:6px 0 10px}
-.bsearch{display:block;box-sizing:border-box;margin:2px 14px 8px!important;width:calc(100% - 28px)!important;max-width:calc(100% - 28px)}
+.bsearch{flex:0 0 auto!important;height:auto!important;min-height:0!important;display:block;box-sizing:border-box;margin:2px 14px 8px!important;width:calc(100% - 28px)!important;max-width:calc(100% - 28px)}
 .guide{margin:6px 0 10px;padding:10px 12px;border-radius:16px;border:1.6px solid color-mix(in srgb,var(--warm,#E4572E) 45%,transparent);background:color-mix(in srgb,var(--warm,#E4572E) 7%,transparent)}
 .g-head{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;width:calc(100% - 72px);font-size:15px}
 .g-head .g-n{margin-left:auto;color:var(--muted);font-size:13px;font-weight:700}.g-chev{color:var(--muted)}
@@ -595,7 +595,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
   </form>
 </div>
 <script type="module">
-import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears } from '/shared/catalog.js';
+import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank } from '/shared/catalog.js';
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
@@ -3315,7 +3315,7 @@ function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Home
 // Your money at a glance. Pay (wages, rent, winnings) arrives as cash, which can be pickpocketed until you take it to a
 // Bank: deposits and withdrawals happen on a Bank's own card, so you have to go to one (tap it on the map).
 function nearestBank(c){ let best=null, bd=1e9; const at=(c&&(c.home||c.job))||null; const ox=at?at[2]:0, oy=at?at[3]:0;
-  for(const b of D.buildings.values()){ if(b.type!=='bank'||b.done===false||b.ruin) continue; const dd=Math.abs(b.x-ox)+Math.abs(b.y-oy); if(dd<bd){ bd=dd; best=b; } } return best; }
+  for(const b of D.buildings.values()){ if(!isBank(b.type)||b.done===false||b.ruin) continue; const dd=Math.abs(b.x-ox)+Math.abs(b.y-oy); if(dd<bd){ bd=dd; best=b; } } return best; }
 // Fly to a building and open its card (loading that part of the map first if it isn't here yet).
 function goToBuilding(b){ const known=D.buildings.get(b.id), [w,d]=known?T(known).size:[2,2], q=iso(b.x+w/2,b.y+d/2); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.2); follow=null;
   const open=()=>{ if(D.buildings.has(b.id)){ sel={kind:'b',id:b.id}; renderCard(true); return true; } return false; };
@@ -3544,7 +3544,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(forSale && !Store.canWrite && b.done!==false && !b.ruin && Me&&Me.token&&Me.handle){
       if(!b.owner) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(price)}`,onclick:()=>toast(`Buy ${b.name||t.name} for ${fmt(price)} coins? You'll collect 80% of its rent or profit every game day.`,'Buy',async()=>{ const r=await meAction('/api/me/properties/buy',{buildingId:b.id},r=>`It's yours! About ${fmt(r.income)} coins a day.`); if(r){ b.owner=Me.handle; Money.at=0; renderCard(true); } })})));
       else if(b.owner.toLowerCase()===Me.handle.toLowerCase()) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
-    if(b.type==='bank' && b.done!==false && !b.ruin && !Store.canWrite) card.append(BankAcct.section(b));
+    if(isBank(b.type) && b.done!==false && !b.ruin && !Store.canWrite) card.append(BankAcct.section(b));
     if(b.type==='petstore' && b.done!==false && !b.ruin && !Store.canWrite) card.append(PetStore.section(b));
     if(b.type==='casino' && b.done!==false && !b.ruin && !Store.canWrite) card.append(el('div',{class:'row-actions'}, Me&&Me.token&&Me.handle
       ? el('button',{class:'btn primary',text:'Play here',onclick:()=>{ casino={ ...(casino||{ game:'coin', pick:'heads', bet:10, last:null }), id:null, open:true }; openMyTab('casino','.casino'); }})

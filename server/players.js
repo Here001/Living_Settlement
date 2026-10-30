@@ -126,6 +126,11 @@ export function playersRouter({ limit, send, admin, world }) {
     return world.setName(p.id, (req.body || {}).name);
   }));
   // Crime, going somewhere, and pets.
+  // Mayor elections
+  r.get('/election', limit, send(async req => { let id = null; try { id = (await me(req)).id; } catch {} return world.elections.info(id); }));
+  r.post('/me/election/run', limit, send(async req => { const b = req.body || {}; return world.elections.run((await me(req)).id, { policy: b.policy, pitch: b.pitch }); }));
+  r.delete('/me/election/run', limit, send(async req => world.elections.withdraw((await me(req)).id)));
+  r.post('/me/election/vote', limit, send(async req => world.elections.vote((await me(req)).id, (req.body || {}).handle)));
   // Phone notifications
   r.get('/push/key', limit, send(async () => world.push.key()));
   r.get('/me/push', limit, send(async req => world.push.status((await me(req)).id)));

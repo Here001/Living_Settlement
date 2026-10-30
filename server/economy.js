@@ -7,6 +7,7 @@ import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
+import { MAYOR_PAY } from '../shared/elections.js';
 
 export const TREASURY_CUT = 0.2;        // the colony's share of every player business
 export const BUSINESS_SHARE = 0.25;     // a business makes 25% of its wage bill in profit
@@ -56,13 +57,14 @@ export class Economy {
   }
   async dailyInfo(id) {
     const c = (await pool.query('select daily_day, daily_streak, daily_best from citizens where id = $1', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
-    return this.dailyState(c);
+    const st = this.dailyState(c), m = await this.dailyBoost(); if (m > 1) { st.reward = Math.round(st.reward * m); st.rewards = st.rewards.map(r => Math.round(r * m)); st.mayorBonus = m; } return st;
   }
+  async dailyBoost() { return (await this.world.elections?.has('daily')) ? 1.5 : 1; } // a mayor's Daily bonus pledge
   async daily(id) {
     return this.world.change(async ch => {
       const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
       const st = this.dailyState(c); if (st.claimed) throw new HttpError(409, `You've collected today's reward. Come back after midnight UTC for day ${st.streak + 1}.`);
-      const streak = st.streak + 1, want = dailyRewardFor(streak), t = Math.floor(R.treasuryOn(ch.meta, ch.today)), paid = Math.max(0, Math.min(want, t));
+      const streak = st.streak + 1, want = Math.round(dailyRewardFor(streak) * await this.dailyBoost()), t = Math.floor(R.treasuryOn(ch.meta, ch.today)), paid = Math.max(0, Math.min(want, t));
       ch.coins(c); c.coins_base += paid; if (paid) treasuryAdd(ch, -paid);
       ch.touch(c); await ch.saveCitizen(c);
       await ch.q('update citizens set daily_day = $2, daily_streak = $3, daily_best = greatest(daily_best, $3) where id = $1', [c.id, realDay(), streak]);
@@ -261,17 +263,18 @@ export class Economy {
   // Owners collect their buildings' income, and savings earn interest. The treasury pays both, keeping its cut.
   async day(ch, days) {
     days = Math.max(1, Math.min(3, days)); let rent = 0, owners = 0, interest = 0;
+    const mayor = await this.world.elections?.mayor(), im = mayor?.policy === 'savers' ? 2 : 1; // a mayor's Savers first pledge doubles interest
     const own = (await ch.q('select * from buildings where owner_id is not null and done and not ruin')).rows, byOwner = new Map();
     for (const b of own) { const inc = dailyIncome(b).net * days; if (inc > 0) byOwner.set(b.owner_id, (byOwner.get(b.owner_id) || 0) + inc); }
     // Interest is paid only from what the treasury holds after rents and profits; if it can't cover everyone, everyone gets the same share.
     const kitty = Math.max(0, R.treasuryOn(ch.meta, ch.today) - [...byOwner.values()].reduce((a, b) => a + b, 0));
-    const want = Number((await ch.q('select coalesce(sum(least($1::numeric, floor(bank * $2::numeric))), 0) w from citizens where bank > 0', [BANK_CAP, BANK_RATE])).rows[0].w) * days;
+    const want = Number((await ch.q('select coalesce(sum(least($1::numeric, floor(bank * $2::numeric))), 0) w from citizens where bank > 0', [BANK_CAP, BANK_RATE])).rows[0].w) * days * im;
     const share = want > 0 ? Math.min(1, kitty / want) : 0;
     const savers = share > 0 ? (await ch.q('select id from citizens where bank > 0')).rows.map(r => r.id) : [];
     const ids = [...new Set([...byOwner.keys(), ...savers])];
     for (let i = 0; i < ids.length; i += 500) {
       for (const c of (await ch.q('select * from citizens where id = any($1) for update', [ids.slice(i, i + 500)])).rows) {
-        const inc = byOwner.get(c.id) || 0, intr = Math.floor(Math.min(BANK_CAP, Math.floor(Number(c.bank || 0) * BANK_RATE)) * days * share);
+        const inc = byOwner.get(c.id) || 0, intr = Math.floor(Math.min(BANK_CAP, Math.floor(Number(c.bank || 0) * BANK_RATE)) * days * share * im);
         if (!inc && !intr) continue;
         ch.coins(c); c.coins_base += inc; ch.touch(c); await ch.saveCitizen(c);
         if (intr) await ch.q('update citizens set bank = bank + $2 where id = $1', [c.id, intr]);
@@ -279,6 +282,9 @@ export class Economy {
       }
     }
     if (rent || interest) treasuryAdd(ch, -(rent + interest));
+    // The mayor's salary, in cash, while the treasury can pay it.
+    if (mayor) { const pay = Math.min(MAYOR_PAY * days, Math.floor(R.treasuryOn(ch.meta, ch.today))); const m = pay > 0 && (await ch.q('select * from citizens where id = $1 for update', [mayor.id])).rows[0];
+      if (m) { ch.coins(m); m.coins_base += pay; treasuryAdd(ch, -pay); ch.touch(m); await ch.saveCitizen(m); } }
     if (rent) await ch.event(`🏠 ${owners} building owner${owners === 1 ? '' : 's'} collected ${fmt(rent)} coins in rent and profits (the treasury kept its ${Math.round(TREASURY_CUT * 100)}%).`, 'property');
     return { rent, interest };
   }

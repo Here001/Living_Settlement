@@ -77,6 +77,9 @@ export class Actions {
     return { notices: rows.map(n => ({ ...n, id: String(n.id), t: Number(n.t) })).sort((a, b) => b.t - a.t) };
   }
   async seenNotice(id, noticeId) { await pool.query('update notices set seen = true where citizen_id = $1 and id = $2', [id, Number(noticeId) || 0]); return { ok: true }; }
+  // Crime odds, less a mayor's Tough on crime pledge (15 points, never below 5%).
+  async odds(kind, dist, wave) { const o = R.crimeOdds(kind, dist, wave);
+    if (await this.world.elections?.has('safety')) { o.chance = Math.max(0.05, Math.round((o.chance - 0.15) * 100) / 100); o.mayor = true; } return o; }
   async waveNow() { return this.world.cevents && (await this.world.cevents.kindNow()) === 'crimewave' ? 0.15 : 0; }
 
   // ---------- crime ----------
@@ -88,14 +91,14 @@ export class Actions {
     if (!c) throw new HttpError(404, 'No such citizen.');
     const now = Date.now(), wave = await this.waveNow();
     const shop = c.home_id ? (await pool.query(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [c.hx, c.hy, SHOPS])).rows[0] : null;
-    const rob = shop ? { ...R.crimeOdds('rob', await this.policeDist(pool, shop.x, shop.y), wave), shop: nameOf(shop) } : null;
+    const rob = shop ? { ...(await this.odds('rob', await this.policeDist(pool, shop.x, shop.y), wave)), shop: nameOf(shop) } : null;
     let pick = null;
     const h = target && R.cleanHandle(target);
     if (h) { const v = (await pool.query('select c.*, h.x hx, h.y hy from citizens c left join buildings h on h.id = c.home_id where lower(c.handle) = lower($1)', [h])).rows[0];
       if (!v) pick = { error: `There's no colonist called @${h}.` };
       else { const where = await this.whereIs(pool, v, now), scene = await this.sceneOf(pool, v, where);
         const blocked = !v.home_id ? 'still in cryosleep' : where === 'home' ? 'safe at home' : where === 'jail' ? 'locked up' : where === 'work' && v.job_id !== c.job_id ? 'at work' : null;
-        pick = { handle: v.handle, where, at: scene.name, blocked, ...R.crimeOdds('pickpocket', await this.policeDist(pool, scene.x, scene.y), wave) }; } }
+        pick = { handle: v.handle, where, at: scene.name, blocked, ...(await this.odds('pickpocket', await this.policeDist(pool, scene.x, scene.y), wave)) }; } }
     return { housed: !!c.home_id, jailedFor: Math.max(0, Number(c.jailed_until || 0) - now), waitFor: Math.max(0, Number(c.crime_at || 0) + CRIME_COOLDOWN - now), wave,
       rates: R.CRIME_RATES, near: R.CRIME_NEAR, far: R.CRIME_FAR, rob, pick };
   }
@@ -126,7 +129,7 @@ export class Actions {
         px = shop.x; py = shop.y; loot = Math.max(1, Math.min(R.treasuryOn(ch.meta, ch.today), Math.floor(60 + rand() * 340)));
       }
       // The farther the nearest Police station is from the scene, the likelier the thief gets away (a crime wave helps too).
-      const odds = R.crimeOdds(kind, await this.policeDist(ch.db, px, py), await this.waveNow()), chance = odds.chance;
+      const odds = await this.odds(kind, await this.policeDist(ch.db, px, py), await this.waveNow()), chance = odds.chance;
       await ch.q('update citizens set crime_at = $2 where id = $1', [c.id, now]);
       ch.coins(c);
       if (rand() < chance) {

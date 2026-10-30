@@ -45,7 +45,7 @@ export class Earn {
   }
   // Pay from the treasury (as much as it holds), and keep a count for badges.
   async pay(ch, c, want, stat, noBoost = false) {
-    if (!noBoost) want = Math.round(want * earnBoost(await this.event(), stat)); // a colony event can boost some earnings
+    if (!noBoost) want = Math.round(want * earnBoost(await this.event(), stat) * ((await this.world.elections?.has('jobs')) ? 1.15 : 1)); // a colony event, or a mayor's Jobs drive, can boost earnings
     const t = Math.floor(R.treasuryOn(ch.meta, ch.today)), paid = Math.max(0, Math.min(want, t));
     if (paid) { c.coins_base += paid; treasuryAdd(ch, -paid); } ch.touch(c); await ch.saveCitizen(c);
     if (stat) await bump(ch, c.id, { [stat]: 1, earned: paid });

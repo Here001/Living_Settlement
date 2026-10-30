@@ -207,6 +207,23 @@ Every building menu has a **search box** at the top that searches all buildings 
 | Local bank | 2×2 | the colonnaded classic (banks built before keep this look) | 24 bankers, down from 92 | 8,200 |
 | International bank | 3×3 | a tall glass tower with an "INTL BANK" sign | 40 investment bankers | 22,000 |
 
+## Mayor elections
+
+Town Square has a **👑 Mayor** tab. Every week (Monday to Monday, UTC) any verified colonist with a home can **run for mayor** for 500 coins in cash. They pick a pledge and can write a pitch of up to 140 characters (no links). Every verified colonist gets one vote, which they can change until the week ends. Candidates can withdraw (no refund).
+
+When the week ends, the most votes wins; a tie goes to whoever ran first. The winner is mayor for the next week:
+
+| Pledge | While they're mayor |
+|---|---|
+| 💼 Jobs drive | side earnings (deliveries, shifts, fishing, foraging, scavenging) pay 15% more |
+| 🚓 Tough on crime | every pickpocket and robbery is 15 points less likely to succeed |
+| 🏦 Savers first | bank interest is doubled |
+| 🎁 Daily bonus | daily rewards are 50% bigger |
+
+- **Perks:** the mayor earns **250 coins a game day** from the treasury, and wears a 👑 on their map name tag (shown when zoomed in a little), on their card ("Role: Mayor") and on their Town Square posts.
+- **News:** candidacies and results go in the News flash. Candidates get a phone notification with the result.
+- **Code and storage:** the server is `server/elections.js`, with tables `candidates`, `mayor_votes` and `elections` (migration 37). The pledges are in `shared/elections.js`.
+
 ## Phone notifications
 
 Players get notifications on their phone (or computer) even when the game is closed. They're **on by default**: browsers need the player to say yes once, so the game asks on the first tap after signing in, with every kind switched on. Once allowed, it keeps that device signed up by itself on every visit. **⚙️ Settings** on the player's own card switches them off, or switches off individual kinds; it also shows or hides the getting-started guide. The kinds are:

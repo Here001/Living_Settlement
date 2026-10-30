@@ -21,6 +21,7 @@ import { Races } from './races.js';
 import { Actions } from './actions.js';
 import { Guide } from './guide.js';
 import { Push } from './push.js';
+import { Elections } from './elections.js';
 import { Lottery } from './lottery.js';
 import { Economy } from './economy.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
@@ -49,10 +50,11 @@ const push = new Push(); world.push = push; chat.push = push;
 const achievements = new Achievements(world, bus); world.achievements = achievements;
 const leaderboards = new Leaderboards(world); world.leaderboards = leaderboards;
 world.tables = new CasinoTables(world);
-world.earn = new Earn(world); world.guide = new Guide(world);
+world.earn = new Earn(world); world.guide = new Guide(world); world.elections = new Elections(world);
 const cevents = new ColonyEvents(world, bus); world.cevents = cevents;
 setInterval(() => { if (isLeader && world.meta) cevents.tick().catch(e => console.error('colony events:', e.message)); }, 30000).unref();
 setInterval(() => { if (isLeader && world.meta) push.dailyReminder().catch(e => console.error('daily reminder:', e.message)); }, 5 * 60000).unref();
+setInterval(() => { if (isLeader && world.meta) world.elections.tally().catch(e => console.error('election:', e.message)); }, 60000).unref();
 setInterval(() => { if (isLeader && world.meta) leaderboards.rollover().catch(e => console.error('leaderboards:', e.message)); }, 60000).unref();
 const actions = new Actions(world); world.actions = actions; world.blockedReason = c => actions.blockedReason(c);
 const app = express();
@@ -115,6 +117,7 @@ app.get('/api/citizens/:handle', limit, send(async req => {
 // ---------- creature races ----------
 app.get('/api/race', limit, send(async req => races.info((await playerFrom(req))?.id, typeof req.query.track === 'string' ? req.query.track : null)));
 // Test servers only (ALLOW_TEST_ROUTES=1, never set on the live colony): run the daily payday on demand.
+if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/election-end', admin, send(async () => { const { weekOf, weekStart } = await import('./leaderboards.js'); const win = await world.elections.tally(weekStart(weekOf() + 1) + 1000); world.elections.testShift = 1; world.elections.cache.t = 0; return { winner: win?.handle || null }; }));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.get('/api/admin/test/pushlog', admin, send(async () => ({ log: push.log })));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/rollover', admin, send(async () => ({ winners: await leaderboards.rollover() })));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/payday', admin, send(() => world.change(ch => economy.day(ch, 1))));

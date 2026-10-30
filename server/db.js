@@ -194,6 +194,11 @@ const MIGRATIONS = [
   // v36: phone notifications (Web Push): one row per phone or browser a colonist turned them on in
   `create table push_subs (endpoint text primary key, citizen_id text not null, keys jsonb not null, prefs jsonb, created bigint not null, fails int not null default 0);
    create index push_subs_citizen on push_subs (citizen_id);`,
+  // v37: mayor elections (candidates and votes per week, and each week's result)
+  `create table candidates (week int not null, citizen_id text not null, handle text not null, policy text not null, pitch text, t bigint not null, primary key (week, citizen_id));
+   create table mayor_votes (week int not null, voter_id text not null, candidate_id text not null, t bigint not null, primary key (week, voter_id));
+   create index mayor_votes_cand on mayor_votes (week, candidate_id);
+   create table elections (week int primary key, winner_id text, winner_handle text, policy text, votes int not null default 0, total int not null default 0, decided_at bigint);`,
 ];
 
 export async function migrate() {

@@ -823,6 +823,29 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(/og:title" content="Resurgence: a living colony/.test(await (await fetch(BASE + '/?c=nobody_here_xyz')).text()), 'an unknown colonist falls back to the normal preview');
     ok(/og:title" content="Resurgence: a living colony/.test(await (await fetch(BASE + '/?c=%3Cscript%3E')).text()), 'odd links are ignored safely');
     const og = await fetch(BASE + '/og.jpg'); ok(og.status === 200 && /image\/jpeg/.test(og.headers.get('content-type')), 'the preview picture is served'); }
+  // ---- mayor elections ----
+  { const e0 = (await call('GET', '/api/election', undefined, { auth: false })).json;
+    ok(e0.week > 0 && e0.mayor === null && Array.isArray(e0.candidates) && e0.policies?.jobs, 'the election page: no mayor yet', JSON.stringify(e0).slice(0, 120));
+    ok((await call('POST', '/api/me/election/vote', { handle: 'zara_ng' }, P)).status === 404, "can't vote for someone who isn't running");
+    ok((await call('POST', '/api/me/election/run', { policy: 'free-money' }, P)).status === 400, 'a candidate picks a real pledge');
+    ok((await call('POST', '/api/me/election/run', { policy: 'daily', pitch: 'vote me www.spam.example' }, P)).status === 400, 'no links in a pitch');
+    await pool.query("update citizens set coins_base = 300, net = 0, coins_day = 0, jailed_until = null where handle = 'zara_ng'");
+    ok((await call('POST', '/api/me/election/run', { policy: 'daily', pitch: 'Bigger daily rewards for all!' }, P)).status === 400, 'running costs 500 coins in cash');
+    await pool.query("update citizens set coins_base = 1000 where handle = 'zara_ng'");
+    const run = await call('POST', '/api/me/election/run', { policy: 'daily', pitch: 'Bigger daily rewards for all!' }, P);
+    ok(run.status === 200 && run.json.coins === 500, 'running for mayor', JSON.stringify(run.json));
+    ok((await call('POST', '/api/me/election/run', { policy: 'jobs' }, P)).status === 409, 'once a week');
+    ok((await call('POST', '/api/me/election/vote', { handle: 'zara_ng' }, P)).status === 200, 'voting');
+    const e1 = (await call('GET', '/api/election', undefined, P)).json;
+    ok(e1.candidates.length === 1 && e1.candidates[0].votes === 1 && e1.candidates[0].myVote && e1.iRun, 'the vote counts', JSON.stringify(e1.candidates));
+    const end = await call('POST', '/api/admin/test/election-end');
+    ok(end.json.winner === 'zara_ng', 'when the week ends, the most votes wins', JSON.stringify(end.json));
+    const e2 = (await call('GET', '/api/election', undefined, { auth: false })).json;
+    ok(e2.mayor?.handle === 'zara_ng' && e2.mayor.policy === 'daily', 'and is mayor for the next week', JSON.stringify(e2.mayor));
+    ok((await call('GET', '/api/me/daily', undefined, P)).json.mayorBonus === 1.5, "the mayor's pledge takes effect: daily rewards are 50% bigger");
+    let ev; for (let i = 0; i < 15 && !ev; i++) { ev = ((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).find(x => x.kind === 'election' && /new mayor/.test(x.text)); if (!ev) await sleep(250); }
+    ok(ev && /@zara_ng is the new mayor/.test(ev.text), 'the result is in the news', ev?.text);
+    ok((await call('POST', '/api/admin/test/election-end')).json.winner === null, 'a week is only counted once'); }
   // ---- the developer adjusts coins ----
   { const zid = (await whoDev('zara_ng')).id; await pool.query("update citizens set coins_base = 100, coins_day = 0, net = 0 where handle = 'zara_ng'");
     const t0 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.treasuryBase;

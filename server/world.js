@@ -990,6 +990,17 @@ export class World {
   }
 
   // ---------- weather ----------
+  // The developer adds coins to the colony treasury (or takes some out). New coins, not taken from anyone.
+  async adjustTreasury(amount) {
+    amount = Math.trunc(Number(amount)); this.requireFounded();
+    if (!amount || Math.abs(amount) > 10000000) throw new HttpError(400, 'Enter an amount up to 10,000,000 coins.');
+    return this.change(async ch => {
+      const now = R.treasuryOn(ch.meta, ch.today);
+      if (amount < 0 && -amount > now) throw new HttpError(400, `The treasury only has ${Math.floor(now).toLocaleString('en-US')} coins.`);
+      ch.meta.treasuryBase = now + amount; ch.meta.treasuryDay = ch.today;
+      return { ok: true, treasury: Math.floor(ch.meta.treasuryBase), income: ch.meta.income || 0 };
+    });
+  }
   // The developer renames the colony (shown at the top of the screen, in the Colony Log and on shared pictures).
   async renameColony(name) {
     name = String(name || '').replace(/[<>\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 32);

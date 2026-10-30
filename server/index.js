@@ -134,6 +134,7 @@ app.post('/api/admin/disasters', admin, send(async req => { const r = await worl
 app.get('/api/colony-event', limit, send(async () => ({ event: await cevents.current() })));
 app.post('/api/admin/colony-event', admin, send(req => cevents.start(String((req.body || {}).kind || ''), (req.body || {}).mins)));
 app.delete('/api/admin/colony-event', admin, send(async () => ({ ended: await cevents.end('over') })));
+app.post('/api/admin/treasury', admin, send(req => world.adjustTreasury((req.body || {}).amount)));
 app.put('/api/admin/colony-name', admin, send(req => world.renameColony((req.body || {}).name)));
 app.put('/api/admin/weather', admin, send(req => world.setWeather((req.body || {}).kind)));
 app.get('/api/admin/draft', admin, send(async () => ({ draft: await world.getDraft() })));

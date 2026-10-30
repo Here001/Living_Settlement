@@ -93,6 +93,8 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .coin{width:18px;height:18px;border-radius:50%;background:var(--gold);border:1.5px solid #2B2621;box-shadow:inset 0 0 0 2.5px #F4D57A}
 .chip button{border:0;background:none;padding:0;display:flex;align-items:center;gap:6px;font-weight:600}
 .mi{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:10px;border:1.5px solid #2B2621}
+#coinChip{cursor:pointer}.tbal{font-size:20px}
+.rsheet .cbet input{flex:1;min-width:0;padding:9px 12px;border-radius:12px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:var(--glass-2,rgba(255,255,255,.5));color:var(--ink);font:inherit;font-size:16px}
 .cevent{position:fixed;z-index:5;top:calc(env(safe-area-inset-top,0px) + 152px);left:10px;display:flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;font:inherit;font-size:13px;cursor:pointer;animation:cepulse 2.4s ease-in-out infinite;max-width:calc(100% - 20px);white-space:nowrap;overflow:hidden}
 .cevent #ceIcon{font-size:17px}.cevent #ceShort{opacity:.8}.cevent .cetime{font-variant-numeric:tabular-nums;font-weight:700;color:var(--warm)}
 @keyframes cepulse{0%,100%{box-shadow:0 0 0 0 rgba(226,177,60,.0)}50%{box-shadow:0 0 0 5px rgba(226,177,60,.35)}}
@@ -2415,6 +2417,21 @@ document.getElementById('card').addEventListener('input',e=>{ if(e.target&&e.tar
 // ---- Chats: private messages between verified colonists, delivered live ----
 const ago = t => { const s=Math.max(0,(Date.now()+skew-t)/1000); return s<90?'just now':s<3600?`${Math.round(s/60)} min ago`:s<86400?`${Math.round(s/3600)} h ago`:`${Math.round(s/86400)} days ago`; };
 const hhmm = t => { const d=new Date(t); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
+// The developer's treasury: tap the coin counter to add coins to the colony treasury (or take some out).
+function treasurySheet(){ if(!Store.canWrite) return; document.querySelector('.rsheet-bg')?.remove();
+  const wrap=el('div',{class:'rsheet-bg'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
+  const bal=el('b',{class:'tbal',text:`${fmt(treasury())} coins`}), inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Amount',placeholder:'Amount'});
+  const go=async sign=>{ const n=Math.floor(Math.abs(Number(inp.value)||0)); if(!n){ toast('Enter an amount.'); return; }
+    try{ const r=await api('/api/admin/treasury',{method:'POST',body:{amount:sign*n}}); bal.textContent=`${fmt(r.treasury)} coins`; inp.value=''; toast(`${sign>0?'Added':'Took out'} ${fmt(n)} coins. The treasury now has ${fmt(r.treasury)}.`); }
+    catch(e){ toast(e.message); } };
+  const quick=v=>el('button',{class:'pill',text:`+${fmt(v)}`,onclick:()=>{ inp.value=String((Number(inp.value)||0)+v); }});
+  wrap.append(el('div',{class:'rsheet inked',role:'dialog','aria-label':'Colony treasury'},
+    el('div',{class:'shhead'}, el('h3',{text:'🏦 Colony treasury'}), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>wrap.remove()})),
+    el('p',null,'Balance: ', bal), el('p',{class:'hint',text:`It earns ${fmt(S.meta&&S.meta.income||0)} coins a game day from taxes and the colony grant. It pays wages, interest, rewards, winnings and everything in the Earn tab.`}),
+    el('div',{class:'rreasons'}, quick(1000), quick(10000), quick(100000), quick(1000000)),
+    el('div',{class:'cbet'}, inp),
+    el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'＋ Add to treasury',onclick:()=>go(1)}), el('button',{class:'btn danger',text:'− Take out',onclick:()=>go(-1)}))));
+  document.body.append(wrap); setTimeout(()=>inp.focus(),50); }
 // The developer starts a colony event now (or ends the one that's on). They also start by themselves every 2–4 hours.
 const EVENT_KINDS=[['festival','🎉 Festival'],['frenzy','🐟 Fishing frenzy'],['meteor','☄️ Meteor shower'],['storm','⛈️ Great storm'],['crimewave','🦹 Crime wave'],['supply','📦 Supply drop']];
 function nameAdmin(){ const inp=el('input',{type:'text',maxlength:'32','aria-label':'Colony name',value:S.meta&&S.meta.name||''});
@@ -2437,6 +2454,7 @@ var CEvent={ ev:null, skew:0,
 setInterval(()=>CEvent.tick(),1000);
 $('cevent').addEventListener('click',()=>CEvent.go());
 $('turnBtn').addEventListener('click',()=>turnView(1));
+$('coinChip').addEventListener('click',()=>{ if(Store.canWrite) treasurySheet(); else if(Me&&Me.token) openMyTab('earn','.earn'); });
 // ---- Earn: every way to make coins, with the ones you can do right now ----
 var Earn={ data:null, at:0, loading:false, skew:0, busy:false, msg:null, cast:null,
   async load(force){ if(!(Me&&Me.token)||this.loading) return; if(!force&&this.data&&Date.now()-this.at<15000) return; this.loading=true;
@@ -3417,7 +3435,7 @@ function refreshHUD(){
   if(S.meta){ $('townName').textContent=S.meta.name; const pop=S.meta.population||0, out=S.meta.outskirts??(pop-(S.meta.residents||0)); $('popLine').textContent=`${fmt(pop)} colonist${pop===1?'':'s'}${out>0?`, ${fmt(out)} in cryosleep`:''}`; $('popLine').hidden=!Store.canWrite; // only the developer sees the head count
     // Money is private: the developer sees the colony treasury; a verified colonist sees only their own coins; everyone else sees none.
     const cc=$('coinChip');
-    if(Store.canWrite){ cc.hidden=false; cc.title='Colony treasury'; $('coinVal').textContent=fmt(treasury()); $('coinRate').textContent=`+${fmt(S.meta.income||0)}/day`; }
+    if(Store.canWrite){ cc.hidden=false; cc.title='Colony treasury (tap to add coins)'; $('coinVal').textContent=fmt(treasury()); $('coinRate').textContent=`+${fmt(S.meta.income||0)}/day`; }
     else if(Me&&Me.token&&myMoney){ cc.hidden=false; cc.title='Your coins'; $('coinVal').textContent=fmt(myMoney.coins); $('coinRate').textContent=myMoney.net>0?`+${fmt(myMoney.net)}/day`:myMoney.net<0?`${fmt(myMoney.net)}/day`:'no job yet'; }
     else cc.hidden=true;
     $('chips').hidden=false; }

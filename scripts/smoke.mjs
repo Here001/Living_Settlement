@@ -665,6 +665,14 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     // Daily limits
     await pool.query(`update citizens set earn = jsonb_set(earn, '{shifts}', '4'), stats = stats where id = $1`, [zid]); await pool.query(`update citizens set earn = jsonb_set(earn, '{shiftAt}', '0') where id = $1`, [zid]);
     ok((await call('POST', '/api/me/earn/shift', {}, P)).status === 429, 'four extra shifts a day at most'); }
+  // ---- the developer tops up the treasury ----
+  { const tr = async () => (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.treasuryBase;
+    ok((await call('POST', '/api/admin/treasury', { amount: 1000 }, { auth: false })).status === 401, 'only the developer changes the treasury');
+    ok((await call('POST', '/api/admin/treasury', { amount: 0 })).status === 400, 'an amount is needed');
+    const t0 = await tr(), up = await call('POST', '/api/admin/treasury', { amount: 250000 });
+    ok(up.status === 200 && Math.round(up.json.treasury - t0) === 250000 && Math.round((await tr()) - t0) === 250000, 'the developer adds 250,000 coins to the treasury', `${t0} → ${up.json.treasury}`);
+    ok((await call('POST', '/api/admin/treasury', { amount: -(up.json.treasury + 1) })).status === 400, "can't take out more than it holds");
+    const dn = await call('POST', '/api/admin/treasury', { amount: -250000 }); ok(dn.status === 200 && Math.round(dn.json.treasury - t0) === 0, 'and can take coins back out'); }
   // ---- renaming the colony ----
   { const before = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.name;
     ok((await call('PUT', '/api/admin/colony-name', { name: 'Gliese-12b' }, { auth: false })).status === 401, 'only the developer renames the colony');

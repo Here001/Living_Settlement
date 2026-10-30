@@ -58,6 +58,10 @@ Open the site with `#builder` and enter your `ADMIN_TOKEN`. As the developer you
 
 In developer mode, every colonist's card has a **Coins** box. **Add** gives them coins out of the treasury; **Take away** returns coins to the treasury. The colony's total stays the same.
 
+## The colony treasury
+
+In developer mode, the coin counter at the top shows the treasury. **Tap it** to add coins (with quick +1,000 / +10,000 / +100,000 / +1,000,000 buttons, or any amount up to 10 million at a time) or to take some out. Added coins are new money; they aren't taken from anyone. The treasury pays wages, bank interest, daily rewards, casino and race winnings, and everything in the Earn tab, so top it up if it runs low. For a player, tapping their own coin counter opens their Earn tab.
+
 ## Renaming the colony
 
 In developer mode, the Town Square has **🪧 Colony name**. Renaming changes the name at the top of the screen, in the Colony Log ("Old name is now called New name") and on shared pictures, and official posts then come from "<name> Updates". The colony that was called Man-Landing was renamed **Gliese-12b** automatically (database migration 32).

@@ -1648,9 +1648,14 @@ function tileShape(P2,x,y,wet,off,rv,rc){
   for(const [sx,sy] of [[-1,-1],[1,-1],[1,1],[-1,1]]){ if(dry(sx,0)||dry(0,sy)||!dry(sx,sy)) continue; // both sides wet, the diagonal dry: an inner corner
     const qx=x+(sx>0?1:0)+sx*off, qy=y+(sy>0?1:0)+sy*off; let A=[qx+sx*rf,qy], B=[qx,qy+sy*rf]; if(sx*sy>0){ const t=A; A=B; B=t; }
     P2.moveTo(A[0],A[1]); P2.lineTo(qx,qy); P2.lineTo(B[0],B[1]); P2.arcTo(qx,qy,A[0],A[1],rf); P2.closePath(); } }
-function drawWaterTiles(list, part){ if(!list.length) return; const wet=(a,b)=>D.water.has(a+','+b);
-  if(part==='ripples'){ waterRipples(list); return; }
-  const deepOf=(a,b)=>{ const k=D.water.get(a+','+b); if(!k||k==='river') return false; for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++) if(!wet(a+i,b+j)) return false; return true; };
+function drawWaterTiles(list, part){ if(!list.length) return;
+  if(part==='ripples'){ waterRipples(list); return; } // ripples are placed through iso(), which already turns with the map
+  // The water shapes are painted straight in tile space, so on a turned map they're worked out in view tiles
+  // (and each neighbour looked up back on the real map), the same way roads are.
+  const turned=VIEW&&!RAW, at=turned?(a,b)=>{ const w=tileFromView(a,b); return D.water.get(w[0]+','+w[1]); }:(a,b)=>D.water.get(a+','+b);
+  const orig=list; if(turned) list=list.map(([x,y,k])=>{ const v=toView(x,y), q=toView(x+1,y+1); return [Math.min(v[0],q[0]), Math.min(v[1],q[1]), k]; });
+  const wet=(a,b)=>!!at(a,b);
+  const deepOf=(a,b)=>{ const k=at(a,b); if(!k||k==='river') return false; for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++) if(!wet(a+i,b+j)) return false; return true; };
   const sand=new Path2D(), damp=new Path2D(), byKind=new Map(), deep=new Map();
   for(const [x,y,kind] of list){ tileShape(sand,x,y,wet,BEACH,WATER_R,WATER_FILLET); tileShape(damp,x,y,wet,WETSAND,WATER_R,WATER_FILLET);
     let p=byKind.get(kind); if(!p) byKind.set(kind,p=new Path2D()); tileShape(p,x,y,wet,0,WATER_R,WATER_FILLET);
@@ -1660,7 +1665,7 @@ function drawWaterTiles(list, part){ if(!list.length) return; const wet=(a,b)=>D
   for(const [kind,p] of byKind){ const W=WATER_TYPES[kind]||WATER_TYPES.river; ctx.fillStyle=W.color; ctx.fill(p); }
   for(const [kind,p] of deep){ const W=WATER_TYPES[kind]||WATER_TYPES.river; ctx.fillStyle=W.deep; ctx.fill(p); }
   ctx.restore();
-  if(part!=='base') waterRipples(list); }
+  if(part!=='base') waterRipples(orig); }
 function waterRipples(list){
   const t=T_NOW/1000; ctx.strokeStyle='rgba(255,255,255,.75)'; ctx.lineWidth=1.1; ctx.lineCap='round';
   for(const [x,y,kind] of list){ const hh=hash(x+','+y);

@@ -180,6 +180,9 @@ const MIGRATIONS = [
    create index if not exists citizens_last_seen on citizens (last_seen) where last_seen is not null;
    create index if not exists race_bets_t on race_bets (t);
    create index if not exists races_unsettled on races (start_at) where not settled;`,
+  // v32: the colony is now called Gliese-12b (after its planet), and so is its official updates account
+  `update meta set data = jsonb_set(data, '{name}', '"Gliese-12b"') where lower(replace(data->>'name', ' ', '-')) = 'man-landing';
+   update messages set handle = 'Gliese-12b Updates' where official and handle = 'Man Landing Updates';`,
 ];
 
 export async function migrate() {

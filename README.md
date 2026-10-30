@@ -21,6 +21,17 @@ Postgres (the truth) ◀─▶ web server(s) ─▶ WebSocket, per district ─�
 - **Money:** jobs pay daily wages. Rent and 20% tax come out of wages and fund the treasury, along with a daily grant of 200. Unemployed residents live rent-free. Building costs coins from the treasury.
 - **Only you build.** Open the site with `#builder` and enter your `ADMIN_TOKEN`. Everyone else gets a view-only city.
 
+## Moving around the map
+
+- **Pan, zoom, turn.**
+  - Drag to move around, and pinch (or scroll) to zoom.
+  - **Twist two fingers** about 40° to turn the map a quarter turn that way; keep twisting for another.
+  - On a computer, the **⟳** button by Full screen turns it, and so do **Q** (left) and **E** (right).
+- **How turning works.** The map turns in quarter turns, the way isometric games do. Free rotation would tip every building over sideways, because the buildings are drawn from one angle.
+  - The ground, roads, water and people turn exactly.
+  - Each building and vehicle is redrawn upright from the new side (`VIEW`, `toView`, `asView` in `public/index.html`).
+  - The spot under your fingers stays put, and each device remembers its last turn.
+
 ## Developer controls
 
 Open the site with `#builder` and enter your `ADMIN_TOKEN`. As the developer you can:
@@ -47,6 +58,10 @@ Open the site with `#builder` and enter your `ADMIN_TOKEN`. As the developer you
 
 In developer mode, every colonist's card has a **Coins** box. **Add** gives them coins out of the treasury; **Take away** returns coins to the treasury. The colony's total stays the same.
 
+## Renaming the colony
+
+In developer mode, the Town Square has **🪧 Colony name**. Renaming changes the name at the top of the screen, in the Colony Log ("Old name is now called New name") and on shared pictures, and official posts then come from "<name> Updates". The colony that was called Man-Landing was renamed **Gliese-12b** automatically (database migration 32).
+
 ## Removing people and starting over
 
 In developer view, **Colonists** (at the bottom) has:
@@ -60,7 +75,7 @@ Colonists who have claimed their avatar (proved it's them and set a password) ca
 
 Colonists can set a **name** (first and last, or just one) on their own card; it shows on their avatar, card and posts, while the @username stays for search. The developer can change anyone's name from their card.
 
-In developer view, the Town Square box posts **official updates as Man Landing Updates** (logo picture, gold Official badge, up to 1000 characters). Tick **Pin to top** to keep it above everything; **Pin / Unpin** works on any post, up to 3 at a time.
+In developer view, the Town Square box posts **official updates as "<colony name> Updates"** (Gliese-12b Updates) (logo picture, gold Official badge, up to 1000 characters). Tick **Pin to top** to keep it above everything; **Pin / Unpin** works on any post, up to 3 at a time.
 
 New colonists start with **0 coins** and earn from their job. Coins are private: a colonist sees only their own, and only the developer sees the colony treasury.
 

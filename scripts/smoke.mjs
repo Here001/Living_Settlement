@@ -296,7 +296,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
   ok((await call('DELETE', `/api/square/${m1.json.id}`)).status === 200, 'the developer can delete a message');
   ok((await call('POST', '/api/admin/square', { text: 'Welcome!' }, { auth: false })).status === 401, 'only the developer posts official updates');
   const off = await call('POST', '/api/admin/square', { text: 'Welcome to Gliese 12 b!', pin: true });
-  ok(off.status === 200 && off.json.o === 1 && off.json.p === 1 && off.json.h === 'Man Landing Updates', 'the developer posts a pinned official update', JSON.stringify(off.json));
+  ok(off.status === 200 && off.json.o === 1 && off.json.p === 1 && / Updates$/.test(off.json.h), 'the developer posts a pinned official update', JSON.stringify(off.json));
   ok((await call('GET', '/api/square', undefined, { auth: false })).json.some(x => x.id === off.json.id && x.p === 1), 'everyone sees the pinned update');
   ok((await call('PUT', `/api/admin/square/${off.json.id}/pin`, { pinned: false })).status === 200 && !(await call('GET', '/api/square', undefined, { auth: false })).json.find(x => x.id === off.json.id).p, 'and can unpin it');
   for (let i = 0; i < 3; i++) await call('POST', '/api/admin/square', { text: 'pin ' + i, pin: true });
@@ -665,6 +665,17 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     // Daily limits
     await pool.query(`update citizens set earn = jsonb_set(earn, '{shifts}', '4'), stats = stats where id = $1`, [zid]); await pool.query(`update citizens set earn = jsonb_set(earn, '{shiftAt}', '0') where id = $1`, [zid]);
     ok((await call('POST', '/api/me/earn/shift', {}, P)).status === 429, 'four extra shifts a day at most'); }
+  // ---- renaming the colony ----
+  { const before = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.name;
+    ok((await call('PUT', '/api/admin/colony-name', { name: 'Gliese-12b' }, { auth: false })).status === 401, 'only the developer renames the colony');
+    ok((await call('PUT', '/api/admin/colony-name', { name: 'x' })).status === 400, 'a name needs at least 2 characters');
+    const rn = await call('PUT', '/api/admin/colony-name', { name: '  Gliese-12b  ' });
+    ok(rn.status === 200 && rn.json.name === 'Gliese-12b' && (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.name === 'Gliese-12b', 'the developer renames the colony', JSON.stringify(rn.json));
+    await new Promise(r => setTimeout(r, 2100));
+    ok(((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).some(e => e.kind === 'rename' && e.text.includes(`${before} is now called Gliese-12b`)), 'and the Colony Log says so');
+    const op = await call('POST', '/api/admin/square', { text: 'Hello from the new name' });
+    ok(op.json.h === 'Gliese-12b Updates', 'official posts come from "<colony> Updates"', JSON.stringify(op.json));
+    await call('PUT', '/api/admin/colony-name', { name: before }); }
   // ---- colony events ----
   { const sleep = ms => new Promise(r => setTimeout(r, ms)), zid = (await whoDev('zara_ng')).id, meta = async () => (await call('GET', '/api/meta', undefined, { auth: false })).json;
     ok((await call('GET', '/api/colony-event', undefined, { auth: false })).json.event === null, 'no colony event to begin with');

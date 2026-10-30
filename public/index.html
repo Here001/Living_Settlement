@@ -517,6 +517,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 <div class="toast" id="toast" hidden><span id="toastMsg"></span><button id="toastBtn" hidden>Undo</button></div>
 <div class="viewbtns" id="viewBtns">
   <button class="vbtn" id="undoBtn" aria-label="Undo" title="Undo (Ctrl+Z)" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+  <button class="vbtn" id="turnBtn" aria-label="Turn the map" title="Turn the map (Q / E, or twist two fingers)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
   <button class="vbtn" id="fsBtn" aria-label="Full screen" title="Full screen (F)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   <button class="vbtn" id="hideBtn" aria-label="Hide the interface" title="Hide the interface (H)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg></button>
 </div>
@@ -704,7 +705,8 @@ const rotType = t => { let r=rotCache.get(t); if(!r){ r={...t, size:[t.size[1],t
 const nameOf = c => (c && c.name) ? c.name : '@'+(c&&c.handle);
 const T = b => { const t=BUILDING_TYPES[b.type] || BUILDING_TYPES.tent; return b.rot ? rotType(t) : t; };
 const sizeOf = (type,rot) => footprint(BUILDING_TYPES[type].size, rot);
-function drawB(b,t){ if(!b.rot){ (DRAW[t.style]||DRAW.house)(b,t); return; }
+function drawB(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>drawB(v,T(v))); }
+  if(!b.rot){ (DRAW[t.style]||DRAW.house)(b,t); return; }
   const t0=t.base||BUILDING_TYPES[b.type], wq=windowQuads.length, lq=lights.length, ft=CanvasRenderingContext2D.prototype.fillText;
   ctx.save(); ctx.scale(-1,1); ctx.fillText=function(str,x,y,m){ this.save(); this.translate(x,y); this.scale(-1,1); m===undefined?ft.call(this,str,0,0):ft.call(this,str,0,0,m); this.restore(); }; // keep lettering readable
   try{ (DRAW[t0.style]||DRAW.house)({...b,x:b.y,y:b.x,rot:0},t0); } finally { delete ctx.fillText; ctx.restore(); }
@@ -874,7 +876,28 @@ let dpr=1, cw=0, ch=0;
 const HOME_VIEW={ tile:[3,2], z:0.75 };
 const cam={ x:0, y:0, z:HOME_VIEW.z };
 const HW=32, HH=16;
-const iso=(x,y)=>({ x:(x-y)*HW, y:(x+y)*HH });
+// ---- Turning the map (a quarter turn at a time) ----
+// turnView(+1 or -1): keeps the spot under (sx,sy) (or the middle of the screen) where it is, and remembers the turn.
+// VIEW (0–3) turns the map about the origin. Everything flat (ground, roads, water, where people stand) is placed through
+// iso(), which applies the turn. Anything drawn in 3D (buildings, vehicles, lamps) is first converted into "view tiles"
+// and then drawn with RAW set, so it's drawn upright from the viewer's side exactly as at VIEW 0.
+let VIEW=0, RAW=false;
+const toView=(x,y)=>(!VIEW||RAW)?[x,y]:VIEW===1?[-y,x]:VIEW===2?[-x,-y]:[y,-x];
+const fromView=(a,b)=>(!VIEW||RAW)?[a,b]:VIEW===1?[b,-a]:VIEW===2?[-a,-b]:[-b,a];
+function viewRect(x,y,w,d){ const p=toView(x,y), q=toView(x+w,y+d); return { x:Math.min(p[0],q[0]), y:Math.min(p[1],q[1]), w:Math.abs(q[0]-p[0]), d:Math.abs(q[1]-p[1]) }; }
+const tileFromView=(a,b)=>{ const p=fromView(a,b), q=fromView(a+1,b+1); return [Math.min(p[0],q[0]), Math.min(p[1],q[1])]; };
+function inView(fn){ if(!VIEW||RAW) return fn(); RAW=true; try{ return fn(); } finally{ RAW=false; } }
+const vdepth=(x,y)=>{ const v=toView(x,y); return v[0]+v[1]; };
+// A building as seen in the turned view: its footprint in view tiles, turned the other way when the turn swaps width and depth.
+function asView(b){ const [w,d]=T(b).size, r=viewRect(b.x,b.y,w,d); return {...b, x:r.x, y:r.y, rot:VIEW%2?(b.rot?0:1):(b.rot||0)}; }
+function turnView(dir, sx, sy){
+  if(sx===undefined){ sx=cw/2; sy=ch/2; }
+  const w0=screenToWorld(sx,sy), t=worldToTileF(w0.x,w0.y);
+  VIEW=((VIEW+(dir>0?1:-1))%4+4)%4; try{ localStorage.setItem('resurgence-view',String(VIEW)); }catch(e){}
+  const p=iso(t.x,t.y); cam.x=p.x-(sx-cw/2)/cam.z; cam.y=p.y-(sy-ch/2)/cam.z; // the same spot stays under the fingers
+  Ground.gen=-1; setTimeout(()=>{ try{ edgeColours(); }catch(e){} },400); try{ navigator.vibrate&&navigator.vibrate(12); }catch(e){} }
+try{ const v=Number(localStorage.getItem('resurgence-view')); if(v>=0&&v<=3) VIEW=Math.floor(v); }catch(e){}
+const iso=(x,y)=>{ if(VIEW&&!RAW){ const v=toView(x,y); x=v[0]; y=v[1]; } return { x:(x-y)*HW, y:(x+y)*HH }; };
 { const p=iso(...HOME_VIEW.tile); cam.x=p.x; cam.y=p.y-30; }
 const up=(p,h)=>({ x:p.x, y:p.y-h });
 const mid=(a,b)=>({ x:(a.x+b.x)/2, y:(a.y+b.y)/2 });
@@ -909,7 +932,7 @@ function edgeColours(){ if(document.hidden||!cv.width) return;
 setInterval(edgeColours, 5000); setTimeout(edgeColours, 1500);
 addEventListener('resize', resize); if(window.visualViewport) visualViewport.addEventListener('resize', resize); resize();
 function screenToWorld(sx,sy){ return { x:(sx-cw/2)/cam.z+cam.x, y:(sy-ch/2)/cam.z+cam.y }; }
-function worldToTileF(wx,wy){ return { x:(wx/HW + wy/HH)/2, y:(wy/HH - wx/HW)/2 }; }
+function worldToTileF(wx,wy){ const a=(wx/HW + wy/HH)/2, b=(wy/HH - wx/HW)/2; if(!VIEW||RAW) return { x:a, y:b }; const w=fromView(a,b); return { x:w[0], y:w[1] }; }
 function tileAt(sx,sy){ const w=screenToWorld(sx,sy); const t=worldToTileF(w.x,w.y); return [Math.floor(t.x), Math.floor(t.y)]; }
 
 let windowQuads=[], lights=[], T_NOW=0, DARK=0, LAMPS=0; // LAMPS: 0 by day, 1 at night; street lights follow the clock, not the weather
@@ -1078,7 +1101,7 @@ function drawTreeAt(p,leaf,s,seed){ seed=seed||7;
 function shade2(hex,f){ const n=parseInt(hex.slice(1),16); const c=v=>Math.max(0,Math.min(255,Math.round(v*f))).toString(16).padStart(2,'0'); return '#'+c((n>>16)&255)+c((n>>8)&255)+c(n&255); }
 const SHADOW_H = { racetrack:()=>12, starport:()=>110, house:t=>(t.height||24)+(t.roofH||18)*0.5, block:t=>t.height||40, tower:t=>t.height+20, watertower:t=>t.height, tent:()=>20, stall:()=>24, well:()=>22, statue:()=>30, fountain:()=>10, tree:()=>38, pine:()=>40, lamp:()=>34, bench:()=>4 };
 function hull(pts){ pts=pts.slice().sort((a,b)=>a.x-b.x||a.y-b.y); const cr=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x); const lo=[],hi=[]; for(const p of pts){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); } for(const p of pts.slice().reverse()){ while(hi.length>=2&&cr(hi[hi.length-2],hi[hi.length-1],p)<=0) hi.pop(); hi.push(p); } return lo.slice(0,-1).concat(hi.slice(0,-1)); }
-function addShadow(P,b){ const t=T(b), fn=SHADOW_H[t.style]; if(!fn) return; const h=fn(t); const ox=-0.62*h, oy=0.3*h;
+function addShadow(P,b){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>addShadow(P,v)); } const t=T(b), fn=SHADOW_H[t.style]; if(!fn) return; const h=fn(t); const ox=-0.62*h, oy=0.3*h;
   if(['tree','pine','lamp','statue','well','birch','bush','turbine','pylon','obelisk','windmill','rocks'].includes(t.style)){ const c=iso(b.x+0.5,b.y+0.5); const pts=[]; const rx=t.style==='lamp'?3:12, ry=t.style==='lamp'?2:6; for(let i=0;i<10;i++){ const a=i/10*Math.PI*2; pts.push({x:c.x+Math.cos(a)*rx,y:c.y+Math.sin(a)*ry},{x:c.x+ox+Math.cos(a)*rx*1.1,y:c.y+oy+Math.sin(a)*ry*1.1}); } const hp=hull(pts); P.moveTo(hp[0].x,hp[0].y); hp.slice(1).forEach(p=>P.lineTo(p.x,p.y)); P.closePath(); return; }
   const [w,d]=t.size; const k=(t.style==='tent'||t.style==='tower'||t.style==='stall')?0.15:0; const cs=[iso(b.x+k,b.y+k),iso(b.x+w-k,b.y+k),iso(b.x+w-k,b.y+d-k),iso(b.x+k,b.y+d-k)];
   const hp=hull(cs.concat(cs.map(p=>({x:p.x+ox,y:p.y+oy})))); P.moveTo(hp[0].x,hp[0].y); hp.slice(1).forEach(p=>P.lineTo(p.x,p.y)); P.closePath(); }
@@ -1582,7 +1605,7 @@ const domeBase = DRAW.dome;
 DRAW.dome = function(b,t){ domeBase(b,t); if(!t.slit) return; const [w,d]=t.size, cp=up(iso(b.x+w/2,b.y+d/2),(t.height||30)-8), r=Math.min(w,d)*15; poly([{x:cp.x-3,y:cp.y},{x:cp.x+3,y:cp.y},{x:cp.x+2,y:cp.y-r*1.05},{x:cp.x-2,y:cp.y-r*1.05}],'#3F4A52'); const sp=iso(b.x+w/2,b.y+d/2); line({x:sp.x,y:sp.y-(t.height||30)-r*0.6},{x:sp.x+16,y:sp.y-(t.height||30)-r*1.1},'#7C8288',3); };
 
 // Ruins left by disasters: rubble, broken walls, and flames then smoke for a while after.
-function drawRuin(b,t){ const [w,d]=t.size, x=b.x, y=b.y, wall=(t.colors&&t.colors.wall)||(t.palette&&t.palette[0])||'#9C9484', age=(Date.now()+skew)-(b.ruinedAt||0), hh=hash(b.id||'r');
+function drawRuin(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>drawRuin(v,T(v))); } const [w,d]=t.size, x=b.x, y=b.y, wall=(t.colors&&t.colors.wall)||(t.palette&&t.palette[0])||'#9C9484', age=(Date.now()+skew)-(b.ruinedAt||0), hh=hash(b.id||'r');
   poly([iso(x,y),iso(x+w,y),iso(x+w,y+d),iso(x,y+d)],'#8E877B','#6E675C',1);
   for(let i=0;i<w*d*3;i++){ const px=x+0.15+((hh>>>(i%20))%10)/10*(w-0.3), py=y+0.15+((hh>>>((i+7)%20))%10)/10*(d-0.3); const p=iso(px,py); ctx.fillStyle=[shade(wall,0.6),'#7A736A','#5E5A57',shade(wall,0.45)][i%4]; ctx.beginPath(); ctx.moveTo(p.x-5,p.y); ctx.lineTo(p.x-1,p.y-4-(i%3)*2); ctx.lineTo(p.x+4,p.y-1); ctx.closePath(); ctx.fill(); }
   const stubs=[[0,d,w,d],[w,d,w,0]]; for(const [ax,ay,bx,by] of stubs){ const n=Math.max(2,Math.round(Math.hypot(bx-ax,by-ay)*2)); for(let i=0;i<n;i++){ if(((hh>>>i)&3)===0) continue; const u0=i/n, u1=(i+0.8)/n; const a=iso(x+ax+(bx-ax)*u0,y+ay+(by-ay)*u0), c=iso(x+ax+(bx-ax)*u1,y+ay+(by-ay)*u1), h=6+((hh>>>(i+3))%5)*5; poly([a,c,up(c,h*0.7),up(a,h)],shade(wall,0.55)); } }
@@ -1632,7 +1655,7 @@ function drawBridge(x,y,R,has){ const N=iso(x,y),E=iso(x+1,y),S2=iso(x+1,y+1),Wp
 /* ---------------- road details: lanes, highway, street lamps ---------------- */
 function drawStreetLamp(p){ line(p,up(p,26),INK,2.4); line(p,up(p,26),'#3E5148',1.2); const q=up(p,26); poly([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}],lampGlass()); poly([{x:q.x-3.5,y:q.y-6},{x:q.x+3.5,y:q.y-6},{x:q.x,y:q.y-9}],'#3E5148');
   if(LAMPS>0){ windowQuads.push([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}]); lights.push({x:q.x,y:q.y-2,r:19,col:'255,218,150',a:1.15},{x:p.x,y:p.y,r:34,col:'255,214,140',a:0.55}); } }
-function roadExtras(x,y,R,has,pushDeco){ const k=x+','+y, hx=has(x-1,y)||has(x+1,y), hy=has(x,y-1)||has(x,y+1), C=iso(x+0.5,y+0.5), hh=hash(k);
+function roadExtras(x,y,R,has,pushDeco){ const k=TILEKEY||x+','+y, hx=has(x-1,y)||has(x+1,y), hy=has(x,y-1)||has(x,y+1), C=iso(x+0.5,y+0.5), hh=hash(k);
   const straight=hx!==hy;
   if(straight && R.lanes && cam.z>=0.5){ // lane markings only when close enough to see them
     const along=(t)=>hx?iso(x+t,y+0.5):iso(x+0.5,y+t), off=(t,s)=>hx?iso(x+t,y+0.5+s):iso(x+0.5+s,y+t);
@@ -1651,7 +1674,7 @@ function drawHighwayTile(x,y,R,has){ const N=iso(x,y),E=iso(x+1,y),S2=iso(x+1,y+
 
 /* ---------------- vehicles ---------------- */
 // One drawer for every vehicle: an oriented box with a cabin, coloured by type, lights at night, sirens when on a call.
-function drawVehicle(px,py,dx,dy,V,col,siren,scale=1){ const len=V.len/2*scale, wid=V.wid/2*scale, h=V.h*scale, sx=-dy, sy=dx;
+function drawVehicle(px,py,dx,dy,V,col,siren,scale=1){ if(VIEW&&!RAW){ const p=toView(px,py), q=toView(dx,dy); return inView(()=>drawVehicle(p[0],p[1],q[0],q[1],V,col,siren,scale)); } const len=V.len/2*scale, wid=V.wid/2*scale, h=V.h*scale, sx=-dy, sy=dx;
   const P=(f,s,z)=>{ const q=iso(px+dx*f*len+sx*s*wid, py+dy*f*len+sy*s*wid); return {x:q.x,y:q.y-z}; };
   poly([P(-1.1,-1.1,0),P(1.1,-1.1,0),P(1.1,1.1,0),P(-1.1,1.1,0)],'rgba(30,40,70,.22)',false);
   const box=(f0,f1,s0,z0,z1,c)=>{ const fs=[[f1,1,dx,dy],[f0,-1,-dx,-dy]], ss=[[s0,1,sx,sy],[-s0,-1,-sx,-sy]], sides=[];
@@ -1773,7 +1796,8 @@ function drawCar(a,b,C,col){ const m=lerp(a,b,0.5), c=lerp(m,C,0.5); const L={x:
   for(const s of sides) poly(s.q,shade(col,0.75),INK,0.7);
   poly(top,col,INK,0.8); const cab=[P(-0.45,-0.75,9),P(0.5,-0.75,9),P(0.5,0.75,9),P(-0.45,0.75,9)]; poly(cab,'#A9C6D8',INK,0.7);
 }
-function drawRoadTile(x,y,R,has,pushDeco){ const k=x+','+y;
+let TILEKEY=null; // the real tile key while a road tile is drawn in view tiles (keeps lamps and trees in the same places)
+function drawRoadTile(x,y,R,has,pushDeco){ const k=TILEKEY||x+','+y;
   const N=iso(x,y),E=iso(x+1,y),S2=iso(x+1,y+1),Wp=iso(x,y+1), C=iso(x+0.5,y+0.5);
   const sides=[[N,E,!has(x,y-1)],[E,S2,!has(x+1,y)],[S2,Wp,!has(x,y+1)],[Wp,N,!has(x-1,y)]];
   poly([N,E,S2,Wp], R.top, R.top, 0.6);
@@ -1798,7 +1822,7 @@ function drawRoadTile(x,y,R,has,pushDeco){ const k=x+','+y;
 const CROWD_MAX=1500; let crowd=[], crowdAt=-1e9, areaSel=null;
 const progressOf = b => { const span=Math.max(1,(b.readyAt||0)-(b.builtAt||0)); return Math.max(0.03,Math.min(1,(Date.now()+skew-(b.builtAt||0))/span)); };
 // A building site: dug-out ground, a faint outline of what's coming, and scaffolding that rises as work goes on.
-function drawConstruction(b,t){
+function drawConstruction(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>drawConstruction(v,T(v))); }
   const [w,d]=t.size, x=b.x, y=b.y, prog=progressOf(b);
   poly([iso(x,y),iso(x+w,y),iso(x+w,y+d),iso(x,y+d)],'#BE9C6B','#8A6A44',1);
   const full=Math.min(150,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24)), h=Math.max(8,full*prog);
@@ -1849,12 +1873,14 @@ function paintGround(g, W, H, wx0, wy0, rz){
         if(v%5===1){ const tx=c.x+((v>>>8)%40)-20, ty=c.y+((v>>>12)%16)-8; tuft.moveTo(tx-3,ty); tuft.lineTo(tx-1,ty-4); tuft.lineTo(tx,ty-1); tuft.lineTo(tx+2,ty-5); tuft.lineTo(tx+3,ty); } }
       ctx.fillStyle='#82B858'; ctx.fill(dark); ctx.fillStyle='#9CCD6F'; ctx.fill(light); ctx.strokeStyle='#6E9E48'; ctx.lineWidth=1; ctx.stroke(tuft);
     }
-    let tx=0, ty=0; const pushDeco=(k,fn)=>Ground.deco.push({k,fn,x:tx,y:ty});
+    let tx=0, ty=0; const pushDeco=(k,fn)=>Ground.deco.push({k,fn,x:tx,y:ty,raw:RAW});
     const hasRoad=(a,b)=>D.roads.has(a+','+b);
     { const wl=[]; for(const w of tileList(D.water)){ const x=w.x, y=w.y; if(x<tminX-1||x>tmaxX+1||y<tminY-1||y>tmaxY+1) continue; wl.push([x,y,w.v]); } drawWaterTiles(wl,'base'); }
     for(const r of tileList(D.roads)){ const x=r.x, y=r.y, k=r.k, type=r.v; if(x<tminX||x>tmaxX||y<tminY||y>tmaxY) continue; const R=ROAD_TYPES[type]||ROAD_TYPES.dirt; tx=x; ty=y;
-      try{ if(R.kind==='highway') drawHighwayTile(x,y,R,hasRoad); else drawRoadTile(x,y,R,hasRoad,pushDeco);
-        roadExtras(x,y,R,hasRoad,pushDeco); if(D.water.has(k)) drawBridge(x,y,R,hasRoad); } // street lights at every zoom
+      try{ const draw=(x,y,has)=>{ if(R.kind==='highway') drawHighwayTile(x,y,R,has); else drawRoadTile(x,y,R,has,pushDeco);
+          roadExtras(x,y,R,has,pushDeco); if(D.water.has(k)) drawBridge(x,y,R,has); }; // street lights at every zoom
+        if(!VIEW) draw(x,y,hasRoad);
+        else { const v=viewRect(x,y,1,1); TILEKEY=k; try{ inView(()=>draw(v.x,v.y,(a,b)=>{ RAW=false; const w=tileFromView(a,b); RAW=true; return hasRoad(w[0],w[1]); })); } finally{ TILEKEY=null; } } }
       catch(e){ if(!paintGround.warned){ paintGround.warned=true; console.error('A road tile failed to draw (the rest still do):', e); } } } // one bad tile never blanks the whole map
     { const P=new Path2D(); for(const b of D.buildings.values()){ const [w,d]=T(b).size; if(b.x+w<tminX-4||b.x>tmaxX+2||b.y+d<tminY-2||b.y>tmaxY+4) continue; addShadow(P,b); } ctx.fillStyle='rgba(38,52,86,.2)'; ctx.fill(P,'nonzero'); }
   } finally { ctx=keep; } }
@@ -1862,7 +1888,7 @@ function paintGround(g, W, H, wx0, wy0, rz){
 function hiddenPeople(items){ const out=[], grid=new Map(), C=128;
   for(let i=items.length-1;i>=0;i--){ const it=items[i];
     if(it.b){ const t=T(it.b), [w,d]=t.size, b=it.b, N=iso(b.x,b.y), E=iso(b.x+w,b.y), S2=iso(b.x+w,b.y+d), W=iso(b.x,b.y+d);
-      const box={x0:W.x,x1:E.x,y0:N.y-((SHADOW_H[t.style]?SHADOW_H[t.style](t):60)+30),y1:S2.y};
+      const cs4=[N,E,S2,W], bx0=Math.min(...cs4.map(p=>p.x)), bx1=Math.max(...cs4.map(p=>p.x)), by0=Math.min(...cs4.map(p=>p.y)), by1=Math.max(...cs4.map(p=>p.y)); const box={x0:bx0,x1:bx1,y0:by0-((SHADOW_H[t.style]?SHADOW_H[t.style](t):60)+30),y1:by1};
       for(let gx=Math.floor(box.x0/C);gx<=Math.floor(box.x1/C);gx++) for(let gy=Math.floor(box.y0/C);gy<=Math.floor(box.y1/C);gy++){ const k=gx+','+gy; let a=grid.get(k); if(!a) grid.set(k,a=[]); a.push(box); } }
     else if(it.c&&grid.size){ const p=iso(it.st.x,it.st.y), x0=p.x-7, x1=p.x+7, y0=p.y-38, y1=p.y; let hit=false;
       for(let gx=Math.floor(x0/C);gx<=Math.floor(x1/C)&&!hit;gx++) for(let gy=Math.floor(y0/C);gy<=Math.floor(y1/C)&&!hit;gy++){ const a=grid.get(gx+','+gy); if(a) for(const q of a) if(q.x0<x1&&q.x1>x0&&q.y0<y1&&q.y1>y0){ hit=true; break; } }
@@ -1904,7 +1930,7 @@ function drawFrame(ts){
   if(Store.canWrite && draftOn) drawDraftGround(); // blue over drafted roads and water, red over what's being removed
   const selB = sel&&sel.kind==='b' ? D.buildings.get(sel.id) : null;
   if(selB){ const [w,d]=T(selB).size; poly([iso(selB.x,selB.y),iso(selB.x+w,selB.y),iso(selB.x+w,selB.y+d),iso(selB.x,selB.y+d)], 'rgba(217,113,74,.3)', '#D9714A', 2.5); }
-  for(const b of D.buildings.values()){ if(tool.kind==='move'&&tool.id===b.id) continue; const [w,d]=T(b).size; if(b.x+w<tminX||b.x>tmaxX+3||b.y+d<tminY||b.y>tmaxY+3) continue; items.push({ k:blocks(b)||b.ruin||b.done===false?b.x+w+b.y+d-0.5:b.x+b.y+0.2, b }); }
+  for(const b of D.buildings.values()){ if(tool.kind==='move'&&tool.id===b.id) continue; const [w,d]=T(b).size; if(b.x+w<tminX-3||b.x>tmaxX+3||b.y+d<tminY-3||b.y>tmaxY+3) continue; const r=VIEW?viewRect(b.x,b.y,w,d):{x:b.x,y:b.y,w,d}; items.push({ k:blocks(b)||b.ruin||b.done===false?r.x+r.w+r.y+r.d-0.5:r.x+r.y+0.2, b }); }
   const states=new Map(); lastStates=states;
   // Only the people whose day happens near the screen are simulated, at most CROWD_MAX of them, nearest first.
   if(ts-crowdAt>500){ crowdAt=ts; const ctr=worldToTileF(cam.x,cam.y); const near=p=>p&&p[2]>=tminX-40&&p[2]<=tmaxX+40&&p[3]>=tminY-40&&p[3]<=tmaxY+40;
@@ -1913,18 +1939,18 @@ function drawFrame(ts){
     if(crowd.length>CROWD_MAX) crowd=crowd.map(c=>[dist(c),c]).sort((a,b)=>a[0]-b[0]).slice(0,CROWD_MAX).map(x=>x[1]);
     if(follow&&!crowd.some(c=>c.id===follow)&&S.citizens.has(follow)) crowd.push(S.citizens.get(follow)); }
   planBudgetEnd=performance.now()+6; // up to 6 ms a frame for working out new plans
-  if(cam.z>=0.45) for(const c of crowd){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible) items.push(st.car?{ k:st.x+st.y, veh:{V:st.V,col:st.col,st,siren:!!st.siren} }:{ k:st.x+st.y, c, st }); }
+  if(cam.z>=0.45) for(const c of crowd){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible) items.push(st.car?{ k:vdepth(st.x,st.y), veh:{V:st.V,col:st.col,st,siren:!!st.siren} }:{ k:vdepth(st.x,st.y), c, st }); }
   // Traffic: ambient cars, buses and vans on busy roads, the developer's own vehicles, and crews answering disasters.
   vehicleHits=[];
   if(cam.z>=0.45){
     for(const r of tileList(D.roads)){ const k=r.k, x=r.x, y=r.y; if(r.h%9!==0||x<tminX-6||x>tmaxX+6||y<tminY-6||y>tmaxY+6||!carOK(k)) continue;
-      const vt=ambientType(k), V=VEHICLE_TYPES[vt], st=roam('amb:'+k,x,y,gm,V,true); if(st) items.push({ k:st.x+st.y, veh:{V,col:V.colors[hash(k)%V.colors.length],st} }); }
+      const vt=ambientType(k), V=VEHICLE_TYPES[vt], st=roam('amb:'+k,x,y,gm,V,true); if(st) items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(k)%V.colors.length],st} }); }
     for(const v of D.vehicles.values()){ if(v.x<tminX-14||v.x>tmaxX+14||v.y<tminY-14||v.y>tmaxY+14) continue; const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car, st=roam(v.id,v.x,v.y,gm,V,false); if(!st) continue;
-      items.push({ k:st.x+st.y, veh:{V,col:V.colors[hash(v.id)%V.colors.length],st,siren:v.type==='police'&&Math.floor(gm/LEG)%5===0,id:v.id} }); vehicleHits.push({id:v.id,st}); }
-    for(const r of responders(gm)) items.push({ k:r.st.x+r.st.y, veh:{V:r.V,col:r.V.colors[0],st:r.st,siren:r.siren} }); }
+      items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(v.id)%V.colors.length],st,siren:v.type==='police'&&Math.floor(gm/LEG)%5===0,id:v.id} }); vehicleHits.push({id:v.id,st}); }
+    for(const r of responders(gm)) items.push({ k:vdepth(r.st.x,r.st.y), veh:{V:r.V,col:r.V.colors[0],st:r.st,siren:r.siren} }); }
   { let wk=0, dr=0; for(const i of items){ if(i.c) wk++; else if(i.veh&&!i.veh.id) dr++; } frameStats={ crowd:crowd.length, walking:wk, driving:dr, citizens:S.citizens.size, quality:Quality.level, dpr }; }
   items.sort((a,b)=>a.k-b.k);
-  for(const it of items){ if(it.fn) it.fn(); else if(it.veh){ const v=it.veh; const hd=(v.st.dx||v.st.dy)?[v.st.dx||0,v.st.dy||0]:[1,0]; drawVehicle(v.st.x,v.st.y,hd[0],hd[1],v.V,v.col,v.siren); if(sel&&sel.kind==='v'&&sel.id===v.id){ const p=iso(v.st.x,v.st.y); ctx.strokeStyle='#F2B33D'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,16,8,0,0,7); ctx.stroke(); } }
+  for(const it of items){ if(it.fn){ if(it.raw) inView(it.fn); else it.fn(); } else if(it.veh){ const v=it.veh; const hd=(v.st.dx||v.st.dy)?[v.st.dx||0,v.st.dy||0]:[1,0]; drawVehicle(v.st.x,v.st.y,hd[0],hd[1],v.V,v.col,v.siren); if(sel&&sel.kind==='v'&&sel.id===v.id){ const p=iso(v.st.x,v.st.y); ctx.strokeStyle='#F2B33D'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,16,8,0,0,7); ctx.stroke(); } }
     else if(it.b){ const t=T(it.b); if(it.b.draft||it.b.draftDel){ draftMark(it.b); ctx.globalAlpha=it.b.draftDel?0.4:0.78; drawB(it.b,t); ctx.globalAlpha=1; } else if(it.b.ruin) drawRuin(it.b,t); else if(it.b.done===false) drawConstruction(it.b,t); else { drawB(it.b,t); if(it.b.type==='racetrack'&&!it.b.ruin) drawRunners(it.b); } } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
   drawDisasters();
   if(Quality.ghosts){ ctx.globalAlpha=0.38; for(const it of hiddenPeople(items)) drawCitizen(it.c,it.st,false,true); ctx.globalAlpha=1; }
@@ -1960,6 +1986,8 @@ function drawFrame(ts){
 const thumbCache={};
 function renderThumb(key, w, d, hgt, drawFn){
   if(thumbCache[key]) return thumbCache[key];
+  const v0=VIEW; VIEW=0; try{ return renderThumb0(key, w, d, hgt, drawFn); } finally{ VIEW=v0; } }
+function renderThumb0(key, w, d, hgt, drawFn){
   const c=document.createElement('canvas'); const Wd=150, Ht=110; c.width=Wd*2; c.height=Ht*2; const g=c.getContext('2d'); if(!g) return '';
   const bw=(w+d)*HW, bh=(w+d)*HH+hgt; const s=Math.min((Wd-14)/bw,(Ht-12)/bh,1.7);
   const center=iso(w/2,d/2); const prev=ctx, wq=windowQuads, lt=lights, dk=DARK;
@@ -2099,7 +2127,7 @@ cv.addEventListener('pointerdown', e=>{ cv.setPointerCapture(e.pointerId); point
     else if(paints()){ paintBuf=new Map(); paintPrev=new Map(); paintAt(e.clientX,e.clientY); }
     else if(tool.kind==='road'&&roadMode==='line'){ gesture.type='roadline'; const t=tileAt(e.clientX,e.clientY); hoverTile=t; if(!roadStart){ roadStart=t; gesture.fresh=true; } }
     else if(tool.kind==='erase'&&tool.mode==='area'){ const t=tileAt(e.clientX,e.clientY); areaSel={a:t,b:t}; } }
-  else if(pointers.size===2){ clearTimeout(holdTimer); const [a,b]=[...pointers.values()]; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture={ type:'pinch', d0:Math.hypot(a.x-b.x,a.y-b.y), z0:cam.z, wx:w.x, wy:w.y }; if(paintBuf){ paintBuf=null; changed(); } areaSel=null; }
+  else if(pointers.size===2){ clearTimeout(holdTimer); const [a,b]=[...pointers.values()]; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture={ type:'pinch', d0:Math.hypot(a.x-b.x,a.y-b.y), z0:cam.z, wx:w.x, wy:w.y, a0:Math.atan2(b.y-a.y,b.x-a.x) }; if(paintBuf){ paintBuf=null; changed(); } areaSel=null; }
 });
 cv.addEventListener('pointermove', e=>{
   if(e.pointerType==='mouse') hoverTile=tileAt(e.clientX,e.clientY);
@@ -2112,7 +2140,11 @@ cv.addEventListener('pointermove', e=>{
     else if(areaSel){ areaSel.b=tileAt(e.clientX,e.clientY); }
     else if(gesture.moved){ cam.x-=(e.clientX-gesture.lx)/cam.z; cam.y-=(e.clientY-gesture.ly)/cam.z; follow=null; }
     gesture.lx=e.clientX; gesture.ly=e.clientY; }
-  else if(gesture&&gesture.type==='pinch'&&pointers.size>=2){ const [a,b]=[...pointers.values()]; cam.z=Math.min(4,Math.max(0.35,gesture.z0*Math.hypot(a.x-b.x,a.y-b.y)/gesture.d0)); const mx=(a.x+b.x)/2,my=(a.y+b.y)/2; cam.x=gesture.wx-(mx-cw/2)/cam.z; cam.y=gesture.wy-(my-ch/2)/cam.z; follow=null; }
+  else if(gesture&&gesture.type==='pinch'&&pointers.size>=2){ const [a,b]=[...pointers.values()];
+    // Twisting two fingers by about 40° turns the map a quarter turn that way (then twist on for another).
+    const ang=Math.atan2(b.y-a.y,b.x-a.x); let da=ang-gesture.a0; while(da>Math.PI) da-=2*Math.PI; while(da<-Math.PI) da+=2*Math.PI;
+    if(Math.abs(da)>0.7){ turnView(da>0?1:-1, (a.x+b.x)/2, (a.y+b.y)/2); gesture.a0=ang; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture.wx=w.x; gesture.wy=w.y; gesture.z0=cam.z; gesture.d0=Math.hypot(a.x-b.x,a.y-b.y); }
+    cam.z=Math.min(4,Math.max(0.35,gesture.z0*Math.hypot(a.x-b.x,a.y-b.y)/gesture.d0)); const mx=(a.x+b.x)/2,my=(a.y+b.y)/2; cam.x=gesture.wx-(mx-cw/2)/cam.z; cam.y=gesture.wy-(my-ch/2)/cam.z; follow=null; }
 });
 function endPointer(e){ if(!pointers.has(e.pointerId)) return; pointers.delete(e.pointerId); clearTimeout(holdTimer);
   if(gesture&&gesture.type==='roadline'&&pointers.size===0){ const g=gesture; gesture=null; if(e.type==='pointercancel') return; const t=tileAt(e.clientX,e.clientY);
@@ -2228,6 +2260,7 @@ $('toolMin').onclick=()=>setMini(!mini);
 $('toolTurn').onclick=turnTool; $('toolUndo').onclick=undoLast;
 addEventListener('keydown',e=>{ if((e.key==='r'||e.key==='R')&&!e.ctrlKey&&!e.metaKey&&!/INPUT|TEXTAREA/.test(e.target.tagName||'')) turnTool(); }); $('undoBtn').onclick=undoLast;
 $('draftBtn').onclick=()=>setDraftMode(!draftOn); $('draftOff').onclick=()=>setDraftMode(false); $('draftPub').onclick=publishDraft; $('draftDiscard').onclick=discardDraft;
+addEventListener('keydown',e=>{ if(!/INPUT|TEXTAREA/.test(e.target.tagName||'')&&!e.ctrlKey&&!e.metaKey){ if(e.key==='q'||e.key==='Q') turnView(-1); else if(e.key==='e'||e.key==='E') turnView(1); } });
 addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z')&&!/INPUT|TEXTAREA/.test(e.target.tagName||'')){ e.preventDefault(); if(Store.canWrite) undoLast(); } });
 addEventListener('keydown',e=>{ if((e.key==='m'||e.key==='M') && !/INPUT|TEXTAREA/.test((e.target.tagName||'')) && tool.kind!=='pan') setMini(!mini); if(e.key==='Escape' && tool.kind!=='pan') setTool({kind:'pan'}); });
 
@@ -2273,7 +2306,7 @@ function renderPane(){
   const p=$('pane'); if(!activeTab){ p.hidden=true; return; } p.hidden=false; p.innerHTML='';
   if(activeTab==='feed'){
     const seg=el('div',{class:'seg',role:'tablist'}); for(const [id,nm] of [['posts','Posts'],['log','Daily log'],['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
-    p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); if(feedMode==='posts'&&Store.canWrite) p.append(eventAdmin()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
+    p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); if(feedMode==='posts'&&Store.canWrite) p.append(eventAdmin(), nameAdmin()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
   if(activeTab==='chats'){ Chats.render(p); return; }
   if(activeTab==='reports'){ Reports.render(p); return; }
   if(activeTab==='top'){ Top.render(p); return; }
@@ -2384,6 +2417,9 @@ const ago = t => { const s=Math.max(0,(Date.now()+skew-t)/1000); return s<90?'ju
 const hhmm = t => { const d=new Date(t); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); };
 // The developer starts a colony event now (or ends the one that's on). They also start by themselves every 2–4 hours.
 const EVENT_KINDS=[['festival','🎉 Festival'],['frenzy','🐟 Fishing frenzy'],['meteor','☄️ Meteor shower'],['storm','⛈️ Great storm'],['crimewave','🦹 Crime wave'],['supply','📦 Supply drop']];
+function nameAdmin(){ const inp=el('input',{type:'text',maxlength:'32','aria-label':'Colony name',value:S.meta&&S.meta.name||''});
+  return el('details',{class:'authbox evadmin'}, el('summary',{text:`🪧 Colony name: ${S.meta&&S.meta.name||''}`}),
+    el('div',{class:'cbet'}, inp, el('button',{class:'btn primary',text:'Rename',onclick:async()=>{ try{ const r=await api('/api/admin/colony-name',{method:'PUT',body:{name:inp.value}}); toast(`The colony is now called ${r.name}.`); }catch(e){ toast(e.message); } }}))); }
 function eventAdmin(){ const d=el('details',{class:'authbox evadmin'}, el('summary',{text:CEvent.ev?`⚡ Colony event: ${CEvent.ev.name} is on`:'⚡ Start a colony event'}));
   const row=el('div',{class:'cpicks'}); for(const [k,nm] of EVENT_KINDS) row.append(el('button',{class:'pill',text:nm,onclick:async()=>{ try{ const r=await api('/api/admin/colony-event',{method:'POST',body:{kind:k}}); toast(`${r.icon} ${r.name} started for ${Math.round((r.end-r.start)/60000)} minutes.`); }catch(e){ toast(e.message); } }}));
   d.append(el('p',{class:'hint',text:'Events also start by themselves every 2–4 hours. Starting one replaces any that is on.'}), row);
@@ -2400,6 +2436,7 @@ var CEvent={ ev:null, skew:0,
   go(){ const E=this.ev; if(!E) return; if(Me&&Me.token){ if(E.kind==='crimewave') openMyTab('crime'); else openMyTab('earn','.earn'); } else toast(`${E.icon} ${E.name}: ${E.text} Sign in to your colonist to join in.`); } };
 setInterval(()=>CEvent.tick(),1000);
 $('cevent').addEventListener('click',()=>CEvent.go());
+$('turnBtn').addEventListener('click',()=>turnView(1));
 // ---- Earn: every way to make coins, with the ones you can do right now ----
 var Earn={ data:null, at:0, loading:false, skew:0, busy:false, msg:null, cast:null,
   async load(force){ if(!(Me&&Me.token)||this.loading) return; if(!force&&this.data&&Date.now()-this.at<15000) return; this.loading=true;
@@ -3278,7 +3315,7 @@ function composer(){ const box=el('div',{class:'composer'});
     const post=el('button',{class:'btn primary',text:'Post update'});
     const send=async()=>{ const t=ta.value.trim(); if(!t) return; post.disabled=true; try{ const m=await api('/api/admin/square',{method:'POST',body:{text:t,pin:pinCb.checked}}); if(!S.chat.some(x=>x.id===m.id)) S.chat.unshift(m); ta.value=''; pinCb.checked=false; feedDirty=true; renderFeed(true); toast(m.p?'Posted and pinned to the top.':'Posted.'); }catch(e){ toast(e.message); } post.disabled=false; };
     post.onclick=send; ta.addEventListener('blur',()=>setTimeout(()=>{ if(!composerBusy()){ feedDirty=true; renderFeed(); } },150));
-    const as=el('div',{class:'postas'}); as.innerHTML=LOGO_SVG; as.append(el('span',null,'Posting as ', el('b',{text:'Man Landing Updates'})));
+    const as=el('div',{class:'postas'}); as.innerHTML=LOGO_SVG; as.append(el('span',null,'Posting as ', el('b',{text:`${S.meta&&S.meta.name||'Colony'} Updates`})));
     box.append(as, ta, el('div',{class:'row'}, el('label',{class:'free'}, pinCb, ' Pin to top'), post)); return box; }
   if(!(Me&&Me.token)){ box.append(el('p',{class:'hint',text:'Claim your colonist to post in the Town Square.'}), el('button',{class:'btn',text:'Find my colonist',onclick:()=>findMe()})); return box; }
   const ta=el('textarea',{maxlength:'280',rows:'2',placeholder:`Say something to the colony, @${Me.handle}…`,'aria-label':'Message to the Town Square'}); const n=el('span',{class:'count',text:'280'});

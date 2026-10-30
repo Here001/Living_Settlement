@@ -990,6 +990,14 @@ export class World {
   }
 
   // ---------- weather ----------
+  // The developer renames the colony (shown at the top of the screen, in the Colony Log and on shared pictures).
+  async renameColony(name) {
+    name = String(name || '').replace(/[<>\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 32);
+    if (name.length < 2) throw new HttpError(400, 'Give the colony a name (2 to 32 characters).');
+    this.requireFounded();
+    return this.change(async ch => { const old = ch.meta.name; if (old === name) return { name };
+      ch.meta.name = name; await ch.event(`🪧 ${old} is now called ${name}.`, 'rename'); return { name }; });
+  }
   async setWeather(kind) {
     if (kind && !WEATHER_TYPES[kind]) throw new HttpError(400, 'Unknown weather.');
     return this.change(async ch => { ch.meta.weather = kind || null; return { weather: ch.meta.weather }; });

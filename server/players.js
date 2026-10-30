@@ -242,7 +242,7 @@ export function playersRouter({ limit, send, admin, world }) {
     return msgOut(m);
   }));
   // The developer posts officially (as the colony's updates account) and can pin any post to the top.
-  const OFFICIAL = 'Man Landing Updates';
+  const OFFICIAL = () => `${world.meta?.name || 'Colony'} Updates`; // the colony's official account, named after it
   r.post('/admin/square', admin, send(async req => {
     const text = String((req.body || {}).text ?? '').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ').trim();
     if (!text) throw new HttpError(400, 'Write something first.');
@@ -250,7 +250,7 @@ export function playersRouter({ limit, send, admin, world }) {
     const pin = !!(req.body || {}).pin;
     if (pin && Number((await pool.query('select count(*) n from messages where pinned')).rows[0].n) >= 3) throw new HttpError(409, 'Up to 3 posts can be pinned. Unpin one first.');
     const m = (await pool.query('insert into messages (id, citizen_id, handle, gender, text, t, official, pinned) values ($1, $2, $3, $4, $5, $6, true, $7) returning *',
-      [crypto.randomUUID(), 'official', OFFICIAL, 'm', text, Date.now(), pin])).rows[0];
+      [crypto.randomUUID(), 'official', OFFICIAL(), 'm', text, Date.now(), pin])).rows[0];
     world.bus.publish([{ op: 'chat', data: msgOut(m) }]);
     return msgOut(m);
   }));

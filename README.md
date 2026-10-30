@@ -215,7 +215,9 @@ A new building (Shops → Going out, 3×2, 8 game hosts, 9,000 to build) where c
 | ⚽ Penalty shootout | Five kicks: pick one of six spots each time. Corners are harder to save but easier to miss. The keeper dives in a fixed mix that makes every spot score about 69% of the time, so no way of shooting beats the house. | 5 goals 3.5×, 4 goals your bet back (about 91–93%) |
 | 🎯 Darts | Three darts at a real dartboard. Tap where to aim; the server adds a wobble. | 140+ 20×, 100+ 5×, 80+ 2×, 60+ 1.5× (about 89% for the best aim) |
 
-Snooker, Whot, Ludo and Ayo are listed as coming soon. Every stake and win is recorded in the developer's Stats tab (as "<game> stakes" and "<game> winnings").
+- **🎱 Snooker practice** is free: six reds racked in a triangle, pot 3 in 6 shots. Tap the table to aim (a dotted line and ghost ball show where the cue ball meets the first ball, and a yellow line where that ball goes), fine-tune with the arrows, pick the power, and shoot. The server simulates the shot (`shared/snooker.js`, with a tiny wobble) and the phone replays it. The first practice win each real day pays 300 coins. It isn't staked, because a perfect-aim robot wins about 65% of the time; staked snooker is player against player.
+
+Whot, Ludo and Ayo (and snooker for a stake) are listed as coming soon. Every stake and win is recorded in the developer's Stats tab (as "<game> stakes" and "<game> winnings").
 
 ## Your own card: Work · Crime · Go here
 

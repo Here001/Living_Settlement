@@ -224,6 +224,7 @@ export function playersRouter({ limit, send, admin, world }) {
       case 'scratch': return gh.scratch(p.id, bid, b.price);
       case 'penalty': return gh.penalty(p.id, bid, { action: String(b.action || ''), bet: b.bet, spot: String(b.spot || '') });
       case 'darts': return gh.darts(p.id, bid, { action: String(b.action || ''), bet: b.bet, x: b.x, y: b.y });
+      case 'snooker': return gh.snooker(p.id, bid, { action: String(b.action || ''), angle: b.angle, power: b.power });
       default: throw new HttpError(404, 'No such game.');
     } })));
   r.post('/me/casino/hilo', limit, send(req => tableMove(req, (p, b) => world.tables.hilo(p.id, String(b.action || ''), b.bet))));

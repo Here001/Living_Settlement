@@ -390,7 +390,8 @@ body.pane-max .composer textarea{height:70px}
 .rkship{font-size:44px;margin-bottom:10px;transition:transform .1s linear;display:block}.rkmult{position:absolute;top:12px;left:0;right:0;text-align:center;color:#fff;font-size:30px;font-weight:800;text-shadow:0 2px 10px rgba(0,0,0,.5);font-variant-numeric:tabular-nums}
 .rkcash{font-size:16px;min-width:180px}
 .casino .cbet{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.casino .cbet input{width:90px;padding:6px 8px;border-radius:10px;border:1.4px solid var(--soft);font:inherit}
-.ghpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;margin:6px 0 10px}
+.ghpick{display:flex;gap:6px;margin:6px -2px 10px;overflow-x:auto;scrollbar-width:none;padding:2px;scroll-snap-type:x proximity}.ghpick::-webkit-scrollbar{display:none}
+.ghpick button{flex:0 0 84px;scroll-snap-align:start}
 .ghpick button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:14px;border:1px solid var(--glass-line,rgba(0,0,0,.12));background:var(--gbtn,rgba(0,0,0,.04));color:inherit;font:inherit;font-size:12px;cursor:pointer}
 .ghpick button .gi{font-size:24px;line-height:1.1} .ghpick button.on{background:var(--gbtn-on,rgba(217,113,74,.25))} .ghpick button small{font-size:10px;color:var(--muted)}
 .ghstage{display:flex;flex-direction:column;gap:8px;align-items:stretch}
@@ -403,6 +404,8 @@ body.pane-max .composer textarea{height:70px}
 .scard button.open{background:var(--glass-2,rgba(0,0,0,.05));border:1px solid var(--glass-line,rgba(0,0,0,.1));animation:cpop .3s ease-out}
 .scard button.hit{background:rgba(242,201,76,.35)}
 .scard button:not(.open)::after{content:'?';position:absolute;inset:0;display:grid;place-items:center;font-size:20px;color:rgba(255,255,255,.85);font-weight:800}
+.snk .aimrow{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}.snk input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
+.snk .pwr{display:flex;gap:8px;align-items:center;font-size:13px}
 .kicks{display:flex;gap:6px;justify-content:center;font-size:20px}
 .ghsvg .zone{fill:transparent;cursor:pointer} .ghsvg .zone:hover{fill:rgba(255,255,255,.18)}
 .ghsvg .dartzone{cursor:crosshair}
@@ -653,6 +656,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 </div>
 <script type="module">
 import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank, carPaid } from '/shared/catalog.js';
+import { TABLE_W, TABLE_H, BALL_R, POCKETS } from '/shared/snooker.js';
 import { GH_GAMES, GH_MAX_BET, WHEEL_PAID, WHEEL_FREE, SCRATCH_TIERS, SCRATCH_SYMBOLS, PEN_SPOTS, DART_ORDER, DART_RINGS } from '/shared/games.js';
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt, PLINKO, PLINKO_ROWS, MINES_TILES, MINES_CHOICES, minesMultiple } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
@@ -3371,7 +3375,7 @@ const GH={ id:null, info:null, at:0, open:false, game:'wheel', bet:100, busy:fal
     this.busy=false; renderCard(true); return r; },
   section(b){ const box=el('div',{class:'authbox casino gh'}, el('div',{class:'cas-head'}, el('h3',{text:'🎮 Game House'}), cardMax()));
     if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'})); return box; }
-    if(!this.open||this.id!==b.id){ box.append(el('p',{class:'hint',text:'Lucky wheel, scratch cards, penalties, darts, snooker, Whot, Ludo and Ayo.'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎮 Play here',onclick:()=>{ this.open=true; this.id=b.id; this.info=null; this.last=null; document.body.classList.add('card-max'); openTab(null); this.load(b); renderCard(true); }}))); return box; }
+    if(!this.open||this.id!==b.id){ box.append(el('p',{class:'hint',text:'Lucky wheel, scratch cards, penalties, darts, snooker, Whot, Ludo and Ayo.'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎮 Play here',onclick:()=>{ this.open=true; this.id=b.id; this.info=null; this.last=null; document.body.classList.add('card-max'); openTab(null); this.load(b); renderCard(true); setTimeout(()=>document.querySelector('#card .gh')?.scrollIntoView({block:'start',behavior:'smooth'}),700); }}))); return box; }
     if(!this.info||Date.now()-this.at>30000&&!this.busy){ if(!this.info){ box.append(el('p',{class:'hint',text:'Opening…'})); this.load(b); return box; } this.load(b); }
     const I=this.info; if(I.error){ box.append(el('p',{class:'hint',text:I.error})); return box; }
     if(!I.housed){ box.append(el('p',{class:'hint',text:'The Game House is for colonists who have woken up and have a home.'})); return box; }
@@ -3427,6 +3431,37 @@ const GH={ id:null, info:null, at:0, open:false, game:'wheel', bet:100, busy:fal
       if(live) wrap.append(el('p',{class:'hint',style:'text-align:center',text:`Kick ${g.kicks.length+1} of 5: tap where to shoot.`}));
       else { if(g&&g.done) wrap.append(el('div',{class:'cresult '+(g.paid?'win':'lose')}, el('b',{text:g.paid?`${g.goals} goals: you won ${fmt(g.paid)} coins!`:`${g.goals} goals. No prize this time.`})));
         wrap.append(this.betRow(I), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Start a shootout',disabled:this.busy,onclick:()=>{ const bet=this.betOk(); if(bet) this.act('penalty',{action:'start',bet},r=>{ this.last=r; }); }}))); }
+      return wrap; },
+    snooker(b,I){ const wrap=el('div',{class:'ghstage snk'}), g=this.last&&this.last.game==='snooker'?this.last:null, live=g&&!g.done;
+      if(this.aim==null) this.aim=0; if(this.power==null) this.power=0.5;
+      const svg=this.svg(`-0.09 -0.09 ${TABLE_W+0.18} ${TABLE_H+0.18}`); svg.style.maxWidth='520px';
+      svg.append(this.mk('rect',{x:-0.09,y:-0.09,width:TABLE_W+0.18,height:TABLE_H+0.18,rx:0.06,fill:'#6B3E22'}), this.mk('rect',{x:0,y:0,width:TABLE_W,height:TABLE_H,fill:'#2E7D46'}),
+        this.mk('line',{x1:0.42,y1:0,x2:0.42,y2:TABLE_H,stroke:'rgba(255,255,255,.25)','stroke-width':0.004}));
+      for(const [px,py,pr] of POCKETS) svg.append(this.mk('circle',{cx:px,cy:Math.min(TABLE_H,Math.max(0,py)),r:pr*0.85,fill:'#111'}));
+      const replay=this.replay&&this.replay.g===g?this.replay:null, balls=replay?null:(g?g.balls:[]), cue=balls&&balls.find(x=>x.id==='c');
+      const group=this.mk('g',{}); svg.append(group);
+      const drawBalls=pos=>{ group.innerHTML=''; for(const [id,[x,y]] of Object.entries(pos)) group.append(this.mk('circle',{cx:x,cy:y,r:BALL_R,fill:id==='c'?'#F7F3E8':'#C0392B',stroke:'rgba(0,0,0,.35)','stroke-width':0.004})); };
+      if(replay){ const step=()=>{ if(!svg.isConnected||this.replay!==replay) return; const i=Math.min(replay.frames.length-1,Math.floor((performance.now()-replay.t0)/1000*30)); drawBalls(replay.frames[i]);
+          if(i<replay.frames.length-1) requestAnimationFrame(step); else { this.replay=null; renderCard(true); } }; drawBalls(replay.frames[0]); requestAnimationFrame(step); }
+      else if(balls) drawBalls(Object.fromEntries(balls.map(x=>[x.id,[x.x,x.y]])));
+      if(live&&cue&&!replay){ // aim line to the first ball or cushion, with a ghost ball where the cue ball would touch
+        const dx=Math.cos(this.aim), dy=Math.sin(this.aim); let tHit=Infinity, hit=null;
+        for(const o of balls){ if(o.id==='c') continue; const fx=o.x-cue.x, fy=o.y-cue.y, proj=fx*dx+fy*dy; if(proj<=0) continue; const perp=Math.abs(fx*dy-fy*dx); if(perp>=BALL_R*2) continue; const t=proj-Math.sqrt(4*BALL_R*BALL_R-perp*perp); if(t<tHit){ tHit=t; hit=o; } }
+        const wall=Math.min(dx>0?(TABLE_W-BALL_R-cue.x)/dx:dx<0?(BALL_R-cue.x)/dx:Infinity, dy>0?(TABLE_H-BALL_R-cue.y)/dy:dy<0?(BALL_R-cue.y)/dy:Infinity), t=Math.min(tHit,wall);
+        const gx=cue.x+dx*t, gy=cue.y+dy*t; svg.append(this.mk('line',{x1:cue.x,y1:cue.y,x2:gx,y2:gy,stroke:'rgba(255,255,255,.75)','stroke-width':0.005,'stroke-dasharray':'0.02 0.015'}), this.mk('circle',{cx:gx,cy:gy,r:BALL_R,fill:'none',stroke:'rgba(255,255,255,.8)','stroke-width':0.004}));
+        if(hit){ const nx=hit.x-gx, ny=hit.y-gy, nl=Math.hypot(nx,ny)||1; svg.append(this.mk('line',{x1:hit.x,y1:hit.y,x2:hit.x+nx/nl*0.25,y2:hit.y+ny/nl*0.25,stroke:'rgba(242,201,76,.85)','stroke-width':0.005})); }
+        const zone=this.mk('rect',{x:-0.09,y:-0.09,width:TABLE_W+0.18,height:TABLE_H+0.18,fill:'transparent',style:'cursor:crosshair'});
+        zone.addEventListener('click',ev=>{ const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY; const q=pt.matrixTransform(svg.getScreenCTM().inverse()); this.aim=Math.atan2(q.y-cue.y,q.x-cue.x); renderCard(true); }); svg.append(zone); }
+      wrap.append(svg);
+      if(g) wrap.append(el('div',{class:'mstat'}, el('span',{text:`Shot ${Math.min(g.shots+(live?1:0),g.max)} of ${g.max}`}), el('b',{text:`Reds potted: ${g.potted} of ${g.need}`})));
+      if(g&&g.last&&!replay){ const L=g.last; wrap.append(el('p',{class:'hint',style:'text-align:center',text:L.foul?'In-off! The cue ball went down; it comes back on its spot.':L.potted.length?`Potted ${L.potted.filter(x=>x!=='c').length}!`:'Nothing went down.'})); }
+      if(live&&!replay){ const nudge=(lab,d)=>el('button',{class:'pill',text:lab,onclick:()=>{ this.aim+=d*Math.PI/180; renderCard(true); }});
+        const pw=el('input',{type:'range',min:'5',max:'100',value:String(Math.round(this.power*100)),'aria-label':'Power'}); pw.oninput=()=>{ this.power=pw.value/100; pv.textContent=`${pw.value}%`; }; const pv=el('b',{text:`${Math.round(this.power*100)}%`});
+        wrap.append(el('p',{class:'hint',style:'text-align:center',text:'Tap the table to aim, fine-tune with the arrows, pick the power, then shoot.'}), el('div',{class:'aimrow'}, nudge('◀◀',-2), nudge('◀',-0.3), nudge('▶',0.3), nudge('▶▶',2)),
+          el('div',{class:'pwr'}, el('span',{text:'Power'}), pw, pv), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'🎱 Shoot',disabled:this.busy,onclick:()=>this.act('snooker',{action:'shoot',angle:this.aim,power:this.power},r=>{ this.last=r; if(r.last&&r.last.frames) this.replay={ g:r, frames:r.last.frames, t0:performance.now() }; if(r.done) setTimeout(()=>toast(r.won?(r.paid?`🎱 You did it! ${fmt(r.paid)} coins (today's prize).`:'🎱 You did it! (Today’s prize is already won.)'):'Out of shots. Rack up again!'), Math.min(4000,(r.last?.frames?.length||0)*33)); })})));
+        return wrap; }
+      if(g&&g.done&&!replay) wrap.append(el('div',{class:'cresult '+(g.won?'win':'lose')}, el('b',{text:g.won?(g.paid?`Cleared! You won today's ${fmt(g.paid)}-coin prize.`:'Cleared! (Today’s prize is already won.)'):'Out of shots this time.'})));
+      if(!live&&!replay) wrap.append(el('p',{class:'hint',text:I.snookerPrize?`Today's prize for a win: ${fmt(300)} coins.`:'You’ve won today’s prize; practice is still free.'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'🎱 Rack up (free)',disabled:this.busy,onclick:()=>this.act('snooker',{action:'start'},r=>{ this.last=r; this.aim=0; })})));
       return wrap; },
     darts(b,I){ const wrap=el('div',{class:'ghstage'}), g=this.last&&this.last.game==='darts'?this.last:null, live=g&&!g.done, R0=100;
       const svg=this.svg('-110 -110 220 220'); svg.append(this.mk('circle',{r:108,fill:'#2B2621'}));

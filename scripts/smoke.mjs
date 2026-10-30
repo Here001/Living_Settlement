@@ -474,6 +474,14 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     const d0 = (await g('darts', { action: 'start', bet: 100 })).json; let dr; for (let i = 0; i < 3; i++) dr = (await g('darts', { action: 'throw', x: 0, y: 0.605 })).json;
     ok(d0.game === 'darts' && dr.done && dr.throws.length === 3 && dr.total === dr.throws.reduce((s, t) => s + t.score, 0) && dr.paid === Math.floor(100 * G.dartsPays(dr.total)), 'three darts, scored where they land (with a wobble)', JSON.stringify({ total: dr.total, paid: dr.paid }));
     ok(G.dartScore(0, 0.605).score === 60 && G.dartScore(0, 0).score === 50 && G.dartScore(0, 0.97).score === 40 && G.dartScore(2, 0).score === 0, 'the dartboard scores like a real one');
+    const s0 = (await g('snooker', { action: 'start' })).json; ok(s0.balls.length === 7 && s0.shots === 0 && (await whoDev('zara_ng')).coins === dr.coins, 'snooker practice racks up for free', JSON.stringify({ n: s0.balls.length }));
+    const s1 = (await g('snooker', { action: 'shoot', angle: 0, power: 0.6 })).json; ok(s1.shots === 1 && Array.isArray(s1.last?.frames) && s1.last.frames.length > 10 && s1.balls.some(b => b.id === 'c'), 'a shot is simulated on the server and comes back to replay', JSON.stringify({ shots: s1.shots, frames: s1.last?.frames?.length }));
+    const SN = await import('../shared/snooker.js'), rs = SN.shoot([{ id: 'c', x: 0.5, y: 0.5 }, { id: 'r0', x: 1.0, y: 0.5 }], 0, 0.5);
+    ok(rs.firstHit === 'r0' && rs.balls.find(b => b.id === 'r0').x > 1.0, 'snooker physics: the cue ball strikes the red and sends it on');
+    const sg = (await pool.query("select play_game from citizens where handle = 'zara_ng'")).rows[0].play_game; await pool.query("update citizens set play_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...sg, need: 0 })]);
+    const sw = (await g('snooker', { action: 'shoot', angle: 0, power: 0.3 })).json; ok(sw.done && sw.won && sw.paid === SN.PRACTICE.prize, "a practice win pays today's prize", JSON.stringify({ won: sw.won, paid: sw.paid }));
+    await g('snooker', { action: 'start' }); const sg2 = (await pool.query("select play_game from citizens where handle = 'zara_ng'")).rows[0].play_game; await pool.query("update citizens set play_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...sg2, need: 0 })]);
+    const sw2 = (await g('snooker', { action: 'shoot', angle: 0, power: 0.3 })).json; ok(sw2.done && sw2.won && sw2.paid === 0, 'only the first practice win each day pays', JSON.stringify({ paid: sw2.paid }));
     const st = await call('GET', '/api/admin/stats?days=7'); ok(st.json.flows['game:penalty:bet']?.today.coins >= 100 && st.json.flows['game:wheel:win'], 'Game House stakes and wins show in Stats');
     await pool.query("update citizens set coins_base = 1000, casino_game = null, play_game = null where handle = 'zara_ng'"); }
   // ---- crime, going out, pets ----

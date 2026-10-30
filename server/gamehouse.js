@@ -10,6 +10,7 @@ import { treasuryAdd } from './races.js';
 import { bump } from './achievements.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES } from '../shared/catalog.js';
+import { startTable, shoot, respot, PRACTICE, AIM_WOBBLE, POWER_WOBBLE } from '../shared/snooker.js';
 import { GH_GAMES, GH_MAX_BET, WHEEL_PAID, WHEEL_FREE, SCRATCH_TIERS, scratchCard, PEN_SPOTS, PEN_PAYS, kick, dartScore, dartsPays, wobble } from '../shared/games.js';
 
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -49,10 +50,10 @@ export class GameHouse {
 
   async info(id, bid) {
     const gh = await this.building(pool, bid);
-    const c = (await pool.query('select coins_base, coins_day, net, home_id, wheel_day, play_game from citizens where id = $1', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
+    const c = (await pool.query('select coins_base, coins_day, net, home_id, wheel_day, snooker_day, play_game from citizens where id = $1', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
     const today = this.world.meta ? R.gameDay(Date.now(), this.world.meta.epoch) : 0;
     return { housed: !!c.home_id, coins: R.balanceOn(c.coins_base, c.coins_day, c.net, today), name: gh.name || BUILDING_TYPES.gamehouse.name, freeSpin: c.wheel_day !== realDay(),
-      maxBet: GH_MAX_BET, playing: c.play_game ? this.view(c.play_game) : null };
+      maxBet: GH_MAX_BET, snookerPrize: c.snooker_day !== realDay(), playing: c.play_game ? this.view(c.play_game) : null };
   }
   view(g) { // what the player may see of a game in progress (nothing is hidden in these games)
     return g ? { ...g } : null;
@@ -127,6 +128,32 @@ export class GameHouse {
         g.x = dartsPays(g.total); g.paid = Math.floor(g.bet * g.x); g.done = true;
         await this.pay(ch, c, 'darts', g.paid, g.bet, name); await this.save(ch, c, null);
       } else await this.save(ch, c, g);
+      return { ...g, coins: c.coins_base };
+    });
+  }
+
+  // ---------- Snooker practice: free; pot 3 reds in 6 shots. The first win each real day pays a prize ----------
+  async snooker(id, bid, { action, angle, power }) {
+    return this.world.change(async ch => {
+      const { c, name } = await this.seat(ch, id, bid); let g = c.play_game;
+      if (g && g.game !== 'snooker') { if (action === 'start') throw new HttpError(409, `Finish your ${GH_GAMES[g.game].name.toLowerCase()} first.`); g = null; }
+      if (action === 'start') {
+        if (g && !g.done) return { ...g, coins: c.coins_base, resumed: true };
+        g = { game: 'snooker', balls: startTable(PRACTICE.reds), shots: 0, potted: 0, need: PRACTICE.need, max: PRACTICE.shots, at: Date.now() };
+        await this.save(ch, c, g); return { ...g, coins: c.coins_base };
+      }
+      if (!g || g.done) throw new HttpError(409, 'Rack up a new frame first.');
+      if (action !== 'shoot') throw new HttpError(400, 'Rack up, or take a shot.');
+      angle = Number(angle); power = Number(power); if (!Number.isFinite(angle) || !Number.isFinite(power) || power <= 0 || power > 1) throw new HttpError(400, 'Aim and pick a power.');
+      const gauss = () => { const u = Math.max(1e-9, rand()), v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+      const r = shoot(g.balls, angle + gauss() * AIM_WOBBLE, power * (1 + gauss() * POWER_WOBBLE));
+      const reds = r.potted.filter(p => p !== 'c').length, foul = r.potted.includes('c');
+      g.balls = foul ? [...r.balls, respot(r.balls)] : r.balls; g.shots++; g.potted += reds; g.last = { potted: r.potted, foul, frames: r.frames };
+      if (g.potted >= g.need || g.shots >= g.max || !g.balls.some(b => b.id !== 'c')) {
+        g.done = true; g.won = g.potted >= g.need; g.paid = 0;
+        if (g.won && c.snooker_day !== realDay()) { g.paid = Math.min(PRACTICE.prize, Math.floor(R.treasuryOn(ch.meta, ch.today))); await ch.q('update citizens set snooker_day = $2 where id = $1', [c.id, realDay()]); }
+        await this.pay(ch, c, 'snooker', g.paid, 0, name); await this.save(ch, c, null);
+      } else await this.save(ch, c, { ...g, last: null });
       return { ...g, coins: c.coins_base };
     });
   }

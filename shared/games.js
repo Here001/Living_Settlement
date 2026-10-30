@@ -6,7 +6,7 @@ export const GH_GAMES = {
   scratch: { name: 'Scratch cards', icon: '🎟️', rule: 'Buy a card and scratch it. Three matching symbols win: 🍀 1×, ⭐ 2×, 💎 5×, 🚀 20×, 👑 100× the card.' },
   penalty: { name: 'Penalty shootout', icon: '⚽', rule: 'Five kicks against the keeper. Pick a spot for each kick: corners are harder to save but easier to miss. 5 goals pays 3.5×, 4 goals gives your bet back.' },
   darts: { name: 'Darts', icon: '🎯', rule: 'Three darts. Tap where to aim; your hand wobbles a little. Score 140+ for 20×, 100+ for 5×, 80+ for 2×, 60+ for 1.5×.' },
-  snooker: { name: 'Snooker', icon: '🎱', rule: 'Practice: pot 3 reds in 6 shots to win 3×. Or challenge another player for a stake.' },
+  snooker: { name: 'Snooker', icon: '🎱', rule: 'Practice for free: pot 3 reds in 6 shots, and your first win each day pays 300 coins. Or challenge another player for a stake.' },
   whot: { name: 'Whot', icon: '🃏', rule: 'Match the shape or number of the card on the pile. First to empty their hand wins the pot.' },
   ludo: { name: 'Ludo', icon: '🎲', rule: 'Race your four pieces home. Roll a 6 to come out. Land on someone to send them back.' },
   ayo: { name: 'Ayo', icon: '🥥', rule: 'Sow seeds round the board; capture when your last seed makes two or three. Most seeds wins.' },

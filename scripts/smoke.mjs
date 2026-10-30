@@ -252,7 +252,9 @@ ok((await chunk('9_9')).chunks['9_9'].buildings.length === b0, 'players see noth
 r = await call('POST', '/api/admin/draft/publish');
 ok(r.status === 200 && r.json.built === 1 && r.json.roads === 2 && r.json.skipped.length === 1, 'update live: one house, two road tiles, one skipped (spot taken)', JSON.stringify(r.json));
 ok((await chunk('9_9')).chunks['9_9'].buildings.some(b => b.type === 'house' && b.x === 310), 'the house is live');
-ok((await call('GET', '/api/meta', undefined, { auth: false })).json.events.filter(e => e.text.includes('update:')).length === 1, 'one headline for the whole update');
+{ const ev = (await call('GET', '/api/meta', undefined, { auth: false })).json.events;
+  ok(!ev.some(e => /update:|road tile|House was built/.test(e.text)), 'a house and some road make no Colony Log news'); }
+ok((await import('../shared/rules.js')).majorBuilding('casino') && !(await import('../shared/rules.js')).majorBuilding('tree') && !(await import('../shared/rules.js')).majorBuilding('house'), 'casinos are major, trees and houses are not');
 ok((await call('GET', '/api/admin/draft')).json.draft === null, 'the draft is cleared after publishing');
 
 console.log('Turning buildings');

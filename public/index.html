@@ -2309,7 +2309,8 @@ const costText = c => c ? `${fmt(c)} coins` : 'free';
 function renderPane(){
   const p=$('pane'); if(!activeTab){ p.hidden=true; return; } p.hidden=false; p.innerHTML='';
   if(activeTab==='feed'){
-    const seg=el('div',{class:'seg',role:'tablist'}); for(const [id,nm] of [['posts','Posts'],['log','Daily log'],['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
+    const seg=el('div',{class:'seg',role:'tablist'}); if(!Store.canWrite&&feedMode==='log') feedMode='posts';
+    for(const [id,nm] of [['posts','Posts'],...(Store.canWrite?[['log','Daily log']]:[]),['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
     p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); if(feedMode==='posts'&&Store.canWrite) p.append(eventAdmin(), nameAdmin()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
   if(activeTab==='chats'){ Chats.render(p); return; }
   if(activeTab==='reports'){ Reports.render(p); return; }
@@ -3282,7 +3283,7 @@ function postItems0(){ const gm=gmNow(); const today=Math.floor(gm/1440); const 
   builtRecently=[]; for(const b of S.buildings.values()){ const t=T(b); if(t.cat==='nature'||t.cat==='decor') continue; const bg=gmAt(b.builtAt); if(gm-bg<2880) builtRecently.push([bg,b]); }
   const cits=[...S.citizens.values()].slice(0,300);
   for(const c of cits) for(let d=Math.max(0,today-1); d<=today; d++) out.push(...postsFor(c,d,gm));
-  for(const e of S.events){ const g=gmAt(e.t); if(g<=gm && g>=(today-1)*1440) out.push({ g, gazette:true, text:e.text }); }
+  if(Store.canWrite) for(const e of S.events){ const g=gmAt(e.t); if(g<=gm && g>=(today-1)*1440) out.push({ g, gazette:true, text:e.text }); } // the Colony Log is the developer's
   for(const m of S.chat) if(!m.p && shownMsg(m)) out.push({ g:gmAt(m.t)+0.001, msg:m }); // pinned posts are shown separately, at the top
   return out.sort((a,b)=>b.g-a.g).slice(0,80); }
 

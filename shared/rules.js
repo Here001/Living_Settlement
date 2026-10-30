@@ -10,6 +10,13 @@ export const START_FUNDS = 5000;
 export const CHUNK = 32;                   // the map is split into 32×32-tile chunks; viewers load only the chunks they see
 export const HANGOUT_RADIUS = 40;          // citizens hang out at the nearest leisure spot within this many tiles of home
 
+// Whether a building is big news for the Colony Log: industry, public services, landmarks and big venues always, and
+// anything else costing 4,000 coins or more. Trees, plants, decorations, small homes and small shops (and roads) aren't.
+const MAJOR_TYPES = new Set(['casino', 'racetrack', 'stadium', 'gym', 'bank', 'mall', 'cinema', 'hotel', 'supermarket', 'deptstore', 'markethall', 'arcade', 'exchange', 'powerplant', 'waterworks']);
+export function majorBuilding(type) {
+  const t = BUILDING_TYPES[type]; if (!t || t.cat === 'nature' || t.cat === 'decor' || type === 'campfire' || type === 'well') return false;
+  return t.cat === 'industry' || t.cat === 'services' || t.cat === 'landmarks' || MAJOR_TYPES.has(type) || (t.cost || 0) >= 4000;
+}
 export const typeOf = b => BUILDING_TYPES[b.type] || BUILDING_TYPES.tent;
 export const blocks = b => !typeOf(b).outdoor;
 export const gameMinutes = (t, epoch) => (t - epoch) / GAME_MIN_MS;

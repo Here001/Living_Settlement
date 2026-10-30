@@ -89,6 +89,10 @@ New visitors see an opening when they first arrive. Put a narrated video at `pub
 
 The colony is themed around the story: new followers **arrive aboard the ark and wait in cryosleep** until there's a home, colonists land at the **landing station** (it replaced the old campfire automatically), and the news is the **Colony Log**.
 
+What makes the Colony Log:
+- **Major construction only.** New industry, public services, landmarks, casinos, racetracks, malls and other big venues, plus anything costing 4,000 coins or more, when started, finished, rebuilt or demolished (`majorBuilding()` in `shared/rules.js`). Roads, water, trees, plants, decorations, small homes and small shops never appear, and a developer update is announced only by the major buildings in it.
+- **No purchases.** Buying a property or a car and adopting a pet aren't announced; to see who owns a building, tap it and look for **Owner** on its card. Gifts are still announced (who gifted whom, not the amount). Migration 33 removed the old purchase and small-build entries.
+
 ## Players: prove it's you, then set a password
 
 A follower opens the city, finds their citizen and taps **This is me**. The site gives them a one-time code like `CLAIM 482913`.

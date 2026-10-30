@@ -155,7 +155,6 @@ export class Economy {
       const car = { id: crypto.randomUUID().slice(0, 8), m: model, col: color, at: Date.now() }; cars.push(car); await bump(ch, c.id, { cars_bought: 1 });
       await ch.q('update citizens set cars = $2, car_active = coalesce(car_active, $3) where id = $1', [c.id, JSON.stringify(cars), car.id]);
       ch.touch(c); await ch.saveCitizen(c);
-      await ch.event(`🚗 @${c.handle} drove a new ${M.name.toLowerCase()} out of the dealership.`, 'car');
       return { ok: true, car, coins: c.coins_base };
     });
   }
@@ -231,7 +230,6 @@ export class Economy {
       if (c.coins_base < price) throw new HttpError(400, `It costs ${fmt(price)} coins. You have ${fmt(c.coins_base)} on you${c.bank ? ' (withdraw from the bank first)' : ''}.`);
       c.coins_base -= price; treasuryAdd(ch, price); ch.touch(c); await ch.saveCitizen(c);
       await ch.q('update buildings set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [b.id, c.id, c.handle, Date.now(), price]); ch.buildings.add(b.id); await bump(ch, c.id, { bought: 1 });
-      await ch.event(`🏠 @${c.handle} bought ${nameOf(b)} for ${fmt(price)} coins.`, 'property');
       return { ok: true, price, coins: c.coins_base, income: dailyIncome(b).net };
     });
   }

@@ -183,6 +183,9 @@ const MIGRATIONS = [
   // v32: the colony is now called Gliese-12b (after its planet), and so is its official updates account
   `update meta set data = jsonb_set(data, '{name}', '"Gliese-12b"') where lower(replace(data->>'name', ' ', '-')) = 'man-landing';
    update messages set handle = 'Gliese-12b Updates' where official and handle = 'Man Landing Updates';`,
+  // v33: the Colony Log no longer lists purchases or small construction; clear the old ones out
+  `delete from events where kind in ('car', 'pet') or (kind = 'property' and text like '%bought%')
+     or (kind = 'build' and (text like '% update: %' or text like '%Tree%' or text like '%Road%' or text like '%Bench%' or text like '%Lamp%' or text like '%Flower%' or text like '%Bush%'));`,
 ];
 
 export async function migrate() {

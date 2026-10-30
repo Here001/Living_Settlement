@@ -385,7 +385,7 @@ export class World {
     if (!r) return false;
     ch.buildings.add(b.id);
     await this.attractVisitors(ch, r);
-    await ch.event(`${r.name || BUILDING_TYPES[r.type]?.name || 'A building'} is finished${r.requested_by ? `. Thanks for the idea, @${r.requested_by}` : ''}`, 'build');
+    if (R.majorBuilding(r.type)) await ch.event(`${r.name || BUILDING_TYPES[r.type]?.name || 'A building'} is finished${r.requested_by ? `. Thanks for the idea, @${r.requested_by}` : ''}`, 'build');
     return true;
   }
   // The developer's fast-forward: finish one building, or every building under construction.
@@ -434,7 +434,8 @@ export class World {
       await this.assertFree(ch, type, x, y, null, rot);
       const b = bRow(await this.insertBuilding(ch, { type, x, y, name: String(name).trim().slice(0, 40), requestedBy: R.cleanHandle(requestedBy), instant: instant !== false, rot }));
       const nm = b.name || t.name, by = b.requestedBy ? `, requested by @${b.requestedBy}` : '';
-      if (b.done) await ch.event(`${nm} was built${by}`, 'build');
+      if (!R.majorBuilding(type)) {} // small things (trees, lamps, little houses) aren't news
+      else if (b.done) await ch.event(`${nm} was built${by}`, 'build');
       else { const h = Math.round(R.buildMinutes(type) / 60); await ch.event(`Construction started on ${nm}${by}. Ready in ${h} game hour${h === 1 ? '' : 's'}`, 'build'); }
       await ch.fillVacancies();
       return { building: b };
@@ -458,7 +459,7 @@ export class World {
       const t = BUILDING_TYPES[b.type] || {};
       await this.demolishIn(ch, b);
       if (refund) ch.refund(t.cost || 0);
-      await ch.event(`${b.name || t.name || 'A building'} was demolished`, 'demolish');
+      if (R.majorBuilding(b.type)) await ch.event(`${b.name || t.name || 'A building'} was demolished`, 'demolish');
       await ch.fillVacancies();
       return { ok: true };
     });
@@ -504,7 +505,8 @@ export class World {
       this.roadOps(ch, {}, removed);
       for (const v of (await ch.q('delete from vehicles where x between $1 and $3 and y between $2 and $4 returning id, cx, cy', [ax, ay, bx, by])).rows)
         ch.extraOps.push({ op: 'removeVehicle', id: v.id, chunks: [R.chunkKey(v.cx, v.cy)] });
-      if (blds.length || removed.length) await ch.event(`An area was cleared: ${fmt(blds.length)} building${blds.length === 1 ? '' : 's'} and ${fmt(removed.length)} road tile${removed.length === 1 ? '' : 's'} removed`, 'demolish');
+      const big = blds.filter(b => R.majorBuilding(b.type)).length; // only worth a headline if something major went
+      if (big) await ch.event(`An area was cleared: ${fmt(big)} major building${big === 1 ? '' : 's'} demolished`, 'demolish');
       await ch.fillVacancies();
       return { buildings: blds.length, roads: removed.length };
     });
@@ -525,7 +527,7 @@ export class World {
       await this.assertFree(ch, b.type, x, y, null, b.rot);
       const row = await this.insertBuilding(ch, { id: String(b.id), type: b.type, x, y, name: String(b.name || '').slice(0, 40), requestedBy: R.cleanHandle(b.requestedBy),
         builtAt: Number(b.builtAt) || Date.now(), builtDay: Number(b.builtDay) || 0, rot: b.rot });
-      if (!roadClears(b.type)) await ch.event(`${row.name || BUILDING_TYPES[b.type].name} was rebuilt`, 'build'); // trees and benches coming back aren't news
+      if (R.majorBuilding(b.type)) await ch.event(`${row.name || BUILDING_TYPES[b.type].name} was rebuilt`, 'build'); // trees and benches coming back aren't news
       await ch.fillVacancies();
       return { ok: true };
     });
@@ -972,7 +974,7 @@ export class World {
       const cap = R.capacities(b.type);
       const r = (await ch.q('update buildings set ruin = false, ruined_at = 0, home_cap = $2, job_cap = $3, hang_cap = $4 where id = $1 returning *', [id, cap.homeCap, cap.jobCap, cap.hangCap])).rows[0];
       ch.buildings.add(id); await this.attractVisitors(ch, r);
-      await ch.event(`${r.name || BUILDING_TYPES[r.type]?.name || 'A building'} was rebuilt after the disaster`, 'build');
+      if (R.majorBuilding(r.type)) await ch.event(`${r.name || BUILDING_TYPES[r.type]?.name || 'A building'} was rebuilt after the disaster`, 'build');
       await ch.fillVacancies();
       return { ok: true };
     });
@@ -1070,14 +1072,14 @@ export class World {
       for (const [id, p] of Object.entries(d.moves || {})) if (await attempt(`move ${name(id)}`, () => this.move(id, p.x, p.y, p.rot))) n.moved++;
       if (water.remove.length) n.water += (await this.paintWater({ set: {}, remove: water.remove })).changed || 0;
       if (roads.remove.length) n.roads += (await this.paintRoads({ set: {}, remove: roads.remove })).changed || 0;
-      for (const b of d.builds || []) if (await attempt(`build ${BUILDING_TYPES[b.type]?.name || b.type}`, () => this.build(b))) n.built++;
+      const major = [];
+      for (const b of d.builds || []) if (await attempt(`build ${BUILDING_TYPES[b.type]?.name || b.type}`, () => this.build(b))) { n.built++; if (R.majorBuilding(b.type)) major.push(b.name || BUILDING_TYPES[b.type].name); }
       if (Object.keys(water.set).length) n.water += (await this.paintWater({ set: water.set, remove: [] })).changed || 0;
       if (Object.keys(roads.set).length) n.roads += (await this.paintRoads({ set: roads.set, remove: [] })).changed || 0;
       for (const v of d.vehicles || []) if (await attempt(`add a ${VEHICLE_TYPES[v.type]?.name?.toLowerCase() || 'vehicle'}`, () => this.placeVehicle(v))) n.vehicles++;
       ch.quiet = false;
-      const parts = [[n.built, 'new building'], [n.moved, 'building moved', 'buildings moved'], [n.demolished, 'building demolished', 'buildings demolished'], [n.roads, 'road tile'], [n.water, 'tile of water', 'tiles of water'], [n.vehicles, 'vehicle change']]
-        .filter(([c]) => c).map(([c, one, many]) => `${fmt(c)} ${c === 1 ? one : (many || one + 's')}`);
-      if (parts.length) await ch.event(`${ch.meta.name} update: ${parts.join(', ')}`, 'build');
+      // Only major new buildings make the news (roads, water, trees and small things don't).
+      if (major.length) await ch.event(major.length === 1 ? `${major[0]} was built` : `New in ${ch.meta.name}: ${major.slice(0, 4).join(', ')}${major.length > 4 ? ` and ${fmt(major.length - 4)} more` : ''}`, 'build');
       await ch.q('delete from draft where id = 1');
     });
     return { ...n, skipped };

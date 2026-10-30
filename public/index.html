@@ -3309,7 +3309,7 @@ const BUYABLE=new Set(['housing','shops','offices','industry']); // what players
 function actionTabs(c){ const wrap=el('div',null); const gb=GuideUI.box(); if(gb) wrap.append(gb); const dr=Daily.row(); if(dr) wrap.append(dr);
   if(!PushUI.st&&!PushUI.busy) PushUI.load().then(()=>{ if(sel&&sel.kind==='c') renderCard(true); });
   wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}), el('button',{class:'btn sm',text:'⚙️ Settings',onclick:()=>PushUI.sheet()}))); const row=el('div',{class:'acttabs',role:'tablist'});
-  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['crime','Crime'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; if(id!=='casino') document.body.classList.remove('card-max'); renderCard(true); }}));
+  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['crime','Crime'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
   if(actTab==='bank') actTab='wallet'; if(actTab==='pet'||actTab==='casino'||actTab==='out') actTab='earn'; const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>Badges.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
 // ---- Home (rent or move, and the buildings you own), Bank, Cars ----
@@ -3502,7 +3502,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     const nm=b=>(D.buildings.get(b.id)||b).name||T(b).name;
     const shr=el('button',{class:'x shr','aria-label':'Share','title':'Share',text:'↗',onclick:()=>Share.colonist(c)});
     const strip=d&&d.badges&&d.badges.length?Badges.strip(d.badges, mineCard(c)):null;
-    card.append(close, shr, head); if(strip) card.append(strip); card.append(el('dl',null,
+    card.append(close, cardMax(), shr, head); if(strip) card.append(strip); card.append(el('dl',null,
       el('dt',{text:'Gender'}), el('dd',{text:c.gender==='f'?'Woman':'Man'}),
       el('dt',{text:'Home'}), el('dd',{text:h?nm(h):d&&d.queue?`None yet. Moves in when ${fmt(d.queue)} more ${d.queue===1?'home is':'homes are'} built`:'None yet'}),
       el('dt',{text:'Job'}), el('dd',{text:j?`${T(j).work.title} at ${nm(j)}`:h?'Looking for work':'Gets one after moving in'}),

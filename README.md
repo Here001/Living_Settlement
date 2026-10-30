@@ -174,6 +174,8 @@ They comment it on any of your Instagram posts **from their own account**. After
 
 A signed-in colonist with a home sees these on their own card. They see one at a time.
 
+Every colonist's card has a full-screen button beside Share and ×, like Town Square, chat and the Casino. It stays full screen as you switch tabs, and closing the card puts it back to normal size.
+
 - **Go here.** Every building's card (except the jail, police stations, trees and street furniture) shows **🚶 Go here** and how far it is from your colonist right now, in miles. Pressing it sends them there for 4 game hours (about 5 real minutes), and the camera locks onto them, walking, driving or in a cab, until they arrive ("📍 You've arrived"). On your own home it says **🏠 Go home**. Everyone sees them there. Other colonists' cards have **Visit their home** too.
 - **Getting there.** Colonists travel to wherever they're going, whether that's going out, the Casino or the Jail, and come back the same way afterwards.
   - Short trips (under 14 tiles) are walked.

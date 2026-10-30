@@ -621,6 +621,19 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     wb.ws.close(); await sleep(600);
     ok(!(await call('GET', '/api/online', undefined, { auth: false })).json.some(p => p.h === 'jobfill_a'), 'closing the colony goes offline');
     wa.ws.close(); stranger.ws.close(); await pool.query("update citizens set pass_hash = null where handle = 'jobfill_a'"); }
+  // ---- the first-day guide ----
+  { await pool.query("update citizens set guide = null, daily_day = null, daily_streak = 0 where handle = 'zara_ng'");
+    ok((await call('GET', '/api/me/guide', undefined, { auth: false })).status === 401, 'the guide is for signed-in colonists');
+    const g0 = (await call('GET', '/api/me/guide', undefined, P)).json;
+    ok(g0.steps?.length === 6 && !g0.finished && g0.steps.find(s => s.id === 'daily')?.done === false, 'a fresh guide has six steps to do', JSON.stringify(g0).slice(0, 160));
+    ok(g0.steps.find(s => s.id === 'bank').done && g0.steps.find(s => s.id === 'out').done, 'steps already done count straight away (a deposit, a trip out)');
+    ok((await call('POST', '/api/me/guide/claim', { step: 'daily' }, P)).status === 409, "can't collect a step you haven't done");
+    ok((await call('POST', '/api/me/guide/claim', { step: 'bonus' }, P)).status === 409, 'the bonus waits until every step is done');
+    const c0 = (await whoDev('zara_ng')).coins, cl = await call('POST', '/api/me/guide/claim', { step: 'bank' }, P);
+    ok(cl.status === 200 && cl.json.paid === 100 && (await whoDev('zara_ng')).coins === c0 + 100, 'collecting a done step pays its reward', JSON.stringify(cl.json));
+    ok((await call('POST', '/api/me/guide/claim', { step: 'bank' }, P)).status === 409, 'and only once');
+    ok((await call('POST', '/api/me/guide/hide', { hidden: true }, P)).status === 200 && (await call('GET', '/api/me/guide', undefined, P)).json.hidden === true, 'the guide can be hidden');
+    await call('POST', '/api/me/guide/hide', { hidden: false }, P); }
   // ---- daily rewards and streaks ----
   { const day = Math.floor(Date.now() / 86400000), meta0 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.treasuryBase;
     await pool.query("update citizens set daily_day = null, daily_streak = 0, daily_best = 0 where handle = 'zara_ng'");

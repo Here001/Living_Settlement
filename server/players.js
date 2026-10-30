@@ -126,6 +126,10 @@ export function playersRouter({ limit, send, admin, world }) {
     return world.setName(p.id, (req.body || {}).name);
   }));
   // Crime, going somewhere, and pets.
+  // The first-day guide
+  r.get('/me/guide', limit, send(async req => world.guide.info((await me(req)).id)));
+  r.post('/me/guide/claim', limit, send(async req => world.guide.claim((await me(req)).id, String((req.body || {}).step || ''))));
+  r.post('/me/guide/hide', limit, send(async req => world.guide.hide((await me(req)).id, (req.body || {}).hidden !== false)));
   r.get('/me/notices', limit, send(async req => world.actions.notices((await me(req)).id)));
   r.post('/me/notices/:id/seen', limit, send(async req => world.actions.seenNotice((await me(req)).id, req.params.id)));
   r.get('/me/crime', limit, send(async req => world.actions.crimeInfo((await me(req)).id, req.query.target)));

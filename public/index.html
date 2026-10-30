@@ -166,6 +166,17 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .ts-tabs::-webkit-scrollbar{display:none}
 .ts-tabs button{flex:1 0 auto;white-space:nowrap}
 .nf-lead{margin:6px 0 10px}
+.guide{margin:6px 0 10px;padding:10px 12px;border-radius:16px;border:1.6px solid color-mix(in srgb,var(--warm,#E4572E) 45%,transparent);background:color-mix(in srgb,var(--warm,#E4572E) 7%,transparent)}
+.g-head{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;width:calc(100% - 72px);font-size:15px}
+.g-head .g-n{margin-left:auto;color:var(--muted);font-size:13px;font-weight:700}.g-chev{color:var(--muted)}
+.g-bar{height:6px;border-radius:999px;background:var(--soft);margin:8px 0 6px;overflow:hidden}.g-bar i{display:block;height:100%;background:var(--warm,#E4572E);border-radius:999px;transition:width .4s}
+.g-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.g-steps li{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--soft)}
+.g-steps li:first-child{border-top:0}.g-steps li.done .g-txt b{color:var(--muted);text-decoration:line-through}
+.g-ic{font-size:20px;width:26px;text-align:center}.g-txt{flex:1;min-width:0;display:flex;flex-direction:column}.g-txt b{font-size:14px}.g-txt small{color:var(--muted);font-size:12.5px;line-height:1.35}
+.g-ok{color:var(--pos,#2E7D4F);font-weight:800;font-size:18px;padding:0 6px}
+.g-bonus{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:13.5px;font-weight:600}
+.g-hide{font-size:12.5px;margin-top:4px}
 .cas-head{display:flex;align-items:center;justify-content:flex-start;gap:10px}.cas-head h3{margin:0}
 .cmaxb{display:grid;place-items:center;flex:0 0 auto}
 body.card-max .bar{top:calc(env(safe-area-inset-top,0px) + 8px)}
@@ -634,7 +645,10 @@ async function api(path, opts={}){
   let r;
   try{ r=await fetch(path,{ method:opts.method||'GET', signal:ac?ac.signal:undefined, headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{}), ...(Me&&Me.token?{'x-player':Me.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined }); }
   catch(e){ clearTimeout(timer); throw new Error(e&&e.name==='AbortError'?'The connection is slow. Please try again.':'Can\'t reach the colony right now. Check your connection.'); }
-  try{ const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`); return j; } finally { clearTimeout(timer); } }
+  try{ const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`);
+    // Anything a player does may tick off a getting-started step, so the guide checks again shortly after.
+    if((opts.method||'GET')!=='GET'&&/^\/api\/(me\/|square)/.test(path)&&!/\/api\/me\/guide/.test(path)&&typeof GuideUI!=='undefined'&&GuideUI.data&&!GuideUI.data.finished){ GuideUI.at=0; setTimeout(()=>GuideUI.load(),400); }
+    return j; } finally { clearTimeout(timer); } }
 const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang, visit:c.visit||null, pet:c.pet||null, claimed:!!c.k, car:c.car||null, online:!!c.o });
 const visiting = c => c.visit && Date.now()+skew < c.visit[4]+20*60000 ? c.visit : null; // [buildingId, type, x, y, until, from]: kept a while after it ends for the trip back
 const placeChunks = c => [c.home,c.job,c.hang,visiting(c)].filter(Boolean).map(p=>ckTile(p[2],p[3]));
@@ -2890,6 +2904,7 @@ var Badges={ data:null, at:0, loading:false,
       for(const b of list){ box.append(el('div',{class:'brow'+(b.t?' got':'')}, el('span',{class:'bdg big t'+b.tier,text:b.icon}),
         el('div',{class:'btxt'}, el('div',null, el('b',{text:b.name}), el('span',{class:'btier t'+b.tier,text:TIER_NAMES[b.tier]})), el('div',{class:'hint',text:b.desc}),
           el('div',{class:'bmeta',text:(b.t?`Earned ${ago(b.t)} · `:'')+(b.pct?`${b.pct}% of colonists have it`:'Nobody has it yet')})))); } }
+    const G=GuideUI.data; if(G&&G.hidden&&!G.finished) box.append(el('button',{class:'linkb',text:'🧭 Show the getting-started guide again',onclick:()=>GuideUI.unhide()}));
     return box; } };
 // ---- Daily rewards: collect once a real day; the longer the streak, the bigger (day 7 is the big one) ----
 var Daily={ info:null, busy:false, last:null,
@@ -3261,7 +3276,7 @@ async function openMyTab(tab, panel){ if(!(Me&&Me.handle)) return; actTab=tab; a
   const show=()=>{ const box=panel&&document.querySelector('#card '+panel); if(box) box.scrollIntoView({block:'nearest',behavior:'smooth'}); };
   requestAnimationFrame(show); setTimeout(show,700); }
 const BUYABLE=new Set(['housing','shops','offices','industry']); // what players may own (matches the server)
-function actionTabs(c){ const wrap=el('div',null); const dr=Daily.row(); if(dr) wrap.append(dr);
+function actionTabs(c){ const wrap=el('div',null); const gb=GuideUI.box(); if(gb) wrap.append(gb); const dr=Daily.row(); if(dr) wrap.append(dr);
   wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}))); const row=el('div',{class:'acttabs',role:'tablist'});
   for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; if(id!=='casino') document.body.classList.remove('card-max'); renderCard(true); }}));
   if(actTab==='bank') actTab='wallet'; if(actTab==='pet') actTab='earn'; const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>Badges.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
@@ -3344,7 +3359,7 @@ function carsPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cars
   const g=el('div',{class:'petgrid'}); for(const [k,m] of Object.entries(CAR_MODELS)) g.append(el('button',{class:'petb'+(carPick.m===k?' on':''),'aria-pressed':String(carPick.m===k),onclick:()=>{ carPick={m:k,col:null}; renderCard(true); }}, el('img',{src:carThumb(k,k===carPick.m?carPick.col:m.colors[0]),alt:'',width:'54',height:'36'}), el('span',{text:`${m.name}`}), el('span',{class:'hint',text:`${fmt(m.price)}`})));
   const sw=el('div',{class:'swatches'}); for(const col of M.colors) sw.append(el('button',{class:'sw'+(carPick.col===col?' on':''),style:`background:${col}`,'aria-label':'Colour','aria-pressed':String(carPick.col===col),onclick:()=>{ carPick.col=col; renderCard(true); }}));
   box.append(el('h3',{text:'Dealer'}), g, sw, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy the ${M.name.toLowerCase()} for ${fmt(M.price)}`,onclick:()=>meAction('/api/me/cars',{model:carPick.m,color:carPick.col},r=>`Enjoy your new ${M.name.toLowerCase()}!`)}))); return box; }
-async function meAction(path, body, ok, method){ try{ const r=await api(path,{method:method||'POST',body}); if(ok) toast(typeof ok==='function'?ok(r):ok); if(r&&typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
+async function meAction(path, body, ok, method){ try{ const r=await api(path,{method:method||'POST',body}); GuideUI.at=0; if(ok) toast(typeof ok==='function'?ok(r):ok); if(r&&typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
     if(Me&&Me.handle){ const dd=[...detail.values()].find(x=>x.h&&x.h.toLowerCase()===Me.handle.toLowerCase()); if(dd) detail.delete(dd.id); }
     Acts.at=0; if(sel) { const c=S.citizens.get(sel.id); if(c) loadDetail(c.handle).then(()=>renderCard(true)); } return r; }catch(e){ toast(e.message); return null; } }
 const Acts={ id:null, at:0, places:null, crime:null, busy:false };
@@ -3631,6 +3646,33 @@ function postItems0(){ const gm=gmNow(); const today=Math.floor(gm/1440); const 
 
 
 
+
+
+/* ---------------- first-day guide ---------------- */
+// "Getting started" on your own card: six first steps, each checked off from what you've actually done, with a small
+// reward to collect for each and a bonus for finishing. "Show me" takes you to the right place for each step.
+var GuideUI={ data:null, at:0, busy:false, open:true,
+  load(){ if(this.busy||!(Me&&Me.token)) return; this.busy=true; api('/api/me/guide').then(d=>{ this.data=d; this.at=Date.now(); }).catch(()=>{}).finally(()=>{ this.busy=false; if(sel&&sel.kind==='c') renderCard(true); }); },
+  get(){ if(!this.data||Date.now()-this.at>8000) this.load(); return this.data; },
+  async claim(step){ try{ const r=await api('/api/me/guide/claim',{method:'POST',body:{step}}); toast(step==='bonus'?`🎉 You've got the hang of it! +${fmt(r.paid)} coins.`:`✓ +${fmt(r.paid)} coins`); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } this.at=0; this.load(); }catch(e){ toast(e.message); } },
+  async hide(){ try{ await api('/api/me/guide/hide',{method:'POST',body:{hidden:true}}); }catch(e){} if(this.data) this.data.hidden=true; renderCard(true); toast('Guide hidden. You can bring it back from the Badges tab.'); },
+  async unhide(){ try{ await api('/api/me/guide/hide',{method:'POST',body:{hidden:false}}); }catch(e){} this.at=0; this.load(); },
+  show(id){ if(id==='daily'){ Daily.info?Daily.sheet():Daily.load(); return; }
+    if(id==='job'||id==='earn'||id==='out'){ actTab={job:'work',earn:'earn',out:'out'}[id]; renderCard(true); requestAnimationFrame(()=>document.querySelector('#card .acttabs')?.scrollIntoView({block:'start',behavior:'smooth'})); return; }
+    if(id==='bank'){ api('/api/me/bank').then(B=>{ const nb=nearestBank(null)||B.nearest; if(nb) goToBuilding(nb); else toast("The colony doesn't have a Bank yet. Check back soon."); }).catch(e=>toast(e.message)); return; }
+    if(id==='post'){ feedMode='posts'; openTab('feed'); setTimeout(()=>{ const t=document.querySelector('.composer textarea'); if(t) t.focus(); },120); } },
+  box(){ const G=this.get(); if(!G||G.finished||G.hidden) return null;
+    const n=G.steps.filter(s=>s.claimed).length, wrap=el('div',{class:'guide'+(this.open?'':' shut')});
+    const head=el('button',{class:'g-head','aria-expanded':String(this.open),onclick:()=>{ this.open=!this.open; renderCard(true); }}, el('b',{text:'🧭 Getting started'}), el('span',{class:'g-n',text:`${n} of ${G.steps.length}`}), el('span',{class:'g-chev',text:this.open?'▾':'▸'}));
+    const bar=el('div',{class:'g-bar'}, el('i',{style:`width:${Math.round(n/G.steps.length*100)}%`}));
+    wrap.append(head, bar); if(!this.open) return wrap;
+    const ul=el('ol',{class:'g-steps'});
+    for(const st of G.steps){ const right = st.claimed ? el('span',{class:'g-ok',text:'✓'}) : st.done ? el('button',{class:'btn primary sm',text:`Collect +${fmt(st.reward)}`,onclick:()=>this.claim(st.id)}) : el('button',{class:'btn sm',text:'Show me',onclick:()=>this.show(st.id)});
+      ul.append(el('li',{class:st.claimed?'done':''}, el('span',{class:'g-ic',text:st.icon}), el('div',{class:'g-txt'}, el('b',{text:st.title}), el('small',{text:st.claimed?'Done':st.done?'Done: collect your reward':`${st.how} +${fmt(st.reward)} coins`})), right)); }
+    wrap.append(ul);
+    wrap.append(el('div',{class:'g-bonus'}, el('span',{text:`🎉 Finish them all for a +${fmt(G.bonus.reward)} bonus`}), G.bonus.ready&&!G.bonus.claimed?el('button',{class:'btn primary sm',text:`Collect +${fmt(G.bonus.reward)}`,onclick:()=>this.claim('bonus')}):''),
+      el('button',{class:'linkb g-hide',text:'Hide the guide',onclick:()=>this.hide()}));
+    return wrap; } };
 
 /* ---------------- watching your own colonist ---------------- */
 // "Watch me go" (a delivery) and "Follow me" (any time): the card and panels get out of the way and the camera stays on

@@ -196,6 +196,23 @@ A signed-in colonist with a home sees these on their own card. They see one at a
   - **News:** successes are reported anonymously in the Colony Log; arrests name the culprit.
 - **Pet.** Adopt one of the six native creatures for 200 coins, name it, and it walks beside you on the map. You can rename it or let it go.
 
+## Getting started guide
+
+A signed-in colonist's own card opens with **🧭 Getting started**: six first steps, each with a small reward the treasury pays once, and a **+250** bonus for finishing them all. Each step is ticked off from what the player has actually done (`server/guide.js`), so steps they've already done count straight away.
+
+| Step | Done when | Reward |
+|---|---|---|
+| 🎁 Collect your daily reward | they've collected a daily reward | 50 |
+| 💼 Get a job | they have a job | 100 |
+| 📦 Earn coins on the side | they've earned from a shift, delivery, fishing, foraging or scavenging | 100 |
+| 🏦 Put cash in the Bank | they've deposited at a Bank | 100 |
+| 🚶 Go out somewhere | they've sent their colonist somewhere | 50 |
+| 📣 Say hello in Town Square | they've posted | 50 |
+
+- **Buttons:** a finished step shows **Collect +N**. An unfinished one has **Show me**, which opens the daily reward, the right tab on your card (Work, Earn, Go out), flies to the nearest Bank, or opens Town Square with the message box ready.
+- **Hiding:** the guide can be folded, or hidden (bring it back from the Badges tab). It disappears for good once the bonus is collected.
+- **Storage:** what's been collected is kept in `citizens.guide` (migration 35). Deposits and trips out are now counted in `stats` (`deposits`, `outings`).
+
 ## Pets, watching yourself, and who's online
 
 - **Pet store.** Pets are adopted at a **Pet store** (a new 2×1 shop, under Shops, with pet-keeper jobs). Tap one on the map to open its card. The **🐾 Adopt a pet** section shows every native creature with its price; renaming or letting go of your pet happens there too.

@@ -96,6 +96,7 @@ export class Economy {
         c.bank = Number(c.bank) - amount; c.coins_base += amount;
       }
       ch.touch(c); await ch.saveCitizen(c); await ch.q('update citizens set bank = $2 where id = $1', [c.id, c.bank]);
+      if (kind === 'deposit') await bump(ch, c.id, { deposits: 1 });
       return { ok: true, wallet: c.coins_base, bank: c.bank, coins: c.coins_base };
     });
   }

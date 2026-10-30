@@ -189,6 +189,8 @@ const MIGRATIONS = [
   // v34: personal notices (e.g. "someone picked your pocket"), kept until the colonist has seen them
   `create table notices (id bigserial primary key, citizen_id text not null, t bigint not null, kind text, text text not null, seen boolean not null default false);
    create index notices_unseen on notices (citizen_id, seen, t desc);`,
+  // v35: the first-day guide (which steps' rewards a colonist has collected, and whether they hid it)
+  `alter table citizens add column guide jsonb;`,
 ];
 
 export async function migrate() {

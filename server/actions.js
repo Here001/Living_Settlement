@@ -174,7 +174,7 @@ export class Actions {
         if (!b || !VISITABLE.includes(b.type)) throw new HttpError(400, "You can't go there. Pick a park, shop or place to hang out.");
         label = nameOf(b);
       }
-      const until = Date.now() + VISIT_TIME; await this.setVisit(ch, c, b, until);
+      const until = Date.now() + VISIT_TIME; await this.setVisit(ch, c, b, until); await bump(ch, c.id, { outings: 1 });
       return { ok: true, place: label, until };
     });
   }

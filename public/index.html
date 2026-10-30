@@ -166,6 +166,11 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .ts-tabs::-webkit-scrollbar{display:none}
 .ts-tabs button{flex:1 0 auto;white-space:nowrap}
 .nf-lead{margin:6px 0 10px}
+.cas-head{display:flex;align-items:center;justify-content:flex-start;gap:10px}.cas-head h3{margin:0}
+.cmaxb{display:grid;place-items:center;flex:0 0 auto}
+body.card-max .bar{top:calc(env(safe-area-inset-top,0px) + 8px)}
+body.card-max .bar>#card:not([hidden]){flex:1 1 auto;max-height:none!important;min-height:0}
+body.card-max .bar>.pane{display:none!important}
 .watchbar{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 64px);z-index:40;display:flex;align-items:center;gap:8px;padding:6px 8px 6px 12px;border-radius:999px;background:var(--panel);box-shadow:0 4px 18px rgba(0,0,0,.18);border:1.4px solid var(--soft);max-width:calc(100vw - 24px);font-size:14px;font-weight:600}
 .watchbar .wtxt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}
 .watchbar .wdot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:0 0 auto}
@@ -2572,6 +2577,10 @@ function paneHead(title, extra){ const h=el('div',{class:'pane-head'}, el('h2',{
 // Full screen ⇄ normal size for the open panel (remembered while the colony is open).
 const MAX_ICON='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>';
 const MIN_ICON='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10h-6V4M4 14h6v6M14 10l7-7M10 14l-7 7"/></svg>';
+// Full screen for the card (the Casino uses it): the card fills the screen like a maximised Town Square or chat.
+function cardMaxBtnRaw(){ const on=document.body.classList.contains('card-max'); return el('button',{class:'x cmaxb','aria-label':on?'Back to normal size':'Full screen','aria-pressed':String(on),title:on?'Back to normal size':'Full screen',
+  onclick:()=>{ document.body.classList.toggle('card-max'); if(document.body.classList.contains('card-max')) openTab(null); renderCard(true); requestAnimationFrame(()=>document.querySelector('#card .casino')?.scrollIntoView({block:'start'})); }}); }
+const cardMax = () => { const b=cardMaxBtnRaw(); b.innerHTML=document.body.classList.contains('card-max')?MIN_ICON:MAX_ICON; return b; };
 function maxBtn(){ const on=document.body.classList.contains('pane-max'); const b=el('button',{class:'x maxb','aria-label':on?'Back to normal size':'Full screen','aria-pressed':String(on),title:on?'Back to normal size':'Full screen',onclick:()=>{ document.body.classList.toggle('pane-max'); const now=document.body.classList.contains('pane-max'); for(const x of document.querySelectorAll('.maxb')){ x.innerHTML=now?MIN_ICON:MAX_ICON; x.setAttribute('aria-pressed',String(now)); x.title=now?'Back to normal size':'Full screen'; } const fb=$('feedBody')||$('dmBody'); if(fb&&$('dmBody')) fb.scrollTop=fb.scrollHeight; }}); b.innerHTML=on?MIN_ICON:MAX_ICON; return b; }
 let instantBuild=true; try{ instantBuild=localStorage.getItem('settlement-instant')!=='0'; }catch(e){}
 const gameHours = type => buildMinutes(type)/60;
@@ -2661,7 +2670,7 @@ function renderPicker(c){ const {kind,items}=sel.picker; const cur=(kind==='job'
     el('span',null, el('b',{text:it.name}), kind==='job'?el('small',{text:' '+it.title.toLowerCase()}):null), el('small',{text:`${it.id===cur?'current · ':''}${fmt(it.used)}/${fmt(it.cap)}${full?(kind==='job'?' full, bumps someone':' full, someone moves out'):''}`}))); }
   return box; }
 function selectBuilding(id){ sel={kind:'b',id}; follow=null; renderCard(); }
-function closeCard(){ sel=null; follow=null; if(Watch.id&&!Watch.until) Watch.stop(); queueMicrotask(syncMyCardBtn); if(pinned){ const c=S.citizens.get(pinned); pinned=null; if(c&&!keepCitizen(c)) S.citizens.delete(c.id); } $('card').hidden=true; }
+function closeCard(){ document.body.classList.remove('card-max'); sel=null; follow=null; if(Watch.id&&!Watch.until) Watch.stop(); queueMicrotask(syncMyCardBtn); if(pinned){ const c=S.citizens.get(pinned); pinned=null; if(c&&!keepCitizen(c)) S.citizens.delete(c.id); } $('card').hidden=true; }
 const CAT_NAME = id => (CATS.find(c=>c.id===id)||{}).name || 'Building';
 function levelOf(b){ const t=T(b); let lv=1; const res=b.homeUsed||0, wk=b.jobUsed||0; if((t.home&&res>=t.home.capacity)||(t.work&&wk>=t.work.slots)) lv++; if(gmNow()/1440-(b.builtDay||0)>=7) lv++; return lv; }
 function authPanel(c){ const box=el('div',{class:'authbox'}); const A=auth;
@@ -3218,7 +3227,7 @@ var Rocket={ g:null, skew:0, timer:null, polling:false, auto:'',
       el('div',{class:'cbet'}, el('span',{text:'Auto cash-out at'}), au, el('span',{class:'hint',text:'× (optional)'})),
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:casino.busy?'Launching…':g?'Launch again':'Launch 🚀',disabled:casino.busy||info.coins<1,onclick:()=>this.launch(c)}), el('button',{class:'linkb',text:'Leave',onclick:()=>{ casino.open=false; this.g=null; renderCard(true); }})));
     return t; } };
-function casinoPanel(c){ const box=el('div',{class:'authbox casino'}, el('h3',{text:'Casino'}));
+function casinoPanel(c){ const box=el('div',{class:'authbox casino'}, el('div',{class:'cas-head'}, el('h3',{text:'Casino'}), cardMax()));
   if(!casino||casino.id!==c.id||(!casino.loading&&Date.now()-casino.at>30000)) loadCasino(c);
   const info=casino&&casino.id===c.id?casino.info:null;
   if(!info){ box.append(el('p',{class:'hint',text:'Checking the casino…'})); return box; }
@@ -3254,7 +3263,7 @@ async function openMyTab(tab, panel){ if(!(Me&&Me.handle)) return; actTab=tab; a
 const BUYABLE=new Set(['housing','shops','offices','industry']); // what players may own (matches the server)
 function actionTabs(c){ const wrap=el('div',null); const dr=Daily.row(); if(dr) wrap.append(dr);
   wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}))); const row=el('div',{class:'acttabs',role:'tablist'});
-  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
+  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; if(id!=='casino') document.body.classList.remove('card-max'); renderCard(true); }}));
   if(actTab==='bank') actTab='wallet'; if(actTab==='pet') actTab='earn'; const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>Badges.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
 // ---- Home (rent or move, and the buildings you own), Bank, Cars ----

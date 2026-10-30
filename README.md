@@ -204,6 +204,7 @@ A signed-in colonist with a home sees these on their own card. They see one at a
 - **Watch me go.** On a delivery gig, **👀 Watch me go** hides the card and panels and keeps the camera on your colonist, walking or in a car or cab, until the delivery is done (then it reminds you to get paid).
   - An orange **You** marker floats over you, and a bar at the top shows the time left.
   - Dragging the map pauses following (**Back to me** resumes it), and **Stop** ends it.
+- **Full-screen casino.** The Casino tab on your card has a full-screen button next to its title, like Town Square and chats; tap it again, switch tab or close the card to go back to normal size.
 - **🎥 Follow me.** The same thing on your own card, with no end time: watch whatever your colonist is doing.
 - **Online now.** The Town Square header shows how many colonists are online (signed in and seen in the last 90 seconds), from `/api/online/count`. It's refreshed every 30 seconds while Town Square is open.
 - **Traffic.**

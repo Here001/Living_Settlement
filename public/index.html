@@ -3400,7 +3400,10 @@ const GH={ id:null, info:null, at:0, open:false, game:'wheel', bet:100, busy:fal
     const live=this.last&&!this.last.done&&this.last.game, pick=el('div',{class:'ghpick'});
     for(const [k,g] of Object.entries(GH_GAMES)){ const soon=!this.views[k]; pick.append(el('button',{class:this.game===k?'on':'','aria-pressed':String(this.game===k),disabled:!!live&&live!==k,onclick:()=>{ this.game=k; this.last=null; this.revealed=new Set(); renderCard(true); }}, el('span',{class:'gi',text:g.icon}), g.name, soon?el('small',{text:'coming soon'}):'')); }
     box.append(el('p',{class:'hint',text:`You have ${fmt(I.coins)} coins on you.`}), pick, el('p',{class:'crule',text:GH_GAMES[this.game].rule}));
-    const v=this.views[this.game]; box.append(v?v.call(this,b,I):el('p',{class:'hint',text:'This one is being built. Check back soon!'}));
+    // A game that fails to draw shows what went wrong (and a retry) instead of leaving a blank space.
+    const v=this.views[this.game]; let view; try{ view=v?v.call(this,b,I):el('p',{class:'hint',text:'This one is being built. Check back soon!'}); }
+    catch(e){ console.error('game view', e); view=el('div',{class:'cresult lose'}, el('b',{text:`${GH_GAMES[this.game]?.name||'This game'} couldn't load: ${e.message}`}), el('button',{class:'btn sm',text:'Try again',onclick:()=>{ Tables.list=null; Tables.mine=null; this.info=null; this.load(b); }})); }
+    box.append(view);
     box.append(el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Close the Game House',onclick:()=>{ this.open=false; document.body.classList.remove('card-max'); renderCard(true); }})));
     return box; },
   betRow(I){ const inp=el('input',{type:'number',min:'1',max:String(GH_MAX_BET),step:'1',inputmode:'numeric','aria-label':'Bet',value:String(this.bet)}); inp.oninput=()=>{ this.bet=inp.value; };
@@ -3504,7 +3507,7 @@ const GH={ id:null, info:null, at:0, open:false, game:'wheel', bet:100, busy:fal
   } };
 // ---- Tables: colonists playing each other (Whot, Ludo, Ayo, Snooker at a Game House; Hold'em at a Casino) ----
 const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, seats:2, quick:true, timer:null, sig:'', aim:0, power:0.55, replay:null, lastShotSig:'',
-  async load(game,bid,quiet){ this.game=game; this.bid=bid; try{ const r=await api(`/api/me/tables?building=${encodeURIComponent(bid)}&game=${game}`); const ls=JSON.stringify(r.tables.map(t=>[t.id,t.status,t.players.length])); const changed=ls!==this.listSig||this.set(r.mine); this.listSig=ls; this.list=r.tables; if(!quiet||changed) renderCard(true); }catch(e){ if(!quiet){ this.list=[]; toast(e.message); } } this.poll(); },
+  async load(game,bid,quiet){ this.game=game; this.bid=bid; this.error=null; try{ const r=await api(`/api/me/tables?building=${encodeURIComponent(bid)}&game=${game}`); const ls=JSON.stringify(r.tables.map(t=>[t.id,t.status,t.players.length])); const changed=ls!==this.listSig||this.set(r.mine); this.listSig=ls; this.list=r.tables; if(!quiet||changed) renderCard(true); }catch(e){ if(!quiet){ this.list=[]; this.error=e.message; renderCard(true); } } this.poll(); },
   set(t){ const was=this.mine&&this.mine.status; this.mine=t; const sig=t?JSON.stringify({...t, now:0}):''; const changed=sig!==this.sig; this.sig=sig; if(t&&t.game==='snooker'&&t.view&&t.view.last){ const ls=JSON.stringify(t.view.last.potted)+t.view.log.length; if(ls!==this.lastShotSig){ this.lastShotSig=ls; if(this.lastShotSig&&t.view.last.frames) this.replay={ frames:t.view.last.frames, t0:performance.now() }; } } if(changed&&(was!==(t&&t.status))) this.poll(); return changed; },
   // While a table is on screen: follow the game (every 1.5 s), or keep the list of open tables fresh (every 4 s).
   poll(){ clearInterval(this.timer); const playing=this.mine&&this.mine.status!=='done';
@@ -3518,6 +3521,7 @@ const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, s
   move(m){ if(!this.mine) return; this.act({action:'move', id:this.mine.id, move:m}); },
   lobby(game, bid){ const box=el('div',{class:'tbl'}), G=TABLE_GAMES[game];
     if(this.game!==game||this.bid!==bid||!this.list){ if(!this.loading||this.loading!==game+bid){ this.loading=game+bid; this.load(game,bid).finally(()=>{ this.loading=null; }); } box.append(el('p',{class:'hint',text:'Finding tables…'})); return box; }
+    if(this.error) box.append(el('div',{class:'cresult lose'}, el('b',{text:`Couldn't reach the tables: ${this.error}`}), el('button',{class:'btn sm',text:'Try again',onclick:()=>{ this.list=null; this.error=null; renderCard(true); }})));
     const t=this.mine&&this.mine.game===game?this.mine:null;
     if(this.mine&&this.mine.game!==game&&this.mine.status!=='done'){ box.append(el('p',{class:'hint',text:`You're at a ${this.mine.name} table. Finish or leave that game first.`}), el('div',{class:'row-actions'}, el('button',{class:'btn',text:`Back to my ${this.mine.name} game`,onclick:()=>{ if(this.mine.game==='poker'){ toast('Your Hold’em game is at the Casino.'); return; } GH.game=this.mine.game; renderCard(true); }}))); return box; }
     if(t) return this.table(t, box);

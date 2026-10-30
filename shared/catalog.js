@@ -297,7 +297,7 @@ const SUB_OF = {
   houses:['tent','cabin','cottage','house','timber','gablecottage','chalet','villa','garagevilla'],
   lowrise:['rowhouses','brickflats','townhouse','townhouses','canalhouses','baroquegables','workers','walkup','mews','almshouse','terraces','slab50s','haussmann','georgian','courtyard','arcadehouse','artnouveau'],
   highrise:['apartment','aptower','gallery','altbau','pilotis','domedapt','cubetower','steppedtower','balconyblock','belletower'],
-  small:['stall','bakery','cafe','bookshop','grocer','cornershop','florist','pharmacy','openmarket'],
+  small:['stall','bakery','cafe','bookshop','grocer','cornershop','florist','petstore','pharmacy','openmarket'],
   large:['supermarket','deptstore','markethall','arcade','mall','gasstation','hotel'],
   going:['tavern','casino','diner','restaurant','cinema'],
   workshops:['lumber','workshop','garage','printshop','lumberyard','canalwarehouses','warehouse'],

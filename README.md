@@ -185,7 +185,12 @@ A signed-in colonist with a home sees these on their own card. They see one at a
     - At work (roughly 07:50–11:40 and 13:10–16:15), only a workmate at the same building can try.
     - The server checks this (`routineAt` in `shared/rules.js`, `whereIs` in `server/actions.js`). The card shows "🛡️ … is safe at home right now" instead of the button when it isn't possible.
   - **Rob the nearest shop:** 60–400 coins from the till, which the treasury pays.
-  - **Chances:** 55% for a pickpocket and 40% for a robbery. Each Police station within 40 tiles cuts that by 12 points, to no lower than 15%.
+  - **Chances** depend on how far the nearest Police station is from where the crime happens (`crimeOdds()` in `shared/rules.js`):
+    - 🟢 more than 40 tiles away, or no police at all: pickpocket 75%, robbery 60%
+    - 🟡 16 to 40 tiles: pickpocket 45%, robbery 32%
+    - 🔴 within 15 tiles: pickpocket 20%, robbery 12%
+    - A crime wave adds 15 points, to at most 90%.
+  - **Where it happens:** for a robbery, the shop; for a pickpocket, wherever the victim is right now (a place they're visiting, their workplace, their hangout, or near home). Before you try, the Crime tab shows that victim's odds and where they are.
   - **Getting caught:** a fine of twice the amount they tried to take, at least 25, which goes to the treasury.
   - **Jail:** if the colony has a Jail, 10 minutes in it, seen inside. A jailed colonist can't gamble, bet, go out, adopt or commit crimes.
   - **News:** successes are reported anonymously in the Colony Log; arrests name the culprit.
@@ -193,10 +198,12 @@ A signed-in colonist with a home sees these on their own card. They see one at a
 
 ## Money: the Bank, cars, homes and buildings
 
-These live on a signed-in colonist's own card, under **Home**, **Bank** and **Cars**.
+These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** and **Cars**, and on a Bank's own card.
 
 - **Bank.**
-  - Deposits need a Bank in the colony ("Colonnaded bank", under Offices). Withdrawals always work.
+  - **All pay is cash.** Wages, rent, profits and winnings arrive as cash on you, and cash can be pickpocketed.
+  - **Deposits and withdrawals happen at a Bank.** Tap a Bank on the map ("Colonnaded bank", under Offices): its card has **🏦 Your account**, with Deposit, Withdraw and Deposit all my cash. The server refuses both unless the request names a finished Bank.
+  - The **👛 Wallet** tab on your own card shows your cash and savings, and has **Go to the nearest Bank**.
   - Money in the bank can't be pickpocketed.
   - Savings grow 0.1% each game day, up to 20 coins a day. The treasury pays interest only when it can afford to, so the bank never creates coins.
 - **Cars.**
@@ -208,8 +215,8 @@ These live on a signed-in colonist's own card, under **Home**, **Bank** and **Ca
   - A home or business (housing, shops, offices, industry) can be bought from its card on the map, up to 5 per colonist. Public buildings, parks, landmarks and utilities stay the colony's.
   - Every game day owners are paid automatically: 80% of the rent their residents pay, or 80% of a business's profit (25% of its wage bill). The treasury keeps 20%.
   - Buildings sell back to the colony for 70%. If the developer knocks one down, the owner gets back what they paid.
-- **Gifts.** Signed-in colonists can send coins to each other, with **Send a gift** on another colonist's card or **Gift coins** in the Bank section.
-  - Gifts come from your pocket first, with the rest taken from your bank savings.
+- **Gifts.** Signed-in colonists can send coins to each other, with **Send a gift** on another colonist's card or **Gift coins** in the Wallet tab.
+  - Gifts are paid in cash, from what you have on you; withdraw savings at a Bank first.
   - Each colonist can send up to 2,000 a game day, so nobody can funnel a stack of accounts into one.
   - Only verified avatars (claimed, with a password) can receive gifts.
   - The Colony Log says who gifted whom, but not the amount.

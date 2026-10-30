@@ -164,6 +164,7 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .ts-tabs::-webkit-scrollbar{display:none}
 .ts-tabs button{flex:1 0 auto;white-space:nowrap}
 .nf-lead{margin:6px 0 10px}
+.bands{margin:4px 0 6px;padding-left:4px;list-style:none;font-size:14px;line-height:1.6}
 .nf-day{position:static;background:none;border-bottom:1.4px solid var(--soft)}
 .nf-day b{font-size:15px}
 .nf-h{font-weight:800;font-size:15px;margin-bottom:6px}
@@ -3163,8 +3164,8 @@ async function openMyTab(tab, panel){ if(!(Me&&Me.handle)) return; actTab=tab; a
   requestAnimationFrame(show); setTimeout(show,700); }
 const BUYABLE=new Set(['housing','shops','offices','industry']); // what players may own (matches the server)
 function actionTabs(c){ const wrap=el('div',null); const dr=Daily.row(); if(dr) wrap.append(dr); const row=el('div',{class:'acttabs',role:'tablist'});
-  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['bank','Bank'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['pet','Pet'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
-  const P={ work:workPanel, home:homePanel, bank:bankPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, pet:petPanel, badges:c=>Badges.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
+  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['pet','Pet'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
+  if(actTab==='bank') actTab='wallet'; const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, pet:petPanel, badges:c=>Badges.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
 // ---- Home (rent or move, and the buildings you own), Bank, Cars ----
 const Money={ id:null, at:0, homes:null, props:null, bank:null, busy:false };
@@ -3186,23 +3187,40 @@ function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Home
         el('button',{class:'btn',text:'Go see',onclick:()=>{ const b=D.buildings.get(p.id); if(b){ const [w,d]=T(b).size, q=iso(b.x+w/2,b.y+d/2); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.2); } sel={kind:'b',id:p.id}; renderCard(true); }}),
         el('button',{class:'linkb',text:`Sell (${fmt(p.sell)})`,onclick:()=>toast(`Sell ${p.name} back to the colony for ${fmt(p.sell)} coins?`,'Sell',()=>moneyAction(c,'/api/me/properties/sell',{buildingId:p.id},r=>`Sold for ${fmt(r.back)} coins.`))}))); box.append(ul); } }
   return box; }
-function bankPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Bank'})); const M=moneyFor(c), B=M&&M.bank;
-  if(!B){ box.append(el('p',{class:'hint',text:'Opening your account…'})); return box; }
-  box.append(el('p',{class:'jobnow'}, 'On you: ', el('b',{text:`${fmt(B.wallet)} coins`}), ' · In the bank: ', el('b',{text:`${fmt(B.bank)} coins`})),
-    el('p',{class:'hint',text:`Money in the bank can't be pickpocketed, and earns ${+(B.rate*100).toFixed(2)}% a game day (up to ${fmt(B.cap)} coins a day)${B.bank?`: about ${fmt(B.interest)} at the next payday`:''}.`}));
-  const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Amount',placeholder:'Amount'});
-  const amt=()=>Math.floor(Number(inp.value)||0);
-  if(!B.hasBank) box.append(el('p',{class:'hint',text:"The colony doesn't have a Bank yet, so you can't deposit. You can still take out what you saved."}));
-  box.append(el('div',{class:'cbet'}, inp, el('button',{class:'btn primary',text:'Deposit',disabled:!B.hasBank,onclick:()=>moneyAction(c,'/api/me/bank/deposit',{amount:amt()},r=>`Deposited. ${fmt(r.bank)} coins in the bank.`)}),
-    el('button',{class:'btn',text:'Withdraw',onclick:()=>moneyAction(c,'/api/me/bank/withdraw',{amount:amt()},r=>`Withdrawn. ${fmt(r.wallet)} coins on you.`)})),
-    el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Deposit everything',disabled:!B.hasBank||!B.wallet,onclick:()=>moneyAction(c,'/api/me/bank/deposit',{amount:B.wallet},'All your coins are safe in the bank.')})));
+// Your money at a glance. Pay (wages, rent, winnings) arrives as cash, which can be pickpocketed until you take it to a
+// Bank: deposits and withdrawals happen on a Bank's own card, so you have to go to one (tap it on the map).
+function nearestBank(c){ let best=null, bd=1e9; const at=(c&&(c.home||c.job))||null; const ox=at?at[2]:0, oy=at?at[3]:0;
+  for(const b of D.buildings.values()){ if(b.type!=='bank'||b.done===false||b.ruin) continue; const dd=Math.abs(b.x-ox)+Math.abs(b.y-oy); if(dd<bd){ bd=dd; best=b; } } return best; }
+function goToBuilding(b){ const [w,d]=T(b).size, q=iso(b.x+w/2,b.y+d/2); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.2); follow=null; sel={kind:'b',id:b.id}; renderCard(true); }
+function walletPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'👛 Wallet'})); const M=moneyFor(c), B=M&&M.bank;
+  if(!B){ box.append(el('p',{class:'hint',text:'Counting your coins…'})); return box; }
+  box.append(el('p',{class:'jobnow'}, 'Cash on you: ', el('b',{text:`${fmt(B.wallet)} coins`}), ' · In the bank: ', el('b',{text:`${fmt(B.bank)} coins`})),
+    el('p',{class:'hint',text:`Wages, rent and winnings are paid in cash, and cash can be pickpocketed. Take it to a Bank to keep it safe: savings earn ${+(B.rate*100).toFixed(2)}% a game day (up to ${fmt(B.cap)} a day). To deposit or withdraw, tap a Bank on the map.`}));
+  const nb=nearestBank(c);
+  box.append(el('div',{class:'row-actions'}, nb?el('button',{class:'btn primary',text:'🏦 Go to the nearest Bank',onclick:()=>goToBuilding(nb)}):el('span',{class:'hint',text:B.hasBank?'Find a Bank on the map to deposit.':"The colony doesn't have a Bank yet."})));
   const gto=el('input',{type:'text',placeholder:'@friend',autocomplete:'off','aria-label':'Gift to'}), gam=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Coins to gift',placeholder:'Coins'});
-  box.append(el('h3',{text:'🎁 Gift coins'}), el('p',{class:'hint',text:'Send coins to a verified colonist: from your pocket first, then your bank. Up to 2,000 a game day.'}), el('div',{class:'cbet'}, gto, gam, el('button',{class:'btn',text:'Send',onclick:()=>sendGift(gto.value, gam.value)}))); return box; }
+  box.append(el('h3',{text:'🎁 Gift coins'}), el('p',{class:'hint',text:'Send cash to a verified colonist, up to 2,000 a game day. Gifts come out of the cash on you.'}), el('div',{class:'cbet'}, gto, gam, el('button',{class:'btn',text:'Send',onclick:()=>sendGift(gto.value, gam.value)}))); return box; }
+// The account section on a Bank's card: the only place to deposit and withdraw.
+const BankAcct={ at:0, data:null, busy:false,
+  load(){ if(this.busy) return; this.busy=true; api('/api/me/bank').then(d=>{ this.data=d; this.at=Date.now(); }).catch(()=>{}).finally(()=>{ this.busy=false; if(sel&&sel.kind==='b') renderCard(true); }); },
+  get(){ if(!this.data||Date.now()-this.at>15000) this.load(); return this.data; },
+  async act(kind,amount,b){ try{ const r=await api('/api/me/bank/'+kind,{method:'POST',body:{amount,buildingId:b.id}}); this.data={...(this.data||{}),wallet:r.wallet,bank:r.bank,interest:Math.min(this.data?.cap||20,Math.floor(r.bank*(this.data?.rate||0)))}; this.at=Date.now(); Money.at=0; Acts.at=0;
+      if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
+      toast(kind==='deposit'?`Deposited ${fmt(amount)}. ${fmt(r.bank)} coins in the bank.`:`Withdrew ${fmt(amount)}. ${fmt(r.wallet)} coins on you.`); renderCard(true); }catch(e){ toast(e.message); } },
+  section(b){ const box=el('div',{class:'authbox bankbox'}, el('h3',{text:'🏦 Your account'}));
+    if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to use the Bank.'})); return box; }
+    const B=this.get(); if(!B){ box.append(el('p',{class:'hint',text:'Opening your account…'})); return box; }
+    box.append(el('p',{class:'jobnow'}, 'Cash on you: ', el('b',{text:`${fmt(B.wallet)} coins`}), ' · Saved: ', el('b',{text:`${fmt(B.bank)} coins`})),
+      el('p',{class:'hint',text:`Saved coins can't be pickpocketed and earn ${+(B.rate*100).toFixed(2)}% a game day${B.interest>0?` (about ${fmt(B.interest)} at the next payday)`:''}.`}));
+    const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Amount',placeholder:'Amount'}), amt=()=>Math.floor(Number(inp.value)||0);
+    box.append(el('div',{class:'cbet'}, inp, el('button',{class:'btn primary',text:'Deposit',onclick:()=>this.act('deposit',amt(),b)}), el('button',{class:'btn',text:'Withdraw',onclick:()=>this.act('withdraw',amt(),b)})),
+      el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Deposit all my cash',disabled:!B.wallet,onclick:()=>this.act('deposit',B.wallet,b)})));
+    return box; } };
 // Gifts: coins from your pocket to another colonist (up to 2,000 a game day).
 let giftOpen=null;
 async function sendGift(to, amount){ to=(to||'').trim().replace(/^@+/,''); const n=Math.floor(Number(amount)||0);
   if(!to){ toast('Who is the gift for?'); return; } if(n<1){ toast('Gift at least 1 coin.'); return; }
-  toast(`Send @${to} ${fmt(n)} coins? They come from your pocket first, then your bank.`,'Send',async()=>{ const r=await meAction('/api/me/gift',{to,amount:n},r=>`🎁 Sent @${r.to} ${fmt(r.amount)} coins${r.fromBank?` (${fmt(r.fromBank)} from your bank)`:''}. You can gift ${fmt(r.left)} more today.`); if(r){ giftOpen=null; Money.at=0; renderCard(true); } }); }
+  toast(`Send @${to} ${fmt(n)} coins? Gifts are paid from the cash on you.`,'Send',async()=>{ const r=await meAction('/api/me/gift',{to,amount:n},r=>`🎁 Sent @${r.to} ${fmt(r.amount)} coins${r.fromBank?` (${fmt(r.fromBank)} from your bank)`:''}. You can gift ${fmt(r.left)} more today.`); if(r){ giftOpen=null; Money.at=0; renderCard(true); } }); }
 function giftBox(handle){ const wrap=el('div',{class:'row-actions'});
   if(giftOpen!==handle){ wrap.append(el('button',{class:'btn',text:'🎁 Send a gift',onclick:()=>{ giftOpen=handle; renderCard(true); }})); return wrap; }
   const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Coins to gift',placeholder:'Coins'});
@@ -3244,15 +3262,31 @@ function outPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Go ou
   box.append(el('div',{class:'cbet'}, el('span',{text:'Visit a friend:'}), fi, el('button',{class:'btn',text:'Go',onclick:()=>meAction('/api/me/visit',{friend:fi.value},r=>`You're on your way to ${r.place}.`)}))); return box; }
 async function doCrime(kind, target){ const r=await meAction('/api/me/crime',{kind,target}); if(!r) return;
   toast(r.caught ? (r.jailed?`🚓 Caught! You were fined ${fmt(r.fine)} coins and locked up for ${mins(r.jailFor)} minutes.`:`🚓 Caught! You were fined ${fmt(r.fine)} coins.`) : `💰 You got away with ${fmt(r.loot)} coins.`); }
+// Crime odds come in three bands, set by how far the nearest Police station is from where it happens.
+const BAND={ high:{ic:'🟢',nm:'High'}, mid:{ic:'🟡',nm:'Medium'}, low:{ic:'🔴',nm:'Low'} };
+const oddsText = o => `${BAND[o.band].ic} ${BAND[o.band].nm} chance, ${Math.round(o.chance*100)}% · ${o.dist==null?'no police station in the colony':`police ${o.dist} tile${o.dist===1?'':'s'} away`}`;
+async function tryPickpocket(target){ const h=(target||'').trim().replace(/^@+/,''); if(!h){ toast("Whose pocket? Type their username."); return; }
+  let k; try{ k=await api('/api/me/crime?target='+encodeURIComponent(h)); }catch(e){ toast(e.message); return; } const P=k.pick;
+  if(!P||P.error){ toast(P?P.error:'Couldn’t find them.'); return; }
+  if(P.blocked){ toast(`@${P.handle} is ${P.blocked} right now, so you can't get close. Try when they're out and about.`); return; }
+  toast(`@${P.handle} is at ${P.at}. ${oddsText(P)} of getting away. Try it?`,'Do it',()=>doCrime('pickpocket',h)); }
 function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Crime'})); const A=actsFor(c), K=A&&A.crime;
   if(!K){ box.append(el('p',{class:'hint',text:'Checking who’s watching…'})); return box; }
   if(!K.housed){ box.append(el('p',{class:'hint',text:'Wake up and move in first.'})); return box; }
   if(K.jailedFor>0){ box.append(el('p',{class:'jobnow',text:`🔒 You're in jail for ${mins(K.jailedFor)} more minute${K.jailedFor>60000?'s':''}.`})); return box; }
-  box.append(el('p',{class:'hint',text:`Crime pays… sometimes. ${K.police?`${K.police} police station${K.police>1?'s are':' is'} nearby, so you're more likely to be caught.`:'No police nearby.'} Caught: a fine of twice what you tried to take (at least 25), and jail if the colony has one.`}));
+  const Rt=K.rates||{pickpocket:{},rob:{}}, pct=v=>Math.round((v||0)*100)+'%';
+  box.append(el('p',{class:'hint',text:'Crime pays… sometimes. Your chance of getting away depends on how far the nearest Police station is from where it happens:'}),
+    el('ul',{class:'bands'}, el('li',{text:`🟢 More than ${K.far} tiles away (or no police): pickpocket ${pct(Rt.pickpocket.high)}, robbery ${pct(Rt.rob.high)}`}),
+      el('li',{text:`🟡 ${K.near+1} to ${K.far} tiles: pickpocket ${pct(Rt.pickpocket.mid)}, robbery ${pct(Rt.rob.mid)}`}),
+      el('li',{text:`🔴 Within ${K.near} tiles: pickpocket ${pct(Rt.pickpocket.low)}, robbery ${pct(Rt.rob.low)}`})),
+    el('p',{class:'hint',text:`${K.wave?'🦹 A crime wave is on: +15% right now. ':''}Caught: a fine of twice what you tried to take (at least 25), and jail if the colony has one.`}));
   if(K.waitFor>0){ box.append(el('p',{class:'jobnow',text:`Lie low for ${mins(K.waitFor)} more minute${K.waitFor>60000?'s':''}.`})); return box; }
   const ti=el('input',{type:'text',placeholder:'@username',autocomplete:'off','aria-label':'Whose pocket'});
-  box.append(el('div',{class:'cbet'}, el('span',{text:`Pickpocket (${Math.round(K.chance.pickpocket*100)}% chance):`}), ti, el('button',{class:'btn',text:'Try',onclick:()=>toast(`Try to pick @${(ti.value||'').replace(/^@/,'')}'s pocket?`,'Do it',()=>doCrime('pickpocket',ti.value))})));
-  box.append(el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:`Rob the nearest shop (${Math.round(K.chance.rob*100)}% chance)`,onclick:()=>toast('Rob the nearest shop? You could get away with up to 400 coins, or end up in jail.','Do it',()=>doCrime('rob'))}))); return box; }
+  box.append(el('div',{class:'cbet'}, el('span',{text:'Pickpocket:'}), ti, el('button',{class:'btn',text:'Try',onclick:()=>tryPickpocket(ti.value)})),
+    el('p',{class:'hint',text:'You’ll see their odds before you commit: it depends on where they are right now.'}));
+  if(K.rob) box.append(el('p',{class:'jobnow',text:`Nearest shop: ${K.rob.shop}. ${oddsText(K.rob)}.`}), el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:`Rob ${K.rob.shop} (${Math.round(K.rob.chance*100)}%)`,onclick:()=>toast(`Rob ${K.rob.shop}? ${oddsText(K.rob)}. You could get away with up to 400 coins, or end up in jail.`,'Do it',()=>doCrime('rob'))})));
+  else box.append(el('p',{class:'hint',text:'There are no shops to rob.'}));
+  return box; }
 let petPick='glimmerhop';
 function petPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Pet'}));
   if(!c.home){ box.append(el('p',{class:'hint',text:'You can adopt a pet once you have a home.'})); return box; }
@@ -3371,6 +3405,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(forSale && !Store.canWrite && b.done!==false && !b.ruin && Me&&Me.token&&Me.handle){
       if(!b.owner) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(price)}`,onclick:()=>toast(`Buy ${b.name||t.name} for ${fmt(price)} coins? You'll collect 80% of its rent or profit every game day.`,'Buy',async()=>{ const r=await meAction('/api/me/properties/buy',{buildingId:b.id},r=>`It's yours! About ${fmt(r.income)} coins a day.`); if(r){ b.owner=Me.handle; Money.at=0; renderCard(true); } })})));
       else if(b.owner.toLowerCase()===Me.handle.toLowerCase()) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
+    if(b.type==='bank' && b.done!==false && !b.ruin && !Store.canWrite) card.append(BankAcct.section(b));
     if(b.type==='casino' && b.done!==false && !b.ruin && !Store.canWrite) card.append(el('div',{class:'row-actions'}, Me&&Me.token&&Me.handle
       ? el('button',{class:'btn primary',text:'Play here',onclick:()=>{ casino={ ...(casino||{ game:'coin', pick:'heads', bet:10, last:null }), id:null, open:true }; openMyTab('casino','.casino'); }})
       : el('span',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'})));

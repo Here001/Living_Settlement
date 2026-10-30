@@ -107,3 +107,12 @@ export function cleanName(n) {
   if (!/^[\p{L}\p{M}][\p{L}\p{M}'’.\- ]*$/u.test(v) || v.split(' ').length > 3) return null;
   return v;
 }
+
+// Crime odds depend on how far the nearest Police station is from where the crime happens.
+// More than 40 tiles away (or no police at all): high. 16 to 40 tiles: mid. Within 15 tiles: low.
+export const CRIME_NEAR = 15, CRIME_FAR = 40;
+export const CRIME_RATES = { pickpocket: { high: 0.75, mid: 0.45, low: 0.2 }, rob: { high: 0.6, mid: 0.32, low: 0.12 } };
+export function crimeOdds(kind, dist, wave = 0) {
+  const band = dist == null || dist > CRIME_FAR ? 'high' : dist > CRIME_NEAR ? 'mid' : 'low';
+  return { band, dist: dist == null ? null : dist, chance: Math.min(0.9, (CRIME_RATES[kind] || CRIME_RATES.rob)[band] + wave) };
+}

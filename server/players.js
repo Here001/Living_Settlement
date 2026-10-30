@@ -126,7 +126,7 @@ export function playersRouter({ limit, send, admin, world }) {
     return world.setName(p.id, (req.body || {}).name);
   }));
   // Crime, going somewhere, and pets.
-  r.get('/me/crime', limit, send(async req => world.actions.crimeInfo((await me(req)).id)));
+  r.get('/me/crime', limit, send(async req => world.actions.crimeInfo((await me(req)).id, req.query.target)));
   r.post('/me/crime', limit, send(async req => { const b = req.body || {}; return world.actions.crime((await me(req)).id, { kind: b.kind, target: b.target }); }));
   r.get('/me/places', limit, send(async req => world.actions.places((await me(req)).id)));
   r.post('/me/visit', limit, send(async req => { const b = req.body || {}; return world.actions.visit((await me(req)).id, { buildingId: b.buildingId, friend: b.friend }); }));
@@ -154,8 +154,8 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/me/gift', limit, send(async req => world.economy.giftInfo((await me(req)).id)));
   r.post('/me/gift', limit, send(async req => { const b = req.body || {}; return world.economy.gift((await me(req)).id, b.to, b.amount); }));
   r.get('/me/bank', limit, send(async req => world.economy.bankInfo((await me(req)).id)));
-  r.post('/me/bank/deposit', limit, send(async req => world.economy.bank((await me(req)).id, 'deposit', (req.body || {}).amount)));
-  r.post('/me/bank/withdraw', limit, send(async req => world.economy.bank((await me(req)).id, 'withdraw', (req.body || {}).amount)));
+  r.post('/me/bank/deposit', limit, send(async req => world.economy.bank((await me(req)).id, 'deposit', (req.body || {}).amount, (req.body || {}).buildingId)));
+  r.post('/me/bank/withdraw', limit, send(async req => world.economy.bank((await me(req)).id, 'withdraw', (req.body || {}).amount, (req.body || {}).buildingId)));
   r.post('/me/cars', limit, send(async req => { const b = req.body || {}; return world.economy.buyCar((await me(req)).id, String(b.model || ''), String(b.color || '')); }));
   r.delete('/me/cars/:id', limit, send(async req => world.economy.sellCar((await me(req)).id, req.params.id)));
   r.put('/me/cars/active', limit, send(async req => world.economy.driveCar((await me(req)).id, String((req.body || {}).id || ''))));

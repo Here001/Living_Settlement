@@ -79,12 +79,15 @@ export class Economy {
     const bank = Number(c.bank || 0);
     return { hasBank: await this.hasBank(), wallet: R.balanceOn(c.coins_base, c.coins_day, c.net, today), bank, interest: Math.min(BANK_CAP, Math.floor(bank * BANK_RATE)), rate: BANK_RATE, cap: BANK_CAP };
   }
-  async bank(id, kind, amount) {
+  // Deposits and withdrawals happen at a Bank: the player taps a Bank on the map and uses its card.
+  async bank(id, kind, amount, bankId) {
     amount = Math.floor(Number(amount)); if (!(amount >= 1)) throw new HttpError(400, 'Enter an amount of at least 1 coin.');
+    if (!bankId) throw new HttpError(400, 'Go to a Bank to do that: tap any Bank on the map and use its card.');
     return this.world.change(async ch => {
+      const at = (await ch.q("select id from buildings where id = $1 and type = 'bank' and done and not ruin", [bankId])).rows[0];
+      if (!at) throw new HttpError(409, "That isn't an open Bank. Tap a finished Bank on the map.");
       const c = await this.lockMe(ch, id); ch.coins(c);
       if (kind === 'deposit') {
-        if (!(await this.hasBank(ch.db))) throw new HttpError(409, "The colony doesn't have a Bank yet.");
         if (c.coins_base < amount) throw new HttpError(400, `You only have ${fmt(c.coins_base)} coins on you.`);
         c.coins_base -= amount; c.bank = Number(c.bank || 0) + amount;
       } else {
@@ -131,8 +134,9 @@ export class Economy {
       const sent = c.gift_day === ch.today ? c.gift_sent : 0, left = GIFT_DAILY - sent;
       if (amount > left) throw new HttpError(429, left > 0 ? `You can gift ${fmt(left)} more coins today (${fmt(GIFT_DAILY)} a day).` : `You've gifted ${fmt(GIFT_DAILY)} coins today. You can send more tomorrow (game time).`);
       ch.coins(c); const bank = Number(c.bank || 0);
-      if (c.coins_base + bank < amount) throw new HttpError(400, `You have ${fmt(c.coins_base)} coins on you and ${fmt(bank)} in the bank, ${fmt(c.coins_base + bank)} in all.`);
-      const fromPocket = Math.min(c.coins_base, amount), fromBank = amount - fromPocket;
+      // Gifts are paid in cash, from what you have on you (savings stay in the bank until you withdraw them at a Bank).
+      if (c.coins_base < amount) throw new HttpError(400, `You have ${fmt(c.coins_base)} coins on you. Gifts are paid in cash${bank ? ': withdraw some at a Bank first' : ''}.`);
+      const fromPocket = amount, fromBank = 0;
       ch.coins(r); c.coins_base -= fromPocket; r.coins_base += amount;
       ch.touch(c); ch.touch(r); await ch.saveCitizen(c); await ch.saveCitizen(r);
       if (fromBank) await ch.q('update citizens set bank = bank - $2 where id = $1', [c.id, fromBank]);
@@ -227,7 +231,7 @@ export class Economy {
       const n = Number((await ch.q('select count(*) n from buildings where owner_id = $1', [c.id])).rows[0].n);
       if (n >= MAX_PROPERTIES) throw new HttpError(409, `You can own up to ${MAX_PROPERTIES} buildings. Sell one first.`);
       const price = priceOf(b.type); ch.coins(c);
-      if (c.coins_base < price) throw new HttpError(400, `It costs ${fmt(price)} coins. You have ${fmt(c.coins_base)} on you${c.bank ? ' (withdraw from the bank first)' : ''}.`);
+      if (c.coins_base < price) throw new HttpError(400, `It costs ${fmt(price)} coins. You have ${fmt(c.coins_base)} on you${c.bank ? ' (withdraw some at a Bank first)' : ''}.`);
       c.coins_base -= price; treasuryAdd(ch, price); ch.touch(c); await ch.saveCitizen(c);
       await ch.q('update buildings set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [b.id, c.id, c.handle, Date.now(), price]); ch.buildings.add(b.id); await bump(ch, c.id, { bought: 1 });
       return { ok: true, price, coins: c.coins_base, income: dailyIncome(b).net };

@@ -435,8 +435,13 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     let policeId = null;
     for (const [t, x, y] of [['police', 930, 900], ['police', 930, 903], ['police', 933, 900], ['jail', 933, 903]]) { const b = await call('POST', '/api/admin/buildings', { type: t, x, y }); policeId = policeId || b.json.building?.id; await call('POST', `/api/admin/buildings/${b.json.building?.id}/finish`); }
     let caught = null;
+    await at('jobfill_a', policeId); // out and about right by the police station
     for (let i = 0; i < 30 && !caught; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 1000'); const r = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P); if (r.json.caught) caught = r.json; }
     ok(caught && caught.jailed && caught.fine >= 25, 'caught near the police: fined and sent to jail', JSON.stringify(caught));
+    ok(caught && caught.band === 'low' && caught.police <= 15, 'police a few tiles from the scene: the low-chance band', JSON.stringify(caught));
+    { const R0 = await import('../shared/rules.js'); const o = R0.crimeOdds;
+      ok(o('pickpocket', null).band === 'high' && o('pickpocket', 41).band === 'high' && o('rob', 40).band === 'mid' && o('rob', 16).band === 'mid' && o('pickpocket', 15).band === 'low', 'odds bands: over 40 tiles high, 16 to 40 mid, 15 or closer low');
+      ok(o('pickpocket', null).chance > o('pickpocket', 30).chance && o('pickpocket', 30).chance > o('pickpocket', 5).chance && o('rob', 99, 0.15).chance === 0.75, 'farther from the police, better the odds (a crime wave adds 15%)'); }
     const zj = await who('zara_ng');
     ok(zj.visit && (await call('GET', '/api/me/crime', undefined, P)).json.jailedFor > 0, 'a jailed colonist is seen in the Jail');
     await sleep(1300); { const r = await call('POST', '/api/me/casino', { game: 'coin', pick: 'heads', bet: 1 }, P); ok(r.status === 409, 'no casino from jail', JSON.stringify(r)); }
@@ -466,12 +471,15 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
   { const set = (h, sql, v = []) => pool.query(`update citizens set ${sql} where handle = $1`, [h, ...v]), money = async () => { const d = await whoDev('zara_ng'); return { wallet: d.coins, bank: d.bank }; };
     const build = async (type, x, y) => { const b = await call('POST', '/api/admin/buildings', { type, x, y }); await call('POST', `/api/admin/buildings/${b.json.building?.id}/finish`); return b.json.building?.id; };
     await set('zara_ng', 'coins_base = 500, coins_day = 0, net = 0, bank = 0, jailed_until = null');
-    ok((await call('POST', '/api/me/bank/deposit', { amount: 100 }, P)).status === 409, 'no Bank, no deposits');
-    await build('bank', 940, 900);
-    const dep = await call('POST', '/api/me/bank/deposit', { amount: 300 }, P);
+    ok((await call('POST', '/api/me/bank/deposit', { amount: 100 }, P)).status === 400, 'deposits only at a Bank');
+    const bakery = await build('bakery', 1210, 1210);
+    ok((await call('POST', '/api/me/bank/deposit', { amount: 100, buildingId: bakery }, P)).status === 409, "a bakery isn't a Bank");
+    const bankId = await build('bank', 940, 900);
+    ok((await call('POST', '/api/me/bank/withdraw', { amount: 1 }, P)).status === 400, 'withdrawals only at a Bank too');
+    const dep = await call('POST', '/api/me/bank/deposit', { amount: 300, buildingId: bankId }, P);
     ok(dep.status === 200 && dep.json.wallet === 200 && dep.json.bank === 300, 'deposit 300 into the Bank', JSON.stringify(dep.json));
-    ok((await call('POST', '/api/me/bank/withdraw', { amount: 400 }, P)).status === 400, "can't withdraw more than you saved");
-    ok((await call('POST', '/api/me/bank/withdraw', { amount: 100 }, P)).json.bank === 200, 'withdraw 100');
+    ok((await call('POST', '/api/me/bank/withdraw', { amount: 400, buildingId: bankId }, P)).status === 400, "can't withdraw more than you saved");
+    ok((await call('POST', '/api/me/bank/withdraw', { amount: 100, buildingId: bankId }, P)).json.bank === 200, 'withdraw 100 at the Bank');
     ok((await who('zara_ng')).bank === undefined && (await whoDev('zara_ng')).bank === 200, 'bank balances are private');
     // cars
     ok((await call('POST', '/api/me/cars', { model: 'hatch', color: '#D9544A' }, P)).status === 400, "can't afford a car with 300 coins on you");
@@ -528,9 +536,9 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     let ev; for (let i = 0; i < 15 && !ev; i++) { ev = ((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).find(e => e.kind === 'gift'); if (!ev) await new Promise(r => setTimeout(r, 250)); } // the news list is cached for 2 s
     ok(ev && /@zara_ng sent @jobfill_a a gift/.test(ev.text) && !/1,500|1500/.test(ev.text), "the Colony Log says who, not how much", ev?.text);
     await set('zara_ng', 'coins_base = 100, bank = 50, gift_day = null, gift_sent = 0');
-    ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 200 }, P)).status === 400, "can't gift more than your pocket and bank together");
-    const gb = await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 130 }, P), zz = await whoDev('zara_ng');
-    ok(gb.status === 200 && gb.json.fromPocket === 100 && gb.json.fromBank === 30 && zz.coins === 0 && zz.bank === 20, 'pocket first, then the bank', JSON.stringify(gb.json));
+    ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 130 }, P)).status === 400, "gifts are cash: savings don't count");
+    const gb = await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 100 }, P), zz = await whoDev('zara_ng');
+    ok(gb.status === 200 && gb.json.fromBank === 0 && zz.coins === 0 && zz.bank === 50, 'a gift comes out of your pocket only', JSON.stringify(gb.json));
     await pool.query("update citizens set pass_hash = null where handle = 'jobfill_a'"); }
   // ---- private chats and who's online ----
   { const sleep = ms => new Promise(r => setTimeout(r, ms));

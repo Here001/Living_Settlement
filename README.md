@@ -58,6 +58,23 @@ Open the site with `#builder` and enter your `ADMIN_TOKEN`. As the developer you
 
 In developer mode, every colonist's card has a **Coins** box. **Add** gives them coins out of the treasury; **Take away** returns coins to the treasury. The colony's total stays the same.
 
+## Railways and trains
+
+Rail is laid exactly like roads, from **Roads → Rail**, point to point or freehand, in drafts or live. It is undone with undo, removed with the road eraser, and bridges over water.
+- **Railway** (80 coins a tile): track that joins up with the rail tiles around it, with curves at corners, junctions where lines meet, and buffer stops at the ends.
+- **Station platform** (120): trains stop here. A run of platform tiles is one station; the train stops in its middle.
+- **Level crossing** (100): where a road meets the rails. Laying rail across a street (or a street across rail) makes one automatically, so the road isn't cut. Cars drive over it, and its lights flash while a train is near.
+
+Trains start running as soon as there's a line at least 4 tiles long. Nothing needs placing:
+- A **closed ring** runs as a loop. Long loops get up to 4 trains.
+- A **line with two ends** gets a shuttle that runs end to end and turns back at the buffers.
+- Each **branch** off a line gets its own train.
+- Trains speed up out of a station, slow into the next, and wait there for a few game minutes.
+- Every viewer works out the same timetable from the clock, so everyone sees the same train in the same place.
+- Each line has its own colours.
+
+Cars can't use railway or platform tiles, and people cross the tracks only when they have to. The code is in `public/index.html`, under "railways" and "trains"; the rail types are in `ROAD_TYPES` in `shared/catalog.js`.
+
 ## The colony treasury
 
 In developer mode, the coin counter at the top shows the treasury. **Tap it** to add coins (with quick +1,000 / +10,000 / +100,000 / +1,000,000 buttons, or any amount up to 10 million at a time) or to take some out. Added coins are new money; they aren't taken from anyone. The treasury pays wages, bank interest, daily rewards, casino and race winnings, and everything in the Earn tab, so top it up if it runs low. For a player, tapping their own coin counter opens their Earn tab.

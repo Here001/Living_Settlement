@@ -121,6 +121,9 @@ ok(await near.saw(o => o.op === 'roads' && o.set['0,5'] === 'street'), 'viewers 
 ok((await call('POST', '/api/admin/roads', { set: { '20,20': 'street' } })).json.changed === 0, 'roads cannot go through a house');
 ok((await call('POST', '/api/admin/buildings', { type: 'cottage', x: 1, y: 5 })).status === 409, 'buildings cannot go on a road');
 ok((await call('POST', '/api/admin/roads', { remove: ['2,5'] })).json.changed === 1, 'remove a road tile');
+r = await call('POST', '/api/admin/roads', { set: { '0,40': 'rail', '1,40': 'rail', '2,40': 'platform', '3,40': 'railcross', '4,40': 'rail' } });
+ok(r.status === 200 && r.json.changed === 5, 'lay a railway with a station platform and a level crossing', JSON.stringify(r.json));
+ok((await call('POST', '/api/admin/roads', { remove: ['0,40', '1,40', '2,40', '3,40', '4,40'] })).json.changed === 5, 'take the railway up again');
 c = await chunk('0_0');
 ok(c.chunks['0_0'].roads['0,5'] === 'street' && !c.chunks['0_0'].roads['2,5'], 'roads saved correctly');
 

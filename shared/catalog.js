@@ -10,7 +10,9 @@
      cost    coins taken from the town treasury when placed
      Style options: house → timber, chimney, awning
                     block → mansard, glass, awning, sign+label, neon, garage, cross, bars, balcony
-   ADD A ROAD: add an entry to ROAD_TYPES (kind: street | highway | cobble | dirt; lanes: one1 | one2 | four | median; walk: sidewalk width).
+   ADD A ROAD: add an entry to ROAD_TYPES (kind: street | highway | cobble | dirt | rail | crossing; lanes: one1 | one2 | four | median; walk: sidewalk width).
+   RAIL: kind 'rail' tiles join up into lines and trains run on them by themselves; 'platform' tiles are stations
+         (trains stop there), and a 'crossing' is a street that a railway crosses (cars and trains both use it).
    sub      the tab inside a build menu (see SUBS)
    This file is shared: the server validates builds with it, the browser draws with it.
    TIME: 30 real minutes = 1 game day. The world is a pure function of the clock.
@@ -36,6 +38,9 @@ export const ROAD_TYPES = {
   sand:       { name:'Sand path', note:'beach and park', sub:'surface', kind:'dirt', top:'#E8D6A6', edge:'#C9B47E', cost:4, speed:1.3, nocars:true },
   gravel:     { name:'Gravel path', note:'cheap and quick', sub:'surface', kind:'dirt', top:'#CDC7B8', edge:'#A39C8C', cost:5, speed:1.4 },
   dirt:       { name:'Dirt path', note:'free', sub:'surface', kind:'dirt', top:'#D6BE8E', edge:'#B09466', cost:0, speed:1.4 },
+  rail:       { name:'Railway', note:'trains run on it', sub:'rail', kind:'rail', top:'#A39A8C', edge:'#857C6E', cost:80, speed:1.2, nocars:true, walkCost:5 },
+  platform:   { name:'Station platform', note:'trains stop here', sub:'rail', kind:'rail', platform:true, top:'#CFC9BC', edge:'#A39F95', cost:120, speed:1.2, nocars:true, walkCost:3 },
+  railcross:  { name:'Level crossing', note:'where a road meets the rails', sub:'rail', kind:'crossing', top:'#7E8185', walk:'#DCD8CE', cost:100, speed:1.6 },
   asphalt:    { name:'Street', kind:'street', top:'#7E8185', walk:'#DCD8CE', cost:30, speed:2.0, hidden:true },
 };
 
@@ -278,7 +283,7 @@ export const BUILDING_TYPES = {
 
 // Tabs inside each build menu. Anything without a sub shows under its menu's first tab.
 export const SUBS = {
-  roads:     [['streets','Streets'],['curbside','Curbside'],['wide','Wide'],['highway','Highway'],['surface','Surfaces']],
+  roads:     [['streets','Streets'],['curbside','Curbside'],['wide','Wide'],['highway','Highway'],['rail','Rail'],['surface','Surfaces']],
   housing:   [['houses','Houses'],['lowrise','Low-rise'],['highrise','High-rise']],
   shops:     [['small','Small'],['large','Large'],['going','Going out']],
   industry:  [['workshops','Workshops'],['factories','Factories'],['farms','Farms']],

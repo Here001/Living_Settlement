@@ -160,6 +160,9 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .ev time{color:var(--muted);font-variant-numeric:tabular-nums}
 .ev.big{font-weight:600}
 .more{color:var(--muted);font-size:13px;padding:4px 0 8px 52px}
+.ts-tabs{display:flex;width:100%;overflow-x:auto;scrollbar-width:none;margin:2px 0 6px;flex:0 0 auto}
+.ts-tabs::-webkit-scrollbar{display:none}
+.ts-tabs button{flex:1 0 auto;white-space:nowrap}
 .nf-lead{margin:6px 0 10px}
 .nf-day{position:static;background:none;border-bottom:1.4px solid var(--soft)}
 .nf-day b{font-size:15px}
@@ -2345,6 +2348,7 @@ async function moveBuilding(id,x,y){ const b=D.buildings.get(id); if(!b){ setToo
 /* ---------------- icons ---------------- */
 const I=(body)=>`<svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="${INK}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${body}</svg>`;
 const ICONS={
+  me: I('<rect x="5" y="6" width="22" height="20" rx="3" fill="#F4EDE0"/><circle cx="12" cy="14" r="3.2" fill="#E8A07A"/><path d="M7 22c0-3 2.3-4.6 5-4.6s5 1.6 5 4.6z" fill="#E8A07A"/><path d="M19 13h5M19 17h4M19 21h3" fill="none"/>'),
   feed: I('<path d="M5 7h22v14H14l-6 5v-5H5z" fill="#9CC4E4"/><path d="M10 12h12M10 16h8"/>'),
   top: I('<path d="M10 6h12v6a6 6 0 0 1-12 0z" fill="#E2B13C"/><path d="M10 8H6a4 4 0 0 0 4 5M22 8h4a4 4 0 0 1-4 5M16 18v4M11 26h10M13 22h6v4h-6z" fill="none"/>'),
   reports: I('<path d="M8 27V5" fill="none"/><path d="M8 6h15l-3 5 3 5H8z" fill="#E8836B"/>'),
@@ -2397,12 +2401,18 @@ addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==
 addEventListener('keydown',e=>{ if((e.key==='m'||e.key==='M') && !/INPUT|TEXTAREA/.test((e.target.tagName||'')) && tool.kind!=='pan') setMini(!mini); if(e.key==='Escape' && tool.kind!=='pan') setTool({kind:'pan'}); });
 
 let activeTab=null, feedMode='posts';
+
+// The "My card" button: opens your own colonist card straight away (same as Find me), and shows as pressed while it's open.
+function syncMyCardBtn(){ const b=document.querySelector('#toolsRow .tb[data-me]'); if(b) b.setAttribute('aria-pressed',String(myCardOpen())); }
+function myHandle(){ if(Store.canWrite) return S.meta&&S.meta.founder; let h=(Me&&Me.handle)||null; if(!h){ try{ const v=localStorage.getItem('settlement-me'); h=v&&v.startsWith('"')?JSON.parse(v):v; }catch(e){} } return h; }
+function myCardOpen(){ const h=myHandle(); if(!h||!sel||sel.kind!=='c') return false; const c=S.citizens.get(sel.id); return !!c&&c.handle===h; }
+function openMyCard(){ if(myCardOpen()){ closeCard&&closeCard(); buildToolbar(); return; } if(innerWidth<900) openTab(null); findMe(); setTimeout(buildToolbar,60); }
 const PLAYER_TABS=new Set(['feed','people','races','top','chats']); // everyone's tabs; the rest are the developer's build menus
 function buildToolbar(){ const row=$('toolsRow'); row.innerHTML='';
-  const tabs=[{id:'feed',name:'Town Square'},{id:'people',name:'Colonists'},{id:'races',name:'Races'},{id:'top',name:'Top'}].concat(Me&&Me.token?[{id:'chats',name:'Chats'}]:[]);
+  const tabs=[{id:'feed',name:'Town Square'},{id:'me',name:'My card'},{id:'people',name:'Colonists'},{id:'races',name:'Races'}].concat(Me&&Me.token?[{id:'chats',name:'Chats'}]:[]);
   const all = Store.canWrite ? tabs.concat([{id:'reports',name:'Reports'},{sep:true}],CATS) : tabs;
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
-    const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(activeTab===c.id),onclick:()=>openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); if(c.id==='reports'&&typeof Reports!=='undefined'&&Reports.open) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Reports.open))})); row.append(btn); } }
+    const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(c.id==='me'?myCardOpen():activeTab===c.id),onclick:()=>c.id==='me'?openMyCard():openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='me') btn.dataset.me='1'; if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); if(c.id==='reports'&&typeof Reports!=='undefined'&&Reports.open) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Reports.open))})); row.append(btn); } }
 function openTab(name){ if(!name) document.body.classList.remove('pane-max'); activeTab=name; if((PLAYER_TABS.has(name)||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
 function applyPermissions(){ buildToolbar(); refreshHUD(); refreshUndo(); refreshDraftBar(); if(Store.canWrite && !draftLoaded){ draftLoaded=true; loadDraft(); if(typeof Reports!=='undefined') Reports.load(); } $('spawnBoxNote')&&0; if(!Store.canWrite && activeTab && !PLAYER_TABS.has(activeTab)) openTab(null); }
 
@@ -2438,11 +2448,11 @@ function renderPane(){
   const p=$('pane'); if(!activeTab){ p.hidden=true; return; } p.hidden=false; p.innerHTML='';
   if(activeTab==='feed'){
     const seg=el('div',{class:'seg',role:'tablist'}); if(!Store.canWrite&&feedMode==='log') feedMode='posts';
-    for(const [id,nm] of [['posts','Posts'],['news','News flash'],...(Store.canWrite?[['log','Daily log']]:[]),['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
-    p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); if(feedMode==='posts'&&Store.canWrite) p.append(eventAdmin(), nameAdmin()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
+    for(const [id,nm] of [['posts','Posts'],['news','News flash'],['top','Top'],...(Store.canWrite?[['log','Daily log']]:[]),['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
+    seg.classList.add('ts-tabs'); p.append(paneHead('Town Square'), seg); requestAnimationFrame(()=>{ const on=seg.querySelector('[aria-pressed="true"]'); if(on) on.scrollIntoView({block:'nearest',inline:'center'}); }); if(feedMode==='posts') p.append(composer()); if(feedMode==='posts'&&Store.canWrite) p.append(eventAdmin(), nameAdmin()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
   if(activeTab==='chats'){ Chats.render(p); return; }
   if(activeTab==='reports'){ Reports.render(p); return; }
-  if(activeTab==='top'){ Top.render(p); return; }
+  if(activeTab==='top'){ activeTab='feed'; feedMode='top'; return renderPane(); }
   if(activeTab==='races'){ p.append(paneHead('Races')); const body=el('div',{class:'pane-body',id:'raceBody'}); p.append(body); renderRaces(true); return; }
   if(activeTab==='people'){ p.append(paneHead('Colonists')); const body=el('div',{class:'pane-body'});
     const s=el('input',{class:'search',id:'search',type:'search',placeholder:'Search a username',autocomplete:'off'}); s.value=peopleQuery; s.oninput=()=>{ peopleQuery=s.value; renderPeople(); };
@@ -2509,7 +2519,7 @@ function renderPicker(c){ const {kind,items}=sel.picker; const cur=(kind==='job'
     el('span',null, el('b',{text:it.name}), kind==='job'?el('small',{text:' '+it.title.toLowerCase()}):null), el('small',{text:`${it.id===cur?'current · ':''}${fmt(it.used)}/${fmt(it.cap)}${full?(kind==='job'?' full, bumps someone':' full, someone moves out'):''}`}))); }
   return box; }
 function selectBuilding(id){ sel={kind:'b',id}; follow=null; renderCard(); }
-function closeCard(){ sel=null; follow=null; if(pinned){ const c=S.citizens.get(pinned); pinned=null; if(c&&!keepCitizen(c)) S.citizens.delete(c.id); } $('card').hidden=true; }
+function closeCard(){ sel=null; follow=null; queueMicrotask(syncMyCardBtn); if(pinned){ const c=S.citizens.get(pinned); pinned=null; if(c&&!keepCitizen(c)) S.citizens.delete(c.id); } $('card').hidden=true; }
 const CAT_NAME = id => (CATS.find(c=>c.id===id)||{}).name || 'Building';
 function levelOf(b){ const t=T(b); let lv=1; const res=b.homeUsed||0, wk=b.jobUsed||0; if((t.home&&res>=t.home.capacity)||(t.work&&wk>=t.work.slots)) lv++; if(gmNow()/1440-(b.builtDay||0)>=7) lv++; return lv; }
 function authPanel(c){ const box=el('div',{class:'authbox'}); const A=auth;
@@ -2671,17 +2681,20 @@ setInterval(()=>{ if(document.hidden||actTab!=='earn'||$('card').hidden) return;
 // ---- Leaderboards: four weekly boards (reset Monday 00:00 UTC) and four all-time standings ----
 const TOP_BOARDS=[['racer','🏁','Racer'],['casino','🎰','Luckiest'],['wanted','🦹','Wanted'],['generous','🎁','Generous'],['richest','💰','Richest'],['landlord','🏙️','Landlord'],['streak','🔥','Streak'],['badges','🏅','Badges']];
 var Top={ board:'racer', data:{}, busy:false,
-  async load(b){ b=b||this.board; try{ this.data[b]={...await api('/api/leaderboards/'+b),at:Date.now()}; }catch(e){ toast(e.message); } if(activeTab==='top'&&this.board===b) this.renderNow(); },
-  renderNow(){ if(activeTab!=='top') return; const p=$('pane'); if(p){ p.innerHTML=''; this.render(p); } },
+  async load(b){ b=b||this.board; try{ this.data[b]={...await api('/api/leaderboards/'+b),at:Date.now()}; }catch(e){ toast(e.message); } if(this.board===b) this.renderNow(); },
+  shown(){ return activeTab==='feed'&&feedMode==='top'; },
+  renderNow(){ if(!this.shown()) return; feedDirty=true; renderFeed(true); },
   left(t){ const ms=Math.max(0,t-Date.now()), d=Math.floor(ms/86400000), h=Math.floor(ms%86400000/3600000), m=Math.floor(ms%3600000/60000); return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m} min`; },
   row(r,B){ const av=el('span',{class:'ava sm'}); av.innerHTML=avatarSVG({handle:r.h,gender:r.g,name:r.n});
     const medal=r.rank===1?'🥇':r.rank===2?'🥈':r.rank===3?'🥉':'#'+r.rank;
     return el('button',{class:'person toprow'+(r.me?' me':'')+(r.rank<=3?' podium':''),onclick:()=>{ openCitizen(r.h); if(innerWidth<900) openTab(null); }},
       el('span',{class:'trank',text:medal}), av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:(r.n?`${r.n} · @${r.h}`:'@'+r.h)+(r.me?' (you)':'')})),
       r.v!=null?el('b',{class:'tval',text:fmt(r.v)}):''); },
-  render(p){ const pills=el('div',{class:'toppills'});
+  render(p){
+    p.append(paneHead('Leaderboards')); const body=el('div',{class:'pane-body',id:'topBody'}); p.append(body); this.renderBody(body); },
+  renderBody(body){ const pills=el('div',{class:'toppills'});
     for(const [id,ic,nm] of TOP_BOARDS) pills.append(el('button',{class:'pill'+(this.board===id?' on':''),'aria-pressed':String(this.board===id),onclick:()=>{ this.board=id; this.renderNow(); if(!this.data[id]||Date.now()-this.data[id].at>30000) this.load(id); }}, ic+' '+nm));
-    p.append(paneHead('Leaderboards')); const body=el('div',{class:'pane-body',id:'topBody'}); body.append(pills); p.append(body);
+    body.append(pills); requestAnimationFrame(()=>{ const on=pills.querySelector('.on'); if(on) on.scrollIntoView({block:'nearest',inline:'center'}); });
     const D0=this.data[this.board]; if(!D0||Date.now()-D0.at>30000) this.load(); if(!D0){ body.append(el('p',{class:'hint',text:'Loading…'})); return; }
     body.append(el('div',{class:'tophead'}, el('h3',{text:`${D0.icon} ${D0.name}`}), el('span',{class:'hint',text:D0.weekly?`This week · starts over in ${this.left(D0.resetsAt)}`:'All time'})));
     body.append(el('p',{class:'hint tunit',text:D0.show?`Ranked by ${D0.unit}${D0.weekly?' this week':''}.`:`Ranked by ${D0.unit}${D0.weekly?' this week':''}. Amounts are private, so only the order is shown.`}));
@@ -3312,7 +3325,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(Store.canWrite) card.append(el('div',{class:'row-actions'}, b.done===false?el('button',{class:'btn primary',text:'Finish now',onclick:async()=>{ try{ await api(`/api/admin/buildings/${encodeURIComponent(b.id)}/finish`,{method:'POST'}); toast(`${b.name||t.name} is finished`); }catch(e){ toast(e.message); } }}):null,
       el('button',{class:'btn',text:'Move',onclick:()=>{ setTool({kind:'move',id:b.id,rot:b.rot||0}); }}), el('button',{class:'btn',text:'⟲ Turn',onclick:()=>rotateBuilding(b.id)}), el('button',{class:'btn',text:'One more',onclick:()=>{ setTool({kind:'place',type:b.type}); }}), el('button',{class:'btn danger',text:'Demolish',onclick:()=>removeBuilding(b.id)})));
   }
-  card.hidden=false;
+  card.hidden=false; syncMyCardBtn();
 }
 async function removeCitizen(c){ try{ await api('/api/admin/citizens/'+encodeURIComponent(c.id),{method:'DELETE'}); closeCard(); toast(`Removed @${c.handle}`); }catch(e){ toast(e.message); } }
 let peopleQuery='', searchTimer=null, searchSeq=0;
@@ -3510,6 +3523,7 @@ function renderFeed(force){
   feedDirty=false; const keep=body.scrollTop; body.innerHTML='';
   if(feedMode==='story'){ body.append(storyPage()); return; }
   if(feedMode==='news'){ News.render(body); body.scrollTop=keep; return; }
+  if(feedMode==='top'){ Top.renderBody(body); body.scrollTop=keep; return; }
   if(!S.meta){ body.append(el('p',{class:'hint',text:'The story starts once the colony is founded.'})); return; }
   if(feedMode==='posts'){ for(const m of S.chat.filter(m=>m.p&&shownMsg(m)).sort((a,b)=>b.t-a.t)) body.append(msgPost(m)); const items=postItems(); if(!items.length&&!S.chat.some(m=>m.p)){ body.append(el('p',{class:'hint',text:'Quiet so far. Check back in a few minutes.'})); return; }
     for(const it of items){

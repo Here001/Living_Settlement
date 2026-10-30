@@ -100,6 +100,12 @@ In developer view, the Town Square box posts **official updates as "<colony name
 
 New colonists start with **0 coins** and earn from their job. Coins are private: a colonist sees only their own, and only the developer sees the colony treasury.
 
+## The bottom bar
+
+Players see **Town Square · My card · Colonists · Races** (plus **Chats** once signed in).
+- **My card** opens your own colonist card straight away, wherever you are on the map, with no need to find your avatar. Tap it again to close the card. It uses the colonist you signed in as (or the one this phone remembers); if there isn't one yet, it opens Colonists so you can find yourself.
+- **Top** (the leaderboards) now lives inside Town Square, as a tab: **Posts · News flash · Top · The story**.
+
 ## News flash
 
 Town Square has a **News flash** tab between Posts and The story. It shows everything that's happened lately, newest first and grouped by day:

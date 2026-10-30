@@ -160,6 +160,18 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .ev time{color:var(--muted);font-variant-numeric:tabular-nums}
 .ev.big{font-weight:600}
 .more{color:var(--muted);font-size:13px;padding:4px 0 8px 52px}
+.nf-lead{margin:6px 0 10px}
+.nf-day{position:static;background:none;border-bottom:1.4px solid var(--soft)}
+.nf-day b{font-size:15px}
+.nf-h{font-weight:800;font-size:15px;margin-bottom:6px}
+.nf-chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.nf-chip{display:flex;align-items:center;gap:8px;flex:0 0 auto;padding:8px 12px;border-radius:14px;border:1.4px solid var(--soft);background:var(--glass,transparent);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.nf-chip small{display:block;color:var(--muted);font-size:12px}
+.nf-chip b{font-size:14px}
+.nf-ic{font-size:22px}
+.nf-ev span{line-height:1.4}
+.nf-at{all:unset;cursor:pointer;font-weight:700;color:var(--pos,#2E7D4F)}
+.nf-at:hover{text-decoration:underline}
 .search{width:100%;margin-top:4px}
 .person{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:none;border:0;border-bottom:1.4px solid var(--soft);padding:8px 2px}
 .person .who{font-weight:600}
@@ -635,7 +647,7 @@ function applyOp(o){
   case 'reports': Reports.soon(); break;
   case 'cevent': CEvent.set(o.data, true); break;
   case 'reset': location.reload(); break;
-  case 'event': S.events.unshift(o.data); if(S.events.length>300) S.events.length=300; feedDirty=true; newsSoon(); break; } }
+  case 'event': News.seen=false; S.events.unshift(o.data); if(S.events.length>300) S.events.length=300; feedDirty=true; newsSoon(); break; } }
 let newsTimer=null; const newsSoon=()=>{ if(!newsTimer) newsTimer=setTimeout(()=>{ newsTimer=null; updateNews(); },300); }; // a burst of news updates the ticker once
 
 // Which chunks the screen needs: everything visible plus a one-chunk margin, capped when zoomed far out.
@@ -2426,7 +2438,7 @@ function renderPane(){
   const p=$('pane'); if(!activeTab){ p.hidden=true; return; } p.hidden=false; p.innerHTML='';
   if(activeTab==='feed'){
     const seg=el('div',{class:'seg',role:'tablist'}); if(!Store.canWrite&&feedMode==='log') feedMode='posts';
-    for(const [id,nm] of [['posts','Posts'],...(Store.canWrite?[['log','Daily log']]:[]),['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
+    for(const [id,nm] of [['posts','Posts'],['news','News flash'],...(Store.canWrite?[['log','Daily log']]:[]),['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
     p.append(paneHead('Town Square',[seg])); if(feedMode==='posts') p.append(composer()); if(feedMode==='posts'&&Store.canWrite) p.append(eventAdmin(), nameAdmin()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
   if(activeTab==='chats'){ Chats.render(p); return; }
   if(activeTab==='reports'){ Reports.render(p); return; }
@@ -3403,6 +3415,32 @@ function postItems0(){ const gm=gmNow(); const today=Math.floor(gm/1440); const 
   for(const m of S.chat) if(!m.p && shownMsg(m)) out.push({ g:gmAt(m.t)+0.001, msg:m }); // pinned posts are shown separately, at the top
   return out.sort((a,b)=>b.g-a.g).slice(0,80); }
 
+
+/* ---------------- News flash (Town Square) ---------------- */
+// Everything that's happened lately, newest first: gifts, new pets, big wins, races, arrests, streaks, badges, colony
+// events and major construction. This week's leaders sit at the top. @names open that colonist.
+const NEWS_KINDS={ people:['gift','pet','streak','badge','career','movein','spawn','leave'], wins:['casino','lottery','race','champions','find','gig'], crime:['crime'], colony:['build','demolish','disaster','cevent','rename','found','day','property'] };
+const NEWS_ICON={ gift:'🎁', pet:'🐾', streak:'🔥', badge:'🏅', career:'💼', movein:'🏠', spawn:'🚀', leave:'👋', casino:'🎰', lottery:'🎟️', race:'🏁', champions:'🏆', find:'🎣', gig:'📦', crime:'🚨', build:'🏗️', demolish:'🧱', disaster:'⚠️', cevent:'🎉', rename:'🪧', found:'🌱', day:'🌅', property:'🏙️' };
+const LEAD_BOARDS=['racer','casino','wanted','generous'];
+var News={ filter:'all', seen:false,
+  leaders(){ const box=el('div',{class:'nf-lead'}, el('div',{class:'nf-h',text:"This week's leaders"})); const row=el('div',{class:'nf-chips'}); let any=false;
+    for(const b of LEAD_BOARDS){ const D0=Top.data[b]; if(!D0||Date.now()-D0.at>60000){ if(!this['ld'+b]){ this['ld'+b]=1; Top.load(b).then(()=>{ this['ld'+b]=0; if(activeTab==='feed'&&feedMode==='news'){ feedDirty=true; renderFeed(true); } }); } }
+      if(!D0||!D0.top||!D0.top[0]) continue; const w=D0.top[0], meta=TOP_BOARDS.find(x=>x[0]===b); any=true;
+      row.append(el('button',{class:'nf-chip',onclick:()=>{ openCitizen(w.h); if(innerWidth<900) openTab(null); }}, el('span',{class:'nf-ic',text:meta?meta[1]:'🏆'}), el('span',null, el('small',{text:D0.name||meta[2]}), el('b',{text:'@'+w.h})))); }
+    if(!any) row.append(el('p',{class:'hint',text:'No leaders yet this week: win a race, a gamble or give a gift to be first.'})); box.append(row); return box; },
+  // Text with @names turned into buttons that open the colonist.
+  rich(text){ const span=el('span'); for(const part of String(text).split(/(@[A-Za-z0-9._]+)/)){ if(/^@[A-Za-z0-9._]+$/.test(part)){ const h=part.slice(1).replace(/\.$/,''); span.append(el('button',{class:'nf-at',text:'@'+h,onclick:()=>{ openCitizen(h); if(innerWidth<900) openTab(null); }}), part.endsWith('.')?'.':''); } else span.append(part); } return span; },
+  render(body){ this.seen=true; body.append(this.leaders());
+    const pills=el('div',{class:'toppills'}); for(const [id,nm] of [['all','All'],['people','Gifts & pets'],['wins','Wins'],['crime','Crime'],['colony','Colony']]) pills.append(el('button',{class:'pill'+(this.filter===id?' on':''),'aria-pressed':String(this.filter===id),onclick:()=>{ this.filter=id; feedDirty=true; renderFeed(true); }, text:nm}));
+    body.append(pills);
+    const list=(S.events||[]).filter(e=>this.filter==='all'||(NEWS_KINDS[this.filter]||[]).includes(e.kind)).slice(0,150);
+    if(!list.length){ body.append(el('p',{class:'hint',text:this.filter==='all'?'No news yet. Check back soon.':'Nothing here yet.'})); return; }
+    const today=Math.floor(gmNow()/1440); let day=null;
+    for(const e of list){ const g=gmAt(e.t), d=Math.floor(g/1440);
+      if(d!==day){ day=d; body.append(el('div',{class:'dayhead nf-day'}, el('b',{text:d===today?'Today':d===today-1?'Yesterday':`Day ${d+1}`}))); }
+      const lead=/^\p{Extended_Pictographic}/u.test(e.text)?'':(NEWS_ICON[e.kind]||'📰')+' ';
+      body.append(el('div',{class:'ev nf-ev'}, el('time',{text:fmtClock(g)}), el('span',null, lead, this.rich(e.text)))); } } };
+
 /* ---------------- storyboard log ---------------- */
 let feedDirty=true;
 function feedItems(){ return withBudget(25, feedItems0); }
@@ -3471,6 +3509,7 @@ function renderFeed(force){
   if(feedMode==='posts' && S.meta){ const items=postItems(); const key=feedMode+'|'+(Me&&Me.handle)+'|'+S.chat.filter(m=>m.p).map(m=>m.id).join(',')+'|'+items.map(i=>(i.msg?i.msg.id:(i.gazette?'g':'@'+(i.c&&i.c.id)))+':'+Math.floor(i.g)).join(','); if(!force && key===feedKey){ feedDirty=false; return; } feedKey=key; } else feedKey='';
   feedDirty=false; const keep=body.scrollTop; body.innerHTML='';
   if(feedMode==='story'){ body.append(storyPage()); return; }
+  if(feedMode==='news'){ News.render(body); body.scrollTop=keep; return; }
   if(!S.meta){ body.append(el('p',{class:'hint',text:'The story starts once the colony is founded.'})); return; }
   if(feedMode==='posts'){ for(const m of S.chat.filter(m=>m.p&&shownMsg(m)).sort((a,b)=>b.t-a.t)) body.append(msgPost(m)); const items=postItems(); if(!items.length&&!S.chat.some(m=>m.p)){ body.append(el('p',{class:'hint',text:'Quiet so far. Check back in a few minutes.'})); return; }
     for(const it of items){

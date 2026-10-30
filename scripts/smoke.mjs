@@ -457,6 +457,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await call('POST', '/api/me/pet', { kind: 'unicorn' }, P)).status === 400, 'only native creatures');
     const pet = await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip' }, P);
     ok(pet.status === 200 && (await who('zara_ng')).pet?.k === 'glimmerhop' && (await coins('zara_ng')) === 300, 'adopting a pet everyone can see', JSON.stringify(pet.json));
+    ok((await call('GET', '/api/meta', undefined, { auth: false })).json.events.some(e => e.kind === 'pet' && e.text.includes('@zara_ng adopted')), 'a new pet makes the News flash');
     ok((await call('POST', '/api/me/pet', { kind: 'starcrest' }, P)).status === 409, 'one pet at a time');
     ok((await call('PUT', '/api/me/pet', { name: 'Zippy' }, P)).status === 200 && (await who('zara_ng')).pet.n === 'Zippy', 'renaming the pet');
     ok((await call('PUT', '/api/me/pet', { name: '<b>' }, P)).status === 400, 'pet names are letters only');
@@ -524,7 +525,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(g.status === 200 && (await whoDev('zara_ng')).coins === 1500 && (await whoDev('jobfill_a')).coins === 1600 && g.json.left === 500, 'gift 1,500 coins: it moves from one pocket to the other', JSON.stringify(g.json));
     ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 600 }, P)).status === 429, 'at most 2,000 a game day');
     ok((await call('GET', '/api/me/gift', undefined, P)).json.left === 500, 'and the card knows how much is left');
-    const ev = ((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).find(e => e.kind === 'gift');
+    let ev; for (let i = 0; i < 15 && !ev; i++) { ev = ((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).find(e => e.kind === 'gift'); if (!ev) await new Promise(r => setTimeout(r, 250)); } // the news list is cached for 2 s
     ok(ev && /@zara_ng sent @jobfill_a a gift/.test(ev.text) && !/1,500|1500/.test(ev.text), "the Colony Log says who, not how much", ev?.text);
     await set('zara_ng', 'coins_base = 100, bank = 50, gift_day = null, gift_sent = 0');
     ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 200 }, P)).status === 400, "can't gift more than your pocket and bank together");

@@ -1110,5 +1110,5 @@ export class World {
     const media = this.meta?.buildPostId; if (!media) return [];
     return (await pool.query('select id, t, username, text from comments where media_id = $1 order by t desc limit $2', [media, limit])).rows;
   }
-  async recentEvents(limit = 60) { return (await pool.query('select id, t, kind, text from events order by t desc limit $1', [limit])).rows; }
+  async recentEvents(limit = 150) { return (await pool.query('select id, t, kind, text from events order by t desc limit $1', [limit])).rows; }
 }

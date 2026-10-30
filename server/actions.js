@@ -158,6 +158,7 @@ export class Actions {
       ch.coins(c); if (c.coins_base < PET_PRICE) throw new HttpError(400, `Adopting costs ${PET_PRICE} coins. You have ${fmt(c.coins_base)}.`);
       c.coins_base -= PET_PRICE; treasuryAdd(ch, PET_PRICE); ch.touch(c); await ch.saveCitizen(c);
       const pet = { k: kind, n: n || CREATURES[kind].name }; await ch.q('update citizens set pet = $2 where id = $1', [c.id, JSON.stringify(pet)]); await bump(ch, c.id, { pets: 1 });
+      await ch.event(`🐾 @${c.handle} adopted a ${CREATURES[kind].name.toLowerCase()} called ${pet.n}.`, 'pet'); // News flash
       return { ok: true, pet, coins: c.coins_base };
     });
   }

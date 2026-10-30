@@ -100,6 +100,20 @@ In developer view, the Town Square box posts **official updates as "<colony name
 
 New colonists start with **0 coins** and earn from their job. Coins are private: a colonist sees only their own, and only the developer sees the colony treasury.
 
+## News flash
+
+Town Square has a **News flash** tab between Posts and The story. It shows everything that's happened lately, newest first and grouped by day:
+- gifts (who gifted whom, never the amount)
+- new pets
+- streaks and badges
+- casino, lottery and race wins, and weekly champions
+- arrests
+- colony events and major construction
+
+At the top, **This week's leaders** shows the current leader of each weekly board (Racer, Luckiest, Wanted, Generous). Filters narrow the list to Gifts & pets, Wins, Crime or Colony, and every @name opens that colonist. The list holds the latest 150 entries.
+
+Property and car purchases still aren't announced; tap a building to see its owner.
+
 ## The story and the intro
 
 New visitors see an opening when they first arrive. Put a narrated video at `public/intro.mp4` (H.264 MP4, ideally under 40 MB) and it plays full screen with a **Begin** button (so sound is allowed) and **Skip**; until then, the story plays as title cards. Anyone can replay it from **Town Square → The story**, which also holds the full story text.
@@ -108,7 +122,7 @@ The colony is themed around the story: new followers **arrive aboard the ark and
 
 What makes the Colony Log:
 - **Major construction only.** New industry, public services, landmarks, casinos, racetracks, malls and other big venues, plus anything costing 4,000 coins or more, when started, finished, rebuilt or demolished (`majorBuilding()` in `shared/rules.js`). Roads, water, trees, plants, decorations, small homes and small shops never appear, and a developer update is announced only by the major buildings in it.
-- **No purchases.** Buying a property or a car and adopting a pet aren't announced; to see who owns a building, tap it and look for **Owner** on its card. Gifts are still announced (who gifted whom, not the amount). Migration 33 removed the old purchase and small-build entries.
+- **No purchases.** Buying a property or a car isn't announced (new pets are, in the News flash); to see who owns a building, tap it and look for **Owner** on its card. Gifts are still announced (who gifted whom, not the amount). Migration 33 removed the old purchase and small-build entries.
 
 ## Players: prove it's you, then set a password
 

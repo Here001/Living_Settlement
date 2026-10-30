@@ -196,6 +196,21 @@ A signed-in colonist with a home sees these on their own card. They see one at a
   - **News:** successes are reported anonymously in the Colony Log; arrests name the culprit.
 - **Pet.** Adopt one of the six native creatures for 200 coins, name it, and it walks beside you on the map. You can rename it or let it go.
 
+## Pets, watching yourself, and who's online
+
+- **Pet store.** Pets are adopted at a **Pet store** (a new 2×1 shop, under Shops, with pet-keeper jobs). Tap one on the map to open its card. The **🐾 Adopt a pet** section shows every native creature with its price; renaming or letting go of your pet happens there too.
+  - Prices, paid in cash (`PET_PRICES` in `shared/creatures.js`, never under 500): Mudgulper 500, Ironshell 700, Dustrunner 900, Skyskimmer 1,200, Starcrest 1,500, Glimmerhop 2,000.
+  - The player card no longer has a Pet tab, and the server refuses an adoption unless it names an open Pet store.
+- **Watch me go.** On a delivery gig, **👀 Watch me go** hides the card and panels and keeps the camera on your colonist, walking or in a car or cab, until the delivery is done (then it reminds you to get paid).
+  - An orange **You** marker floats over you, and a bar at the top shows the time left.
+  - Dragging the map pauses following (**Back to me** resumes it), and **Stop** ends it.
+- **🎥 Follow me.** The same thing on your own card, with no end time: watch whatever your colonist is doing.
+- **Online now.** The Town Square header shows how many colonists are online (signed in and seen in the last 90 seconds), from `/api/online/count`. It's refreshed every 30 seconds while Town Square is open.
+- **Traffic.**
+  - Each roaming vehicle runs errands around its patch at its own speed, with short stops, and only to streets it can actually reach, so it never gets stuck or jumps.
+  - Vehicles' hours are staggered, so they no longer all appear or vanish at once. A vehicle going off duty fades out where it parked and fades back in where it next sets off.
+  - Vehicles heading the same way in the same lane queue behind each other instead of driving through each other.
+
 ## Notices and distances
 
 - **Personal notices.** When someone picks your pocket you get a notice straight away, or the next time you open the game if you were away ("While you were away"). Notices are kept in the `notices` table (migration 34) until seen.

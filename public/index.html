@@ -166,6 +166,15 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .ts-tabs::-webkit-scrollbar{display:none}
 .ts-tabs button{flex:1 0 auto;white-space:nowrap}
 .nf-lead{margin:6px 0 10px}
+.watchbar{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 64px);z-index:40;display:flex;align-items:center;gap:8px;padding:6px 8px 6px 12px;border-radius:999px;background:var(--panel);box-shadow:0 4px 18px rgba(0,0,0,.18);border:1.4px solid var(--soft);max-width:calc(100vw - 24px);font-size:14px;font-weight:600}
+.watchbar .wtxt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}
+.watchbar .wdot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+.watchbar .wdot.on{background:#E4572E;animation:wpulse 1.2s infinite}
+.watchbar .cdown{font-variant-numeric:tabular-nums;color:var(--muted)}
+@keyframes wpulse{50%{opacity:.35}}
+.followrow{margin:4px 0 2px}
+.onl-chip{align-self:center;margin-left:8px;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:700;color:var(--pos,#2E7D4F);background:color-mix(in srgb,var(--pos,#2E7D4F) 12%,transparent);white-space:nowrap}
+.petb .petprice{display:block;color:var(--muted);font-size:11px;font-weight:600}
 .nt-h{margin:0 0 8px}
 .nt-list{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto}
 .nt-item{padding:10px 12px;border-radius:12px;border:1.4px solid var(--soft)}
@@ -571,7 +580,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 <script type="module">
 import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears } from '/shared/catalog.js';
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt } from '/shared/casino.js';
-import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr } from '/shared/creatures.js';
+import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
 import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles } from '/shared/rules.js';
 
@@ -1950,13 +1959,53 @@ const pathTime=(path,speedMul=1)=>{ let t=0; for(let i=1;i<path.length;i++) t+=c
 function traffic(gm){ const h=Math.floor(((gm%1440)+1440)%1440/60); return h<5?0.12:h<6?0.3:h<7?0.55:h<10?0.95:h<16?0.6:h<19?0.95:h<22?0.5:0.22; }
 const candCache=new Map();
 function roadsNear(ax,ay,r=12){ const key=ax+','+ay+','+r; let c=candCache.get(key); if(c) return c; c=[]; for(let x=ax-r;x<=ax+r;x++) for(let y=ay-r;y<=ay+r;y++) if(carOK(x+','+y)) c.push([x,y]); candCache.set(key,c); if(candCache.size>3000) candCache.clear(); return c; }
-// A roaming vehicle drives from one random nearby road tile to the next, one leg every LEG game minutes; every viewer computes the same route.
-const LEG=60; // each trip gets a game hour: drive a few blocks, then park until the next one
-function roam(id,ax,ay,gm,V,ambient){ const n=Math.floor(gm/LEG), cands=roadsNear(ax,ay,7); if(cands.length<2) return carOK(ax+','+ay)?{x:ax+0.5,y:ay+0.5,dx:1,dy:0,moving:false}:null;
-  if(ambient && rng(hash(id+':a:'+n))()>traffic(n*LEG)) return null;
-  const pick=m=>cands[hash(id+':'+m)%cands.length], from=pick(n-1), to=pick(n); const path=findRoadPath(from[0],from[1],to[0],to[1]);
-  if(!path||path.length<2) return {x:from[0]+0.5,y:from[1]+0.5,dx:1,dy:0,moving:false};
-  const mul=Math.max(V.speed||1, pathTime(path,1)/(LEG*0.9)); return alongRoad(path, gm-n*LEG, mul); }
+// A roaming vehicle's day is a run of game hours ("legs"). In a leg it runs a few errands around its patch at its own
+// speed, stopping briefly at each, and ends the leg where the next one starts, so it never jumps. Every vehicle's legs
+// are offset by its own amount, so they don't all change at once, and it only picks streets it can actually reach.
+// Ambient traffic thins out by time of day: an off-duty vehicle fades out where it parked and fades back in where it
+// will set off. Every viewer works out the same thing from the clock.
+const LEG=60, ERRAND_STOP=2; // game minutes
+const reachCache=new Map(); let reachGen=-1;
+function roamCands(ax,ay,r=7){ if(reachGen!==tileListGen){ reachCache.clear(); reachGen=tileListGen; }
+  const key=ax+','+ay; let c=reachCache.get(key); if(c) return c;
+  const start=nearestRoad(ax,ay,3); c=[];
+  if(start){ const seen=new Set([start[0]+','+start[1]]), q=[start];
+    for(let i=0;i<q.length;i++){ const [x,y]=q[i]; c.push(q[i]); for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+dx, ny=y+dy, k=nx+','+ny; if(seen.has(k)||Math.abs(nx-ax)>r||Math.abs(ny-ay)>r||!carOK(k)) continue; seen.add(k); q.push([nx,ny]); } } }
+  if(reachCache.size>4000) reachCache.clear(); reachCache.set(key,c); return c; }
+const legPlans=new Map();
+function legPlan(id,n,cands,V){ const key=id+'|'+n+'|'+tileListGen; let P=legPlans.get(key); if(P) return P;
+  const pick=(m,j)=>cands[hash(id+':'+m+':'+j)%cands.length], start=pick(n-1,'e'), end=pick(n,'e'), sp=V.speed||1, room=LEG*0.94;
+  const route=(a,b)=>a[0]===b[0]&&a[1]===b[1]?null:findRoadPath(a[0],a[1],b[0],b[1]);
+  const segs=[]; let t=0, pos=start;
+  for(let j=0;j<7;j++){ const sub=pick(n,j), p1=route(pos,sub), p2=route(sub,end); if(!p1||p1.length<2) continue;
+    const t1=pathTime(p1,sp), t2=p2?pathTime(p2,sp):0; if(t+t1+ERRAND_STOP+t2>room) break;
+    segs.push({p:p1,t0:t,mul:sp,dur:t1}); t+=t1+ERRAND_STOP; pos=sub; }
+  const pf=route(pos,end); if(pf&&pf.length>=2){ const nat=pathTime(pf,sp), mul=Math.max(sp, nat/Math.max(1,room-t)); segs.push({p:pf,t0:t,mul,dur:nat*sp/mul}); }
+  P={start,end,segs}; if(legPlans.size>3000) legPlans.clear(); legPlans.set(key,P); return P; }
+function roam(id,ax,ay,gm,V,ambient){ const cands=roamCands(ax,ay); if(cands.length<2) return cands.length?{x:cands[0][0]+0.5,y:cands[0][1]+0.5,dx:1,dy:0,moving:false}:null;
+  const off=hash(id+':off')%LEG, g=gm+off, n=Math.floor(g/LEG), u=g-n*LEG;
+  const on=m=>!ambient||rng(hash(id+':a:'+m))()<=traffic(m*LEG-off);
+  const parkAt=(t,a)=>({x:t[0]+0.5,y:t[1]+0.5,dx:1,dy:0,moving:false,alpha:a});
+  if(!on(n)){ const pick=(m)=>cands[hash(id+':'+m+':e')%cands.length], FADE=4;
+    if(u<FADE&&on(n-1)) return parkAt(pick(n-1),1-u/FADE); if(u>LEG-FADE&&on(n+1)) return parkAt(pick(n),(u-(LEG-FADE))/FADE); return null; }
+  const P=legPlan(id,n,cands,V); let at=P.start;
+  for(const sgm of P.segs){ if(u<sgm.t0) return parkAt(at,1); if(u<=sgm.t0+sgm.dur) return alongRoad(sgm.p,u-sgm.t0,sgm.mul); at=sgm.p[sgm.p.length-1]; }
+  return parkAt(P.end,1); }
+// Vehicles in the same lane heading the same way queue instead of driving through each other: the one behind is drawn
+// a car-length back, easing there so nothing jumps.
+const queueOff=new Map();
+function queueTraffic(list){ const G=new Map(), cell=2, len=v=>(v.V.len||0.62);
+  for(const it of list){ const s=it.veh.st, k=Math.floor(s.x/cell)+','+Math.floor(s.y/cell); let a=G.get(k); if(!a) G.set(k,a=[]); a.push(it); }
+  const want=new Map();
+  for(const it of list){ const A=it.veh, s=A.st; let push=0;
+    for(let gx=-1;gx<=1;gx++) for(let gy=-1;gy<=1;gy++){ const a=G.get((Math.floor(s.x/cell)+gx)+','+(Math.floor(s.y/cell)+gy)); if(!a) continue;
+      for(const jt of a){ if(jt===it) continue; const B=jt.veh, t=B.st; const dot=(s.dx||0)*(t.dx||0)+(s.dy||0)*(t.dy||0); if(dot<0.7) continue;
+        const rx=t.x-s.x, ry=t.y-s.y, ahead=rx*(s.dx||0)+ry*(s.dy||0), side=Math.abs(rx*(s.dy||0)-ry*(s.dx||0)); if(ahead<=0.001||side>0.22) continue;
+        const need=(len(A)+len(B))/2+0.08; if(ahead<need) push=Math.max(push, need-ahead); } }
+    if(A.key) want.set(A.key,push); }
+  for(const it of list){ const A=it.veh; if(!A.key) continue; const target=want.get(A.key)||0, prev=queueOff.get(A.key)||0, cur=prev+(target-prev)*0.25;
+    if(cur>0.005){ A.st={...A.st, x:A.st.x-(A.st.dx||0)*cur, y:A.st.y-(A.st.dy||0)*cur}; it.k=vdepth(A.st.x,A.st.y); queueOff.set(A.key,cur); } else queueOff.delete(A.key); }
+  if(queueOff.size>5000) queueOff.clear(); }
 const AMBIENT_TYPES=[['car',58],['taxi',10],['van',14],['bus',10],['truck',8]];
 const ambientType = k => { let r=hash(k+':t')%100, acc=0; for(const [t,p] of AMBIENT_TYPES){ acc+=p; if(r<acc) return t; } return 'car'; };
 // Emergency crews: when a disaster happens they drive from the nearest station (or from out of town) and park at the scene with sirens on.
@@ -2163,21 +2212,24 @@ function drawFrame(ts){
     { const CM=crowdMax(); if(crowd.length>CM) crowd=crowd.map(c=>[dist(c),c]).sort((a,b)=>a[0]-b[0]).slice(0,CM).map(x=>x[1]); }
     if(follow&&!crowd.some(c=>c.id===follow)&&S.citizens.has(follow)) crowd.push(S.citizens.get(follow)); }
   planBudgetEnd=performance.now()+6; // up to 6 ms a frame for working out new plans
-  if(cam.z>=0.45) for(const c of crowd){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible) items.push(st.car?{ k:vdepth(st.x,st.y), veh:{V:st.V,col:st.col,st,siren:!!st.siren} }:{ k:vdepth(st.x,st.y), c, st }); }
+  if(cam.z>=0.45) for(const c of crowd){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible) items.push(st.car?{ k:vdepth(st.x,st.y), veh:{V:st.V,col:st.col,st,siren:!!st.siren,key:'c:'+c.id} }:{ k:vdepth(st.x,st.y), c, st }); }
   // Traffic: ambient cars, buses and vans on busy roads, the developer's own vehicles, and crews answering disasters.
   vehicleHits=[];
   if(cam.z>=0.45){
-    for(const r of tileList(D.roads)){ const k=r.k, x=r.x, y=r.y; if(r.h%9!==0||x<tminX-6||x>tmaxX+6||y<tminY-6||y>tmaxY+6||!carOK(k)) continue;
-      const vt=ambientType(k), V=VEHICLE_TYPES[vt], st=roam('amb:'+k,x,y,gm,V,true); if(st) items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(k)%V.colors.length],st} }); }
+    for(const r of tileList(D.roads)){ const k=r.k, x=r.x, y=r.y; if(r.h%9!==0||x<tminX-9||x>tmaxX+9||y<tminY-9||y>tmaxY+9||!carOK(k)) continue; // a roamer can be up to 7 tiles from its street
+      const vt=ambientType(k), V=VEHICLE_TYPES[vt], st=roam('amb:'+k,x,y,gm,V,true); if(st) items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(k)%V.colors.length],st,key:'a:'+k} }); }
     for(const v of D.vehicles.values()){ if(v.x<tminX-14||v.x>tmaxX+14||v.y<tminY-14||v.y>tmaxY+14) continue; const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car, st=roam(v.id,v.x,v.y,gm,V,false); if(!st) continue;
-      items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(v.id)%V.colors.length],st,siren:v.type==='police'&&Math.floor(gm/LEG)%5===0,id:v.id} }); vehicleHits.push({id:v.id,st}); }
+      items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(v.id)%V.colors.length],st,siren:v.type==='police'&&Math.floor(gm/LEG)%5===0,id:v.id,key:'v:'+v.id} }); vehicleHits.push({id:v.id,st}); }
     for(const r of responders(gm)) items.push({ k:vdepth(r.st.x,r.st.y), veh:{V:r.V,col:r.V.colors[0],st:r.st,siren:r.siren} });
+    try{ const vs=items.filter(i=>i.veh&&i.veh.key); queueTraffic(vs); lastVeh=vs; }catch(e){}
     try{ for(const t of trainCars(gm,tminX,tmaxX,tminY,tmaxY)) items.push(t); }catch(e){ if(!trainCars.warned){ trainCars.warned=true; console.error('Trains failed to draw:', e); } } }
   { let wk=0, dr=0; for(const i of items){ if(i.c) wk++; else if(i.veh&&!i.veh.id) dr++; } frameStats={ crowd:crowd.length, walking:wk, driving:dr, citizens:S.citizens.size, quality:Quality.level, dpr }; }
   items.sort((a,b)=>a.k-b.k); BSPR.budgetEnd=performance.now()+(Quality.level>=2?5:8); // time for new building pictures starts when drawing does
-  for(const it of items){ if(it.fn){ if(it.raw) inView(it.fn); else it.fn(); } else if(it.veh){ const v=it.veh; const hd=(v.st.dx||v.st.dy)?[v.st.dx||0,v.st.dy||0]:[1,0]; drawVehicle(v.st.x,v.st.y,hd[0],hd[1],v.V,v.col,v.siren,1,v.col2); if(sel&&sel.kind==='v'&&sel.id===v.id){ const p=iso(v.st.x,v.st.y); ctx.strokeStyle='#F2B33D'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,16,8,0,0,7); ctx.stroke(); } }
+  for(const it of items){ if(it.fn){ if(it.raw) inView(it.fn); else it.fn(); } else if(it.veh){ const v=it.veh; const hd=(v.st.dx||v.st.dy)?[v.st.dx||0,v.st.dy||0]:[1,0]; if(v.st.alpha!=null&&v.st.alpha<1) ctx.globalAlpha=Math.max(0,v.st.alpha); drawVehicle(v.st.x,v.st.y,hd[0],hd[1],v.V,v.col,v.siren,1,v.col2); ctx.globalAlpha=1; if(sel&&sel.kind==='v'&&sel.id===v.id){ const p=iso(v.st.x,v.st.y); ctx.strokeStyle='#F2B33D'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,16,8,0,0,7); ctx.stroke(); } }
     else if(it.b){ const t=T(it.b); if(it.b.draft||it.b.draftDel){ draftMark(it.b); ctx.globalAlpha=it.b.draftDel?0.4:0.78; drawB(it.b,t); ctx.globalAlpha=1; } else if(it.b.ruin) drawRuin(it.b,t); else if(it.b.done===false) drawConstruction(it.b,t); else { drawBCached(it.b,t); if(it.b.type==='racetrack'&&!it.b.ruin) drawRunners(it.b); } } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
   drawDisasters();
+  if(Watch.id){ const c=S.citizens.get(Watch.id), st=c&&(states.get(Watch.id)||citizenAt(c,gm)); if(st){ const p=iso(st.x,st.y), y=p.y-(st.car?30:46)-Math.abs(Math.sin(T_NOW/260))*4; // "you" marker over your colonist (or their car)
+    poly([{x:p.x-7,y:y-12},{x:p.x+7,y:y-12},{x:p.x,y}],'#E4572E',INK,1.4); ctx.font='800 11px system-ui,sans-serif'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.strokeText('You',p.x,y-16); ctx.fillStyle='#2B2621'; ctx.fillText('You',p.x,y-16); } }
   if(Quality.ghosts){ ctx.globalAlpha=0.38; for(const it of hiddenPeople(items)) drawCitizen(it.c,it.st,false,true); ctx.globalAlpha=1; }
   if(areaSel){ const ax=Math.min(areaSel.a[0],areaSel.b[0]), bx=Math.max(areaSel.a[0],areaSel.b[0])+1, ay=Math.min(areaSel.a[1],areaSel.b[1]), by=Math.max(areaSel.a[1],areaSel.b[1])+1; poly([iso(ax,ay),iso(bx,ay),iso(bx,by),iso(ax,by)],'rgba(184,67,58,.28)','#B8433A',2.5); }
   if(ghostTool()) drawFootprint();
@@ -2539,7 +2591,7 @@ function renderPane(){
   if(activeTab==='feed'){
     const seg=el('div',{class:'seg',role:'tablist'}); if(!Store.canWrite&&feedMode==='log') feedMode='posts';
     for(const [id,nm] of [['posts','Posts'],['news','News flash'],['top','Top'],...(Store.canWrite?[['log','Daily log']]:[]),['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
-    seg.classList.add('ts-tabs'); p.append(paneHead('Town Square'), seg); requestAnimationFrame(()=>{ const on=seg.querySelector('[aria-pressed="true"]'); if(on) on.scrollIntoView({block:'nearest',inline:'center'}); }); if(feedMode==='posts') p.append(composer()); if(feedMode==='posts'&&Store.canWrite) p.append(eventAdmin(), nameAdmin()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
+    seg.classList.add('ts-tabs'); const ph=paneHead('Town Square'); ph.querySelector('.pane-title').after(Online.chip()); p.append(ph, seg); Online.load(); requestAnimationFrame(()=>{ const on=seg.querySelector('[aria-pressed="true"]'); if(on) on.scrollIntoView({block:'nearest',inline:'center'}); }); if(feedMode==='posts') p.append(composer()); if(feedMode==='posts'&&Store.canWrite) p.append(eventAdmin(), nameAdmin()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
   if(activeTab==='chats'){ Chats.render(p); return; }
   if(activeTab==='reports'){ Reports.render(p); return; }
   if(activeTab==='top'){ activeTab='feed'; feedMode='top'; return renderPane(); }
@@ -2609,7 +2661,7 @@ function renderPicker(c){ const {kind,items}=sel.picker; const cur=(kind==='job'
     el('span',null, el('b',{text:it.name}), kind==='job'?el('small',{text:' '+it.title.toLowerCase()}):null), el('small',{text:`${it.id===cur?'current · ':''}${fmt(it.used)}/${fmt(it.cap)}${full?(kind==='job'?' full, bumps someone':' full, someone moves out'):''}`}))); }
   return box; }
 function selectBuilding(id){ sel={kind:'b',id}; follow=null; renderCard(); }
-function closeCard(){ sel=null; follow=null; queueMicrotask(syncMyCardBtn); if(pinned){ const c=S.citizens.get(pinned); pinned=null; if(c&&!keepCitizen(c)) S.citizens.delete(c.id); } $('card').hidden=true; }
+function closeCard(){ sel=null; follow=null; if(Watch.id&&!Watch.until) Watch.stop(); queueMicrotask(syncMyCardBtn); if(pinned){ const c=S.citizens.get(pinned); pinned=null; if(c&&!keepCitizen(c)) S.citizens.delete(c.id); } $('card').hidden=true; }
 const CAT_NAME = id => (CATS.find(c=>c.id===id)||{}).name || 'Building';
 function levelOf(b){ const t=T(b); let lv=1; const res=b.homeUsed||0, wk=b.jobUsed||0; if((t.home&&res>=t.home.capacity)||(t.work&&wk>=t.work.slots)) lv++; if(gmNow()/1440-(b.builtDay||0)>=7) lv++; return lv; }
 function authPanel(c){ const box=el('div',{class:'authbox'}); const A=auth;
@@ -2728,7 +2780,7 @@ var Earn={ data:null, at:0, loading:false, skew:0, busy:false, msg:null, cast:nu
         done?el('button',{class:'btn primary',text:B?'…':`Get paid +${fmt(a.pay)}`,disabled:B,onclick:()=>this.act('/api/me/earn/gig',{action:'deliver'},r=>toast(this.paidText(r,`Delivered to ${r.to}`)))})
           :el('span',{class:'cdown big','data-until':a.until,text:this.left(a.until)})));
       if(!done) gsec.append(el('button',{class:'linkb',text:'Give up this delivery',onclick:()=>this.act('/api/me/earn/gig',{action:'drop'})}),
-        el('button',{class:'linkb',text:'Watch me go',onclick:()=>{ if(Me) openCitizen(Me.handle); if(innerWidth<900) openTab(null); }})); }
+        el('button',{class:'btn primary',text:'👀 Watch me go',onclick:()=>Watch.start(a.until,`Delivering to ${a.to.name}`)})); }
     else if(G.left>0&&D0.housed){ if(!G.offers.length) gsec.append(el('p',{class:'hint',text:'No parcels right now. The colony needs a few more buildings first.'}));
       for(const g of G.offers) gsec.append(el('div',{class:'egig'}, el('div',null, el('b',{text:`${g.from.name} → ${g.to.name}`}), el('div',{class:'hint',text:`About ${g.mins} min · ${miles(g.dist)}`})),
         el('button',{class:'btn',text:`+${fmt(g.pay)}`,disabled:B,onclick:()=>this.act('/api/me/earn/gig',{action:'take',id:g.id},r=>toast(`On your way to ${r.gig.to.name}!`))}))); }
@@ -3200,9 +3252,10 @@ async function openMyTab(tab, panel){ if(!(Me&&Me.handle)) return; actTab=tab; a
   const show=()=>{ const box=panel&&document.querySelector('#card '+panel); if(box) box.scrollIntoView({block:'nearest',behavior:'smooth'}); };
   requestAnimationFrame(show); setTimeout(show,700); }
 const BUYABLE=new Set(['housing','shops','offices','industry']); // what players may own (matches the server)
-function actionTabs(c){ const wrap=el('div',null); const dr=Daily.row(); if(dr) wrap.append(dr); const row=el('div',{class:'acttabs',role:'tablist'});
-  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['pet','Pet'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
-  if(actTab==='bank') actTab='wallet'; const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, pet:petPanel, badges:c=>Badges.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
+function actionTabs(c){ const wrap=el('div',null); const dr=Daily.row(); if(dr) wrap.append(dr);
+  wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}))); const row=el('div',{class:'acttabs',role:'tablist'});
+  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
+  if(actTab==='bank') actTab='wallet'; if(actTab==='pet') actTab='earn'; const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>Badges.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
 // ---- Home (rent or move, and the buildings you own), Bank, Cars ----
 const Money={ id:null, at:0, homes:null, props:null, bank:null, busy:false };
@@ -3328,15 +3381,26 @@ function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cri
   else box.append(el('p',{class:'hint',text:'There are no shops to rob.'}));
   return box; }
 let petPick='glimmerhop';
-function petPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Pet'}));
-  if(!c.home){ box.append(el('p',{class:'hint',text:'You can adopt a pet once you have a home.'})); return box; }
-  if(c.pet&&CREATURES[c.pet.k]){ const ni=el('input',{type:'text',maxlength:'20','aria-label':'Pet name',value:c.pet.n});
-    box.append(el('div',{class:'row-actions'}, el('img',{src:creatureThumb(c.pet.k),alt:'',width:'56',height:'56',class:'petimg'}), el('span',{class:'jobnow',text:`${c.pet.n} the ${CREATURES[c.pet.k].name.toLowerCase()} follows you everywhere.`})),
-      el('div',{class:'cbet'}, ni, el('button',{class:'btn',text:'Rename',onclick:()=>meAction('/api/me/pet',{name:ni.value},'Renamed.','PUT')}), el('button',{class:'linkb',text:'Let it go',onclick:()=>toast(`Let ${c.pet.n} go back to the wild? You won't get your coins back.`,'Let go',()=>meAction('/api/me/pet',null,`${c.pet.n} went back to the wild.`,'DELETE'))}))); return box; }
-  box.append(el('p',{class:'hint',text:'Adopt one of Gliese 12 b’s native creatures for 200 coins. It walks with you wherever you go.'}));
-  const g=el('div',{class:'petgrid'}); for(const k of CREATURE_IDS) g.append(el('button',{class:'petb'+(petPick===k?' on':''),'aria-pressed':String(petPick===k),onclick:()=>{ petPick=k; renderCard(true); }}, el('img',{src:creatureThumb(k),alt:'',width:'48',height:'48'}), el('span',{text:CREATURES[k].name})));
-  const ni=el('input',{type:'text',maxlength:'20',placeholder:`Name (e.g. ${CREATURES[petPick].name})`,'aria-label':'Pet name'});
-  box.append(g, el('div',{class:'cbet'}, ni, el('button',{class:'btn primary',text:'Adopt for 200',onclick:()=>meAction('/api/me/pet',{kind:petPick,name:ni.value},r=>`Say hello to ${r.pet.n}!`)}))); return box; }
+// ---- The Pet store: adopting (and renaming or letting go of) a pet happens on a Pet store's own card ----
+const PetStore={ me:null, at:0, busy:false,
+  load(){ if(this.busy||!(Me&&Me.handle)) return; this.busy=true; api('/api/citizens/'+encodeURIComponent(Me.handle)).then(d=>{ this.me=normC(d); this.at=Date.now(); }).catch(()=>{}).finally(()=>{ this.busy=false; if(sel&&sel.kind==='b') renderCard(true); }); },
+  get(){ if(!this.me||Date.now()-this.at>20000) this.load(); return this.me; },
+  async act(path, body, ok, method){ const r=await meAction(path, body, ok, method); if(r){ this.at=0; this.load(); } return r; },
+  section(b){ const box=el('div',{class:'authbox petstore'}, el('h3',{text:'🐾 Adopt a pet'}));
+    if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to adopt a pet.'})); return box; }
+    const c=this.get(); if(!c){ box.append(el('p',{class:'hint',text:'Opening the pens…'})); return box; }
+    if(!c.home){ box.append(el('p',{class:'hint',text:'You can adopt a pet once you have a home.'})); return box; }
+    if(c.pet&&CREATURES[c.pet.k]){ const ni=el('input',{type:'text',maxlength:'20','aria-label':'Pet name',value:c.pet.n});
+      box.append(el('div',{class:'row-actions'}, el('img',{src:creatureThumb(c.pet.k),alt:'',width:'56',height:'56',class:'petimg'}), el('span',{class:'jobnow',text:`${c.pet.n} the ${CREATURES[c.pet.k].name.toLowerCase()} follows you everywhere.`})),
+        el('div',{class:'cbet'}, ni, el('button',{class:'btn',text:'Rename',onclick:()=>this.act('/api/me/pet',{name:ni.value},'Renamed.','PUT')}), el('button',{class:'linkb',text:'Let it go',onclick:()=>toast(`Let ${c.pet.n} go back to the wild? You won't get your coins back.`,'Let go',()=>this.act('/api/me/pet',null,`${c.pet.n} went back to the wild.`,'DELETE'))})),
+        el('p',{class:'hint',text:'One pet at a time: let this one go to adopt a different creature.'})); return box; }
+    box.append(el('p',{class:'hint',text:'Adopt one of Gliese 12 b’s native creatures. It walks with you wherever you go. Paid in cash.'}));
+    const g=el('div',{class:'petgrid'}); for(const k of CREATURE_IDS) g.append(el('button',{class:'petb'+(petPick===k?' on':''),'aria-pressed':String(petPick===k),onclick:()=>{ petPick=k; renderCard(true); }}, el('img',{src:creatureThumb(k),alt:'',width:'48',height:'48'}), el('span',{text:CREATURES[k].name}), el('small',{class:'petprice',text:`${fmt(petPrice(k))} coins`})));
+    const ni=el('input',{type:'text',maxlength:'20',placeholder:`Name (e.g. ${CREATURES[petPick].name})`,'aria-label':'Pet name'});
+    box.append(g, el('p',{class:'hint',text:CREATURES[petPick].blurb}), el('div',{class:'cbet'}, ni, el('button',{class:'btn primary',text:`Adopt for ${fmt(petPrice(petPick))}`,onclick:()=>this.act('/api/me/pet',{kind:petPick,name:ni.value,buildingId:b.id},r=>`Say hello to ${r.pet.n}!`)})));
+    return box; } };
+function nearestOf(type,c){ let best=null, bd=1e9; const at=(c&&(c.home||c.job))||null, ox=at?at[2]:0, oy=at?at[3]:0;
+  for(const b of D.buildings.values()){ if(b.type!==type||b.done===false||b.ruin) continue; const dd=Math.abs(b.x-ox)+Math.abs(b.y-oy); if(dd<bd){ bd=dd; best=b; } } return best; }
 // ---- Work: a signed-in colonist's own job, and the board of open jobs near home ----
 let jobBoard=null; // { id, data, open, busy }
 async function loadJobs(c, open){ const same=jobBoard&&jobBoard.id===c.id; jobBoard={ id:c.id, data:same?jobBoard.data:null, open:open??(same&&jobBoard.open), busy:true, at:Date.now() };
@@ -3446,6 +3510,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       if(!b.owner) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(price)}`,onclick:()=>toast(`Buy ${b.name||t.name} for ${fmt(price)} coins? You'll collect 80% of its rent or profit every game day.`,'Buy',async()=>{ const r=await meAction('/api/me/properties/buy',{buildingId:b.id},r=>`It's yours! About ${fmt(r.income)} coins a day.`); if(r){ b.owner=Me.handle; Money.at=0; renderCard(true); } })})));
       else if(b.owner.toLowerCase()===Me.handle.toLowerCase()) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
     if(b.type==='bank' && b.done!==false && !b.ruin && !Store.canWrite) card.append(BankAcct.section(b));
+    if(b.type==='petstore' && b.done!==false && !b.ruin && !Store.canWrite) card.append(PetStore.section(b));
     if(b.type==='casino' && b.done!==false && !b.ruin && !Store.canWrite) card.append(el('div',{class:'row-actions'}, Me&&Me.token&&Me.handle
       ? el('button',{class:'btn primary',text:'Play here',onclick:()=>{ casino={ ...(casino||{ game:'coin', pick:'heads', bet:10, last:null }), id:null, open:true }; openMyTab('casino','.casino'); }})
       : el('span',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'})));
@@ -3557,6 +3622,34 @@ function postItems0(){ const gm=gmNow(); const today=Math.floor(gm/1440); const 
 
 
 
+
+/* ---------------- watching your own colonist ---------------- */
+// "Watch me go" (a delivery) and "Follow me" (any time): the card and panels get out of the way and the camera stays on
+// your colonist, walking or driving. A small bar at the top says so; Stop ends it, and dragging the map pauses it
+// ("Back to me" picks it up again). A delivery watch ends by itself when the delivery is done.
+const Watch={ id:null, until:0, label:'', bar:null, done:false,
+  async start(until, label){ const h=myHandle(); if(!h){ toast('Sign in to your colonist first (tap "Find me").'); return; }
+    let c=[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===h.toLowerCase());
+    if(!c){ const d=await loadDetail(h); if(!d) return; c=normC(d); pinned=c.id; S.citizens.set(c.id,c); }
+    pinned=c.id; this.id=c.id; this.until=until||0; this.label=label||'Following you'; this.done=false;
+    sel=null; $('card').hidden=true; openTab(null); document.body.classList.remove('pane-max');
+    const st=citizenAt(c,gmNow()); if(st){ const p=iso(st.x,st.y); cam.x=p.x; cam.y=p.y-14; } cam.z=Math.max(cam.z,1.6); follow=c.id;
+    this.show(); syncMyCardBtn(); },
+  stop(){ this.id=null; if(follow) follow=null; this.bar&&this.bar.remove(); this.bar=null; },
+  resume(){ if(!this.id) return; follow=this.id; this.show(); },
+  show(){ if(!this.bar){ this.bar=el('div',{class:'watchbar',role:'status'}); document.body.append(this.bar); } const b=this.bar; b.innerHTML='';
+    const on=follow===this.id; b.append(el('span',{class:'wdot'+(on?' on':'')}), el('span',{class:'wtxt',text:on?`👀 ${this.label}`:'Camera moved'}),
+      this.until?el('span',{class:'cdown','data-until':this.until,text:''}):'',
+      on?'':el('button',{class:'btn sm',text:'Back to me',onclick:()=>this.resume()}), el('button',{class:'btn sm',text:'Stop',onclick:()=>this.stop()})); },
+  tick(){ if(!this.id) return; if(this.bar){ const shown=this.bar.querySelector('.wdot.on')!=null; if(shown!==(follow===this.id)) this.show(); const cd=this.bar.querySelector('.cdown'); if(cd&&this.until){ const ms=Math.max(0,this.until-(Date.now()+skew)); cd.textContent=`${Math.floor(ms/60000)}:${String(Math.floor(ms%60000/1000)).padStart(2,'0')}`; } }
+    if(this.until&&Date.now()+skew>=this.until&&!this.done){ this.done=true; toast('📦 Delivered! Open 💰 Earn on your card to get paid.','Get paid',()=>{ this.stop(); openMyTab('earn'); }); setTimeout(()=>{ if(this.done) this.stop(); },6000); } } };
+setInterval(()=>Watch.tick(),500);
+
+/* ---------------- who's online (Town Square header) ---------------- */
+var Online={ n:null, at:0,
+  chip(){ return el('span',{class:'onl-chip',id:'onlChip',title:'Colonists online now',text:this.n==null?'● …':`● ${fmt(this.n)} online`}); },
+  async load(){ if(Date.now()-this.at<15000&&this.n!=null) return; this.at=Date.now(); try{ this.n=(await api('/api/online/count')).online; }catch(e){ return; } const c=$('onlChip'); if(c) c.textContent=`● ${fmt(this.n)} online`; } };
+setInterval(()=>{ if(activeTab==='feed'&&!document.hidden){ Online.at=0; Online.load(); } },30000);
 /* ---------------- personal notices ---------------- */
 // Things that happened to you: "someone picked your pocket", or "@x picked your pocket but got caught: refunded".
 // Shown as a card the moment they happen; any you missed while away are shown the next time you open the game.
@@ -3887,8 +3980,8 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
   catch(err){ toast(err.message); } });
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
-let frameStats={};
-window.__dbg={ jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+let frameStats={}, lastVeh=[];
+window.__dbg={ goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

@@ -6,13 +6,12 @@ import { score } from './leaderboards.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES } from '../shared/catalog.js';
-import { CREATURES } from '../shared/creatures.js';
+import { CREATURES, petPrice } from '../shared/creatures.js';
 import { treasuryAdd } from './races.js';
 
 export const CRIME_COOLDOWN = 10 * 60 * 1000;    // one crime every 10 real minutes
 export const JAIL_TIME = 10 * 60 * 1000;         // caught: 10 real minutes in the Jail
 export const VISIT_TIME = 4 * 60 * R.GAME_MIN_MS; // going somewhere lasts 4 game hours (5 real minutes)
-export const PET_PRICE = 200;
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const rand = () => crypto.randomInt(0, 1e9) / 1e9;
 const nameOf = b => b.name || BUILDING_TYPES[b.type]?.name || 'a building';
@@ -181,18 +180,23 @@ export class Actions {
   }
 
   // ---------- pets ----------
-  async adopt(id, { kind, name }) {
+  // Pets are adopted at a Pet store: the colonist taps one on the map and picks from its card.
+  async adopt(id, { kind, name, buildingId }) {
     if (!CREATURES[kind]) throw new HttpError(400, 'Pick one of the native creatures.');
     const n = String(name || '').trim().replace(/\s+/g, ' ');
     if (n && !/^[\p{L}][\p{L} '-]{0,19}$/u.test(n)) throw new HttpError(400, 'Use letters only for your pet’s name (up to 20).');
+    if (!buildingId) throw new HttpError(400, 'Pets are adopted at a Pet store: tap one on the map.');
+    const price = petPrice(kind);
     return this.world.change(async ch => {
+      const store = (await ch.q("select id from buildings where id = $1 and type = 'petstore' and done and not ruin", [buildingId])).rows[0];
+      if (!store) throw new HttpError(409, "That isn't an open Pet store.");
       const { c } = await this.load(ch, id);
       if (c.pet) throw new HttpError(409, 'You already have a pet. Let it go first if you want a different one.');
-      ch.coins(c); if (c.coins_base < PET_PRICE) throw new HttpError(400, `Adopting costs ${PET_PRICE} coins. You have ${fmt(c.coins_base)}.`);
-      c.coins_base -= PET_PRICE; treasuryAdd(ch, PET_PRICE); ch.touch(c); await ch.saveCitizen(c);
+      ch.coins(c); if (c.coins_base < price) throw new HttpError(400, `A ${CREATURES[kind].name} costs ${fmt(price)} coins. You have ${fmt(c.coins_base)} on you.`);
+      c.coins_base -= price; treasuryAdd(ch, price); ch.touch(c); await ch.saveCitizen(c);
       const pet = { k: kind, n: n || CREATURES[kind].name }; await ch.q('update citizens set pet = $2 where id = $1', [c.id, JSON.stringify(pet)]); await bump(ch, c.id, { pets: 1 });
       await ch.event(`🐾 @${c.handle} adopted a ${CREATURES[kind].name.toLowerCase()} called ${pet.n}.`, 'pet'); // News flash
-      return { ok: true, pet, coins: c.coins_base };
+      return { ok: true, pet, price, coins: c.coins_base };
     });
   }
   async renamePet(id, name) {

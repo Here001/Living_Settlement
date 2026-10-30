@@ -450,7 +450,8 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(zj.visit && (await call('GET', '/api/me/crime', undefined, P)).json.jailedFor > 0, 'a jailed colonist is seen in the Jail');
     await sleep(1300); { const r = await call('POST', '/api/me/casino', { game: 'coin', pick: 'heads', bet: 1 }, P); ok(r.status === 409, 'no casino from jail', JSON.stringify(r)); }
     ok((await call('POST', '/api/me/visit', { friend: 'jobfill_a' }, P)).status === 409, 'no going out from jail');
-    ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop' }, P)).status === 409, 'no adopting from jail');
+    const petShop = (await call('POST', '/api/admin/buildings', { type: 'petstore', x: 1230, y: 1230 })).json.building?.id; await call('POST', `/api/admin/buildings/${petShop}/finish`);
+    ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', buildingId: petShop }, P)).status === 409, 'no adopting from jail');
     await set('zara_ng', 'jailed_until = null, visit_id = null, visit_until = null');
     // going out
     const pl = (await call('GET', '/api/me/places', undefined, P)).json;
@@ -461,13 +462,18 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(policeId && (await call('POST', '/api/me/visit', { buildingId: policeId }, P)).status === 400, "can't just walk into a police station");
     ok((await call('POST', '/api/me/visit/end', {}, P)).status === 200 && (await who('zara_ng')).visit?.[4] <= Date.now() + 1000, 'and heads home (the trip back stays visible)');
     // pets
-    await set('zara_ng', 'coins_base = 150'); ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip' }, P)).status === 400, 'a pet costs 200 coins');
-    await set('zara_ng', 'coins_base = 500');
-    ok((await call('POST', '/api/me/pet', { kind: 'unicorn' }, P)).status === 400, 'only native creatures');
-    const pet = await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip' }, P);
-    ok(pet.status === 200 && (await who('zara_ng')).pet?.k === 'glimmerhop' && (await coins('zara_ng')) === 300, 'adopting a pet everyone can see', JSON.stringify(pet.json));
+    await set('zara_ng', 'coins_base = 2500');
+    ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip' }, P)).status === 400, 'pets are adopted at a Pet store');
+    ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip', buildingId: policeId }, P)).status === 409, "a police station isn't a Pet store");
+    { const { PET_PRICES, petPrice } = await import('../shared/creatures.js'); const ps = Object.values(PET_PRICES);
+      ok(Math.min(...ps) >= 500 && new Set(ps).size === ps.length && petPrice('glimmerhop') === 2000, 'every creature has its own price, 500 at least', JSON.stringify(PET_PRICES)); }
+    await set('zara_ng', 'coins_base = 1999'); ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip', buildingId: petShop }, P)).status === 400, 'a glimmerhop costs 2,000 coins');
+    await set('zara_ng', 'coins_base = 2500');
+    ok((await call('POST', '/api/me/pet', { kind: 'unicorn', buildingId: petShop }, P)).status === 400, 'only native creatures');
+    const pet = await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip', buildingId: petShop }, P);
+    ok(pet.status === 200 && (await who('zara_ng')).pet?.k === 'glimmerhop' && (await coins('zara_ng')) === 500 && pet.json.price === 2000, 'adopting a pet everyone can see', JSON.stringify(pet.json));
     ok((await call('GET', '/api/meta', undefined, { auth: false })).json.events.some(e => e.kind === 'pet' && e.text.includes('@zara_ng adopted')), 'a new pet makes the News flash');
-    ok((await call('POST', '/api/me/pet', { kind: 'starcrest' }, P)).status === 409, 'one pet at a time');
+    ok((await call('POST', '/api/me/pet', { kind: 'starcrest', buildingId: petShop }, P)).status === 409, 'one pet at a time');
     ok((await call('PUT', '/api/me/pet', { name: 'Zippy' }, P)).status === 200 && (await who('zara_ng')).pet.n === 'Zippy', 'renaming the pet');
     ok((await call('PUT', '/api/me/pet', { name: '<b>' }, P)).status === 400, 'pet names are letters only');
     ok((await call('DELETE', '/api/me/pet', undefined, P)).status === 200 && !(await who('zara_ng')).pet, 'letting it go'); }

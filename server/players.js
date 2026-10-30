@@ -133,7 +133,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/me/places', limit, send(async req => world.actions.places((await me(req)).id)));
   r.post('/me/visit', limit, send(async req => { const b = req.body || {}; return world.actions.visit((await me(req)).id, { buildingId: b.buildingId, friend: b.friend }); }));
   r.post('/me/visit/end', limit, send(async req => world.actions.visit((await me(req)).id, {})));
-  r.post('/me/pet', limit, send(async req => { const b = req.body || {}; return world.actions.adopt((await me(req)).id, { kind: b.kind, name: b.name }); }));
+  r.post('/me/pet', limit, send(async req => { const b = req.body || {}; return world.actions.adopt((await me(req)).id, { kind: b.kind, name: b.name, buildingId: b.buildingId }); }));
   r.put('/me/pet', limit, send(async req => world.actions.renamePet((await me(req)).id, (req.body || {}).name)));
   r.delete('/me/pet', limit, send(async req => world.actions.release((await me(req)).id)));
   // The Bank, cars, moving home, and owning buildings.

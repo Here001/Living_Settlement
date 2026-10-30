@@ -11,7 +11,7 @@ import { World, HttpError } from './world.js';
 import { createBus } from './bus.js';
 import { instagramRouter, igStatus, connectInstagram, loadIgStatus } from './instagram.js';
 import { playersRouter, sweepPlayers, playerFrom, playerByToken } from './players.js';
-import { Chat } from './chat.js';
+import { Chat, ONLINE_WINDOW } from './chat.js';
 import { Achievements } from './achievements.js';
 import { Leaderboards } from './leaderboards.js';
 import { CasinoTables } from './tables.js';
@@ -88,6 +88,12 @@ let eventsCache = { t: 0, rows: [], disasters: [] };
 app.get('/api/meta', limit, send(async () => {
   if (Date.now() - eventsCache.t > 2000) eventsCache = { t: Date.now(), rows: await world.recentEvents(), disasters: await world.recentDisasters() };
   return { meta: world.publicMeta(), events: eventsCache.rows, disasters: eventsCache.disasters, serverNow: Date.now() };
+}));
+// How many colonists are online right now (signed in and seen in the last 90 seconds), for the Town Square header.
+let onlineCache = { t: 0, n: 0 };
+app.get('/api/online/count', limit, send(async () => {
+  if (Date.now() - onlineCache.t > 10000) onlineCache = { t: Date.now(), n: Number((await pool.query('select count(*) n from citizens where last_seen > $1', [Date.now() - ONLINE_WINDOW])).rows[0].n) };
+  return { online: onlineCache.n };
 }));
 app.get('/api/chunks', limit, send(async req => {
   const keys = [...new Set(String(req.query.keys || '').split(','))].filter(k => CHUNK_KEY.test(k)).slice(0, 25);

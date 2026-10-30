@@ -728,9 +728,56 @@ function drawB(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>drawB(
   if(!b.rot){ (DRAW[t.style]||DRAW.house)(b,t); return; }
   const t0=t.base||BUILDING_TYPES[b.type], wq=windowQuads.length, lq=lights.length, ft=CanvasRenderingContext2D.prototype.fillText;
   ctx.save(); ctx.scale(-1,1); ctx.fillText=function(str,x,y,m){ this.save(); this.translate(x,y); this.scale(-1,1); m===undefined?ft.call(this,str,0,0):ft.call(this,str,0,0,m); this.restore(); }; // keep lettering readable
-  try{ (DRAW[t0.style]||DRAW.house)({...b,x:b.y,y:b.x,rot:0},t0); } finally { delete ctx.fillText; ctx.restore(); }
+  SPR_MIRROR=true; try{ (DRAW[t0.style]||DRAW.house)({...b,x:b.y,y:b.x,rot:0},t0); } finally { SPR_MIRROR=false; delete ctx.fillText; ctx.restore(); }
   for(let i=wq;i<windowQuads.length;i++) windowQuads[i]=windowQuads[i].map(p=>({x:-p.x,y:p.y}));
   for(let i=lq;i<lights.length;i++) lights[i]={...lights[i],x:-lights[i].x}; }
+
+// ---- Building pictures ----
+// Redrawing every wall and window of every building each frame is most of what a phone's processor does, so a finished
+// building is drawn once into its own small picture (at the current zoom, in steps of about 41%) and that picture is
+// copied each frame. Night lights and chimney smoke from the drawing are remembered and replayed on top, so they still
+// glow and drift. Buildings that animate (clocks, windmills, neon, ferris wheels…) are always drawn live.
+const ANIM_STYLES=new Set(['stall','tower','fountain','pine','windmill','dome','bush','tanks','cooling','ponds','atom','lighthouse','ferris','winery']);
+const BSPR={ map:new Map(), last:new Map(), px:0, budgetEnd:0, hits:0, made:0, live:0 };
+let SPR_REC=null, SPR_MIRROR=false; // while a building picture is being drawn: animated bits to replay each frame
+const bspCap = () => Quality.level>=2 ? 6e6 : 9e6; // pixels kept (about 4 bytes each)
+function bCacheable(t){ const t0=t.base||t; return !ANIM_STYLES.has(t0.style) && !(t0.style==='block'&&t0.neon); }
+function bspBucket(){ return Math.min(4, Math.pow(2, Math.ceil(Math.log2(Math.max(0.2, cam.z*dpr))*2)/2)); }
+function bspFree(e){ if(!e) return; BSPR.px-=e.px; e.cv.width=e.cv.height=0; } // frees the memory straight away (iOS counts it)
+// How far a type's drawing reaches around its spot, measured once by drawing it small and looking for painted pixels.
+const bspBox=new Map(); let bspScratch=null;
+function bspBounds(b,t){ const key=b.type+'|'+(b.rot||0)+'|'+VIEW; let bx=bspBox.get(key); if(bx) return bx;
+  const S0=0.25, N=512, keep=ctx, wq=windowQuads.length, lq=lights.length;
+  if(!bspScratch){ bspScratch=document.createElement('canvas'); bspScratch.width=bspScratch.height=N; }
+  const g=bspScratch.getContext('2d', {willReadFrequently:true}); g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,N,N); g.setTransform(S0,0,0,S0,N/2,N*0.75);
+  ctx=g; SPR_REC=[]; try{ drawB({...b,x:0,y:0},t); } catch(e){} finally{ ctx=keep; SPR_REC=null; windowQuads.length=wq; lights.length=lq; }
+  const d=g.getImageData(0,0,N,N).data; let x0=N,y0=N,x1=-1,y1=-1;
+  for(let y=0;y<N;y++) for(let x=0;x<N;x++) if(d[(y*N+x)*4+3]>8){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+  bx = x1<0 ? null : { x0:(x0-N/2)/S0-14, x1:(x1+1-N/2)/S0+14, y0:(y0-N*0.75)/S0-14, y1:(y1+1-N*0.75)/S0+14 };
+  bspBox.set(key,bx); return bx; }
+function bspMake(b,t,sc,base){ const bx=bspBounds(b,t); if(!bx) return null; const o=iso(b.x,b.y);
+  const x0=o.x+bx.x0, x1=o.x+bx.x1, y0=o.y+bx.y0, y1=o.y+bx.y1;
+  const W=Math.ceil((x1-x0)*sc), Hh=Math.ceil((y1-y0)*sc); if(W<1||Hh<1||W*Hh>3e6) return null;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=Hh; const g=cv.getContext('2d'); if(!g) return null;
+  g.setTransform(sc,0,0,sc,-x0*sc,-y0*sc); g.strokeStyle=INK; g.lineWidth=1; g.lineJoin='round'; g.lineCap='round';
+  const keep=ctx, wq=windowQuads.length, lq=lights.length; ctx=g; SPR_REC=[];
+  try{ drawB(b,t); } catch(e){ ctx=keep; SPR_REC=null; windowQuads.length=wq; lights.length=lq; cv.width=cv.height=0; return null; }
+  ctx=keep; const e={ cv, x0, y0, w:x1-x0, h:y1-y0, quads:windowQuads.splice(wq), lts:lights.splice(lq), rec:SPR_REC, px:W*Hh, base };
+  SPR_REC=null; return e; }
+function drawBCached(b,t){
+  if(!bCacheable(t)){ BSPR.live++; drawB(b,t); return; }
+  const base=`${b.id}|${b.type}|${b.rot||0}|${b.x},${b.y}|${VIEW}|${LAMPS>0?1:0}|${DARK>0.3?1:0}`, sc=bspBucket(), key=base+'|'+sc;
+  let e=BSPR.map.get(key);
+  if(e){ BSPR.map.delete(key); BSPR.map.set(key,e); BSPR.hits++; }
+  else { const old=BSPR.last.get(b.id), zooming=performance.now()-Ground.zoomAt<220;
+    if(old&&old.base===base&&(zooming||performance.now()>BSPR.budgetEnd)) e=old; // mid-pinch or out of time: the last picture, scaled
+    else if(performance.now()<=BSPR.budgetEnd||!old){ e=performance.now()<=BSPR.budgetEnd?bspMake(b,t,sc,base):null;
+      if(e){ BSPR.made++; BSPR.map.set(key,e); BSPR.px+=e.px; if(old&&old!==e&&old.base!==base){} BSPR.last.set(b.id,e);
+        const cap=bspCap(); for(const [k,v] of BSPR.map){ if(BSPR.px<=cap) break; BSPR.map.delete(k); if(BSPR.last.get(v.base.split('|')[0])===v) BSPR.last.delete(v.base.split('|')[0]); bspFree(v); } } } }
+  if(!e){ BSPR.live++; drawB(b,t); return; }
+  ctx.drawImage(e.cv, e.x0, e.y0, e.w, e.h);
+  for(const q of e.quads) windowQuads.push(q); for(const l of e.lts) lights.push(l);
+  for(const [x,y,seed] of e.rec) smoke(x,y,seed); }
 const blocks = b => !T(b).outdoor;
 // A citizen's home/job/hangout travels as [id, type, x, y]; use the loaded building if we have it.
 const bOf = p => p ? (D.buildings.get(p[0]) || { id:p[0], type:p[1], x:p[2], y:p[3], name:'' }) : null;
@@ -1237,7 +1284,7 @@ function awning(F,v,col,w){ const n=Math.max(4,Math.round(w*4)); const o={x:-32*
   for(let i=0;i<n;i++){ const a=F(i/n,v), b=F((i+1)/n,v); poly([a,b,{x:b.x+o.x,y:b.y+o.y},{x:a.x+o.x,y:a.y+o.y}], i%2?'#F4EDE0':col, INK, 0.7); } }
 function faceText(F,u,v,text,size,color){ const a=F(u,v), b=F(u+0.01,v); const dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy)||1;
   ctx.save(); ctx.translate(a.x,a.y); ctx.transform(dx/len,dy/len,0,1,0,0); ctx.font=`800 ${size}px "Bricolage Grotesque",system-ui,sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillStyle=color; ctx.fillText(text,0,0); ctx.restore(); }
-function smoke(x,y,seed){ const t=T_NOW/1000+seed; for(let i=0;i<3;i++){ const p=((t*0.35+i/3)%1); ctx.fillStyle=`rgba(235,235,232,${0.55*(1-p)})`; ctx.beginPath(); ctx.arc(x+Math.sin(t+i)*3+p*10,y-p*30,3+p*7,0,7); ctx.fill(); } }
+function smoke(x,y,seed){ if(SPR_REC){ SPR_REC.push([SPR_MIRROR?-x:x,y,seed]); return; } const t=T_NOW/1000+seed; for(let i=0;i<3;i++){ const p=((t*0.35+i/3)%1); ctx.fillStyle=`rgba(235,235,232,${0.55*(1-p)})`; ctx.beginPath(); ctx.arc(x+Math.sin(t+i)*3+p*10,y-p*30,3+p*7,0,7); ctx.fill(); } }
 
 Object.assign(DRAW, {
   house(b,t){ const [w,d]=t.size, h=t.height||24, rh=t.roofH||18, x=b.x, y=b.y; const c=t.colors;
@@ -2047,7 +2094,7 @@ function frame(ts){ requestAnimationFrame(frame);
   finally { planBudgetEnd=Infinity; }
   Quality.sample(performance.now()-t0, ts); }
 function drawFrame(ts){
-  T_NOW=ts; windowQuads=[]; lights=[]; edgePan(); sprBegin();
+  T_NOW=ts; windowQuads=[]; lights=[]; edgePan(); sprBegin(); BSPR.budgetEnd=performance.now()+(Quality.level>=2?4:7); BSPR.hits=BSPR.made=BSPR.live=0;
   const gm=gmNow(); DARK=darkness(gm); LAMPS=Math.min(1,Math.max(0,(DARK-0.2)/0.25)); // on from about 7pm, off by about 5:30am
   if(S.meta){ const wNow=weatherAt(S.meta,gm); if(wNow==='storm'||wNow==='fog') LAMPS=1; } // and whenever the weather turns dark
   if(follow){ const c=S.citizens.get(follow); const st=c&&citizenAt(c,gm); if(st){ const p=iso(st.x,st.y); cam.x+=(p.x-cam.x)*0.08; cam.y+=(p.y-14-cam.y)*0.08; } }
@@ -2089,9 +2136,9 @@ function drawFrame(ts){
     for(const r of responders(gm)) items.push({ k:vdepth(r.st.x,r.st.y), veh:{V:r.V,col:r.V.colors[0],st:r.st,siren:r.siren} });
     try{ for(const t of trainCars(gm,tminX,tmaxX,tminY,tmaxY)) items.push(t); }catch(e){ if(!trainCars.warned){ trainCars.warned=true; console.error('Trains failed to draw:', e); } } }
   { let wk=0, dr=0; for(const i of items){ if(i.c) wk++; else if(i.veh&&!i.veh.id) dr++; } frameStats={ crowd:crowd.length, walking:wk, driving:dr, citizens:S.citizens.size, quality:Quality.level, dpr }; }
-  items.sort((a,b)=>a.k-b.k);
+  items.sort((a,b)=>a.k-b.k); BSPR.budgetEnd=performance.now()+(Quality.level>=2?5:8); // time for new building pictures starts when drawing does
   for(const it of items){ if(it.fn){ if(it.raw) inView(it.fn); else it.fn(); } else if(it.veh){ const v=it.veh; const hd=(v.st.dx||v.st.dy)?[v.st.dx||0,v.st.dy||0]:[1,0]; drawVehicle(v.st.x,v.st.y,hd[0],hd[1],v.V,v.col,v.siren,1,v.col2); if(sel&&sel.kind==='v'&&sel.id===v.id){ const p=iso(v.st.x,v.st.y); ctx.strokeStyle='#F2B33D'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,16,8,0,0,7); ctx.stroke(); } }
-    else if(it.b){ const t=T(it.b); if(it.b.draft||it.b.draftDel){ draftMark(it.b); ctx.globalAlpha=it.b.draftDel?0.4:0.78; drawB(it.b,t); ctx.globalAlpha=1; } else if(it.b.ruin) drawRuin(it.b,t); else if(it.b.done===false) drawConstruction(it.b,t); else { drawB(it.b,t); if(it.b.type==='racetrack'&&!it.b.ruin) drawRunners(it.b); } } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
+    else if(it.b){ const t=T(it.b); if(it.b.draft||it.b.draftDel){ draftMark(it.b); ctx.globalAlpha=it.b.draftDel?0.4:0.78; drawB(it.b,t); ctx.globalAlpha=1; } else if(it.b.ruin) drawRuin(it.b,t); else if(it.b.done===false) drawConstruction(it.b,t); else { drawBCached(it.b,t); if(it.b.type==='racetrack'&&!it.b.ruin) drawRunners(it.b); } } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
   drawDisasters();
   if(Quality.ghosts){ ctx.globalAlpha=0.38; for(const it of hiddenPeople(items)) drawCitizen(it.c,it.st,false,true); ctx.globalAlpha=1; }
   if(areaSel){ const ax=Math.min(areaSel.a[0],areaSel.b[0]), bx=Math.max(areaSel.a[0],areaSel.b[0])+1, ay=Math.min(areaSel.a[1],areaSel.b[1]), by=Math.max(areaSel.a[1],areaSel.b[1])+1; poly([iso(ax,ay),iso(bx,ay),iso(bx,by),iso(ax,by)],'rgba(184,67,58,.28)','#B8433A',2.5); }
@@ -3750,7 +3797,7 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
 let frameStats={};
-window.__dbg={ trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>frameStats, Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+window.__dbg={ trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

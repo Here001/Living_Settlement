@@ -142,6 +142,19 @@ They comment it on any of your Instagram posts **from their own account**. After
 
 ## Jobs
 
+**Shifts and bedtimes.** Not everyone keeps the same hours (`shiftOf()` and `owlOf()` in `shared/rules.js`, used by both the map and the server):
+
+| Shift | Hours (game time) | Who works it |
+|---|---|---|
+| Day | 07:50–16:15, lunch around noon | everyone at offices, banks, schools, the town hall, courts, libraries, the post office and museums; most others |
+| Evening | 14:00–22:00, dinner break around 18:00 | about 3 in 10 at shops, cafés, cinemas, gyms, stadiums and other places to go out; a quarter at places that never close |
+| Night | 22:00–06:00, a break around 03:00 | a quarter at places that never close: services (hospital, police, fire…), utilities, industry, hotels, petrol stations, the casino, taverns and diners |
+
+- Which shift someone works is fixed for each job they hold, so taking a different job can change it. A colonist's card shows **Hours** (for example "Night shift, 22:00–06:00"), and the Work tab shows the hours of your job and of every opening.
+- Night-shift workers sleep from about 07:00 to 15:00 and run errands in the late afternoon. Evening-shift workers sleep until about 08:00 and go out in the morning.
+- **Bedtimes vary** too: early birds head home an hour early, night owls up to an hour and a half late, so the colony doesn't all go to bed at once.
+- Pickpocketing follows the same hours: a night-shift worker is safe at home in the morning and out and about in the late afternoon.
+
 - **Automatic jobs.** Colonists start with 0 coins. When they move into a home, the game gives them the nearest free job. Each game day they earn their salary minus their rent.
 - **The Work box.** A signed-in colonist's own card has a Work box. It shows their job and take-home pay, a **Quit** button, and **Find a job**: a list of open jobs nearest their home, each with take-home pay and distance.
 - **Taking a job.** Colonists can take a new job once per game day. Quitting is always allowed, but doesn't reset that limit.
@@ -189,9 +202,9 @@ Every colonist's card has a full-screen button beside Share and ×, like Town Sq
     - Not enough cash for the fare? You walk, for free. The Go here line shows the fare before you go, and fares go to the treasury.
 - **Crime.** Crimes can be tried once every 10 minutes.
   - **Pickpocket:** steal 10–25% of a colonist's coins, up to 1,500. Other colonists' cards have **Pick their pocket**.
-    - Only someone **out and about** can be pickpocketed: on their lunch break, commuting, out in the evening, job hunting, or on a trip somewhere that isn't a home.
-    - Nobody can be pickpocketed at home (asleep or relaxing, roughly 21:40–07:45 game time), while visiting someone's home, or in the Jail.
-    - At work (roughly 07:50–11:40 and 13:10–16:15), only a workmate at the same building can try.
+    - Only someone **out and about** can be pickpocketed: on their lunch break, commuting, out in the evening, job hunting, or on a trip somewhere that isn't a home. When that is depends on their shift and bedtime (see **Shifts and bedtimes** under Jobs).
+    - Nobody can be pickpocketed at home (asleep or relaxing: for a day worker roughly 19:20 to 07:55 game time, later for night owls), while visiting someone's home, or in the Jail.
+    - At work (during their shift), only a workmate at the same building can try.
     - The server checks this (`routineAt` in `shared/rules.js`, `whereIs` in `server/actions.js`). The card shows "🛡️ … is safe at home right now" instead of the button when it isn't possible.
   - **Rob the nearest shop:** 5,000–10,000 coins from the till, which the treasury pays.
   - **Chances** depend on how far the nearest Police station is from where the crime happens (`crimeOdds()` in `shared/rules.js`):

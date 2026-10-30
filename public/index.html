@@ -613,7 +613,7 @@ import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DIS
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
-import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice } from '/shared/rules.js';
+import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
@@ -916,17 +916,38 @@ function getPlan(c, day){
   const home=bOf(c.home), job=bOf(c.job), hang=bOf(c.hang);
   const homeP=placeFor(home, rng(hash(c.id+'home')), 'the landing station');
   const steps=[];
-  steps.push({ p:homeP, act:'Sleeping', until:360+r()*60, kind:'home' });
-  steps.push({ p:homeP, act:'Getting ready for the day', until:450+r()*25, kind:'home' });
-  if(job){ const t=T(job), wp=placeFor(job,r), act=`Working as ${t.work.title.toLowerCase()}`;
-    steps.push({ p:wp, act, until:690+r()*40, kind:'work' });
-    steps.push({ p:hang&&Math.abs(hang.x-job.x)+Math.abs(hang.y-job.y)<14?placeFor(hang,r):wanderNear(job,r), act:'On a lunch break', until:770+r()*25, kind:'lunch' });
-    steps.push({ p:wp, act, until:960+r()*40, kind:'work' }); }
-  else { const n=2+Math.floor(r()*2); for(let i=0;i<n;i++) steps.push({ p:home?wanderNear(home,r):placeFor(null,r), act: i===0?'Looking for work':'Exploring the neighbourhood', until:480+(i+1)*(480/n), kind:'wander' }); }
-  if(hang){ const lp=placeFor(hang,r); steps.push({ p:lp, act:`Hanging out at ${lp.name}`, until:1130+r()*70, kind:'leisure' }); }
-  else steps.push({ p:home?wanderNear(home,r):placeFor(null,r), act:'Taking an evening walk', until:1100+r()*60, kind:'wander' });
-  steps.push({ p:homeP, act:'Relaxing at home', until:1310+r()*50, kind:'home' });
-  steps.push({ p:homeP, act:'Sleeping', until:1440, kind:'home' });
+  // Their shift (day, evening or night, by job) and bedtime (early bird to night owl): see shiftOf and owlOf in shared/rules.js.
+  const shift=job?shiftOf(c.id, job.id, job.type):'day', owl=owlOf(c.id);
+  const outing=(until, wander)=>{ if(hang){ const lp=placeFor(hang,r); return { p:lp, act:`Hanging out at ${lp.name}`, until, kind:'leisure' }; } return { p:home?wanderNear(home,r):placeFor(null,r), act:wander, until, kind:'wander' }; };
+  if(job&&shift==='night'){ const t=T(job), wp=placeFor(job,r), act=`On the night shift as ${t.work.title.toLowerCase()}`;
+    steps.push({ p:wp, act, until:140+r()*15, kind:'work' });
+    steps.push({ p:wanderNear(job,r), act:'On a break', until:190+r()*5, kind:'lunch' });
+    steps.push({ p:wp, act, until:360+r()*10, kind:'work' });
+    steps.push({ p:homeP, act:'Winding down after the night shift', until:430+r()*20, kind:'home' });
+    steps.push({ p:homeP, act:'Sleeping', until:900+owl/2+r()*40, kind:'home' });
+    steps.push({ p:homeP, act:'Getting up', until:960+r()*20, kind:'home' });
+    steps.push(outing(1150+r()*40, 'Running errands'));
+    steps.push({ p:homeP, act:'Getting ready for the night shift', until:1270+r()*10, kind:'home' });
+    steps.push({ p:wp, act, until:1440, kind:'work' }); }
+  else if(job&&shift==='evening'){ const t=T(job), wp=placeFor(job,r), act=`On the evening shift as ${t.work.title.toLowerCase()}`;
+    steps.push({ p:homeP, act:'Sleeping', until:480+owl/2+r()*30, kind:'home' });
+    steps.push({ p:homeP, act:'Having a slow morning', until:540+r()*20, kind:'home' });
+    steps.push(outing(760+r()*30, 'Out for the morning'));
+    steps.push({ p:wp, act, until:1055+r()*10, kind:'work' });
+    steps.push({ p:wanderNear(job,r), act:'On a dinner break', until:1100+r()*5, kind:'lunch' });
+    steps.push({ p:wp, act, until:1320+r()*10, kind:'work' });
+    steps.push({ p:homeP, act:'Unwinding after work', until:1440, kind:'home' }); }
+  else {
+    steps.push({ p:homeP, act:'Sleeping', until:360+r()*60+Math.max(0,owl)/2, kind:'home' });
+    steps.push({ p:homeP, act:'Getting ready for the day', until:450+r()*25, kind:'home' });
+    if(job){ const t=T(job), wp=placeFor(job,r), act=`Working as ${t.work.title.toLowerCase()}`;
+      steps.push({ p:wp, act, until:690+r()*40, kind:'work' });
+      steps.push({ p:hang&&Math.abs(hang.x-job.x)+Math.abs(hang.y-job.y)<14?placeFor(hang,r):wanderNear(job,r), act:'On a lunch break', until:770+r()*25, kind:'lunch' });
+      steps.push({ p:wp, act, until:960+r()*40, kind:'work' }); }
+    else { const n=2+Math.floor(r()*2); for(let i=0;i<n;i++) steps.push({ p:home?wanderNear(home,r):placeFor(null,r), act: i===0?'Looking for work':'Exploring the neighbourhood', until:480+(i+1)*(480/n), kind:'wander' }); }
+    steps.push(hang?outing(1155+owl+r()*50):{ p:home?wanderNear(home,r):placeFor(null,r), act:'Taking an evening walk', until:1160+owl+r()*50, kind:'wander' });
+    steps.push({ p:homeP, act:'Relaxing at home', until:1310+owl+r()*50, kind:'home' });
+    steps.push({ p:homeP, act:'Sleeping', until:1440, kind:'home' }); }
   const segs=[]; let t=0;
   for(let i=0;i<steps.length;i++){
     const s=steps[i];
@@ -2905,7 +2926,7 @@ var Top={ board:'racer', data:{}, busy:false,
 // Pickpocketing: only someone out and about (not at home, not at work unless you work there too). Same rule as the server.
 function pocketWhy(c){ const now=Date.now()+skew, v=c.visit;
   let where; if(v&&v[4]>now&&(v[5]||0)<=now){ const b=bOf(v), t=b&&T(b); where=t&&t.home?'home':b&&b.type==='jail'?'jail':(c.job&&c.job[0]===v[0]?'work':'out'); }
-  else where=routineAt(gmNow(), !!c.job);
+  else { const jb=bOf(c.job); where=routineAt(gmNow(), !!c.job, shiftOf(c.id, c.job&&c.job[0], jb&&jb.type), owlOf(c.id)); }
   const me=Me&&Me.handle&&[...S.citizens.values()].find(x=>x.handle.toLowerCase()===Me.handle.toLowerCase()), sameJob=me&&me.job&&c.job&&me.job[0]===c.job[0];
   if(where==='home') return `@${c.handle} is safe at home right now.`;
   if(where==='jail') return `@${c.handle} is in the Jail.`;
@@ -3473,7 +3494,8 @@ function workPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Work
   const d=jobBoard&&jobBoard.id===c.id?jobBoard.data:null;
   if(!d){ box.append(el('p',{class:'hint',text:'Loading jobs…'})); return box; }
   if(!d.housed){ box.append(el('p',{class:'hint',text:'You can work once you wake up and have a home.'})); return box; }
-  if(d.current){ const j=d.current; box.append(el('p',{class:'jobnow'}, `${j.title} at ${j.place}. You take home `, el('span',{class:'pay',text:perDay(j.takeHome)}), ` (${fmt(j.salary)} pay − ${fmt(d.rent)} rent).`)); }
+  const hoursOf=(id,k)=>{ const b=D.buildings.get(id); const sh=SHIFTS[k||shiftOf(c.id, id, b&&b.type)]||SHIFTS.day; return `${sh.name}, ${sh.hours}`; };
+  if(d.current){ const j=d.current; box.append(el('p',{class:'jobnow'}, `${j.title} at ${j.place}. You take home `, el('span',{class:'pay',text:perDay(j.takeHome)}), ` (${fmt(j.salary)} pay − ${fmt(d.rent)} rent). 🕒 ${hoursOf(j.id, j.shift)}.`)); }
   else box.append(el('p',{class:'jobnow',text:d.choosing?"No job. You chose to look for yourself, so you won't be given one automatically. Pick one below.":'No job yet. Pick one below, or wait to be given the nearest one.'}));
   const row=el('div',{class:'row-actions'});
   row.append(el('button',{class:'btn primary',text:jobBoard.open?'Hide jobs':(d.current?'Find a different job':'Find a job'),onclick:()=>{ jobBoard.open=!jobBoard.open; if(jobBoard.open) loadJobs(c,true); else renderCard(true); }}));
@@ -3483,7 +3505,7 @@ function workPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Work
     if(!d.canTakeToday) box.append(el('p',{class:'hint',text:"You've changed jobs today already. You can take another one tomorrow (game time)."}));
     if(!d.openings.length) box.append(el('p',{class:'hint',text:'No open jobs right now. New workplaces bring new jobs.'}));
     else { const ul=el('ul',{class:'joblist'});
-      for(const o of d.openings.slice(0,15)){ ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:`${o.title} · ${perDay(o.takeHome)}`}), el('span',{text:`${o.place}, ${miles(o.dist)} from home${o.free>1?` · ${o.free} places`:''}`})),
+      for(const o of d.openings.slice(0,15)){ ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:`${o.title} · ${perDay(o.takeHome)}`}), el('span',{text:`${o.place}, ${miles(o.dist)} from home${o.free>1?` · ${o.free} places`:''} · 🕒 ${hoursOf(o.id, o.shift)}`})),
         el('button',{class:'btn',text:'Take',disabled:!d.canTakeToday,onclick:()=>toast(`Work as ${o.title.toLowerCase()} at ${o.place} for ${perDay(o.takeHome)}?${d.current?' You can only change jobs once a day.':''}`,'Take it',()=>jobAction(c,'/api/me/job',{buildingId:o.id},`You're now working as ${o.title.toLowerCase()} at ${o.place}.`))}))); }
       box.append(ul); } }
   return box; }
@@ -3511,6 +3533,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       el('dt',{text:'Gender'}), el('dd',{text:c.gender==='f'?'Woman':'Man'}),
       el('dt',{text:'Home'}), el('dd',{text:h?nm(h):d&&d.queue?`None yet. Moves in when ${fmt(d.queue)} more ${d.queue===1?'home is':'homes are'} built`:'None yet'}),
       el('dt',{text:'Job'}), el('dd',{text:j?`${T(j).work.title} at ${nm(j)}`:h?'Looking for work':'Gets one after moving in'}),
+      ...(j?(()=>{ const sh=SHIFTS[shiftOf(c.id, j.id, j.type)]; return [el('dt',{text:'Hours'}), el('dd',{text:`${sh.name}, ${sh.hours}`})]; })():[]),
       ...((Store.canWrite||(Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase()))?[el('dt',{text:'Coins'}), el('dd',{text:d&&typeof d.coins==='number'?(d.net?`${fmt(d.coins)}, ${d.net>0?'+':''}${d.net} per day`:`${fmt(d.coins)}, no job yet`):(coinsReload(c),'…')})]:[]),
       ...(isMayor(c.handle)?[el('dt',{text:'Role'}), el('dd',{text:`👑 Mayor of ${(S.meta&&S.meta.name)||'the colony'}`})]:[]),
       ...(d&&d.claimed?[el('dt',{text:'Online'}), el('dd',{class:d.online?'online':'',text:d.online?'● Online now':d.seen?`Last seen ${ago(d.seen)}`:'Not seen yet'})]:[]),

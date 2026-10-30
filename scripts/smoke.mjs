@@ -466,6 +466,12 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     { const R0 = await import('../shared/rules.js'); const o = R0.crimeOdds;
       ok(o('pickpocket', null).band === 'high' && o('pickpocket', 41).band === 'high' && o('rob', 40).band === 'mid' && o('rob', 16).band === 'mid' && o('pickpocket', 15).band === 'low', 'odds bands: over 40 tiles high, 16 to 40 mid, 15 or closer low');
       ok(o('pickpocket', null).chance > o('pickpocket', 30).chance && o('pickpocket', 30).chance > o('pickpocket', 5).chance && o('rob', 99, 0.15).chance === 0.75, 'farther from the police, better the odds (a crime wave adds 15%)');
+      { const ids = Array.from({ length: 400 }, (_, i) => 'c' + i), tally = jt => { const n = { day: 0, evening: 0, night: 0 }; for (const id of ids) n[R0.shiftOf(id, 'job-' + id.length, jt)]++; return n; };
+        const hosp = tally('hospital'), shop = tally('cafe'), off = tally('office');
+        ok(hosp.night > 50 && hosp.evening > 50 && hosp.day > 120 && shop.night === 0 && shop.evening > 60 && off.day === 400 && R0.shiftOf('x', null, null) === 'day', 'shifts: hospitals run day, evening and night; cafés day and evening; offices days only', JSON.stringify({ hosp, shop, off }));
+        ok(R0.routineAt(60, true, 'night') === 'work' && R0.routineAt(600, true, 'night') === 'home' && R0.routineAt(1400, true, 'night') === 'work' && R0.routineAt(60, true, 'evening') === 'home' && R0.routineAt(900, true, 'evening') === 'work' && R0.routineAt(600, true, 'day') === 'work',
+          'night-shift workers are at work after midnight and asleep in the morning; evening shifts work the afternoon');
+        const owls = new Set(ids.map(R0.owlOf)); ok(owls.size >= 5 && R0.routineAt(1240, false, 'day', 90) === 'out' && R0.routineAt(1240, false, 'day', 0) === 'home' && R0.routineAt(1110, false, 'day', -60) === 'home', 'bedtimes vary: early birds are home by 18:30, night owls are still out at 20:40'); }
       ok(R0.isNight(22 * 60) && R0.isNight(0) && R0.isNight(5 * 60 + 59) && !R0.isNight(6 * 60) && !R0.isNight(19 * 60 + 59) && R0.isNight(1440 * 3 + 21 * 60), 'night runs from 20:00 through midnight to 06:00');
       ok(o('rob', 99, 0, true).chance === 0.75 && o('pickpocket', 30, 0, true).chance === 0.6 && o('rob', 99, 0.15, true).chance === 0.9 && o('rob', 99, 0, true).night, 'crimes at night are 15 points likelier to work (at most 90%)'); }
     const zj = await who('zara_ng');

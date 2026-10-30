@@ -71,7 +71,8 @@ export class Actions {
       return c.job_id && c.visit_id === c.job_id ? 'work' : 'out';
     }
     const meta = this.world.meta; if (!meta) return 'out';
-    return R.routineAt(R.gameMinutes(now, meta.epoch), !!c.job_id);
+    const jt = c.job_id ? (await (ch.q ? ch.q('select type from buildings where id = $1', [c.job_id]) : ch.query('select type from buildings where id = $1', [c.job_id]))).rows[0]?.type : null;
+    return R.routineAt(R.gameMinutes(now, meta.epoch), !!c.job_id, R.shiftOf(c.id, c.job_id, jt), R.owlOf(c.id));
   }
   // Tiles from (x, y) to the nearest working Police station, or null if the colony has none.
   async policeDist(db, x, y) {

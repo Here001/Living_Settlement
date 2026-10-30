@@ -718,13 +718,13 @@ export class World {
     if (!c.home_id) return out;
     const rent = R.capacities(c.htype).rent, dist = (x, y, t) => { const [w, d] = BUILDING_TYPES[t]?.size || [1, 1]; return Math.abs(x + Math.floor(w / 2) - c.hx) + Math.abs(y + Math.floor(d / 2) - c.hy); };
     out.rent = rent;
-    if (c.job_id) { const t = BUILDING_TYPES[c.jtype]; out.current = { id: c.job_id, title: t?.work?.title || 'Worker', place: c.jname || t?.name || '', salary: t?.work?.salary || 0, takeHome: R.netOf(t?.work?.salary || 0, rent), dist: dist(c.jx, c.jy, c.jtype) }; }
+    if (c.job_id) { const t = BUILDING_TYPES[c.jtype]; out.current = { id: c.job_id, title: t?.work?.title || 'Worker', place: c.jname || t?.name || '', salary: t?.work?.salary || 0, takeHome: R.netOf(t?.work?.salary || 0, rent), dist: dist(c.jx, c.jy, c.jtype), shift: R.shiftOf(c.id, c.job_id, c.jtype) }; }
     const rows = (await pool.query(`select b.id, b.type, b.name, b.x, b.y, b.job_cap - b.job_used free from buildings b
       where b.done and b.job_cap > 0 and b.id is distinct from $3
         and (b.job_used < b.job_cap or exists (select 1 from citizens w where w.job_id = b.id and not w.manual and w.pass_hash is null))
       order by (b.x - $1::int) * (b.x - $1::int) + (b.y - $2::int) * (b.y - $2::int), b.id limit 40`, [c.hx, c.hy, c.job_id])).rows;
     for (const b of rows) { const t = BUILDING_TYPES[b.type]; if (!t?.work) continue;
-      out.openings.push({ id: b.id, title: t.work.title, place: b.name || t.name, salary: t.work.salary, takeHome: R.netOf(t.work.salary, rent), dist: dist(b.x, b.y, b.type), free: b.free }); }
+      out.openings.push({ id: b.id, title: t.work.title, place: b.name || t.name, salary: t.work.salary, takeHome: R.netOf(t.work.salary, rent), dist: dist(b.x, b.y, b.type), free: b.free, shift: R.shiftOf(c.id, b.id, b.type) }); }
     return out;
   }
   // Take an open job (jobId) or quit (null). Taking a job is limited to once per game day; quitting is always allowed.

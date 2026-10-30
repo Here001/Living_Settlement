@@ -21,13 +21,46 @@ export const typeOf = b => BUILDING_TYPES[b.type] || BUILDING_TYPES.tent;
 export const blocks = b => !typeOf(b).outdoor;
 export const gameMinutes = (t, epoch) => (t - epoch) / GAME_MIN_MS;
 export const gameDay = (t, epoch) => Math.floor(gameMinutes(t, epoch) / 1440);
-// Roughly where a colonist is at a minute of the game day, by their routine: asleep or relaxing at home (before ~07:45 and
-// after ~21:40), at work (~07:50–11:40 and ~13:10–16:15, if they have a job), or out and about (lunch, commuting, evenings,
-// job hunting). The map shows each person's exact day; these windows are slightly generous towards being home or at work.
-export function routineAt(minute, hasJob) {
+// ---- Shifts and bedtimes ----
+// Not everyone keeps the same hours. Places that never close (services, utilities, industry, hotels, petrol stations,
+// the casino, taverns) run day, evening and night shifts; shops and places to go out run day and evening shifts; offices,
+// schools, banks and the like work days. Which shift a colonist works is fixed for each job they hold (picked from their
+// id and the job's id, so the server and every phone agree). Bedtimes vary too: early birds turn in an hour early,
+// night owls up to an hour and a half late.
+export const SHIFTS = {
+  day: { name: 'Day shift', hours: '07:50–16:15' },
+  evening: { name: 'Evening shift', hours: '14:00–22:00' },
+  night: { name: 'Night shift', hours: '22:00–06:00' },
+};
+const DAY_ONLY = new Set(['townhall', 'school', 'library', 'postoffice', 'kindergarten', 'openschool', 'college', 'university', 'courthouse', 'museum']);
+const ROUND_CLOCK = new Set(['hotel', 'gasstation', 'casino', 'tavern', 'diner']);
+export function hashStr(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+export function shiftOf(citizenId, jobId, jobType) {
+  const t = jobId && BUILDING_TYPES[jobType]; if (!t || !t.work || DAY_ONLY.has(jobType)) return 'day';
+  const r = hashStr(`${citizenId}:shift:${jobId}`) % 100;
+  if (ROUND_CLOCK.has(jobType) || ['services', 'utilities', 'industry'].includes(t.cat)) return r < 50 ? 'day' : r < 75 ? 'evening' : 'night';
+  if (['shops', 'parks', 'landmarks'].includes(t.cat)) return r < 70 ? 'day' : 'evening';
+  return 'day';
+}
+export const OWLS = [-60, -30, 0, 0, 30, 60, 90]; // minutes later (or earlier) than usual they head home and go to bed
+export const owlOf = citizenId => OWLS[hashStr(`${citizenId}:owl`) % OWLS.length];
+// Roughly where a colonist is at a minute of the game day, by their shift and bedtime: 'home' (asleep or relaxing),
+// 'work', or 'out' (breaks, commuting, evenings, errands, job hunting). The map shows each person's exact day; these
+// windows are slightly generous towards being home or at work.
+export function routineAt(minute, hasJob, shift = 'day', owl = 0) {
   const m = ((minute % 1440) + 1440) % 1440;
-  if (m < 465 || m >= 1300) return 'home';
-  if (hasJob && ((m >= 470 && m < 700) || (m >= 790 && m < 975))) return 'work';
+  if (hasJob && shift === 'night') {
+    if (m < 155 || (m >= 185 && m < 370) || m >= 1320) return 'work';
+    if ((m >= 370 && m < 990) || (m >= 1150 && m < 1320)) return 'home';
+    return 'out';
+  }
+  if (hasJob && shift === 'evening') {
+    if (m < 560 || m >= 1320) return 'home';
+    if ((m >= 760 && m < 1065) || (m >= 1095 && m < 1320)) return 'work';
+    return 'out';
+  }
+  if (m < 475 || m >= 1160 + owl) return 'home';
+  if (hasJob && ((m >= 475 && m < 730) || (m >= 770 && m < 1000))) return 'work';
   return 'out';
 }
 export const cleanHandle = s => String(s || '').trim().replace(/^@+/, '').replace(/[^A-Za-z0-9._]/g, '').slice(0, 30);

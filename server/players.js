@@ -146,6 +146,8 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/me/crime', limit, send(async req => world.actions.crimeInfo((await me(req)).id, req.query.target)));
   r.post('/me/crime', limit, send(async req => { const b = req.body || {}; return world.actions.crime((await me(req)).id, { kind: b.kind, target: b.target }); }));
   r.get('/me/places', limit, send(async req => world.actions.places((await me(req)).id)));
+  // Every trip starts from where the colonist really is: the phone sends it with the request.
+  r.use(async (req, res, next) => { if (req.method === 'POST' && req.body && req.body.from && /^\/me\/(visit|earn\/)/.test(req.path)) { try { world.actions.noteOrigin((await me(req)).id, req.body.from); } catch {} } next(); });
   r.post('/me/visit', limit, send(async req => { const b = req.body || {}; return world.actions.visit((await me(req)).id, { buildingId: b.buildingId, friend: b.friend }); }));
   r.post('/me/visit/end', limit, send(async req => world.actions.visit((await me(req)).id, {})));
   r.post('/me/pet', limit, send(async req => { const b = req.body || {}; return world.actions.adopt((await me(req)).id, { kind: b.kind, name: b.name, buildingId: b.buildingId }); }));

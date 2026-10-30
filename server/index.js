@@ -118,6 +118,7 @@ app.get('/api/citizens/:handle', limit, send(async req => {
 app.get('/api/race', limit, send(async req => races.info((await playerFrom(req))?.id, typeof req.query.track === 'string' ? req.query.track : null)));
 // Test servers only (ALLOW_TEST_ROUTES=1, never set on the live colony): run the daily payday on demand.
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/election-end', admin, send(async () => { const { weekOf, weekStart } = await import('./leaderboards.js'); const win = await world.elections.tally(weekStart(weekOf() + 1) + 1000); world.elections.testShift = 1; world.elections.cache.t = 0; return { winner: win?.handle || null }; }));
+if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/bills', admin, send(() => world.change(ch => economy.weeklyBills(ch, true))));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.get('/api/admin/test/pushlog', admin, send(async () => ({ log: push.log })));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/rollover', admin, send(async () => ({ winners: await leaderboards.rollover() })));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/payday', admin, send(() => world.change(ch => economy.day(ch, 1))));

@@ -487,6 +487,30 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok(go && go.status === 200, `Go here works for any building, not just shops and parks (${off?.type})`, JSON.stringify(go?.json));
       const myHome = (await who('zara_ng')).home[0], gh = await call('POST', '/api/me/visit', { buildingId: myHome }, P);
       ok(gh.status === 200 && gh.json.home === true, 'going to your own home heads home'); }
+    { // trips start where the colonist really is, and riding costs money
+      await pool.query("update citizens set cars = null, car_active = null, coins_base = 1000, net = 0, coins_day = 0, visit_id = null, visit_until = null, visit_origin = null where handle = 'zara_ng'");
+      const R0 = await import('../shared/rules.js'), zh = (await who('zara_ng')).home;
+      const far = (await pool.query("select id, x, y from buildings where done and not ruin and type = any($1) and abs(x - $2) + abs(y - $3) >= 30 limit 1", [Object.keys((await import('../shared/catalog.js')).BUILDING_TYPES).filter(R0.canGoTo), zh[2], zh[3]])).rows[0];
+      const from = { x: zh[2] + 3.5, y: zh[3] + 1.25 }, c0 = (await whoDev('zara_ng')).coins;
+      const go = await call('POST', '/api/me/visit', { buildingId: far.id, from }, P), v = (await who('zara_ng')).visit;
+      ok(go.status === 200 && v?.[6]?.x === from.x && v[6].y === from.y, 'a trip starts from where the colonist really is (sent by the phone)', JSON.stringify(v?.[6]));
+      const want = R0.tripFare(Math.abs(from.x - far.x) + Math.abs(from.y - far.y), false).fare + R0.tripFare(Math.abs(far.x - zh[2]) + Math.abs(far.y - zh[3]), false).fare;
+      ok(go.json.mode === 'cab' && go.json.fare === want && (await whoDev('zara_ng')).coins === c0 - want, `no car: a cab there and back (${want} coins)`, JSON.stringify(go.json));
+      await pool.query("update citizens set coins_base = 0, visit_id = null, visit_until = null where handle = 'zara_ng'");
+      const broke = await call('POST', '/api/me/visit', { buildingId: far.id, from }, P);
+      ok(broke.status === 200 && broke.json.fare === 0 && (await who('zara_ng')).visit?.[6]?.walk === true, "can't afford the cab: they walk", JSON.stringify(broke.json));
+      await pool.query("update citizens set cars = $1, car_active = 'c1', coins_base = 1000, visit_id = null, visit_until = null where handle = 'zara_ng'", [JSON.stringify([{ id: 'c1', m: 'sedan', col: '#2B2621', at: 1 }])]);
+      const dr = await call('POST', '/api/me/visit', { buildingId: far.id, from }, P);
+      ok(dr.json.mode === 'car' && dr.json.fare > 0 && dr.json.fare < want, 'with a car: just fuel, cheaper than a cab', JSON.stringify(dr.json));
+      // weekly bills: car upkeep and property upkeep
+      const zid = (await pool.query("select id from citizens where handle = 'zara_ng'")).rows[0].id, own = (await pool.query("select id, type, price from buildings where owner_id is null and done limit 1")).rows[0];
+      await pool.query('update buildings set owner_id = $1, owner_handle = $2, price = 5000 where id = $3', [zid, 'zara_ng', own.id]);
+      await pool.query("update citizens set coins_base = 100, bank = 1000, net = 0, coins_day = 0 where id = $1", [zid]);
+      const bl = await call('POST', '/api/admin/test/bills'), z1 = await whoDev('zara_ng');
+      ok(bl.status === 200 && z1.coins === 0 && z1.bank === 1000 - (60 + 100 - 100), 'weekly bills: car upkeep (60) and property upkeep (2% of 5,000), cash first, then savings', JSON.stringify({ bl: bl.json, coins: z1.coins, bank: z1.bank }));
+      const nt = (await pool.query("select text from notices where citizen_id = $1 and kind = 'bills' order by id desc limit 1", [zid])).rows[0]?.text || '';
+      ok(/car upkeep 60 \+ 🏠 property upkeep 100 = 160 coins/.test(nt), 'and a notice says what it was for', nt);
+      await pool.query('update buildings set owner_id = null, owner_handle = null where id = $1', [own.id]); await pool.query("update citizens set cars = null, car_active = null where id = $1", [zid]); }
     ok((await call('POST', '/api/me/visit/end', {}, P)).status === 200 && (await who('zara_ng')).visit?.[4] <= Date.now() + 1000, 'and heads home (the trip back stays visible)');
     // pets
     await set('zara_ng', 'coins_base = 2500');
@@ -707,7 +731,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     // Extra shift
     const job = (await whoDev('zara_ng')).job;
     if (job) { const s1 = await call('POST', '/api/me/earn/shift', {}, P);
-      ok(s1.status === 200 && s1.json.paid === E.shift.pay && s1.json.paid > 0 && (await coins()) === 100 + s1.json.paid, `an extra shift pays ${E.shift.pay} at once`, JSON.stringify(s1.json));
+      ok(s1.status === 200 && s1.json.paid === E.shift.pay && s1.json.paid > 0 && (await coins()) === 100 + s1.json.paid - s1.json.travel, `an extra shift pays ${E.shift.pay} at once (less ${s1.json.travel} to get there)`, JSON.stringify(s1.json));
       ok((await call('POST', '/api/me/earn/shift', {}, P)).status === 429, 'then you need a rest before the next one');
       await pool.query(`update citizens set earn = jsonb_set(earn, '{shiftAt}', '0') where id = $1`, [zid]);
       ok((await call('POST', '/api/me/earn/shift', {}, P)).status === 200, 'after the rest, another shift'); }

@@ -91,7 +91,7 @@ export class Earn {
       if (!want) throw new HttpError(400, "Your job doesn't pay a wage.");
       e.shifts++; e.shiftAt = now; await this.go(ch, c, job, now + EARN.shift.length);
       const r = await this.pay(ch, c, want, 'shifts'); await this.save(ch, c, e);
-      return { ok: true, ...r, coins: c.coins_base, left: EARN.shift.perDay - e.shifts, readyAt: now + EARN.shift.cooldown };
+      return { ok: true, ...r, coins: c.coins_base, travel: c.lastTrip?.fare || 0, left: EARN.shift.perDay - e.shifts, readyAt: now + EARN.shift.cooldown };
     });
   }
 

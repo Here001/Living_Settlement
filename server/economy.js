@@ -259,10 +259,36 @@ export class Economy {
     const back = b.price || priceOf(b.type); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); ch.touch(c); await ch.saveCitizen(c);
   }
 
+  // ---------- once a game week: bills ----------
+  // Every 7 game days: each car's upkeep, and 2% of the price of every building a colonist owns. Paid from cash first,
+  // then savings; what can't be paid is let go (with a note). Everyone billed gets a notice and a phone notification.
+  async weeklyBills(ch, force = false) {
+    const week = Math.floor(ch.today / 7);
+    if (!force) { if (ch.meta.billsWeek == null) { ch.meta.billsWeek = week; return null; } if (ch.meta.billsWeek >= week) return null; }
+    ch.meta.billsWeek = week;
+    const props = (await ch.q('select owner_id, type, price from buildings where owner_id is not null')).rows, byOwner = new Map();
+    for (const b of props) byOwner.set(b.owner_id, (byOwner.get(b.owner_id) || 0) + Math.round((b.price || priceOf(b.type)) * R.UPKEEP_RATE));
+    const ids = [...new Set([...byOwner.keys(), ...(await ch.q("select id from citizens where cars is not null and jsonb_array_length(cars) > 0")).rows.map(r => r.id)])];
+    let total = 0, billed = 0;
+    for (const id of ids) {
+      const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) continue;
+      const cars = Array.isArray(c.cars) ? c.cars : [], carFee = cars.reduce((s, x) => s + (CAR_MODELS[x.m]?.upkeep || 0), 0), propFee = byOwner.get(id) || 0, due = carFee + propFee;
+      if (!due) continue;
+      ch.coins(c); const fromCash = Math.min(Math.max(0, c.coins_base), due), fromBank = Math.min(Number(c.bank || 0), due - fromCash), paid = fromCash + fromBank;
+      c.coins_base -= fromCash; ch.touch(c); await ch.saveCitizen(c); if (fromBank) await ch.q('update citizens set bank = bank - $2 where id = $1', [id, fromBank]);
+      treasuryAdd(ch, paid); total += paid; billed++;
+      const parts = [carFee ? `🚗 car upkeep ${fmt(carFee)}` : '', propFee ? `🏠 property upkeep ${fmt(propFee)}` : ''].filter(Boolean).join(' + ');
+      const how = fromBank ? (fromCash ? `${fmt(fromCash)} from your cash and ${fmt(fromBank)} from the bank` : 'from the bank') : 'from your cash';
+      await this.world.actions?.notify(ch, id, 'bills', paid < due ? `🧾 Weekly bills: ${parts} = ${fmt(due)} coins. You could only pay ${fmt(paid)} (${how}).` : `🧾 Weekly bills: ${parts} = ${fmt(due)} coins, paid ${how}.`);
+    }
+    return { billed, total };
+  }
+
   // ---------- once a game day (called by the clock) ----------
   // Owners collect their buildings' income, and savings earn interest. The treasury pays both, keeping its cut.
   async day(ch, days) {
     days = Math.max(1, Math.min(3, days)); let rent = 0, owners = 0, interest = 0;
+    await this.weeklyBills(ch);
     const mayor = await this.world.elections?.mayor(), im = mayor?.policy === 'savers' ? 2 : 1; // a mayor's Savers first pledge doubles interest
     const own = (await ch.q('select * from buildings where owner_id is not null and done and not ruin')).rows, byOwner = new Map();
     for (const b of own) { const inc = dailyIncome(b).net * days; if (inc > 0) byOwner.set(b.owner_id, (byOwner.get(b.owner_id) || 0) + inc); }

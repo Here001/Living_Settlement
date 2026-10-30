@@ -122,5 +122,14 @@ export function crimeOdds(kind, dist, wave = 0) {
 export const NO_GO = new Set(['jail', 'police', 'commissariat']);
 export const canGoTo = type => { const t = BUILDING_TYPES[type]; return !!t && !NO_GO.has(type) && t.cat !== 'nature' && t.cat !== 'decor'; };
 export const TILE_MILES = 0.05;
+// Getting around: trips of 14 tiles (0.7 mi) or more are made by car if the colonist owns one, otherwise by cab; shorter
+// ones are walked. A car costs fuel, a cab costs a fare; someone who can't afford the cab walks.
+export const TRIP_DRIVE = 14, CAB_BASE = 10, CAB_PER_MILE = 6, FUEL_PER_MILE = 2;
+export function tripFare(tiles, hasCar) {
+  if (!(tiles >= TRIP_DRIVE)) return { mode: 'walk', fare: 0 };
+  const mi = tiles * TILE_MILES; return hasCar ? { mode: 'car', fare: Math.max(1, Math.round(mi * FUEL_PER_MILE)) } : { mode: 'cab', fare: Math.round(CAB_BASE + mi * CAB_PER_MILE) };
+}
+// Weekly bills (every 7 game days): each car's upkeep (in CAR_MODELS), and 2% of the price of every building you own.
+export const UPKEEP_RATE = 0.02;
 export function miles(tiles) { const m = Math.max(0, Number(tiles) || 0) * TILE_MILES;
   return m < 0.1 ? 'under 0.1 mi' : m < 10 ? `${Math.round(m * 10) / 10} mi` : `${Math.round(m)} mi`; }

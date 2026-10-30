@@ -179,6 +179,12 @@ A signed-in colonist with a home sees these on their own card. They see one at a
   - Short trips (under 14 tiles) are walked.
   - Longer ones are driven by colonists who own a car; everyone else takes a cab.
   - Anyone caught for a crime is driven to the Jail in a police car with its lights on.
+  - **They always set off from where they are.** The phone tells the server where your colonist is when you send them somewhere (`from` on `POST /api/me/visit` and `/api/me/earn/*`, kept as `visit_origin`). A second trip starts from the first place, and changing your mind mid-trip carries on from that spot on the road instead of jumping back home.
+  - **Fares** (`tripFare()` in `shared/rules.js`), charged in cash when the trip starts, for the way there and back:
+    - 🚶 walking (under 14 tiles): free
+    - 🚕 cab: 10 coins plus 6 a mile
+    - 🚗 your own car: fuel, 2 coins a mile
+    - Not enough cash for the fare? You walk, for free. The Go here line shows the fare before you go, and fares go to the treasury.
 - **Crime.** Crimes can be tried once every 10 minutes.
   - **Pickpocket:** steal 10–25% of a colonist's coins, up to 300. Other colonists' cards have **Pick their pocket**.
     - Only someone **out and about** can be pickpocketed: on their lunch break, commuting, out in the evening, job hunting, or on a trip somewhere that isn't a home.
@@ -307,6 +313,10 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
   - Each colonist can send up to 2,000 a game day, so nobody can funnel a stack of accounts into one.
   - Only verified avatars (claimed, with a password) can receive gifts.
   - The Colony Log says who gifted whom, but not the amount.
+- **Weekly bills.** At the start of each game week (every 7 game days, `weeklyBills()` in `server/economy.js`) owners pay upkeep to the treasury, from cash first and then the bank. A 🧾 notice lists what was paid.
+  - **Car maintenance:** 2% of each car's price a week: Hatchback 30, Sedan 60, Pickup 100, SUV 130, Sports car 280.
+  - **Property upkeep:** 2% of what each home or business you own is worth, every week.
+  - If both cash and savings run out, the rest is let go for that week.
 - **New buildings.** A **Gym** and an outdoor **Fitness park**, under Parks → Sports.
 
 ## Chats and who's online

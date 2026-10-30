@@ -25,7 +25,7 @@ const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_c
 // even when the workplace is in a part of the map they haven't loaded.
 const CITIZEN_SELECT = `
   select c.id, c.seq, c.handle, c.joined_at, c.founder, c.gender, c.display_name, c.pet, c.cars, c.car_active, (c.pass_hash is not null) claimed, c.last_seen,
-         c.home_cx, c.home_cy, c.job_cx, c.job_cy, c.hang_cx, c.hang_cy, c.visit_cx, c.visit_cy, c.visit_until, c.visit_from,
+         c.home_cx, c.home_cy, c.job_cx, c.job_cy, c.hang_cx, c.hang_cy, c.visit_cx, c.visit_cy, c.visit_until, c.visit_from, c.visit_origin,
          h.id hid, h.type ht, h.x hx, h.y hy, j.id jid, j.type jt, j.x jx, j.y jy, g.id gid, g.type gt, g.x gx, g.y gy, v.id vid, v.type vt, v.x vx, v.y vy
   from citizens c
   left join buildings h on h.id = c.home_id left join buildings j on j.id = c.job_id left join buildings g on g.id = c.hang_id
@@ -33,7 +33,7 @@ const CITIZEN_SELECT = `
 export const cOut = r => ({ id: r.id, s: r.seq, h: r.handle, t: r.joined_at, f: r.founder ? 1 : 0, g: r.gender || 'm', n: r.display_name || '',
   home: r.hid ? [r.hid, r.ht, r.hx, r.hy] : null, job: r.jid ? [r.jid, r.jt, r.jx, r.jy] : null, hang: r.gid ? [r.gid, r.gt, r.gx, r.gy] : null,
   // A visit: [building, type, x, y, until, from]. Kept for 20 minutes after it ends so viewers can draw the trip back.
-  visit: r.vid && Number(r.visit_until) > Date.now() - VISIT_TAIL ? [r.vid, r.vt, r.vx, r.vy, Number(r.visit_until), Number(r.visit_from || r.visit_until - 300000)] : null, pet: r.pet || null,
+  visit: r.vid && Number(r.visit_until) > Date.now() - VISIT_TAIL ? [r.vid, r.vt, r.vx, r.vy, Number(r.visit_until), Number(r.visit_from || r.visit_until - 300000), r.visit_origin || null] : null, pet: r.pet || null,
   // claimed colonists drive only the car they bought (car: [model, colour]); everyone else follows the old 50/50 rule
   k: r.claimed ? 1 : 0, car: (() => { const a = Array.isArray(r.cars) && (r.cars.find(x => x.id === r.car_active) || r.cars[0]); return a ? [a.m, a.col] : null; })() });
 export const VISIT_TAIL = 20 * 60 * 1000;

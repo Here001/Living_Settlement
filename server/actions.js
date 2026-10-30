@@ -21,7 +21,7 @@ const SHOPS = Object.keys(BUILDING_TYPES).filter(k => BUILDING_TYPES[k].cat === 
 const VISITABLE = Object.keys(BUILDING_TYPES).filter(k => { const t = BUILDING_TYPES[k]; return t.leisure || ['shops', 'parks', 'landmarks'].includes(t.cat); });
 
 export class Actions {
-  constructor(world) { this.world = world; }
+  constructor(world) { this.world = world; this.origins = new Map(); }
 
   // Why this colonist can't act right now (jail), or null.
   async blockedReason(c) {
@@ -36,9 +36,29 @@ export class Actions {
     const why = await this.blockedReason(c); if (why) throw new HttpError(409, why);
     const hx = c.hx, hy = c.hy; delete c.hx; delete c.hy; return { c, hx, hy };
   }
+  // Where a player's colonist really is right now (their phone works it out and sends it with the request), so a new
+  // trip starts from there: mid-journey, or from the last place they went, not from where their routine would put them.
+  noteOrigin(id, from) { if (!from || !Number.isFinite(Number(from.x)) || !Number.isFinite(Number(from.y))) return;
+    const o = { x: Math.round(Number(from.x) * 100) / 100, y: Math.round(Number(from.y) * 100) / 100, b: typeof from.b === 'string' && from.b.length <= 64 ? from.b : null, t: Date.now() };
+    if (Math.abs(o.x) > 1e6 || Math.abs(o.y) > 1e6) return; this.origins.set(id, o); if (this.origins.size > 5000) this.origins.clear(); }
+  takeOrigin(id) { const o = this.origins.get(id); this.origins.delete(id); return o && Date.now() - o.t < 15000 ? o : null; }
   async setVisit(ch, c, b, until) {
     if (!b) { await ch.q('update citizens set visit_until = least(visit_until, $2) where id = $1 and visit_until > $2', [c.id, Date.now()]); ch.touch(c); return; } // ending early: head back from here
-    await ch.q('update citizens set visit_from = case when visit_id = $2 and visit_until > $6 then visit_from else $6 end, visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5 where id = $1', [c.id, b.id, until, b.cx, b.cy, Date.now()]);
+    const now = Date.now(), same = c.visit_id === b.id && Number(c.visit_until || 0) > now; // tapping the same place again changes nothing
+    let origin = same ? c.visit_origin : this.takeOrigin(c.id), fare = 0, mode = 'walk';
+    if (!same && b.type !== 'jail') { // travel costs: fuel for a car, a fare for a cab, there and back (walk if the cab is too dear)
+      const home = c.home_id ? (await ch.q('select x, y from buildings where id = $1', [c.home_id])).rows[0] : null;
+      const ox = origin ? origin.x : home ? home.x : b.x, oy = origin ? origin.y : home ? home.y : b.y, own = Array.isArray(c.cars) && c.cars.length > 0;
+      const out = R.tripFare(Math.abs(ox - b.x) + Math.abs(oy - b.y), own), back = home ? R.tripFare(Math.abs(b.x - home.x) + Math.abs(b.y - home.y), own) : { fare: 0, mode: 'walk' };
+      fare = out.fare + back.fare; mode = out.mode !== 'walk' ? out.mode : back.mode;
+      ch.coins(c);
+      if (fare > 0 && c.coins_base < fare) { origin = { ...(origin || {}), walk: true }; fare = 0; mode = 'walk'; } // can't afford it: walk
+      else if (fare > 0) { c.coins_base -= fare; treasuryAdd(ch, fare); await ch.saveCitizen(c); await bump(ch, c.id, { travel: fare }); }
+      if (origin) delete origin.t;
+    }
+    await ch.q('update citizens set visit_from = case when visit_id = $2 and visit_until > $6 then visit_from else $6 end, visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5, visit_origin = $7 where id = $1',
+      [c.id, b.id, until, b.cx, b.cy, now, origin ? JSON.stringify(origin) : null]);
+    c.lastTrip = { fare, mode };
     const before = ch.citizens.get(c.id) || []; ch.touch(c);
     if (b) ch.citizens.set(c.id, [...new Set([...before, ...(ch.citizens.get(c.id) || []), R.chunkKey(b.cx, b.cy)])]);
   }
@@ -70,7 +90,7 @@ export class Actions {
   async notify(ch, citizenId, kind, text) {
     const t = Date.now(), id = (await ch.q('insert into notices (citizen_id, t, kind, text) values ($1, $2, $3, $4) returning id', [citizenId, t, kind, text])).rows[0].id;
     ch.extraOps.push({ op: 'notice', private: true, to: [citizenId], data: { id: String(id), t, kind, text } });
-    ch.pushes.push([[citizenId], { kind: kind === 'pickpocket' ? 'crime' : kind, title: kind === 'pickpocket' ? (text.startsWith('🚓') ? 'Thief caught: you’ve been refunded' : 'Your pocket was picked') : 'Resurgence', body: text.replace(/^\S+\s/, ''), tag: 'notice-' + id }]);
+    ch.pushes.push([[citizenId], { kind: kind === 'pickpocket' ? 'crime' : kind, title: kind === 'pickpocket' ? (text.startsWith('🚓') ? 'Thief caught: you’ve been refunded' : 'Your pocket was picked') : kind === 'bills' ? '🧾 Weekly bills' : 'Resurgence', body: text.replace(/^\S+\s/, ''), tag: 'notice-' + id }]);
   }
   async notices(id) {
     const rows = (await pool.query('update notices set seen = true where id in (select id from notices where citizen_id = $1 and not seen order by t desc limit 20) returning id, t, kind, text', [id])).rows;
@@ -180,7 +200,7 @@ export class Actions {
         label = nameOf(b);
       }
       const until = Date.now() + VISIT_TIME; await this.setVisit(ch, c, b, until); await bump(ch, c.id, { outings: 1 });
-      return { ok: true, place: label, until };
+      return { ok: true, place: label, until, fare: c.lastTrip?.fare || 0, mode: c.lastTrip?.mode || 'walk', coins: c.coins_base };
     });
   }
 

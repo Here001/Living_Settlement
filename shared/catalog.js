@@ -347,11 +347,11 @@ export const VEHICLE_TYPES = {
 
 // Cars a colonist can buy from the dealer. They draw like the car above, in the size and colour of the model.
 export const CAR_MODELS = {
-  hatch:  { name:'Hatchback',  price:1500,  len:0.54, wid:0.28, h:6, colors:['#D9544A','#5B8DB8','#E6C35C','#3E7A4B','#F2F0EA','#2B2621'] },
-  sedan:  { name:'Sedan',      price:3000,  len:0.64, wid:0.3,  h:6, colors:['#7C8288','#2F4A7A','#F2F0EA','#8C2F1B','#2B2621','#3E7A4B'] },
-  pickup: { name:'Pickup',     price:5000,  len:0.72, wid:0.32, h:7, cargo:'#8C7B66', colors:['#C8382E','#2F4A7A','#E2A23B','#F2F0EA','#4A5A44'] },
-  suv:    { name:'SUV',        price:6500,  len:0.7,  wid:0.33, h:8, colors:['#2B2621','#F2F0EA','#5E7C99','#8C2F1B','#7C8288'] },
-  sports: { name:'Sports car', price:14000, len:0.66, wid:0.3,  h:5, colors:['#E4572E','#F2B33D','#2E5E8C','#F2F0EA','#2B2621'] },
+  hatch:  { name:'Hatchback',  price:1500, upkeep:30,  len:0.54, wid:0.28, h:6, colors:['#D9544A','#5B8DB8','#E6C35C','#3E7A4B','#F2F0EA','#2B2621'] },
+  sedan:  { name:'Sedan',      price:3000, upkeep:60,  len:0.64, wid:0.3,  h:6, colors:['#7C8288','#2F4A7A','#F2F0EA','#8C2F1B','#2B2621','#3E7A4B'] },
+  pickup: { name:'Pickup',     price:5000, upkeep:100,  len:0.72, wid:0.32, h:7, cargo:'#8C7B66', colors:['#C8382E','#2F4A7A','#E2A23B','#F2F0EA','#4A5A44'] },
+  suv:    { name:'SUV',        price:6500, upkeep:130,  len:0.7,  wid:0.33, h:8, colors:['#2B2621','#F2F0EA','#5E7C99','#8C2F1B','#7C8288'] },
+  sports: { name:'Sports car', price:14000, upkeep:280, len:0.66, wid:0.3,  h:5, colors:['#E4572E','#F2B33D','#2E5E8C','#F2F0EA','#2B2621'] },
 };
 
 export const DISASTER_TYPES = {

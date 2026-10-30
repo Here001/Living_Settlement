@@ -199,6 +199,8 @@ const MIGRATIONS = [
    create table mayor_votes (week int not null, voter_id text not null, candidate_id text not null, t bigint not null, primary key (week, voter_id));
    create index mayor_votes_cand on mayor_votes (week, candidate_id);
    create table elections (week int primary key, winner_id text, winner_handle text, policy text, votes int not null default 0, total int not null default 0, decided_at bigint);`,
+  // v38: where a trip starts (the colonist's real position when they set off) and whether they walk it
+  `alter table citizens add column visit_origin jsonb;`,
 ];
 
 export async function migrate() {

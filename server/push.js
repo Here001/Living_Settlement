@@ -7,7 +7,7 @@ import { pool } from './db.js';
 import { HttpError } from './world.js';
 
 export const PUSH_KINDS = {
-  crime: 'Pickpockets and thieves', gift: 'Gifts', chat: 'Chat messages', win: 'Race, lottery and casino wins', guide: 'Daily reward reminders',
+  crime: 'Pickpockets and thieves', gift: 'Gifts', bills: 'Weekly bills', chat: 'Chat messages', win: 'Race, lottery and casino wins', guide: 'Daily reward reminders',
 };
 const DEFAULT_PREFS = Object.fromEntries(Object.keys(PUSH_KINDS).map(k => [k, true]));
 

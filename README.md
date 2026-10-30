@@ -196,6 +196,10 @@ A signed-in colonist with a home sees these on their own card. They see one at a
   - **News:** successes are reported anonymously in the Colony Log; arrests name the culprit.
 - **Pet.** Adopt one of the six native creatures for 200 coins, name it, and it walks beside you on the map. You can rename it or let it go.
 
+## Finding a building to build
+
+Every building menu has a **search box** at the top that searches all buildings by name, by what they are, or by job title ("bank", "pets", "school", "banker"). Each result says which menu it lives in (for example "Shops → Small"), and tapping one picks it up to place, the same as in its own menu. The bank is now just called **Bank** (under Offices).
+
 ## Getting started guide
 
 A signed-in colonist's own card opens with **🧭 Getting started**: six first steps, each with a small reward the treasury pays once, and a **+250** bonus for finishing them all. Each step is ticked off from what the player has actually done (`server/guide.js`), so steps they've already done count straight away.
@@ -242,7 +246,7 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
 
 - **Bank.**
   - **All pay is cash.** Wages, rent, profits and winnings arrive as cash on you, and cash can be pickpocketed.
-  - **Deposits and withdrawals happen at a Bank.** Tap a Bank on the map ("Colonnaded bank", under Offices): its card has **🏦 Your account**, with Deposit, Withdraw and Deposit all my cash. The server refuses both unless the request names a finished Bank.
+  - **Deposits and withdrawals happen at a Bank.** Tap a Bank on the map ("Bank", under Offices; or type "bank" in the build menu search): its card has **🏦 Your account**, with Deposit, Withdraw and Deposit all my cash. The server refuses both unless the request names a finished Bank.
   - The **👛 Wallet** tab on your own card shows your cash and savings, and has **Go to the nearest Bank**.
   - Money in the bank can't be pickpocketed.
   - Savings grow 0.1% each game day, up to 20 coins a day. The treasury pays interest only when it can afford to, so the bank never creates coins.

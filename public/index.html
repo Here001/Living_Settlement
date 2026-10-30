@@ -166,6 +166,7 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .ts-tabs::-webkit-scrollbar{display:none}
 .ts-tabs button{flex:1 0 auto;white-space:nowrap}
 .nf-lead{margin:6px 0 10px}
+.bsearch{display:block;box-sizing:border-box;margin:2px 14px 8px!important;width:calc(100% - 28px)!important;max-width:calc(100% - 28px)}
 .guide{margin:6px 0 10px;padding:10px 12px;border-radius:16px;border:1.6px solid color-mix(in srgb,var(--warm,#E4572E) 45%,transparent);background:color-mix(in srgb,var(--warm,#E4572E) 7%,transparent)}
 .g-head{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;width:calc(100% - 72px);font-size:15px}
 .g-head .g-n{margin-left:auto;color:var(--muted);font-size:13px;font-weight:700}.g-chev{color:var(--muted)}
@@ -2656,11 +2657,21 @@ function renderPane(){
     for(const [mode,nm,note] of [['area','Clear an area','drag a box over anything'],['all','Bulldozer','buildings and roads'],['buildings','Buildings only','roads stay'],['roads','Roads only','buildings stay']]){ const b=card('', nm, note, '', tool.kind==='erase'&&tool.mode===mode, ()=>setTool(tool.kind==='erase'&&tool.mode===mode?{kind:'pan'}:{kind:'erase',mode}));
       const ic=el('span',{class:'icthumb'}); ic.innerHTML=ICONS[mode==='roads'?'roads':mode==='buildings'?'housing':mode==='area'?'area':'bulldoze']; b.replaceChild(ic,b.querySelector('img')); cards.append(b); }
     p.append(cards); return; }
-  const cat=CATS.find(c=>c.id===activeTab); p.append(paneHead(cat?cat.name:'Build', buildExtras())); if(subs) p.append(subRow());
-  const ids=Object.keys(BUILDING_TYPES).filter(id=>BUILDING_TYPES[id].cat===activeTab&&(!subs||BUILDING_TYPES[id].sub===subNow)).sort((a,b)=>(BUILDING_TYPES[a].cost||0)-(BUILDING_TYPES[b].cost||0));
-  for(const id of ids){ const t=BUILDING_TYPES[id]; cards.append(card(thumbFor(id), t.name, timeText(id), statLine(t), tool.kind==='place'&&tool.type===id, ()=>setTool(tool.kind==='place'&&tool.type===id?{kind:'pan'}:{kind:'place',type:id}))); }
-  p.append(cards);
+  const cat=CATS.find(c=>c.id===activeTab); p.append(paneHead(cat?cat.name:'Build', buildExtras()));
+  // Search every building by name (or by what it is: "bank", "pets", "school"), whichever menu it lives in.
+  const q=el('input',{class:'search bsearch',type:'search',placeholder:'Search all buildings: bank, pets, casino…',autocomplete:'off','aria-label':'Search all buildings'}); q.value=buildQuery;
+  const sub=subs?subRow():null; p.append(q); if(sub) p.append(sub);
+  const fill=()=>{ cards.innerHTML=''; const term=buildQuery.trim().toLowerCase(); if(sub) sub.hidden=!!term;
+    const catName=id=>(CATS.find(c=>c.id===id)||{}).name||id, subName=t=>{ const ss=SUBS[t.cat]; const f=ss&&ss.find(x=>x[0]===t.sub); return f?f[1]:''; };
+    const ids=Object.keys(BUILDING_TYPES).filter(id=>{ const t=BUILDING_TYPES[id]; if(t.hidden) return false;
+      if(term) return [t.name,id,catName(t.cat),t.work&&t.work.title,t.label].filter(Boolean).some(x=>String(x).toLowerCase().includes(term));
+      return t.cat===activeTab&&(!subs||t.sub===subNow); }).sort((a,b)=>(BUILDING_TYPES[a].cost||0)-(BUILDING_TYPES[b].cost||0));
+    for(const id of ids.slice(0,60)){ const t=BUILDING_TYPES[id]; cards.append(card(thumbFor(id), t.name, timeText(id), term?`${catName(t.cat)}${subName(t)?' → '+subName(t):''}`:statLine(t), tool.kind==='place'&&tool.type===id, ()=>setTool(tool.kind==='place'&&tool.type===id?{kind:'pan'}:{kind:'place',type:id}))); }
+    if(term&&!ids.length) cards.append(el('p',{class:'hint',text:`Nothing called “${buildQuery.trim()}”.`})); };
+  q.oninput=()=>{ buildQuery=q.value; fill(); };
+  fill(); p.append(cards);
 }
+let buildQuery='';
 
 const detail=new Map(), detailLoading=new Set();
 // The card was loaded before signing in (coins are private then): fetch it again, once, now that the owner can see them.

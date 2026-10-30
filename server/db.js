@@ -209,6 +209,12 @@ const MIGRATIONS = [
    create table snapshots (day int primary key, data jsonb not null, t bigint not null);`,
   // v40: the Game House: a game in progress there (penalties, darts, snooker practice) and the day of the last free wheel spin
   `alter table citizens add column play_game jsonb, add column wheel_day int, add column snooker_day int;`,
+  // v41: tables where colonists play each other (Whot, Ludo, Ayo, Snooker, Hold'em), and the table each one is at
+  `create table game_tables (id text primary key, game text not null, building_id text not null, stake int not null, seats int not null, opts jsonb,
+     players jsonb not null, state jsonb, status text not null, created_at bigint not null, turn_at bigint, ended_at bigint, result jsonb);
+   create index game_tables_open on game_tables (building_id, game, status);
+   create index game_tables_turn on game_tables (status, turn_at);
+   alter table citizens add column table_id text;`,
 ];
 
 export async function migrate() {

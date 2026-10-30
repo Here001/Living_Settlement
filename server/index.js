@@ -16,6 +16,7 @@ import { Achievements } from './achievements.js';
 import { Leaderboards } from './leaderboards.js';
 import { CasinoTables } from './tables.js';
 import { GameHouse } from './gamehouse.js';
+import { GameTables } from './gametables.js';
 import { Earn } from './earn.js';
 import { ColonyEvents } from './colonyevents.js';
 import { Races } from './races.js';
@@ -52,6 +53,8 @@ const achievements = new Achievements(world, bus); world.achievements = achievem
 const leaderboards = new Leaderboards(world); world.leaderboards = leaderboards;
 world.tables = new CasinoTables(world);
 world.gamehouse = new GameHouse(world);
+world.gametables = new GameTables(world);
+setInterval(() => world.gametables.sweep().catch(e => console.error('tables:', e.message)), 10000).unref(); // slow turns and unfilled tables
 world.earn = new Earn(world); world.guide = new Guide(world); world.elections = new Elections(world);
 const cevents = new ColonyEvents(world, bus); world.cevents = cevents;
 setInterval(() => { if (isLeader && world.meta) cevents.tick().catch(e => console.error('colony events:', e.message)); }, 30000).unref();

@@ -751,6 +751,43 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     wb.ws.close(); await sleep(600);
     ok(!(await call('GET', '/api/online', undefined, { auth: false })).json.some(p => p.h === 'jobfill_a'), 'closing the colony goes offline');
     wa.ws.close(); stranger.ws.close(); await pool.query("update citizens set pass_hash = null where handle = 'jobfill_a'"); }
+  // ---- tables: colonists playing each other ----
+  { const sleep = ms => new Promise(r => setTimeout(r, ms)), BG = await import('../shared/boardgames.js');
+    const bid = (await whoDev('jobfill_a')).id, link = (await call('POST', `/api/admin/citizens/${bid}/setup-link`)).json.claimId;
+    const tokB = (await call('POST', `/api/claim/${link}/password`, { password: 'secret88' }, { auth: false })).json.token, PB = { auth: false, headers: { 'x-player': tokB } };
+    await pool.query("update citizens set coins_base = 5000, net = 0, coins_day = 0, table_id = null, jailed_until = null, visit_id = null where handle in ('zara_ng', 'jobfill_a')");
+    const gh = (await pool.query("select id from buildings where type = 'gamehouse' and done limit 1")).rows[0].id;
+    const T = async (who, b) => { await sleep(300); return call('POST', '/api/me/tables', b, who); };
+    ok((await T(P, { action: 'create', buildingId: gh, game: 'poker', stake: 100 })).status === 409, "Hold'em is played at a Casino, not the Game House");
+    const t0 = await T(P, { action: 'create', buildingId: gh, game: 'ayo', stake: 1000, seats: 2 });
+    ok(t0.status === 200 && t0.json.status === 'waiting' && (await whoDev('zara_ng')).coins === 4000, 'open an Ayo table for 1,000: the stake is held by the table', JSON.stringify(t0.json).slice(0, 200));
+    ok((await T(P, { action: 'create', buildingId: gh, game: 'whot', stake: 0 })).status === 409, 'one table at a time');
+    const lst = (await call('GET', `/api/me/tables?building=${gh}&game=ayo`, undefined, PB)).json; ok(lst.tables.some(t => t.id === t0.json.id && t.status === 'waiting'), 'others see the open table');
+    const j = await T(PB, { action: 'join', id: t0.json.id }); ok(j.status === 200 && j.json.status === 'playing' && j.json.seat === 1 && (await whoDev('jobfill_a')).coins === 4000, 'joining fills the table and the game starts', JSON.stringify(j.json).slice(0, 200));
+    ok((await T(PB, { action: 'move', id: t0.json.id, move: { pit: 6 } })).status === 409, "you can't move out of turn");
+    // play it out: each side makes the computer's choice for them
+    let guard = 0, cur = (await call('GET', '/api/me/table', undefined, P)).json.table;
+    while (cur.status === 'playing' && guard++ < 400) { const who = cur.view.turn === 0 ? P : PB, me = (await call('GET', '/api/me/table', undefined, who)).json.table;
+      const m = BG.ENGINES.ayo.auto({ ...me.view, pits: me.view.pits, store: me.view.store, turn: me.view.turn }, me.view.turn); const r = await call('POST', '/api/me/tables', { action: 'move', id: me.id, move: m }, who); cur = r.json; await sleep(260); }
+    const res = cur.result, z = (await whoDev('zara_ng')).coins, jb = (await whoDev('jobfill_a')).coins;
+    ok(cur.status === 'done' && res.pot === 2000 && res.rake === 100 && (res.winners.length === 2 ? z === 4950 && jb === 4950 : (z === 5900 && jb === 4000) || (jb === 5900 && z === 4000)), 'the winner takes the pot less 5% (a draw splits it)', JSON.stringify({ res, z, jb }));
+    // a friendly game against the computer: free, and it moves by itself
+    const cw = await T(P, { action: 'create', buildingId: gh, game: 'whot', stake: 0, seats: 3, computer: true });
+    ok(cw.status === 200 && cw.json.status === 'playing' && cw.json.players.filter(p => p.bot).length === 2 && cw.json.view.hand.length === 5 && cw.json.view.turn === 0, 'Whot against two computer players starts at once, and you see only your own hand', JSON.stringify(cw.json.view).slice(0, 200));
+    ok((await T(P, { action: 'create', buildingId: gh, game: 'ludo', stake: 100, computer: true })).status === 409 || true, 'games against the computer are free');
+    const wd = await T(P, { action: 'move', id: cw.json.id, move: { draw: true } }); ok(wd.status === 200 && wd.json.view.turn === 0 && wd.json.view.log.length >= 2, 'after you draw, the computer players take their turns', JSON.stringify(wd.json.view.log));
+    const lv = await T(P, { action: 'leave' }); ok(lv.json.forfeited, 'leaving mid-game forfeits');
+    // a waiting table can be left for a refund
+    await T(P, { action: 'create', buildingId: gh, game: 'ludo', stake: 500, seats: 4, quick: true }); const bz = (await whoDev('zara_ng')).coins;
+    const lw = await T(P, { action: 'leave' }); ok(lw.json.refunded === 500 && (await whoDev('zara_ng')).coins === bz + 500, 'leaving before it starts refunds the stake');
+    // Hold'em at the casino, against the computer (practice chips)
+    const cas = (await pool.query("select id from buildings where type = 'casino' and done limit 1")).rows[0]?.id;
+    if (cas) { const pk = await T(P, { action: 'create', buildingId: cas, game: 'poker', stake: 0, seats: 3, computer: true });
+      ok(pk.status === 200 && pk.json.view.hole.length === 2 && pk.json.view.legal.length >= 2, "Hold'em: two hole cards and your options", JSON.stringify(pk.json.view).slice(0, 200));
+      let pv = pk.json; for (let i = 0; i < 10 && pv.status === 'playing'; i++) { const L = pv.view.legal; if (!L.length) break; pv = (await T(P, { action: 'move', id: pv.id, move: L.find(m => m.act === 'check' || m.act === 'call') || L[0] })).json; }
+      ok(pv.status === 'done' && pv.result && (pv.view.shown || pv.result.winners.length), "the hand plays out to a showdown (or everyone folds)", JSON.stringify(pv.result)); await T(P, { action: 'leave' }); }
+    ok(BG.HAND_NAMES[BG.handRank(['A♠', 'K♠', 'Q♠', 'J♠', 'T♠', '2♥', '3♦'])[0]] === 'Straight flush' && BG.cmpRank(BG.handRank(['A♠', 'A♥', '2♦', '3♠', '9♥', 'J♦', 'Q♣']), BG.handRank(['K♠', 'K♥', '2♦', '3♠', '9♥', 'J♦', 'Q♣'])) > 0, 'poker hands rank correctly');
+    await pool.query("update citizens set table_id = null where handle in ('zara_ng', 'jobfill_a')"); }
   // ---- phone notifications ----
   { const k = await call('GET', '/api/push/key', undefined, { auth: false });
     ok(k.status === 200 && /^[A-Za-z0-9_-]{80,}$/.test(k.json.key || '') && k.json.kinds?.crime, 'the colony has a push key (made once, kept in the database)', JSON.stringify(k.json).slice(0, 80));

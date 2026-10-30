@@ -227,6 +227,17 @@ export function playersRouter({ limit, send, admin, world }) {
       case 'snooker': return gh.snooker(p.id, bid, { action: String(b.action || ''), angle: b.angle, power: b.power });
       default: throw new HttpError(404, 'No such game.');
     } })));
+  // Tables where colonists play each other (Whot, Ludo, Ayo, Snooker at a Game House; Hold'em at a Casino).
+  r.get('/me/tables', limit, send(async req => world.gametables.list((await me(req)).id, req.query.building, String(req.query.game || ''))));
+  r.get('/me/table', limit, send(async req => world.gametables.mine((await me(req)).id)));
+  r.post('/me/tables', limit, send(req => tableMove(req, (p, b) => { const T = world.gametables;
+    switch (String(b.action || '')) {
+      case 'create': return T.create(p.id, { buildingId: b.buildingId, game: String(b.game || ''), stake: b.stake, seats: b.seats, quick: !!b.quick, computer: !!b.computer });
+      case 'join': return T.join(p.id, b.id);
+      case 'leave': return T.leave(p.id);
+      case 'move': return T.move(p.id, b.id, b.move && typeof b.move === 'object' ? b.move : {});
+      default: throw new HttpError(400, 'Create, join, leave or move.');
+    } })));
   r.post('/me/casino/hilo', limit, send(req => tableMove(req, (p, b) => world.tables.hilo(p.id, String(b.action || ''), b.bet))));
   r.post('/me/casino/mines', limit, send(req => tableMove(req, (p, b) => world.tables.mines(p.id, String(b.action || ''), b.bet, b.mines, b.cell))));
   r.post('/me/casino/rocket', limit, send(req => tableMove(req, (p, b) => world.tables.rocket(p.id, String(b.action || ''), b.bet, b.auto, b.at))));

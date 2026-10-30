@@ -1,3 +1,4 @@
+import { noteActive } from './stats.js';
 import { assertNotMuted } from './chat.js';
 import express from 'express';
 import crypto from 'node:crypto';
@@ -66,6 +67,7 @@ export async function playerByToken(t) {
   if (!t || typeof t !== 'string') return null;
   const s = (await pool.query(`select s.citizen_id, s.last_seen, c.handle, c.gender, c.gender_chosen, c.display_name from sessions s join citizens c on c.id = s.citizen_id where s.token_hash = $1`, [sha(t)])).rows[0];
   if (!s || Date.now() - Number(s.last_seen) > SESSION_TTL) return null;
+  noteActive(s.citizen_id); // developer stats: who played today
   if (Date.now() - Number(s.last_seen) > 3600 * 1000) pool.query('update sessions set last_seen = $2 where token_hash = $1', [sha(t), Date.now()]).catch(() => {});
   return { id: s.citizen_id, handle: s.handle, name: s.display_name || '', gender: s.gender, genderChosen: !!s.gender_chosen };
 }

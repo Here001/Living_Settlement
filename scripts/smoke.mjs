@@ -978,6 +978,12 @@ ok(r.status === 200 && r.json.removed === 2 && r.json.notFound === 1, 'remove a 
 ok((await who('gone_a')).error && !(await who('stay_c')).error, 'only the listed ones are gone');
 r = await call('POST', '/api/admin/citizens/remove', { all: true });
 ok(r.status === 200 && r.json.removed > 0 && (await meta()).population === 1, 'remove everyone except the founder', JSON.stringify(r.json));
+// ---- developer stats ----
+{ ok((await call('GET', '/api/admin/stats', undefined, { auth: false })).status === 401, 'stats are for the developer only');
+  const st = await call('GET', '/api/admin/stats?days=7'); const F = st.json.flows || {};
+  ok(st.status === 200 && st.json.series.length === 7 && st.json.players.today >= 1 && typeof st.json.players.signedUp === 'number', 'stats: players who used the game today', JSON.stringify(st.json.players));
+  ok(F['earn:shifts']?.today.players >= 1 && F['car:buy']?.today.coins >= 25000 && F['travel']?.today.n >= 1 && F['daily']?.today.coins >= 200 && F['gift']?.today.coins >= 9500, 'stats: coins earned and spent are recorded by kind, with how many players', Object.keys(F).join(','));
+  ok(typeof st.json.money.playerCash === 'number' && st.json.money.treasury >= 0 && st.json.funnel.length === 11 && st.json.funnel.every(f => typeof f[2] === 'number'), 'stats: coins in circulation and the sign-up funnel', JSON.stringify(st.json.money)); }
 ok((await call('POST', '/api/admin/reset', { confirm: 'nope' })).status === 400, 'reset needs the word RESET');
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' }, { auth: false })).status === 401, 'only the developer can reset');
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' })).status === 200 && !(await call('GET', '/api/meta', undefined, { auth: false })).json.meta, 'reset wipes the colony');

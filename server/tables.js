@@ -4,6 +4,7 @@
 // Every random draw happens here on the server; the browser only ever sees what's been revealed.
 import crypto from 'node:crypto';
 import { pool } from './db.js';
+import { track } from './stats.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES } from '../shared/catalog.js';
@@ -30,7 +31,7 @@ export class CasinoTables {
     bet = Math.floor(Number(bet)); if (!Number.isFinite(bet) || bet < 1) throw new HttpError(400, 'Bet at least 1 coin.');
     if (bet > MAX_BET) throw new HttpError(400, `The most you can bet at once is ${fmt(MAX_BET)} coins.`);
     if (c.coins_base < bet) throw new HttpError(400, c.coins_base ? `You only have ${fmt(c.coins_base)} coins.` : "You don't have any coins yet. Get a job first.");
-    c.coins_base -= bet; ch.meta.treasuryBase = R.treasuryOn(ch.meta, ch.today) + bet; ch.meta.treasuryDay = ch.today;
+    c.coins_base -= bet; ch.meta.treasuryBase = R.treasuryOn(ch.meta, ch.today) + bet; ch.meta.treasuryDay = ch.today; track(ch, 'casino:bet', bet, c.id);
     const until = Date.now() + 10 * 60 * 1000;
     await ch.q('update citizens set visit_from = case when visit_id = $2 and visit_until > $6 then visit_from else $6 end, visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5 where id = $1', [c.id, cas.id, until, cas.cx, cas.cy, Date.now()]);
     ch.citizens.set(c.id, [...new Set([...(ch.citizens.get(c.id) || []), R.chunkKey(cas.cx, cas.cy)])]);
@@ -38,7 +39,7 @@ export class CasinoTables {
   }
   // Pay out (from the treasury), record it for badges and the weekly board, and announce big wins.
   async payout(ch, c, game, staked, paid, casName, gameName) {
-    if (paid > 0) { c.coins_base += paid; ch.meta.treasuryBase = Math.max(0, R.treasuryOn(ch.meta, ch.today) - paid); ch.meta.treasuryDay = ch.today; }
+    if (paid > 0) { track(ch, 'casino:win', paid, c.id); c.coins_base += paid; ch.meta.treasuryBase = Math.max(0, R.treasuryOn(ch.meta, ch.today) - paid); ch.meta.treasuryDay = ch.today; }
     ch.touch(c); await ch.saveCitizen(c);
     const won = paid - staked; await score(ch, c.id, 'casino_net', won);
     await bump(ch, c.id, won > 0 ? { casino_plays: 1, casino_wins: 1 } : { casino_plays: 1 }, won > 0 ? { casino_best: paid } : {});

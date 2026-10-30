@@ -201,6 +201,12 @@ const MIGRATIONS = [
    create table elections (week int primary key, winner_id text, winner_handle text, policy text, votes int not null default 0, total int not null default 0, decided_at bigint);`,
   // v38: where a trip starts (the colonist's real position when they set off) and whether they walk it
   `alter table citizens add column visit_origin jsonb;`,
+  // v39: developer stats: who played each real day, every coin earned or spent (by kind), and a daily money snapshot
+  `create table activity (day int not null, citizen_id text not null, t bigint not null, primary key (day, citizen_id));
+   create index activity_citizen on activity (citizen_id, day);
+   create table flows (day int not null, key text not null, n bigint not null default 0, coins bigint not null default 0, primary key (day, key));
+   create table flow_players (day int not null, key text not null, citizen_id text not null, primary key (day, key, citizen_id));
+   create table snapshots (day int primary key, data jsonb not null, t bigint not null);`,
 ];
 
 export async function migrate() {

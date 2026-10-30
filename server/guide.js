@@ -4,6 +4,7 @@ import { pool } from './db.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { treasuryAdd } from './races.js';
+import { track } from './stats.js';
 
 export const GUIDE_STEPS = [
   { id: 'daily', icon: '🎁', title: 'Collect your daily reward', how: 'Free coins every day, more the longer your streak.', reward: 250 },
@@ -38,7 +39,7 @@ export class Guide {
       if (got.has(s.id)) throw new HttpError(409, "You've already collected that.");
       const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0];
       const paid = Math.max(0, Math.min(s.reward, Math.floor(R.treasuryOn(ch.meta, ch.today))));
-      ch.coins(c); c.coins_base += paid; if (paid) treasuryAdd(ch, -paid); ch.touch(c); await ch.saveCitizen(c);
+      ch.coins(c); c.coins_base += paid; if (paid) treasuryAdd(ch, -paid); track(ch, 'guide', paid, c.id); ch.touch(c); await ch.saveCitizen(c);
       got.add(s.id); await ch.q('update citizens set guide = $2 where id = $1', [id, JSON.stringify({ ...S.g, claimed: [...got] })]);
       return { ok: true, step: s.id, paid, coins: c.coins_base };
     });

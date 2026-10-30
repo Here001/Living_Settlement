@@ -136,6 +136,8 @@ app.get('/api/cron/tick', send(async req => {
 
 // ---------- builder (you) ----------
 app.get('/api/admin/check', admin, (req, res) => res.json({ ok: true }));
+// Developer stats: daily players, coins in circulation, how players earn and spend, and where they drop off.
+app.get('/api/admin/stats', admin, send(async req => { const S = await import('./stats.js'); return S.dashboard(world, req.query.days); }));
 app.post('/api/admin/found', admin, send(req => world.found(req.body || {})));
 app.post('/api/admin/buildings', admin, send(req => world.build(req.body || {})));
 app.post('/api/admin/buildings/restore', admin, send(req => world.restore((req.body || {}).building)));

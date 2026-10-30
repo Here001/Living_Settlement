@@ -8,6 +8,7 @@ import * as R from '../shared/rules.js';
 import { BUILDING_TYPES } from '../shared/catalog.js';
 import { CREATURES, petPrice } from '../shared/creatures.js';
 import { treasuryAdd } from './races.js';
+import { track } from './stats.js';
 
 export const CRIME_COOLDOWN = 10 * 60 * 1000;    // one crime every 10 real minutes
 export const JAIL_TIME = 10 * 60 * 1000;         // caught: 10 real minutes in the Jail
@@ -53,7 +54,7 @@ export class Actions {
       fare = out.fare + back.fare; mode = out.mode !== 'walk' ? out.mode : back.mode;
       ch.coins(c);
       if (fare > 0 && c.coins_base < fare) { origin = { ...(origin || {}), walk: true }; fare = 0; mode = 'walk'; } // can't afford it: walk
-      else if (fare > 0) { c.coins_base -= fare; treasuryAdd(ch, fare); await ch.saveCitizen(c); await bump(ch, c.id, { travel: fare }); }
+      else if (fare > 0) { c.coins_base -= fare; treasuryAdd(ch, fare); track(ch, 'travel', fare, c.id); await ch.saveCitizen(c); await bump(ch, c.id, { travel: fare }); }
       if (origin) delete origin.t;
     }
     await ch.q('update citizens set visit_from = case when visit_id = $2 and visit_until > $6 then visit_from else $6 end, visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5, visit_origin = $7 where id = $1',
@@ -154,14 +155,14 @@ export class Actions {
       await ch.q('update citizens set crime_at = $2 where id = $1', [c.id, now]);
       ch.coins(c);
       if (rand() < chance) {
-        c.coins_base += loot; ch.touch(c); await ch.saveCitizen(c); await bump(ch, c.id, { crimes: 1 }); await score(ch, c.id, 'crimes', 1);
+        c.coins_base += loot; ch.touch(c); await ch.saveCitizen(c); track(ch, victim ? 'crime:pickpocket' : 'crime:rob', loot, c.id); await bump(ch, c.id, { crimes: 1 }); await score(ch, c.id, 'crimes', 1);
         if (victim) { victim.coins_base -= loot; ch.touch(victim); await ch.saveCitizen(victim); await ch.event(`👛 Someone picked @${victim.handle}'s pocket and got away with ${fmt(loot)} coins!`, 'crime');
           await this.notify(ch, victim.id, 'pickpocket', `👛 Someone just picked your pocket and got away with ${fmt(loot)} coins. Keep your cash in a Bank to keep it safe.`); }
         else { treasuryAdd(ch, -loot); await ch.event(`🚨 ${nameOf(shop)} was robbed of ${fmt(loot)} coins! The thief got away.`, 'crime'); }
         return { ok: true, caught: false, loot, coins: c.coins_base, chance, band: odds.band, police: odds.dist };
       }
       // Caught: a fine (twice what they tried to take, at least 250, never more than they have), and jail if the colony has one.
-      const fine = Math.min(c.coins_base, Math.max(250, loot * 2)); c.coins_base -= fine; treasuryAdd(ch, fine); ch.touch(c); await ch.saveCitizen(c);
+      const fine = Math.min(c.coins_base, Math.max(250, loot * 2)); c.coins_base -= fine; treasuryAdd(ch, fine); track(ch, 'crime:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
       const jail = (await ch.q(`select * from buildings where type = 'jail' and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [px, py])).rows[0];
       const what = victim ? `pickpocketing @${victim.handle}` : `robbing ${nameOf(shop)}`;
       if (victim) await this.notify(ch, victim.id, 'pickpocket', `🚓 @${c.handle} picked your pocket but got caught by the police. Your ${fmt(loot)} coins have been refunded.`);
@@ -219,7 +220,7 @@ export class Actions {
       const { c } = await this.load(ch, id);
       if (c.pet) throw new HttpError(409, 'You already have a pet. Let it go first if you want a different one.');
       ch.coins(c); if (c.coins_base < price) throw new HttpError(400, `A ${CREATURES[kind].name} costs ${fmt(price)} coins. You have ${fmt(c.coins_base)} on you.`);
-      c.coins_base -= price; treasuryAdd(ch, price); ch.touch(c); await ch.saveCitizen(c);
+      c.coins_base -= price; treasuryAdd(ch, price); track(ch, 'pet', price, c.id); ch.touch(c); await ch.saveCitizen(c);
       const pet = { k: kind, n: n || CREATURES[kind].name }; await ch.q('update citizens set pet = $2 where id = $1', [c.id, JSON.stringify(pet)]); await bump(ch, c.id, { pets: 1 });
       await ch.event(`🐾 @${c.handle} adopted a ${CREATURES[kind].name.toLowerCase()} called ${pet.n}.`, 'pet'); // News flash
       return { ok: true, pet, price, coins: c.coins_base };

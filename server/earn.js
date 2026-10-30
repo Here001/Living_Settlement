@@ -8,6 +8,7 @@ import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
+import { track } from './stats.js';
 import { bump } from './achievements.js';
 import { earnBoost } from '../shared/events.js';
 
@@ -48,7 +49,7 @@ export class Earn {
     if (!noBoost) want = Math.round(want * earnBoost(await this.event(), stat) * ((await this.world.elections?.has('jobs')) ? 1.15 : 1)); // a colony event, or a mayor's Jobs drive, can boost earnings
     const t = Math.floor(R.treasuryOn(ch.meta, ch.today)), paid = Math.max(0, Math.min(want, t));
     if (paid) { c.coins_base += paid; treasuryAdd(ch, -paid); } ch.touch(c); await ch.saveCitizen(c);
-    if (stat) await bump(ch, c.id, { [stat]: 1, earned: paid });
+    if (stat) { await bump(ch, c.id, { [stat]: 1, earned: paid }); track(ch, 'earn:' + stat, paid, c.id); }
     return { paid, short: paid < want };
   }
   async save(ch, c, e) { await ch.q('update citizens set earn = $2 where id = $1', [c.id, JSON.stringify(e)]); }

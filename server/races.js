@@ -7,6 +7,7 @@
 // paid when it ends. Odds come from each creature's form and the weather at race time, and are fixed once shown.
 import crypto from 'node:crypto';
 import { pool } from './db.js';
+import { track } from './stats.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { CREATURES, CREATURE_IDS, oddsFor, runRace, fieldFor, hashStr } from '../shared/creatures.js';
@@ -103,7 +104,7 @@ export class Races {
         const share = bonus && stake ? Math.floor(bonus * b.amount / stake) : 0; fromBonus += share;
         const payout = Math.floor(b.amount * b.pays) + share;
         const c = (await ch.q('select * from citizens where id = $1 for update', [b.citizen_id])).rows[0];
-        if (c) { ch.coins(c); c.coins_base += payout; ch.touch(c); await ch.saveCitizen(c); paid += payout;
+        if (c) { ch.coins(c); c.coins_base += payout; ch.touch(c); await ch.saveCitizen(c); paid += payout; track(ch, 'race:win', payout, c.id);
           ch.pushes.push([[c.id], { kind: 'win', title: '🏁 Your creature won!', body: `${CREATURES[win].name} won Race #${this.label(trackId, n)}. You won ${fmt(payout)} coins.`, tag: 'race' }]); }
         await ch.q('update race_bets set payout = $2 where id = $1', [b.id, payout]);
       }
@@ -159,7 +160,7 @@ export class Races {
       if (blocked) { const why = await blocked(c); if (why) throw new HttpError(409, why); }
       if ((await ch.q('select 1 from race_bets where track_id = $1 and n = $2 and citizen_id = $3', [t.id, n, c.id])).rowCount) throw new HttpError(409, "You've already bet on this race.");
       ch.coins(c); if (c.coins_base < amount) throw new HttpError(400, c.coins_base ? `You only have ${fmt(c.coins_base)} coins.` : "You don't have any coins yet. Get a job first.");
-      c.coins_base -= amount; ch.touch(c); await ch.saveCitizen(c); treasuryAdd(ch, amount);
+      c.coins_base -= amount; ch.touch(c); await ch.saveCitizen(c); treasuryAdd(ch, amount); track(ch, 'race:bet', amount, c.id);
       const pays = r.odds[creature].pays;
       await ch.q('insert into race_bets (id, track_id, n, citizen_id, handle, creature, amount, pays, t) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)', [crypto.randomUUID(), t.id, n, c.id, c.handle, creature, amount, pays, Date.now()]);
       return { ok: true, track: t.id, n, no: this.label(t.id, n), creature, amount, pays, coins: c.coins_base };

@@ -5,6 +5,7 @@ import { pool } from './db.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { treasuryAdd } from './races.js';
+import { track } from './stats.js';
 
 export const LOTTERY_ANNOUNCE = 150 * 1000, MAX_TICKETS = 10;
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -40,7 +41,7 @@ export class Lottery {
       const have = Number((await ch.q('select count from lottery_tickets where lottery_id = $1 and citizen_id = $2', [l.id, c.id])).rows[0]?.count || 0);
       if (have + count > MAX_TICKETS) throw new HttpError(400, have ? `You have ${have} ticket${have === 1 ? '' : 's'}. The most anyone can hold is ${MAX_TICKETS}.` : `The most anyone can hold is ${MAX_TICKETS}.`);
       const cost = count * l.price; ch.coins(c); if (c.coins_base < cost) throw new HttpError(400, `${count} ticket${count === 1 ? '' : 's'} cost${count === 1 ? 's' : ''} ${fmt(cost)} coins. You have ${fmt(c.coins_base)}.`);
-      c.coins_base -= cost; ch.touch(c); await ch.saveCitizen(c);
+      c.coins_base -= cost; ch.touch(c); await ch.saveCitizen(c); track(ch, 'lottery:ticket', cost, c.id);
       await ch.q(`insert into lottery_tickets (lottery_id, citizen_id, handle, count) values ($1, $2, $3, $4)
         on conflict (lottery_id, citizen_id) do update set count = lottery_tickets.count + $4`, [l.id, c.id, c.handle, count]);
       ch.extraOps.push({ op: 'lottery', data: { id: l.id, stage: 'tickets' } });
@@ -69,7 +70,7 @@ export class Lottery {
       if (!total) { treasuryAdd(ch, l.bonus); await ch.event('🎟️ Nobody bought a lottery ticket, so there was no draw.', 'lottery'); ch.extraOps.push({ op: 'lottery', data: { id, stage: 'drawn' } }); return; }
       let pick = crypto.randomInt(total), win = tickets[0]; for (const t of tickets) { if ((pick -= t.count) < 0) { win = t; break; } }
       const c = (await ch.q('select * from citizens where id = $1 for update', [win.citizen_id])).rows[0];
-      if (c) { ch.coins(c); c.coins_base += prize; ch.touch(c); await ch.saveCitizen(c); ch.pushes.push([[c.id], { kind: 'win', title: '🎉 You won the lottery!', body: `${fmt(prize)} coins are yours.`, tag: 'lottery', urgency: 'high' }]); } else treasuryAdd(ch, prize);
+      if (c) { ch.coins(c); c.coins_base += prize; track(ch, 'lottery:win', prize, c.id); ch.touch(c); await ch.saveCitizen(c); ch.pushes.push([[c.id], { kind: 'win', title: '🎉 You won the lottery!', body: `${fmt(prize)} coins are yours.`, tag: 'lottery', urgency: 'high' }]); } else treasuryAdd(ch, prize);
       await ch.q('update lotteries set winner = $2, prize = $3 where id = $1', [id, win.handle, prize]);
       await ch.event(`🎉 @${win.handle} won the lottery: ${fmt(prize)} coins! (${tickets.length} colonist${tickets.length === 1 ? '' : 's'} bought ${fmt(total)} ticket${total === 1 ? '' : 's'}.)`, 'lottery');
       ch.extraOps.push({ op: 'lottery', data: { id, stage: 'drawn' } });

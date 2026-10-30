@@ -562,6 +562,25 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 .rrow{padding:5px 8px 5px 5px} .rrow .rthumb{width:36px;height:36px} .rrow .rtx{font-size:11.5px} .rrow .rtx b{font-size:13px} .rrow .rpays{font-size:14px}
 .lane{height:28px} .lane img{width:26px;height:26px}
 .x{width:26px;height:26px;font-size:15px}
+/* Developer stats */
+.stats .sh{font-size:13px;color:var(--muted);font-weight:600;margin:16px 0 6px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.stats .sh small{font-weight:400;font-size:11.5px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:6px}
+.kpi{border-radius:12px;padding:8px 10px;background:var(--glass-2,rgba(0,0,0,.04));border:1px solid var(--glass-line,rgba(0,0,0,.08));min-width:0}
+.kpi b{display:block;font-size:19px;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi span{font-size:11.5px;color:var(--muted)}
+.schart{max-width:100%;display:block;overflow:visible}
+.schart .bar{fill:var(--accent)} .schart .bar:hover{opacity:.75} .schart .ax{stroke:var(--muted);stroke-opacity:.35;stroke-width:1} .schart text{fill:var(--muted);font-size:10px}
+.stbl{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+.stbl th{font-weight:600;color:var(--muted);text-align:right;padding:4px 4px;font-size:11px;white-space:nowrap}
+.stbl th:first-child,.stbl td:first-child{text-align:left}
+.stbl td{padding:5px 4px;text-align:right;border-top:1px solid var(--glass-line,rgba(0,0,0,.08));white-space:nowrap}
+.stbl td:first-child{white-space:normal;min-width:120px}
+.stbl .hb{display:block;height:4px;border-radius:2px;background:var(--accent);margin-top:3px;min-width:2px}
+.stbl tr.muted td{color:var(--muted)}
+.funnel .fr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;padding:5px 0;border-top:1px solid var(--glass-line,rgba(0,0,0,.08));font-size:12.5px}
+.funnel .fr .hb{grid-column:1/-1;height:6px;border-radius:3px;background:var(--accent)}
+.funnel .fr .n{font-variant-numeric:tabular-nums;text-align:right} .funnel .fr .d{color:var(--warm,#A63E22);font-size:11.5px}
 </style>
 </head>
 <body>
@@ -682,7 +701,7 @@ function applyOp(o){
     for(const k of o.chunks) if(loading.has(k)){ if(!buffered.has(k)) buffered.set(k,[]); buffered.get(k).push(o); return; }
     if(o.op!=='citizen'&&o.op!=='citizenGone') return; }
   switch(o.op){
-  case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&!PLAYER_TABS.has(activeTab)&&activeTab!=='reports') renderPane(); break;
+  case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&!PLAYER_TABS.has(activeTab)&&activeTab!=='reports'&&activeTab!=='stats') renderPane(); break;
   case 'race': raceSoon(o.data); break;
   case 'lottery': lotterySoon(o.data); break;
   case 'building': { const old=S.buildings.get(o.data.id), n=o.data; putBuilding(n);
@@ -2555,6 +2574,7 @@ const ICONS={
   feed: I('<path d="M5 7h22v14H14l-6 5v-5H5z" fill="#9CC4E4"/><path d="M10 12h12M10 16h8"/>'),
   top: I('<path d="M10 6h12v6a6 6 0 0 1-12 0z" fill="#E2B13C"/><path d="M10 8H6a4 4 0 0 0 4 5M22 8h4a4 4 0 0 1-4 5M16 18v4M11 26h10M13 22h6v4h-6z" fill="none"/>'),
   reports: I('<path d="M8 27V5" fill="none"/><path d="M8 6h15l-3 5 3 5H8z" fill="#E8836B"/>'),
+  stats: I('<path d="M5 27h22" fill="none"/><rect x="7" y="16" width="4" height="11" fill="#9CC3DE"/><rect x="14" y="9" width="4" height="18" fill="#E8836B"/><rect x="21" y="13" width="4" height="14" fill="#F2C94C"/>'),
   chats: I('<path d="M5 8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-7l-5 4v-4a3 3 0 0 1-3-3z" fill="#A8D5BA"/><path d="M11 21h7l5 4v-4a3 3 0 0 0 3-3v-6" fill="none"/>'),
   races: I('<path d="M8 27V5"/><path d="M8 6h16l-3 5 3 5H8z" fill="#F4EDE0"/><path d="M8 6h4v5H8zM16 6h4v5h-4zM12 11h4v5h-4zM20 11h4v5h-4z" fill="#2B2621" stroke="none"/>'),
   people: I('<circle cx="12" cy="11" r="4" fill="#E8A07A"/><circle cx="21" cy="12" r="3.5" fill="#F2C9A8"/><path d="M4 25c0-5 4-8 8-8s8 3 8 8z" fill="#E8A07A"/><path d="M17 25c0-4 2-7 5-7s6 3 6 7z" fill="#F2C9A8"/>'),
@@ -2590,7 +2610,7 @@ async function rotateBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
 function setTool(t){ tool=t; ghost=null; roadStart=null; setTimeout(refreshTurn); const chip=$('toolchip');
   if(t.kind==='pan'){ chip.hidden=true; setMini(false); }
   else { chip.hidden=false; $('toolLabel').textContent = t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} onto a road` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
-  if(activeTab && !PLAYER_TABS.has(activeTab) && activeTab!=='reports') renderPane(); }
+  if(activeTab && !PLAYER_TABS.has(activeTab) && activeTab!=='reports' && activeTab!=='stats') renderPane(); }
 $('toolDone').onclick=()=>setTool({kind:'pan'});
 // Minimise: tuck the menus away while keeping the chosen tool, so the whole map is free to build on.
 let mini=false;
@@ -2615,7 +2635,7 @@ const PLAYER_TABS=new Set(['feed','people','races','top','chats']); // everyone'
 function syncFindChip(){ const b=$('findBtn'); if(b&&b.parentElement) b.parentElement.style.display=(Me&&Me.token&&Me.handle)?'none':''; }
 function buildToolbar(){ const row=$('toolsRow'); row.innerHTML=''; syncFindChip();
   const tabs=[{id:'feed',name:'Town Square'},{id:'me',name:'My card'},{id:'people',name:'Colonists'},{id:'races',name:'Races'}].concat(Me&&Me.token?[{id:'chats',name:'Chats'}]:[]);
-  const all = Store.canWrite ? tabs.concat([{id:'reports',name:'Reports'},{sep:true}],CATS) : tabs;
+  const all = Store.canWrite ? tabs.concat([{id:'reports',name:'Reports'},{id:'stats',name:'Stats'},{sep:true}],CATS) : tabs;
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
     const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(c.id==='me'?myCardOpen():activeTab===c.id),onclick:()=>c.id==='me'?openMyCard():openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='me') btn.dataset.me='1'; if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); if(c.id==='reports'&&typeof Reports!=='undefined'&&Reports.open) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Reports.open))})); row.append(btn); } }
 function openTab(name){ if(!name) document.body.classList.remove('pane-max'); activeTab=name; if((PLAYER_TABS.has(name)||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
@@ -2661,6 +2681,7 @@ function renderPane(){
     seg.classList.add('ts-tabs'); const ph=paneHead('Town Square'); ph.querySelector('.pane-title').after(Online.chip()); p.append(ph, seg); Online.load(); requestAnimationFrame(()=>{ const on=seg.querySelector('[aria-pressed="true"]'); if(on) on.scrollIntoView({block:'nearest',inline:'center'}); }); if(feedMode==='posts') p.append(composer()); if(feedMode==='posts'&&Store.canWrite) p.append(eventAdmin(), nameAdmin()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
   if(activeTab==='chats'){ Chats.render(p); return; }
   if(activeTab==='reports'){ Reports.render(p); return; }
+  if(activeTab==='stats'){ Stats.render(p); return; }
   if(activeTab==='top'){ activeTab='feed'; feedMode='top'; return renderPane(); }
   if(activeTab==='races'){ p.append(paneHead('Races')); const body=el('div',{class:'pane-body',id:'raceBody'}); p.append(body); renderRaces(true); return; }
   if(activeTab==='people'){ p.append(paneHead('Colonists')); const body=el('div',{class:'pane-body'});
@@ -3019,6 +3040,77 @@ function reportSheet({kind,id,handle,text}){ document.querySelector('.rsheet-bg'
     el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Cancel',onclick:()=>wrap.remove()}), send)));
   document.body.append(wrap); }
 // ---- The developer's Reports tab: read what was reported and dismiss it, delete the message, or mute the colonist ----
+// ---- Developer stats: daily players, coins in circulation, how players earn and spend, and where they drop off ----
+const FLOW_NAMES={ 'earn:shifts':['source','Extra shifts'], 'earn:gigs':['source','Deliveries'], 'earn:fish':['source','Fishing'], 'earn:forage':['source','Foraging'], 'earn:scavenged':['source','Scavenging'],
+  'earn:supplies':['source','Supply drops'], daily:['source','Daily rewards'], guide:['source','Getting started rewards'], 'crime:rob':['source','Shop robberies'], 'casino:win':['source','Casino winnings'],
+  'race:win':['source','Race winnings'], 'lottery:win':['source','Lottery prizes'], 'property:income':['source','Rent and profits (owners)'], 'bank:interest':['source','Savings interest'], 'mayor:pay':['source',"Mayor's pay"],
+  'car:sell':['source','Selling cars'], 'property:sell':['source','Selling buildings'], 'property:refund':['source','Refunds (building knocked down)'], 'dev:adjust':['source','Developer adjustments'],
+  travel:['sink','Cab fares and fuel'], 'bills:car':['sink','Car maintenance'], 'bills:property':['sink','Property upkeep'], 'car:buy':['sink','Buying cars'], 'property:buy':['sink','Buying buildings'],
+  pet:['sink','Pets'], 'crime:fine':['sink','Crime fines'], 'election:fee':['sink','Running for mayor'], 'casino:bet':['sink','Casino bets'], 'race:bet':['sink','Race bets'], 'lottery:ticket':['sink','Lottery tickets'],
+  gift:['move','Gifts'], 'crime:pickpocket':['move','Pickpocketing'] };
+const EARN_KEYS=['earn:shifts','earn:gigs','earn:fish','earn:forage','earn:scavenged','daily','earn:supplies','crime:rob','casino:win','race:win','lottery:win'];
+var Stats={ data:null, days:30, busy:false, at:0,
+  async load(){ if(!Store.canWrite||this.busy) return; this.busy=true; try{ this.data=await api('/api/admin/stats?days='+this.days); this.at=Date.now(); }catch(e){ toast(e.message); } this.busy=false; if(activeTab==='stats') this.renderNow(); },
+  renderNow(){ if(activeTab!=='stats') return; const p=$('pane'); if(p){ const keep=$('statsBody')?.scrollTop||0; p.innerHTML=''; this.render(p); const b=$('statsBody'); if(b) b.scrollTop=keep; } },
+  date(d){ return new Date(d*86400000).toLocaleDateString([], {month:'short', day:'numeric', timeZone:'UTC'}); },
+  kpi(v,label,title){ return el('div',{class:'kpi',title:title||''}, el('b',{text:v}), el('span',{text:label})); },
+  bars(vals, labels, tip){ // one series of vertical bars, with a 2px gap and the largest value marked, drawn at the panel's real width
+    const W=Math.max(260, ($('statsBody')?.clientWidth||600)-6), H=110, n=vals.length, max=Math.max(1,...vals), bw=W/n;
+    const ns='http://www.w3.org/2000/svg', svg=document.createElementNS(ns,'svg'); svg.setAttribute('viewBox',`0 -14 ${W} ${H+30}`); svg.setAttribute('width',W); svg.setAttribute('height',H+30); svg.setAttribute('class','schart'); svg.setAttribute('role','img');
+    const mk=(t,a)=>{ const e=document.createElementNS(ns,t); for(const k in a) e.setAttribute(k,a[k]); return e; };
+    svg.append(mk('line',{x1:0,x2:W,y1:H,y2:H,class:'ax'}));
+    vals.forEach((v,i)=>{ const h=v?Math.max(2,v/max*H):0, r=mk('rect',{x:i*bw+1,y:H-h,width:Math.max(1,bw-2),height:h,rx:Math.min(3,bw/4),class:'bar'}); const t=mk('title',{}); t.textContent=tip(i); r.append(t); svg.append(r);
+      const hit=mk('rect',{x:i*bw,y:-14,width:bw,height:H+14,fill:'transparent'}); const t2=mk('title',{}); t2.textContent=tip(i); hit.append(t2); svg.append(hit); });
+    const lab=(x,txt,anchor)=>{ const t=mk('text',{x,y:H+16,'text-anchor':anchor}); t.textContent=txt; svg.append(t); };
+    lab(0,labels[0],'start'); lab(W,labels[n-1],'end');
+    const top=mk('text',{x:0,y:-3,'text-anchor':'start'}); top.textContent=`max ${fmt(max)}`; svg.append(top);
+    return svg; },
+  flowTable(D, kind, wagesRow){
+    const rows=Object.entries(D.flows).filter(([k])=>(FLOW_NAMES[k]||['source'])[0]===kind).map(([k,f])=>({ k, name:(FLOW_NAMES[k]||[0,k])[1], ...f })).sort((a,b)=>b.range.coins-a.range.coins);
+    if(wagesRow) rows.unshift(wagesRow);
+    if(!rows.length) return el('p',{class:'hint',text:'Nothing yet.'});
+    const max=Math.max(1,...rows.map(r=>r.range.coins)), t=el('table',{class:'stbl'});
+    t.append(el('tr',null, el('th',{text:''}), el('th',{text:'Coins'}), el('th',{text:'Times'}), el('th',{text:'Players'}), el('th',{text:'Came back',title:'Of the players who did this, how many did it again on another day'})));
+    for(const r of rows){ const pl=r.range.players||0;
+      t.append(el('tr',{class:r.est?'muted':''}, el('td',null, r.name, el('span',{class:'hb',style:`width:${Math.max(1,r.range.coins/max*100)}%`})), el('td',{text:fmt(r.range.coins)}), el('td',{text:r.est?'–':fmt(r.range.n)}),
+        el('td',{text:pl?fmt(pl):'–'}), el('td',{text:pl?`${Math.round((r.range.again||0)/pl*100)}%`:'–'}))); }
+    return t; },
+  render(p){
+    const seg=el('div',{class:'seg',role:'tablist'}); for(const d of [7,30,90]) seg.append(el('button',{'aria-pressed':String(this.days===d),text:`${d} days`,onclick:()=>{ this.days=d; this.data=null; this.renderNow(); this.load(); }}));
+    p.append(paneHead('Stats',[seg])); const body=el('div',{class:'pane-body stats',id:'statsBody'}); p.append(body);
+    const D=this.data; if(!D){ body.append(el('p',{class:'hint',text:'Loading…'})); this.load(); return; }
+    if(Date.now()-this.at>60000) setTimeout(()=>this.load(),0);
+    const P=D.players, M=D.money, last=D.series[D.series.length-1];
+    body.append(el('p',{class:'hint',text:`Players are colonists who set a password. Tracking started ${this.date(D.since)}; earlier days show no activity. Updated ${ago(this.at)}.`}), el('button',{class:'linkb',text:'Refresh',onclick:()=>this.load()}));
+    body.append(el('div',{class:'sh'},'Players'), el('div',{class:'kpis'}, this.kpi(fmt(P.today),'played today'), this.kpi(fmt(P.week),'this week'), this.kpi(fmt(P.month),'last 30 days'),
+      this.kpi(fmt(P.signedUp),'signed up in all'), this.kpi(fmt(P.newWeek),'new this week',`${P.newToday} today`)));
+    body.append(el('div',{class:'sh'},'Daily players', el('small',{text:`last ${D.days} days`})), this.bars(D.series.map(s=>s.active), D.series.map(s=>this.date(s.day)), i=>`${this.date(D.series[i].day)}: ${D.series[i].active} played, ${D.series[i].new} new`));
+    const pc=M.playerCash+M.playerBank;
+    body.append(el('div',{class:'sh'},'Coins in circulation'), el('div',{class:'kpis'}, this.kpi(fmt(pc),"players' coins",'cash and savings'), this.kpi(fmt(M.playerCash),'players’ cash'), this.kpi(fmt(M.playerBank),'players’ savings'),
+      this.kpi(M.players?fmt(Math.round(pc/M.players)):'–','per player'), this.kpi(fmt(M.treasury),'treasury'), this.kpi(fmt(M.townCash+M.townBank),'townspeople')));
+    const ms=D.series.map(s=>s.money?s.money.playerCash+s.money.playerBank:0);
+    if(ms.some(Boolean)) body.append(el('div',{class:'sh'},"Players' coins over time", el('small',{text:'cash and savings, end of each day'})), this.bars(ms, D.series.map(s=>this.date(s.day)), i=>`${this.date(D.series[i].day)}: ${fmt(ms[i])} coins`));
+    const wages=M.playerWagesPerGameDay*48, wagesRow={ k:'wages', name:'Wages (now, a real day)', est:true, range:{ coins:wages, n:0, players:0 } };
+    const earned=Object.entries(D.flows).filter(([k])=>(FLOW_NAMES[k]||['source'])[0]==='source').reduce((s,[,f])=>s+f.range.coins,0), spent=Object.entries(D.flows).filter(([k])=>(FLOW_NAMES[k]||[])[0]==='sink').reduce((s,[,f])=>s+f.range.coins,0);
+    body.append(el('div',{class:'sh'},'Where coins come from', el('small',{text:`last ${D.days} days · ${fmt(earned)} in, besides wages`})), this.flowTable(D,'source',wagesRow),
+      el('div',{class:'sh'},'Where coins go', el('small',{text:`last ${D.days} days · ${fmt(spent)} out`})), this.flowTable(D,'sink'),
+      el('div',{class:'sh'},'Between players', el('small',{text:`last ${D.days} days`})), this.flowTable(D,'move'));
+    const used=EARN_KEYS.map(k=>[k,D.flows[k]]).filter(([,f])=>f), act7=Math.max(1,P.week);
+    if(used.length){ const t=el('table',{class:'stbl'}); t.append(el('tr',null, el('th',{text:'Earning method'}), el('th',{text:'Players (7 days)'}), el('th',{text:'Share of active'}), el('th',{text:'Today'})));
+      for(const [k,f] of used.sort((a,b)=>b[1].week.players-a[1].week.players)) t.append(el('tr',null, el('td',null, FLOW_NAMES[k][1], el('span',{class:'hb',style:`width:${Math.min(100,f.week.players/act7*100)}%`})), el('td',{text:fmt(f.week.players)}), el('td',{text:`${Math.round(f.week.players/act7*100)}%`}), el('td',{text:fmt(f.today.players)})));
+      body.append(el('div',{class:'sh'},'Which ways to earn players use', el('small',{text:`of ${fmt(P.week)} players this week`})), t); }
+    // Signing up is a sequence (each step loses some people); after that, each line is the share of players who got that far.
+    const F=D.funnel, top=Math.max(1,...F.map(f=>f[2])), signed=Math.max(1,(F.find(f=>f[0]==='signed')||[0,0,0])[2]), fbox=el('div',{class:'funnel'}); let prev=null;
+    for(const [id,name,n] of F){ const pre=['claimed','verified','signed'].includes(id);
+      const note=pre?(prev!=null&&prev>0&&n<prev?` −${Math.round((prev-n)/prev*100)}%`:''):` · ${Math.round(n/signed*100)}% of players`;
+      fbox.append(el('div',{class:'fr'}, el('span',{text:name}), el('span',{class:'n'}, fmt(n), el('span',{class:pre?'d':'hint',text:note})), el('span',{class:'hb',style:`width:${Math.max(0.5,n/top*100)}%`}))); prev=n; }
+    body.append(el('div',{class:'sh'},'Where players drop off', el('small',{text:'every player so far'})), fbox);
+    const L=D.lapsed||{}; body.append(el('div',{class:'sh'},'When players were last here'), el('div',{class:'kpis'}, ...[['today','today'],['1-2','1–2 days ago'],['3-7','3–7 days ago'],['8-30','8–30 days ago'],['30+','over 30 days'],['never','not since signing up']].map(([k,l])=>this.kpi(fmt(L[k]||0),l))));
+    if(D.cohorts.length){ const t=el('table',{class:'stbl'}), pct=(a,n,d)=>D.today<d?'…':n?`${Math.round(a/n*100)}%`:'–';
+      t.append(el('tr',null, el('th',{text:'Signed up'}), el('th',{text:'Players'}), el('th',{text:'Next day',title:'came back the day after signing up'}), el('th',{text:'Day 2–3'}), el('th',{text:'Day 6–8'})));
+      for(const c of D.cohorts) t.append(el('tr',null, el('td',{text:this.date(c.day)}), el('td',{text:fmt(c.n)}), el('td',{text:pct(c.d1,c.n,c.day+1)}), el('td',{text:pct(c.d3,c.n,c.day+2)}), el('td',{text:pct(c.d7,c.n,c.day+6)})));
+      body.append(el('div',{class:'sh'},'Do new players come back?', el('small',{text:'last 3 weeks'})), t); }
+  } };
 var Reports={ data:null, view:'open', open:undefined, t:0,
   async load(){ if(!Store.canWrite) return; try{ this.data=await api('/api/admin/reports?status='+this.view); }catch(e){ return; }
     const n=this.data.open; if(n!==this.open){ if(this.open!==undefined&&n>this.open&&activeTab!=='reports') toast(`⚑ New report: ${n} waiting`,'View',()=>openTab('reports')); this.open=n; buildToolbar(); }
@@ -4074,7 +4166,7 @@ function refreshHUD(){
     $('chips').hidden=false; }
   const mb=$('musicBtn'); mb.setAttribute('aria-pressed',String(Music.on)); $('musicIcon').textContent=Music.on?'❚❚':'▶'; $('musicLabel').textContent=Music.on?'Music on':'Music';
 }
-function refreshUI(){ refreshHUD(); if(sel) renderCard(); if(activeTab==='people') renderPeople(); else if(activeTab && !['feed','races','chats','top','reports'].includes(activeTab)) renderPane(); feedDirty=true; renderFeed(); }
+function refreshUI(){ refreshHUD(); if(sel) renderCard(); if(activeTab==='people') renderPeople(); else if(activeTab && !['feed','races','chats','top','reports','stats'].includes(activeTab)) renderPane(); feedDirty=true; renderFeed(); }
 setInterval(()=>{ if(!S.meta||document.hidden) return; const gm=gmNow(); $('clockTime').textContent=fmtClock(gm); },250);
 let cardTimer=null; const cardSoon=()=>{ clearTimeout(cardTimer); cardTimer=setTimeout(()=>renderCard(true),150); };
 // Every few seconds: refresh the line saying what the selected colonist is doing (and a building's construction progress).

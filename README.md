@@ -54,6 +54,19 @@ Open the site with `#builder` and enter your `ADMIN_TOKEN`. As the developer you
 - **Trigger disasters.** **Disasters** (fire, tornado, earthquake, flood, meteor) hit where you tap. Damaged buildings become ruins and their people lose that home or job until you **Rebuild** them. **Clear ruins** removes all rubble.
 - **Go full screen.** Use the buttons above the toolbar for full screen (F) and to hide the interface for streaming (H). On iPhone, use Share → Add to Home Screen to open the city full screen.
 
+
+### 📊 Stats (developer only)
+
+The **Stats** tab in the developer's toolbar shows how the colony is really being played, so prices and rewards can be tuned from real data (`server/stats.js`, `GET /api/admin/stats?days=7|30|90`). "Players" are colonists who have set a password.
+
+- **Players:** played today, this week, last 30 days, signed up in all, new this week, and a bar chart of daily players (hover a bar for that day's count and new sign-ups).
+- **Coins in circulation:** players' cash, savings, average per player, the treasury and townspeople's coins, and players' coins over time (saved every game day).
+- **Where coins come from / where coins go / between players:** every coin earned or spent, by kind (extra shifts, deliveries, fishing, daily rewards, casino, robberies, fares, car and building purchases, bills, fines, gifts, pickpocketing…), with coins, times, players and **Came back** (how many who tried it did it again on another day). Wages are shown as what players' jobs pay in a real day right now.
+- **Which ways to earn players use:** the share of this week's players who used each way to earn.
+- **Where players drop off:** started claiming → proved it → set a password, then the share of players who got a job, collected a daily reward, earned on the side, went somewhere, used the Bank, came back another day, bought a car or a building.
+- **When players were last here**, and **Do new players come back?** (by sign-up day: the next day, days 2–3 and days 6–8).
+- Data is kept in `activity` (who played each real day), `flows` and `flow_players` (coins by kind and day) and `snapshots` (money each day). Tracking starts from this version, so earlier days are empty.
+
 ## Adjusting a colonist's coins
 
 In developer mode, every colonist's card has a **Coins** box. **Add** gives them coins out of the treasury; **Take away** returns coins to the treasury. The colony's total stays the same.

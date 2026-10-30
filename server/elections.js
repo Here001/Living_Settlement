@@ -8,6 +8,7 @@ import * as R from '../shared/rules.js';
 import { POLICIES, RUN_FEE, MAYOR_PAY, PITCH_MAX } from '../shared/elections.js';
 import { weekOf, weekStart } from './leaderboards.js';
 import { treasuryAdd } from './races.js';
+import { track } from './stats.js';
 
 const fmt = n => Math.round(n).toLocaleString('en-US');
 
@@ -46,7 +47,7 @@ export class Elections {
       if (Number(c.jailed_until || 0) > Date.now()) throw new HttpError(409, "You can't run for mayor from jail.");
       if ((await ch.q('select 1 from candidates where week = $1 and citizen_id = $2', [w, id])).rowCount) throw new HttpError(409, "You're already running this week.");
       ch.coins(c); if (c.coins_base < RUN_FEE) throw new HttpError(400, `Running for mayor costs ${fmt(RUN_FEE)} coins (cash). You have ${fmt(c.coins_base)} on you.`);
-      c.coins_base -= RUN_FEE; treasuryAdd(ch, RUN_FEE); ch.touch(c); await ch.saveCitizen(c);
+      c.coins_base -= RUN_FEE; treasuryAdd(ch, RUN_FEE); track(ch, 'election:fee', RUN_FEE, c.id); ch.touch(c); await ch.saveCitizen(c);
       await ch.q('insert into candidates (week, citizen_id, handle, policy, pitch, t) values ($1, $2, $3, $4, $5, $6)', [w, id, c.handle, policy, pitch, Date.now()]);
       await ch.event(`🗳️ @${c.handle} is running for mayor, pledging ${POLICIES[policy].icon} ${POLICIES[policy].name}.`, 'election');
       return { ok: true, coins: c.coins_base };

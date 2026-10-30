@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { pool, worldTx } from './db.js';
+import { flushFlows, track } from './stats.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 import { playRound, GAMES, MAX_BET, validRoulette } from '../shared/casino.js';
@@ -271,6 +272,7 @@ export class World {
       if (!row && !allowUnfounded) throw new HttpError(409, 'Found the colony first.');
       const ch = new Change(db, row ? row.data : null);
       const r = await changeScope.run(ch, () => fn(ch));
+      if (ch.flows) await flushFlows(db, ch.flows); // developer stats: coins earned and spent
       if (ch.meta) await db.query('insert into meta (id, data) values (1, $1) on conflict (id) do update set data = $1', [ch.meta]);
       const ops = await this.collectOps(db, ch);
       return { r, ops, pushes: ch.pushes };
@@ -696,7 +698,7 @@ export class World {
       const until = Date.now() + 10 * 60 * 1000;
       await ch.q('update citizens set visit_from = case when visit_id = $2 and visit_until > $6 then visit_from else $6 end, visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5 where id = $1', [c.id, cas.id, until, cas.cx, cas.cy, Date.now()]);
       ch.citizens.set(c.id, [...new Set([...(ch.citizens.get(c.id) || []), R.chunkKey(cas.cx, cas.cy)])]);
-      const won = round.payout - bet;
+      const won = round.payout - bet; track(ch, 'casino:bet', bet, c.id); if (round.payout > 0) track(ch, 'casino:win', round.payout, c.id);
       await score(ch, c.id, 'casino_net', won);
       await bump(ch, c.id, won > 0 ? { casino_plays: 1, casino_wins: 1 } : { casino_plays: 1 }, won > 0 ? { casino_best: round.payout } : {});
       if (won >= 200 || (round.payout >= bet * 20 && won >= 50)) await ch.event(`@${c.handle} won ${fmt(round.payout)} coins on ${GAMES[game].name.toLowerCase()} at the ${cas.name || 'casino'}!`, 'casino');

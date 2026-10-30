@@ -5,6 +5,7 @@ import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES, carPaid } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
+import { track, snapshot } from './stats.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 import { MAYOR_PAY } from '../shared/elections.js';
@@ -65,7 +66,7 @@ export class Economy {
       const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
       const st = this.dailyState(c); if (st.claimed) throw new HttpError(409, `You've collected today's reward. Come back after midnight UTC for day ${st.streak + 1}.`);
       const streak = st.streak + 1, want = Math.round(dailyRewardFor(streak) * await this.dailyBoost()), t = Math.floor(R.treasuryOn(ch.meta, ch.today)), paid = Math.max(0, Math.min(want, t));
-      ch.coins(c); c.coins_base += paid; if (paid) treasuryAdd(ch, -paid);
+      ch.coins(c); c.coins_base += paid; if (paid) treasuryAdd(ch, -paid); track(ch, 'daily', paid, c.id);
       ch.touch(c); await ch.saveCitizen(c);
       await ch.q('update citizens set daily_day = $2, daily_streak = $3, daily_best = greatest(daily_best, $3) where id = $1', [c.id, realDay(), streak]);
       if (DAILY_MILESTONES.has(streak)) await ch.event(`🔥 @${c.handle} has come back ${streak} days in a row.`, 'streak');
@@ -112,7 +113,7 @@ export class Economy {
       ch.coins(c);
       if (amount < 0 && c.coins_base < -amount) throw new HttpError(400, `@${c.handle} only has ${fmt(c.coins_base)} coins on them.`);
       if (amount > 0 && fromTreasury) { const t = R.treasuryOn(ch.meta, ch.today); if (t < amount) throw new HttpError(400, `The treasury only has ${fmt(t)} coins.`); }
-      c.coins_base += amount; if (fromTreasury) treasuryAdd(ch, -amount); ch.touch(c); await ch.saveCitizen(c);
+      c.coins_base += amount; if (fromTreasury) treasuryAdd(ch, -amount); track(ch, 'dev:adjust', amount, c.id); ch.touch(c); await ch.saveCitizen(c);
       return { ok: true, coins: c.coins_base, treasury: R.treasuryOn(ch.meta, ch.today) };
     });
   }
@@ -141,7 +142,7 @@ export class Economy {
       // Gifts are paid in cash, from what you have on you (savings stay in the bank until you withdraw them at a Bank).
       if (c.coins_base < amount) throw new HttpError(400, `You have ${fmt(c.coins_base)} coins on you. Gifts are paid in cash${bank ? ': withdraw some at a Bank first' : ''}.`);
       const fromPocket = amount, fromBank = 0;
-      ch.coins(r); c.coins_base -= fromPocket; r.coins_base += amount;
+      ch.coins(r); c.coins_base -= fromPocket; r.coins_base += amount; track(ch, 'gift', amount, c.id);
       ch.touch(c); ch.touch(r); await ch.saveCitizen(c); await ch.saveCitizen(r);
       if (fromBank) await ch.q('update citizens set bank = bank - $2 where id = $1', [c.id, fromBank]);
       await ch.q('update citizens set gift_day = $2, gift_sent = $3 where id = $1', [c.id, today, sent + amount]);
@@ -160,7 +161,7 @@ export class Economy {
       const cars = Array.isArray(c.cars) ? c.cars : [];
       if (cars.length >= MAX_CARS) throw new HttpError(409, `Your garage holds ${MAX_CARS} cars. Sell one first.`);
       ch.coins(c); if (c.coins_base < M.price) throw new HttpError(400, `The ${M.name} costs ${fmt(M.price)} coins. You have ${fmt(c.coins_base)} on you.`);
-      c.coins_base -= M.price; treasuryAdd(ch, M.price);
+      c.coins_base -= M.price; treasuryAdd(ch, M.price); track(ch, 'car:buy', M.price, c.id);
       const car = { id: crypto.randomUUID().slice(0, 8), m: model, col: color, at: Date.now(), paid: M.price }; cars.push(car); await bump(ch, c.id, { cars_bought: 1 });
       await ch.q('update citizens set cars = $2, car_active = coalesce(car_active, $3) where id = $1', [c.id, JSON.stringify(cars), car.id]);
       ch.touch(c); await ch.saveCitizen(c);
@@ -171,7 +172,7 @@ export class Economy {
     return this.world.change(async ch => {
       const c = await this.lockMe(ch, id); const cars = Array.isArray(c.cars) ? c.cars : [], car = cars.find(x => x.id === carId);
       if (!car) throw new HttpError(404, "That car isn't in your garage.");
-      const back = Math.floor(carPaid(car) * CAR_RESALE); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back);
+      const back = Math.floor(carPaid(car) * CAR_RESALE); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'car:sell', back, c.id);
       const left = cars.filter(x => x.id !== carId), active = c.car_active === carId ? (left[0]?.id ?? null) : c.car_active;
       await ch.q('update citizens set cars = $2, car_active = $3 where id = $1', [c.id, left.length ? JSON.stringify(left) : null, active]);
       ch.touch(c); await ch.saveCitizen(c); return { ok: true, back, coins: c.coins_base };
@@ -237,7 +238,7 @@ export class Economy {
       if (n >= MAX_PROPERTIES) throw new HttpError(409, `You can own up to ${MAX_PROPERTIES} buildings. Sell one first.`);
       const price = priceOf(b.type); ch.coins(c);
       if (c.coins_base < price) throw new HttpError(400, `It costs ${fmt(price)} coins. You have ${fmt(c.coins_base)} on you${c.bank ? ' (withdraw some at a Bank first)' : ''}.`);
-      c.coins_base -= price; treasuryAdd(ch, price); ch.touch(c); await ch.saveCitizen(c);
+      c.coins_base -= price; treasuryAdd(ch, price); track(ch, 'property:buy', price, c.id); ch.touch(c); await ch.saveCitizen(c);
       await ch.q('update buildings set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [b.id, c.id, c.handle, Date.now(), price]); ch.buildings.add(b.id); await bump(ch, c.id, { bought: 1 });
       return { ok: true, price, coins: c.coins_base, income: dailyIncome(b).net };
     });
@@ -247,7 +248,7 @@ export class Economy {
       const c = await this.lockMe(ch, id);
       const b = (await ch.q('select * from buildings where id = $1 and owner_id = $2 for update', [String(buildingId), c.id])).rows[0];
       if (!b) throw new HttpError(404, "You don't own that building.");
-      const back = Math.floor((b.price || priceOf(b.type)) * PROPERTY_RESALE); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); ch.touch(c); await ch.saveCitizen(c);
+      const back = Math.floor((b.price || priceOf(b.type)) * PROPERTY_RESALE); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'property:sell', back, c.id); ch.touch(c); await ch.saveCitizen(c);
       await ch.q('update buildings set owner_id = null, owner_handle = null, bought_at = null, price = null where id = $1', [b.id]); ch.buildings.add(b.id);
       return { ok: true, back, coins: c.coins_base };
     });
@@ -256,7 +257,7 @@ export class Economy {
   async refundDemolished(ch, b) {
     if (!b.owner_id) return;
     const c = (await ch.q('select * from citizens where id = $1 for update', [b.owner_id])).rows[0]; if (!c) return;
-    const back = b.price || priceOf(b.type); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); ch.touch(c); await ch.saveCitizen(c);
+    const back = b.price || priceOf(b.type); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'property:refund', back, c.id); ch.touch(c); await ch.saveCitizen(c);
   }
 
   // ---------- once a game week: bills ----------
@@ -276,7 +277,7 @@ export class Economy {
       if (!due) continue;
       ch.coins(c); const fromCash = Math.min(Math.max(0, c.coins_base), due), fromBank = Math.min(Number(c.bank || 0), due - fromCash), paid = fromCash + fromBank;
       c.coins_base -= fromCash; ch.touch(c); await ch.saveCitizen(c); if (fromBank) await ch.q('update citizens set bank = bank - $2 where id = $1', [id, fromBank]);
-      treasuryAdd(ch, paid); total += paid; billed++;
+      treasuryAdd(ch, paid); total += paid; billed++; if (carFee) track(ch, 'bills:car', Math.min(paid, carFee), id); if (paid > carFee) track(ch, 'bills:property', paid - carFee, id);
       const parts = [carFee ? `🚗 car upkeep ${fmt(carFee)}` : '', propFee ? `🏠 property upkeep ${fmt(propFee)}` : ''].filter(Boolean).join(' + ');
       const how = fromBank ? (fromCash ? `${fmt(fromCash)} from your cash and ${fmt(fromBank)} from the bank` : 'from the bank') : 'from your cash';
       await this.world.actions?.notify(ch, id, 'bills', paid < due ? `🧾 Weekly bills: ${parts} = ${fmt(due)} coins. You could only pay ${fmt(paid)} (${how}).` : `🧾 Weekly bills: ${parts} = ${fmt(due)} coins, paid ${how}.`);
@@ -304,14 +305,15 @@ export class Economy {
         if (!inc && !intr) continue;
         ch.coins(c); c.coins_base += inc; ch.touch(c); await ch.saveCitizen(c);
         if (intr) await ch.q('update citizens set bank = bank + $2 where id = $1', [c.id, intr]);
-        rent += inc; interest += intr; if (inc) owners++;
+        rent += inc; interest += intr; if (inc) { owners++; track(ch, 'property:income', inc, c.id); } if (intr) track(ch, 'bank:interest', intr, c.id);
       }
     }
     if (rent || interest) treasuryAdd(ch, -(rent + interest));
     // The mayor's salary, in cash, while the treasury can pay it.
     if (mayor) { const pay = Math.min(MAYOR_PAY * days, Math.floor(R.treasuryOn(ch.meta, ch.today))); const m = pay > 0 && (await ch.q('select * from citizens where id = $1 for update', [mayor.id])).rows[0];
-      if (m) { ch.coins(m); m.coins_base += pay; treasuryAdd(ch, -pay); ch.touch(m); await ch.saveCitizen(m); } }
+      if (m) { ch.coins(m); m.coins_base += pay; treasuryAdd(ch, -pay); track(ch, 'mayor:pay', pay, m.id); ch.touch(m); await ch.saveCitizen(m); } }
     if (rent) await ch.event(`🏠 ${owners} building owner${owners === 1 ? '' : 's'} collected ${fmt(rent)} coins in rent and profits (the treasury kept its ${Math.round(TREASURY_CUT * 100)}%).`, 'property');
+    await snapshot(ch.db, ch.meta); // developer stats: how many coins exist, saved through each real day
     return { rent, interest };
   }
 }

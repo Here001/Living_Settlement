@@ -166,6 +166,7 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .ts-tabs::-webkit-scrollbar{display:none}
 .ts-tabs button{flex:1 0 auto;white-space:nowrap}
 .nf-lead{margin:6px 0 10px}
+.gohere{align-items:center}
 .mayorbox{margin:6px 0 12px;padding:12px;border-radius:16px;border:1.6px solid color-mix(in srgb,#E2B13C 60%,transparent);background:color-mix(in srgb,#E2B13C 10%,transparent)}
 .mayorbox .mrow{display:flex;gap:12px;align-items:center}.mayorbox .mk{font-size:13px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .nf-at.big{font-size:19px}.mpol{display:flex;flex-direction:column;gap:2px;margin-top:10px;font-size:14px}.mpol span{color:var(--muted)}
@@ -609,7 +610,7 @@ import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DIS
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
-import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles } from '/shared/rules.js';
+import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
@@ -3234,25 +3235,27 @@ function blackjackTable(c,info){ const t=el('div',{class:'bj'}), h=casino.bj;
   return t; }
 // Rocket: the multiplier climbs from 1× after a 3-second countdown; cash out before it blows up.
 var Rocket={ g:null, skew:0, timer:null, polling:false, auto:'',
-  track(g){ this.g=g; this.skew=(g.now||Date.now())-Date.now(); clearInterval(this.timer); if(!g.done) this.timer=setInterval(()=>this.tick(),100); },
+  track(g){ this.g=g; this.skew=(g.now||Date.now())-Date.now(); this.frozen=null; cancelAnimationFrame(this.timer); if(!g.done){ const loop=()=>{ if(!this.g||this.g.done) return; this.tick(); this.timer=requestAnimationFrame(loop); }; this.timer=requestAnimationFrame(loop); } }, // smooth: every frame
   mult(){ const g=this.g; if(!g) return 1; return rocketAt((Date.now()+this.skew-g.start)/1000); },
-  tick(){ const g=this.g; if(!g||g.done){ clearInterval(this.timer); return; } const now=Date.now()+this.skew, m=this.mult();
+  tick(){ const g=this.g; if(!g||g.done){ cancelAnimationFrame(this.timer); return; } if(this.frozen) return; const now=Date.now()+this.skew, m=this.mult();
     const mEl=$('rkMult'), bEl=$('rkCash'), sh=$('rkShip');
     if(mEl) mEl.textContent=now<g.start?`Lift-off in ${Math.ceil((g.start-now)/1000)}…`:`${m.toFixed(2)}×`;
     if(bEl) bEl.textContent=now<g.start?'Get ready…':`Cash out ${fmt(Math.floor(g.bet*m))}`, bEl&&(bEl.disabled=now<g.start);
     if(sh) sh.style.transform=`translateY(${-Math.min(120,Math.log(m)*42)}px) rotate(${Math.sin(now/90)*2}deg)`;
     if(now>=g.start&&!this.polling&&(!this.lastPoll||Date.now()-this.lastPoll>450)){ this.lastPoll=Date.now(); this.polling=true;
       api('/api/me/casino/rocket',{method:'POST',body:{action:'status'}}).then(r=>{ if(r.done) this.finish(r); }).catch(()=>{}).finally(()=>{ this.polling=false; }); } },
-  finish(r){ this.g=r; clearInterval(this.timer); if(typeof r.coins==='number'){ casino.info={...casino.info,coins:r.coins}; myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } else loadMyMoney().then(refreshHUD); renderCard(true); },
+  finish(r){ this.g=r; this.frozen=null; cancelAnimationFrame(this.timer); if(typeof r.coins==='number'){ casino.info={...casino.info,coins:r.coins}; myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } else loadMyMoney().then(refreshHUD); renderCard(true); },
   async launch(c){ if(casino.busy) return; casino.busy=true; renderCard(true);
     try{ const r=await api('/api/me/casino/rocket',{method:'POST',body:{action:'launch',bet:Math.floor(Number(casino.bet)),auto:this.auto?Number(this.auto):null}}); this.track(r);
       if(typeof r.coins==='number'){ casino.info={...casino.info,coins:r.coins}; myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } }
     catch(e){ toast(e.message); } casino.busy=false; renderCard(true); },
-  async cashout(){ const b=$('rkCash'); if(b) b.disabled=true; try{ const r=await api('/api/me/casino/rocket',{method:'POST',body:{action:'cashout'}}); this.finish(r); }catch(e){ toast(e.message); if(b) b.disabled=false; } },
+  async cashout(){ const g=this.g; if(!g||g.done||this.frozen) return; const at=Date.now()+this.skew; if(at<g.start) return;
+    const m=this.mult(); this.frozen=m; const b=$('rkCash'), mEl=$('rkMult'); if(b){ b.disabled=true; b.textContent=`Cashing out at ${m.toFixed(2)}×…`; } if(mEl) mEl.textContent=`${m.toFixed(2)}×`; // freeze what they saw
+    try{ const r=await api('/api/me/casino/rocket',{method:'POST',body:{action:'cashout',at}}); this.finish(r); }catch(e){ this.frozen=null; toast(e.message); if(b) b.disabled=false; } },
   table(c,info){ const t=el('div',{class:'rk'}), g=this.g;
     if(g&&!g.done){ t.append(el('div',{class:'rksky'}, el('span',{class:'rkship',id:'rkShip',text:'🚀'}), el('b',{class:'rkmult',id:'rkMult',text:'…'})),
         el('p',{class:'hint',text:`Bet ${fmt(g.bet)}${g.auto?` · cashing out automatically at ${g.auto}×`:''}.`}),
-        el('div',{class:'row-actions'}, el('button',{class:'btn primary rkcash',id:'rkCash',text:'Get ready…',onclick:()=>this.cashout()})));
+        el('div',{class:'row-actions'}, el('button',{class:'btn primary rkcash',id:'rkCash',text:'Get ready…',onpointerdown:e=>{ e.preventDefault(); this.cashout(); },onclick:()=>this.cashout()})));
       requestAnimationFrame(()=>this.tick()); return t; }
     if(g&&g.done){ const won=g.payout>0; t.append(el('div',{class:'cresult '+(won?'win':'lose')}, el('span',{class:'roll',text:won?'🪂':'💥'}),
         el('b',{text:won?`Cashed out at ${g.cashed}×: you get ${fmt(g.payout)} coins!`:`It blew up at ${g.crash}×. You lost ${fmt(g.bet)}.`}), won?el('span',{class:'hint',text:`It would have blown up at ${g.crash}×.`}):'')); }
@@ -3300,8 +3303,8 @@ const BUYABLE=new Set(['housing','shops','offices','industry']); // what players
 function actionTabs(c){ const wrap=el('div',null); const gb=GuideUI.box(); if(gb) wrap.append(gb); const dr=Daily.row(); if(dr) wrap.append(dr);
   if(!PushUI.st&&!PushUI.busy) PushUI.load().then(()=>{ if(sel&&sel.kind==='c') renderCard(true); });
   wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}), el('button',{class:'btn sm',text:'⚙️ Settings',onclick:()=>PushUI.sheet()}))); const row=el('div',{class:'acttabs',role:'tablist'});
-  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; if(id!=='casino') document.body.classList.remove('card-max'); renderCard(true); }}));
-  if(actTab==='bank') actTab='wallet'; if(actTab==='pet') actTab='earn'; const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>Badges.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
+  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['crime','Crime'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; if(id!=='casino') document.body.classList.remove('card-max'); renderCard(true); }}));
+  if(actTab==='bank') actTab='wallet'; if(actTab==='pet'||actTab==='casino'||actTab==='out') actTab='earn'; const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>Badges.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
 // ---- Home (rent or move, and the buildings you own), Bank, Cars ----
 const Money={ id:null, at:0, homes:null, props:null, bank:null, busy:false };
@@ -3556,11 +3559,13 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(forSale && !Store.canWrite && b.done!==false && !b.ruin && Me&&Me.token&&Me.handle){
       if(!b.owner) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(price)}`,onclick:()=>toast(`Buy ${b.name||t.name} for ${fmt(price)} coins? You'll collect 80% of its rent or profit every game day.`,'Buy',async()=>{ const r=await meAction('/api/me/properties/buy',{buildingId:b.id},r=>`It's yours! About ${fmt(r.income)} coins a day.`); if(r){ b.owner=Me.handle; Money.at=0; renderCard(true); } })})));
       else if(b.owner.toLowerCase()===Me.handle.toLowerCase()) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
+    if(!Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin && canGoTo(b.type)) card.append(goHereRow(b));
     if(isBank(b.type) && b.done!==false && !b.ruin && !Store.canWrite) card.append(BankAcct.section(b));
     if(b.type==='petstore' && b.done!==false && !b.ruin && !Store.canWrite) card.append(PetStore.section(b));
-    if(b.type==='casino' && b.done!==false && !b.ruin && !Store.canWrite) card.append(el('div',{class:'row-actions'}, Me&&Me.token&&Me.handle
-      ? el('button',{class:'btn primary',text:'Play here',onclick:()=>{ casino={ ...(casino||{ game:'coin', pick:'heads', bet:10, last:null }), id:null, open:true }; openMyTab('casino','.casino'); }})
-      : el('span',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'})));
+    if(b.type==='casino' && b.done!==false && !b.ruin && !Store.canWrite){ // the games are played right here, on the casino's own card
+      if(!(Me&&Me.token&&Me.handle)) card.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'}));
+      else if(casino&&casino.open&&casino.id===b.id) card.append(casinoPanel({id:b.id}));
+      else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎰 Play here',onclick:()=>{ casino={ ...(casino||{ game:'coin', pick:'heads', bet:10, last:null }), id:b.id, open:true, info:null, at:0 }; loadCasino({id:b.id}); casino.open=true; renderCard(true); }}))); }
     if(Store.canWrite) card.append(el('div',{class:'row-actions'}, b.done===false?el('button',{class:'btn primary',text:'Finish now',onclick:async()=>{ try{ await api(`/api/admin/buildings/${encodeURIComponent(b.id)}/finish`,{method:'POST'}); toast(`${b.name||t.name} is finished`); }catch(e){ toast(e.message); } }}):null,
       el('button',{class:'btn',text:'Move',onclick:()=>{ setTool({kind:'move',id:b.id,rot:b.rot||0}); }}), el('button',{class:'btn',text:'⟲ Turn',onclick:()=>rotateBuilding(b.id)}), el('button',{class:'btn',text:'One more',onclick:()=>{ setTool({kind:'place',type:b.type}); }}), el('button',{class:'btn danger',text:'Demolish',onclick:()=>removeBuilding(b.id)})));
   }
@@ -3770,7 +3775,8 @@ var GuideUI={ data:null, at:0, busy:false, open:true,
   async hide(){ try{ await api('/api/me/guide/hide',{method:'POST',body:{hidden:true}}); }catch(e){} if(this.data) this.data.hidden=true; renderCard(true); toast('Guide hidden. You can bring it back from ⚙️ Settings on your card.'); },
   async unhide(){ try{ await api('/api/me/guide/hide',{method:'POST',body:{hidden:false}}); }catch(e){} this.at=0; this.load(); },
   show(id){ if(id==='daily'){ Daily.info?Daily.sheet():Daily.load(); return; }
-    if(id==='job'||id==='earn'||id==='out'){ actTab={job:'work',earn:'earn',out:'out'}[id]; renderCard(true); requestAnimationFrame(()=>document.querySelector('#card .acttabs')?.scrollIntoView({block:'start',behavior:'smooth'})); return; }
+    if(id==='out'){ closeCard(); openTab(null); toast('Tap any building on the map, then press 🚶 Go here on its card.'); return; }
+    if(id==='job'||id==='earn'){ actTab={job:'work',earn:'earn'}[id]; renderCard(true); requestAnimationFrame(()=>document.querySelector('#card .acttabs')?.scrollIntoView({block:'start',behavior:'smooth'})); return; }
     if(id==='bank'){ api('/api/me/bank').then(B=>{ const nb=nearestBank(null)||B.nearest; if(nb) goToBuilding(nb); else toast("The colony doesn't have a Bank yet. Check back soon."); }).catch(e=>toast(e.message)); return; }
     if(id==='post'){ feedMode='posts'; openTab('feed'); setTimeout(()=>{ const t=document.querySelector('.composer textarea'); if(t) t.focus(); },120); } },
   box(){ const G=this.get(); if(!G||G.finished||G.hidden) return null;
@@ -3786,12 +3792,24 @@ var GuideUI={ data:null, at:0, busy:false, open:true,
       el('button',{class:'linkb g-hide',text:'Hide the guide',onclick:()=>this.hide()}));
     return wrap; } };
 
+
+// "Go here" on a building's card: how far it is from your colonist right now, and a button that sends them there with
+// the camera locked on them until they arrive.
+function myCitizen(){ const h=Me&&Me.handle; if(!h) return null; const c=[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===h.toLowerCase()); return c||PetStore.get(); }
+function goHereRow(b){ const me=myCitizen(), [w,d]=T(b).size, bx=b.x+w/2, by=b.y+d/2;
+  const st=me&&citizenAt(me,gmNow()), from=st?[st.x,st.y]:me&&me.home?[me.home[2]+0.5,me.home[3]+0.5]:null;
+  const dist=from?Math.round(Math.abs(from[0]-bx)+Math.abs(from[1]-by)):null, mine=me&&me.home&&me.home[0]===b.id, here=st&&st.bid===b.id;
+  const name=b.name||T(b).name;
+  return el('div',{class:'row-actions gohere'}, here?el('span',{class:'badge ok',text:'📍 You’re here'}):
+    el('button',{class:'btn primary',text:mine?'🏠 Go home':'🚶 Go here',onclick:async()=>{ try{ await api('/api/me/visit',{method:'POST',body:{buildingId:b.id}}); toast(mine?'Heading home.':`On your way to ${name}.`); Watch.start(0, mine?'Heading home':`Going to ${name}`, b.id); }catch(e){ toast(e.message); } }}),
+    dist!=null&&!here?el('span',{class:'hint',text:dist<=1?'right next to you':`${miles(dist)} away`}):''); }
+
 /* ---------------- watching your own colonist ---------------- */
 // "Watch me go" (a delivery) and "Follow me" (any time): the card and panels get out of the way and the camera stays on
 // your colonist, walking or driving. A small bar at the top says so; Stop ends it, and dragging the map pauses it
 // ("Back to me" picks it up again). A delivery watch ends by itself when the delivery is done.
 const Watch={ id:null, until:0, label:'', bar:null, done:false,
-  async start(until, label){ const h=myHandle(); if(!h){ toast('Sign in to your colonist first (tap "Find me").'); return; }
+  async start(until, label, target){ this.target=target||null; this.started=Date.now(); const h=myHandle(); if(!h){ toast('Sign in to your colonist first (tap "Find me").'); return; }
     let c=[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===h.toLowerCase());
     if(!c){ const d=await loadDetail(h); if(!d) return; c=normC(d); pinned=c.id; S.citizens.set(c.id,c); }
     pinned=c.id; this.id=c.id; this.until=until||0; this.label=label||'Following you'; this.done=false;
@@ -3804,7 +3822,10 @@ const Watch={ id:null, until:0, label:'', bar:null, done:false,
     const on=follow===this.id; b.append(el('span',{class:'wdot'+(on?' on':'')}), el('span',{class:'wtxt',text:on?`👀 ${this.label}`:'Camera moved'}),
       this.until?el('span',{class:'cdown','data-until':this.until,text:''}):'',
       on?'':el('button',{class:'btn sm',text:'Back to me',onclick:()=>this.resume()}), el('button',{class:'btn sm',text:'Stop',onclick:()=>this.stop()})); },
-  tick(){ if(!this.id) return; if(this.bar){ const shown=this.bar.querySelector('.wdot.on')!=null; if(shown!==(follow===this.id)) this.show(); const cd=this.bar.querySelector('.cdown'); if(cd&&this.until){ const ms=Math.max(0,this.until-(Date.now()+skew)); cd.textContent=`${Math.floor(ms/60000)}:${String(Math.floor(ms%60000/1000)).padStart(2,'0')}`; } }
+  tick(){ if(!this.id) return;
+    if(this.target){ const c=S.citizens.get(this.id), st=c&&citizenAt(c,gmNow());
+      if(st&&!st.moving&&st.bid===this.target&&Date.now()-this.started>1500){ const b=D.buildings.get(this.target); this.stop(); toast(`📍 You’ve arrived${b?` at ${b.name||T(b).name}`:''}.`); return; }
+      if(Date.now()-this.started>10*60000){ this.stop(); return; } } if(this.bar){ const shown=this.bar.querySelector('.wdot.on')!=null; if(shown!==(follow===this.id)) this.show(); const cd=this.bar.querySelector('.cdown'); if(cd&&this.until){ const ms=Math.max(0,this.until-(Date.now()+skew)); cd.textContent=`${Math.floor(ms/60000)}:${String(Math.floor(ms%60000/1000)).padStart(2,'0')}`; } }
     if(this.until&&Date.now()+skew>=this.until&&!this.done){ this.done=true; toast('📦 Delivered! Open 💰 Earn on your card to get paid.','Get paid',()=>{ this.stop(); openMyTab('earn'); }); setTimeout(()=>{ if(this.done) this.stop(); },6000); } } };
 setInterval(()=>Watch.tick(),500);
 
@@ -4145,7 +4166,7 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
 let frameStats={}, lastVeh=[];
-window.__dbg={ goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+window.__dbg={ openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

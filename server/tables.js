@@ -105,7 +105,7 @@ export class CasinoTables {
   rocketView(g, coins, now = Date.now()) {
     return { game: 'rocket', bet: g.bet, start: g.start, now, auto: g.auto || null, done: !!g.done, crash: g.done ? g.crash : null, cashed: g.done ? g.cashed : null, payout: g.paid || 0, coins };
   }
-  async rocket(id, action, bet, auto) {
+  async rocket(id, action, bet, auto, at) {
     if (action === 'status') { // polled during a flight: a plain read unless the flight is due to end
       const g = (await pool.query('select casino_game from citizens where id = $1', [id])).rows[0]?.casino_game, now = Date.now();
       if (!g || g.game !== 'rocket') throw new HttpError(409, 'Launch a rocket first.');
@@ -127,7 +127,12 @@ export class CasinoTables {
       if (action === 'status') return this.rocketView(g, c.coins_base, now);
       if (action === 'cashout') {
         if (now < g.start) throw new HttpError(409, "It hasn't taken off yet.");
-        const m = Math.min(rocketAt((now - g.start) / 1000), g.crash);
+        // Cash out at the moment the player tapped (their phone sends it), not when the request got here: on a phone
+        // connection that can be a second later, with the multiplier still climbing. A tap from more than 1.2 s ago, or
+        // from the future, isn't believed; and if the rocket had blown up by then, it's lost.
+        const tap = Number(at), when = Number.isFinite(tap) && tap <= now && tap >= now - 1200 ? Math.max(g.start, tap) : now;
+        if ((when - g.start) / 1000 >= rocketTime(g.crash)) { g.cashed = 0; g.paid = 0; g.done = true; await this.payout(ch, c, 'rocket', g.bet, 0, g.casName, 'the Rocket'); await this.save(ch, c, null); return this.rocketView(g, c.coins_base, now); }
+        const m = Math.min(rocketAt((when - g.start) / 1000), g.crash);
         g.cashed = m; g.paid = Math.floor(g.bet * m); g.done = true;
         await this.payout(ch, c, 'rocket', g.bet, g.paid, g.casName, 'the Rocket'); await this.save(ch, c, null);
         return this.rocketView(g, c.coins_base, now);

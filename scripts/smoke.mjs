@@ -399,6 +399,23 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     while (Date.now() < gm.start + 6200) await sleep(200); // about 2.1× after 6.2 s
     const co = (await rk('cashout')).json;
     ok(co.done && co.cashed >= 2 && co.cashed < 2.3 && co.payout === Math.floor(100 * co.cashed) && co.crash === 5, 'cashing out pays the multiplier at that moment', JSON.stringify(co));
+    { // the tap counts, not when the request arrives (phones can be slow)
+      await rk('launch', { bet: 100 }); let g2 = (await pool.query("select casino_game from citizens where handle = 'zara_ng'")).rows[0].casino_game;
+      await pool.query("update citizens set casino_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...g2, crash: 50 })]);
+      while (Date.now() < g2.start + 6000) await sleep(200);
+      const tapAt = Date.now() - 900, want = Math.floor(100 * Math.exp(Math.log(1.0) + 0)); // computed below from the shared formula
+      const { rocketAt } = await import('../shared/casino.js'), r = (await call('POST', '/api/me/casino/rocket', { action: 'cashout', at: tapAt }, P)).json;
+      ok(r.done && r.cashed === rocketAt((tapAt - g2.start) / 1000), 'cashing out pays the multiplier at the moment of the tap, not when the request arrived', JSON.stringify({ cashed: r.cashed, atTap: rocketAt((tapAt - g2.start) / 1000) }));
+      await rk('launch', { bet: 100 }); g2 = (await pool.query("select casino_game from citizens where handle = 'zara_ng'")).rows[0].casino_game;
+      await pool.query("update citizens set casino_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...g2, crash: 50 })]);
+      while (Date.now() < g2.start + 6000) await sleep(200);
+      const r2 = (await call('POST', '/api/me/casino/rocket', { action: 'cashout', at: g2.start + 100 }, P)).json; // a "tap" from 6 s ago isn't believed
+      ok(r2.done && r2.cashed >= 2, 'a tap from long ago is ignored: it cashes out now', JSON.stringify({ cashed: r2.cashed }));
+      await rk('launch', { bet: 100 }); g2 = (await pool.query("select casino_game from citizens where handle = 'zara_ng'")).rows[0].casino_game;
+      await pool.query("update citizens set casino_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...g2, crash: 1.5 })]);
+      while (Date.now() < g2.start + 3800) await sleep(100); // it blew up at about 3.6 s
+      const r3 = (await call('POST', '/api/me/casino/rocket', { action: 'cashout', at: Date.now() - 100 }, P)).json;
+      ok(r3.done && r3.payout === 0, 'a tap after it blew up loses', JSON.stringify({ payout: r3.payout })); }
     const L2 = (await rk('launch', { bet: 100 })).json; gm = (await pool.query("select casino_game from citizens where handle = 'zara_ng'")).rows[0].casino_game;
     await pool.query("update citizens set casino_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...gm, crash: 1.2 })]);
     while (Date.now() < gm.start + 2200) await sleep(200);
@@ -463,6 +480,13 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(go.status === 200 && (await who('zara_ng')).visit?.[0] === pl.places[0].id, 'and goes there, for everyone to see');
     ok((await call('POST', '/api/me/visit', { friend: 'jobfill_a' }, P)).status === 200 && (await who('zara_ng')).visit?.[0] === (await who('jobfill_a')).home[0], "visiting a friend's home");
     ok(policeId && (await call('POST', '/api/me/visit', { buildingId: policeId }, P)).status === 400, "can't just walk into a police station");
+    { const C = await import('../shared/catalog.js'), R0 = await import('../shared/rules.js'), myH = (await who('zara_ng')).home[0];
+      const kinds = Object.keys(C.BUILDING_TYPES).filter(k => R0.canGoTo(k) && ['housing', 'offices', 'industry', 'utilities'].includes(C.BUILDING_TYPES[k].cat));
+      const off = (await pool.query("select id, type from buildings where type = any($1) and done and not ruin and id <> $2 limit 1", [kinds, myH])).rows[0];
+      const go = off && await call('POST', '/api/me/visit', { buildingId: off.id }, P);
+      ok(go && go.status === 200, `Go here works for any building, not just shops and parks (${off?.type})`, JSON.stringify(go?.json));
+      const myHome = (await who('zara_ng')).home[0], gh = await call('POST', '/api/me/visit', { buildingId: myHome }, P);
+      ok(gh.status === 200 && gh.json.home === true, 'going to your own home heads home'); }
     ok((await call('POST', '/api/me/visit/end', {}, P)).status === 200 && (await who('zara_ng')).visit?.[4] <= Date.now() + 1000, 'and heads home (the trip back stays visible)');
     // pets
     await set('zara_ng', 'coins_base = 2500');

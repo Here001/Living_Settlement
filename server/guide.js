@@ -10,7 +10,7 @@ export const GUIDE_STEPS = [
   { id: 'job', icon: '💼', title: 'Get a job', how: 'A job pays wages every game day. Pick one near home.', reward: 100 },
   { id: 'earn', icon: '📦', title: 'Earn coins on the side', how: 'Do a delivery, an extra shift, fishing, foraging or scavenging in 💰 Earn.', reward: 100 },
   { id: 'bank', icon: '🏦', title: 'Put cash in the Bank', how: "Cash on you can be pickpocketed. Tap a Bank on the map and deposit some.", reward: 100 },
-  { id: 'out', icon: '🚶', title: 'Go out somewhere', how: 'Send your colonist to a park, café or shop and watch them go.', reward: 50 },
+  { id: 'out', icon: '🚶', title: 'Go out somewhere', how: 'Tap any building on the map and press Go here, then watch them go.', reward: 50 },
   { id: 'post', icon: '📣', title: 'Say hello in Town Square', how: 'Post a message so the colony knows you’ve arrived.', reward: 50 },
 ];
 export const GUIDE_BONUS = 250;

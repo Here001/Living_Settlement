@@ -150,7 +150,7 @@ They comment it on any of your Instagram posts **from their own account**. After
 
 ## Casino
 
-- **Opening.** Once the colony has a finished **Casino**, signed-in colonists with a home see a Casino box on their own card. The Casino's card also has **Play here**.
+- **Opening.** The casino is played only at a casino: tap a finished **Casino** on the map and press **🎰 Play here**, and the games open right on the casino's card (there's no casino tab on the player card).
 - **The games:**
   - **Coin flip:** pick heads or tails, win 1.9×.
   - **Dice:** pick 1 to 6, win 5.7×.
@@ -167,13 +167,14 @@ They comment it on any of your Instagram posts **from their own account**. After
   - The server rolls the dice, so nobody can cheat from their browser.
 - **Limits.** One bet every ~1 second, and at most 100,000 coins per bet. There is no daily limit.
 - **Visits.** While playing, and for 10 minutes after their last bet, the colonist is inside the Casino for everyone to see.
+- **Rocket cash-outs** count from the moment you tap (your phone sends it), not when the request reaches the server, so a slow connection never cashes you out higher than you saw, or after it blew up. A tap more than 1.2 seconds old isn't believed. The button reacts on touch, the multiplier freezes on screen at once, and the flight animates every frame.
 - **Announcements.** Big wins (200+ coins of profit, or 20×+ on a small bet) go in the Colony Log.
 
-## Your own card: Work · Go out · Casino · Crime · Pet
+## Your own card: Work · Crime · Go here
 
 A signed-in colonist with a home sees these on their own card. They see one at a time.
 
-- **Go out.** Send your colonist to a park, shop, café, landmark or a friend's home for 4 game hours (about 5 real minutes). Everyone sees them there. Other colonists' cards have **Visit their home** too.
+- **Go here.** Every building's card (except the jail, police stations, trees and street furniture) shows **🚶 Go here** and how far it is from your colonist right now, in miles. Pressing it sends them there for 4 game hours (about 5 real minutes), and the camera locks onto them, walking, driving or in a cab, until they arrive ("📍 You've arrived"). On your own home it says **🏠 Go home**. Everyone sees them there. Other colonists' cards have **Visit their home** too.
 - **Getting there.** Colonists travel to wherever they're going, whether that's going out, the Casino or the Jail, and come back the same way afterwards.
   - Short trips (under 14 tiles) are walked.
   - Longer ones are driven by colonists who own a car; everyone else takes a cab.
@@ -252,7 +253,7 @@ A signed-in colonist's own card opens with **🧭 Getting started**: six first s
 | 💼 Get a job | they have a job | 100 |
 | 📦 Earn coins on the side | they've earned from a shift, delivery, fishing, foraging or scavenging | 100 |
 | 🏦 Put cash in the Bank | they've deposited at a Bank | 100 |
-| 🚶 Go out somewhere | they've sent their colonist somewhere | 50 |
+| 🚶 Go somewhere | they've sent their colonist somewhere with Go here | 50 |
 | 📣 Say hello in Town Square | they've posted | 50 |
 
 - **Buttons:** a finished step shows **Collect +N**. An unfinished one has **Show me**, which opens the daily reward, the right tab on your card (Work, Earn, Go out), flies to the nearest Bank, or opens Town Square with the message box ready.
@@ -267,7 +268,7 @@ A signed-in colonist's own card opens with **🧭 Getting started**: six first s
 - **Watch me go.** On a delivery gig, **👀 Watch me go** hides the card and panels and keeps the camera on your colonist, walking or in a car or cab, until the delivery is done (then it reminds you to get paid).
   - An orange **You** marker floats over you, and a bar at the top shows the time left.
   - Dragging the map pauses following (**Back to me** resumes it), and **Stop** ends it.
-- **Full-screen casino.** The Casino tab on your card has a full-screen button next to its title, like Town Square and chats; tap it again, switch tab or close the card to go back to normal size.
+- **Full-screen casino.** The casino games on a Casino's card have a full-screen button next to its title, like Town Square and chats; tap it again, switch tab or close the card to go back to normal size.
 - **🎥 Follow me.** The same thing on your own card, with no end time: watch whatever your colonist is doing.
 - **Online now.** The Town Square header shows how many colonists are online (signed in and seen in the last 90 seconds), from `/api/online/count`. It's refreshed every 30 seconds while Town Square is open.
 - **Traffic.**
@@ -280,7 +281,7 @@ A signed-in colonist's own card opens with **🧭 Getting started**: six first s
 - **Personal notices.** When someone picks your pocket you get a notice straight away, or the next time you open the game if you were away ("While you were away"). Notices are kept in the `notices` table (migration 34) until seen.
   - **If the thief got away:** "👛 Someone just picked your pocket and got away with N coins". Their name isn't revealed.
   - **If they were caught:** "🚓 @thief picked your pocket but got caught by the police. Your N coins have been refunded". The thief is named only when caught, and you never actually lose the coins.
-- **Miles.** Distances players see (Go out, homes, jobs, delivery gigs, crime odds) are in game miles, at 20 tiles to the mile (`miles()` in `shared/rules.js`). The developer's build tools still count tiles.
+- **Miles.** Distances players see (Go here, homes, jobs, delivery gigs, crime odds) are in game miles, at 20 tiles to the mile (`miles()` in `shared/rules.js`). The developer's build tools still count tiles.
 
 ## Money: the Bank, cars, homes and buildings
 

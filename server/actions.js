@@ -175,7 +175,8 @@ export class Actions {
         b = f; label = `@${f.handle}'s home`;
       } else {
         b = (await ch.q('select * from buildings where id = $1 and done and not ruin', [String(buildingId)])).rows[0];
-        if (!b || !VISITABLE.includes(b.type)) throw new HttpError(400, "You can't go there. Pick a park, shop or place to hang out.");
+        if (!b || !R.canGoTo(b.type)) throw new HttpError(400, b && R.NO_GO.has(b.type) ? "You can't just walk in there." : "You can't go there.");
+        if (b.id === c.home_id) { await this.setVisit(ch, c, null); return { ok: true, home: true, place: 'home' }; } // going home
         label = nameOf(b);
       }
       const until = Date.now() + VISIT_TIME; await this.setVisit(ch, c, b, until); await bump(ch, c.id, { outings: 1 });

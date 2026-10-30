@@ -212,7 +212,7 @@ export function playersRouter({ limit, send, admin, world }) {
   const lastMove = new Map();
   const tableMove = async (req, fn) => { const p = await me(req), now = Date.now(); if (now - (lastMove.get(p.id) || 0) < 250) throw new HttpError(429, 'One move at a time.'); lastMove.set(p.id, now); if (lastMove.size > 5000) lastMove.clear(); return fn(p, req.body || {}); };
   r.post('/me/casino/blackjack', limit, send(req => tableMove(req, (p, b) => world.tables.blackjack(p.id, String(b.action || ''), b.bet))));
-  r.post('/me/casino/rocket', limit, send(req => tableMove(req, (p, b) => world.tables.rocket(p.id, String(b.action || ''), b.bet, b.auto))));
+  r.post('/me/casino/rocket', limit, send(req => tableMove(req, (p, b) => world.tables.rocket(p.id, String(b.action || ''), b.bet, b.auto, b.at))));
   // The job board: openings near home, take one (once per game day), or quit.
   r.get('/me/jobs', limit, send(async req => {
     const p = await me(req);

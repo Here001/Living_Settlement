@@ -8,7 +8,7 @@ import { track } from './stats.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES } from '../shared/catalog.js';
-import { GAMES, MINES_TILES, MINES_CHOICES, minesMultiple, MAX_BET, SUITS, RANKS, handValue, isBlackjack, rocketAt, rocketTime, rocketCrash, ROCKET_COUNTDOWN, ROCKET_MAX } from '../shared/casino.js';
+import { hiloRank, hiloStep, GAMES, MINES_TILES, MINES_CHOICES, minesMultiple, MAX_BET, SUITS, RANKS, handValue, isBlackjack, rocketAt, rocketTime, rocketCrash, ROCKET_COUNTDOWN, ROCKET_MAX } from '../shared/casino.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 
@@ -130,6 +130,40 @@ export class CasinoTables {
     });
   }
 
+  // ---------- Hi-Lo ----------
+  // start (bet) → a card is shown → guess higher or lower for the next one, as many times as you like → cash out.
+  hiloView(g, coins, extra = {}) {
+    const top = g.cards[g.cards.length - 1], r = hiloRank(top);
+    const v = { game: 'hilo', bet: g.bet, cards: g.cards, mult: g.mult, steps: g.cards.length - 1, up: hiloStep(r, 'higher'), down: hiloStep(r, 'lower'), done: !!g.done, outcome: g.outcome || null, paid: g.paid || 0, ...extra };
+    if (coins !== undefined) v.coins = coins; return v; }
+  async hilo(id, action, bet) {
+    return this.world.change(async ch => {
+      const { c, cas } = await this.seat(ch, id), name = cas.name || BUILDING_TYPES.casino.name; let g = c.casino_game;
+      if (g && g.game !== 'hilo') { if (action === 'start') throw new HttpError(409, `Finish your ${GAMES[g.game]?.name || 'other'} game first.`); g = null; }
+      const card = () => RANKS[crypto.randomInt(13)] + SUITS[crypto.randomInt(4)];
+      const end = async (outcome, paid) => { g.done = true; g.outcome = outcome; g.paid = paid; await this.payout(ch, c, 'hilo', g.bet, paid, name, 'Hi-Lo'); await this.save(ch, c, null); };
+      if (action === 'start') {
+        if (g && !g.done) return this.hiloView(g, c.coins_base, { resumed: true });
+        g = { game: 'hilo', bet: await this.stake(ch, c, cas, bet), cards: [card()], mult: 1, at: Date.now() };
+        ch.touch(c); await ch.saveCitizen(c); await this.save(ch, c, g); return this.hiloView(g, c.coins_base);
+      }
+      if (!g || g.done) throw new HttpError(409, 'Start a new game first.');
+      if (action === 'higher' || action === 'lower') {
+        const prev = hiloRank(g.cards[g.cards.length - 1]), next = card(), r = hiloRank(next), right = action === 'higher' ? r >= prev : r <= prev;
+        const step = hiloStep(prev, action); g.cards.push(next);
+        if (!right) { await end('wrong', 0); return this.hiloView(g, c.coins_base); }
+        g.mult = Math.min(10000, Math.floor(g.mult * step * 100) / 100);
+        if (g.cards.length >= 21) { await end('cashed', Math.floor(g.bet * g.mult)); return this.hiloView(g, c.coins_base); }
+        await this.save(ch, c, g); return this.hiloView(g, c.coins_base);
+      }
+      if (action === 'cashout') {
+        if (g.cards.length < 2) throw new HttpError(400, 'Make at least one guess before you cash out.');
+        await end('cashed', Math.floor(g.bet * g.mult)); return this.hiloView(g, c.coins_base);
+      }
+      throw new HttpError(400, 'Start, guess higher or lower, or cash out.');
+    });
+  }
+
   // ---------- Rocket ----------
   // Settle a flight that's over by time alone: blown up (or cashed out automatically at the target).
   async rocketResolve(ch, c, g, now = Date.now()) {
@@ -182,6 +216,7 @@ export class CasinoTables {
     const g = (await pool.query('select casino_game from citizens where id = $1', [id])).rows[0]?.casino_game; if (!g || g.done) return null;
     if (g.game === 'rocket') { if (Date.now() >= g.start + rocketTime(g.crash) * 1000 || Date.now() - g.at > ABANDON) { try { const r = await this.rocket(id, 'status'); return r.done ? null : r; } catch { return null; } } return this.rocketView(g, undefined); }
     if (g.game === 'mines') return this.minesView(g, undefined);
+    if (g.game === 'hilo') return this.hiloView(g, undefined);
     return this.bjView(g, undefined);
   }
 }

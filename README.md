@@ -197,9 +197,11 @@ They comment it on any of your Instagram posts **from their own account**. After
 - **Announcements.** Big wins (200+ coins of profit, or 20×+ on a small bet) go in the Colony Log.
 
 
-### Mines and Plinko
+### Mines, Plinko, Baccarat and Hi-Lo
 
 - **Mines:** pick 1, 3, 5, 10 or 20 mines hidden in 25 tiles, then open tiles one by one. Each gem raises the multiplier (the fair odds less 3%, `minesMultiple()` in `shared/casino.js`). Cash out any time; hit a mine and the bet is lost. The mines are placed on the server and only shown when the game ends.
+- **Baccarat:** bet on the Player hand, the Banker hand or a tie; standard drawing rules, cards from an endless shoe. Player pays 2×, Banker 1.95×, Tie 9× (a tie gives Player and Banker bets back), about 99% back on Player or Banker, like the real game.
+- **Hi-Lo:** a card is dealt; guess whether the next is higher or lower (the same rank counts as right). Each right guess multiplies your winnings by 0.97 ÷ its chance, so a likely call pays little and a long shot a lot. Cash out any time; one wrong guess loses the bet. At most 20 guesses.
 - **Plinko:** pick low, medium or high risk and drop a ball through 12 rows of pegs. The 13 slots pay 0.4×–10× (low), 0.3×–33× (medium) or 0.1×–170× (high), each table returning about 96–97% on average.
 
 ## 🎮 Game House

@@ -226,6 +226,7 @@ export function playersRouter({ limit, send, admin, world }) {
       case 'darts': return gh.darts(p.id, bid, { action: String(b.action || ''), bet: b.bet, x: b.x, y: b.y });
       default: throw new HttpError(404, 'No such game.');
     } })));
+  r.post('/me/casino/hilo', limit, send(req => tableMove(req, (p, b) => world.tables.hilo(p.id, String(b.action || ''), b.bet))));
   r.post('/me/casino/mines', limit, send(req => tableMove(req, (p, b) => world.tables.mines(p.id, String(b.action || ''), b.bet, b.mines, b.cell))));
   r.post('/me/casino/rocket', limit, send(req => tableMove(req, (p, b) => world.tables.rocket(p.id, String(b.action || ''), b.bet, b.auto, b.at))));
   // The job board: openings near home, take one (once per game day), or quit.

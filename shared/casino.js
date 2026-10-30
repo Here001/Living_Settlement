@@ -14,6 +14,8 @@ export const GAMES = {
   blackjack: { name: 'Blackjack', rule: 'Get closer to 21 than the dealer without going over. A win pays 2×, blackjack 2.5×. The dealer stands on 17.', picks: null, table: true },
   rocket: { name: 'Rocket', rule: 'The multiplier climbs as the rocket rises. Cash out before it blows up: 2× or more about half the time, 10× about 1 time in 10.', picks: null, table: true },
   mines: { name: 'Mines', rule: '25 tiles hide gems and mines. Every gem you find raises your winnings; cash out before you hit a mine. More mines, bigger multipliers.', picks: null, table: true },
+  baccarat: { name: 'Baccarat', rule: 'Bet on the Player hand, the Banker hand or a tie: whichever ends closer to 9 wins. Player pays 2×, Banker 1.95×, Tie 9× (a tie gives Player and Banker bets back).', picks: ['player', 'banker', 'tie'] },
+  hilo: { name: 'Hi-Lo', rule: 'Guess if the next card is higher or lower. Every right guess grows your winnings, more for riskier calls. Cash out any time; one wrong guess loses it all. Aces are low.', picks: null, table: true },
   plinko: { name: 'Plinko', rule: 'Drop a ball through 12 rows of pegs. Where it lands pays 0.1× to 170×; pick low, medium or high risk.', picks: ['low', 'mid', 'high'] },
 };
 export const MAX_BET = 100000;
@@ -67,12 +69,36 @@ export function minesMultiple(mines, safe) {
   return safe ? Math.floor(m * 100) / 100 : 1;
 }
 
+// ---- Baccarat: punto banco from an endless shoe (cards drawn at random) ----
+const BAC_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const bacValue = r => r === 'A' ? 1 : ['10', 'J', 'Q', 'K'].includes(r) ? 0 : Number(r);
+export const bacTotal = cards => cards.reduce((s, c) => s + bacValue(c.slice(0, -1)), 0) % 10;
+export function baccarat(rand) {
+  const draw = () => BAC_RANKS[rand(13)] + SUITS[rand(4)], P = [draw(), draw()], B = [draw(), draw()];
+  let pt = bacTotal(P), bt = bacTotal(B);
+  if (pt < 8 && bt < 8) {
+    let third = null; if (pt <= 5) { third = draw(); P.push(third); }
+    const t = third == null ? -1 : bacValue(third.slice(0, -1));
+    const bankerDraws = third == null ? bt <= 5 : bt <= 2 || (bt === 3 && t !== 8) || (bt === 4 && t >= 2 && t <= 7) || (bt === 5 && t >= 4 && t <= 7) || (bt === 6 && (t === 6 || t === 7));
+    if (bankerDraws) B.push(draw());
+    pt = bacTotal(P); bt = bacTotal(B);
+  }
+  return { player: P, banker: B, pt, bt, winner: pt > bt ? 'player' : bt > pt ? 'banker' : 'tie' };
+}
+export const BAC_PAYS = { player: 2, banker: 1.95, tie: 9 };
+// ---- Hi-Lo: ranks 1 (ace) to 13; "higher" wins on the same rank or above, "lower" on the same or below ----
+export const hiloRank = card => BAC_RANKS.indexOf(card.slice(0, -1)) + 1;
+export const hiloChance = (rank, dir) => dir === 'higher' ? (14 - rank) / 13 : rank / 13;
+export const hiloStep = (rank, dir) => Math.floor(0.97 / hiloChance(rank, dir) * 100) / 100; // what a right guess multiplies by
+
 // Play one round. rand(n) must return a whole number from 0 to n-1 (the server passes a secure one).
 export function playRound(game, pick, bet, rand) {
   const g = GAMES[game]; if (!g) return null;
   if (game === 'coin') { const result = g.picks[rand(2)]; const won = result === pick; return { result, won, payout: won ? Math.floor(bet * g.pays) : 0 }; }
   if (game === 'roulette') { const result = rand(37), m = rouletteMultiple(String(pick), result); return { result, won: m > 0, payout: Math.floor(bet * m) }; }
   if (game === 'dice') { const result = String(rand(6) + 1); const won = result === String(pick); return { result, won, payout: won ? Math.floor(bet * g.pays) : 0 }; }
+  if (game === 'baccarat') { const r = baccarat(rand), x = r.winner === 'tie' && pick !== 'tie' ? 1 : r.winner === pick ? BAC_PAYS[pick] : 0;
+    return { result: r, won: x > 1, push: x === 1, payout: Math.floor(bet * x) }; }
   if (game === 'plinko') { const t = PLINKO[pick] || PLINKO.low, path = []; for (let i = 0; i < PLINKO_ROWS; i++) path.push(rand(2));
     const slot = path.reduce((a, b) => a + b, 0), m = t[slot]; return { result: { path, slot, m }, won: m >= 1, payout: Math.floor(bet * m) }; }
   const total = SLOT_SYMBOLS.reduce((s, x) => s + x.weight, 0);

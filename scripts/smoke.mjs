@@ -443,6 +443,16 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     await mn({ action: 'start', bet: 100, mines: 3 }); const lay2 = (await pool.query("select casino_game from citizens where handle = 'zara_ng'")).rows[0].casino_game.layout;
     const boom = (await mn({ action: 'pick', cell: lay2[0] })).json; ok(boom.done && boom.outcome === 'boom' && boom.paid === 0, 'hitting a mine loses the bet', JSON.stringify(boom));
     ok((await mn({ action: 'start', bet: 100, mines: 7 })).status === 400, 'only the offered numbers of mines');
+    // Baccarat and Hi-Lo
+    await sleep(1300); const bc = (await call('POST', '/api/me/casino', { game: 'baccarat', pick: 'banker', bet: 100 }, P)).json, BR = bc.result;
+    ok(BR && BR.pt === C.bacTotal(BR.player) && BR.bt === C.bacTotal(BR.banker) && bc.payout === (BR.winner === 'banker' ? 195 : BR.winner === 'tie' ? 100 : 0), 'baccarat: closest to 9 wins; a tie gives the bet back', JSON.stringify(bc));
+    const hl = async b => { await sleep(300); return call('POST', '/api/me/casino/hilo', b, P); };
+    const h0 = (await hl({ action: 'start', bet: 100 })).json; ok(h0.game === 'hilo' && h0.cards.length === 1 && !h0.done, 'Hi-Lo deals a first card', JSON.stringify(h0));
+    ok((await hl({ action: 'cashout' })).status === 400, 'guess at least once before cashing out');
+    const hg = (await pool.query("select casino_game from citizens where handle = 'zara_ng'")).rows[0].casino_game; await pool.query("update citizens set casino_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...hg, cards: ['A♠'] })]);
+    const h1 = (await hl({ action: 'higher' })).json; ok(!h1.done && h1.cards.length === 2 && h1.mult === C.hiloStep(1, 'higher'), 'higher than an ace is always right (and pays least)', JSON.stringify(h1));
+    const hb = (await whoDev('zara_ng')).coins, hc = (await hl({ action: 'cashout' })).json; ok(hc.done && hc.paid === Math.floor(100 * h1.mult) && (await whoDev('zara_ng')).coins === hb + hc.paid, 'cashing out pays the multiplier', JSON.stringify(hc));
+    ok([...Array(13).keys()].every(i => C.hiloChance(i + 1, 'higher') * C.hiloStep(i + 1, 'higher') < 1 && C.hiloChance(i + 1, 'lower') * C.hiloStep(i + 1, 'lower') < 1), 'every Hi-Lo guess keeps a house edge');
     // The Game House
     const gh = await call('POST', '/api/admin/buildings', { type: 'gamehouse', x: 820, y: 900 }); await call('POST', `/api/admin/buildings/${gh.json.building?.id}/finish`); const ghId = gh.json.building?.id;
     ok(gh.status === 200 && (await call('GET', `/api/me/games?building=${(await pool.query("select id from buildings where type <> 'gamehouse' limit 1")).rows[0].id}`, undefined, P)).status === 409, "games are played at a Game House, not anywhere");

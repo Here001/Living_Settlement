@@ -3417,7 +3417,7 @@ async function doCrime(kind, target){ const r=await meAction('/api/me/crime',{ki
   toast(r.caught ? (r.jailed?`🚓 Caught! You were fined ${fmt(r.fine)} coins and locked up for ${mins(r.jailFor)} minutes.`:`🚓 Caught! You were fined ${fmt(r.fine)} coins.`) : `💰 You got away with ${fmt(r.loot)} coins.`); }
 // Crime odds come in three bands, set by how far the nearest Police station is from where it happens.
 const BAND={ high:{ic:'🟢',nm:'High'}, mid:{ic:'🟡',nm:'Medium'}, low:{ic:'🔴',nm:'Low'} };
-const oddsText = o => `${BAND[o.band].ic} ${BAND[o.band].nm} chance, ${Math.round(o.chance*100)}% · ${o.dist==null?'no police station in the colony':`police ${miles(o.dist)} away`}`;
+const oddsText = o => `${BAND[o.band].ic} ${BAND[o.band].nm} chance, ${Math.round(o.chance*100)}% · ${o.dist==null?'no police station in the colony':`police ${miles(o.dist)} away`}${o.night?' · 🌙 night, +15%':''}`;
 async function tryPickpocket(target){ const h=(target||'').trim().replace(/^@+/,''); if(!h){ toast("Whose pocket? Type their username."); return; }
   let k; try{ k=await api('/api/me/crime?target='+encodeURIComponent(h)); }catch(e){ toast(e.message); return; } const P=k.pick;
   if(!P||P.error){ toast(P?P.error:'Couldn’t find them.'); return; }
@@ -3437,7 +3437,7 @@ function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cri
   const ti=el('input',{type:'text',placeholder:'@username',autocomplete:'off','aria-label':'Whose pocket'});
   box.append(el('div',{class:'cbet'}, el('span',{text:'Pickpocket:'}), ti, el('button',{class:'btn',text:'Try',onclick:()=>tryPickpocket(ti.value)})),
     el('p',{class:'hint',text:'You’ll see their odds before you commit: it depends on where they are right now.'}));
-  if(K.rob) box.append(el('p',{class:'jobnow',text:`Nearest shop: ${K.rob.shop}. ${oddsText(K.rob)}.`}), el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:`Rob ${K.rob.shop} (${Math.round(K.rob.chance*100)}%)`,onclick:()=>toast(`Rob ${K.rob.shop}? ${oddsText(K.rob)}. You could get away with up to 1,500 coins, or end up in jail.`,'Do it',()=>doCrime('rob'))})));
+  if(K.rob) box.append(el('p',{class:'jobnow',text:`Nearest shop: ${K.rob.shop}. ${oddsText(K.rob)}.`}), el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:`Rob ${K.rob.shop} (${Math.round(K.rob.chance*100)}%)`,onclick:()=>toast(`Rob ${K.rob.shop}? ${oddsText(K.rob)}. You could get away with 5,000–10,000 coins, or end up in jail.`,'Do it',()=>doCrime('rob'))})));
   else box.append(el('p',{class:'hint',text:'There are no shops to rob.'}));
   return box; }
 let petPick='glimmerhop';

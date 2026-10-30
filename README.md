@@ -193,12 +193,13 @@ Every colonist's card has a full-screen button beside Share and ×, like Town Sq
     - Nobody can be pickpocketed at home (asleep or relaxing, roughly 21:40–07:45 game time), while visiting someone's home, or in the Jail.
     - At work (roughly 07:50–11:40 and 13:10–16:15), only a workmate at the same building can try.
     - The server checks this (`routineAt` in `shared/rules.js`, `whereIs` in `server/actions.js`). The card shows "🛡️ … is safe at home right now" instead of the button when it isn't possible.
-  - **Rob the nearest shop:** 200–1,500 coins from the till, which the treasury pays.
+  - **Rob the nearest shop:** 5,000–10,000 coins from the till, which the treasury pays.
   - **Chances** depend on how far the nearest Police station is from where the crime happens (`crimeOdds()` in `shared/rules.js`):
     - 🟢 more than 40 tiles away, or no police at all: pickpocket 75%, robbery 60%
     - 🟡 16 to 40 tiles: pickpocket 45%, robbery 32%
     - 🔴 within 15 tiles: pickpocket 20%, robbery 12%
     - A crime wave adds 15 points, to at most 90%.
+    - **Night** (20:00 game time, through midnight, until 06:00) adds another 15 points, to at most 90%. The Crime tab shows 🌙 when it applies.
   - **Where it happens:** for a robbery, the shop; for a pickpocket, wherever the victim is right now (a place they're visiting, their workplace, their hangout, or near home). Before you try, the Crime tab shows that victim's odds and where they are.
   - **Getting caught:** a fine of twice the amount they tried to take, at least 250, which goes to the treasury.
   - **Jail:** if the colony has a Jail, 10 minutes in it, seen inside. A jailed colonist can't gamble, bet, go out, adopt or commit crimes.

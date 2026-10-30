@@ -98,7 +98,7 @@ export class Actions {
   }
   async seenNotice(id, noticeId) { await pool.query('update notices set seen = true where citizen_id = $1 and id = $2', [id, Number(noticeId) || 0]); return { ok: true }; }
   // Crime odds, less a mayor's Tough on crime pledge (15 points, never below 5%).
-  async odds(kind, dist, wave) { const o = R.crimeOdds(kind, dist, wave);
+  async odds(kind, dist, wave) { const meta = this.world.meta, o = R.crimeOdds(kind, dist, wave, !!meta && R.isNight(R.gameMinutes(Date.now(), meta.epoch)));
     if (await this.world.elections?.has('safety')) { o.chance = Math.max(0.05, Math.round((o.chance - 0.15) * 100) / 100); o.mayor = true; } return o; }
   async waveNow() { return this.world.cevents && (await this.world.cevents.kindNow()) === 'crimewave' ? 0.15 : 0; }
 
@@ -146,7 +146,7 @@ export class Actions {
       } else {
         shop = (await ch.q(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [hx, hy, SHOPS])).rows[0];
         if (!shop) throw new HttpError(409, 'There are no shops to rob.');
-        px = shop.x; py = shop.y; loot = Math.max(1, Math.min(R.treasuryOn(ch.meta, ch.today), Math.floor(200 + rand() * 1300)));
+        px = shop.x; py = shop.y; loot = Math.max(1, Math.min(R.treasuryOn(ch.meta, ch.today), Math.floor(5000 + rand() * 5001)));
       }
       // The farther the nearest Police station is from the scene, the likelier the thief gets away (a crime wave helps too).
       const odds = await this.odds(kind, await this.policeDist(ch.db, px, py), await this.waveNow()), chance = odds.chance;

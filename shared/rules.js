@@ -112,9 +112,12 @@ export function cleanName(n) {
 // More than 40 tiles away (or no police at all): high. 16 to 40 tiles: mid. Within 15 tiles: low.
 export const CRIME_NEAR = 15, CRIME_FAR = 40;
 export const CRIME_RATES = { pickpocket: { high: 0.75, mid: 0.45, low: 0.2 }, rob: { high: 0.6, mid: 0.32, low: 0.12 } };
-export function crimeOdds(kind, dist, wave = 0) {
+// Night (20:00 game time, through midnight, until 06:00): dark streets add 15 points.
+export const NIGHT_FROM = 20 * 60, NIGHT_TO = 6 * 60, NIGHT_BONUS = 0.15;
+export const isNight = gm => { const m = ((gm % 1440) + 1440) % 1440; return m >= NIGHT_FROM || m < NIGHT_TO; };
+export function crimeOdds(kind, dist, wave = 0, night = false) {
   const band = dist == null || dist > CRIME_FAR ? 'high' : dist > CRIME_NEAR ? 'mid' : 'low';
-  return { band, dist: dist == null ? null : dist, chance: Math.min(0.9, (CRIME_RATES[kind] || CRIME_RATES.rob)[band] + wave) };
+  return { band, dist: dist == null ? null : dist, night: !!night, chance: Math.min(0.9, (CRIME_RATES[kind] || CRIME_RATES.rob)[band] + wave + (night ? NIGHT_BONUS : 0)) };
 }
 
 // Distances players see are in game miles: 20 tiles to the mile.

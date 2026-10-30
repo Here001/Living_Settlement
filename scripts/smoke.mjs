@@ -465,13 +465,19 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       const mine = await call('GET', '/api/me/notices', undefined, P); ok(mine.status === 200 && Array.isArray(mine.json.notices), 'a colonist can read their own notices'); }
     { const R0 = await import('../shared/rules.js'); const o = R0.crimeOdds;
       ok(o('pickpocket', null).band === 'high' && o('pickpocket', 41).band === 'high' && o('rob', 40).band === 'mid' && o('rob', 16).band === 'mid' && o('pickpocket', 15).band === 'low', 'odds bands: over 40 tiles high, 16 to 40 mid, 15 or closer low');
-      ok(o('pickpocket', null).chance > o('pickpocket', 30).chance && o('pickpocket', 30).chance > o('pickpocket', 5).chance && o('rob', 99, 0.15).chance === 0.75, 'farther from the police, better the odds (a crime wave adds 15%)'); }
+      ok(o('pickpocket', null).chance > o('pickpocket', 30).chance && o('pickpocket', 30).chance > o('pickpocket', 5).chance && o('rob', 99, 0.15).chance === 0.75, 'farther from the police, better the odds (a crime wave adds 15%)');
+      ok(R0.isNight(22 * 60) && R0.isNight(0) && R0.isNight(5 * 60 + 59) && !R0.isNight(6 * 60) && !R0.isNight(19 * 60 + 59) && R0.isNight(1440 * 3 + 21 * 60), 'night runs from 20:00 through midnight to 06:00');
+      ok(o('rob', 99, 0, true).chance === 0.75 && o('pickpocket', 30, 0, true).chance === 0.6 && o('rob', 99, 0.15, true).chance === 0.9 && o('rob', 99, 0, true).night, 'crimes at night are 15 points likelier to work (at most 90%)'); }
     const zj = await who('zara_ng');
     ok(zj.visit && (await call('GET', '/api/me/crime', undefined, P)).json.jailedFor > 0, 'a jailed colonist is seen in the Jail');
     await sleep(1300); { const r = await call('POST', '/api/me/casino', { game: 'coin', pick: 'heads', bet: 1 }, P); ok(r.status === 409, 'no casino from jail', JSON.stringify(r)); }
     ok((await call('POST', '/api/me/visit', { friend: 'jobfill_a' }, P)).status === 409, 'no going out from jail');
     const petShop = (await call('POST', '/api/admin/buildings', { type: 'petstore', x: 1230, y: 1230 })).json.building?.id; await call('POST', `/api/admin/buildings/${petShop}/finish`);
     ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', buildingId: petShop }, P)).status === 409, 'no adopting from jail');
+    { await call('POST', '/api/admin/treasury', { amount: 100000 }); let got = null;
+      for (let i = 0; i < 40 && !got; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 100000, visit_id = null, visit_until = null'); const r = await call('POST', '/api/me/crime', { kind: 'rob' }, P); if (r.json.ok && !r.json.caught) got = r.json; }
+      ok(got && got.loot >= 5000 && got.loot <= 10000, 'a shop robbery takes 5,000 to 10,000 from the till', JSON.stringify(got));
+      await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 1000'); await call('POST', '/api/admin/treasury', { amount: -100000 }); }
     await set('zara_ng', 'jailed_until = null, visit_id = null, visit_until = null');
     // going out
     const pl = (await call('GET', '/api/me/places', undefined, P)).json;

@@ -69,7 +69,7 @@ export class Lottery {
       if (!total) { treasuryAdd(ch, l.bonus); await ch.event('🎟️ Nobody bought a lottery ticket, so there was no draw.', 'lottery'); ch.extraOps.push({ op: 'lottery', data: { id, stage: 'drawn' } }); return; }
       let pick = crypto.randomInt(total), win = tickets[0]; for (const t of tickets) { if ((pick -= t.count) < 0) { win = t; break; } }
       const c = (await ch.q('select * from citizens where id = $1 for update', [win.citizen_id])).rows[0];
-      if (c) { ch.coins(c); c.coins_base += prize; ch.touch(c); await ch.saveCitizen(c); } else treasuryAdd(ch, prize);
+      if (c) { ch.coins(c); c.coins_base += prize; ch.touch(c); await ch.saveCitizen(c); ch.pushes.push([[c.id], { kind: 'win', title: '🎉 You won the lottery!', body: `${fmt(prize)} coins are yours.`, tag: 'lottery', urgency: 'high' }]); } else treasuryAdd(ch, prize);
       await ch.q('update lotteries set winner = $2, prize = $3 where id = $1', [id, win.handle, prize]);
       await ch.event(`🎉 @${win.handle} won the lottery: ${fmt(prize)} coins! (${tickets.length} colonist${tickets.length === 1 ? '' : 's'} bought ${fmt(total)} ticket${total === 1 ? '' : 's'}.)`, 'lottery');
       ch.extraOps.push({ op: 'lottery', data: { id, stage: 'drawn' } });

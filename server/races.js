@@ -103,7 +103,8 @@ export class Races {
         const share = bonus && stake ? Math.floor(bonus * b.amount / stake) : 0; fromBonus += share;
         const payout = Math.floor(b.amount * b.pays) + share;
         const c = (await ch.q('select * from citizens where id = $1 for update', [b.citizen_id])).rows[0];
-        if (c) { ch.coins(c); c.coins_base += payout; ch.touch(c); await ch.saveCitizen(c); paid += payout; }
+        if (c) { ch.coins(c); c.coins_base += payout; ch.touch(c); await ch.saveCitizen(c); paid += payout;
+          ch.pushes.push([[c.id], { kind: 'win', title: '🏁 Your creature won!', body: `${CREATURES[win].name} won Race #${this.label(trackId, n)}. You won ${fmt(payout)} coins.`, tag: 'race' }]); }
         await ch.q('update race_bets set payout = $2 where id = $1', [b.id, payout]);
       }
       await ch.q('update race_bets set payout = 0 where track_id = $1 and n = $2 and payout is null', [trackId, n]);

@@ -43,6 +43,7 @@ export const VISIT_TAIL = 20 * 60 * 1000;
 class Change {
   constructor(db, meta) {
     this.db = db; this.meta = meta; this.today = meta ? R.gameDay(Date.now(), meta.epoch) : 0;
+    this.pushes = [];            // phone notifications to send once this change is saved: [citizenIds, message]
     this.citizens = new Map();   // id → chunks the citizen was in before this change (null = new citizen)
     this.gone = new Map();       // id → chunks, for removed citizens
     this.buildings = new Set(); this.removedBuildings = new Map(); this.roadOps = []; this.events = [];
@@ -272,9 +273,10 @@ export class World {
       const r = await changeScope.run(ch, () => fn(ch));
       if (ch.meta) await db.query('insert into meta (id, data) values (1, $1) on conflict (id) do update set data = $1', [ch.meta]);
       const ops = await this.collectOps(db, ch);
-      return { r, ops };
+      return { r, ops, pushes: ch.pushes };
     });
     this.bus.publish(result.ops);
+    if (this.push) for (const [ids, msg] of result.pushes) this.push.send(ids, msg).catch(e => console.error('push:', e.message)); // only after it's saved
     return result.r;
   }
 

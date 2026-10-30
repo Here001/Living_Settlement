@@ -126,6 +126,12 @@ export function playersRouter({ limit, send, admin, world }) {
     return world.setName(p.id, (req.body || {}).name);
   }));
   // Crime, going somewhere, and pets.
+  // Phone notifications
+  r.get('/push/key', limit, send(async () => world.push.key()));
+  r.get('/me/push', limit, send(async req => world.push.status((await me(req)).id)));
+  r.post('/me/push', limit, send(async req => { const b = req.body || {}; return world.push.subscribe((await me(req)).id, b.subscription, b.prefs); }));
+  r.delete('/me/push', limit, send(async req => world.push.unsubscribe((await me(req)).id, (req.body || {}).endpoint)));
+  r.put('/me/push/prefs', limit, send(async req => world.push.setPrefs((await me(req)).id, (req.body || {}).prefs)));
   // The first-day guide
   r.get('/me/guide', limit, send(async req => world.guide.info((await me(req)).id)));
   r.post('/me/guide/claim', limit, send(async req => world.guide.claim((await me(req)).id, String((req.body || {}).step || ''))));

@@ -70,6 +70,7 @@ export class Actions {
   async notify(ch, citizenId, kind, text) {
     const t = Date.now(), id = (await ch.q('insert into notices (citizen_id, t, kind, text) values ($1, $2, $3, $4) returning id', [citizenId, t, kind, text])).rows[0].id;
     ch.extraOps.push({ op: 'notice', private: true, to: [citizenId], data: { id: String(id), t, kind, text } });
+    ch.pushes.push([[citizenId], { kind: kind === 'pickpocket' ? 'crime' : kind, title: kind === 'pickpocket' ? (text.startsWith('🚓') ? 'Thief caught: you’ve been refunded' : 'Your pocket was picked') : 'Resurgence', body: text.replace(/^\S+\s/, ''), tag: 'notice-' + id }]);
   }
   async notices(id) {
     const rows = (await pool.query('update notices set seen = true where id in (select id from notices where citizen_id = $1 and not seen order by t desc limit 20) returning id, t, kind, text', [id])).rows;

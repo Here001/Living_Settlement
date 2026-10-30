@@ -191,6 +191,9 @@ const MIGRATIONS = [
    create index notices_unseen on notices (citizen_id, seen, t desc);`,
   // v35: the first-day guide (which steps' rewards a colonist has collected, and whether they hid it)
   `alter table citizens add column guide jsonb;`,
+  // v36: phone notifications (Web Push): one row per phone or browser a colonist turned them on in
+  `create table push_subs (endpoint text primary key, citizen_id text not null, keys jsonb not null, prefs jsonb, created bigint not null, fails int not null default 0);
+   create index push_subs_citizen on push_subs (citizen_id);`,
 ];
 
 export async function migrate() {

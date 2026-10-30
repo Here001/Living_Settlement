@@ -207,6 +207,24 @@ Every building menu has a **search box** at the top that searches all buildings 
 | Local bank | 2×2 | the colonnaded classic (banks built before keep this look) | 24 bankers, down from 92 | 8,200 |
 | International bank | 3×3 | a tall glass tower with an "INTL BANK" sign | 40 investment bankers | 22,000 |
 
+## Phone notifications
+
+Players can get notifications on their phone (or computer) even when the game is closed. They turn them on with **🔔 Notifications** on their own card, and choose which kinds they want:
+
+| Kind | When |
+|---|---|
+| Pickpockets and thieves | someone picked your pocket (named, with the refund, if they were caught) |
+| Gifts | someone sent you coins |
+| Chat messages | a message arrives while you're not in the game |
+| Race, lottery and casino wins | your creature won a race you bet on, or you won the lottery |
+| Daily reward reminders | at 18:00 UTC (7pm in Lagos), if you have a streak going and haven't collected today |
+
+- **How it works:** standard Web Push, with no app store. `public/sw.js` only shows notifications and opens the game when one is tapped (a chat notification opens that chat); it caches nothing. The server side is `server/push.js`, with subscriptions in `push_subs` (migration 36).
+- **Sent only after it's saved:** notifications are sent once the action that caused them has been saved, so a failed action never notifies anyone.
+- **Gone phones are forgotten:** a phone the push service reports as gone is dropped, and so is one that fails five times in a row.
+- **Keys:** the keys that identify the colony to push services come from `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` if set. Otherwise they're generated once and kept in the database, so it works with no setup. `VAPID_SUBJECT` (a `mailto:` address) is optional.
+- **iPhone:** notifications only work after adding the game to the Home Screen (Share → Add to Home Screen) and opening it from there. The panel explains this on iPhone. Android Chrome works straight away.
+
 ## Getting started guide
 
 A signed-in colonist's own card opens with **🧭 Getting started**: six first steps, each with a small reward the treasury pays once, and a **+250** bonus for finishing them all. Each step is ticked off from what the player has actually done (`server/guide.js`), so steps they've already done count straight away.

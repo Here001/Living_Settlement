@@ -166,6 +166,7 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .ts-tabs::-webkit-scrollbar{display:none}
 .ts-tabs button{flex:1 0 auto;white-space:nowrap}
 .nf-lead{margin:6px 0 10px}
+.pushk{display:flex;align-items:center;gap:10px;padding:7px 2px;font-size:15px;border-top:1px solid var(--soft)}.pushk input{width:20px;height:20px;accent-color:var(--warm,#E4572E)}
 .bsearch{flex:0 0 auto!important;height:auto!important;min-height:0!important;display:block;box-sizing:border-box;margin:2px 14px 8px!important;width:calc(100% - 28px)!important;max-width:calc(100% - 28px)}
 .guide{margin:6px 0 10px;padding:10px 12px;border-radius:16px;border:1.6px solid color-mix(in srgb,var(--warm,#E4572E) 45%,transparent);background:color-mix(in srgb,var(--warm,#E4572E) 7%,transparent)}
 .g-head{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;width:calc(100% - 72px);font-size:15px}
@@ -3288,7 +3289,8 @@ async function openMyTab(tab, panel){ if(!(Me&&Me.handle)) return; actTab=tab; a
   requestAnimationFrame(show); setTimeout(show,700); }
 const BUYABLE=new Set(['housing','shops','offices','industry']); // what players may own (matches the server)
 function actionTabs(c){ const wrap=el('div',null); const gb=GuideUI.box(); if(gb) wrap.append(gb); const dr=Daily.row(); if(dr) wrap.append(dr);
-  wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}))); const row=el('div',{class:'acttabs',role:'tablist'});
+  if(!PushUI.st&&!PushUI.busy) PushUI.load().then(()=>{ if(sel&&sel.kind==='c') renderCard(true); });
+  wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}), el('button',{class:'btn sm',text:PushUI.label(),onclick:()=>PushUI.sheet()}))); const row=el('div',{class:'acttabs',role:'tablist'});
   for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['out','Go out'],['casino','Casino'],['crime','Crime'],['badges','Badges']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; if(id!=='casino') document.body.classList.remove('card-max'); renderCard(true); }}));
   if(actTab==='bank') actTab='wallet'; if(actTab==='pet') actTab='earn'; const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>Badges.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
@@ -3659,6 +3661,43 @@ function postItems0(){ const gm=gmNow(); const today=Math.floor(gm/1440); const 
 
 
 
+
+/* ---------------- phone notifications ---------------- */
+// Turn on notifications in this browser or on this phone, and pick which kinds. They arrive even when the game is
+// closed. On an iPhone they only work once the game is added to the Home Screen (Share → Add to Home Screen).
+const PushUI={ st:null, at:0, busy:false, sw:null,
+  supported(){ return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; },
+  iosNeedsInstall(){ const ios=/iPhone|iPad|iPod/.test(navigator.userAgent); const standalone=window.navigator.standalone||matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches; return ios&&!standalone; },
+  async reg(){ if(this.sw) return this.sw; this.sw=await navigator.serviceWorker.register('/sw.js'); return this.sw; },
+  async mySub(){ try{ const r=await this.reg(); return await r.pushManager.getSubscription(); }catch(e){ return null; } },
+  async load(){ if(!(Me&&Me.token)||this.busy) return; this.busy=true; try{ this.st=await api('/api/me/push'); const sub=this.supported()?await this.mySub():null; this.st.here=!!(sub&&this.st.endpoints.includes(sub.endpoint)); this.at=Date.now(); }catch(e){} this.busy=false; },
+  label(){ return this.st&&this.st.here?'🔔 Notifications on':'🔕 Notifications'; },
+  async enable(){ if(!this.supported()){ toast(this.iosNeedsInstall()?'On iPhone, add Resurgence to your Home Screen first (Share → Add to Home Screen), then open it from there.':'This browser can’t show notifications.'); return false; }
+    if(this.iosNeedsInstall()){ toast('On iPhone, add Resurgence to your Home Screen first (Share → Add to Home Screen), then open it from there.'); return false; }
+    try{ const perm=await Notification.requestPermission(); if(perm!=='granted'){ toast('Notifications are blocked. Allow them for this site in your browser settings.'); return false; }
+      const { key }=await api('/api/push/key'), r=await this.reg(); let sub=await r.pushManager.getSubscription();
+      if(!sub) sub=await r.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:urlB64(key) });
+      this.st=await api('/api/me/push',{method:'POST',body:{subscription:sub.toJSON()}}); this.st.here=true; toast('🔔 Notifications are on for this device.'); return true; }
+    catch(e){ const m=String(e&&e.message||''); toast(/permission|denied|registration|push service|abort/i.test(m)?'This browser couldn’t sign up for notifications. On a phone, try Chrome (Android) or the Home Screen app (iPhone), and check notifications are allowed for this site.':(m||'Couldn’t turn on notifications.')); return false; } },
+  async disable(){ try{ const sub=await this.mySub(); if(sub){ await api('/api/me/push',{method:'DELETE',body:{endpoint:sub.endpoint}}); await sub.unsubscribe().catch(()=>{}); } await this.load(); toast('Notifications are off for this device.'); }catch(e){ toast(e.message); } },
+  async setPref(k,on){ const prefs={...(this.st&&this.st.prefs||{}),[k]:on}; try{ this.st={...this.st,...await api('/api/me/push/prefs',{method:'PUT',body:{prefs}})}; this.st.here=true; }catch(e){ toast(e.message); } },
+  async sheet(){ await this.load(); document.querySelector('.rsheet-bg.pushs')?.remove();
+    const wrap=el('div',{class:'rsheet-bg pushs'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
+    const box=el('div',{class:'rsheet inked',role:'dialog','aria-label':'Phone notifications'}); wrap.append(box); document.body.append(wrap);
+    const fill=()=>{ box.innerHTML=''; const S0=this.st||{}, on=!!S0.here;
+      box.append(el('h3',{text:'🔔 Phone notifications'}), el('p',{class:'hint',text:'Hear about what happens in the colony even when the game is closed.'}));
+      if(this.iosNeedsInstall()) box.append(el('p',{class:'jobnow',text:'On iPhone: tap Share, then “Add to Home Screen”, and open Resurgence from your Home Screen. Then turn notifications on here.'}));
+      box.append(el('div',{class:'row-actions'}, on?el('button',{class:'btn',text:'Turn off on this device',onclick:async()=>{ await this.disable(); fill(); }}):el('button',{class:'btn primary',text:'Turn on notifications',onclick:async()=>{ if(await this.enable()) fill(); }})));
+      if(on){ box.append(el('h4',{class:'bgroup',text:'Tell me about'})); for(const [k,nm] of Object.entries(S0.kinds||{})){ const cb=el('input',{type:'checkbox'}); cb.checked=S0.prefs?.[k]!==false; cb.onchange=()=>this.setPref(k,cb.checked);
+          box.append(el('label',{class:'pushk'}, cb, el('span',{text:nm}))); }
+        if(S0.devices>1) box.append(el('p',{class:'hint',text:`On ${S0.devices} devices.`})); }
+      box.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Done',onclick:()=>{ wrap.remove(); if(sel) renderCard(true); }}))); };
+    fill(); } };
+function urlB64(b64){ const pad='='.repeat((4-b64.length%4)%4), s=atob((b64+pad).replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from([...s].map(c=>c.charCodeAt(0))); }
+if('serviceWorker' in navigator) addEventListener('load',()=>{ PushUI.reg().catch(()=>{}); });
+// A notification opens the game at the right place: ?chat=handle opens that chat.
+function openFromNotification(){ const h=new URLSearchParams(location.search).get('chat'); if(!h) return; const go=()=>{ if(Me&&Me.token) Chats.open(h); }; setTimeout(go,1500); try{ window.history.replaceState(null,'',location.pathname); }catch(e){} }
+
 /* ---------------- first-day guide ---------------- */
 // "Getting started" on your own card: six first steps, each checked off from what you've actually done, with a small
 // reward to collect for each and a bonus for finishing. "Show me" takes you to the right place for each step.
@@ -3870,7 +3909,7 @@ function findMe(){ let mine=(Me&&Me.handle)||null; if(!mine){ try{ const v=local
   const h = Store.canWrite ? (S.meta&&S.meta.founder) : mine;
   if(h){ openCitizen(h); return; }
   openTab('people'); setTimeout(()=>{ const s=$('search'); if(s) s.focus(); },50); toast('Type your username, open your card and tap "This is me".'); }
-checkMe().then(resumeClaim);
+checkMe().then(resumeClaim).then(openFromNotification);
 // ---- The opening: plays the narrated intro video (public/intro.mp4) when there is one, otherwise the story as title cards ----
 async function playIntro(force){
   if(document.getElementById('intro')) return; ls.set('resurgence-intro-seen',1);

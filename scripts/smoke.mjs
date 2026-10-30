@@ -441,6 +441,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     for (let i = 0; i < 30 && !caught; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 1000'); const r = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P); if (r.json.caught) caught = r.json; }
     ok(caught && caught.jailed && caught.fine >= 25, 'caught near the police: fined and sent to jail', JSON.stringify(caught));
     ok(caught && caught.band === 'low' && caught.police <= 15, 'police a few tiles from the scene: the low-chance band', JSON.stringify(caught));
+    { const lg = (await call('GET', '/api/admin/test/pushlog')).json.log; ok(lg.some(x => x.kind === 'crime' && /got caught/.test(x.body) && /refunded/.test(x.body)), 'a caught pickpocket: the victim’s phone hears about the refund', JSON.stringify(lg.slice(-1))); }
     { const nts = (await pool.query("select n.text from notices n join citizens c on c.id = n.citizen_id where c.handle = 'jobfill_a' order by n.id")).rows.map(r => r.text);
       ok(nts.some(t => /^🚓 @zara_ng picked your pocket but got caught by the police\. Your [\d,]+ coins have been refunded\.$/.test(t)), 'caught: the victim is told who it was, and refunded', JSON.stringify(nts.slice(-2)));
       ok(nts.filter(t => /Someone just picked your pocket/.test(t)).every(t => !/@zara_ng/.test(t)), 'got away: the victim is told, but not who', JSON.stringify(nts.slice(0, 2)));
@@ -551,6 +552,8 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await call('GET', '/api/me/gift', undefined, P)).json.left === 500, 'and the card knows how much is left');
     let ev; for (let i = 0; i < 15 && !ev; i++) { ev = ((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).find(e => e.kind === 'gift'); if (!ev) await new Promise(r => setTimeout(r, 250)); } // the news list is cached for 2 s
     ok(ev && /@zara_ng sent @jobfill_a a gift/.test(ev.text) && !/1,500|1500/.test(ev.text), "the Colony Log says who, not how much", ev?.text);
+    { const ja = (await pool.query("select id from citizens where handle = 'jobfill_a'")).rows[0].id, lg = (await call('GET', '/api/admin/test/pushlog')).json.log;
+      ok(lg.some(x => x.kind === 'gift' && x.ids.includes(ja) && /@zara_ng sent you 1,500 coins/.test(x.body)), 'the gift goes to their phone too, once it is saved', JSON.stringify(lg.slice(-2))); }
     await set('zara_ng', 'coins_base = 100, bank = 50, gift_day = null, gift_sent = 0');
     ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 130 }, P)).status === 400, "gifts are cash: savings don't count");
     const gb = await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 100 }, P), zz = await whoDev('zara_ng');
@@ -625,6 +628,17 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     wb.ws.close(); await sleep(600);
     ok(!(await call('GET', '/api/online', undefined, { auth: false })).json.some(p => p.h === 'jobfill_a'), 'closing the colony goes offline');
     wa.ws.close(); stranger.ws.close(); await pool.query("update citizens set pass_hash = null where handle = 'jobfill_a'"); }
+  // ---- phone notifications ----
+  { const k = await call('GET', '/api/push/key', undefined, { auth: false });
+    ok(k.status === 200 && /^[A-Za-z0-9_-]{80,}$/.test(k.json.key || '') && k.json.kinds?.crime, 'the colony has a push key (made once, kept in the database)', JSON.stringify(k.json).slice(0, 80));
+    ok((await call('GET', '/api/push/key', undefined, { auth: false })).json.key === k.json.key, 'and it stays the same');
+    ok((await call('POST', '/api/me/push', { subscription: { endpoint: 'http://not-https.example/x', keys: { p256dh: 'a', auth: 'b' } } }, P)).status === 400, 'only proper push subscriptions are accepted');
+    const sub = { endpoint: 'https://push.invalid/smoke-' + Date.now(), keys: { p256dh: 'BOr5r0Z7m8lRMYmdKvyX4gS3T2q1Xq5c6Q9w8nM2b1J0Yb3o2pQ1rS4tU5vW6xY7zA8bC9dE0fG1hI2jK3lM4nO5pQ', auth: 'aBcDeFgHiJkLmNoPqRsTuV' } };
+    const on = await call('POST', '/api/me/push', { subscription: sub }, P);
+    ok(on.status === 200 && on.json.devices === 1 && on.json.prefs.gift === true, 'turning notifications on for a device', JSON.stringify(on.json).slice(0, 120));
+    const pr = await call('PUT', '/api/me/push/prefs', { prefs: { chat: false } }, P);
+    ok(pr.json.prefs.chat === false && pr.json.prefs.crime === true, 'and choosing which kinds to get');
+    ok((await call('DELETE', '/api/me/push', { endpoint: sub.endpoint }, P)).json.devices === 0, 'turning them off again'); }
   // ---- the first-day guide ----
   { await pool.query("update citizens set guide = null, daily_day = null, daily_streak = 0 where handle = 'zara_ng'");
     ok((await call('GET', '/api/me/guide', undefined, { auth: false })).status === 401, 'the guide is for signed-in colonists');

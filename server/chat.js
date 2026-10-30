@@ -80,6 +80,7 @@ export class Chat {
     await pool.query('insert into dms (id, pair, sender_id, recipient_id, text, t) values ($1, $2, $3, $4, $5, $6)', [m.id, m.pair, m.sender_id, m.recipient_id, m.text, m.t]);
     // Delivered only to the two people's own connections, never broadcast.
     this.bus.publish([{ op: 'dm', private: true, to: [meP.id, o.id], data: { id: m.id, from: { id: meP.id, h: meP.handle, n: meP.name || '', g: meP.gender || 'm' }, to: { id: o.id, h: o.handle }, text, t: now } }]);
+    if (this.push && !isOnline(o.last_seen)) this.push.send([o.id], { kind: 'chat', title: `💬 ${meP.name || '@' + meP.handle}`, body: text.length > 120 ? text.slice(0, 120) + '…' : text, tag: 'dm-' + meP.id, url: '/?chat=' + encodeURIComponent(meP.handle) }).catch(() => {});
     await pool.query('delete from dms where pair = $1 and t < (select t from dms where pair = $1 order by t desc offset 500 limit 1)', [m.pair]); // keep the last 500 per chat
     return { ok: true, id: m.id, t: now };
   }

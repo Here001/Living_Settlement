@@ -26,7 +26,9 @@
 <meta name="twitter:image" content="https://playresurgence.com/og.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap" rel="stylesheet">
+<!-- Fonts load without holding up the first screen: on a slow or blocked connection the game shows straight away in the phone's own font. -->
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap" rel="stylesheet"></noscript>
 <style>
 :root{
   --paper:#F6F1E6; --panel:#FBF8F1; --ink:#2B2621; --muted:#6E655A; --line:#2B2621; --soft:#E3DACA;
@@ -778,7 +780,7 @@ function drawBCached(b,t){
   if(e){ BSPR.map.delete(key); BSPR.map.set(key,e); BSPR.hits++; }
   else { const old=BSPR.last.get(b.id), zooming=performance.now()-Ground.zoomAt<220;
     if(old&&old.base===base&&(zooming||performance.now()>BSPR.budgetEnd)) e=old; // mid-pinch or out of time: the last picture, scaled
-    else if(performance.now()<=BSPR.budgetEnd||!old){ e=performance.now()<=BSPR.budgetEnd?bspMake(b,t,sc,base):null;
+    else { const can=performance.now()<=BSPR.budgetEnd||BSPR.made<(zooming?2:10); e=can?bspMake(b,t,sc,base):null; // a picture costs about one ordinary drawing, so a few a frame are always worth it
       if(e){ BSPR.made++; BSPR.map.set(key,e); BSPR.px+=e.px; if(old&&old!==e&&old.base!==base){} BSPR.last.set(b.id,e);
         const cap=bspCap(); for(const [k,v] of BSPR.map){ if(BSPR.px<=cap) break; BSPR.map.delete(k); if(BSPR.last.get(v.base.split('|')[0])===v) BSPR.last.delete(v.base.split('|')[0]); bspFree(v); } } } }
   if(!e){ BSPR.live++; drawB(b,t); return; }
@@ -981,7 +983,11 @@ function line(a,b,col,lw){ ctx.strokeStyle=col||INK; ctx.lineWidth=lw||1; ctx.li
 function hatch(a,b,c,d,n,col,lw){ ctx.strokeStyle=col; ctx.lineWidth=lw||0.8; ctx.beginPath(); for(let i=1;i<n;i++){ const t=i/n, p=lerp(a,d,t), q=lerp(b,c,t); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); } ctx.stroke(); }
 // Quality: if a phone can't keep up, the city drops to a slightly lower resolution (and skips small extras) instead of stuttering,
 // and climbs back up when there's headroom again. Level 0 is full quality.
-const Quality={ level:0, slow:0, fast:0, last:0, avg:16,
+// Each phone remembers the level it settled on last time, so a slow phone starts where it ended up instead of stuttering
+// its way down again. A first visit on a phone with little memory or few cores starts two steps down.
+const QSAVED=(()=>{ try{ const v=localStorage.getItem('resurgence-quality'); return v==null?null:Math.max(0,Math.min(3,Number(v)||0)); }catch(e){ return null; } })();
+const QGUESS=(()=>{ const mem=navigator.deviceMemory||8, cores=navigator.hardwareConcurrency||8, mobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent); return mobile&&(mem<=3||cores<=4)?2:mobile&&mem<=4?1:0; })();
+const Quality={ level:QSAVED??QGUESS, slow:0, fast:0, last:0, avg:16,
   dpr(){ const full=Math.min(window.devicePixelRatio||1,2); return Math.max(1,Math.min(full,[2,1.5,1.25,1][this.level])); },
   get grain(){ return this.level<2; }, get ghosts(){ return this.level<3; },
   sample(work,ts){ const dt=this.last?ts-this.last:16; this.last=ts; if(dt>400||document.hidden) return; // ignore pauses (tab hidden, alerts)
@@ -993,7 +999,7 @@ const Quality={ level:0, slow:0, fast:0, last:0, avg:16,
   floor:0, upAt:0,
   set(l){ const now=performance.now();
     if(l<this.level) this.upAt=now; else if(now-this.upAt<20000) this.floor=l; // went up and had to come straight back down: stay here
-    this.level=l; this.slow=this.fast=0; this.avg=24; resize(); } };
+    this.level=l; this.slow=this.fast=0; this.avg=24; resize(); clearTimeout(this.saveT); this.saveT=setTimeout(()=>{ try{ localStorage.setItem('resurgence-quality',String(this.level)); }catch(e){} },4000); } };
 function resize(){ dpr=Quality.dpr(); cw=cv.clientWidth||innerWidth; ch=cv.clientHeight||innerHeight; cv.width=Math.round(cw*dpr); cv.height=Math.round(ch*dpr); }
 // Every couple of seconds, take the map's colour along its top and bottom edges and paint the page's edges (and the
 // browser's theme colour) to match, so the phone's own bars blend into the colony instead of showing a flat band.
@@ -1210,19 +1216,24 @@ const PART_DRAW={
 function rr0(a,b,w,h,r){ ctx.beginPath(); ctx.roundRect ? ctx.roundRect(a,b,w,h,r) : ctx.rect(a,b,w,h); ctx.fill(); ctx.stroke(); }
 // Sprites cover x −12…11 and y −40…6 around the feet, at the current zoom × screen density rounded to steps of about 19%.
 // All parts for the current zoom live in one atlas image, so the browser copies from a single picture.
-const SPR={ step:0, map:new Map(), atlas:null, g:null, cx:0, cy:0, full:false };
+// The parts live on 1024×1024 pages rather than one huge picture: adding a part to a page that is also being drawn from
+// makes the browser copy that whole page again, and a small page is a quick copy (a 2048 one froze slow phones on zoom).
+const SPR={ step:0, map:new Map(), pages:[], pool:[], g:null, cv:null, cx:0, cy:0, full:false };
+const SPR_PAGE=1024, SPR_PAGES=8;
+function sprPage(){ if(SPR.pages.length>=SPR_PAGES) return false; let cv=SPR.pool.pop();
+  if(!cv){ cv=document.createElement('canvas'); cv.width=cv.height=SPR_PAGE; } const g=cv.getContext('2d'); if(!g) return false;
+  g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,SPR_PAGE,SPR_PAGE); SPR.pages.push(cv); SPR.cv=cv; SPR.g=g; SPR.cx=SPR.cy=0; return true; }
 function sprStep(){ const s=cam.z*dpr; return Math.pow(2,Math.round(Math.log2(Math.max(0.2,s))*4)/4); }
 function part(name,a,b){ const key=name+'|'+a+'|'+b; let c=SPR.map.get(key); if(c) return c;
-  const s=SPR.step, w=Math.ceil(23*s)+2, h=Math.ceil(46*s)+2, A=SPR.atlas;
-  if(SPR.cx+w>A.width){ SPR.cx=0; SPR.cy+=h; } if(SPR.cy+h>A.height) return null; // full: draw by hand this time
-  const g=SPR.g, ox=SPR.cx, oy=SPR.cy; SPR.cx+=w;
+  const s=SPR.step, w=Math.ceil(23*s)+2, h=Math.ceil(46*s)+2; if(w>SPR_PAGE||h>SPR_PAGE) return null;
+  if(!SPR.cv&&!sprPage()) return null;
+  if(SPR.cx+w>SPR_PAGE){ SPR.cx=0; SPR.cy+=h; } if(SPR.cy+h>SPR_PAGE&&!sprPage()) return null; // all pages full: draw by hand this time
+  const g=SPR.g, cv=SPR.cv, ox=SPR.cx, oy=SPR.cy; SPR.cx+=w;
   const keep=ctx; ctx=g; try{ g.setTransform(s,0,0,s,ox+12*s+1,oy+40*s+1); g.strokeStyle=INK; g.lineWidth=0.9; g.lineJoin='round'; PART_DRAW[name](a,b); } finally { ctx=keep; }
-  c={ox,oy,w,h,s}; SPR.map.set(key,c); return c; }
-function stamp(c,x,y){ const s=c.s; ctx.drawImage(SPR.atlas, c.ox, c.oy, c.w, c.h, x-(12*s+1)/s, y-(40*s+1)/s, c.w/s, c.h/s); }
-function sprBegin(){ const st=sprStep(); if(st===SPR.step&&SPR.atlas) return;
-  SPR.step=st; SPR.map=new Map(); SPR.cx=SPR.cy=0;
-  if(!SPR.atlas){ SPR.atlas=document.createElement('canvas'); SPR.atlas.width=SPR.atlas.height=2048; SPR.g=SPR.atlas.getContext('2d'); }
-  SPR.g.setTransform(1,0,0,1,0,0); SPR.g.clearRect(0,0,2048,2048); }
+  c={cv,ox,oy,w,h,s}; SPR.map.set(key,c); return c; }
+function stamp(c,x,y){ const s=c.s; ctx.drawImage(c.cv, c.ox, c.oy, c.w, c.h, x-(12*s+1)/s, y-(40*s+1)/s, c.w/s, c.h/s); }
+function sprBegin(){ const st=sprStep(); if(st===SPR.step&&SPR.step) return;
+  SPR.step=st; SPR.map=new Map(); SPR.pool.push(...SPR.pages); SPR.pages=[]; SPR.cv=null; SPR.g=null; SPR.cx=SPR.cy=0; }
 const SW_STEPS=[-1.4,-0.7,0,0.7,1.4];
 function drawCitizen(c, st, selected, ghost){
   const p=iso(st.x,st.y), L=c._look||(c._look=look(c)), hc=c._h??(c._h=hash(c.id)); const bob=st.moving?Math.abs(Math.sin(T_NOW/140+hc))*2:0;
@@ -1864,7 +1875,26 @@ function trainCars(gm,tminX,tmaxX,tminY,tmaxY){ const out=[]; railBusy.clear();
 
 /* ---------------- vehicles ---------------- */
 // One drawer for every vehicle: an oriented box with a cabin, coloured by type, lights at night, sirens when on a call.
-function drawVehicle(px,py,dx,dy,V,col,siren,scale=1,col2){ if(VIEW&&!RAW){ const p=toView(px,py), q=toView(dx,dy); return inView(()=>drawVehicle(p[0],p[1],q[0],q[1],V,col,siren,scale,col2)); } const len=V.len/2*scale, wid=V.wid/2*scale, h=V.h*scale, sx=-dy, sy=dx;
+// Vehicles come from small cached pictures, one per type, colour and heading (32 headings), so a busy street costs a
+// few image copies instead of dozens of shapes. Night lights and windows are replayed; flashing sirens are drawn live.
+const VSPR={ map:new Map(), ids:new WeakMap(), n:0 };
+function drawVehicle(px,py,dx,dy,V,col,siren,scale=1,col2){ if(VIEW&&!RAW){ const p=toView(px,py), q=toView(dx,dy); return inView(()=>drawVehicle(p[0],p[1],q[0],q[1],V,col,siren,scale,col2)); }
+  if(SPR_REC) return drawVehicle0(px,py,dx,dy,V,col,siren,scale,col2); // (inside another cached picture: draw it as usual)
+  let vid=VSPR.ids.get(V); if(!vid){ vid=++VSPR.n; VSPR.ids.set(V,vid); }
+  const ai=((Math.round(Math.atan2(dy,dx)/(2*Math.PI)*32)%32)+32)%32, a=ai/32*2*Math.PI, sc=bspBucket(), key=`${vid}|${col}|${col2||''}|${ai}|${scale}|${sc}|${DARK>0.3?1:0}`;
+  let e=VSPR.map.get(key);
+  if(!e){ const X=56, Y0=44, Y1=26, W=Math.ceil(2*X*sc), H=Math.ceil((Y0+Y1)*sc), cv=document.createElement('canvas'); cv.width=W; cv.height=H; const g=cv.getContext('2d');
+    if(!g) return drawVehicle0(px,py,dx,dy,V,col,siren,scale,col2);
+    g.setTransform(sc,0,0,sc,X*sc,Y0*sc); g.strokeStyle=INK; g.lineJoin='round'; g.lineCap='round';
+    const keep=ctx, wq=windowQuads.length, lq=lights.length; ctx=g;
+    try{ drawVehicle0(0,0,Math.cos(a),Math.sin(a),V,col,false,scale,col2); } finally{ ctx=keep; }
+    e={ cv, X, Y0, Y1, quads:windowQuads.splice(wq), lts:lights.splice(lq) };
+    if(VSPR.map.size>700){ const k0=VSPR.map.keys().next().value; const o=VSPR.map.get(k0); o.cv.width=o.cv.height=0; VSPR.map.delete(k0); }
+    VSPR.map.set(key,e); }
+  const o=iso(px,py); ctx.drawImage(e.cv, o.x-e.X, o.y-e.Y0, 2*e.X, e.Y0+e.Y1);
+  for(const q of e.quads) windowQuads.push(q.map(p=>({x:p.x+o.x,y:p.y+o.y}))); for(const l of e.lts) lights.push({...l,x:l.x+o.x,y:l.y+o.y});
+  if(V.siren && siren){ const h=V.h*scale, sx=o.x, sy=o.y-h-2, on=Math.floor(T_NOW/250)%2; ctx.fillStyle=on?V.siren:'#F4F4F0'; ctx.beginPath(); ctx.arc(sx-2,sy,2,0,7); ctx.fill(); ctx.fillStyle=on?'#F4F4F0':'#4A7BD9'; ctx.beginPath(); ctx.arc(sx+2,sy,2,0,7); ctx.fill(); lights.push({x:sx,y:sy,r:34,col:on?'255,80,70':'90,140,255'}); } }
+function drawVehicle0(px,py,dx,dy,V,col,siren,scale=1,col2){ if(VIEW&&!RAW){ const p=toView(px,py), q=toView(dx,dy); return inView(()=>drawVehicle0(p[0],p[1],q[0],q[1],V,col,siren,scale,col2)); } const len=V.len/2*scale, wid=V.wid/2*scale, h=V.h*scale, sx=-dy, sy=dx;
   const P=(f,s,z)=>{ const q=iso(px+dx*f*len+sx*s*wid, py+dy*f*len+sy*s*wid); return {x:q.x,y:q.y-z}; };
   poly([P(-1.1,-1.1,0),P(1.1,-1.1,0),P(1.1,1.1,0),P(-1.1,1.1,0)],'rgba(30,40,70,.22)',false);
   const box=(f0,f1,s0,z0,z1,c)=>{ const fs=[[f1,1,dx,dy],[f0,-1,-dx,-dy]], ss=[[s0,1,sx,sy],[-s0,-1,-sx,-sy]], sides=[];
@@ -2485,7 +2515,7 @@ const wxIconEl = k => { const s2=el('span',{class:'icthumb'}); s2.innerHTML=I(WX
 const disasterIconEl = k => { const s2=el('span',{class:'icthumb'}); s2.innerHTML=I(DIS_SVG[k]); return s2; };
 function waterThumb(id){ return renderThumb('w:'+id, 2, 2, 8, ()=>{ const back=D.water; D.water=new Map([['0,0',id],['1,0',id],['0,1',id],['1,1',id]]); drawWaterTiles([...D.water.keys()].map(k=>{ const [x,y]=k.split(',').map(Number); return [x,y,id]; })); D.water=back; }); }
 function drainThumb(){ return renderThumb('drain', 2, 2, 8, ()=>{ poly([iso(0,0),iso(2,0),iso(2,2),iso(0,2)],'#8FC463','#6E9E48',1); poly([iso(1,0),iso(2,0),iso(2,1),iso(1,1)],'#6FB3D2',INK,1); }); }
-function vehicleThumb(id){ return renderThumb('v:'+id, 2, 1, 16, ()=>{ poly([iso(-0.2,0),iso(2.2,0),iso(2.2,1),iso(-0.2,1)],'#7E8185',INK,1); drawVehicle(1,0.5,1,0,VEHICLE_TYPES[id],VEHICLE_TYPES[id].colors[0],true,1.3); }); }
+function vehicleThumb(id){ return renderThumb('v:'+id, 2, 1, 16, ()=>{ poly([iso(-0.2,0),iso(2.2,0),iso(2.2,1),iso(-0.2,1)],'#7E8185',INK,1); drawVehicle0(1,0.5,1,0,VEHICLE_TYPES[id],VEHICLE_TYPES[id].colors[0],true,1.3); }); }
 function paneHead(title, extra){ const h=el('div',{class:'pane-head'}, el('h2',{class:'pane-title',text:title})); if(extra) h.append(...extra); h.append(maxBtn(), el('button',{class:'x','aria-label':'Close panel',text:'×',onclick:()=>openTab(null)})); return h; }
 // Full screen ⇄ normal size for the open panel (remembered while the colony is open).
 const MAX_ICON='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>';
@@ -3238,7 +3268,7 @@ function giftBox(handle){ const wrap=el('div',{class:'row-actions'});
     el('div',{class:'cbet'}, inp, el('button',{class:'btn primary',text:'Send',onclick:()=>sendGift(handle, inp.value)}), el('button',{class:'linkb',text:'Cancel',onclick:()=>{ giftOpen=null; renderCard(true); }}))); }
 let carPick={ m:'hatch', col:null };
 function carThumb(m,col){ const k='car:'+m+':'+col; if(creatureThumbs[k]) return creatureThumbs[k]; const cv2=document.createElement('canvas'); cv2.width=96; cv2.height=64; const keep=ctx; ctx=cv2.getContext('2d');
-  try{ ctx.setTransform(2.2,0,0,2.2,48,40); drawVehicle(0,0,1,0,CAR_MODELS[m],col,false,1); } finally { ctx=keep; } return creatureThumbs[k]=cv2.toDataURL(); }
+  try{ ctx.setTransform(2.2,0,0,2.2,48,40); drawVehicle0(0,0,1,0,CAR_MODELS[m],col,false,1); } finally { ctx=keep; } return creatureThumbs[k]=cv2.toDataURL(); }
 function carsPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cars'})); const d=detail.get(c.id); const cars=(d&&d.cars)||[], active=d&&d.carActive;
   if(!c.home){ box.append(el('p',{class:'hint',text:'You need a home before you buy a car.'})); return box; }
   if(cars.length){ const ul=el('ul',{class:'joblist'}); for(const car of cars){ const M=CAR_MODELS[car.m]; if(!M) continue;
@@ -3858,7 +3888,7 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
 let frameStats={};
-window.__dbg={ trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+window.__dbg={ jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

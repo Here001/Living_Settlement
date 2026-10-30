@@ -358,6 +358,23 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
 - **Tickets.** Colonists buy up to 10 tickets each.
 - **The draw.** It's announced 2½ minutes before it happens. One ticket wins the whole pot: every ticket's price plus the bonus.
 
+## Performance on phones
+
+The map is tuned for low-end Android phones. The main pieces, all in `public/index.html`:
+- **Buildings are cached pictures.** Each finished building is drawn once into its own picture, sized to its type's measured outline and redrawn only when the zoom moves to a new step, and that picture is copied each frame. Night lights and chimney smoke are replayed on top. Buildings that animate (clocks, windmills, neon, ferris wheels…) are drawn live. The cache is limited to 6 to 9 million pixels.
+- **Vehicles are cached pictures** too: one per type, colour and heading (32 headings). Flashing sirens are drawn live.
+- **People are drawn from pre-drawn parts**, packed on 1024×1024 pages. Pages are kept small because adding a part to a page that's also being drawn from makes the browser copy the whole page.
+- **Quality adapts.** If frames run slow, the map drops to a lower resolution and simulates fewer people (1,500 → 1,100 → 700 → 450). Each phone remembers the level it settled on. On a first visit, a phone with little memory or few cores starts two steps down.
+- **Fonts never block the first screen.** On a slow or blocked connection the game opens in the phone's own font.
+
+Results on a simulated low-end Android (360×780 screen, CPU slowed 6×, 9,000 colonists):
+- town centre: 2.4 → 8–10 frames a second
+- zoomed out over the whole colony: 8 → 11–30
+- jumping from the whole colony into a busy street: freezes went from 2.2 s to under 0.3 s
+- total freezes while loading: 13.5 s → 5.5–7.5 s
+
+At full speed the town centre runs at about 46–60 frames a second (it was 18). A two-minute session of wandering, zooming and opening tabs keeps memory flat at 20–30 MB.
+
 ## Run it on your computer
 
 With Docker: `docker compose up --build`, then open http://localhost:3000/#builder (token `local-dev-token-please-change`).

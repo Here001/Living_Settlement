@@ -5,4 +5,4 @@ export const POLICIES = {
   savers: { icon: '🏦', name: 'Savers first',   does: 'Bank interest is doubled.' },
   daily:  { icon: '🎁', name: 'Daily bonus',    does: 'Daily rewards are 50% bigger.' },
 };
-export const RUN_FEE = 500, MAYOR_PAY = 250, PITCH_MAX = 140;
+export const RUN_FEE = 5000, MAYOR_PAY = 60, PITCH_MAX = 140; // pay is per game day: about 2,900 a real day, like a top job

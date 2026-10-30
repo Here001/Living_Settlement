@@ -609,11 +609,11 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
   </form>
 </div>
 <script type="module">
-import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank } from '/shared/catalog.js';
+import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank, carPaid } from '/shared/catalog.js';
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
-import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare } from '/shared/rules.js';
+import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
@@ -2864,7 +2864,7 @@ var Earn={ data:null, at:0, loading:false, skew:0, busy:false, msg:null, cast:nu
     box.append(ssec);
     // 6. Everything else
     box.append(this.section('✨','More ways','',el('ul',{class:'emore'},
-      el('li',null,'🎁 ',el('b',{text:'Daily reward'}),': up to 400 coins for coming back every day.'),
+      el('li',null,'🎁 ',el('b',{text:'Daily reward'}),': up to 1,600 coins for coming back every day.'),
       el('li',null,'🏠 ',el('b',{text:'Be a landlord'}),': buy a building (Home tab) and collect rent and profits every day.'),
       el('li',null,'🏦 ',el('b',{text:'Bank'}),': savings earn a little interest.'),
       el('li',null,'🎁 ',el('b',{text:'Gifts'}),': friends can send you coins.'),
@@ -3144,7 +3144,7 @@ function renderRaces(force){ const body=$('raceBody'); if(!body||activeTab!=='ra
   const I=Race.info, hadLanes=!!$('raceLanes'), keep=body.scrollTop; body.innerHTML='';
   requestAnimationFrame(()=>{ body.scrollTop = $('raceLanes')&&!hadLanes ? 0 : keep; }); // jump up to the race when it starts
   const lb=lotteryBox(); if(lb) body.append(lb);
-  if(Store.canWrite && !(Lotto.info&&Lotto.info.lottery&&!Lotto.info.lottery.drawn)){ const mi=el('input',{type:'number',min:'5',max:'1440',value:'60','aria-label':'Minutes until the draw'}), pi=el('input',{type:'number',min:'1',value:'10','aria-label':'Ticket price'}), bi=el('input',{type:'number',min:'0',value:'0','aria-label':'Bonus coins'});
+  if(Store.canWrite && !(Lotto.info&&Lotto.info.lottery&&!Lotto.info.lottery.drawn)){ const mi=el('input',{type:'number',min:'5',max:'1440',value:'60','aria-label':'Minutes until the draw'}), pi=el('input',{type:'number',min:'1',max:'10000',value:'100','aria-label':'Ticket price'}), bi=el('input',{type:'number',min:'0',value:'0','aria-label':'Bonus coins'});
     body.append(el('details',{class:'authbox'}, el('summary',{text:'Start a lottery'}), el('div',{class:'cbet'}, el('span',{text:'Draw in (minutes)'}), mi), el('div',{class:'cbet'}, el('span',{text:'Ticket price'}), pi), el('div',{class:'cbet'}, el('span',{text:'Bonus from treasury'}), bi),
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Start the lottery',onclick:async()=>{ try{ await api('/api/admin/lottery',{method:'POST',body:{minutes:Number(mi.value),price:Number(pi.value),bonus:Number(bi.value)}}); toast('Lottery started.'); loadLottery(); }catch(e){ toast(e.message); } }})))); }
   if(!I){ body.append(el('p',{class:'hint',text:'Loading the races…'})); if(!Race.loadAt) loadRace(); return; }
@@ -3352,7 +3352,7 @@ function walletPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'�
   const nb=nearestBank(c)||B.nearest;
   box.append(el('div',{class:'row-actions'}, nb?el('button',{class:'btn primary',text:'🏦 Go to the nearest Bank',onclick:()=>goToBuilding(nb)}):el('span',{class:'hint',text:B.hasBank?'Find a Bank on the map to deposit.':"The colony doesn't have a Bank yet."})));
   const gto=el('input',{type:'text',placeholder:'@friend',autocomplete:'off','aria-label':'Gift to'}), gam=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Coins to gift',placeholder:'Coins'});
-  box.append(el('h3',{text:'🎁 Gift coins'}), el('p',{class:'hint',text:'Send cash to a verified colonist, up to 2,000 a game day. Gifts come out of the cash on you.'}), el('div',{class:'cbet'}, gto, gam, el('button',{class:'btn',text:'Send',onclick:()=>sendGift(gto.value, gam.value)}))); return box; }
+  box.append(el('h3',{text:'🎁 Gift coins'}), el('p',{class:'hint',text:'Send cash to a verified colonist, up to 10,000 a day. Gifts come out of the cash on you.'}), el('div',{class:'cbet'}, gto, gam, el('button',{class:'btn',text:'Send',onclick:()=>sendGift(gto.value, gam.value)}))); return box; }
 // The account section on a Bank's card: the only place to deposit and withdraw.
 const BankAcct={ at:0, data:null, busy:false,
   load(){ if(this.busy) return; this.busy=true; api('/api/me/bank').then(d=>{ this.data=d; this.at=Date.now(); }).catch(()=>{}).finally(()=>{ this.busy=false; if(sel&&sel.kind==='b') renderCard(true); }); },
@@ -3369,7 +3369,7 @@ const BankAcct={ at:0, data:null, busy:false,
     box.append(el('div',{class:'cbet'}, inp, el('button',{class:'btn primary',text:'Deposit',onclick:()=>this.act('deposit',amt(),b)}), el('button',{class:'btn',text:'Withdraw',onclick:()=>this.act('withdraw',amt(),b)})),
       el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Deposit all my cash',disabled:!B.wallet,onclick:()=>this.act('deposit',B.wallet,b)})));
     return box; } };
-// Gifts: coins from your pocket to another colonist (up to 2,000 a game day).
+// Gifts: coins from your pocket to another colonist (up to 10,000 a real day).
 let giftOpen=null;
 async function sendGift(to, amount){ to=(to||'').trim().replace(/^@+/,''); const n=Math.floor(Number(amount)||0);
   if(!to){ toast('Who is the gift for?'); return; } if(n<1){ toast('Gift at least 1 coin.'); return; }
@@ -3377,7 +3377,7 @@ async function sendGift(to, amount){ to=(to||'').trim().replace(/^@+/,''); const
 function giftBox(handle){ const wrap=el('div',{class:'row-actions'});
   if(giftOpen!==handle){ wrap.append(el('button',{class:'btn',text:'🎁 Send a gift',onclick:()=>{ giftOpen=handle; renderCard(true); }})); return wrap; }
   const inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Coins to gift',placeholder:'Coins'});
-  return el('div',{class:'authbox'}, el('h3',{text:`Gift coins to @${handle}`}), el('p',{class:'hint',text:'From your pocket first, then your bank. Up to 2,000 a game day.'}),
+  return el('div',{class:'authbox'}, el('h3',{text:`Gift coins to @${handle}`}), el('p',{class:'hint',text:'Paid from the cash on you. Up to 10,000 a day.'}),
     el('div',{class:'cbet'}, inp, el('button',{class:'btn primary',text:'Send',onclick:()=>sendGift(handle, inp.value)}), el('button',{class:'linkb',text:'Cancel',onclick:()=>{ giftOpen=null; renderCard(true); }}))); }
 let carPick={ m:'hatch', col:null };
 function carThumb(m,col){ const k='car:'+m+':'+col; if(creatureThumbs[k]) return creatureThumbs[k]; const cv2=document.createElement('canvas'); cv2.width=96; cv2.height=64; const keep=ctx; ctx=cv2.getContext('2d');
@@ -3387,7 +3387,7 @@ function carsPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cars
   if(cars.length){ const ul=el('ul',{class:'joblist'}); for(const car of cars){ const M=CAR_MODELS[car.m]; if(!M) continue;
       ul.append(el('li',null, el('img',{src:carThumb(car.m,car.col),alt:'',width:'48',height:'32'}), el('div',{class:'jt'}, el('b',{text:M.name+(car.id===active?' · driving':'')}), el('span',{text:`Sells for ${fmt(Math.floor(M.price*0.6))}`})),
         car.id===active?'':el('button',{class:'btn',text:'Drive',onclick:()=>meAction('/api/me/cars/active',{id:car.id},`You're driving the ${M.name.toLowerCase()} now.`,'PUT')}),
-        el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell your ${M.name.toLowerCase()} for ${fmt(Math.floor(M.price*0.6))} coins?`,'Sell',()=>meAction(`/api/me/cars/${car.id}`,null,r=>`Sold for ${fmt(r.back)} coins.`,'DELETE'))}))); }
+        el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell your ${M.name.toLowerCase()} for ${fmt(Math.floor(carPaid(car)*0.6))} coins?`,'Sell',()=>meAction(`/api/me/cars/${car.id}`,null,r=>`Sold for ${fmt(r.back)} coins.`,'DELETE'))}))); }
     box.append(el('p',{class:'hint',text:`Your garage (${cars.length} of 3). You drive on longer trips; without a car you take a cab.`}), ul); }
   else box.append(el('p',{class:'hint',text:"You don't have a car, so you take cabs on longer trips. Buy one below."}));
   if(cars.length>=3) return box;
@@ -3437,7 +3437,7 @@ function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cri
   const ti=el('input',{type:'text',placeholder:'@username',autocomplete:'off','aria-label':'Whose pocket'});
   box.append(el('div',{class:'cbet'}, el('span',{text:'Pickpocket:'}), ti, el('button',{class:'btn',text:'Try',onclick:()=>tryPickpocket(ti.value)})),
     el('p',{class:'hint',text:'You’ll see their odds before you commit: it depends on where they are right now.'}));
-  if(K.rob) box.append(el('p',{class:'jobnow',text:`Nearest shop: ${K.rob.shop}. ${oddsText(K.rob)}.`}), el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:`Rob ${K.rob.shop} (${Math.round(K.rob.chance*100)}%)`,onclick:()=>toast(`Rob ${K.rob.shop}? ${oddsText(K.rob)}. You could get away with up to 400 coins, or end up in jail.`,'Do it',()=>doCrime('rob'))})));
+  if(K.rob) box.append(el('p',{class:'jobnow',text:`Nearest shop: ${K.rob.shop}. ${oddsText(K.rob)}.`}), el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:`Rob ${K.rob.shop} (${Math.round(K.rob.chance*100)}%)`,onclick:()=>toast(`Rob ${K.rob.shop}? ${oddsText(K.rob)}. You could get away with up to 1,500 coins, or end up in jail.`,'Do it',()=>doCrime('rob'))})));
   else box.append(el('p',{class:'hint',text:'There are no shops to rob.'}));
   return box; }
 let petPick='glimmerhop';
@@ -3563,7 +3563,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(t.work) add('Workers',`${fmt(b.jobUsed||0)} of ${fmt(t.work.slots)}${list('job',b.jobUsed||0)}`);
     if(t.work) add('Pay',`${t.work.salary} coins a day`);
     add('Here now', inside.length?inside.join(', '):'Nobody');
-    const forSale=BUYABLE.has(t.cat)&&(t.home||t.work), price=Math.max(500,t.cost||0);
+    const forSale=BUYABLE.has(t.cat)&&(t.home||t.work), price=propertyPrice(b.type);
     if(b.owner) add('Owner', `@${b.owner}`); else if(forSale&&b.done!==false&&!b.ruin) add('For sale', `${fmt(price)} coins`);
     if(forSale&&b.done!==false){ const gross=(t.home?(b.homeUsed||0)*(t.home.rent||0):0)+(t.work?(b.jobUsed||0)*(t.work.salary||0)*0.25:0); add('Earns', `About ${fmt(Math.floor(gross*0.8))} a day for its owner`); }
     card.append(close, el('button',{class:'x shr','aria-label':'Share','title':'Share',text:'↗',onclick:()=>Share.building(b)}), head, dl);
@@ -3712,7 +3712,7 @@ var Mayor={ data:null, at:0, busy:false, pick:'jobs',
     if(!D0.candidates.length) body.append(el('p',{class:'hint',text:'Nobody is running yet. You could be the first!'}));
     const most=Math.max(1,...D0.candidates.map(k=>k.votes));
     for(const k of D0.candidates){ const av=el('span',{class:'ava sm'}); av.innerHTML=avatarSVG({handle:k.handle,gender:k.g,name:k.name}); const pol=P[k.policy]||{};
-      const btn = k.me ? el('button',{class:'linkb',text:'Withdraw',onclick:()=>toast('Stop running? Your 500 coins aren’t refunded, and votes for you are dropped.','Withdraw',()=>this.act('/api/me/election/run',null,'DELETE','You’ve withdrawn.'))})
+      const btn = k.me ? el('button',{class:'linkb',text:'Withdraw',onclick:()=>toast(`Stop running? Your ${fmt(D0.fee)} coins aren’t refunded, and votes for you are dropped.`,'Withdraw',()=>this.act('/api/me/election/run',null,'DELETE','You’ve withdrawn.'))})
         : k.myVote ? el('span',{class:'g-ok',text:'✓ Your vote'})
         : el('button',{class:'btn sm primary',text:'Vote',disabled:!signed,onclick:()=>this.act('/api/me/election/vote',{handle:k.handle},'POST',`You voted for @${k.handle}.`)});
       body.append(el('div',{class:'cand'+(k.myVote?' voted':'')}, av, el('div',{class:'ctx'},

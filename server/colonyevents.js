@@ -71,7 +71,7 @@ export class ColonyEvents {
       const r = (await ch.q('select * from colony_events where id = $1 for update', [ev.id])).rows[0], d = r.data || {};
       if ((d.claimed || []).includes(id)) throw new HttpError(409, "You've already claimed your share.");
       if (!(d.left > 0)) throw new HttpError(409, 'Too late! All the supplies have been claimed.');
-      const { c } = await earn.lock(ch, id), want = 100 + crypto.randomInt(201);
+      const { c } = await earn.lock(ch, id), want = 300 + crypto.randomInt(601);
       d.left--; d.claimed = [...(d.claimed || []), id]; await ch.q('update colony_events set data = $2 where id = $1', [r.id, JSON.stringify(d)]);
       const p = await earn.pay(ch, c, want, 'supplies', true);
       ch.extraOps.push({ op: 'cevent', data: { ...out({ ...r, data: d }) } });

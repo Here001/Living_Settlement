@@ -16,7 +16,7 @@ export class Lottery {
   async start({ minutes, price, bonus }) {
     minutes = Math.floor(Number(minutes)); price = Math.floor(Number(price)); bonus = Math.floor(Number(bonus || 0));
     if (!(minutes >= 5 && minutes <= 1440)) throw new HttpError(400, 'The draw must be 5 minutes to 24 hours away.');
-    if (!(price >= 1 && price <= 1000)) throw new HttpError(400, 'Tickets cost 1 to 1,000 coins.');
+    if (!(price >= 1 && price <= 10000)) throw new HttpError(400, 'Tickets cost 1 to 10,000 coins.');
     if (!(bonus >= 0 && bonus <= 1000000)) throw new HttpError(400, 'The bonus must be 0 to 1,000,000 coins.');
     return this.world.change(async ch => {
       if (await this.current(ch.db)) throw new HttpError(409, 'A lottery is already running. Wait for its draw.');

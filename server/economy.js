@@ -3,21 +3,21 @@ import crypto from 'node:crypto';
 import { pool } from './db.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
-import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES } from '../shared/catalog.js';
+import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES, carPaid } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 import { MAYOR_PAY } from '../shared/elections.js';
 
-export const TREASURY_CUT = 0.2;        // the colony's share of every player business
-export const BUSINESS_SHARE = 0.25;     // a business makes 25% of its wage bill in profit
-// Savings grow 0.1% a game day (a game day is 30 real minutes), at most 20 coins a day each, and only while the
-// treasury can pay it: interest moves existing coins around, it never creates them.
-export const BANK_RATE = 0.001, BANK_CAP = 20;
-export const GIFT_DAILY = 2000; // the most coins one colonist can gift in a game day
+export const TREASURY_CUT = R.TREASURY_CUT, BUSINESS_SHARE = R.BUSINESS_SHARE;
+// Savings grow 0.02% a game day, about 1% a real day (48 game days), at most 100 coins a game day each, and only while
+// the treasury can pay it: interest moves existing coins around, it never creates them. A building earns its owner about
+// three times that, so savings are safe but slow, as in real life.
+export const BANK_RATE = 0.0002, BANK_CAP = 100;
+export const GIFT_DAILY = 10000; // the most coins one colonist can gift in a real day (about two days of hard work)
 // Coming back every day: a reward once per real-world day (days start at midnight UTC), bigger the longer the streak,
 // paid from the treasury. A week of it is worth about one real day of wages. Missing a day starts the streak again.
-export const DAILY_REWARDS = [50, 75, 100, 125, 150, 200, 400];
+export const DAILY_REWARDS = [200, 300, 400, 500, 600, 800, 1600]; // once a real day; day 7 is about a third of a busy day's earnings
 export const DAILY_MILESTONES = new Set([7, 14, 30, 50, 100, 200, 365]);
 const DAY_MS = 86400000, realDay = (t = Date.now()) => Math.floor(t / DAY_MS);
 export const dailyRewardFor = streak => DAILY_REWARDS[(Math.max(1, streak) - 1) % DAILY_REWARDS.length];
@@ -27,7 +27,7 @@ const nameOf = b => b.name || BUILDING_TYPES[b.type]?.name || 'a building';
 // What players may buy: homes and businesses. Public services, parks, landmarks, utilities and nature stay the colony's.
 const BUYABLE_CATS = new Set(['housing', 'shops', 'offices', 'industry']);
 export const buyable = type => { const t = BUILDING_TYPES[type]; return !!t && BUYABLE_CATS.has(t.cat) && !!(t.home || t.work); };
-export const priceOf = type => Math.max(500, BUILDING_TYPES[type]?.cost || 0);
+export const priceOf = type => R.propertyPrice(type); // see shared/rules.js: about a real month to pay for itself
 // A building's daily income for its owner, after the treasury's cut.
 export function dailyIncome(b) {
   const t = BUILDING_TYPES[b.type] || {}; let gross = 0;
@@ -119,11 +119,11 @@ export class Economy {
 
   // ---------- gifts ----------
   // A colonist sends coins to another verified colonist: from their pocket first, and the rest from their bank savings.
-  // At most GIFT_DAILY a game day, so nobody can pour a stack of accounts into one. Only avatars that have been claimed
+  // At most GIFT_DAILY a real day, so nobody can pour a stack of accounts into one. Only avatars that have been claimed
   // (verified with a password) can receive. The Colony Log says who gifted whom, never how much (balances are private).
   async giftInfo(id) {
     const c = (await pool.query('select gift_day, gift_sent from citizens where id = $1', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
-    const today = this.world.meta ? R.gameDay(Date.now(), this.world.meta.epoch) : 0;
+    const today = realDay();
     return { limit: GIFT_DAILY, left: GIFT_DAILY - (c.gift_day === today ? c.gift_sent : 0) };
   }
   async gift(id, to, amount) {
@@ -135,8 +135,8 @@ export class Economy {
       if (!r) throw new HttpError(404, `There's no colonist called @${h}.`);
       if (r.id === c.id) throw new HttpError(400, "You can't send a gift to yourself.");
       if (!r.pass_hash) throw new HttpError(403, `@${r.handle} hasn't verified their avatar yet, so they can't receive gifts.`);
-      const sent = c.gift_day === ch.today ? c.gift_sent : 0, left = GIFT_DAILY - sent;
-      if (amount > left) throw new HttpError(429, left > 0 ? `You can gift ${fmt(left)} more coins today (${fmt(GIFT_DAILY)} a day).` : `You've gifted ${fmt(GIFT_DAILY)} coins today. You can send more tomorrow (game time).`);
+      const today = realDay(), sent = c.gift_day === today ? c.gift_sent : 0, left = GIFT_DAILY - sent;
+      if (amount > left) throw new HttpError(429, left > 0 ? `You can gift ${fmt(left)} more coins today (${fmt(GIFT_DAILY)} a day).` : `You've gifted ${fmt(GIFT_DAILY)} coins today. You can send more tomorrow.`);
       ch.coins(c); const bank = Number(c.bank || 0);
       // Gifts are paid in cash, from what you have on you (savings stay in the bank until you withdraw them at a Bank).
       if (c.coins_base < amount) throw new HttpError(400, `You have ${fmt(c.coins_base)} coins on you. Gifts are paid in cash${bank ? ': withdraw some at a Bank first' : ''}.`);
@@ -144,7 +144,7 @@ export class Economy {
       ch.coins(r); c.coins_base -= fromPocket; r.coins_base += amount;
       ch.touch(c); ch.touch(r); await ch.saveCitizen(c); await ch.saveCitizen(r);
       if (fromBank) await ch.q('update citizens set bank = bank - $2 where id = $1', [c.id, fromBank]);
-      await ch.q('update citizens set gift_day = $2, gift_sent = $3 where id = $1', [c.id, ch.today, sent + amount]);
+      await ch.q('update citizens set gift_day = $2, gift_sent = $3 where id = $1', [c.id, today, sent + amount]);
       await ch.event(`🎁 @${c.handle} sent @${r.handle} a gift.`, 'gift');
       ch.pushes.push([[r.id], { kind: 'gift', title: '🎁 You got a gift', body: `@${c.handle} sent you ${fmt(amount)} coins.`, tag: 'gift' }]); await bump(ch, c.id, { gifts: 1 }); await score(ch, c.id, 'gifted', amount);
       return { ok: true, to: r.handle, amount, fromPocket, fromBank, coins: c.coins_base, bank: bank - fromBank, left: left - amount };
@@ -161,7 +161,7 @@ export class Economy {
       if (cars.length >= MAX_CARS) throw new HttpError(409, `Your garage holds ${MAX_CARS} cars. Sell one first.`);
       ch.coins(c); if (c.coins_base < M.price) throw new HttpError(400, `The ${M.name} costs ${fmt(M.price)} coins. You have ${fmt(c.coins_base)} on you.`);
       c.coins_base -= M.price; treasuryAdd(ch, M.price);
-      const car = { id: crypto.randomUUID().slice(0, 8), m: model, col: color, at: Date.now() }; cars.push(car); await bump(ch, c.id, { cars_bought: 1 });
+      const car = { id: crypto.randomUUID().slice(0, 8), m: model, col: color, at: Date.now(), paid: M.price }; cars.push(car); await bump(ch, c.id, { cars_bought: 1 });
       await ch.q('update citizens set cars = $2, car_active = coalesce(car_active, $3) where id = $1', [c.id, JSON.stringify(cars), car.id]);
       ch.touch(c); await ch.saveCitizen(c);
       return { ok: true, car, coins: c.coins_base };
@@ -171,7 +171,7 @@ export class Economy {
     return this.world.change(async ch => {
       const c = await this.lockMe(ch, id); const cars = Array.isArray(c.cars) ? c.cars : [], car = cars.find(x => x.id === carId);
       if (!car) throw new HttpError(404, "That car isn't in your garage.");
-      const back = Math.floor(CAR_MODELS[car.m].price * CAR_RESALE); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back);
+      const back = Math.floor(carPaid(car) * CAR_RESALE); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back);
       const left = cars.filter(x => x.id !== carId), active = c.car_active === carId ? (left[0]?.id ?? null) : c.car_active;
       await ch.q('update citizens set cars = $2, car_active = $3 where id = $1', [c.id, left.length ? JSON.stringify(left) : null, active]);
       ch.touch(c); await ch.saveCitizen(c); return { ok: true, back, coins: c.coins_base };

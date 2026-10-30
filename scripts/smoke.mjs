@@ -504,25 +504,25 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok(dr.json.mode === 'car' && dr.json.fare > 0 && dr.json.fare < want, 'with a car: just fuel, cheaper than a cab', JSON.stringify(dr.json));
       // weekly bills: car upkeep and property upkeep
       const zid = (await pool.query("select id from citizens where handle = 'zara_ng'")).rows[0].id, own = (await pool.query("select id, type, price from buildings where owner_id is null and done limit 1")).rows[0];
-      await pool.query('update buildings set owner_id = $1, owner_handle = $2, price = 5000 where id = $3', [zid, 'zara_ng', own.id]);
-      await pool.query("update citizens set coins_base = 100, bank = 1000, net = 0, coins_day = 0 where id = $1", [zid]);
+      await pool.query('update buildings set owner_id = $1, owner_handle = $2, price = 50000 where id = $3', [zid, 'zara_ng', own.id]);
+      await pool.query("update citizens set coins_base = 50, bank = 1000, net = 0, coins_day = 0 where id = $1", [zid]);
       const bl = await call('POST', '/api/admin/test/bills'), z1 = await whoDev('zara_ng');
-      ok(bl.status === 200 && z1.coins === 0 && z1.bank === 1000 - (60 + 100 - 100), 'weekly bills: car upkeep (60) and property upkeep (2% of 5,000), cash first, then savings', JSON.stringify({ bl: bl.json, coins: z1.coins, bank: z1.bank }));
+      ok(bl.status === 200 && z1.coins === 0 && z1.bank === 1000 - (45 + 50 - 50), 'weekly bills: car upkeep (45) and property upkeep (0.1% of 50,000), cash first, then savings', JSON.stringify({ bl: bl.json, coins: z1.coins, bank: z1.bank }));
       const nt = (await pool.query("select text from notices where citizen_id = $1 and kind = 'bills' order by id desc limit 1", [zid])).rows[0]?.text || '';
-      ok(/car upkeep 60 \+ 🏠 property upkeep 100 = 160 coins/.test(nt), 'and a notice says what it was for', nt);
+      ok(/car upkeep 45 \+ 🏠 property upkeep 50 = 95 coins/.test(nt), 'and a notice says what it was for', nt);
       await pool.query('update buildings set owner_id = null, owner_handle = null where id = $1', [own.id]); await pool.query("update citizens set cars = null, car_active = null where id = $1", [zid]); }
     ok((await call('POST', '/api/me/visit/end', {}, P)).status === 200 && (await who('zara_ng')).visit?.[4] <= Date.now() + 1000, 'and heads home (the trip back stays visible)');
     // pets
-    await set('zara_ng', 'coins_base = 2500');
+    await set('zara_ng', 'coins_base = 12500');
     ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip' }, P)).status === 400, 'pets are adopted at a Pet store');
     ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip', buildingId: policeId }, P)).status === 409, "a police station isn't a Pet store");
     { const { PET_PRICES, petPrice } = await import('../shared/creatures.js'); const ps = Object.values(PET_PRICES);
-      ok(Math.min(...ps) >= 500 && new Set(ps).size === ps.length && petPrice('glimmerhop') === 2000, 'every creature has its own price, 500 at least', JSON.stringify(PET_PRICES)); }
-    await set('zara_ng', 'coins_base = 1999'); ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip', buildingId: petShop }, P)).status === 400, 'a glimmerhop costs 2,000 coins');
-    await set('zara_ng', 'coins_base = 2500');
+      ok(Math.min(...ps) >= 2500 && new Set(ps).size === ps.length && petPrice('glimmerhop') === 10000, 'every creature has its own price, 2,500 at least', JSON.stringify(PET_PRICES)); }
+    await set('zara_ng', 'coins_base = 9999'); ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip', buildingId: petShop }, P)).status === 400, 'a glimmerhop costs 10,000 coins');
+    await set('zara_ng', 'coins_base = 12500');
     ok((await call('POST', '/api/me/pet', { kind: 'unicorn', buildingId: petShop }, P)).status === 400, 'only native creatures');
     const pet = await call('POST', '/api/me/pet', { kind: 'glimmerhop', name: 'Zip', buildingId: petShop }, P);
-    ok(pet.status === 200 && (await who('zara_ng')).pet?.k === 'glimmerhop' && (await coins('zara_ng')) === 500 && pet.json.price === 2000, 'adopting a pet everyone can see', JSON.stringify(pet.json));
+    ok(pet.status === 200 && (await who('zara_ng')).pet?.k === 'glimmerhop' && (await coins('zara_ng')) === 2500 && pet.json.price === 10000, 'adopting a pet everyone can see', JSON.stringify(pet.json));
     ok((await call('GET', '/api/meta', undefined, { auth: false })).json.events.some(e => e.kind === 'pet' && e.text.includes('@zara_ng adopted')), 'a new pet makes the News flash');
     ok((await call('POST', '/api/me/pet', { kind: 'starcrest', buildingId: petShop }, P)).status === 409, 'one pet at a time');
     ok((await call('PUT', '/api/me/pet', { name: 'Zippy' }, P)).status === 200 && (await who('zara_ng')).pet.n === 'Zippy', 'renaming the pet');
@@ -548,16 +548,19 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await who('zara_ng')).bank === undefined && (await whoDev('zara_ng')).bank === 200, 'bank balances are private');
     // cars
     ok((await call('POST', '/api/me/cars', { model: 'hatch', color: '#D9544A' }, P)).status === 400, "can't afford a car with 300 coins on you");
-    await set('zara_ng', 'coins_base = 10000');
+    await set('zara_ng', 'coins_base = 200000');
     const c1 = await call('POST', '/api/me/cars', { model: 'hatch', color: '#5B8DB8' }, P);
-    ok(c1.status === 200 && c1.json.coins === 8500, 'buy a hatchback for 1,500', JSON.stringify(c1.json));
+    ok(c1.status === 200 && c1.json.coins === 175000 && c1.json.car.paid === 25000, 'buy a hatchback for 25,000', JSON.stringify(c1.json));
     ok(JSON.stringify((await who('zara_ng')).car) === JSON.stringify(['hatch', '#5B8DB8']), 'everyone sees which car they drive');
     const c2 = await call('POST', '/api/me/cars', { model: 'sedan', color: '#2F4A7A' }, P);
     ok((await call('PUT', '/api/me/cars/active', { id: c2.json.car.id }, P)).status === 200 && (await who('zara_ng')).car[0] === 'sedan', 'switch to driving the sedan');
     await call('POST', '/api/me/cars', { model: 'hatch' }, P);
     ok((await call('POST', '/api/me/cars', { model: 'hatch' }, P)).status === 409, 'the garage holds 3 cars');
     const sold = await call('DELETE', `/api/me/cars/${c1.json.car.id}`, undefined, P);
-    ok(sold.status === 200 && sold.json.back === 900, 'sell a car for 60%');
+    ok(sold.status === 200 && sold.json.back === 15000, 'sell a car for 60% of what you paid');
+    { const C = await import('../shared/catalog.js'); ok(C.carPaid({ m: 'hatch' }) === 1500 && C.carPaid({ m: 'hatch', paid: 25000 }) === 25000, 'a car bought before the repricing sells for 60% of its old price, not the new one'); }
+    { const Rr = await import('../shared/rules.js'); const hp = Rr.propertyPrice('house'), inc = Rr.fullIncome('house') * 48;
+      ok(hp === 37000 && hp / inc > 28 && hp / inc < 32 && Rr.propertyPrice('tent') === 5000, 'a full building pays for itself in about a real month (a House: 37,000)', JSON.stringify({ hp, inc })); }
     ok((await call('POST', '/api/me/cars', { model: 'tank' }, P)).status === 400, 'only cars the dealer sells');
     // moving home
     const spare = await build('house', 950, 900);
@@ -568,11 +571,11 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     // owning buildings
     await set('zara_ng', 'coins_base = 500');
     ok((await call('POST', '/api/me/properties/buy', { buildingId: spare }, P)).status === 400, "can't buy what you can't afford");
-    await set('zara_ng', 'coins_base = 50000');
+    await set('zara_ng', 'coins_base = 500000');
     const police = await build('police', 960, 900);
     ok((await call('POST', '/api/me/properties/buy', { buildingId: police }, P)).status === 400, "public buildings aren't for sale");
     const buy = await call('POST', '/api/me/properties/buy', { buildingId: spare }, P);
-    ok(buy.status === 200 && (await whoDev('zara_ng')).coins === 50000 - buy.json.price, 'buy the house you live in', JSON.stringify(buy.json));
+    ok(buy.status === 200 && (await whoDev('zara_ng')).coins === 500000 - buy.json.price, 'buy the house you live in', JSON.stringify(buy.json));
     ok((await call('POST', '/api/me/properties/buy', { buildingId: spare }, P)).status === 409, "can't buy it twice");
     const props = (await call('GET', '/api/me/properties', undefined, P)).json;
     ok(props.list.length === 1 && props.list[0].id === spare, 'it shows in your buildings');
@@ -580,28 +583,28 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     const t0 = await money(), pd = await call('POST', '/api/admin/test/payday', {});
     if (pd.status === 404) console.log('  (payday route only on test servers; start the server with ALLOW_TEST_ROUTES=1 to check paydays)');
     else { const t1 = await money();
-      const inc = props.list[0].income; ok(pd.status === 200 && t1.wallet - t0.wallet === inc && t1.bank - t0.bank === 20, `payday: ${inc} rent to the owner, interest on savings`, JSON.stringify({ t0, t1, inc, pd: pd.json })); }
-    const shop = await build('stall', 965, 900); await call('POST', '/api/me/properties/buy', { buildingId: shop }, P);
+      const inc = props.list[0].income; ok(pd.status === 200 && t1.wallet - t0.wallet === inc && t1.bank - t0.bank === 10, `payday: ${inc} rent to the owner, interest on savings`, JSON.stringify({ t0, t1, inc, pd: pd.json })); }
+    const shop = await build('stall', 965, 900), shopBuy = await call('POST', '/api/me/properties/buy', { buildingId: shop }, P);
     const before = (await money()).wallet; await call('DELETE', `/api/admin/buildings/${shop}`);
-    ok((await money()).wallet === before + 500, 'if the developer knocks it down, the owner gets their money back');
+    { const after = (await money()).wallet; ok(after === before + 5000, 'if the developer knocks it down, the owner gets their money back', JSON.stringify({ before, after, buy: shopBuy.json })); }
     const sl = await call('POST', '/api/me/properties/sell', { buildingId: spare }, P);
     ok(sl.status === 200 && sl.json.back === Math.floor(buy.json.price * 0.7), 'sell a building back for 70%'); }
   // ---- gifts ----
   { const set = (h, sql) => pool.query(`update citizens set ${sql} where handle = $1`, [h]);
-    await set('zara_ng', 'coins_base = 3000, coins_day = 0, net = 0, gift_day = null, gift_sent = 0, jailed_until = null'); await set('jobfill_a', 'coins_base = 100, coins_day = 0, net = 0');
+    await set('zara_ng', 'coins_base = 11500, coins_day = 0, net = 0, gift_day = null, gift_sent = 0, jailed_until = null'); await set('jobfill_a', 'coins_base = 100, coins_day = 0, net = 0');
     ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 10 }, P)).status === 403, "unverified avatars can't receive gifts");
     await pool.query("update citizens set pass_hash = 'x' where handle = 'jobfill_a'"); // pretend they verified
     ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 10 }, { auth: false })).status === 401, 'only signed-in colonists can gift');
     ok((await call('POST', '/api/me/gift', { to: 'zara_ng', amount: 10 }, P)).status === 400, "can't gift yourself");
     ok((await call('POST', '/api/me/gift', { to: 'nobody_here', amount: 10 }, P)).status === 404, 'the friend must exist');
-    const g = await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 1500 }, P);
-    ok(g.status === 200 && (await whoDev('zara_ng')).coins === 1500 && (await whoDev('jobfill_a')).coins === 1600 && g.json.left === 500, 'gift 1,500 coins: it moves from one pocket to the other', JSON.stringify(g.json));
-    ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 600 }, P)).status === 429, 'at most 2,000 a game day');
+    const g = await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 9500 }, P);
+    ok(g.status === 200 && (await whoDev('zara_ng')).coins === 2000 && (await whoDev('jobfill_a')).coins === 9600 && g.json.left === 500, 'gift 9,500 coins: it moves from one pocket to the other', JSON.stringify(g.json));
+    ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 600 }, P)).status === 429, 'at most 10,000 a day');
     ok((await call('GET', '/api/me/gift', undefined, P)).json.left === 500, 'and the card knows how much is left');
     let ev; for (let i = 0; i < 15 && !ev; i++) { ev = ((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).find(e => e.kind === 'gift'); if (!ev) await new Promise(r => setTimeout(r, 250)); } // the news list is cached for 2 s
     ok(ev && /@zara_ng sent @jobfill_a a gift/.test(ev.text) && !/1,500|1500/.test(ev.text), "the Colony Log says who, not how much", ev?.text);
     { const ja = (await pool.query("select id from citizens where handle = 'jobfill_a'")).rows[0].id, lg = (await call('GET', '/api/admin/test/pushlog')).json.log;
-      ok(lg.some(x => x.kind === 'gift' && x.ids.includes(ja) && /@zara_ng sent you 1,500 coins/.test(x.body)), 'the gift goes to their phone too, once it is saved', JSON.stringify(lg.slice(-2))); }
+      ok(lg.some(x => x.kind === 'gift' && x.ids.includes(ja) && /@zara_ng sent you 9,500 coins/.test(x.body)), 'the gift goes to their phone too, once it is saved', JSON.stringify(lg.slice(-2))); }
     await set('zara_ng', 'coins_base = 100, bank = 50, gift_day = null, gift_sent = 0');
     ok((await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 130 }, P)).status === 400, "gifts are cash: savings don't count");
     const gb = await call('POST', '/api/me/gift', { to: 'jobfill_a', amount: 100 }, P), zz = await whoDev('zara_ng');
@@ -696,7 +699,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await call('POST', '/api/me/guide/claim', { step: 'daily' }, P)).status === 409, "can't collect a step you haven't done");
     ok((await call('POST', '/api/me/guide/claim', { step: 'bonus' }, P)).status === 409, 'the bonus waits until every step is done');
     const c0 = (await whoDev('zara_ng')).coins, cl = await call('POST', '/api/me/guide/claim', { step: 'bank' }, P);
-    ok(cl.status === 200 && cl.json.paid === 100 && (await whoDev('zara_ng')).coins === c0 + 100, 'collecting a done step pays its reward', JSON.stringify(cl.json));
+    ok(cl.status === 200 && cl.json.paid === 500 && (await whoDev('zara_ng')).coins === c0 + 500, 'collecting a done step pays its reward', JSON.stringify(cl.json));
     ok((await call('POST', '/api/me/guide/claim', { step: 'bank' }, P)).status === 409, 'and only once');
     ok((await call('POST', '/api/me/guide/hide', { hidden: true }, P)).status === 200 && (await call('GET', '/api/me/guide', undefined, P)).json.hidden === true, 'the guide can be hidden');
     await call('POST', '/api/me/guide/hide', { hidden: false }, P); }
@@ -705,22 +708,22 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     await pool.query("update citizens set daily_day = null, daily_streak = 0, daily_best = 0 where handle = 'zara_ng'");
     ok((await call('GET', '/api/me/daily', undefined, { auth: false })).status === 401, 'daily rewards are for signed-in colonists');
     const d0 = (await call('GET', '/api/me/daily', undefined, P)).json;
-    ok(d0.claimed === false && d0.streak === 0 && d0.reward === 50 && d0.day === 1 && d0.rewards.length === 7, 'a first-timer can collect day 1 (50 coins)', JSON.stringify(d0));
+    ok(d0.claimed === false && d0.streak === 0 && d0.reward === 200 && d0.day === 1 && d0.rewards.length === 7, 'a first-timer can collect day 1 (200 coins)', JSON.stringify(d0));
     const c0 = (await whoDev('zara_ng')).coins, g1 = await call('POST', '/api/me/daily', {}, P);
-    ok(g1.status === 200 && g1.json.paid === 50 && g1.json.streak === 1 && (await whoDev('zara_ng')).coins === c0 + 50, 'collecting pays 50 coins', JSON.stringify(g1.json));
+    ok(g1.status === 200 && g1.json.paid === 200 && g1.json.streak === 1 && (await whoDev('zara_ng')).coins === c0 + 200, 'collecting pays 200 coins', JSON.stringify(g1.json));
     ok((await call('POST', '/api/me/daily', {}, P)).status === 409, 'only once a day');
     const d1 = (await call('GET', '/api/me/daily', undefined, P)).json;
-    ok(d1.claimed && d1.streak === 1 && d1.reward === 75 && d1.day === 1, "after collecting, it shows tomorrow's 75", JSON.stringify(d1));
+    ok(d1.claimed && d1.streak === 1 && d1.reward === 300 && d1.day === 1, "after collecting, it shows tomorrow's 300", JSON.stringify(d1));
     const t1 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.treasuryBase;
     ok(meta0 === undefined || Math.round(meta0 - t1) === 50 || t1 < meta0, 'the coins come out of the treasury', `${meta0} → ${t1}`);
     await pool.query("update citizens set daily_day = $1, daily_streak = 6 where handle = 'zara_ng'", [day - 1]);
-    const d6 = (await call('GET', '/api/me/daily', undefined, P)).json; ok(d6.streak === 6 && d6.reward === 400 && d6.day === 7, 'collecting yesterday keeps the streak: day 7 pays 400', JSON.stringify(d6));
-    const g7 = await call('POST', '/api/me/daily', {}, P); ok(g7.json.streak === 7 && g7.json.paid === 400, 'a 7-day streak collects 400');
+    const d6 = (await call('GET', '/api/me/daily', undefined, P)).json; ok(d6.streak === 6 && d6.reward === 1600 && d6.day === 7, 'collecting yesterday keeps the streak: day 7 pays 1,600', JSON.stringify(d6));
+    const g7 = await call('POST', '/api/me/daily', {}, P); ok(g7.json.streak === 7 && g7.json.paid === 1600, 'a 7-day streak collects 1,600');
     await new Promise(r => setTimeout(r, 2100)); ok(((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).some(e => e.kind === 'streak' && /@zara_ng has come back 7 days in a row/.test(e.text)), 'a 7-day streak is in the Colony Log');
     await pool.query("update citizens set daily_day = $1, daily_streak = 7 where handle = 'zara_ng'", [day - 1]);
-    ok((await call('GET', '/api/me/daily', undefined, P)).json.reward === 50, 'day 8 starts the cycle again at 50');
+    ok((await call('GET', '/api/me/daily', undefined, P)).json.reward === 200, 'day 8 starts the cycle again at 200');
     await pool.query("update citizens set daily_day = $1, daily_streak = 9 where handle = 'zara_ng'", [day - 3]);
-    const dm = (await call('GET', '/api/me/daily', undefined, P)).json; ok(dm.streak === 0 && dm.missed === 9 && dm.reward === 50, 'missing a day starts the streak over', JSON.stringify(dm));
+    const dm = (await call('GET', '/api/me/daily', undefined, P)).json; ok(dm.streak === 0 && dm.missed === 9 && dm.reward === 200, 'missing a day starts the streak over', JSON.stringify(dm));
     ok((await call('GET', '/api/me/daily', undefined, P)).json.best === 7, 'your best streak is remembered'); }
   // ---- more ways to earn ----
   { const sleep = ms => new Promise(r => setTimeout(r, ms)), zid = (await whoDev('zara_ng')).id, coins = async () => (await whoDev('zara_ng')).coins;
@@ -819,7 +822,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     await call('POST', '/api/admin/colony-event', { kind: 'supply' });
     await pool.query("update colony_events set data = jsonb_set(data, '{left}', '1') where not ended");
     const c0 = (await whoDev('zara_ng')).coins, sp = await call('POST', '/api/me/earn/supply', {}, P);
-    ok(sp.status === 200 && sp.json.paid >= 100 && sp.json.paid <= 300 && (await whoDev('zara_ng')).coins === c0 + sp.json.paid, `claiming the supply drop pays ${sp.json.paid}`, JSON.stringify(sp.json));
+    ok(sp.status === 200 && sp.json.paid >= 300 && sp.json.paid <= 900 && (await whoDev('zara_ng')).coins === c0 + sp.json.paid, `claiming the supply drop pays ${sp.json.paid}`, JSON.stringify(sp.json));
     ok((await call('POST', '/api/me/earn/supply', {}, P)).status === 409, 'once each');
     ok((await call('GET', '/api/colony-event', undefined, { auth: false })).json.event.data.left === 0, 'and the supplies run out');
     await call('DELETE', '/api/admin/colony-event');
@@ -828,13 +831,13 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
   { const sleep = ms => new Promise(r => setTimeout(r, ms)), zid = (await whoDev('zara_ng')).id;
     ok((await call('GET', '/api/me/badges', undefined, { auth: false })).status === 401, 'badges are for signed-in colonists');
     await pool.query('delete from achievements where citizen_id = $1', [zid]);
-    await pool.query("update citizens set stats = null, coins_base = 1500, bank = 0, daily_best = 8 where id = $1", [zid]);
+    await pool.query("update citizens set stats = null, coins_base = 15000, bank = 0, daily_best = 8 where id = $1", [zid]);
     const b0 = (await call('GET', '/api/me/badges', undefined, P)).json, has = (l, id) => l.badges.find(x => x.id === id)?.t > 0;
     ok(b0.total >= 20 && b0.badges.every(x => x.icon && x.name && x.desc && [1, 2, 3].includes(x.tier)), 'every badge has an icon, name, description and tier', JSON.stringify(b0).slice(0, 200));
     ok(has(b0, 'verified') && has(b0, 'k1') && has(b0, 'streak7') && !has(b0, 'streak30') && !has(b0, 'k50'), 'badges are worked out from what you have', JSON.stringify(b0.badges.filter(x => x.t).map(x => x.id)));
     ok(b0.badges.find(x => x.id === 'verified').pct > 0, 'and show how many colonists have each one');
     ok(!has(b0, 'jackpot') && !has(b0, 'casino'), 'no casino badges before winning');
-    await pool.query(`update citizens set stats = '{"casino_wins": 1, "casino_best": 1200}'::jsonb where id = $1`, [zid]);
+    await pool.query(`update citizens set stats = '{"casino_wins": 1, "casino_best": 12000}'::jsonb where id = $1`, [zid]);
     const sock = new WebSocket(BASE.replace(/^http/, 'ws') + '/ws'), msgs = []; sock.on('message', d => { try { msgs.push(JSON.parse(d)); } catch {} });
     await new Promise(r => sock.on('open', r)); sock.send(JSON.stringify({ type: 'auth', token: P.headers['x-player'] })); await sleep(400);
     await call('POST', '/api/me/name', { name: 'Zara' }, P); await sleep(1200);
@@ -877,9 +880,9 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await call('POST', '/api/me/election/vote', { handle: 'zara_ng' }, P)).status === 404, "can't vote for someone who isn't running");
     ok((await call('POST', '/api/me/election/run', { policy: 'free-money' }, P)).status === 400, 'a candidate picks a real pledge');
     ok((await call('POST', '/api/me/election/run', { policy: 'daily', pitch: 'vote me www.spam.example' }, P)).status === 400, 'no links in a pitch');
-    await pool.query("update citizens set coins_base = 300, net = 0, coins_day = 0, jailed_until = null where handle = 'zara_ng'");
-    ok((await call('POST', '/api/me/election/run', { policy: 'daily', pitch: 'Bigger daily rewards for all!' }, P)).status === 400, 'running costs 500 coins in cash');
-    await pool.query("update citizens set coins_base = 1000 where handle = 'zara_ng'");
+    await pool.query("update citizens set coins_base = 3000, net = 0, coins_day = 0, jailed_until = null where handle = 'zara_ng'");
+    ok((await call('POST', '/api/me/election/run', { policy: 'daily', pitch: 'Bigger daily rewards for all!' }, P)).status === 400, 'running costs 5,000 coins in cash');
+    await pool.query("update citizens set coins_base = 5500 where handle = 'zara_ng'");
     const run = await call('POST', '/api/me/election/run', { policy: 'daily', pitch: 'Bigger daily rewards for all!' }, P);
     ok(run.status === 200 && run.json.coins === 500, 'running for mayor', JSON.stringify(run.json));
     ok((await call('POST', '/api/me/election/run', { policy: 'jobs' }, P)).status === 409, 'once a week');

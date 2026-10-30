@@ -11,8 +11,9 @@ export const CREATURES = {
 };
 export const CREATURE_IDS = Object.keys(CREATURES);
 // What each creature costs at a Pet store (never under 500).
-export const PET_PRICES = { mudgulper: 500, ironshell: 700, dustrunner: 900, skyskimmer: 1200, starcrest: 1500, glimmerhop: 2000 };
-export const petPrice = kind => Math.max(500, PET_PRICES[kind] || 500);
+export const PET_PRICES = { mudgulper: 2500, ironshell: 3500, dustrunner: 4500, skyskimmer: 6000, starcrest: 7500, glimmerhop: 10000 };
+export const PET_MIN = 2500;
+export const petPrice = kind => Math.max(PET_MIN, PET_PRICES[kind] || PET_MIN);
 // How fast a creature runs today, before luck.
 export const formOf = (id, weather) => CREATURES[id].speed + (CREATURES[id].weather[weather] || 0);
 // One race: each runner's performance = form + luck. rand() returns 0..1. Highest performance wins.

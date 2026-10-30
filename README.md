@@ -188,28 +188,28 @@ Every colonist's card has a full-screen button beside Share and ×, like Town Sq
     - 🚗 your own car: fuel, 2 coins a mile
     - Not enough cash for the fare? You walk, for free. The Go here line shows the fare before you go, and fares go to the treasury.
 - **Crime.** Crimes can be tried once every 10 minutes.
-  - **Pickpocket:** steal 10–25% of a colonist's coins, up to 300. Other colonists' cards have **Pick their pocket**.
+  - **Pickpocket:** steal 10–25% of a colonist's coins, up to 1,500. Other colonists' cards have **Pick their pocket**.
     - Only someone **out and about** can be pickpocketed: on their lunch break, commuting, out in the evening, job hunting, or on a trip somewhere that isn't a home.
     - Nobody can be pickpocketed at home (asleep or relaxing, roughly 21:40–07:45 game time), while visiting someone's home, or in the Jail.
     - At work (roughly 07:50–11:40 and 13:10–16:15), only a workmate at the same building can try.
     - The server checks this (`routineAt` in `shared/rules.js`, `whereIs` in `server/actions.js`). The card shows "🛡️ … is safe at home right now" instead of the button when it isn't possible.
-  - **Rob the nearest shop:** 60–400 coins from the till, which the treasury pays.
+  - **Rob the nearest shop:** 200–1,500 coins from the till, which the treasury pays.
   - **Chances** depend on how far the nearest Police station is from where the crime happens (`crimeOdds()` in `shared/rules.js`):
     - 🟢 more than 40 tiles away, or no police at all: pickpocket 75%, robbery 60%
     - 🟡 16 to 40 tiles: pickpocket 45%, robbery 32%
     - 🔴 within 15 tiles: pickpocket 20%, robbery 12%
     - A crime wave adds 15 points, to at most 90%.
   - **Where it happens:** for a robbery, the shop; for a pickpocket, wherever the victim is right now (a place they're visiting, their workplace, their hangout, or near home). Before you try, the Crime tab shows that victim's odds and where they are.
-  - **Getting caught:** a fine of twice the amount they tried to take, at least 25, which goes to the treasury.
+  - **Getting caught:** a fine of twice the amount they tried to take, at least 250, which goes to the treasury.
   - **Jail:** if the colony has a Jail, 10 minutes in it, seen inside. A jailed colonist can't gamble, bet, go out, adopt or commit crimes.
   - **News:** successes are reported anonymously in the Colony Log; arrests name the culprit.
-- **Pet.** Adopt one of the six native creatures for 200 coins, name it, and it walks beside you on the map. You can rename it or let it go.
+- **Pet.** Adopt one of the six native creatures at a Pet store (2,500–10,000 coins), name it, and it walks beside you on the map. You can rename it or let it go.
 
 ## Finding a building to build
 
 Every building menu has a **search box** at the top that searches all buildings by name, by what they are, or by job title ("bank", "pets", "school", "banker"). Each result says which menu it lives in (for example "Shops → Small"), and tapping one picks it up to place, the same as in its own menu. There are four kinds of bank, all under Offices (`BANK_TYPES` in `shared/catalog.js`). Any of them takes deposits and pays out withdrawals from the same account.
 
-| Bank | Size | Look | Jobs | Cost |
+| Bank | Size | Look | Jobs | Cost to build |
 |---|---|---|---|---|
 | Microfinance bank | 1×1 | a small cream branch with a green "MFB" sign | 3 loan officers | 2,500 |
 | Community bank | 2×1 | a red-brick branch with a "COMMUNITY" sign | 8 tellers | 4,500 |
@@ -218,7 +218,7 @@ Every building menu has a **search box** at the top that searches all buildings 
 
 ## Mayor elections
 
-Town Square has a **👑 Mayor** tab. Every week (Monday to Monday, UTC) any verified colonist with a home can **run for mayor** for 500 coins in cash. They pick a pledge and can write a pitch of up to 140 characters (no links). Every verified colonist gets one vote, which they can change until the week ends. Candidates can withdraw (no refund).
+Town Square has a **👑 Mayor** tab. Every week (Monday to Monday, UTC) any verified colonist with a home can **run for mayor** for 5,000 coins in cash. They pick a pledge and can write a pitch of up to 140 characters (no links). Every verified colonist gets one vote, which they can change until the week ends. Candidates can withdraw (no refund).
 
 When the week ends, the most votes wins; a tie goes to whoever ran first. The winner is mayor for the next week:
 
@@ -229,7 +229,7 @@ When the week ends, the most votes wins; a tie goes to whoever ran first. The wi
 | 🏦 Savers first | bank interest is doubled |
 | 🎁 Daily bonus | daily rewards are 50% bigger |
 
-- **Perks:** the mayor earns **250 coins a game day** from the treasury, and wears a 👑 on their map name tag (shown when zoomed in a little), on their card ("Role: Mayor") and on their Town Square posts.
+- **Perks:** the mayor earns **60 coins a game day** (about 2,900 a real day, like a top job) from the treasury, and wears a 👑 on their map name tag (shown when zoomed in a little), on their card ("Role: Mayor") and on their Town Square posts.
 - **News:** candidacies and results go in the News flash. Candidates get a phone notification with the result.
 - **Code and storage:** the server is `server/elections.js`, with tables `candidates`, `mayor_votes` and `elections` (migration 37). The pledges are in `shared/elections.js`.
 
@@ -253,7 +253,7 @@ Players get notifications on their phone (or computer) even when the game is clo
 
 ## Getting started guide
 
-A signed-in colonist's own card opens with **🧭 Getting started**: six first steps, each with a small reward the treasury pays once, and a **+250** bonus for finishing them all. Each step is ticked off from what the player has actually done (`server/guide.js`), so steps they've already done count straight away.
+A signed-in colonist's own card opens with **🧭 Getting started**: six first steps, each with a small reward the treasury pays once, and a **+1,500** bonus for finishing them all (rewards of 250–500 each). Each step is ticked off from what the player has actually done (`server/guide.js`), so steps they've already done count straight away.
 
 | Step | Done when | Reward |
 |---|---|---|
@@ -271,7 +271,7 @@ A signed-in colonist's own card opens with **🧭 Getting started**: six first s
 ## Pets, watching yourself, and who's online
 
 - **Pet store.** Pets are adopted at a **Pet store** (a new 2×1 shop, under Shops, with pet-keeper jobs). Tap one on the map to open its card. The **🐾 Adopt a pet** section shows every native creature with its price; renaming or letting go of your pet happens there too.
-  - Prices, paid in cash (`PET_PRICES` in `shared/creatures.js`, never under 500): Mudgulper 500, Ironshell 700, Dustrunner 900, Skyskimmer 1,200, Starcrest 1,500, Glimmerhop 2,000.
+  - Prices, paid in cash (`PET_PRICES` in `shared/creatures.js`, never under 2,500): Mudgulper 2,500, Ironshell 3,500, Dustrunner 4,500, Skyskimmer 6,000, Starcrest 7,500, Glimmerhop 10,000.
   - The player card no longer has a Pet tab, and the server refuses an adoption unless it names an open Pet store.
 - **Watch me go.** On a delivery gig, **👀 Watch me go** hides the card and panels and keeps the camera on your colonist, walking or in a car or cab, until the delivery is done (then it reminds you to get paid).
   - An orange **You** marker floats over you, and a bar at the top shows the time left.
@@ -293,6 +293,8 @@ A signed-in colonist's own card opens with **🧭 Getting started**: six first s
 
 ## Money: the Bank, cars, homes and buildings
 
+**The scale.** A game day is 30 real minutes, so 48 pass in a real day. Prices are set against what a player can earn in a real day, not a game day: an active player (job, shifts, deliveries, fishing, scavenging, the daily reward) makes roughly 4,000–5,000 coins a real day. A first small home or a hatchback takes several days of play, a block of flats months, and the towers and the car plant are for the colony's richest. Everything else follows the same scale: pets 2,500–10,000, running for mayor 5,000, daily rewards 200–1,600, gifts up to 10,000 a real day, Getting started rewards 250–500, badges at 10,000 / 50,000 in the bank / 1,000,000 (a casino Jackpot is a 10,000 win), lottery tickets up to 10,000.
+
 These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** and **Cars**, and on a Bank's own card.
 
 - **Bank.**
@@ -300,24 +302,25 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
   - **Deposits and withdrawals happen at a Bank.** Tap any bank on the map (Microfinance, Community, Local or International, all under Offices; or type "bank" in the build menu search): its card has **🏦 Your account**, with Deposit, Withdraw and Deposit all my cash. The server refuses both unless the request names a finished Bank.
   - The **👛 Wallet** tab on your own card shows your cash and savings, and has **Go to the nearest Bank**.
   - Money in the bank can't be pickpocketed.
-  - Savings grow 0.1% each game day, up to 20 coins a day. The treasury pays interest only when it can afford to, so the bank never creates coins.
+  - Savings grow 0.02% each game day (about 1% a real day), up to 100 coins a game day. The treasury pays interest only when it can afford to, so the bank never creates coins.
 - **Cars.**
-  - The dealer sells five models (Hatchback 1,500, Sedan 3,000, Pickup 5,000, SUV 6,500, Sports car 14,000), each in a choice of colours.
-  - Colonists keep up to 3 in their garage, pick which one they drive, and can sell for 60% back.
+  - The dealer sells five models (Hatchback 25,000, Sedan 45,000, Pickup 70,000, SUV 95,000, Sports car 300,000), each in a choice of colours.
+  - Colonists keep up to 3 in their garage, pick which one they drive, and can sell for 60% of what they paid (cars bought before the October 2026 repricing sell for 60% of their old price).
   - Signed-in colonists drive their own car on longer trips and commutes; without one they take a cab. Everyone else keeps the old rule, where about half own a car.
 - **Moving home.** Rent any home with free space and move there, once per game day. Rent comes out of wages as before. You can always move into a home you own, and if it's full, the newest tenant who hasn't claimed their avatar moves out.
 - **Owning buildings.**
   - A home or business (housing, shops, offices, industry) can be bought from its card on the map, up to 5 per colonist. Public buildings, parks, landmarks and utilities stay the colony's.
   - Every game day owners are paid automatically: 80% of the rent their residents pay, or 80% of a business's profit (25% of its wage bill). The treasury keeps 20%.
-  - Buildings sell back to the colony for 70%. If the developer knocks one down, the owner gets back what they paid.
+  - **Prices** (`propertyPrice()` in `shared/rules.js`) are set so a full building pays for itself in about a real month (30 real days, 1,440 game days), and slower when it isn't full. For example: Market stall or Shelter tent 5,000; Log cabin 14,000; House 37,000; Small office 48,000; Restaurant 46,000; Casino 59,000; Panel block 195,000; Local bank 275,000; Apartment tower 485,000; Shopping mall 760,000; Belle époque tower 7,900,000. A building's "Cost" in the build menu is what the developer pays to build it, not what a player pays to buy it.
+  - Buildings sell back to the colony for 70% of what was paid. If the developer knocks one down, the owner gets back what they paid.
 - **Gifts.** Signed-in colonists can send coins to each other, with **Send a gift** on another colonist's card or **Gift coins** in the Wallet tab.
   - Gifts are paid in cash, from what you have on you; withdraw savings at a Bank first.
-  - Each colonist can send up to 2,000 a game day, so nobody can funnel a stack of accounts into one.
+  - Each colonist can send up to 10,000 a real day, so nobody can funnel a stack of accounts into one.
   - Only verified avatars (claimed, with a password) can receive gifts.
   - The Colony Log says who gifted whom, but not the amount.
 - **Weekly bills.** At the start of each game week (every 7 game days, `weeklyBills()` in `server/economy.js`) owners pay upkeep to the treasury, from cash first and then the bank. A 🧾 notice lists what was paid.
-  - **Car maintenance:** 2% of each car's price a week: Hatchback 30, Sedan 60, Pickup 100, SUV 130, Sports car 280.
-  - **Property upkeep:** 2% of what each home or business you own is worth, every week.
+  - **Car maintenance:** 0.1% of each car's price a game week: Hatchback 25, Sedan 45, Pickup 70, SUV 95, Sports car 300. With about 7 game weeks in a real day, a sedan costs about 310 a real day to keep.
+  - **Property upkeep:** 0.1% of what each home or business you own is worth, every game week. For a full building that's about a fifth of what it earns.
   - If both cash and savings run out, the rest is let go for that week.
 - **New buildings.** A **Gym** and an outdoor **Fitness park**, under Parks → Sports.
 
@@ -344,7 +347,7 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
   - ☄️ **Meteor shower** (25 min, needs the landing station): searches take 1 minute with no wait between them, and finds pay 2×.
   - ⛈️ **Great storm** (20 min): storm weather, so no fishing or foraging, but deliveries pay 1.5× hazard money. The weather goes back to how it was afterwards.
   - 🦹 **Crime wave** (20 min): crimes succeed 15% more often.
-  - 📦 **Supply drop** (15 min, needs the landing station): the first 15 colonists to tap **Claim supplies** in the Earn tab get 100–300 coins each (from the treasury).
+  - 📦 **Supply drop** (15 min, needs the landing station): the first 15 colonists to tap **Claim supplies** in the Earn tab get 300–900 coins each (from the treasury).
 - **Developer controls.** In developer mode, **⚡ Start a colony event** in the Town Square starts any of them now (replacing one that's on) or ends the current one.
 
 ## Ways to earn
@@ -370,7 +373,7 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
 ## Daily rewards and streaks
 
 - **Collecting.** Signed-in colonists collect a reward once per real-world day. A pop-up offers it when they open the colony, and it waits until any first-time setup is done. They can also collect it from **Collect +N** at the top of their own card.
-- **The 7-day cycle.** 50 → 75 → 100 → 125 → 150 → 200 → **400** on day 7, then it starts again at 50. The streak count keeps growing across cycles.
+- **The 7-day cycle.** 200 → 300 → 400 → 500 → 600 → 800 → **1,600** on day 7, then it starts again at 200. The streak count keeps growing across cycles.
   - A full week is 1,100 coins, about one real day of wages from a job, so it rewards coming back without flooding the economy.
 - **Streaks.** Collecting on consecutive days builds the streak. Missing a day starts it over, and the pop-up says what was lost.
   - Days start at midnight UTC, which is 01:00 in Lagos. The pop-up shows the local time.

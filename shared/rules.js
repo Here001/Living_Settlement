@@ -129,7 +129,23 @@ export function tripFare(tiles, hasCar) {
   if (!(tiles >= TRIP_DRIVE)) return { mode: 'walk', fare: 0 };
   const mi = tiles * TILE_MILES; return hasCar ? { mode: 'car', fare: Math.max(1, Math.round(mi * FUEL_PER_MILE)) } : { mode: 'cab', fare: Math.round(CAB_BASE + mi * CAB_PER_MILE) };
 }
-// Weekly bills (every 7 game days): each car's upkeep (in CAR_MODELS), and 2% of the price of every building you own.
-export const UPKEEP_RATE = 0.02;
+// ---- Prices players pay ----
+// A game day is 30 real minutes, so 48 pass in a real day. Prices are set against that: a building a player buys pays
+// for itself in about a real month (30 real days = 1,440 game days) when every home or job in it is filled, and less
+// quickly when it isn't. An active player earns roughly 4,000–5,000 coins a real day, so a first small home takes a
+// few days of play, a block of flats months, and the towers are for the colony's richest.
+export const TREASURY_CUT = 0.2;           // the colony's share of every player business
+export const BUSINESS_SHARE = 0.25;        // a business makes 25% of its wage bill in profit
+export const PAYBACK_GAME_DAYS = 30 * 48, PROPERTY_MIN = 5000;
+const nicePrice = n => { const step = n < 20000 ? 500 : n < 100000 ? 1000 : n < 1e6 ? 5000 : 50000; return Math.round(n / step) * step; };
+export function fullIncome(type) { // what a full building earns its owner each game day, after the treasury's cut
+  const t = BUILDING_TYPES[type] || {}; let g = 0;
+  if (t.home) g += (t.home.capacity || 0) * (t.home.rent || 0);
+  if (t.work) g += (t.work.slots || 0) * (t.work.salary || 0) * BUSINESS_SHARE;
+  return g * (1 - TREASURY_CUT); }
+export const propertyPrice = type => nicePrice(Math.max(PROPERTY_MIN, fullIncome(type) * PAYBACK_GAME_DAYS));
+// Weekly bills (every 7 game days, so about 7 game weeks a real day): each car's upkeep (in CAR_MODELS), and 0.1% of
+// the price of every building you own. For a full building that's about a fifth of what it earns.
+export const UPKEEP_RATE = 0.001;
 export function miles(tiles) { const m = Math.max(0, Number(tiles) || 0) * TILE_MILES;
   return m < 0.1 ? 'under 0.1 mi' : m < 10 ? `${Math.round(m * 10) / 10} mi` : `${Math.round(m)} mi`; }

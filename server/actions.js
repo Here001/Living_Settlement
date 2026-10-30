@@ -142,11 +142,11 @@ export class Actions {
         if (where === 'work' && victim.job_id !== c.job_id) throw new HttpError(409, `@${victim.handle} is at work, and only their workmates can get close. Catch them on their lunch break or after work.`);
         const scene = await this.sceneOf(ch.db, victim, where); px = scene.x; py = scene.y; delete victim.hx; delete victim.hy; // where they are now
         ch.coins(victim); if (victim.coins_base < 5) throw new HttpError(400, `@${victim.handle}'s pockets are empty.`);
-        loot = Math.max(1, Math.min(300, Math.floor(victim.coins_base * (0.1 + rand() * 0.15))));
+        loot = Math.max(1, Math.min(1500, Math.floor(victim.coins_base * (0.1 + rand() * 0.15))));
       } else {
         shop = (await ch.q(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [hx, hy, SHOPS])).rows[0];
         if (!shop) throw new HttpError(409, 'There are no shops to rob.');
-        px = shop.x; py = shop.y; loot = Math.max(1, Math.min(R.treasuryOn(ch.meta, ch.today), Math.floor(60 + rand() * 340)));
+        px = shop.x; py = shop.y; loot = Math.max(1, Math.min(R.treasuryOn(ch.meta, ch.today), Math.floor(200 + rand() * 1300)));
       }
       // The farther the nearest Police station is from the scene, the likelier the thief gets away (a crime wave helps too).
       const odds = await this.odds(kind, await this.policeDist(ch.db, px, py), await this.waveNow()), chance = odds.chance;
@@ -159,8 +159,8 @@ export class Actions {
         else { treasuryAdd(ch, -loot); await ch.event(`🚨 ${nameOf(shop)} was robbed of ${fmt(loot)} coins! The thief got away.`, 'crime'); }
         return { ok: true, caught: false, loot, coins: c.coins_base, chance, band: odds.band, police: odds.dist };
       }
-      // Caught: a fine (twice what they tried to take, at least 25, never more than they have), and jail if the colony has one.
-      const fine = Math.min(c.coins_base, Math.max(25, loot * 2)); c.coins_base -= fine; treasuryAdd(ch, fine); ch.touch(c); await ch.saveCitizen(c);
+      // Caught: a fine (twice what they tried to take, at least 250, never more than they have), and jail if the colony has one.
+      const fine = Math.min(c.coins_base, Math.max(250, loot * 2)); c.coins_base -= fine; treasuryAdd(ch, fine); ch.touch(c); await ch.saveCitizen(c);
       const jail = (await ch.q(`select * from buildings where type = 'jail' and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [px, py])).rows[0];
       const what = victim ? `pickpocketing @${victim.handle}` : `robbing ${nameOf(shop)}`;
       if (victim) await this.notify(ch, victim.id, 'pickpocket', `🚓 @${c.handle} picked your pocket but got caught by the police. Your ${fmt(loot)} coins have been refunded.`);

@@ -209,7 +209,7 @@ Every building menu has a **search box** at the top that searches all buildings 
 
 ## Phone notifications
 
-Players can get notifications on their phone (or computer) even when the game is closed. They turn them on with **🔔 Notifications** on their own card, and choose which kinds they want:
+Players get notifications on their phone (or computer) even when the game is closed. They're **on by default**: browsers need the player to say yes once, so the game asks on the first tap after signing in, with every kind switched on. Once allowed, it keeps that device signed up by itself on every visit. **⚙️ Settings** on the player's own card switches them off, or switches off individual kinds; it also shows or hides the getting-started guide. The kinds are:
 
 | Kind | When |
 |---|---|

@@ -481,6 +481,31 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     const s1 = (await g('snooker', { action: 'shoot', angle: 0, power: 0.6 })).json; ok(s1.shots === 1 && Array.isArray(s1.last?.frames) && s1.last.frames.length > 10 && s1.balls.some(b => b.id === 'c'), 'a shot is simulated on the server and comes back to replay', JSON.stringify({ shots: s1.shots, frames: s1.last?.frames?.length }));
     const SN = await import('../shared/snooker.js'), rs = SN.shoot([{ id: 'c', x: 0.5, y: 0.5 }, { id: 'r0', x: 1.0, y: 0.5 }], 0, 0.5);
     ok(rs.firstHit === 'r0' && rs.balls.find(b => b.id === 'r0').x > 1.0, 'snooker physics: the cue ball strikes the red and sends it on');
+    { const BG = await import('../shared/boardgames.js'), P8 = BG.ENGINES.pool8, P9 = BG.ENGINES.pool9, rnd = () => 0.5;
+      const r8 = SN.rack8(Math.random), r9 = SN.rack9(Math.random), ids = a => a.map(b => b.id).sort().join();
+      ok(r8.length === 16 && new Set(r8.map(b => b.id)).size === 16 && r9.length === 10 && r9.find(b => b.id === 'b9') && r9.find(b => b.id === 'b1').x < r9.find(b => b.id === 'b9').x, '8-ball racks 15 numbered balls; 9-ball racks 1–9 with the 1 in front', ids(r9));
+      // 8-ball: a lone stripe straight in front of the cue ball and a pocket → it takes stripes and shoots again
+      let s8 = P8.setup(2, {}, Math.random); s8.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'b12', x: 1.85, y: 0.85 }, { id: 'b3', x: 0.3, y: 0.3 }, { id: 'b8', x: 0.3, y: 0.7 }];
+      let n8 = P8.play(s8, 0, { shot: true, angle: Math.PI / 4, power: 0.4 }, rnd);
+      ok(n8.groups[0] === 'stripes' && n8.groups[1] === 'solids' && n8.turn === 0, '8-ball: potting a stripe on an open table takes stripes and you shoot again', JSON.stringify({ g: n8.groups, t: n8.turn, p: n8.last.potted }));
+      n8.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'b8', x: 1.85, y: 0.85 }, { id: 'b3', x: 0.3, y: 0.3 }, { id: 'b10', x: 0.3, y: 0.8 }];
+      const early = P8.play(n8, 0, { shot: true, angle: Math.PI / 4, power: 0.4 }, rnd);
+      ok(early.turn === null && early.winners[0] === 1 && early.last.eight === 'lost', 'sinking the 8 before clearing your group loses');
+      n8.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'b8', x: 1.85, y: 0.85 }, { id: 'b3', x: 0.3, y: 0.3 }];
+      const win8 = P8.play(n8, 0, { shot: true, angle: Math.PI / 4, power: 0.4 }, rnd);
+      ok(win8.winners[0] === 0 && win8.last.eight === 'won', 'clear your group, then the 8 wins');
+      n8.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'b3', x: 1.85, y: 0.85 }, { id: 'b10', x: 0.3, y: 0.8 }];
+      const wrong = P8.play(n8, 0, { shot: true, angle: Math.PI / 4, power: 0.4 }, rnd);
+      ok(wrong.last.foul && wrong.turn === 1, 'hitting the other group first is a foul and the turn passes');
+      // 9-ball
+      let s9 = P9.setup(2, {}, Math.random); s9.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'b9', x: 1.85, y: 0.85 }, { id: 'b2', x: 0.3, y: 0.3 }];
+      const foul9 = P9.play(s9, 0, { shot: true, angle: Math.PI / 4, power: 0.4 }, rnd);
+      ok(foul9.last.foul && foul9.turn === 1 && foul9.balls.some(b => b.id === 'b9'), "9-ball: potting the 9 without hitting the lowest ball first is a foul and the 9 comes back");
+      s9.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'b2', x: 1.85, y: 0.85 }, { id: 'b9', x: 0.3, y: 0.3 }];
+      const ok9 = P9.play(s9, 0, { shot: true, angle: Math.PI / 4, power: 0.4 }, rnd);
+      ok(!ok9.last.foul && ok9.turn === 0 && ok9.view === undefined && P9.view(ok9).on[0] === 'b9', 'pot the lowest ball and you go again; the 9 is next');
+      let sims = 0, finished = 0; for (const E of [P8, P9]) for (let k = 0; k < 10; k++) { let st = E.setup(2, {}, Math.random), n = 0; while (st.turn != null && n < 400) { st = E.play(st, st.turn, E.auto(st, st.turn, Math.random), Math.random); n++; } sims++; if (st.winners) finished++; }
+      ok(finished === sims, 'computer-v-computer pool games always finish'); }
     const sg = (await pool.query("select play_game from citizens where handle = 'zara_ng'")).rows[0].play_game; await pool.query("update citizens set play_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...sg, need: 0 })]);
     const sw = (await g('snooker', { action: 'shoot', angle: 0, power: 0.3 })).json; ok(sw.done && sw.won && sw.paid === SN.PRACTICE.prize, "a practice win pays today's prize", JSON.stringify({ won: sw.won, paid: sw.paid }));
     await g('snooker', { action: 'start' }); const sg2 = (await pool.query("select play_game from citizens where handle = 'zara_ng'")).rows[0].play_game; await pool.query("update citizens set play_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...sg2, need: 0 })]);
@@ -850,6 +875,14 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     // Ayo: an empty side forfeits what's left on the other side
     { const A = BG.ENGINES.ayo; const s = A.play({ n: 2, pits: [0, 0, 0, 0, 0, 1, 2, 0, 0, 0, 3, 0], store: [20, 18], turn: 0, winners: null, last: null, log: [] }, 0, { pit: 5 });
       ok(s.store.join() === '23,21' && s.winners[0] === 0, 'Ayo: when your side runs empty, your opponent takes the pebbles left on theirs', JSON.stringify(s.store)); }
+    // 8-ball against the computer: your shot is played, then the computer's (if the turn passes)
+    { const p8 = await T(P, { action: 'create', buildingId: gh, game: 'pool8', stake: 0, seats: 2, computer: true });
+      ok(p8.status === 200 && p8.json.view.mode === 8 && p8.json.view.balls.length === 16 && p8.json.view.turn === 0, '8-ball against the computer racks up', JSON.stringify(p8.json.view?.groups));
+      const sh = await T(P, { action: 'move', id: p8.json.id, move: { shot: true, angle: 0, power: 0.9 } });
+      ok(sh.status === 200 && sh.json.view.last && Array.isArray(sh.json.view.last.frames), 'the break is played and can be replayed', JSON.stringify(sh.json.view?.log));
+      await T(P, { action: 'leave' }); await pool.query("update citizens set table_id = null where handle = 'zara_ng'");
+      const p9 = await T(P, { action: 'create', buildingId: gh, game: 'pool9', stake: 0, seats: 2, computer: true });
+      ok(p9.status === 200 && p9.json.view.mode === 9 && p9.json.view.on[0] === 'b1', '9-ball starts with the 1 to hit'); await T(P, { action: 'leave' }); await pool.query("update citizens set table_id = null where handle = 'zara_ng'"); }
     // a waiting table can be left for a refund
     await T(P, { action: 'create', buildingId: gh, game: 'ludo', stake: 500, seats: 4, quick: true }); const bz = (await whoDev('zara_ng')).coins;
     const lw = await T(P, { action: 'leave' }); ok(lw.json.refunded === 500 && (await whoDev('zara_ng')).coins === bz + 500, 'leaving before it starts refunds the stake');

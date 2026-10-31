@@ -409,7 +409,7 @@ body.pane-max .composer textarea{height:70px}
 .ghpick button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:14px;border:1px solid var(--glass-line,rgba(0,0,0,.12));background:var(--gbtn,rgba(0,0,0,.04));color:inherit;font:inherit;font-size:12px;cursor:pointer}
 .ghpick button .gi{font-size:24px;line-height:1.1} .ghpick button.on{background:var(--gbtn-on,rgba(217,113,74,.25))} .ghpick button small{font-size:10px;color:var(--muted)}
 .ghstage{display:flex;flex-direction:column;gap:8px;align-items:stretch}
-.ghsvg{width:100%;max-width:340px;margin:0 auto;display:block;touch-action:manipulation}
+.ghsvg{width:100%;max-width:340px;margin:0 auto;display:block;touch-action:manipulation}.ghsvg.dartsvg{max-width:400px;border-radius:14px;box-shadow:0 8px 20px rgba(0,0,0,.3)}.ghsvg.pensvg{max-width:420px;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.3)}
 .wheelwrap{position:relative;width:100%;max-width:300px;margin:0 auto}
 .wheelwrap svg{width:100%;display:block}
 .wheelwrap .ptr{position:absolute;left:50%;top:-4px;transform:translateX(-50%);font-size:22px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))}
@@ -427,7 +427,10 @@ body.pane-max .composer textarea{height:70px}
 .snkspin{width:54px;height:54px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#E8E8E8 55%,#BDBDBD);box-shadow:0 3px 8px rgba(0,0,0,.35);position:relative;touch-action:none;cursor:pointer}
 .snkspin .dot{position:absolute;width:12px;height:12px;border-radius:50%;background:#D63A2F;box-shadow:0 0 0 2px rgba(255,255,255,.8);transform:translate(-50%,-50%)}
 .snkside small{font-size:10px;color:var(--muted);text-align:center;line-height:1.2}
-.snksvg{flex:1 1 auto;min-width:0;max-height:68vh;touch-action:none;display:block}
+.snkcv{flex:1 1 auto;min-width:0;width:100%;max-height:68vh;aspect-ratio:1.26/2.26;touch-action:none;display:block;border-radius:12px;box-shadow:0 10px 24px rgba(0,0,0,.35)}.snkcv.grab{cursor:grabbing}
+.snkwheel{width:34px;height:150px;border-radius:17px;background:linear-gradient(90deg,#1F2227,#4A505A 45%,#5A616C 55%,#1F2227);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12),0 3px 8px rgba(0,0,0,.35);position:relative;overflow:hidden;touch-action:none;cursor:ns-resize}
+.snkwheel .ridges{position:absolute;inset:0;background:repeating-linear-gradient(180deg,rgba(255,255,255,.22) 0 2px,rgba(0,0,0,.35) 2px 4px,transparent 4px 9px);-webkit-mask:linear-gradient(180deg,transparent,#000 22%,#000 78%,transparent);mask:linear-gradient(180deg,transparent,#000 22%,#000 78%,transparent)}
+.snkwheel.on{box-shadow:inset 0 0 0 2px var(--accent,#d9714a)}
 .snk .aimrow{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}.snk input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
 .snk .pwr{display:flex;gap:8px;align-items:center;font-size:13px}
 #card.ghplay > dl, #card.ghplay > .row-actions, #card.ghplay > p.hint{display:none}
@@ -3537,7 +3540,7 @@ const GH={ id:null, info:null, at:0, open:false, game:'penalty', bet:100, busy:f
     this.busy=false; renderCard(true); return r; },
   section(b){ const box=el('div',{class:'authbox casino gh'}, el('div',{class:'cas-head'}, el('h3',{text:'🎮 Game House'}), cardMax()));
     if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'})); return box; }
-    if(!this.open||this.id!==b.id){ box.append(el('p',{class:'hint',text:'Lucky wheel, scratch cards, penalties, darts, snooker, Whot, Ludo and Ayo.'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎮 Play here',onclick:()=>{ this.open=true; this.id=b.id; this.info=null; this.last=null; this.greet=true; if(!this.views[this.game]||this.game==='wheel'||this.game==='scratch') this.game='penalty'; document.body.classList.add('card-max'); openTab(null); this.load(b); renderCard(true); setTimeout(()=>document.querySelector('#card .gh')?.scrollIntoView({block:'start',behavior:'smooth'}),700); }}))); return box; }
+    if(!this.open||this.id!==b.id){ box.append(el('p',{class:'hint',text:'Penalties, darts, snooker, 8-ball and 9-ball pool, Whot, Ludo and Ayo.'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎮 Play here',onclick:()=>{ this.open=true; this.id=b.id; this.info=null; this.last=null; this.greet=true; if(!this.views[this.game]||this.game==='wheel'||this.game==='scratch') this.game='penalty'; document.body.classList.add('card-max'); openTab(null); this.load(b); renderCard(true); setTimeout(()=>document.querySelector('#card .gh')?.scrollIntoView({block:'start',behavior:'smooth'}),700); }}))); return box; }
     if(!this.info||Date.now()-this.at>30000&&!this.busy){ if(!this.info){ box.append(el('p',{class:'hint',text:'Opening…'})); this.load(b); return box; } this.load(b); }
     const I=this.info; if(I.error){ box.append(el('p',{class:'hint',text:I.error})); return box; }
     if(!I.housed){ box.append(el('p',{class:'hint',text:'The Game House is for colonists who have woken up and have a home.'})); return box; }
@@ -3584,49 +3587,111 @@ const GH={ id:null, info:null, at:0, open:false, game:'penalty', bet:100, busy:f
         else wrap.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Scratch them all',onclick:()=>{ for(let i=0;i<9;i++) this.revealed.add(i); renderCard(true); }}))); }
       wrap.append(tiers, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':`Buy a ${fmt(this.tier)} card`,disabled:this.busy||(card&&this.revealed.size<9),onclick:()=>this.act('scratch',{price:this.tier},r=>{ this.last=r; this.revealed=new Set(); })})));
       return wrap; },
-    penalty(b,I){ const wrap=el('div',{class:'ghstage'}), g=this.last&&this.last.game==='penalty'?this.last:null, live=g&&!g.done;
-      const svg=this.svg('0 0 300 170'); svg.append(this.mk('rect',{x:0,y:0,width:300,height:170,fill:'#5FA34A',rx:10}), this.mk('rect',{x:30,y:20,width:240,height:100,fill:'rgba(255,255,255,.18)',stroke:'#fff','stroke-width':4}));
-      for(let i=1;i<6;i++) svg.append(this.mk('line',{x1:30+i*40,y1:20,x2:30+i*40,y2:120,stroke:'rgba(255,255,255,.25)'}));
-      svg.append(this.mk('circle',{cx:150,cy:152,r:2.5,fill:'#fff'})); // the penalty spot
+    penalty(b,I){ const wrap=el('div',{class:'ghstage'}), g=this.last&&this.last.game==='penalty'?this.last:null, live=g&&!g.done, mk=this.mk.bind(this);
+      const svg=this.svg('0 0 300 190'); svg.classList.add('pensvg');
+      const defs=mk('defs',{}); defs.innerHTML=`<linearGradient id="penSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0E1A33"/><stop offset="1" stop-color="#1F3A66"/></linearGradient>
+        <linearGradient id="penPost" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#D9DDE3"/><stop offset=".45" stop-color="#FFFFFF"/><stop offset="1" stop-color="#AEB4BD"/></linearGradient>
+        <pattern id="penNet" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H7M0 0V7" stroke="rgba(255,255,255,.55)" stroke-width=".7" fill="none"/></pattern>
+        <pattern id="penCrowd" width="12" height="8" patternUnits="userSpaceOnUse"><rect width="12" height="8" fill="#2B2F45"/><circle cx="3" cy="3" r="1.6" fill="#E8C39E"/><circle cx="9" cy="5" r="1.6" fill="#8D5524"/><rect x="1.5" y="4.5" width="3" height="3.5" fill="#D9714A"/><rect x="7.5" y="6.4" width="3" height="1.6" fill="#3B82C4"/></pattern>
+        <radialGradient id="penBall" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".7" stop-color="#E9E9E9"/><stop offset="1" stop-color="#9A9A9A"/></radialGradient>
+        <radialGradient id="penLight" cx=".5" cy="0" r=".9"><stop offset="0" stop-color="rgba(255,255,230,.35)"/><stop offset="1" stop-color="rgba(255,255,230,0)"/></radialGradient>`; svg.append(defs);
+      // the stadium: sky, crowd, boards, striped grass, the box and the spot
+      svg.append(mk('rect',{x:0,y:0,width:300,height:190,fill:'url(#penSky)',rx:10}), mk('rect',{x:0,y:8,width:300,height:30,fill:'url(#penCrowd)'}), mk('rect',{x:0,y:0,width:300,height:60,fill:'url(#penLight)'}));
+      ['#D9714A','#F2C94C','#3B82C4','#2BA593','#D9714A','#F2C94C'].forEach((c,i)=>svg.append(mk('rect',{x:i*50,y:38,width:50,height:9,fill:c}), mk('text',{x:i*50+25,y:45,'text-anchor':'middle','font-size':6,'font-weight':800,fill:'#fff'},['RESURGENCE','GAME HOUSE','GLIESE 12 b','PLAY FAIR','RESURGENCE','GAME HOUSE'][i])));
+      for(let i=0;i<8;i++){ const y0=47+i*18, y1=y0+18; svg.append(mk('rect',{x:0,y:y0,width:300,height:18,fill:i%2?'#3E8E3A':'#469D41'})); }
+      svg.append(mk('rect',{x:0,y:182,width:300,height:8,fill:'#3E8E3A',rx:0}));
+      svg.append(mk('path',{d:'M44 120 L20 150 L280 150 L256 120',fill:'none',stroke:'rgba(255,255,255,.85)','stroke-width':1.6}), mk('line',{x1:0,y1:120,x2:300,y2:120,stroke:'rgba(255,255,255,.85)','stroke-width':1.6}), mk('ellipse',{cx:150,cy:168,rx:3.2,ry:1.6,fill:'#fff'}));
+      // the goal: net behind, posts and crossbar in front
+      svg.append(mk('path',{d:'M30 20 L44 30 L256 30 L270 20 L270 120 L256 112 L44 112 L30 120 Z',fill:'rgba(10,20,10,.35)'}), mk('path',{d:'M30 20 L44 30 L256 30 L270 20 L270 120 L256 112 L44 112 L30 120 Z',fill:'url(#penNet)'}));
+      svg.append(mk('rect',{x:27,y:17,width:5,height:104,fill:'url(#penPost)',rx:1.5}), mk('rect',{x:268,y:17,width:5,height:104,fill:'url(#penPost)',rx:1.5}), mk('rect',{x:27,y:16,width:246,height:5,fill:'#F4F6F8',rx:1.5}));
       const zx={l:30,c:110,r:190}, zy={h:20,l:70}, last=g&&g.kicks.length?g.kicks[g.kicks.length-1]:null;
-      // The keeper and ball start in the middle; after a kick they fly to where they went, then (if there's another kick to take) go back.
-      const K0=[150,92], B0=[150,152], age=Date.now()-(this.kickAt||0), showing=last&&(!live||age<1800);
-      const keeper=this.mk('g',{}), kr=this.mk('rect',{x:-16,y:-24,width:32,height:48,rx:8,fill:'#F2C94C',stroke:'#2B2621','stroke-width':2}), kt=this.mk('text',{x:0,y:6,'text-anchor':'middle','font-size':16},'🧤'); keeper.append(kr,kt);
-      const ball=this.mk('text',{x:0,y:7,'text-anchor':'middle','font-size':20},'⚽'), ballG=this.mk('g',{}); ballG.append(ball); svg.append(keeper, ballG);
-      const place=(gEl,[x,y],rot=0)=>gEl.setAttribute('transform',`translate(${x} ${y}) rotate(${rot})`);
-      if(showing){ const K1=[zx[last.keeper[0]]+40, zy[last.keeper[1]]+28], B1=last.miss?[last.spot[0]==='l'?14:last.spot[0]==='r'?286:150, last.spot[1]==='h'?6:60]:[zx[last.spot[0]]+40, zy[last.spot[1]]+25], tilt=last.keeper[0]==='l'?-35:last.keeper[0]==='r'?35:0;
-        const at=u=>{ const e=1-Math.pow(1-u,3); place(keeper,[K0[0]+(K1[0]-K0[0])*e,K0[1]+(K1[1]-K0[1])*e],tilt*e); place(ballG,[B0[0]+(B1[0]-B0[0])*e,B0[1]+(B1[1]-B0[1])*e-Math.sin(u*Math.PI)*12]); };
-        at(Math.min(1,age/550)); if(age<550){ const t0=performance.now()-age; const step=now=>{ if(!svg.isConnected) return; const u=Math.min(1,(now-t0)/550); at(u); if(u<1) requestAnimationFrame(step); }; requestAnimationFrame(step); }
+      // The keeper: a person in a bright kit who dives the way they guessed. Built around the hips; arms swing from the shoulders.
+      const keeper=mk('g',{}), body=mk('g',{}), armL=mk('g',{}), armR=mk('g',{});
+      const arm=(gEl,side)=>{ gEl.append(mk('rect',{x:-3,y:0,width:6,height:19,rx:3,fill:'#C6F135',stroke:'#1B2A0A','stroke-width':.8}), mk('circle',{cx:0,cy:21,r:4.6,fill:'#FFFFFF',stroke:'#E8731C','stroke-width':1.6})); return gEl; };
+      body.append(mk('ellipse',{cx:0,cy:31,rx:15,ry:3,fill:'rgba(0,0,0,.25)'}),
+        mk('path',{d:'M-9 6 L-11 27 L-5 27 L-3 8 Z',fill:'#20242B'}), mk('path',{d:'M9 6 L11 27 L5 27 L3 8 Z',fill:'#20242B'}),
+        mk('rect',{x:-11.5,y:24,width:7,height:4,rx:1.5,fill:'#111'}), mk('rect',{x:4.5,y:24,width:7,height:4,rx:1.5,fill:'#111'}),
+        mk('path',{d:'M-11 -2 L11 -2 L12 9 L1 9 L0 5 L-1 9 L-12 9 Z',fill:'#20242B'}),
+        mk('path',{d:'M-12 -33 Q0 -37 12 -33 L13 -1 L-13 -1 Z',fill:'#C6F135',stroke:'#1B2A0A','stroke-width':.8}),
+        mk('path',{d:'M-12 -33 Q0 -37 12 -33 L12 -28 Q0 -31 -12 -28 Z',fill:'#1B2A0A',opacity:.35}),
+        mk('text',{x:0,y:-12,'text-anchor':'middle','font-size':12,'font-weight':900,fill:'#1B2A0A'},'1'),
+        mk('rect',{x:-2.5,y:-38,width:5,height:5,fill:'#8D5524'}), mk('circle',{cx:0,cy:-44,r:7.5,fill:'#8D5524'}), mk('path',{d:'M-7.5 -45 Q0 -55 7.5 -45 Q4 -49 0 -49 Q-4 -49 -7.5 -45 Z',fill:'#1A120C'}),
+        mk('circle',{cx:-2.6,cy:-44,r:.9,fill:'#111'}), mk('circle',{cx:2.6,cy:-44,r:.9,fill:'#111'}));
+      armL.setAttribute('transform','translate(-12 -31)'); armR.setAttribute('transform','translate(12 -31)'); arm(armL); arm(armR);
+      const armLi=mk('g',{}), armRi=mk('g',{}); armLi.append(...armL.childNodes); armRi.append(...armR.childNodes); armL.append(armLi); armR.append(armRi);
+      keeper.append(armL, body, armR);
+      // ball: a classic black-and-white football that shrinks a little as it flies into the goal
+      const ballG=mk('g',{}), ballI=mk('g',{}); ballI.append(mk('circle',{r:7,fill:'url(#penBall)',stroke:'#555','stroke-width':.5}), mk('path',{d:'M0 -2.6 L2.5 -0.8 L1.5 2.1 L-1.5 2.1 L-2.5 -0.8 Z',fill:'#1A1A1A'}),
+        ...[0,72,144,216,288].map(a=>mk('path',{d:'M0 -7 L1.6 -5.6 L-1.6 -5.6 Z',fill:'#1A1A1A',transform:`rotate(${a})`}))); ballG.append(mk('ellipse',{cx:1,cy:7.5,rx:6,ry:1.6,fill:'rgba(0,0,0,.3)',class:'bsh'}), ballI);
+      svg.append(keeper, ballG);
+      const K0=[150,88], B0=[150,164], age=Date.now()-(this.kickAt||0), showing=last&&(!live||age<1800);
+      const pose=(u,dive)=>{ // u 0..1 through the dive
+        const e=1-Math.pow(1-u,3), [kx,ky]=dive.at, rot=dive.rot*e;
+        keeper.setAttribute('transform',`translate(${K0[0]+(kx-K0[0])*e} ${K0[1]+(ky-K0[1])*e}) rotate(${rot})`);
+        armLi.setAttribute('transform',`rotate(${30+(dive.aL-30)*e})`); armRi.setAttribute('transform',`rotate(${-30+(dive.aR+30)*e})`); };
+      const diveFor=k=>{ const side=k[0], high=k[1]==='h'; if(side==='c') return high?{at:[150,64],rot:0,aL:175,aR:-175}:{at:[150,96],rot:0,aL:80,aR:-80};
+        const dir=side==='l'?-1:1; return { at:[150+dir*(high?78:84), high?58:92], rot:dir*(high?62:80), aL:dir<0?150:170, aR:dir<0?-170:-150 }; };
+      const putBall=(p,s,spin)=>{ ballG.setAttribute('transform',`translate(${p[0]} ${p[1]}) scale(${s})`); ballI.setAttribute('transform',`rotate(${spin})`); };
+      if(showing){ const dv=diveFor(last.keeper), B1=last.miss?[last.spot[0]==='l'?16:last.spot[0]==='r'?284:150, last.spot[1]==='h'?6:58]:last.goal?[zx[last.spot[0]]+40, zy[last.spot[1]]+26]:[dv.at[0]+(last.keeper[0]==='l'?-10:last.keeper[0]==='r'?10:0), dv.at[1]-6];
+        const at=u=>{ pose(Math.min(1,u*1.15),dv); const e=1-Math.pow(1-u,2.2); putBall([B0[0]+(B1[0]-B0[0])*e, B0[1]+(B1[1]-B0[1])*e-Math.sin(u*Math.PI)*14], 1-0.42*e, u*540); };
+        at(Math.min(1,age/600)); if(age<600){ const t0=performance.now()-age; const step=now=>{ if(!svg.isConnected) return; const u=Math.min(1,(now-t0)/600); at(u); if(u<1) requestAnimationFrame(step); }; requestAnimationFrame(step); }
         if(live) setTimeout(()=>{ if(sel&&sel.kind==='b'&&this.last===g) renderCard(true); }, 1850-age); }
-      else { place(keeper,K0); place(ballG,B0); }
-      if(live&&!showing) for(const s of PEN_SPOTS){ const z=this.mk('rect',{x:zx[s[0]],y:zy[s[1]],width:80,height:50,class:'zone'}); z.addEventListener('click',()=>this.act('penalty',{action:'kick',spot:s},r=>{ this.last=r; this.kickAt=Date.now(); if(r.done) setTimeout(()=>toast(r.paid?`⚽ ${r.goals} goals: you won ${fmt(r.paid)}!`:`${r.goals} goals. Better luck next time.`),700); })); svg.append(z); }
+      else { pose(0,{at:K0,rot:0,aL:30,aR:-30}); putBall(B0,1,0);
+        // a little ready-bounce while waiting for the kick
+        if(live){ const t0=performance.now(); const idle=now=>{ if(!svg.isConnected) return; const s=Math.sin((now-t0)/260); keeper.setAttribute('transform',`translate(${K0[0]+s*3} ${K0[1]+Math.abs(s)*-1.5})`); requestAnimationFrame(idle); }; requestAnimationFrame(idle); } }
+      if(live&&!showing) for(const s of PEN_SPOTS){ const z=mk('rect',{x:zx[s[0]],y:zy[s[1]],width:80,height:50,class:'zone'}); z.addEventListener('click',()=>this.act('penalty',{action:'kick',spot:s},r=>{ this.last=r; this.kickAt=Date.now(); if(r.done) setTimeout(()=>toast(r.paid?`⚽ ${r.goals} goals: you won ${fmt(r.paid)}!`:`${r.goals} goals. Better luck next time.`),700); })); svg.append(z); }
       wrap.append(svg);
       if(g){ wrap.append(el('div',{class:'kicks'}, ...[0,1,2,3,4].map(i=>el('span',{text:g.kicks[i]?(g.kicks[i].goal?'✅':g.kicks[i].miss?'↗️':'🧤'):'⚪'})))); if(last&&showing) wrap.append(el('p',{class:'hint',style:'text-align:center',text:last.goal?'Goal!':last.miss?'Off target!':'Saved!'})); }
       if(live) wrap.append(el('p',{class:'hint',style:'text-align:center',text:showing?'…':`Kick ${g.kicks.length+1} of 5: tap where to shoot.`}));
       else { if(g&&g.done) wrap.append(el('div',{class:'cresult '+(g.paid?'win':'lose')}, el('b',{text:g.paid?`${g.goals} goals: you won ${fmt(g.paid)} coins!`:`${g.goals} goals. No prize this time.`})));
         wrap.append(this.betRow(I), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Start a shootout',disabled:this.busy,onclick:()=>{ const bet=this.betOk(); if(bet) this.act('penalty',{action:'start',bet},r=>{ this.last=r; this.kickAt=0; }); }}))); }
       return wrap; },
+    whot(b){ return Tables.lobby('whot', b.id); },
+    ludo(b){ return Tables.lobby('ludo', b.id); },
+    ayo(b){ return Tables.lobby('ayo', b.id); },
+    pool8(b){ return Tables.lobby('pool8', b.id); },
+    pool9(b){ return Tables.lobby('pool9', b.id); },
     snooker(b,I){ if(Tables.mine&&Tables.mine.game==='snooker'&&Tables.bid===b.id) return Tables.lobby('snooker', b.id);
       const wrap=el('div',{class:'ghstage snk'}), g=this.last&&this.last.game==='snooker'?this.last:null, live=g&&!g.done, replay=this.replay&&this.replay.g===g?this.replay:null;
-      if(g){ wrap.append(SnookerUI.view({ balls:g.balls, replay, canShoot:live&&!replay&&!this.busy,
+      if(g){ wrap.append(SnookerUI.view({ mode:'snooker', balls:g.balls, replay, canShoot:live&&!replay&&!this.busy,
           onShoot:(angle,power,spin)=>this.act('snooker',{action:'shoot',angle,power,spin},r=>{ this.last=r; if(r.last&&r.last.frames) this.replay={ g:r, frames:r.last.frames, t0:performance.now() }; if(r.done) setTimeout(()=>toast(r.won?(r.paid?`🎱 You did it! ${fmt(r.paid)} coins (today's prize).`:'🎱 You did it! (Today’s prize is already won.)'):'Out of shots. Rack up again!'), Math.min(4000,(r.last?.frames?.length||0)*33)); }),
           onReplayEnd:()=>{ this.replay=null; renderCard(true); } }));
         wrap.append(el('div',{class:'mstat'}, el('span',{text:`Shot ${Math.min(g.shots+(live?1:0),g.max)} of ${g.max}`}), el('b',{text:`Reds potted: ${g.potted} of ${g.need}`})));
         if(g.last&&!replay){ const L=g.last; wrap.append(el('p',{class:'hint',style:'text-align:center',text:L.foul?'In-off! The cue ball went down; it comes back on its spot.':L.potted.length?`Potted ${L.potted.filter(x=>x!=='c').length}!`:'Nothing went down.'})); }
-        if(live&&!replay) wrap.append(el('p',{class:'hint',style:'text-align:center',text:'Drag on the table to aim. Drag the cue down in the bar on the left and let go to shoot. Set spin on the white ball.'})); }
+        if(live&&!replay) wrap.append(el('p',{class:'hint',style:'text-align:center',text:'Press the cue and swing it to aim; roll the wheel on the right to fine-tune. Pull the power bar down and let go to shoot. Set spin on the white ball (it resets after each shot).'})); }
       if(g&&g.done&&!replay) wrap.append(el('div',{class:'cresult '+(g.won?'win':'lose')}, el('b',{text:g.won?(g.paid?`Cleared! You won today's ${fmt(g.paid)}-coin prize.`:'Cleared! (Today’s prize is already won.)'):'Out of shots this time.'})));
       if(!live&&!replay){ wrap.append(el('h4',{class:'bgroup',text:'Practice'}), el('p',{class:'hint',text:I.snookerPrize?`Pot 3 reds in 6 shots. Today's prize for a win: ${fmt(300)} coins.`:'Pot 3 reds in 6 shots. You’ve won today’s prize; practice is still free.'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'🎱 Rack up (free)',disabled:this.busy,onclick:()=>this.act('snooker',{action:'start'},r=>{ this.last=r; SnookerUI.aim=0; SnookerUI.spin={x:0,y:0}; })})));
         wrap.append(Tables.lobby('snooker', b.id)); }
       return wrap; },
-    darts(b,I){ const wrap=el('div',{class:'ghstage'}), g=this.last&&this.last.game==='darts'?this.last:null, live=g&&!g.done, R0=100;
-      const svg=this.svg('-110 -110 220 220'); svg.append(this.mk('circle',{r:108,fill:'#2B2621'}));
-      const ring=(r0,r1,i,col)=>{ const a0=(i*18-9-90)*Math.PI/180, a1=a0+18*Math.PI/180, P=(r,a)=>`${r*Math.cos(a)} ${r*Math.sin(a)}`; return this.mk('path',{d:`M${P(r0,a0)} L${P(r1,a0)} A${r1} ${r1} 0 0 1 ${P(r1,a1)} L${P(r0,a1)} A${r0} ${r0} 0 0 0 ${P(r0,a0)} Z`,fill:col}); };
-      for(let i=0;i<20;i++){ const dark=i%2===0; svg.append(ring(DART_RINGS.outer*R0,R0,i,dark?'#1E1E1E':'#F1E6C8'), ring(DART_RINGS.tripleIn*R0,DART_RINGS.tripleOut*R0,i,dark?'#C0392B':'#2E8B57'), ring(DART_RINGS.doubleIn*R0,R0,i,dark?'#C0392B':'#2E8B57'));
-        const a=(i*18-90)*Math.PI/180; svg.append(this.mk('text',{x:104*Math.cos(a)*0.985,y:104*Math.sin(a)*0.985+3,'text-anchor':'middle','font-size':8,fill:'#fff','font-weight':700},DART_ORDER[i])); }
-      svg.append(this.mk('circle',{r:DART_RINGS.outer*R0,fill:'#2E8B57'}), this.mk('circle',{r:DART_RINGS.bull*R0,fill:'#C0392B'}));
-      if(g) g.throws.forEach(t=>{ svg.append(this.mk('circle',{cx:t.hit[0]*R0,cy:-t.hit[1]*R0,r:3.2,fill:'#4FA3E0',stroke:'#fff','stroke-width':1.2})); });
-      if(live){ const hit=this.mk('circle',{r:110,fill:'transparent',class:'dartzone'}); hit.addEventListener('click',ev=>{ const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY; const q=pt.matrixTransform(svg.getScreenCTM().inverse());
-          this.act('darts',{action:'throw',x:q.x/R0,y:-q.y/R0},r=>{ this.last=r; const t=r.throws[r.throws.length-1]; toast(`🎯 ${t.label}${t.score?` · ${t.score}`:''}`); }); }); svg.append(hit); }
+    darts(b,I){ const wrap=el('div',{class:'ghstage'}), g=this.last&&this.last.game==='darts'?this.last:null, live=g&&!g.done, R0=100, mk=this.mk.bind(this);
+      const svg=this.svg('-118 -118 236 236'); svg.classList.add('dartsvg');
+      const defs=mk('defs',{}); defs.innerHTML=`<radialGradient id="dbWall" cx=".5" cy=".45" r=".7"><stop offset="0" stop-color="#3A2A22"/><stop offset="1" stop-color="#140D0A"/></radialGradient>
+        <radialGradient id="dbRim" cx=".5" cy=".5" r=".5"><stop offset=".86" stop-color="#121212"/><stop offset=".95" stop-color="#2E2E2E"/><stop offset="1" stop-color="#0A0A0A"/></radialGradient>
+        <filter id="dbSisal" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="4" result="n"/><feColorMatrix in="n" type="saturate" values="0"/><feComponentTransfer><feFuncA type="table" tableValues="0 .22"/></feComponentTransfer><feComposite in2="SourceGraphic" operator="in"/><feBlend in="SourceGraphic" mode="multiply"/></filter>
+        <radialGradient id="dbShade" cx=".38" cy=".3" r=".8"><stop offset="0" stop-color="rgba(255,255,255,.14)"/><stop offset=".6" stop-color="rgba(255,255,255,0)"/><stop offset="1" stop-color="rgba(0,0,0,.35)"/></radialGradient>
+        <linearGradient id="dbWire" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F4F4F4"/><stop offset="1" stop-color="#8E9196"/></linearGradient>`; svg.append(defs);
+      svg.append(mk('rect',{x:-118,y:-118,width:236,height:236,rx:14,fill:'url(#dbWall)'}), mk('circle',{cx:3,cy:5,r:114,fill:'rgba(0,0,0,.5)'}), mk('circle',{r:113,fill:'url(#dbRim)'}));
+      const board=mk('g',{filter:'url(#dbSisal)'});
+      const ring=(r0,r1,i,col)=>{ const a0=(i*18-9-90)*Math.PI/180, a1=a0+18*Math.PI/180, P=(r,a)=>`${(r*Math.cos(a)).toFixed(2)} ${(r*Math.sin(a)).toFixed(2)}`; return mk('path',{d:`M${P(r0,a0)} L${P(r1,a0)} A${r1} ${r1} 0 0 1 ${P(r1,a1)} L${P(r0,a1)} A${r0} ${r0} 0 0 0 ${P(r0,a0)} Z`,fill:col}); };
+      for(let i=0;i<20;i++){ const dark=i%2===0; board.append(ring(DART_RINGS.outer*R0,R0,i,dark?'#1B1B1B':'#EADCB6'), ring(DART_RINGS.tripleIn*R0,DART_RINGS.tripleOut*R0,i,dark?'#C4282A':'#1F8A4C'), ring(DART_RINGS.doubleIn*R0,R0,i,dark?'#C4282A':'#1F8A4C')); }
+      board.append(mk('circle',{r:DART_RINGS.outer*R0,fill:'#1F8A4C'}), mk('circle',{r:DART_RINGS.bull*R0,fill:'#C4282A'})); svg.append(board);
+      // the wire "spider": thin metal rings and spokes
+      const wire={fill:'none',stroke:'url(#dbWire)','stroke-width':.7};
+      for(const r of [DART_RINGS.bull,DART_RINGS.outer,DART_RINGS.tripleIn,DART_RINGS.tripleOut,DART_RINGS.doubleIn,1]) svg.append(mk('circle',{r:r*R0,...wire}));
+      for(let i=0;i<20;i++){ const a=(i*18-9-90)*Math.PI/180; svg.append(mk('line',{x1:DART_RINGS.outer*R0*Math.cos(a),y1:DART_RINGS.outer*R0*Math.sin(a),x2:R0*Math.cos(a),y2:R0*Math.sin(a),...wire})); }
+      svg.append(mk('circle',{r:R0,fill:'url(#dbShade)'}));
+      // the number ring
+      for(let i=0;i<20;i++){ const a=(i*18-90)*Math.PI/180, x=107*Math.cos(a), y=107*Math.sin(a); svg.append(mk('text',{x,y,'text-anchor':'middle','dominant-baseline':'central','font-size':9.5,'font-weight':800,fill:'#F2F2F2',stroke:'rgba(0,0,0,.6)','stroke-width':.35,transform:`rotate(${i*18>90&&i*18<270?i*18-180:i*18} ${x} ${y})`,'font-family':'system-ui,sans-serif'},DART_ORDER[i])); }
+      // darts that have landed: a steel tip in the board with a barrel and flight pointing at you
+      if(g) g.throws.forEach((t,k)=>{ const x=t.hit[0]*R0, y=-t.hit[1]*R0, d=mk('g',{transform:`translate(${x} ${y})`});
+        d.append(mk('ellipse',{cx:3,cy:4,rx:7,ry:2.6,fill:'rgba(0,0,0,.35)',transform:'rotate(35 3 4)'}), mk('line',{x1:0,y1:0,x2:6,y2:-7,stroke:'#C9CED6','stroke-width':2.4,'stroke-linecap':'round'}), mk('line',{x1:6,y1:-7,x2:11,y2:-13,stroke:'#2B2F36','stroke-width':3.2,'stroke-linecap':'round'}),
+          mk('path',{d:'M11 -13 L19 -14 L15 -19 Z',fill:['#4FA3E0','#F2C94C','#D9714A'][k%3],stroke:'#fff','stroke-width':.5}), mk('path',{d:'M11 -13 L13 -21 L17 -17 Z',fill:['#3B82C4','#E2B13C','#C0583A'][k%3],stroke:'#fff','stroke-width':.5}), mk('circle',{r:1.3,fill:'#fff'}));
+        svg.append(d); });
+      if(live){ const cross=mk('g',{opacity:0,'pointer-events':'none'}); cross.append(mk('circle',{r:6,fill:'none',stroke:'#fff','stroke-width':1}), mk('line',{x1:-10,y1:0,x2:10,y2:0,stroke:'#fff','stroke-width':.8}), mk('line',{x1:0,y1:-10,x2:0,y2:10,stroke:'#fff','stroke-width':.8}));
+        const hit=mk('circle',{r:115,fill:'transparent',class:'dartzone'}), at=ev=>{ const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY; return pt.matrixTransform(svg.getScreenCTM().inverse()); };
+        hit.addEventListener('pointermove',ev=>{ const q=at(ev); cross.setAttribute('transform',`translate(${q.x} ${q.y})`); cross.setAttribute('opacity',.9); });
+        hit.addEventListener('pointerleave',()=>cross.setAttribute('opacity',0));
+        hit.addEventListener('click',ev=>{ const q=at(ev); this.act('darts',{action:'throw',x:q.x/R0,y:-q.y/R0},r=>{ this.last=r; const t=r.throws[r.throws.length-1]; toast(`🎯 ${t.label}${t.score?` · ${t.score}`:''}`); }); }); svg.append(hit, cross); }
       wrap.append(svg);
       if(g) wrap.append(el('div',{class:'mstat'}, el('span',{text:g.throws.map(t=>t.label).join(' · ')||'Three darts'}), el('b',{text:`Total ${g.total}`})));
       if(live) wrap.append(el('p',{class:'hint',style:'text-align:center',text:`Dart ${g.throws.length+1} of 3: tap where to aim.`}));
@@ -3638,64 +3703,115 @@ const GH={ id:null, info:null, at:0, open:false, game:'penalty', bet:100, busy:f
 // show where the cue ball and the first ball it hits will go), drag the cue down in the power bar and let go to shoot,
 // and set spin on the cue ball at the side (top or back spin, and side spin). Table units: the physics table is 2 × 1;
 // on screen it stands upright with the cue ball's end at the bottom.
-const SnookerUI={ aim:0, power:0, spin:{x:0,y:0},
-  S:(x,y)=>[y, TABLE_W-x], // physics → screen
-  view({ balls, replay, canShoot, onShoot, onReplayEnd }){
-    const mk=GH.mk.bind(GH), M=0.13, svg=GH.svg(`${-M} ${-M} ${TABLE_H+2*M} ${TABLE_W+2*M}`); svg.classList.add('snksvg'); svg.removeAttribute('style');
-    const defs=mk('defs',{}); defs.innerHTML=`<linearGradient id="snkRail" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5B2A12"/><stop offset=".5" stop-color="#8A4523"/><stop offset="1" stop-color="#5B2A12"/></linearGradient>
-      <radialGradient id="snkCloth" cx=".5" cy=".45" r=".75"><stop offset="0" stop-color="#2AA391"/><stop offset="1" stop-color="#17786B"/></radialGradient>
-      <radialGradient id="snkRed" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#FF9A8C"/><stop offset=".35" stop-color="#E0402F"/><stop offset="1" stop-color="#8E1F16"/></radialGradient>
-      <radialGradient id="snkCue" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".6" stop-color="#F1EFE8"/><stop offset="1" stop-color="#B9B5AA"/></radialGradient>
-      <radialGradient id="snkHole" cx=".5" cy=".5" r=".5"><stop offset=".6" stop-color="#050505"/><stop offset="1" stop-color="#2A2A2A"/></radialGradient>
-      <linearGradient id="snkStick" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3B82C4"/><stop offset=".02" stop-color="#F4E4C1"/><stop offset=".72" stop-color="#D9B57A"/><stop offset=".73" stop-color="#4A2A14"/><stop offset="1" stop-color="#2B170A"/></linearGradient>`; svg.append(defs);
-    svg.append(mk('rect',{x:-M,y:-M,width:TABLE_H+2*M,height:TABLE_W+2*M,rx:0.07,fill:'url(#snkRail)'}), mk('rect',{x:-0.035,y:-0.035,width:TABLE_H+0.07,height:TABLE_W+0.07,rx:0.02,fill:'#11594F'}), mk('rect',{x:0,y:0,width:TABLE_H,height:TABLE_W,fill:'url(#snkCloth)'}));
-    for(const f of [0.25,0.5,0.75]) svg.append(mk('circle',{cx:f*TABLE_H,cy:-0.08,r:0.008,fill:'#F4E4C1'}), mk('circle',{cx:f*TABLE_H,cy:TABLE_W+0.08,r:0.008,fill:'#F4E4C1'}));
-    for(const f of [0.25,0.75,1.25,1.75]) svg.append(mk('circle',{cx:-0.08,cy:f,r:0.008,fill:'#F4E4C1'}), mk('circle',{cx:TABLE_H+0.08,cy:f,r:0.008,fill:'#F4E4C1'}));
-    const [bx,by]=this.S(0.42,0); svg.append(mk('line',{x1:0,y1:by,x2:TABLE_H,y2:by,stroke:'rgba(255,255,255,.28)','stroke-width':0.004}));
-    for(const [px,py,pr] of POCKETS){ const [sx,sy]=this.S(px,py); svg.append(mk('circle',{cx:Math.min(TABLE_H+0.01,Math.max(-0.01,sx)),cy:Math.min(TABLE_W+0.01,Math.max(-0.01,sy)),r:pr*1.05+0.012,fill:'#E8DCC0',opacity:.9}), mk('circle',{cx:Math.min(TABLE_H+0.01,Math.max(-0.01,sx)),cy:Math.min(TABLE_W+0.01,Math.max(-0.01,sy)),r:pr*1.05,fill:'url(#snkHole)'})); }
-    const guide=mk('g',{}), ballsG=mk('g',{}), stickG=mk('g',{}); svg.append(guide, ballsG, stickG);
-    const circles={}; const ball=(id,x,y)=>{ const [sx,sy]=this.S(x,y); let c=circles[id]; if(!c){ const g=mk('g',{}); g.append(mk('ellipse',{cx:0.004,cy:0.012,rx:BALL_R*0.95,ry:BALL_R*0.75,fill:'rgba(0,0,0,.35)'}), mk('circle',{r:BALL_R,fill:id==='c'?'url(#snkCue)':'url(#snkRed)'}), mk('circle',{cx:-BALL_R*0.35,cy:-BALL_R*0.4,r:BALL_R*0.22,fill:'rgba(255,255,255,.55)'})); ballsG.append(g); c=circles[id]=g; }
-      c.setAttribute('transform',`translate(${sx} ${sy})`); c.style.display=''; };
-    const place=pos=>{ for(const id in circles) if(!pos[id]) circles[id].style.display='none'; for(const [id,[x,y]] of Object.entries(pos)) ball(id,x,y); };
-    if(replay){ const step=()=>{ if(!svg.isConnected) return; const i=Math.min(replay.frames.length-1,Math.floor((performance.now()-replay.t0)/1000*30)); place(replay.frames[i]); if(i<replay.frames.length-1) requestAnimationFrame(step); else onReplayEnd&&onReplayEnd(); }; place(replay.frames[0]); requestAnimationFrame(step); }
-    else place(Object.fromEntries((balls||[]).map(b=>[b.id,[b.x,b.y]])));
-    const cue=!replay&&(balls||[]).find(b=>b.id==='c');
-    const draw=()=>{ guide.innerHTML=''; stickG.innerHTML=''; if(!cue||!canShoot) return;
-      const dx=Math.cos(this.aim), dy=Math.sin(this.aim); let tHit=Infinity, hit=null;
-      for(const o of balls){ if(o.id==='c') continue; const fx=o.x-cue.x, fy=o.y-cue.y, proj=fx*dx+fy*dy; if(proj<=0) continue; const perp=Math.abs(fx*dy-fy*dx); if(perp>=BALL_R*2) continue; const t=proj-Math.sqrt(4*BALL_R*BALL_R-perp*perp); if(t<tHit){ tHit=t; hit=o; } }
-      const wall=Math.min(dx>0?(TABLE_W-BALL_R-cue.x)/dx:dx<0?(BALL_R-cue.x)/dx:Infinity, dy>0?(TABLE_H-BALL_R-cue.y)/dy:dy<0?(BALL_R-cue.y)/dy:Infinity), t=Math.min(tHit,wall);
-      const gx=cue.x+dx*t, gy=cue.y+dy*t, [c0x,c0y]=this.S(cue.x,cue.y), [g0x,g0y]=this.S(gx,gy);
-      guide.append(mk('line',{x1:c0x,y1:c0y,x2:g0x,y2:g0y,stroke:'#fff','stroke-width':0.006,opacity:.9}), mk('circle',{cx:g0x,cy:g0y,r:BALL_R,fill:'none',stroke:'#fff','stroke-width':0.005}));
-      if(hit){ const nx=hit.x-gx, ny=hit.y-gy, nl=Math.hypot(nx,ny)||1, [hx,hy]=this.S(hit.x,hit.y), [ex,ey]=this.S(hit.x+nx/nl*0.3,hit.y+ny/nl*0.3); guide.append(mk('line',{x1:hx,y1:hy,x2:ex,y2:ey,stroke:'#fff','stroke-width':0.005,opacity:.85}));
-        const tx=dx-(dx*nx+dy*ny)/nl*nx/nl, ty=dy-(dx*nx+dy*ny)/nl*ny/nl, tl=Math.hypot(tx,ty); if(tl>0.05){ const [qx,qy]=this.S(gx+tx/tl*0.12,gy+ty/tl*0.12); guide.append(mk('line',{x1:g0x,y1:g0y,x2:qx,y2:qy,stroke:'#fff','stroke-width':0.004,opacity:.55})); } }
-      // the cue stick, drawn back from the cue ball as the power goes up
-      const ux=Math.sin(this.aim), uy=-Math.cos(this.aim), pull=BALL_R*1.5+this.power*0.22, L=1.15, w0=0.008, w1=0.017;
-      const ax=c0x-ux*pull, ay=c0y-uy*pull;
-      // drawn in its own frame so the wood grain and the tip run along it
-      const ang=Math.atan2(-uy,-ux)*180/Math.PI; const sg=mk('g',{transform:`translate(${ax} ${ay}) rotate(${ang})`}); sg.append(mk('polygon',{points:`0,${-w0} 0,${w0} ${L},${w1} ${L},${-w1}`,fill:'url(#snkStick)',stroke:'rgba(0,0,0,.35)','stroke-width':0.002})); stickG.append(sg); };
-    draw(); this.redraw=draw;
-    if(cue&&canShoot){ const aimAt=ev=>{ const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY; const q=pt.matrixTransform(svg.getScreenCTM().inverse()), [cx,cy]=this.S(cue.x,cue.y), sx=q.x-cx, sy=q.y-cy; if(Math.hypot(sx,sy)<0.01) return; this.aim=Math.atan2(sx,-sy); draw(); };
-      let down=false; svg.addEventListener('pointerdown',ev=>{ down=true; svg.setPointerCapture(ev.pointerId); aimAt(ev); }); svg.addEventListener('pointermove',ev=>{ if(down) aimAt(ev); }); svg.addEventListener('pointerup',()=>{ down=false; }); svg.addEventListener('pointercancel',()=>{ down=false; }); }
-    // the power bar (drag the cue down, let go to shoot) and the spin ball
+const SnookerUI={ aim:0, power:0, spin:{x:0,y:0}, M:0.13,
+  S:(x,y)=>[y, TABLE_W-x], // physics → screen (table units, portrait)
+  COLORS:{1:'#F2B705',2:'#1E4FB8',3:'#D3261C',4:'#5A2A8C',5:'#EE6C17',6:'#16804A',7:'#7C1A22',8:'#151515'},
+  // A small noise tile for the cloth, made once.
+  noise(){ if(this._noise) return this._noise; const c=document.createElement('canvas'); c.width=c.height=96; const x=c.getContext('2d'), d=x.createImageData(96,96);
+    for(let i=0;i<d.data.length;i+=4){ const v=Math.random()*255; d.data[i]=d.data[i+1]=d.data[i+2]=v; d.data[i+3]=26; } x.putImageData(d,0,0); return this._noise=c; },
+  // The table without balls (rails, cloth, cushions, pockets), drawn once per size into its own canvas.
+  base(w,h,dpr){ const key=w+'x'+h+'@'+dpr; if(this._base&&this._base.key===key) return this._base.c;
+    const M=this.M, c=document.createElement('canvas'); c.width=Math.round(w*dpr); c.height=Math.round(h*dpr); const x=c.getContext('2d'), k=w/(TABLE_H+2*M)*dpr; x.setTransform(k,0,0,k,M*k,M*k);
+    // wooden frame with grain
+    const rr=(X,Y,W,H,r)=>{ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+W,Y,X+W,Y+H,r); x.arcTo(X+W,Y+H,X,Y+H,r); x.arcTo(X,Y+H,X,Y,r); x.arcTo(X,Y,X+W,Y,r); x.closePath(); };
+    let g=x.createLinearGradient(-M,0,TABLE_H+M,0); g.addColorStop(0,'#3E1C0B'); g.addColorStop(.12,'#7A3A17'); g.addColorStop(.5,'#8E4A22'); g.addColorStop(.88,'#7A3A17'); g.addColorStop(1,'#3E1C0B');
+    rr(-M,-M,TABLE_H+2*M,TABLE_W+2*M,0.075); x.fillStyle=g; x.fill();
+    x.save(); x.clip(); x.globalAlpha=.18; for(let i=0;i<70;i++){ const yy=-M+Math.random()*(TABLE_W+2*M); x.strokeStyle=i%3?'#2A1205':'#B06A3A'; x.lineWidth=0.002+Math.random()*0.004; x.beginPath(); x.moveTo(-M,yy); x.bezierCurveTo(0.3,yy+(Math.random()-.5)*0.05,0.7,yy+(Math.random()-.5)*0.05,TABLE_H+M,yy+(Math.random()-.5)*0.03); x.stroke(); } x.restore();
+    // a soft bevel on the rail
+    g=x.createLinearGradient(0,-M,0,-M+0.03); g.addColorStop(0,'rgba(255,220,180,.35)'); g.addColorStop(1,'rgba(255,220,180,0)'); rr(-M,-M,TABLE_H+2*M,TABLE_W+2*M,0.075); x.strokeStyle='rgba(0,0,0,.5)'; x.lineWidth=0.006; x.stroke();
+    // diamonds (mother-of-pearl)
+    const dia=(cx,cy)=>{ x.save(); x.translate(cx,cy); x.rotate(Math.PI/4); const s=0.011; const gg=x.createLinearGradient(-s,-s,s,s); gg.addColorStop(0,'#FFFFFF'); gg.addColorStop(1,'#CFC6B0'); x.fillStyle=gg; x.fillRect(-s/2,-s/2,s,s); x.restore(); };
+    for(const f of [0.25,0.5,0.75]){ dia(f*TABLE_H,-0.075); dia(f*TABLE_H,TABLE_W+0.075); } for(const f of [0.25,0.5,0.75,1.25,1.5,1.75]){ dia(-0.075,f); dia(TABLE_H+0.075,f); }
+    // cushions (rubber, slightly lighter than the bed) and the cloth
+    x.fillStyle='#0F6157'; x.fillRect(-0.035,-0.035,TABLE_H+0.07,TABLE_W+0.07);
+    g=x.createRadialGradient(TABLE_H/2,TABLE_W*0.45,0.1,TABLE_H/2,TABLE_W/2,1.2); g.addColorStop(0,'#2BA593'); g.addColorStop(.6,'#1E8C7C'); g.addColorStop(1,'#13695D'); x.fillStyle=g; x.fillRect(0,0,TABLE_H,TABLE_W);
+    x.save(); x.beginPath(); x.rect(0,0,TABLE_H,TABLE_W); x.clip(); x.globalCompositeOperation='overlay'; const pat=x.createPattern(this.noise(),'repeat'); x.setTransform(dpr,0,0,dpr,0,0); x.fillStyle=pat; x.fillRect(0,0,c.width,c.height); x.restore();
+    x.setTransform(k,0,0,k,M*k,M*k);
+    // the cushion shadow on the cloth
+    for(const [a,b,c2,d2] of [[0,0,TABLE_H,0.02],[0,TABLE_W-0.02,TABLE_H,0.02],[0,0,0.02,TABLE_W],[TABLE_H-0.02,0,0.02,TABLE_W]]){ const gg=a===0&&c2===TABLE_H?x.createLinearGradient(0,b===0?0:TABLE_W,0,b===0?0.02:TABLE_W-0.02):x.createLinearGradient(a===0?0:TABLE_H,0,a===0?0.02:TABLE_H-0.02,0); gg.addColorStop(0,'rgba(0,0,0,.28)'); gg.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=gg; x.fillRect(a,b,c2,d2); }
+    // baulk line and D (snooker) are drawn per view; spots
+    for(const [px,py,pr] of POCKETS){ const [sx0,sy0]=this.S(px,py), sx=Math.min(TABLE_H+0.012,Math.max(-0.012,sx0)), sy=Math.min(TABLE_W+0.012,Math.max(-0.012,sy0)), r=pr*1.05;
+      const lg=x.createRadialGradient(sx,sy,r*0.6,sx,sy,r+0.02); lg.addColorStop(0,'#2A1A10'); lg.addColorStop(.7,'#4A2E1B'); lg.addColorStop(1,'#1D120A'); x.fillStyle=lg; x.beginPath(); x.arc(sx,sy,r+0.017,0,Math.PI*2); x.fill();
+      const hg=x.createRadialGradient(sx-r*0.2,sy-r*0.2,0,sx,sy,r); hg.addColorStop(0,'#000'); hg.addColorStop(.75,'#050505'); hg.addColorStop(1,'#262626'); x.fillStyle=hg; x.beginPath(); x.arc(sx,sy,r,0,Math.PI*2); x.fill(); }
+    this._base={key,c}; return c; },
+  // One ball: a coloured sphere (striped for 9–15) with its number, a highlight and a shadow on the cloth.
+  ball(x,id,sx,sy){ const R=BALL_R, n=id==='c'?0:id[0]==='b'?Number(id.slice(1)):-1;
+    x.fillStyle='rgba(0,0,0,.32)'; x.beginPath(); x.ellipse(sx+R*0.18,sy+R*0.38,R*0.95,R*0.7,0,0,Math.PI*2); x.fill();
+    x.save(); x.beginPath(); x.arc(sx,sy,R,0,Math.PI*2); x.clip();
+    const col=n===0?'#F6F3EA':n<0?'#C8231A':this.COLORS[n>8?n-8:n];
+    x.fillStyle=n>8?'#F6F3EA':col; x.fillRect(sx-R,sy-R,2*R,2*R);
+    if(n>8){ x.fillStyle=col; x.fillRect(sx-R,sy-R*0.55,2*R,R*1.1); }
+    if(n>0){ x.fillStyle='#FBFAF5'; x.beginPath(); x.arc(sx,sy,R*0.47,0,Math.PI*2); x.fill(); x.fillStyle='#151515'; x.font=`800 ${R*(n>9?0.56:0.66)}px system-ui,sans-serif`; x.textAlign='center'; x.textBaseline='middle'; x.fillText(String(n),sx,sy+R*0.04); }
+    const sh=x.createRadialGradient(sx-R*0.35,sy-R*0.4,R*0.05,sx,sy,R*1.05); sh.addColorStop(0,'rgba(255,255,255,.75)'); sh.addColorStop(.18,'rgba(255,255,255,.18)'); sh.addColorStop(.6,'rgba(0,0,0,0)'); sh.addColorStop(1,'rgba(0,0,0,.45)');
+    x.fillStyle=sh; x.fillRect(sx-R,sy-R,2*R,2*R); x.restore(); },
+  // The cue stick: tip, ferrule, maple shaft, joint and a dark butt with rings, rounded by a gradient across it.
+  stick(x,ax,ay,ux,uy){ const L=1.2, w0=0.0075, w1=0.017; x.save(); x.translate(ax,ay); x.rotate(Math.atan2(uy,ux));
+    x.fillStyle='rgba(0,0,0,.25)'; x.beginPath(); x.moveTo(0.004,-w0+0.012); x.lineTo(L+0.004,-w1+0.016); x.lineTo(L+0.004,w1+0.016); x.lineTo(0.004,w0+0.012); x.fill();
+    const seg=(a,b,c1,c2)=>{ const wa=w0+(w1-w0)*a/L, wb=w0+(w1-w0)*b/L; const g=x.createLinearGradient(0,-wb,0,wb); g.addColorStop(0,c2); g.addColorStop(.35,c1); g.addColorStop(.5,c1); g.addColorStop(1,c2); x.fillStyle=g; x.beginPath(); x.moveTo(a,-wa); x.lineTo(b,-wb); x.lineTo(b,wb); x.lineTo(a,wa); x.closePath(); x.fill(); };
+    seg(0,0.008,'#4C8FD6','#22507F'); seg(0.008,0.026,'#FFFFFF','#BEBAB0'); seg(0.026,0.72,'#F2DDB0','#B98F55'); seg(0.72,0.735,'#E9E4D8','#9A948A'); seg(0.735,1.2,'#5A2E14','#24110A');
+    for(const r of [0.8,0.82,1.12]) seg(r,r+0.006,'#E8D9B5','#8F7A55');
+    x.restore(); },
+  view({ balls, replay, canShoot, onShoot, onReplayEnd, on, mode }){
+    const M=this.M, cv=el('canvas',{class:'snkcv','aria-label':'The table'}), x=cv.getContext('2d'), self=this;
+    const cue=!replay&&(balls||[]).find(b=>b.id==='c'); let pos=Object.fromEntries((balls||[]).map(b=>[b.id,[b.x,b.y]]));
+    let k=1, dpr=1, W=0, H=0;
+    const fit=()=>{ const w=cv.clientWidth; if(!w) return false; dpr=Math.min(3,window.devicePixelRatio||1); W=w; H=w*(TABLE_W+2*M)/(TABLE_H+2*M); if(cv.width!==Math.round(W*dpr)){ cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); } k=W/(TABLE_H+2*M); return true; };
+    const stickGeo=()=>{ const [c0x,c0y]=this.S(cue.x,cue.y), ux=Math.sin(this.aim), uy=-Math.cos(this.aim), pull=BALL_R*1.4+this.power*0.22; return { c0x,c0y, ux:-ux, uy:-uy, ax:c0x-ux*pull, ay:c0y-uy*pull }; };
+    const draw=()=>{ if(!cv.isConnected||!fit()) return; x.setTransform(1,0,0,1,0,0); x.clearRect(0,0,cv.width,cv.height); x.drawImage(this.base(W,H,dpr),0,0);
+      x.setTransform(k*dpr,0,0,k*dpr,M*k*dpr,M*k*dpr);
+      if(mode==='snooker'){ const [,by]=this.S(0.42,0); x.strokeStyle='rgba(255,255,255,.3)'; x.lineWidth=0.004; x.beginPath(); x.moveTo(0,by); x.lineTo(TABLE_H,by); x.stroke(); x.beginPath(); x.arc(TABLE_H/2,by,0.16,0,Math.PI); x.stroke(); }
+      else { const [fx,fy]=this.S(1.45,0.5), [hx,hy]=this.S(0.42,0.5); x.fillStyle='rgba(255,255,255,.35)'; for(const [a,b] of [[fx,fy],[hx,hy]]){ x.beginPath(); x.arc(a,b,0.006,0,Math.PI*2); x.fill(); } }
+      // which ball you must hit first
+      if(on&&on.length===1&&!replay&&canShoot) for(const id of on){ const p=pos[id]; if(!p) continue; const [sx,sy]=this.S(p[0],p[1]); x.strokeStyle='rgba(255,236,150,.85)'; x.lineWidth=0.005; x.beginPath(); x.arc(sx,sy,BALL_R*1.45,0,Math.PI*2); x.stroke(); }
+      if(cue&&canShoot){ // the aiming line, the ghost ball and where the object ball goes
+        const dx=Math.cos(this.aim), dy=Math.sin(this.aim); let tHit=Infinity, hit=null;
+        for(const o of balls){ if(o.id==='c') continue; const fx=o.x-cue.x, fy=o.y-cue.y, proj=fx*dx+fy*dy; if(proj<=0) continue; const perp=Math.abs(fx*dy-fy*dx); if(perp>=BALL_R*2) continue; const t=proj-Math.sqrt(4*BALL_R*BALL_R-perp*perp); if(t<tHit){ tHit=t; hit=o; } }
+        const wall=Math.min(dx>0?(TABLE_W-BALL_R-cue.x)/dx:dx<0?(BALL_R-cue.x)/dx:Infinity, dy>0?(TABLE_H-BALL_R-cue.y)/dy:dy<0?(BALL_R-cue.y)/dy:Infinity), t=Math.min(tHit,wall);
+        const gx=cue.x+dx*t, gy=cue.y+dy*t, [c0x,c0y]=this.S(cue.x,cue.y), [g0x,g0y]=this.S(gx,gy);
+        x.strokeStyle='rgba(255,255,255,.92)'; x.lineWidth=0.0045; x.beginPath(); x.moveTo(c0x,c0y); x.lineTo(g0x,g0y); x.stroke();
+        x.lineWidth=0.004; x.beginPath(); x.arc(g0x,g0y,BALL_R,0,Math.PI*2); x.stroke();
+        if(hit){ const nx=hit.x-gx, ny=hit.y-gy, nl=Math.hypot(nx,ny)||1, [hx,hy]=this.S(hit.x,hit.y), [ex,ey]=this.S(hit.x+nx/nl*0.3,hit.y+ny/nl*0.3); x.strokeStyle='rgba(255,255,255,.8)'; x.beginPath(); x.moveTo(hx,hy); x.lineTo(ex,ey); x.stroke();
+          const tx=dx-(dx*nx+dy*ny)/nl*nx/nl, ty=dy-(dx*nx+dy*ny)/nl*ny/nl, tl=Math.hypot(tx,ty); if(tl>0.05){ const [qx,qy]=this.S(gx+tx/tl*0.12,gy+ty/tl*0.12); x.strokeStyle='rgba(255,255,255,.45)'; x.setLineDash([0.012,0.01]); x.beginPath(); x.moveTo(g0x,g0y); x.lineTo(qx,qy); x.stroke(); x.setLineDash([]); } } }
+      for(const [id,[bx,by]] of Object.entries(pos)){ const [sx,sy]=this.S(bx,by); this.ball(x,id,sx,sy); }
+      if(cue&&canShoot){ const s=stickGeo(); this.stick(x,s.ax,s.ay,s.ux,s.uy); } };
+    this.redraw=draw;
+    const start=()=>{ if(!cv.isConnected){ requestAnimationFrame(start); return; } draw();
+      if(replay){ const step=()=>{ if(!cv.isConnected) return; const i=Math.min(replay.frames.length-1,Math.max(0,Math.floor((performance.now()-replay.t0)/1000*30))); pos=replay.frames[i]; draw(); if(i<replay.frames.length-1) requestAnimationFrame(step); else onReplayEnd&&onReplayEnd(); }; requestAnimationFrame(step); } };
+    requestAnimationFrame(start);
+    if(typeof ResizeObserver!=='undefined'){ const ro=new ResizeObserver(()=>{ if(!cv.isConnected){ ro.disconnect(); return; } draw(); }); requestAnimationFrame(()=>ro.observe(cv)); }
+    // Aim by moving the stick itself: press on the cue and swing it round the white ball. Touches anywhere else do nothing.
+    if(cue&&canShoot){ const toTable=ev=>{ const r=cv.getBoundingClientRect(); return [(ev.clientX-r.left)/k-M,(ev.clientY-r.top)/k-M]; };
+      const onStick=(px,py)=>{ const s=stickGeo(), vx=px-s.ax, vy=py-s.ay, along=vx*s.ux+vy*s.uy, across=Math.abs(vx*s.uy-vy*s.ux); return along>-0.05&&along<1.2&&across<0.055; };
+      let grab=null;
+      cv.addEventListener('pointerdown',ev=>{ const [px,py]=toTable(ev); if(!onStick(px,py)) return; ev.preventDefault(); cv.setPointerCapture(ev.pointerId); const s=stickGeo(); grab={ a0:Math.atan2(py-s.c0y,px-s.c0x), aim0:this.aim }; cv.classList.add('grab'); });
+      cv.addEventListener('pointermove',ev=>{ const [px,py]=toTable(ev); if(!grab){ cv.style.cursor=onStick(px,py)?'grab':''; return; } const s=stickGeo(); let d=Math.atan2(py-s.c0y,px-s.c0x)-grab.a0; d=Math.atan2(Math.sin(d),Math.cos(d)); this.aim=grab.aim0+d; draw(); });
+      const end=()=>{ grab=null; cv.classList.remove('grab'); }; cv.addEventListener('pointerup',end); cv.addEventListener('pointercancel',end); }
+    // the power bar (drag the cue down, let go to shoot)
     const pow=el('div',{class:'snkpow','aria-label':'Power: drag down and let go to shoot'}), fill=el('div',{class:'fill'}), stick=el('div',{class:'stick'}), pct=el('div',{class:'pct',text:''}); pow.append(fill, stick, pct);
     const setPow=v=>{ this.power=Math.max(0,Math.min(1,v)); fill.style.height=`${this.power*100}%`; stick.style.transform=`translate(-50%, ${this.power*40}%)`; pct.textContent=this.power>0.02?`${Math.round(this.power*100)}%`:''; draw(); };
-    if(canShoot&&cue){ let start=null; pow.addEventListener('pointerdown',ev=>{ pow.setPointerCapture(ev.pointerId); const r=pow.getBoundingClientRect(); start=r; setPow((ev.clientY-r.top)/r.height); });
-      pow.addEventListener('pointermove',ev=>{ if(start) setPow((ev.clientY-start.top)/start.height); });
-      pow.addEventListener('pointerup',()=>{ if(!start) return; start=null; const p=this.power; setPow(0); if(p>=0.05) onShoot(this.aim, p, { ...this.spin }); });
-      pow.addEventListener('pointercancel',()=>{ start=null; setPow(0); }); }
-    else pow.style.opacity=.45;
     const spinBall=el('div',{class:'snkspin','aria-label':'Spin'}), dot=el('div',{class:'dot'}); spinBall.append(dot);
     const spinName=()=>this.spin.y>0.2?'Top spin':this.spin.y<-0.2?'Back spin':Math.abs(this.spin.x)>0.2?'Side spin':'Spin', spinLab=el('small',{text:spinName()});
-    const showSpin=()=>{ dot.style.left=`${50+this.spin.x*38}%`; dot.style.top=`${50-this.spin.y*38}%`; }; showSpin();
-    if(canShoot){ let on=false; const setSpin=ev=>{ const r=spinBall.getBoundingClientRect(); let x=((ev.clientX-r.left)/r.width-0.5)/0.38, y=-((ev.clientY-r.top)/r.height-0.5)/0.38; const m=Math.hypot(x,y); if(m>1){ x/=m; y/=m; } if(m<0.18){ x=0; y=0; } this.spin={x:Math.round(x*100)/100,y:Math.round(y*100)/100}; showSpin(); if(spinLab) spinLab.textContent=spinName(); };
-      spinBall.addEventListener('pointerdown',ev=>{ on=true; spinBall.setPointerCapture(ev.pointerId); setSpin(ev); }); spinBall.addEventListener('pointermove',ev=>{ if(on) setSpin(ev); }); spinBall.addEventListener('pointerup',()=>{ on=false; }); }
-    const side=el('div',{class:'snkside'}, spinBall, spinLab,
-      canShoot?el('button',{class:'pill',text:'◀',title:'Fine aim',onclick:()=>{ this.aim-=0.3*Math.PI/180; draw(); }}):'', canShoot?el('button',{class:'pill',text:'▶',title:'Fine aim',onclick:()=>{ this.aim+=0.3*Math.PI/180; draw(); }}):'');
-    return el('div',{class:'snkrow'}, pow, svg, side); } };
+    const showSpin=()=>{ dot.style.left=`${50+this.spin.x*38}%`; dot.style.top=`${50-this.spin.y*38}%`; spinLab.textContent=spinName(); }; showSpin();
+    if(canShoot&&cue){ let start2=null; pow.addEventListener('pointerdown',ev=>{ pow.setPointerCapture(ev.pointerId); const r=pow.getBoundingClientRect(); start2=r; setPow((ev.clientY-r.top)/r.height); });
+      pow.addEventListener('pointermove',ev=>{ if(start2) setPow((ev.clientY-start2.top)/start2.height); });
+      pow.addEventListener('pointerup',()=>{ if(!start2) return; start2=null; const p=this.power, sp={ ...this.spin }; setPow(0); if(p>=0.05){ this.spin={x:0,y:0}; showSpin(); onShoot(this.aim, p, sp); } }); // spin goes back to the centre after every shot
+      pow.addEventListener('pointercancel',()=>{ start2=null; setPow(0); }); }
+    else pow.style.opacity=.45;
+    if(canShoot){ let son=false; const setSpin=ev=>{ const r=spinBall.getBoundingClientRect(); let sx=((ev.clientX-r.left)/r.width-0.5)/0.38, sy=-((ev.clientY-r.top)/r.height-0.5)/0.38; const m=Math.hypot(sx,sy); if(m>1){ sx/=m; sy/=m; } if(m<0.18){ sx=0; sy=0; } this.spin={x:Math.round(sx*100)/100,y:Math.round(sy*100)/100}; showSpin(); };
+      spinBall.addEventListener('pointerdown',ev=>{ son=true; spinBall.setPointerCapture(ev.pointerId); setSpin(ev); }); spinBall.addEventListener('pointermove',ev=>{ if(son) setSpin(ev); }); spinBall.addEventListener('pointerup',()=>{ son=false; }); }
+    // The fine-aim wheel: roll it up or down to nudge the stick a fraction of a degree.
+    const wheel=el('div',{class:'snkwheel','aria-label':'Fine aim: roll up or down'}), ridges=el('div',{class:'ridges'}); wheel.append(ridges);
+    if(canShoot&&cue){ let wy=null, off=0; wheel.addEventListener('pointerdown',ev=>{ wheel.setPointerCapture(ev.pointerId); wy=ev.clientY; wheel.classList.add('on'); });
+      wheel.addEventListener('pointermove',ev=>{ if(wy==null) return; const d=ev.clientY-wy; wy=ev.clientY; off+=d; ridges.style.backgroundPositionY=`${off}px`; this.aim+=d*0.0011; draw(); });
+      const wend=()=>{ wy=null; wheel.classList.remove('on'); }; wheel.addEventListener('pointerup',wend); wheel.addEventListener('pointercancel',wend);
+      wheel.addEventListener('wheel',ev=>{ ev.preventDefault(); off-=ev.deltaY*0.3; ridges.style.backgroundPositionY=`${off}px`; this.aim-=ev.deltaY*0.0003; draw(); },{passive:false}); }
+    else wheel.style.opacity=.45;
+    const side=el('div',{class:'snkside'}, spinBall, spinLab, wheel, el('small',{text:'Fine aim'}));
+    return el('div',{class:'snkrow'}, pow, cv, side); } };
 // ---- Tables: colonists playing each other (Whot, Ludo, Ayo, Snooker at a Game House; Hold'em at a Casino) ----
 const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, seats:2, quick:true, timer:null, sig:'', aim:0, power:0.55, replay:null, lastShotSig:'',
   async load(game,bid,quiet){ this.game=game; this.bid=bid; this.error=null; try{ const r=await api(`/api/me/tables?building=${encodeURIComponent(bid)}&game=${game}`); const ls=JSON.stringify(r.tables.map(t=>[t.id,t.status,t.players.length])); const changed=ls!==this.listSig||this.set(r.mine); this.listSig=ls; this.list=r.tables; if(!quiet||changed) renderCard(true); }catch(e){ if(!quiet){ this.list=[]; this.error=e.message; renderCard(true); } } this.poll(); },
-  set(t){ const was=this.mine&&this.mine.status; this.mine=t; const sig=t?JSON.stringify({...t, now:0}):''; const changed=sig!==this.sig; this.sig=sig; if(t&&t.game==='snooker'&&t.view&&t.view.last){ const ls=JSON.stringify(t.view.last.potted)+t.view.log.length; if(ls!==this.lastShotSig){ this.lastShotSig=ls; if(this.lastShotSig&&t.view.last.frames) this.replay={ frames:t.view.last.frames, t0:performance.now() }; } } if(changed&&(was!==(t&&t.status))) this.poll(); return changed; },
+  set(t){ const was=this.mine&&this.mine.status; this.mine=t; const sig=t?JSON.stringify({...t, now:0}):''; const changed=sig!==this.sig; this.sig=sig; if(t&&/^(snooker|pool8|pool9)$/.test(t.game)&&t.view&&t.view.last){ const ls=JSON.stringify(t.view.last.potted)+t.view.log.length; if(ls!==this.lastShotSig){ this.lastShotSig=ls; if(this.lastShotSig&&t.view.last.frames) this.replay={ frames:t.view.last.frames, t0:performance.now() }; } } if(changed&&(was!==(t&&t.status))) this.poll(); return changed; },
   // While a table is on screen: follow the game (every 1.5 s), or keep the list of open tables fresh (every 4 s).
   poll(){ clearInterval(this.timer); const playing=this.mine&&this.mine.status!=='done';
     this.timer=setInterval(async()=>{ if(!document.querySelector('#card .tbl')){ clearInterval(this.timer); this.timer=null; return; }
@@ -3814,10 +3930,19 @@ const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, s
       if(v.log.length) w.append(el('p',{class:'hint',style:'text-align:center',text:v.log.slice(-3).map(([s,a,x,y,d])=>`${names(s)} ${a==='rolled'?`rolled ${Array.isArray(x)?x.join(' + '):x}`:a==='captured'?'captured a token!':a==='moved'?`moved ${d||''}`:a==='no move'?'couldn’t move':a}`).join(' · ')}));
       return w; },
     snooker(t,v){ const w=el('div',{class:'ghstage snk'}), my=t.canMove, rp=this.replay;
-      w.append(SnookerUI.view({ balls:v.balls, replay:rp, canShoot:my&&!rp&&!this.busy, onShoot:(angle,power,spin)=>this.move({shot:true,angle,power,spin}), onReplayEnd:()=>{ this.replay=null; renderCard(true); } }));
+      w.append(SnookerUI.view({ mode:'snooker', balls:v.balls, replay:rp, canShoot:my&&!rp&&!this.busy, onShoot:(angle,power,spin)=>this.move({shot:true,angle,power,spin}), onReplayEnd:()=>{ this.replay=null; renderCard(true); } }));
       w.append(el('div',{class:'mstat'}, el('span',{text:`First to ${v.race} reds`}), el('b',{text:`You ${v.score[t.seat]??0} · Them ${v.score[1-(t.seat<0?0:t.seat)]??0}`})));
       if(v.last&&!rp) w.append(el('p',{class:'hint',style:'text-align:center',text:`${v.last.seat===t.seat?'You':'They'} ${v.last.foul?'fouled':v.last.potted.filter(x=>x!=='c').length?`potted ${v.last.potted.filter(x=>x!=='c').length}`:'missed'}.`}));
-      if(my&&!rp) w.append(el('p',{class:'hint',style:'text-align:center',text:'Your shot: drag on the table to aim, then drag the cue down on the left and let go.'}));
+      if(my&&!rp) w.append(el('p',{class:'hint',style:'text-align:center',text:'Your shot: press the cue and swing it to aim, roll the wheel for fine aim, then pull the power bar down and let go.'}));
+      else if(!rp&&v.turn!=null) w.append(el('p',{class:'hint',style:'text-align:center',text:'Their shot…'}));
+      return w; },
+    pool8(t,v){ return this.boards.pool.call(this,t,v); }, pool9(t,v){ return this.boards.pool.call(this,t,v); },
+    pool(t,v){ const w=el('div',{class:'ghstage snk'}), my=t.canMove, rp=this.replay, me=t.seat<0?0:t.seat, who=s=>s===t.seat?'You':t.players[s]?(t.players[s].bot?'The computer':'@'+t.players[s].handle):'They';
+      w.append(SnookerUI.view({ mode:'pool', balls:v.balls, on:v.on, replay:rp, canShoot:my&&!rp&&!this.busy, onShoot:(angle,power,spin)=>this.move({shot:true,angle,power,spin}), onReplayEnd:()=>{ this.replay=null; renderCard(true); } }));
+      if(v.mode===8){ const g=v.groups[me], o=v.groups[1-me]; w.append(el('div',{class:'mstat'}, el('span',{text:g?`You: ${g}${v.left[me]===0?' · on the 8':` · ${v.left[me]} left`}`:'Open table: pot any ball to claim its group'}), el('b',{text:o?`Them: ${o}${v.left[1-me]===0?' · on the 8':` · ${v.left[1-me]} left`}`:''}))); }
+      else { const lo=v.on&&v.on[0]; w.append(el('div',{class:'mstat'}, el('span',{text:lo?`Ball on: ${lo.slice(1)}`:''}), el('b',{text:`${v.balls.filter(b=>b.id!=='c').length} balls left`}))); }
+      if(v.last&&!rp){ const L=v.last, n=L.potted.filter(x=>x!=='c').length; w.append(el('p',{class:'hint',style:'text-align:center',text:L.eight?(L.eight==='won'?`${who(L.seat)} sank the 8!`:`${who(L.seat)} sank the 8 too early.`):L.nine?`${who(L.seat)} sank the 9!`:`${who(L.seat)} ${L.foul?`fouled (${L.why})`:n?`potted ${n}`:'missed'}.${L.took?` ${L.seat===t.seat?'You take':'They take'} ${L.took}.`:''}${L.respot?' The 9 goes back on its spot.':''}`})); }
+      if(my&&!rp) w.append(el('p',{class:'hint',style:'text-align:center',text:'Your shot: press the cue and swing it to aim, roll the wheel for fine aim, then pull the power bar down and let go.'}));
       else if(!rp&&v.turn!=null) w.append(el('p',{class:'hint',style:'text-align:center',text:'Their shot…'}));
       return w; },
     poker(t,v){ const w=el('div',{class:'ghstage'}), card=c=>{ const red=/[♥♦]$/.test(c); return el('span',{class:'pcard'+(red?' red':''),text:c.replace('T','10')}); }, back=()=>el('span',{class:'pcard back',text:'🂠'});
@@ -4856,7 +4981,7 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
 let frameStats={}, lastVeh=[];
-window.__dbg={ chats:()=>Chats, tab:t=>openTab(t), openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+window.__dbg={ snk:()=>SnookerUI, chats:()=>Chats, tab:t=>openTab(t), openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

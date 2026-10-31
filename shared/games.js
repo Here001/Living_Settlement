@@ -5,8 +5,10 @@ export const GH_GAMES = {
   wheel: { name: 'Lucky wheel', icon: '🎡', rule: 'One free spin every day. Paid spins win 0× to 8× your bet.' },
   scratch: { name: 'Scratch cards', icon: '🎟️', rule: 'Buy a card and scratch it. Three matching symbols win: 🍀 1×, ⭐ 2×, 💎 5×, 🚀 20×, 👑 100× the card.' },
   penalty: { name: 'Penalty shootout', icon: '⚽', rule: 'Five kicks against the keeper. Pick a spot for each kick: corners are harder to save but easier to miss. 5 goals pays 3.5×, 4 goals gives your bet back.' },
-  darts: { name: 'Darts', icon: '🎯', rule: 'Three darts. Tap where to aim; your hand wobbles a little. Score 140+ for 20×, 100+ for 5×, 80+ for 2×, 60+ for 1.5×.' },
-  snooker: { name: 'Snooker', icon: '🎱', rule: 'Practice for free: pot 3 reds in 6 shots, and your first win each day pays 300 coins. Or challenge another player for a stake.' },
+  darts: { name: 'Darts', icon: '🎯', rule: 'Three darts. Tap where to aim; your hand wobbles a little. Score 140+ for 12×, 100+ for 3×, 85+ for 1.6×, 75+ for your bet back.' },
+  snooker: { name: 'Snooker', icon: '🔴', rule: 'Practice for free: pot 3 reds in 6 shots, and your first win each day pays 300 coins. Or challenge another player for a stake.' },
+  pool8: { name: '8-Ball', icon: '🎱', rule: 'Pool for two. Pot a ball to claim solids (1–7) or stripes (9–15), clear them, then sink the 8. Play the computer for free or another player for a stake.' },
+  pool9: { name: '9-Ball', icon: '9️⃣', rule: 'Pool for two with balls 1–9. Always hit the lowest ball first; pot the 9 on a fair shot to win. Play the computer for free or another player for a stake.' },
   whot: { name: 'Whot', icon: '🃏', rule: 'Match the shape or number of the card on the pile. First to empty their hand wins the pot.' },
   ludo: { name: 'Ludo', icon: '🎲', rule: 'Race your pieces home (two each in a quick game, four in classic). Roll two dice and use each one on any piece. A 6 brings a piece out; double six, a capture or getting a piece home rolls again.' },
   ayo: { name: 'Ayo', icon: '🥥', rule: 'Sow pebbles round the board; capture when your last pebble makes two or three. If your side runs empty, your opponent takes what’s left on theirs. Most pebbles wins.' },
@@ -51,7 +53,7 @@ export function kick(spot, rand) {
 // ---- Darts: a standard board, radius 1. The server adds a wobble to your aim ----
 export const DART_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
 export const DART_RINGS = { bull: 0.037, outer: 0.094, tripleIn: 0.582, tripleOut: 0.629, doubleIn: 0.953 };
-export const DART_WOBBLE = 0.13, DART_PAYS = [[140, 20], [100, 5], [80, 2], [60, 1.5]];
+export const DART_WOBBLE = 0.1, DART_PAYS = [[140, 12], [100, 3], [85, 1.6], [75, 1]]; // a steadier hand than before, so the prizes were tuned to keep about 88% back
 export function dartScore(x, y) { // x right, y up
   const r = Math.hypot(x, y); if (r > 1) return { score: 0, label: 'Miss' };
   if (r < DART_RINGS.bull) return { score: 50, label: 'Bull' };

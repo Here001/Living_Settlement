@@ -1,15 +1,17 @@
-// Games played between colonists at a table: Whot, Ludo, Ayo, Snooker and Texas Hold'em.
+// Games played between colonists at a table: Whot, Ludo, Ayo, Snooker, 8-ball and 9-ball pool, and Texas Hold'em.
 // Each engine is plain data in, plain data out, so the server can check every move and save the table as JSON:
 //   setup(n, opts, rand) → state        legal(state, seat) → moves        play(state, seat, move, rand) → state
 //   view(state, seat) → what that seat may see        auto(state, seat, rand) → a move (for timeouts and the computer)
 // state.turn is the seat to move (null when the game is over); state.winners lists the winning seats once it ends.
-import { shoot, startTable, respot, AIM_WOBBLE, POWER_WOBBLE, BALL_R, POCKETS } from './snooker.js';
+import { shoot, startTable, respot, rack8, rack9, ballNo, footSpot, AIM_WOBBLE, POWER_WOBBLE, BALL_R, POCKETS } from './snooker.js';
 
 export const TABLE_GAMES = {
   whot: { name: 'Whot', icon: '🃏', min: 2, max: 4, where: 'gamehouse' },
   ludo: { name: 'Ludo', icon: '🎲', min: 2, max: 4, where: 'gamehouse' },
   ayo: { name: 'Ayo', icon: '🥥', min: 2, max: 2, where: 'gamehouse' },
-  snooker: { name: 'Snooker', icon: '🎱', min: 2, max: 2, where: 'gamehouse' },
+  snooker: { name: 'Snooker', icon: '🔴', min: 2, max: 2, where: 'gamehouse' },
+  pool8: { name: '8-Ball Pool', icon: '🎱', min: 2, max: 2, where: 'gamehouse' },
+  pool9: { name: '9-Ball Pool', icon: '9️⃣', min: 2, max: 2, where: 'gamehouse' },
   poker: { name: "Texas Hold'em", icon: '♠️', min: 2, max: 6, where: 'casino' },
 };
 export const RAKE = 0.05;          // the house's share of every pot
@@ -184,6 +186,73 @@ const snooker = {
     return { shot: true, angle: (best ? best.angle : 0) + (rand() - 0.5) * 0.06, power: 0.45 + rand() * 0.2 }; },
 };
 
+// ======================= Pool: 8-ball and 9-ball (1 v 1) =======================
+// One shot, with the same small wobble a real cue has.
+function cueShot(balls, m, rand) {
+  const angle = Number(m.angle), power = Number(m.power); if (!Number.isFinite(angle) || !(power > 0 && power <= 1)) throw new Error('Aim and pick a power.');
+  const g = () => { const u = Math.max(1e-9, rand()), v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+  return shoot(balls, angle + g() * AIM_WOBBLE, power * (1 + g() * POWER_WOBBLE), m.spin);
+}
+// The computer: for each ball it may play, find the pocket with the gentlest cut and aim the cue ball at the ghost spot.
+function aimAt(balls, targets, rand) {
+  const cue = balls.find(b => b.id === 'c'); let best = null;
+  for (const r of balls) if (targets.includes(r.id)) for (const [px, py] of POCKETS) { const dx = px - r.x, dy = py - r.y, d = Math.hypot(dx, dy), gx = r.x - dx / d * BALL_R * 2, gy = r.y - dy / d * BALL_R * 2;
+    const ax = gx - cue.x, ay = gy - cue.y, cut = Math.acos(Math.max(-1, Math.min(1, (ax * dx + ay * dy) / (Math.hypot(ax, ay) * d)))); if (!best || cut < best.cut) best = { cut, angle: Math.atan2(ay, ax) }; }
+  if (!best) { const t = balls.find(b => targets.includes(b.id)); best = { angle: t ? Math.atan2(t.y - cue.y, t.x - cue.x) : 0 }; }
+  return { shot: true, angle: best.angle + (rand() - 0.5) * 0.05, power: 0.45 + rand() * 0.25 };
+}
+const POOL_CAP = 300; // a game that somehow drags on this long ends (fewest balls left wins 8-ball; 9-ball is a draw)
+const SOLIDS = [1, 2, 3, 4, 5, 6, 7], STRIPES = [9, 10, 11, 12, 13, 14, 15];
+const groupOf = n => (n >= 1 && n <= 7 ? 'solids' : n >= 9 && n <= 15 ? 'stripes' : null);
+// 8-ball: the first player to pot a ball (without a foul) takes that group, solids (1–7) or stripes (9–15). Pot one of
+// yours and you shoot again. Fouls (cue ball down, hitting nothing, or hitting the other group or the 8 first) pass the
+// turn. Clear your group, then pot the 8 to win; the 8 down early, or with a foul, loses the game.
+const pool8 = {
+  setup(n, opts, rand) { return { n: 2, mode: 8, balls: rack8(rand), groups: [null, null], turn: 0, winners: null, last: null, log: [] }; },
+  legal(s, seat) { return s.turn === seat ? [{ shot: true }] : []; },
+  left(s, seat) { const g = s.groups[seat]; if (!g) return null; const want = g === 'solids' ? SOLIDS : STRIPES; return s.balls.filter(b => want.includes(ballNo(b.id))).length; },
+  targets(s, seat) { const g = s.groups[seat]; if (!g) return s.balls.filter(b => b.id !== 'c' && b.id !== 'b8').map(b => b.id);
+    const mine = s.balls.filter(b => groupOf(ballNo(b.id)) === g).map(b => b.id); return mine.length ? mine : ['b8']; },
+  play(s, seat, m, rand) { s = structuredClone(s); if (s.turn !== seat) throw new Error('Not your turn.');
+    const on = this.targets(s, seat), onEight = on.length === 1 && on[0] === 'b8', r = cueShot(s.balls, m, rand);
+    const down = r.potted.filter(p => p !== 'c'), scratch = r.potted.includes('c'), first = r.firstHit;
+    let foul = scratch || !first || (s.groups[seat] ? !on.includes(first) : first === 'b8');
+    s.balls = scratch ? [...r.balls, respot(r.balls)] : r.balls;
+    const why = !first ? 'hit nothing' : scratch ? 'potted the cue ball' : foul ? 'hit the wrong ball first' : null;
+    s.last = { seat, potted: r.potted, foul, why, frames: r.frames };
+    if (down.includes('b8')) { const win = onEight && !foul; s.winners = [win ? seat : 1 - seat]; s.turn = null; s.last.eight = win ? 'won' : 'lost'; s.log.push([seat, win ? 'potted the 8' : 'lost on the 8']); return s; }
+    if (!foul && !s.groups[seat] && down.length) { const g = groupOf(ballNo(down[0])); s.groups[seat] = g; s.groups[1 - seat] = g === 'solids' ? 'stripes' : 'solids'; s.last.took = g; }
+    const mine = s.groups[seat] ? down.filter(id => groupOf(ballNo(id)) === s.groups[seat]) : down;
+    s.log.push([seat, foul ? 'foul' : mine.length ? 'potted' : 'missed', mine.length]);
+    if (foul || !mine.length) s.turn = 1 - seat;
+    if ((s.shots = (s.shots || 0) + 1) >= POOL_CAP) { const l = [0, 1].map(i => this.left(s, i) ?? 7); s.turn = null; s.winners = l[0] === l[1] ? [0, 1] : [l[0] < l[1] ? 0 : 1]; } return s; },
+  drop(s, seat) { return dropSeat(s, seat); },
+  view(s) { return { n: 2, mode: 8, out: s.out || null, balls: s.balls, groups: s.groups, left: [this.left(s, 0), this.left(s, 1)], turn: s.turn, winners: s.winners, last: s.last, log: s.log.slice(-6),
+    on: s.turn == null ? null : this.targets(s, s.turn) }; },
+  auto(s, seat, rand) { return aimAt(s.balls, this.targets(s, seat), rand); },
+};
+// 9-ball: always hit the lowest-numbered ball on the table first. Pot anything on a fair shot and you go again.
+// Pot the 9 on a fair shot (even with a combination) to win; a 9 potted on a foul comes back to the foot spot.
+const pool9 = {
+  setup(n, opts, rand) { return { n: 2, mode: 9, balls: rack9(rand), turn: 0, winners: null, last: null, log: [] }; },
+  legal(s, seat) { return s.turn === seat ? [{ shot: true }] : []; },
+  lowest(s) { let lo = null; for (const b of s.balls) { const n = ballNo(b.id); if (n && (lo == null || n < lo)) lo = n; } return lo; },
+  play(s, seat, m, rand) { s = structuredClone(s); if (s.turn !== seat) throw new Error('Not your turn.');
+    const lo = 'b' + this.lowest(s), r = cueShot(s.balls, m, rand), down = r.potted.filter(p => p !== 'c'), scratch = r.potted.includes('c');
+    const foul = scratch || r.firstHit !== lo, why = !r.firstHit ? 'hit nothing' : scratch ? 'potted the cue ball' : foul ? `didn't hit the ${lo.slice(1)} first` : null;
+    let balls = scratch ? [...r.balls, respot(r.balls)] : r.balls;
+    s.last = { seat, potted: r.potted, foul, why, frames: r.frames };
+    if (down.includes('b9')) { if (!foul) { s.balls = balls; s.winners = [seat]; s.turn = null; s.last.nine = true; s.log.push([seat, 'potted the 9']); return s; }
+      balls = [...balls, footSpot(balls, 'b9')]; s.last.respot = true; }
+    s.balls = balls; s.log.push([seat, foul ? 'foul' : down.length ? 'potted' : 'missed', down.length]);
+    if (foul || !down.length) s.turn = 1 - seat;
+    if ((s.shots = (s.shots || 0) + 1) >= POOL_CAP) { s.turn = null; s.winners = [0, 1]; } return s; },
+  drop(s, seat) { return dropSeat(s, seat); },
+  view(s) { return { n: 2, mode: 9, out: s.out || null, balls: s.balls, turn: s.turn, winners: s.winners, last: s.last, log: s.log.slice(-6), on: s.turn == null ? null : ['b' + this.lowest(s)] }; },
+  auto(s, seat, rand) { const lo = 'b' + this.lowest(s); // try to pot the lowest ball, or the 9 off it if that lines up better
+    return aimAt(s.balls, [lo], rand); },
+};
+
 // ======================= Texas Hold'em (one hand, fixed limit) =======================
 // Everyone puts in the stake (the ante). Betting rounds: before the flop, after the flop, the turn and the river.
 // A bet or raise is the stake (twice the stake on the turn and river), at most three raises a round. Fold, check,
@@ -241,7 +310,7 @@ const poker = {
     return L.find(m => m.act === 'check') || L.find(m => m.act === 'fold'); },
 };
 
-export const ENGINES = { whot, ludo, ayo, snooker, poker };
+export const ENGINES = { whot, ludo, ayo, snooker, pool8, pool9, poker };
 // What a seat sees, plus whose turn it is.
 export const tableView = (game, s, seat) => ENGINES[game].view(s, seat);
 // How much each seat has put in (poker grows the pot as it goes; the others are the stake each).

@@ -13,6 +13,29 @@ export function rack(n, x0 = 1.45) {
   return out;
 }
 export const startTable = n => [{ id: 'c', x: CUE_SPOT[0], y: CUE_SPOT[1] }, ...rack(n)];
+// Pool racks. Balls are 'b1'..'b15'. 8-ball: a triangle of 15 with the 8 in the middle and a solid and a stripe in the
+// back corners. 9-ball: a diamond of nine with the 1 at the front and the 9 in the middle. rand() shuffles the rest.
+const slot = (row, i, x0 = 1.45) => { const d = BALL_R * 2.02; return { x: x0 + row * d * 0.866, y: 0.5 + (i - row / 2) * d }; };
+const shuffled = (a, rand) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+export function rack8(rand = Math.random) {
+  const spots = []; for (let row = 0; row < 5; row++) for (let i = 0; i <= row; i++) spots.push([row, i]);
+  const solid = shuffled([1, 2, 3, 4, 5, 6, 7], rand), stripe = shuffled([9, 10, 11, 12, 13, 14, 15], rand), at = new Map();
+  at.set('2,1', 8); const [c1, c2] = rand() < 0.5 ? [solid.pop(), stripe.pop()] : [stripe.pop(), solid.pop()]; at.set('4,0', c1); at.set('4,4', c2);
+  const rest = shuffled([...solid, ...stripe], rand); for (const [r, i] of spots) if (!at.has(r + ',' + i)) at.set(r + ',' + i, rest.pop());
+  return [{ id: 'c', x: CUE_SPOT[0], y: CUE_SPOT[1] }, ...spots.map(([r, i]) => ({ id: 'b' + at.get(r + ',' + i), ...slot(r, i) }))];
+}
+export function rack9(rand = Math.random) {
+  const rows = [1, 2, 3, 2, 1], spots = []; rows.forEach((n, r) => { for (let i = 0; i < n; i++) spots.push([r, i, n]); });
+  const rest = shuffled([2, 3, 4, 5, 6, 7, 8], rand);
+  return [{ id: 'c', x: CUE_SPOT[0], y: CUE_SPOT[1] }, ...spots.map(([r, i, n]) => { const d = BALL_R * 2.02; const num = r === 0 ? 1 : (r === 2 && i === 1) ? 9 : rest.pop();
+    return { id: 'b' + num, x: 1.45 + r * d * 0.866, y: 0.5 + (i - (n - 1) / 2) * d }; })];
+}
+export const ballNo = id => (id && id[0] === 'b' ? Number(id.slice(1)) : 0);
+// Put a ball back on the foot spot (or just behind it), e.g. a 9 potted on a foul.
+export function footSpot(balls, id) {
+  for (let k = 0; k < 40; k++) { const x = 1.45 + k * BALL_R * 2.1, y = 0.5; if (x > TABLE_W - BALL_R) break; if (balls.every(b => Math.hypot(b.x - x, b.y - y) > BALL_R * 2.05)) return { id, x, y }; }
+  return { id, x: 1.45, y: 0.5 + BALL_R * 3 };
+}
 
 // Where a potted cue ball comes back: on its spot, or the nearest free place beside it.
 export function respot(balls) {

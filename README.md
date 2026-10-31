@@ -542,6 +542,8 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
 
 ## Performance on phones
 
+**Staying connected.** The live connection reopens itself: if the line goes quiet for 12 seconds (the server ticks every 1.25 s), or a connection attempt hangs for 8, it starts over. Whenever the phone wakes (screen back on, app back in front, network back, or any touch or key press) and nothing has arrived for 5 seconds, it reconnects straight away and then catches up on what was missed: chats, notices, races, the lottery, your coins and any table you're at.
+
 The map is tuned for low-end Android phones. The main pieces, all in `public/index.html`:
 - **Buildings are cached pictures.** Each finished building is drawn once into its own picture, sized to its type's measured outline and redrawn only when the zoom moves to a new step, and that picture is copied each frame. Night lights and chimney smoke are replayed on top. Buildings that animate (clocks, windmills, neon, ferris wheels…) are drawn live. The cache is limited to 6 to 9 million pixels.
 - **Vehicles are cached pictures** too: one per type, colour and heading (32 headings). Flashing sirens are drawn live.

@@ -879,18 +879,18 @@ async function loadMeta(){ const r=await api('/api/meta'); S.meta=r.meta; S.even
 S.chat=[]; async function loadChat(){ try{ S.chat=await api('/api/square'); feedDirty=true; renderFeed(); }catch(e){} }
 // The live connection: the server sends a clock tick every 1.25 s, so a silent line for 20 s means it died without telling us
 // (common on phones switching networks). Reconnects back off gently and happen at once when the phone wakes or comes back online.
-let lastMsgAt=Date.now(), retryN=0, retryTimer=null;
+let lastMsgAt=Date.now(), retryN=0, retryTimer=null, connectAt=0;
 function reconnectSoon(now){ clearTimeout(retryTimer); const wait=now?200:Math.min(30000,1500*Math.pow(1.7,retryN++))+Math.random()*1500; retryTimer=setTimeout(connect,wait); }
 function connect(){
   clearTimeout(retryTimer);
   if(ws){ ws.onclose=ws.onmessage=ws.onerror=null; try{ ws.close(); }catch(e){} }
   try{ ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`); }catch(e){ reconnectSoon(); return; }
-  lastMsgAt=Date.now(); const me=ws;
+  lastMsgAt=Date.now(); connectAt=Date.now(); const me=ws;
   ws.onopen=()=>{ Store.online=true; subKey=''; retryN=0; wsAuth(); };
   ws.onerror=()=>{ try{ me.close(); }catch(e){} };
   ws.onmessage=e=>{ lastMsgAt=Date.now(); let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
     if(m.type==='hello'){ S.meta=m.meta; skew=m.serverNow-Date.now();
-      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); Chats.load(); Daily.load(); Notices.load(); PushUI.auto(); CEvent.load(); Mayor.load(); buildToolbar(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); } }
+      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); Chats.load(); Daily.load(); Notices.load(); PushUI.auto(); CEvent.load(); Mayor.load(); buildToolbar(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); catchUp(); } }
     else if(m.type==='ops'){ opBatch++; try{ for(const o of m.ops){ try{ applyOp(o); }catch(err){ console.error('Skipped an update:', err); } } } finally { opBatch--; } if(!opBatch&&batchChanged){ batchChanged=false; changed(); } }
     else if(m.type==='resync') reloadAll();
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
@@ -903,9 +903,19 @@ function connect(){
     else if(m.type==='stars' && m.data) Stars.got(m.data.stars); };
   ws.onclose=()=>{ if(ws!==me) return; if(Store.online) toast('Reconnecting to the colony…'); Store.online=false; reconnectSoon(); };
 }
-setInterval(()=>{ if(!ws||document.hidden) return; if(ws.readyState===1&&Date.now()-lastMsgAt>20000){ lastMsgAt=Date.now(); try{ ws.close(); }catch(e){} reconnectSoon(true); } },5000);
-const wake=()=>{ if(!Store.ready&&!ws) return; if(!ws||ws.readyState>1||Date.now()-lastMsgAt>20000){ retryN=0; reconnectSoon(true); } };
-addEventListener('online', wake); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) wake(); });
+// A line that's open but silent (the server ticks every 1.25 s) or a connection attempt that never finishes is dead: start over.
+setInterval(()=>{ if(!ws||document.hidden) return; const now=Date.now();
+  if((ws.readyState===1&&now-lastMsgAt>12000)||(ws.readyState===0&&now-connectAt>8000)){ lastMsgAt=now; try{ ws.close(); }catch(e){} retryN=0; reconnectSoon(true); } },3000);
+// Waking up: the phone screen comes back on, the app comes to the front, the network returns, or the player touches the
+// screen. If nothing has arrived for a few seconds the line is assumed dead and is reopened straight away.
+let wakeAt=0;
+const wake=()=>{ if(!Store.ready&&!ws) return; const now=Date.now(); if(now-wakeAt<1500) return; wakeAt=now;
+  if(!ws||ws.readyState>1||(ws.readyState===1&&now-lastMsgAt>5000)||(ws.readyState===0&&now-connectAt>5000)){ retryN=0; reconnectSoon(true); } };
+addEventListener('online', wake); addEventListener('focus', wake); addEventListener('pageshow', wake); document.addEventListener('resume', wake);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) wake(); });
+addEventListener('pointerdown', wake, {capture:true, passive:true}); addEventListener('keydown', wake, {capture:true});
+// After reconnecting: fetch what was missed while the line was down (chats, notices, races, the table you're at).
+function catchUp(){ try{ Chats.load(); Notices.load(); loadRace(); loadLottery(); Daily.load(false); if(Tables.mine) Tables.poll(); if(Me&&Me.handle) loadMyMoney(); }catch(e){} }
 async function initStore(){
   try{ Store.token=localStorage.getItem('settlement-token'); }catch(e){}
   if(location.hash==='#builder' && !Store.token){ const t=prompt('Builder token'); if(t){ Store.token=t.trim(); try{ localStorage.setItem('settlement-token',Store.token); }catch(e){} } }
@@ -5296,7 +5306,7 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
 let frameStats={}, lastVeh=[];
-window.__dbg={ myTab:t=>openMyTab(t), tables:()=>Tables, snk:()=>SnookerUI, chats:()=>Chats, tab:t=>openTab(t), openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+window.__dbg={ wsState:()=>({ready:ws&&ws.readyState, quiet:Date.now()-lastMsgAt}), myTab:t=>openMyTab(t), tables:()=>Tables, snk:()=>SnookerUI, chats:()=>Chats, tab:t=>openTab(t), openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

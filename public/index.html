@@ -3368,7 +3368,7 @@ let casino=null; // { id, info, open, game, pick, bet, last, busy, at }
 const DICE='⚀⚁⚂⚃⚄⚅', ICON=Object.fromEntries(SLOT_SYMBOLS.map(x=>[x.id,x.icon]));
 async function loadCasino(c){ const prev=casino||{}, same=prev.id===c.id;
   casino={ id:c.id, game:prev.game||'coin', pick:prev.pick||'heads', bet:prev.bet||10, last:same?prev.last:null, open:!!prev.open, info:same?prev.info:null, busy:false, loading:true, at:Date.now() };
-  try{ casino.info=await api('/api/me/casino'); }catch(e){} casino.loading=false;
+  try{ casino.info=await api('/api/me/casino'); if(casino.greet&&casino.info){ casino.greet=false; toast(`🎰 Welcome to the ${casino.info.casino?.name||'Casino'}. You have ${fmt(casino.info.coins)} coins on you.`); } }catch(e){} casino.loading=false;
   const tb=casino.info&&casino.info.table; if(tb){ casino.open=true; casino.game=tb.game; if(tb.game==='blackjack') casino.bj=tb; else if(tb.game==='mines') casino.mn=tb; else if(tb.game==='hilo') casino.hl=tb; else Rocket.track(tb); }
   if(sel&&sel.id===c.id) renderCard(true); }
 async function casinoPlay(c){ if(casino.busy) return; const bet=Math.floor(Number(casino.bet));
@@ -3385,21 +3385,22 @@ function resultLine(r){ const g=r.result;
   const brag=r.won&&r.payout>=50?el('button',{class:'linkb',text:'↗ Share my win',onclick:()=>Share.win(`Won ${fmt(r.payout)} coins!`,`${gname} at ${r.casino?r.casino.name:'the casino'}`,`I just won ${fmt(r.payout)} coins on ${gname.toLowerCase()} at the casino in ${S.meta?S.meta.name:'my colony'} on Resurgence 🎰`,cb?[cb.x+1,cb.y+1]:null)}):null;
   return el('div',{class:'cresult '+(r.won?'win':'lose')}, el('span',{class:'roll',text:shown}), el('b',{text:r.won?`You won ${fmt(r.payout)} coins!`:r.push?'A tie: your bet is back.':`No luck. You lost ${fmt(r.bet)}.`}), brag); }
 // ---- The Game House: a building full of games, played on its own card (full screen) ----
-const GH={ id:null, info:null, at:0, open:false, game:'wheel', bet:100, busy:false, last:null, tier:SCRATCH_TIERS[0], revealed:new Set(), spinTo:0,
-  async load(b){ this.id=b.id; this.at=Date.now(); try{ this.info=await api('/api/me/games?building='+encodeURIComponent(b.id)); const pg=this.info.playing; if(pg&&!pg.done){ this.game=pg.game; this.last=pg; } }catch(e){ this.info={error:e.message}; } if(sel&&sel.kind==='b'&&sel.id===b.id) renderCard(true); },
-  coins(r){ if(r&&typeof r.coins==='number'){ this.info={...this.info, coins:r.coins}; myMoney={...(myMoney||{}), coins:r.coins}; refreshHUD(); } },
+const GH={ id:null, info:null, at:0, open:false, game:'penalty', bet:100, busy:false, last:null, tier:SCRATCH_TIERS[0], revealed:new Set(), spinTo:0,
+  async load(b){ this.id=b.id; this.at=Date.now(); try{ this.info=await api('/api/me/games?building='+encodeURIComponent(b.id)); this.infoFor=b.id; if(this.greet){ this.greet=false; toast(`🎮 Welcome to the ${this.info.name}. You have ${fmt(this.info.coins)} coins on you.`); } const pg=this.info.playing; if(pg&&!pg.done){ this.game=pg.game; this.last=pg; } }catch(e){ this.info={error:e.message}; } if(sel&&sel.kind==='b'&&sel.id===b.id) renderCard(true); },
+  coins(r){ if(r&&typeof r.coins==='number'){ this.info={...this.info, coins:r.coins}; myMoney={...(myMoney||{}), coins:r.coins}; refreshHUD(); try{ if(casino&&casino.id===this.id&&casino.info) casino.info={...casino.info, coins:r.coins}; }catch(e){} } },
   async act(game, body, after){ if(this.busy) return null; this.busy=true; renderCard(true); let r=null;
     try{ r=await api('/api/me/games/'+game,{method:'POST',body:{...body, buildingId:this.id}}); this.coins(r); if(after) after(r); }catch(e){ toast(e.message); }
     this.busy=false; renderCard(true); return r; },
   section(b){ const box=el('div',{class:'authbox casino gh'}, el('div',{class:'cas-head'}, el('h3',{text:'🎮 Game House'}), cardMax()));
     if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'})); return box; }
-    if(!this.open||this.id!==b.id){ box.append(el('p',{class:'hint',text:'Lucky wheel, scratch cards, penalties, darts, snooker, Whot, Ludo and Ayo.'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎮 Play here',onclick:()=>{ this.open=true; this.id=b.id; this.info=null; this.last=null; document.body.classList.add('card-max'); openTab(null); this.load(b); renderCard(true); setTimeout(()=>document.querySelector('#card .gh')?.scrollIntoView({block:'start',behavior:'smooth'}),700); }}))); return box; }
+    if(!this.open||this.id!==b.id){ box.append(el('p',{class:'hint',text:'Lucky wheel, scratch cards, penalties, darts, snooker, Whot, Ludo and Ayo.'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎮 Play here',onclick:()=>{ this.open=true; this.id=b.id; this.info=null; this.last=null; this.greet=true; if(!this.views[this.game]||this.game==='wheel'||this.game==='scratch') this.game='penalty'; document.body.classList.add('card-max'); openTab(null); this.load(b); renderCard(true); setTimeout(()=>document.querySelector('#card .gh')?.scrollIntoView({block:'start',behavior:'smooth'}),700); }}))); return box; }
     if(!this.info||Date.now()-this.at>30000&&!this.busy){ if(!this.info){ box.append(el('p',{class:'hint',text:'Opening…'})); this.load(b); return box; } this.load(b); }
     const I=this.info; if(I.error){ box.append(el('p',{class:'hint',text:I.error})); return box; }
     if(!I.housed){ box.append(el('p',{class:'hint',text:'The Game House is for colonists who have woken up and have a home.'})); return box; }
     const live=this.last&&!this.last.done&&this.last.game, pick=el('div',{class:'ghpick'});
-    for(const [k,g] of Object.entries(GH_GAMES)){ const soon=!this.views[k]; pick.append(el('button',{class:this.game===k?'on':'','aria-pressed':String(this.game===k),disabled:!!live&&live!==k,onclick:()=>{ this.game=k; this.last=null; this.revealed=new Set(); renderCard(true); }}, el('span',{class:'gi',text:g.icon}), g.name, soon?el('small',{text:'coming soon'}):'')); }
+    for(const [k,g] of Object.entries(GH_GAMES)){ if(k==='wheel'||k==='scratch') continue; const soon=!this.views[k]; pick.append(el('button',{class:this.game===k?'on':'','aria-pressed':String(this.game===k),disabled:!!live&&live!==k,onclick:()=>{ this.game=k; this.last=null; this.revealed=new Set(); renderCard(true); }}, el('span',{class:'gi',text:g.icon}), g.name, soon?el('small',{text:'coming soon'}):'')); }
     box.append(el('p',{class:'hint',text:`You have ${fmt(I.coins)} coins on you.`}), pick, el('p',{class:'crule',text:GH_GAMES[this.game].rule}));
+    requestAnimationFrame(()=>{ const on=pick.querySelector('button.on'); if(on) pick.scrollLeft=Math.max(0,on.offsetLeft-(pick.clientWidth-on.offsetWidth)/2); }); // the chosen game stays in view
     // A game that fails to draw shows what went wrong (and a retry) instead of leaving a blank space.
     const v=this.views[this.game]; let view; try{ view=v?v.call(this,b,I):el('p',{class:'hint',text:'This one is being built. Check back soon!'}); }
     catch(e){ console.error('game view', e); view=el('div',{class:'cresult lose'}, el('b',{text:`${GH_GAMES[this.game]?.name||'This game'} couldn't load: ${e.message}`}), el('button',{class:'btn sm',text:'Try again',onclick:()=>{ Tables.list=null; Tables.mine=null; this.info=null; this.load(b); }})); }
@@ -3428,7 +3429,7 @@ const GH={ id:null, info:null, at:0, open:false, game:'wheel', bet:100, busy:fal
       const spin=(free)=>{ const bet=free?0:this.betOk(); if(!free&&!bet) return; this.wheelFree=free;
         this.act('wheel',{free,bet},r=>{ const nn=(free?WHEEL_FREE:WHEEL_PAID).length, target=360-(r.slot*360/nn); const from=this.angle(); this.spin={ from, to:(Math.ceil(from/360)+5)*360+target, t0:performance.now() }; this.spinTo=this.spin.to; this.turn(); this.last={...r,t:Date.now()}; if(free) this.info={...this.info,freeSpin:false}; setTimeout(()=>{ if(sel&&sel.kind==='b') renderCard(true); },3300); }); };
       wrap.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:free?'🎁 Free spin':'Free spin used today',disabled:!free||this.busy,onclick:()=>spin(true)})), this.betRow(I),
-        el('div',{class:'row-actions'}, el('button',{class:'btn',text:this.busy?'…':'Spin for coins',disabled:this.busy,onclick:()=>spin(false)}), el('button',{class:'linkb',text:this.wheelFree?'Show paid wheel':'Show free wheel',onclick:()=>{ this.wheelFree=!this.wheelFree; this.spinTo=0; this.spin=null; this.last=null; renderCard(true); }})));
+        el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Spin for coins',disabled:this.busy,onclick:()=>spin(false)})));
       return wrap; },
     scratch(b,I){ const wrap=el('div',{class:'ghstage'}), card=this.last&&this.last.cells?this.last:null;
       const tiers=el('div',{class:'cpicks'}); for(const t of SCRATCH_TIERS) tiers.append(el('button',{class:'pill'+(this.tier===t?' on':''),'aria-pressed':String(this.tier===t),text:`${fmt(t)} card`,onclick:()=>{ this.tier=t; renderCard(true); }}));
@@ -3442,16 +3443,24 @@ const GH={ id:null, info:null, at:0, open:false, game:'wheel', bet:100, busy:fal
     penalty(b,I){ const wrap=el('div',{class:'ghstage'}), g=this.last&&this.last.game==='penalty'?this.last:null, live=g&&!g.done;
       const svg=this.svg('0 0 300 170'); svg.append(this.mk('rect',{x:0,y:0,width:300,height:170,fill:'#5FA34A',rx:10}), this.mk('rect',{x:30,y:20,width:240,height:100,fill:'rgba(255,255,255,.18)',stroke:'#fff','stroke-width':4}));
       for(let i=1;i<6;i++) svg.append(this.mk('line',{x1:30+i*40,y1:20,x2:30+i*40,y2:120,stroke:'rgba(255,255,255,.25)'}));
+      svg.append(this.mk('circle',{cx:150,cy:152,r:2.5,fill:'#fff'})); // the penalty spot
       const zx={l:30,c:110,r:190}, zy={h:20,l:70}, last=g&&g.kicks.length?g.kicks[g.kicks.length-1]:null;
-      if(last){ const kx=zx[last.keeper[0]]+40, ky=zy[last.keeper[1]]+28; svg.append(this.mk('rect',{x:kx-16,y:ky-18,width:32,height:40,rx:8,fill:'#F2C94C',stroke:'#2B2621','stroke-width':2}), this.mk('text',{x:kx,y:ky+8,'text-anchor':'middle','font-size':16},'🧤'));
-        const bx=last.miss?(last.spot[0]==='l'?14:last.spot[0]==='r'?286:150):zx[last.spot[0]]+40, by=last.miss?(last.spot[1]==='h'?8:60):zy[last.spot[1]]+25; svg.append(this.mk('text',{x:bx,y:by+6,'text-anchor':'middle','font-size':20},'⚽')); }
-      else { svg.append(this.mk('rect',{x:134,y:62,width:32,height:52,rx:8,fill:'#F2C94C',stroke:'#2B2621','stroke-width':2}), this.mk('text',{x:150,y:94,'text-anchor':'middle','font-size':16},'🧤'), this.mk('text',{x:150,y:158,'text-anchor':'middle','font-size':20},'⚽')); }
-      if(live) for(const s of PEN_SPOTS){ const z=this.mk('rect',{x:zx[s[0]],y:zy[s[1]],width:80,height:50,class:'zone'}); z.addEventListener('click',()=>this.act('penalty',{action:'kick',spot:s},r=>{ this.last=r; if(r.done) toast(r.paid?`⚽ ${r.goals} goals: you won ${fmt(r.paid)}!`:`${r.goals} goals. Better luck next time.`); })); svg.append(z); }
+      // The keeper and ball start in the middle; after a kick they fly to where they went, then (if there's another kick to take) go back.
+      const K0=[150,92], B0=[150,152], age=Date.now()-(this.kickAt||0), showing=last&&(!live||age<1800);
+      const keeper=this.mk('g',{}), kr=this.mk('rect',{x:-16,y:-24,width:32,height:48,rx:8,fill:'#F2C94C',stroke:'#2B2621','stroke-width':2}), kt=this.mk('text',{x:0,y:6,'text-anchor':'middle','font-size':16},'🧤'); keeper.append(kr,kt);
+      const ball=this.mk('text',{x:0,y:7,'text-anchor':'middle','font-size':20},'⚽'), ballG=this.mk('g',{}); ballG.append(ball); svg.append(keeper, ballG);
+      const place=(gEl,[x,y],rot=0)=>gEl.setAttribute('transform',`translate(${x} ${y}) rotate(${rot})`);
+      if(showing){ const K1=[zx[last.keeper[0]]+40, zy[last.keeper[1]]+28], B1=last.miss?[last.spot[0]==='l'?14:last.spot[0]==='r'?286:150, last.spot[1]==='h'?6:60]:[zx[last.spot[0]]+40, zy[last.spot[1]]+25], tilt=last.keeper[0]==='l'?-35:last.keeper[0]==='r'?35:0;
+        const at=u=>{ const e=1-Math.pow(1-u,3); place(keeper,[K0[0]+(K1[0]-K0[0])*e,K0[1]+(K1[1]-K0[1])*e],tilt*e); place(ballG,[B0[0]+(B1[0]-B0[0])*e,B0[1]+(B1[1]-B0[1])*e-Math.sin(u*Math.PI)*12]); };
+        at(Math.min(1,age/550)); if(age<550){ const t0=performance.now()-age; const step=now=>{ if(!svg.isConnected) return; const u=Math.min(1,(now-t0)/550); at(u); if(u<1) requestAnimationFrame(step); }; requestAnimationFrame(step); }
+        if(live) setTimeout(()=>{ if(sel&&sel.kind==='b'&&this.last===g) renderCard(true); }, 1850-age); }
+      else { place(keeper,K0); place(ballG,B0); }
+      if(live&&!showing) for(const s of PEN_SPOTS){ const z=this.mk('rect',{x:zx[s[0]],y:zy[s[1]],width:80,height:50,class:'zone'}); z.addEventListener('click',()=>this.act('penalty',{action:'kick',spot:s},r=>{ this.last=r; this.kickAt=Date.now(); if(r.done) setTimeout(()=>toast(r.paid?`⚽ ${r.goals} goals: you won ${fmt(r.paid)}!`:`${r.goals} goals. Better luck next time.`),700); })); svg.append(z); }
       wrap.append(svg);
-      if(g){ wrap.append(el('div',{class:'kicks'}, ...[0,1,2,3,4].map(i=>el('span',{text:g.kicks[i]?(g.kicks[i].goal?'✅':g.kicks[i].miss?'↗️':'🧤'):'⚪'})))); if(last) wrap.append(el('p',{class:'hint',style:'text-align:center',text:last.goal?'Goal!':last.miss?'Off target!':'Saved!'})); }
-      if(live) wrap.append(el('p',{class:'hint',style:'text-align:center',text:`Kick ${g.kicks.length+1} of 5: tap where to shoot.`}));
+      if(g){ wrap.append(el('div',{class:'kicks'}, ...[0,1,2,3,4].map(i=>el('span',{text:g.kicks[i]?(g.kicks[i].goal?'✅':g.kicks[i].miss?'↗️':'🧤'):'⚪'})))); if(last&&showing) wrap.append(el('p',{class:'hint',style:'text-align:center',text:last.goal?'Goal!':last.miss?'Off target!':'Saved!'})); }
+      if(live) wrap.append(el('p',{class:'hint',style:'text-align:center',text:showing?'…':`Kick ${g.kicks.length+1} of 5: tap where to shoot.`}));
       else { if(g&&g.done) wrap.append(el('div',{class:'cresult '+(g.paid?'win':'lose')}, el('b',{text:g.paid?`${g.goals} goals: you won ${fmt(g.paid)} coins!`:`${g.goals} goals. No prize this time.`})));
-        wrap.append(this.betRow(I), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Start a shootout',disabled:this.busy,onclick:()=>{ const bet=this.betOk(); if(bet) this.act('penalty',{action:'start',bet},r=>{ this.last=r; }); }}))); }
+        wrap.append(this.betRow(I), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Start a shootout',disabled:this.busy,onclick:()=>{ const bet=this.betOk(); if(bet) this.act('penalty',{action:'start',bet},r=>{ this.last=r; this.kickAt=0; }); }}))); }
       return wrap; },
     snooker(b,I){ if(Tables.mine&&Tables.mine.game==='snooker'&&Tables.bid===b.id) return Tables.lobby('snooker', b.id);
       const wrap=el('div',{class:'ghstage snk'}), g=this.last&&this.last.game==='snooker'?this.last:null, live=g&&!g.done;
@@ -3734,8 +3743,13 @@ function casinoPanel(c){ const box=el('div',{class:'authbox casino'}, el('div',{
   const busyTable=(casino.bj&&!casino.bj.done)||(Rocket.g&&!Rocket.g.done)||(casino.mn&&!casino.mn.done)||(casino.hl&&!casino.hl.done);
   const tabs=el('div',{class:'ctabs'}); for(const k of Object.keys(GAMES)) tabs.append(el('button',{class:'pill'+(casino.game===k?' on':''),'aria-pressed':String(casino.game===k),text:GAMES[k].name,disabled:busyTable&&casino.game!==k,onclick:()=>{ casino.game=k; casino.pick=GAMES[k].picks?GAMES[k].picks[0]:k==='roulette'?'red':null; casino.last=null; renderCard(true); }}));
   tabs.append(el('button',{class:'pill'+(casino.game==='holdem'?' on':''),'aria-pressed':String(casino.game==='holdem'),text:"Hold'em",disabled:busyTable,onclick:()=>{ casino.game='holdem'; renderCard(true); }}));
+  for(const [k,nm] of [['wheel','🎡 Lucky wheel'],['scratch','🎟️ Scratch cards']]) tabs.append(el('button',{class:'pill'+(casino.game===k?' on':''),'aria-pressed':String(casino.game===k),text:nm,disabled:busyTable,onclick:()=>{ casino.game=k; GH.last=null; GH.revealed=new Set(); renderCard(true); }}));
+  if(casino.game==='wheel'||casino.game==='scratch'){ // played here at the Casino (the Game House's code, pointed at this building)
+    box.append(el('p',{class:'hint',text:`You have ${fmt(info.coins)} coins on you.`}), tabs, el('p',{class:'crule',text:GH_GAMES[casino.game].rule}));
+    if(GH.infoFor!==c.id||!GH.info){ if(!GH.loadingFor||GH.loadingFor!==c.id){ GH.loadingFor=c.id; GH.load({id:c.id}).finally(()=>{ GH.loadingFor=null; }); } box.append(el('p',{class:'hint',text:'Loading…'})); return box; }
+    GH.id=c.id; box.append(GH.views[casino.game].call(GH,{id:c.id},GH.info)); return box; }
   if(casino.game==='holdem'){ box.append(el('p',{class:'hint',text:`You have ${fmt(info.coins)} coins.`}), tabs, el('p',{class:'crule',text:"Texas Hold'em, one hand per table, fixed bets. Everyone antes the stake; a bet or raise is the stake (twice it on the turn and river), three raises a round. Best five cards wins the pot, less 5% for the house."}), Tables.lobby('poker', c.id)); return box; }
-  box.append(el('p',{class:'hint',text:`You have ${fmt(info.coins)} coins.`}), tabs, el('p',{class:'crule',text:GAMES[casino.game].rule}));
+  box.append(el('p',{class:'hint',text:`You have ${fmt(info.coins)} coins on you.`}), tabs, el('p',{class:'crule',text:GAMES[casino.game].rule}));
   if(casino.game==='blackjack'){ box.append(blackjackTable(c,info)); return box; }
   if(casino.game==='rocket'){ box.append(Rocket.table(c,info)); return box; }
   if(casino.game==='mines'){ box.append(Mines.table(c,info)); return box; }
@@ -4033,7 +4047,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(b.type==='casino' && b.done!==false && !b.ruin && !Store.canWrite){ // the games are played right here, on the casino's own card
       if(!(Me&&Me.token&&Me.handle)) card.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'}));
       else if(casino&&casino.open&&casino.id===b.id) card.append(casinoPanel({id:b.id}));
-      else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎰 Play here',onclick:()=>{ casino={ ...(casino||{ game:'coin', pick:'heads', bet:10, last:null }), id:b.id, open:true, info:null, at:0 }; loadCasino({id:b.id}); casino.open=true; renderCard(true); }}))); }
+      else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎰 Play here',onclick:()=>{ casino={ ...(casino||{ game:'coin', pick:'heads', bet:10, last:null }), id:b.id, open:true, info:null, at:0 }; casino.greet=true; loadCasino({id:b.id}); casino.open=true; renderCard(true); }}))); }
     if(Store.canWrite) card.append(el('div',{class:'row-actions'}, b.done===false?el('button',{class:'btn primary',text:'Finish now',onclick:async()=>{ try{ await api(`/api/admin/buildings/${encodeURIComponent(b.id)}/finish`,{method:'POST'}); toast(`${b.name||t.name} is finished`); }catch(e){ toast(e.message); } }}):null,
       el('button',{class:'btn',text:'Move',onclick:()=>{ setTool({kind:'move',id:b.id,rot:b.rot||0}); }}), el('button',{class:'btn',text:'⟲ Turn',onclick:()=>rotateBuilding(b.id)}), el('button',{class:'btn',text:'One more',onclick:()=>{ setTool({kind:'place',type:b.type}); }}), el('button',{class:'btn danger',text:'Demolish',onclick:()=>removeBuilding(b.id)})));
   }

@@ -464,6 +464,9 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     const ps = (await g('wheel', { bet: 100 })).json; ok(ps.paid === Math.floor(100 * G.WHEEL_PAID[ps.slot]), 'paid spins pay the slice they land on', JSON.stringify(ps));
     ok(G.WHEEL_PAID.reduce((a, b) => a + b, 0) / G.WHEEL_PAID.length < 1, 'the paid wheel keeps a house edge');
     ok((await g('wheel', { bet: G.GH_MAX_BET + 1 })).status === 400, 'Game House bets are capped');
+    { const casId = (await pool.query("select id from buildings where type = 'casino' and done limit 1")).rows[0]?.id;
+      if (casId) { await sleep(300); const cw = await call('POST', '/api/me/games/wheel', { bet: 100, buildingId: casId }, P); ok(cw.status === 200 && typeof cw.json.slot === 'number', 'the Lucky wheel is played at the Casino', JSON.stringify(cw.json));
+        await sleep(300); ok((await call('POST', '/api/me/games/penalty', { action: 'start', bet: 100, buildingId: casId }, P)).status === 409, 'penalties are only at a Game House'); } }
     const sc = (await g('scratch', { price: 200 })).json; const cnt = sc.cells.reduce((m, k) => (m[k] = (m[k] || 0) + 1, m), {});
     ok(sc.cells.length === 9 && sc.paid === 200 * sc.x && (sc.win ? cnt[sc.win] === 3 : Object.values(cnt).every(n => n <= 2)), 'a scratch card shows three of a kind only when it wins', JSON.stringify(sc));
     ok((await g('scratch', { price: 300 })).status === 400, 'scratch cards come in set prices');

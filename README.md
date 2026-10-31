@@ -210,8 +210,8 @@ A new building (Shops → Going out, 3×2, 8 game hosts, 9,000 to build) where c
 
 | Game | How it works | Pays |
 |---|---|---|
-| 🎡 Lucky wheel | One free spin every real day (50 to 5,000 coins, about 650 on average). Paid spins: 24 slices from 0× to 8×. | about 94% back on paid spins |
-| 🎟️ Scratch cards | Cards at 200, 1,000 or 5,000. Scratch 9 boxes; three of a kind wins. | 🍀 1×, ⭐ 2×, 💎 5×, 🚀 20×, 👑 100× (about 88% back) |
+| 🎡 Lucky wheel (at the Casino) | One free spin every real day (50 to 5,000 coins, about 650 on average). Paid spins: 24 slices from 0× to 8×. | about 94% back on paid spins |
+| 🎟️ Scratch cards (at the Casino) | Cards at 200, 1,000 or 5,000. Scratch 9 boxes; three of a kind wins. | 🍀 1×, ⭐ 2×, 💎 5×, 🚀 20×, 👑 100× (about 88% back) |
 | ⚽ Penalty shootout | Five kicks: pick one of six spots each time. Corners are harder to save but easier to miss. The keeper dives in a fixed mix that makes every spot score about 69% of the time, so no way of shooting beats the house. | 5 goals 3.5×, 4 goals your bet back (about 91–93%) |
 | 🎯 Darts | Three darts at a real dartboard. Tap where to aim; the server adds a wobble. | 140+ 20×, 100+ 5×, 80+ 2×, 60+ 1.5× (about 89% for the best aim) |
 

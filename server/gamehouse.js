@@ -15,25 +15,27 @@ import { GH_GAMES, GH_MAX_BET, WHEEL_PAID, WHEEL_FREE, SCRATCH_TIERS, scratchCar
 
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const rand = () => crypto.randomInt(0, 2 ** 32) / 2 ** 32;
-const STAY = 10 * 60 * 1000; // playing keeps your avatar at the Game House this long
+const STAY = 10 * 60 * 1000;
+const CASINO_OK = ['casino', 'gamehouse']; // playing keeps your avatar at the Game House this long
 
 export class GameHouse {
   constructor(world) { this.world = world; }
-  async building(db, bid) {
+  // The Lucky wheel and scratch cards are at the Casino; the rest of the games are at a Game House.
+  async building(db, bid, types = ['gamehouse']) {
     const b = bid && (await db.query('select * from buildings where id = $1', [String(bid)])).rows[0];
-    if (!b || b.type !== 'gamehouse' || !b.done || b.ruin) throw new HttpError(409, "That isn't an open Game House.");
+    if (!b || !types.includes(b.type) || !b.done || b.ruin) throw new HttpError(409, types.includes('casino') && !types.includes('gamehouse') ? "That isn't an open Casino." : types.length > 1 ? "That isn't an open Casino or Game House." : "That isn't an open Game House.");
     return b;
   }
   // Lock the colonist, check they can play, and walk their avatar to the Game House for a while.
-  async seat(ch, id, bid) {
-    const gh = await this.building(ch.db, bid);
+  async seat(ch, id, bid, types) {
+    const gh = await this.building(ch.db, bid, types);
     const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
     if (!c.home_id) throw new HttpError(400, 'The Game House is for colonists who have woken up and have a home.');
     const why = this.world.blockedReason && await this.world.blockedReason(c); if (why) throw new HttpError(409, why);
     ch.coins(c); const now = Date.now();
     await ch.q('update citizens set visit_from = case when visit_id = $2 and visit_until > $6 then visit_from else $6 end, visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5, visit_origin = null where id = $1', [c.id, gh.id, now + STAY, gh.cx, gh.cy, now]);
     ch.citizens.set(c.id, [...new Set([...(ch.citizens.get(c.id) || []), R.chunkKey(gh.cx, gh.cy)])]);
-    return { c, gh, name: gh.name || BUILDING_TYPES.gamehouse.name };
+    return { c, gh, name: gh.name || BUILDING_TYPES[gh.type].name };
   }
   stake(ch, c, game, bet) {
     bet = Math.floor(Number(bet)); if (!Number.isFinite(bet) || bet < 1) throw new HttpError(400, 'Bet at least 1 coin.');
@@ -49,10 +51,10 @@ export class GameHouse {
   async save(ch, c, g) { await ch.q('update citizens set play_game = $2 where id = $1', [c.id, g ? JSON.stringify(g) : null]); }
 
   async info(id, bid) {
-    const gh = await this.building(pool, bid);
+    const gh = await this.building(pool, bid, ['gamehouse', 'casino']);
     const c = (await pool.query('select coins_base, coins_day, net, home_id, wheel_day, snooker_day, play_game from citizens where id = $1', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
     const today = this.world.meta ? R.gameDay(Date.now(), this.world.meta.epoch) : 0;
-    return { housed: !!c.home_id, coins: R.balanceOn(c.coins_base, c.coins_day, c.net, today), name: gh.name || BUILDING_TYPES.gamehouse.name, freeSpin: c.wheel_day !== realDay(),
+    return { housed: !!c.home_id, coins: R.balanceOn(c.coins_base, c.coins_day, c.net, today), name: gh.name || BUILDING_TYPES[gh.type].name, freeSpin: c.wheel_day !== realDay(),
       maxBet: GH_MAX_BET, snookerPrize: c.snooker_day !== realDay(), playing: c.play_game ? this.view(c.play_game) : null };
   }
   view(g) { // what the player may see of a game in progress (nothing is hidden in these games)
@@ -62,7 +64,7 @@ export class GameHouse {
   // ---------- Lucky wheel: one free spin a real day (coins), or paid spins (a multiple of the bet) ----------
   async wheel(id, bid, { free, bet }) {
     return this.world.change(async ch => {
-      const { c, name } = await this.seat(ch, id, bid);
+      const { c, name } = await this.seat(ch, id, bid, CASINO_OK);
       if (free) {
         if (c.wheel_day === realDay()) throw new HttpError(409, 'You’ve had your free spin today. Come back tomorrow, or spin for coins.');
         const slot = crypto.randomInt(WHEEL_FREE.length), prize = Math.min(WHEEL_FREE[slot], Math.floor(R.treasuryOn(ch.meta, ch.today)));
@@ -80,7 +82,7 @@ export class GameHouse {
   async scratch(id, bid, price) {
     price = Math.floor(Number(price)); if (!SCRATCH_TIERS.includes(price)) throw new HttpError(400, `Cards cost ${SCRATCH_TIERS.map(fmt).join(', ')} coins.`);
     return this.world.change(async ch => {
-      const { c, name } = await this.seat(ch, id, bid); this.stake(ch, c, 'scratch', price);
+      const { c, name } = await this.seat(ch, id, bid, CASINO_OK); this.stake(ch, c, 'scratch', price);
       const card = scratchCard(rand), paid = price * card.x;
       await this.pay(ch, c, 'scratch', paid, price, name);
       return { ok: true, price, cells: card.cells, win: card.win, x: card.x, paid, coins: c.coins_base };

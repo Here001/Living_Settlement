@@ -417,6 +417,7 @@ body.pane-max .composer textarea{height:70px}
 .wcard{width:56px;height:80px;border-radius:9px;background:#FBF8F1;color:#7A1F2B;border:2px solid #7A1F2B;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:13px;cursor:pointer;padding:0}
 .wcard .ws{font-size:26px;line-height:1}.wcard.whot{background:#7A1F2B;color:#FBF8F1}.wcard.no{opacity:.45;cursor:default}.wcard.big{width:76px;height:108px;font-size:16px}.wcard.big .ws{font-size:38px}
 .wtop{display:flex;align-items:center;justify-content:center;gap:16px}
+.ldie{font-size:44px;line-height:1;border:0;background:none;color:inherit;padding:0 4px;border-radius:10px;cursor:pointer}.ldie.on{outline:3px solid var(--accent);background:var(--gbtn-on,rgba(217,113,74,.2))}.ldie.used{opacity:.3}
 .ayo{display:grid;grid-template-columns:44px repeat(6,1fr) 44px;gap:6px;align-items:center;background:#8A5A33;border-radius:18px;padding:10px}
 .ayo .pit{aspect-ratio:1;border-radius:50%;background:#5E3A1E;color:#FBF1DC;display:grid;place-items:center;font-weight:800;font-size:16px;border:0;cursor:default;box-shadow:inset 0 3px 8px rgba(0,0,0,.45)}
 .ayo .pit.go{cursor:pointer;outline:3px solid #F2C94C}.ayo .pit.last{background:#7A4A26}
@@ -3553,9 +3554,10 @@ const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, s
     return box; },
   table(t, box){ const G=TABLE_GAMES[t.game], v=t.view, mine=t.seat;
     box.append(el('div',{class:'tbar'}, el('b',{text:`${G.icon} ${G.name}${t.stake?` · pot ${fmt(t.pot)}`:' · friendly'}`}), el('span',{class:'timer',text:this.left()})));
-    const seats=el('div',{class:'seats'}); t.players.forEach((p,i)=>seats.append(el('span',{class:'seat'+(v&&v.turn===i?' on':'')+(i===mine?' me':'')+(p.left?' gone':''),text:`${p.bot?'🤖 ':''}${i===mine?'You':'@'+p.handle}${v&&v.counts?` · ${v.counts[i]}🂠`:''}${v&&v.store?` · ${v.store[i]}`:''}${v&&v.score?` · ${v.score[i]}`:''}`})));
+    const seats=el('div',{class:'seats'}); t.players.forEach((p,i)=>seats.append(el('span',{class:'seat'+(v&&v.turn===i?' on':'')+(i===mine?' me':'')+(p.left||(v&&v.out&&v.out[i])?' gone':''),text:`${p.missed&&!p.left?'⚠️ ':''}${p.bot?'🤖 ':''}${i===mine?'You':'@'+p.handle}${v&&v.counts?` · ${v.counts[i]}🂠`:''}${v&&v.store?` · ${v.store[i]}`:''}${v&&v.score?` · ${v.score[i]}`:''}`})));
     for(let i=t.players.length;i<t.seats;i++) seats.append(el('span',{class:'seat',text:'empty seat'})); box.append(seats);
     if(t.status==='waiting'){ box.append(el('p',{class:'hint',style:'text-align:center',text:`Waiting for ${t.seats-t.players.length} more player${t.seats-t.players.length>1?'s':''}…`}), el('div',{class:'row-actions'}, el('button',{class:'linkb',text:t.stake?`Leave and get ${fmt(t.stake)} back`:'Leave',onclick:()=>this.act({action:'leave'})}))); return box; }
+    if(t.status==='playing'&&mine>=0&&t.players[mine].missed===1) box.append(el('p',{class:'hint',style:'text-align:center;color:var(--warm)',text:'⚠️ You missed a turn. Miss one more and you forfeit this game.'}));
     box.append(this.boards[t.game].call(this,t,v));
     if(t.status==='done'){ const R0=t.result||{}, won=R0.winners&&R0.winners.includes(Me&&Me.handle);
       box.append(el('div',{class:'cresult '+(won?'win':'lose')}, el('b',{text:R0.winners&&R0.winners.length>1?`A draw!${R0.share?` You get ${fmt(R0.share)} back.`:''}`:won?(R0.share?`You won ${fmt(R0.share)} coins!`:'You won!'):`${R0.winners&&R0.winners[0]?'@'+R0.winners[0]:'They'} won.`})),
@@ -3589,17 +3591,21 @@ const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, s
       PATH.forEach(([x,y],i)=>{ if(LUDO_SAFE.includes(i)&&!COL[i]) svg.append(mk('text',{x:x*sz+sz/2,y:y*sz+sz*0.72,'text-anchor':'middle','font-size':11,fill:'#B9A985'},'★')); });
       for(const [st,cells] of Object.entries(HOMECOL)) cells.forEach(([x,y])=>svg.append(mk('rect',{x:x*sz+1,y:y*sz+1,width:sz-2,height:sz-2,fill:COL[st],opacity:0.75,rx:3})));
       svg.append(mk('polygon',{points:`${6*sz},${6*sz} ${9*sz},${6*sz} ${7.5*sz},${7.5*sz}`,fill:COL[13]}), mk('polygon',{points:`${9*sz},${6*sz} ${9*sz},${9*sz} ${7.5*sz},${7.5*sz}`,fill:COL[26]}), mk('polygon',{points:`${9*sz},${9*sz} ${6*sz},${9*sz} ${7.5*sz},${7.5*sz}`,fill:COL[39]}), mk('polygon',{points:`${6*sz},${9*sz} ${6*sz},${6*sz} ${7.5*sz},${7.5*sz}`,fill:COL[0]}));
-      const movable=new Set(my&&v.dice!=null?(t.view&&v.tokens[t.seat]||[]).map((p,i)=>{ if(p===56) return -1; if(p===-1) return v.dice===6?i:-1; return p+v.dice<=56?i:-1; }).filter(i=>i>=0):[]);
+      // Two dice: pick a die (the first unused one is picked for you), then tap a token to move it by that die.
+      const dice=v.dice, used=v.used||[false,false]; if(dice&&(this.die==null||used[this.die])) this.die=used[0]?1:0; if(!dice) this.die=null;
+      const canMove=(p,d)=>p!==56&&p!==-2&&(p===-1?d===6:p+d<=56);
+      const movable=new Set(my&&dice?(v.tokens[t.seat]||[]).map((p,i)=>canMove(p,dice[this.die])?i:-1).filter(i=>i>=0):[]);
       v.tokens.forEach((toks,seat)=>{ const st=v.starts[seat], [yx,yy]=YARD[st];
-        toks.forEach((p,i)=>{ let cx,cy; if(p===-1){ cx=(yx+1.5+(i%2)*3)*sz; cy=(yy+1.5+Math.floor(i/2)*3)*sz; } else if(p===56){ cx=(7.5+(i%2-0.5)*0.6)*sz; cy=(7.5+(Math.floor(i/2)-0.5)*0.6)*sz; }
+        toks.forEach((p,i)=>{ if(p===-2) return; let cx,cy; if(p===-1){ cx=(yx+1.5+(i%2)*3)*sz; cy=(yy+1.5+Math.floor(i/2)*3)*sz; } else if(p===56){ cx=(7.5+(i%2-0.5)*0.6)*sz; cy=(7.5+(Math.floor(i/2)-0.5)*0.6)*sz; }
           else if(p>50){ const [x,y]=HOMECOL[st][p-51]; cx=(x+0.5)*sz; cy=(y+0.5)*sz; } else { const [x,y]=PATH[(st+p)%52]; cx=(x+0.5)*sz+(i-1.5)*1.5; cy=(y+0.5)*sz; }
           const go=seat===t.seat&&movable.has(i), tok=mk('circle',{cx,cy,r:sz*0.36,fill:COL[st],stroke:go?'#2B2621':'#fff','stroke-width':go?3:2,style:go?'cursor:pointer':''});
-          if(go) tok.addEventListener('click',()=>this.move({token:i})); svg.append(tok); }); });
+          if(go) tok.addEventListener('click',()=>this.move({token:i,die:this.die})); svg.append(tok); }); });
       w.append(svg);
-      const dice=['⚀','⚁','⚂','⚃','⚄','⚅'];
-      w.append(el('div',{class:'row-actions',style:'justify-content:center;align-items:center'}, v.dice!=null?el('span',{style:'font-size:40px;line-height:1',text:dice[v.dice-1]}):'', my&&v.dice==null?el('button',{class:'btn primary',text:'🎲 Roll',onclick:()=>this.move({roll:true})}):el('span',{class:'hint',text:my?(movable.size?'Tap a token to move it.':'No move: passing…'):v.turn==null?'':'Their turn…'})));
+      const DIE=['⚀','⚁','⚂','⚃','⚄','⚅'], dieBtn=k=>el('button',{class:'ldie'+(used[k]?' used':'')+(my&&!used[k]&&this.die===k?' on':''),disabled:!my||used[k],'aria-label':`Die showing ${dice[k]}`,onclick:()=>{ this.die=k; renderCard(true); }}, DIE[dice[k]-1]);
+      w.append(el('div',{class:'row-actions',style:'justify-content:center;align-items:center;gap:12px'}, ...(dice?[dieBtn(0),dieBtn(1)]:[]),
+        my&&!dice?el('button',{class:'btn primary',text:'🎲🎲 Roll',onclick:()=>this.move({roll:true})}):el('span',{class:'hint',text:my?(movable.size?`Tap a token to move it ${dice[this.die]}.`:'That die can’t move anything: pick the other.'):v.turn==null?'':'Their turn…'})));
       const names=i=>i===t.seat?'You':(t.players[i]?.bot?'🤖 ':'')+'@'+(t.players[i]?.handle||'?');
-      if(v.log.length) w.append(el('p',{class:'hint',style:'text-align:center',text:v.log.slice(-3).map(([s,a,x])=>`${names(s)} ${a==='rolled'?`rolled ${x}`:a==='captured'?'captured a token!':a==='moved'?'moved':a}`).join(' · ')}));
+      if(v.log.length) w.append(el('p',{class:'hint',style:'text-align:center',text:v.log.slice(-3).map(([s,a,x,y,d])=>`${names(s)} ${a==='rolled'?`rolled ${Array.isArray(x)?x.join(' + '):x}`:a==='captured'?'captured a token!':a==='moved'?`moved ${d||''}`:a==='no move'?'couldn’t move':a}`).join(' · ')}));
       return w; },
     snooker(t,v){ const w=el('div',{class:'ghstage snk'}), my=t.canMove;
       const svg=GH.svg(`-0.09 -0.09 ${TABLE_W+0.18} ${TABLE_H+0.18}`), mk=GH.mk.bind(GH); svg.style.maxWidth='520px';

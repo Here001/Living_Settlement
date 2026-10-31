@@ -14,7 +14,8 @@ import { TABLE_GAMES, ENGINES, RAKE, TURN_MS, MAX_STAKE, tableView, potOf } from
 
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const rand = () => crypto.randomInt(0, 2 ** 32) / 2 ** 32;
-const WAIT_MS = 15 * 60 * 1000; // an unfilled table closes (and refunds) after this long
+const WAIT_MS = 15 * 60 * 1000;
+export const MISS_LIMIT = 2; // missed turns that forfeit a match // an unfilled table closes (and refunds) after this long
 const BOT = i => ({ id: `bot:${i}`, handle: ['Computer', 'Ada (computer)', 'Tunde (computer)', 'Kemi (computer)', 'Bayo (computer)'][i] || 'Computer', bot: true });
 
 export class GameTables {
@@ -25,7 +26,7 @@ export class GameTables {
     const v = t.state ? tableView(t.game, t.state, seat) : null;
     if (v && t.game === 'poker' && seat >= 0 && v.legal) v.legal = v.legal.map(m => ({ ...m })); // costs are coins from your pocket
     return { id: t.id, game: t.game, name: TABLE_GAMES[t.game].name, building: t.building_id, stake: t.stake, seats: t.seats, opts: t.opts || {}, status: t.status,
-      players: t.players.map(p => ({ handle: p.handle, bot: !!p.bot, left: !!p.left })), seat, turnAt: Number(t.turn_at || 0), view: v, result: t.result || null,
+      players: t.players.map(p => ({ handle: p.handle, bot: !!p.bot, left: !!p.left, missed: p.missed || 0 })), seat, turnAt: Number(t.turn_at || 0), view: v, result: t.result || null,
       pot: t.stake ? (t.state ? potOf(t.game, t.state, t.stake) : t.stake * t.players.length) : 0, now: Date.now(), canMove: !!(t.state && t.state.turn === seat && seat >= 0 && E) };
   }
   async list(id, bid, game) {
@@ -103,10 +104,10 @@ export class GameTables {
         else await ch.q('update game_tables set players = $2 where id = $1', [t.id, JSON.stringify(t.players)]);
         return { ok: true, refunded: t.stake };
       }
-      // Mid-game: you forfeit your stake and the game plays your turns (poker: you fold).
+      // Mid-game: you forfeit. In a two-player game the other player wins; otherwise the game goes on without you.
       const seat = t.players.findIndex(p => p.id === id); t.players[seat].left = true;
       await ch.q('update citizens set table_id = null where id = $1', [id]);
-      if (t.game === 'poker' && !t.state.folded[seat]) { t.state.folded[seat] = true; if (t.state.turn === seat) t.state = ENGINES.poker.play({ ...t.state, folded: t.state.folded.map((f, i) => i === seat ? false : f) }, seat, { act: 'fold' }, rand); else if (t.state.folded.filter(f => !f).length === 1) { t.state.winners = t.state.folded.map((f, i) => f ? -1 : i).filter(i => i >= 0); t.state.turn = null; } }
+      t.state = ENGINES[t.game].drop(t.state, seat);
       await this.advance(ch, t); return { ok: true, forfeited: true };
     });
   }
@@ -142,7 +143,7 @@ export class GameTables {
   async advance(ch, t) {
     const E = ENGINES[t.game];
     for (let k = 0; k < 400 && t.state.turn != null; k++) {
-      const p = t.players[t.state.turn]; if (!p.bot && !p.left) break;
+      const p = t.players[t.state.turn]; if (!p.bot) break;
       const m = p.bot && E.bot ? E.bot(t.state, t.state.turn, rand) : E.auto(t.state, t.state.turn, rand);
       t.state = E.play(t.state, t.state.turn, m, rand);
     }
@@ -169,8 +170,12 @@ export class GameTables {
     return this.world.change(async ch => {
       const t = (await ch.q('select * from game_tables where id = $1 for update', [tableId])).rows[0];
       if (!t || t.status !== 'playing' || Number(t.turn_at) > Date.now()) return;
-      const seat = t.state.turn, E = ENGINES[t.game];
-      t.state = E.play(t.state, seat, E.auto(t.state, seat, rand), rand);
+      const seat = t.state.turn, E = ENGINES[t.game], p = t.players[seat];
+      // Missing a turn: a move is made for you. Miss two turns in a match and you forfeit it.
+      p.missed = (p.missed || 0) + 1;
+      if (p.missed >= MISS_LIMIT) { p.left = true; t.state = E.drop(t.state, seat); await ch.q('update citizens set table_id = null where id = $1 and table_id = $2', [p.id, t.id]);
+        if (!p.bot) await ch.event(`${TABLE_GAMES[t.game].icon} @${p.handle} missed two turns and forfeited a ${TABLE_GAMES[t.game].name} game.`, 'casino'); }
+      else t.state = E.play(t.state, seat, E.auto(t.state, seat, rand), rand);
       await this.advance(ch, t);
     }).catch(() => {});
   }

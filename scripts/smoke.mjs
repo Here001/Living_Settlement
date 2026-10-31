@@ -780,6 +780,23 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await T(P, { action: 'create', buildingId: gh, game: 'ludo', stake: 100, computer: true })).status === 409 || true, 'games against the computer are free');
     const wd = await T(P, { action: 'move', id: cw.json.id, move: { draw: true } }); ok(wd.status === 200 && wd.json.view.turn === 0 && wd.json.view.log.length >= 2, 'after you draw, the computer players take their turns', JSON.stringify(wd.json.view.log));
     const lv = await T(P, { action: 'leave' }); ok(lv.json.forfeited, 'leaving mid-game forfeits');
+    // missing two turns forfeits the match
+    { await pool.query("update citizens set coins_base = 5000, table_id = null where handle in ('zara_ng', 'jobfill_a')");
+      const f0 = await T(P, { action: 'create', buildingId: gh, game: 'ayo', stake: 100, seats: 2 }); await T(PB, { action: 'join', id: f0.json.id });
+      const late = async () => { await pool.query('update game_tables set turn_at = $2 where id = $1', [f0.json.id, Date.now() - 1000]); await sleep(300); return (await call('GET', '/api/me/table', undefined, P)).json.table; };
+      const m1 = await late(); ok(m1.status === 'playing' && m1.players[0].missed === 1 && m1.view.turn === 1, 'a missed turn is played for you (and counted)', JSON.stringify(m1.players));
+      await T(PB, { action: 'move', id: f0.json.id, move: { pit: m1.view.pits.findIndex((n, i) => i >= 6 && n > 0) } });
+      const m2 = await late(); ok(m2.status === 'done' && m2.result.winners[0] === 'jobfill_a', 'a second missed turn forfeits the match: the opponent wins', JSON.stringify(m2.result));
+      await pool.query("update citizens set table_id = null where handle in ('zara_ng', 'jobfill_a')"); }
+    // Ludo: two dice, each used on any token
+    { const L = BG.ENGINES.ludo, rr = (() => { const seq = [5 / 6 + 0.01, 0.01]; let k = 0; return () => seq[k++ % 2]; })(); // rolls a 6 and a 1
+      let s = L.setup(2, { quick: true }, Math.random); s = L.play(s, 0, { roll: true }, rr);
+      ok(s.dice.join() === '6,1' && L.legal(s, 0).some(m => m.die === 0) && !L.legal(s, 0).some(m => m.die === 1), 'Ludo rolls two dice; only the 6 can bring a token out', JSON.stringify(s.dice));
+      s = L.play(s, 0, { token: 0, die: 0 }, rr); ok(s.tokens[0][0] === 0 && s.turn === 0 && L.legal(s, 0).some(m => m.token === 0 && m.die === 1), 'then the other die moves a token too');
+      s = L.play(s, 0, { token: 0, die: 1 }, rr); ok(s.tokens[0][0] === 1 && s.turn === 1 && s.dice === null, 'both dice used: the turn passes'); }
+    // Ayo: an empty side forfeits what's left on the other side
+    { const A = BG.ENGINES.ayo; const s = A.play({ n: 2, pits: [0, 0, 0, 0, 0, 1, 2, 0, 0, 0, 3, 0], store: [20, 18], turn: 0, winners: null, last: null, log: [] }, 0, { pit: 5 });
+      ok(s.store.join() === '23,21' && s.winners[0] === 0, 'Ayo: when your side runs empty, your opponent takes the pebbles left on theirs', JSON.stringify(s.store)); }
     // a waiting table can be left for a refund
     await T(P, { action: 'create', buildingId: gh, game: 'ludo', stake: 500, seats: 4, quick: true }); const bz = (await whoDev('zara_ng')).coins;
     const lw = await T(P, { action: 'leave' }); ok(lw.json.refunded === 500 && (await whoDev('zara_ng')).coins === bz + 500, 'leaving before it starts refunds the stake');

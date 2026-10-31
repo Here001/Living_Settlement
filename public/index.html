@@ -52,8 +52,10 @@ html{background-color:var(--edge-bot,#5E7F45)} body{background:transparent} /* S
 #edgeTop{top:0;height:2px;background:var(--edge-top,#5E7F45)}
 #edgeBot{bottom:0;height:6px;background:var(--edge-bot,#5E7F45)}
 #world{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100lvh;display:block;touch-action:none} /* the whole screen, behind the browser's bars too */
-/* iPhone Home Screen app: the manifest asks for "standalone", not "fullscreen". iOS has no fullscreen mode, and asking for
-   it makes Safari lay the app out one status bar short, leaving an empty strip along the bottom. */
+/* Saved to the Home Screen on iPhone, the page is sometimes laid out shorter than the screen (by the height of the status
+   bar), leaving a strip at the bottom. Then the whole page is stretched to the real screen height (see fitHomeScreen). */
+html.sa-fix body{position:fixed;top:0;left:0;right:0;height:calc(100% + var(--sa-gap,0px));transform:translateZ(0);overflow:hidden}
+html.sa-fix #world{height:100%}
 /* Taps belong to the game: no page zoom on double tap, no text selection, magnifier or copy menu on long press */
 html,body{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
@@ -1231,6 +1233,13 @@ function edgeColours(){ if(document.hidden||!cv.width) return;
     const top=row(Math.min(h-1,2)), bot=row(Math.max(0,h-3)), key=top+bot; if(key===edgeLast) return; edgeLast=key;
     const st=document.documentElement.style; st.setProperty('--edge-top',top); st.setProperty('--edge-bot',bot); if(edgeMeta) edgeMeta.setAttribute('content',top); }catch(e){} }
 setInterval(edgeColours, 5000); setTimeout(edgeColours, 1500);
+// On an iPhone Home Screen app: if the page is laid out shorter than the screen, stretch it (body becomes the frame
+// that fixed things are placed in, so the bottom bar sits at the real bottom). Measured with no keyboard open.
+function fitHomeScreen(){ const ios=/iPhone|iPad|iPod/.test(navigator.userAgent), sa=navigator.standalone||matchMedia('(display-mode: standalone)').matches; if(!ios||!sa) return;
+  const a=document.activeElement; if(a&&/INPUT|TEXTAREA/.test(a.tagName)) return; // the keyboard shrinks the window: don't measure then
+  const portrait=innerHeight>=innerWidth, full=portrait?Math.max(screen.height,screen.width):Math.min(screen.height,screen.width), gap=Math.round(full-innerHeight);
+  const root=document.documentElement; if(gap>0&&gap<=80){ root.style.setProperty('--sa-gap',gap+'px'); root.classList.add('sa-fix'); } else { root.classList.remove('sa-fix'); root.style.removeProperty('--sa-gap'); } }
+fitHomeScreen(); addEventListener('orientationchange',()=>setTimeout(()=>{ fitHomeScreen(); resize(); },400));
 addEventListener('resize', resize); if(window.visualViewport) visualViewport.addEventListener('resize', resize); resize();
 function screenToWorld(sx,sy){ return { x:(sx-cw/2)/cam.z+cam.x, y:(sy-ch/2)/cam.z+cam.y }; }
 function worldToTileF(wx,wy){ const a=(wx/HW + wy/HH)/2, b=(wy/HH - wx/HW)/2; if(!VIEW||RAW) return { x:a, y:b }; const w=fromView(a,b); return { x:w[0], y:w[1] }; }

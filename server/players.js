@@ -121,6 +121,61 @@ export function playersRouter({ limit, send, admin, world }) {
     return { token: await newSession(c.id), handle: c.handle };
   }));
   r.get('/me', limit, send(async req => { const p = await me(req); return p; }));
+
+  // ---------- joining without Instagram ----------
+  // A username and password on the website (with a bot check, and a few sign-ups per network a day), or Google.
+  // Either way the colonist joins the housing queue like an Instagram SPAWN, already claimed, and is signed in.
+  r.get('/auth/config', send(async () => ({ google: process.env.GOOGLE_CLIENT_ID || null, turnstile: process.env.TURNSTILE_SITE_KEY || null })));
+  const signups = new Map(); setInterval(() => signups.clear(), 24 * 3600 * 1000).unref();
+  const SIGNUPS_PER_IP = Number(process.env.SIGNUPS_PER_IP || 3);
+  const ipOf = req => String(req.get('cf-connecting-ip') || (req.get('x-forwarded-for') || '').split(',')[0].trim() || req.ip || '');
+  async function botCheck(req, tok) {
+    const secret = process.env.TURNSTILE_SECRET; if (!secret) return; // not set up: no check (development)
+    if (!tok) throw new HttpError(400, 'Please complete the "I am human" check.');
+    const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ secret, response: String(tok), remoteip: ipOf(req) }) }).then(x => x.json()).catch(() => null);
+    if (!r?.success) throw new HttpError(400, 'The "I am human" check didn’t pass. Try again.');
+  }
+  function newHandle(h) {
+    h = R.cleanHandle(h); if (!h || h.length < 3) throw new HttpError(400, 'Pick a username of at least 3 letters or numbers (dots and underscores are fine).');
+    if (/^(admin|developer|mayor|colony|gliese|resurgence|system|support)/i.test(h)) throw new HttpError(400, 'That username is reserved. Pick another.');
+    return h;
+  }
+  async function join(req, handle, gender, source, extra) {
+    const ip = ipOf(req), n = signups.get(ip) || 0; if (n >= SIGNUPS_PER_IP) throw new HttpError(429, 'Too many new colonists from this network today. Try again tomorrow.');
+    if ((await pool.query('select 1 from citizens where lower(handle) = lower($1)', [handle])).rowCount) throw new HttpError(409, `@${handle} is taken. Pick another username.`);
+    const g = gender === 'm' || gender === 'f' ? gender : null;
+    const r = await world.spawn(handle, source, g); const id = r.citizen.id; signups.set(ip, n + 1);
+    await pool.query('update citizens set pass_hash = $2, pass_set_at = $3, gender_chosen = $4, google_sub = $5, email = $6 where id = $1',
+      [id, extra.pass, Date.now(), !!g, extra.sub || null, extra.email || null]);
+    return { token: await newSession(id), handle: r.citizen.handle, housed: r.citizen.housed, created: true };
+  }
+  r.post('/signup', limit, send(async req => {
+    const b = req.body || {}, handle = newHandle(b.handle), pw = cleanPassword(b.password);
+    await botCheck(req, b.turnstile);
+    return join(req, handle, b.gender, 'web', { pass: await hashPassword(pw) });
+  }));
+  // Google: the browser gets an ID token from Google's button; we check it with Google. A new Google user picks a username.
+  async function googleUser(credential) {
+    const cid = process.env.GOOGLE_CLIENT_ID; if (!cid) throw new HttpError(503, 'Google sign-in isn’t set up yet.');
+    const t = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(String(credential || ''))).then(x => x.ok ? x.json() : null).catch(() => null);
+    if (!t || t.aud !== cid || !['accounts.google.com', 'https://accounts.google.com'].includes(t.iss) || Number(t.exp) * 1000 < Date.now() || !t.sub) throw new HttpError(401, 'Google sign-in didn’t work. Try again.');
+    if (t.email && t.email_verified !== 'true' && t.email_verified !== true) throw new HttpError(401, 'Verify your Google email first.');
+    return t;
+  }
+  r.post('/auth/google', limit, send(async req => {
+    const b = req.body || {}, t = await googleUser(b.credential);
+    const c = (await pool.query('select id, handle from citizens where google_sub = $1', [t.sub])).rows[0];
+    if (c) return { token: await newSession(c.id), handle: c.handle };
+    if (!b.handle) { // first time: suggest a username from their email
+      let base = R.cleanHandle(String(t.email || '').split('@')[0]).slice(0, 24) || 'colonist', sug = base;
+      for (let k = 2; k < 200 && (await pool.query('select 1 from citizens where lower(handle) = lower($1)', [sug])).rowCount; k++) sug = base + k;
+      return { needHandle: true, suggestion: sug, name: t.given_name || '' };
+    }
+    const out = await join(req, newHandle(b.handle), b.gender, 'google', { pass: await hashPassword(crypto.randomBytes(24).toString('hex')), sub: t.sub, email: t.email || null });
+    if (t.given_name) { const nm = R.cleanName ? R.cleanName(t.given_name) : null; if (nm) await pool.query('update citizens set display_name = $2 where lower(handle) = lower($1)', [out.handle, nm]); }
+    return out;
+  }));
   // Once their avatar is claimed, a colonist picks man or woman, one time only. (The developer can still change it.)
   // A colonist's display name, changeable any time by its owner.
   r.post('/me/name', limit, send(async req => {

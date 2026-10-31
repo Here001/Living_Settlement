@@ -25,7 +25,7 @@ const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_c
 // The compact citizen record viewers receive. Coordinates travel with it so a viewer can draw a commute
 // even when the workplace is in a part of the map they haven't loaded.
 const CITIZEN_SELECT = `
-  select c.id, c.seq, c.handle, c.joined_at, c.founder, c.gender, c.display_name, c.pet, c.cars, c.car_active, (c.pass_hash is not null) claimed, c.last_seen,
+  select c.id, c.seq, c.handle, c.joined_at, c.founder, c.source, c.gender, c.display_name, c.pet, c.cars, c.car_active, (c.pass_hash is not null) claimed, c.last_seen,
          c.home_cx, c.home_cy, c.job_cx, c.job_cy, c.hang_cx, c.hang_cy, c.visit_cx, c.visit_cy, c.visit_until, c.visit_from, c.visit_origin,
          h.id hid, h.type ht, h.x hx, h.y hy, j.id jid, j.type jt, j.x jx, j.y jy, g.id gid, g.type gt, g.x gx, g.y gy, v.id vid, v.type vt, v.x vx, v.y vy
   from citizens c
@@ -36,7 +36,7 @@ export const cOut = r => ({ id: r.id, s: r.seq, h: r.handle, t: r.joined_at, f: 
   // A visit: [building, type, x, y, until, from]. Kept for 20 minutes after it ends so viewers can draw the trip back.
   visit: r.vid && Number(r.visit_until) > Date.now() - VISIT_TAIL ? [r.vid, r.vt, r.vx, r.vy, Number(r.visit_until), Number(r.visit_from || r.visit_until - 300000), r.visit_origin || null] : null, pet: r.pet || null,
   // claimed colonists drive only the car they bought (car: [model, colour]); everyone else follows the old 50/50 rule
-  k: r.claimed ? 1 : 0, car: (() => { const a = Array.isArray(r.cars) && (r.cars.find(x => x.id === r.car_active) || r.cars[0]); return a ? [a.m, a.col] : null; })() });
+  k: r.claimed ? 1 : 0, w: r.source === 'web' || r.source === 'google' ? 1 : 0, car: (() => { const a = Array.isArray(r.cars) && (r.cars.find(x => x.id === r.car_active) || r.cars[0]); return a ? [a.m, a.col] : null; })() });
 export const VISIT_TAIL = 20 * 60 * 1000;
 
 // One world change. Holds the database connection inside the global world lock and records everything that changed,
@@ -419,6 +419,9 @@ export class World {
     const seen = new Set(); const fresh = [];
     for (const h of handles) { const c = R.cleanHandle(h); if (c && !seen.has(c.toLowerCase())) { seen.add(c.toLowerCase()); fresh.push(c); } }
     if (!fresh.length) return [];
+    // Instagram names win: someone who joined on the website with a name that turns out to be an Instagram account's is
+    // renamed (name_web, name_web2…) when that account comments SPAWN, and told why.
+    if (source === 'instagram') for (const w of (await ch.q("select * from citizens where lower(handle) = any($1) and source in ('web', 'google') for update", [[...seen]])).rows) await this.renameWebUser(ch, w);
     const taken = new Set((await ch.q('select lower(handle) h from citizens where lower(handle) = any($1)', [[...seen]])).rows.map(r => r.h));
     const add = fresh.filter(h => !taken.has(h.toLowerCase()));
     if (!add.length) return [];
@@ -430,6 +433,18 @@ export class World {
     for (const c of rows) ch.citizens.set(c.id, []);
     ch.meta.population = (ch.meta.population || 0) + rows.length;
     return rows;
+  }
+
+  async renameWebUser(ch, w) {
+    let nh = null; for (let k = 1; k < 50 && !nh; k++) { const cand = (w.handle.slice(0, 25) + '_web' + (k > 1 ? k : '')); if (!(await ch.q('select 1 from citizens where lower(handle) = lower($1)', [cand])).rowCount) nh = cand; }
+    if (!nh) nh = w.handle.slice(0, 20) + '_' + uid().slice(0, 6);
+    await ch.q('update citizens set handle = $2 where id = $1', [w.id, nh]);
+    await ch.q('update messages set handle = $2 where citizen_id = $1', [w.id, nh]);
+    await ch.q('update buildings set owner_handle = $2 where owner_id = $1', [w.id, nh]);
+    await ch.q('update claims set handle = $2 where citizen_id = $1', [w.id, nh]).catch(() => {});
+    await ch.q('update elections set winner_handle = $2 where winner_id = $1', [w.id, nh]).catch(() => {});
+    ch.touch({ ...w, handle: nh });
+    await this.actions?.notify(ch, w.id, 'account', `🪪 The Instagram account @${w.handle} just joined the colony, and Instagram names come first, so your username is now @${nh}. Sign in with @${nh} from now on (your password is the same).`);
   }
 
   // The developer builds for free. `instant: false` gives the building a construction period instead.

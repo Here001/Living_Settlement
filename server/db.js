@@ -233,6 +233,9 @@ const MIGRATIONS = [
    create table heists (id text primary key, kind text not null, planner_id text not null, group_id text not null, target_id text, target_label text,
      building_id text, at bigint not null, status text not null, result jsonb, created_at bigint not null);
    create index heists_status on heists (status, at);`,
+  // v44: joining without Instagram (a username and password on the website, or Google)
+  `alter table citizens add column google_sub text, add column email text;
+   create unique index citizens_google on citizens (google_sub) where google_sub is not null;`,
 ];
 
 export async function migrate() {

@@ -484,6 +484,9 @@ body.pane-max .composer textarea{height:70px}
 .sladder{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:8px}.sstep{display:flex;flex-direction:column;align-items:center;gap:1px;padding:5px 2px;border-radius:10px;background:var(--glass-2,rgba(0,0,0,.04));font-size:12px;font-weight:700}.sstep small{font-size:10px;font-weight:500;opacity:.6}.sstep.got{background:rgba(242,201,76,.15)}
 .atsug{position:fixed;z-index:60;max-height:300px;overflow-y:auto;border-radius:14px;padding:4px;background:var(--panel,#FBF8F1);color:var(--ink);box-shadow:0 10px 28px rgba(0,0,0,.28);border:1px solid var(--glass-line,rgba(0,0,0,.12))}
 .atopt{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:6px 8px;border-radius:10px;text-align:left;font:inherit;color:inherit;cursor:pointer}.atopt:hover,.atopt:first-child{background:rgba(217,113,74,.1)}.att{display:flex;flex-direction:column;min-width:0}.att small{font-size:11px;opacity:.65}
+.joinbox{width:min(420px,100%)}.joinbox .gin{margin:6px 0}.gbtn{display:flex;justify-content:center;margin:10px 0 4px;min-height:44px}.tsbox{margin:6px 0}
+.orline{display:flex;align-items:center;gap:8px;margin:10px 0 4px;font-size:12px;opacity:.7}.orline::before,.orline::after{content:'';flex:1;height:1px;background:currentColor;opacity:.35}
+.webtag{font-size:12px;margin-left:4px}
 .ludosvg{max-width:400px;filter:drop-shadow(0 8px 16px rgba(0,0,0,.3))}
 .ltok.go{animation:ltokb .9s ease-in-out infinite}.ltok.hop{animation:ltokh .17s ease-out}
 @keyframes ltokb{0%,100%{translate:0 0}50%{translate:0 -3px}} @keyframes ltokh{0%{translate:0 0}50%{translate:0 -5px}100%{translate:0 0}}
@@ -804,7 +807,7 @@ async function api(path, opts={}){
     // Anything a player does may tick off a getting-started step, so the guide checks again shortly after.
     if((opts.method||'GET')!=='GET'&&/^\/api\/(me\/|square)/.test(path)&&!/\/api\/me\/guide/.test(path)&&typeof GuideUI!=='undefined'&&GuideUI.data&&!GuideUI.data.finished){ GuideUI.at=0; setTimeout(()=>GuideUI.load(),400); }
     return j; } finally { clearTimeout(timer); } }
-const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang, visit:c.visit||null, pet:c.pet||null, claimed:!!c.k, car:c.car||null, online:!!c.o });
+const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang, visit:c.visit||null, pet:c.pet||null, claimed:!!c.k, web:!!c.w, car:c.car||null, online:!!c.o });
 const visiting = c => c.visit && Date.now()+skew < c.visit[4]+20*60000 ? c.visit : null; // [buildingId, type, x, y, until, from]: kept a while after it ends for the trip back
 const placeChunks = c => [c.home,c.job,c.hang,visiting(c)].filter(Boolean).map(p=>ckTile(p[2],p[3]));
 const keepCitizen = c => c.id===pinned || placeChunks(c).some(k=>S.chunks.has(k));
@@ -4604,7 +4607,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(!d && !detailLoading.has(c.id)){ detailLoading.add(c.id); const id=c.id; loadDetail(c.handle).finally(()=>{ detailLoading.delete(id); if(sel&&sel.id===id&&detail.has(id)) renderCard(); }); }
     const h=bOf(c.home), j=bOf(c.job); const st=h?citizenAt(c,gmNow()):null;
     const now = cardNow(c, d);
-    const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,nameOf(c), el('span',{class:'gsym',title:c.gender==='f'?'Woman':'Man',text:c.gender==='f'?' ♀':' ♂'})); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); head.append(av, el('div',null,title, c.name?el('p',{class:'uname',text:'@'+c.handle}):'', el('p',{class:'now',text:now})));
+    const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,nameOf(c), el('span',{class:'gsym',title:c.gender==='f'?'Woman':'Man',text:c.gender==='f'?' ♀':' ♂'}), c.web?el('span',{class:'webtag',title:'Joined on the website, not through Instagram',text:'🌐'}):''); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); head.append(av, el('div',null,title, c.name?el('p',{class:'uname',text:'@'+c.handle}):'', el('p',{class:'now',text:now})));
     const nm=b=>(D.buildings.get(b.id)||b).name||T(b).name;
     const shr=el('button',{class:'x shr','aria-label':'Share','title':'Share',text:'↗',onclick:()=>Share.colonist(c)});
     const strip=d&&d.claimed?Stars.strip(d.stars||0, mineCard(c)):null;
@@ -5119,7 +5122,37 @@ $('musicBtn').onclick=()=>Music.toggle();
 function findMe(){ let mine=(Me&&Me.handle)||null; if(!mine){ try{ const v=localStorage.getItem('settlement-me'); mine=v&&v.startsWith('"')?JSON.parse(v):v; }catch(e){} }
   const h = Store.canWrite ? (S.meta&&S.meta.founder) : mine;
   if(h){ openCitizen(h); return; }
-  openTab('people'); setTimeout(()=>{ const s=$('search'); if(s) s.focus(); },50); toast('Type your username, open your card and tap "This is me".'); }
+  Join.sheet(); }
+function findOnInstagram(){ openTab('people'); setTimeout(()=>{ const s=$('search'); if(s) s.focus(); },50); toast('Type your Instagram username, open your card and tap "This is me".'); }
+// ---- Joining without Instagram: Google, or a username and password made here ----
+const Join={ cfg:null, step:'start', g:null, busy:false, gender:null,
+  async config(){ if(this.cfg) return this.cfg; try{ this.cfg=await api('/api/auth/config'); }catch(e){ this.cfg={}; } return this.cfg; },
+  load(src){ return new Promise((res,rej)=>{ if(document.querySelector(`script[src="${src}"]`)){ res(); return; } const sc=document.createElement('script'); sc.src=src; sc.async=true; sc.onload=res; sc.onerror=rej; document.head.append(sc); }); },
+  done(r){ signedIn(r); document.querySelector('.rsheet-bg.join')?.remove(); toast(r.created?`Welcome to ${S.meta?S.meta.name:'the colony'}, @${r.handle}! ${r.housed?'You have a home already.':'You’re in cryosleep until a home is free.'}`:`Welcome back, @${r.handle}.`); setTimeout(()=>openCitizen(r.handle),400); },
+  async sheet(){ const C=await this.config(); document.querySelector('.rsheet-bg')?.remove(); this.step='start'; this.g=null;
+    const wrap=el('div',{class:'rsheet-bg join'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
+    const box=el('div',{class:'rsheet inked joinbox',role:'dialog','aria-label':'Join the colony'}); wrap.append(box); document.body.append(wrap); this.fill(box,C); },
+  fill(box,C){ box.innerHTML=''; const close=el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>box.parentElement.remove()});
+    box.append(el('div',{class:'shhead'}, el('h3',{text:this.step==='google'?'Pick your username':'Join the colony'}), close));
+    if(this.step==='google'){ // a new Google user picks a username
+      const hi=el('input',{class:'gin',type:'text',maxlength:'30',autocomplete:'username','aria-label':'Username',value:this.g.suggestion});
+      box.append(el('p',{class:'hint',text:'This is how other colonists will find you. Letters, numbers, dots and underscores.'}), hi, this.genderRow(box,C),
+        el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Create my colonist',disabled:this.busy,onclick:async()=>{ this.busy=true; this.fill(box,C);
+          try{ this.done(await api('/api/auth/google',{method:'POST',body:{credential:this.g.credential,handle:hi.value,gender:this.gender}})); }catch(e){ toast(e.message); } this.busy=false; if(box.isConnected) this.fill(box,C); }})));
+      return; }
+    box.append(el('p',{class:'hint',text:'Already in the colony from Instagram? '}, el('button',{class:'linkb',text:'Find my colonist',onclick:()=>{ box.parentElement.remove(); findOnInstagram(); }})));
+    if(C.google){ const gb=el('div',{class:'gbtn'}); box.append(gb);
+      this.load('https://accounts.google.com/gsi/client').then(()=>{ if(!window.google?.accounts?.id) return;
+        google.accounts.id.initialize({ client_id:C.google, callback:async res=>{ try{ const r=await api('/api/auth/google',{method:'POST',body:{credential:res.credential}}); if(r.needHandle){ this.g={...r,credential:res.credential}; this.step='google'; this.fill(box,C); } else this.done(r); }catch(e){ toast(e.message); } } });
+        google.accounts.id.renderButton(gb,{ theme:'filled_black', size:'large', shape:'pill', text:'continue_with', width:Math.min(320,innerWidth-80) }); }).catch(()=>{ gb.append(el('p',{class:'hint',text:'Google sign-in couldn’t load.'})); });
+      box.append(el('div',{class:'orline'}, el('span',{text:'or make an account'}))); }
+    const hi=el('input',{class:'gin',type:'text',maxlength:'30',autocomplete:'username',placeholder:'Pick a username','aria-label':'Username'}), pw=el('input',{class:'gin',type:'password',autocomplete:'new-password',placeholder:'Password (6 or more characters)','aria-label':'Password'});
+    const ts=el('div',{class:'tsbox'}); box.append(hi, pw, this.genderRow(box,C), ts);
+    let tsTok=null; if(C.turnstile) this.load('https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit').then(()=>{ window.turnstile?.render(ts,{ sitekey:C.turnstile, callback:t=>{ tsTok=t; }, 'expired-callback':()=>{ tsTok=null; } }); }).catch(()=>{});
+    box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Create my colonist',disabled:this.busy,onclick:async()=>{ this.busy=true;
+      try{ this.done(await api('/api/signup',{method:'POST',body:{handle:hi.value,password:pw.value,gender:this.gender,turnstile:tsTok}})); }catch(e){ toast(e.message); if(window.turnstile) try{ turnstile.reset(ts); }catch(_){} } this.busy=false; }})),
+      el('p',{class:'hint',text:'You’ll arrive aboard the ark like everyone else: you move into the first free home and get a job nearby. Your colonist shows 🌐 because you joined on the website.'})); },
+  genderRow(box,C){ return el('div',{class:'cpicks'}, el('span',{text:'Your avatar:'}), ...[['m','Man'],['f','Woman']].map(([k,n])=>el('button',{class:'pill'+(this.gender===k?' on':''),text:n,onclick:e=>{ this.gender=k; e.currentTarget.parentElement.querySelectorAll('.pill').forEach(b=>b.classList.toggle('on',b===e.currentTarget)); }}))); } };
 checkMe().then(resumeClaim).then(openFromNotification).then(()=>PushUI.auto());
 // ---- The opening: plays the narrated intro video (public/intro.mp4) when there is one, otherwise the story as title cards ----
 async function playIntro(force){
@@ -5129,7 +5162,7 @@ async function playIntro(force){
   const finish=()=>{ ov.innerHTML=''; ov.classList.add('end');
     ov.append(el('div',{class:'title'}, el('p',{class:'kicker',text:'WELCOME TO GLIESE 12 b'}), el('h1',{text:'RESURGENCE'}), el('p',{text:'One planet. One civilization. Millions of possibilities.'}),
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Find my colonist',onclick:()=>{ ov.remove(); findMe(); }}), el('button',{class:'btn',text:'Explore the colony',onclick:()=>ov.remove()})),
-      el('p',{class:'hint',text:'Not here yet? Comment SPAWN on our Instagram to wake from cryosleep.'}))); };
+      el('p',{class:'hint'}, 'Not here yet? Comment SPAWN on our Instagram, or ', el('button',{class:'linkb',text:'join here',onclick:()=>{ ov.remove(); Join.sheet(); }}), '.'))); };
   skip.onclick=()=>{ const v=ov.querySelector('video'); if(v) v.pause(); finish(); };
   if(video){ const v=el('video',{src:'/intro.mp4',poster:'/intro-poster.jpg',playsinline:'','webkit-playsinline':'',preload:'auto'}); v.onended=finish;
     const start=el('button',{class:'begin',text:'▶  Begin'}); start.onclick=()=>{ start.remove(); v.play().catch(()=>finish()); };

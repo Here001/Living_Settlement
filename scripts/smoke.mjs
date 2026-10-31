@@ -230,6 +230,22 @@ let z = null; for (let i = 0; i < 40 && !z?.id; i++) { await sleep(100); z = awa
 ok(z?.id && (z.home || z.queue > 0), 'commenting "spawn" brings them in', JSON.stringify(z));
 ok((await call('GET', '/api/citizens?q=zara', undefined, { auth: false })).json.length === 1, 'a re-sent comment does not spawn twice');
 ok((await who('tunde')).error, 'a comment without "spawn" does not spawn');
+// Joining without Instagram
+{ const cfg = (await call('GET', '/api/auth/config', undefined, { auth: false })).json; ok('google' in cfg && 'turnstile' in cfg, 'the page can ask how people can join');
+  ok((await call('POST', '/api/signup', { handle: 'ab', password: 'secret88' }, { auth: false })).status === 400, 'website usernames need at least 3 characters');
+  ok((await call('POST', '/api/signup', { handle: 'zara_ng', password: 'secret88' }, { auth: false })).status === 409, "a website sign-up can't take an existing colonist's username");
+  ok((await call('POST', '/api/signup', { handle: 'web_kemi', password: '123' }, { auth: false })).status === 400, 'and needs a proper password');
+  const su = await call('POST', '/api/signup', { handle: 'web_kemi', password: 'secret88', gender: 'f' }, { auth: false });
+  ok(su.status === 200 && su.json.token && su.json.handle === 'web_kemi' && su.json.created, 'anyone can join with a username and password', JSON.stringify(su.json));
+  const wk = await who('web_kemi'); ok(wk.id && wk.claimed && wk.g === 'f' && wk.w === 1, 'they arrive like a SPAWN, already claimed, with the avatar they picked', JSON.stringify(wk));
+  ok((await call('GET', '/api/me', undefined, { auth: false, headers: { 'x-player': su.json.token } })).json.handle === 'web_kemi', 'and are signed in straight away');
+  ok((await call('POST', '/api/login', { handle: 'web_kemi', password: 'secret88' }, { auth: false })).json.token, 'and can log in with their password later');
+  ok((await call('POST', '/api/auth/google', { credential: 'x' }, { auth: false })).status >= 400, 'Google sign-in refuses a bad (or unconfigured) token');
+  // Instagram names win: the real @web_kemi comments SPAWN
+  await post(comment('c-wk', 'web_kemi', 'spawn')); let ig = null; for (let i = 0; i < 40 && !(ig && ig.id && ig.id !== wk.id); i++) { await sleep(100); ig = await who('web_kemi'); }
+  const moved = (await pool.query('select handle, source from citizens where id = $1', [wk.id])).rows[0];
+  ok(ig?.id && ig.id !== wk.id && moved.handle === 'web_kemi_web' && moved.source === 'web', 'when the Instagram account with that name spawns, the website player is renamed (and told)', JSON.stringify(moved));
+  ok((await call('POST', '/api/login', { handle: 'web_kemi_web', password: 'secret88' }, { auth: false })).json.token, 'and logs in with the new name and the same password'); }
 ok((await call('PUT', '/api/admin/build-post', { mediaId: 'vote-post' })).status === 200, 'mark the build-vote post');
 await post(comment('c3', 'tunde', 'Build a football pitch!', 'vote-post'));
 r = await call('GET', '/api/admin/requests');

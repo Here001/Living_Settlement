@@ -143,6 +143,19 @@ What makes the Colony Log:
 - **Major construction only.** New industry, public services, landmarks, casinos, racetracks, malls and other big venues, plus anything costing 4,000 coins or more, when started, finished, rebuilt or demolished (`majorBuilding()` in `shared/rules.js`). Roads, water, trees, plants, decorations, small homes and small shops never appear, and a developer update is announced only by the major buildings in it.
 - **No purchases.** Buying a property or a car isn't announced (new pets are, in the News flash); to see who owns a building, tap it and look for **Owner** on its card. Gifts are still announced (who gifted whom, not the amount). Migration 33 removed the old purchase and small-build entries.
 
+## Joining without Instagram
+
+People who aren't on Instagram can join from the website: **Find me** (or **Find my colonist** / **join here** at the end of the intro) opens **Join the colony**.
+
+- **A username and password.** Pick a username (3+ characters: letters, numbers, dots, underscores; names like admin, mayor or colony are reserved), a password (6+), and Man or Woman. The colonist arrives aboard the ark like a SPAWN (first free home, a job nearby), already claimed, and signed in (`POST /api/signup`).
+- **Continue with Google** (shown once it's set up). The first time, Google suggests a username from your email, which you can change; after that the button just signs you in (`POST /api/auth/google`; the token is checked with Google).
+- **Against fake accounts:** at most 3 new colonists per network a day (`SIGNUPS_PER_IP`), and an optional Cloudflare "I am human" check.
+- **Instagram names come first.** Website players show 🌐 on their card. If an Instagram account with the same username later comments SPAWN, the website player is renamed `name_web` (keeping everything else, and the same password) and gets a notice telling them.
+- **Settings** (environment variables on the server):
+  - `GOOGLE_CLIENT_ID`: in Google Cloud Console → APIs & Services → Credentials → Create credentials → OAuth client ID → Web application, with `https://playresurgence.com` under Authorized JavaScript origins. Copy the Client ID (no secret needed).
+  - `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET`: in the Cloudflare dashboard → Turnstile → Add site (free). Without them there's no human check (only the per-network limit).
+  - `SIGNUPS_PER_IP` (default 3).
+
 ## Players: prove it's you, then set a password
 
 A follower opens the city, finds their citizen and taps **This is me**. The site gives them a one-time code like `CLAIM 482913`.

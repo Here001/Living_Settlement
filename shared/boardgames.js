@@ -169,7 +169,7 @@ const snooker = {
   play(s, seat, m, rand) { s = structuredClone(s); if (s.turn !== seat) throw new Error('Not your turn.');
     const angle = Number(m.angle), power = Number(m.power); if (!Number.isFinite(angle) || !(power > 0 && power <= 1)) throw new Error('Aim and pick a power.');
     const g = () => { const u = Math.max(1e-9, rand()), v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
-    const r = shoot(s.balls, angle + g() * AIM_WOBBLE, power * (1 + g() * POWER_WOBBLE));
+    const r = shoot(s.balls, angle + g() * AIM_WOBBLE, power * (1 + g() * POWER_WOBBLE), m.spin);
     const reds = r.potted.filter(p => p !== 'c').length, foul = r.potted.includes('c') || !r.firstHit;
     s.balls = r.potted.includes('c') ? [...r.balls, respot(r.balls)] : r.balls; s.score[seat] += reds;
     s.last = { seat, potted: r.potted, foul, frames: r.frames }; s.log.push([seat, foul ? 'foul' : reds ? 'potted' : 'missed', reds]);

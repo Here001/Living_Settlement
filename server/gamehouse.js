@@ -135,7 +135,7 @@ export class GameHouse {
   }
 
   // ---------- Snooker practice: free; pot 3 reds in 6 shots. The first win each real day pays a prize ----------
-  async snooker(id, bid, { action, angle, power }) {
+  async snooker(id, bid, { action, angle, power, spin }) {
     return this.world.change(async ch => {
       const { c, name } = await this.seat(ch, id, bid); let g = c.play_game;
       if (g && g.game !== 'snooker') { if (action === 'start') throw new HttpError(409, `Finish your ${GH_GAMES[g.game].name.toLowerCase()} first.`); g = null; }
@@ -148,7 +148,7 @@ export class GameHouse {
       if (action !== 'shoot') throw new HttpError(400, 'Rack up, or take a shot.');
       angle = Number(angle); power = Number(power); if (!Number.isFinite(angle) || !Number.isFinite(power) || power <= 0 || power > 1) throw new HttpError(400, 'Aim and pick a power.');
       const gauss = () => { const u = Math.max(1e-9, rand()), v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
-      const r = shoot(g.balls, angle + gauss() * AIM_WOBBLE, power * (1 + gauss() * POWER_WOBBLE));
+      const r = shoot(g.balls, angle + gauss() * AIM_WOBBLE, power * (1 + gauss() * POWER_WOBBLE), spin);
       const reds = r.potted.filter(p => p !== 'c').length, foul = r.potted.includes('c');
       g.balls = foul ? [...r.balls, respot(r.balls)] : r.balls; g.shots++; g.potted += reds; g.last = { potted: r.potted, foul, frames: r.frames };
       if (g.potted >= g.need || g.shots >= g.max || !g.balls.some(b => b.id !== 'c')) {

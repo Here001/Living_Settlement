@@ -21,12 +21,17 @@ export function respot(balls) {
   return { id: 'c', x: CUE_SPOT[0], y: 0.5 };
 }
 
-// Play a shot. balls: [{id, x, y}] (the cue ball is id 'c'); angle in radians; power 0..1.
+// Spin, from where the cue strikes the cue ball: y > 0 is top spin (it follows through after hitting a ball), y < 0 is
+// back spin (it screws back), x is side spin (it bends off the cushions). Both run -1..1.
+export const cleanSpin = sp => { let x = Number(sp?.x) || 0, y = Number(sp?.y) || 0; const m = Math.hypot(x, y); if (m > 1) { x /= m; y /= m; } return { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 }; };
+const FOLLOW = 0.55, SIDE = 0.3;
+// Play a shot. balls: [{id, x, y}] (the cue ball is id 'c'); angle in radians; power 0..1; spin {x, y}.
 // Returns the balls left on the table, what was potted (in order), the first ball the cue ball hit, and frames to replay.
-export function shoot(balls, angle, power) {
+export function shoot(balls, angle, power, spin) {
   const B = balls.map(b => ({ id: b.id, x: b.x, y: b.y, vx: 0, vy: 0, on: true }));
   const cue = B.find(b => b.id === 'c'); if (!cue) throw new Error('no cue ball');
   const sp = Math.max(0.05, Math.min(1, power)) * MAX_SPEED; cue.vx = Math.cos(angle) * sp; cue.vy = Math.sin(angle) * sp;
+  let { x: side, y: roll } = cleanSpin(spin), rollUsed = false;
   const potted = [], frames = [snap(B)]; let firstHit = null, t = 0, nextFrame = FRAME, cushions = 0;
   while (t < MAX_T) {
     let moving = false;
@@ -36,15 +41,18 @@ export function shoot(balls, angle, power) {
     for (const b of B) { if (!b.on) continue;
       for (const [px, py, pr] of POCKETS) if (Math.hypot(b.x - px, b.y - py) < pr) { b.on = false; b.vx = b.vy = 0; potted.push(b.id); break; }
       if (!b.on) continue;
-      if (b.x < BALL_R) { b.x = BALL_R; b.vx = -b.vx * CUSHION; cushions++; } else if (b.x > TABLE_W - BALL_R) { b.x = TABLE_W - BALL_R; b.vx = -b.vx * CUSHION; cushions++; }
-      if (b.y < BALL_R) { b.y = BALL_R; b.vy = -b.vy * CUSHION; cushions++; } else if (b.y > TABLE_H - BALL_R) { b.y = TABLE_H - BALL_R; b.vy = -b.vy * CUSHION; cushions++; } }
+      const kick = (v, along) => { if (b !== cue || !side) return along; const k = side * SIDE * Math.abs(v); side *= 0.5; return along + k; }; // side spin bends the cue ball off a cushion
+      if (b.x < BALL_R) { b.x = BALL_R; b.vy = kick(b.vx, b.vy); b.vx = -b.vx * CUSHION; cushions++; } else if (b.x > TABLE_W - BALL_R) { b.x = TABLE_W - BALL_R; b.vy = kick(b.vx, b.vy); b.vx = -b.vx * CUSHION; cushions++; }
+      if (b.y < BALL_R) { b.y = BALL_R; b.vx = kick(b.vy, b.vx); b.vy = -b.vy * CUSHION; cushions++; } else if (b.y > TABLE_H - BALL_R) { b.y = TABLE_H - BALL_R; b.vx = kick(b.vy, b.vx); b.vy = -b.vy * CUSHION; cushions++; } }
     for (let i = 0; i < B.length; i++) { const a = B[i]; if (!a.on) continue;
       for (let j = i + 1; j < B.length; j++) { const b = B[j]; if (!b.on) continue;
         const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy); if (d >= BALL_R * 2 || d === 0) continue;
         const nx = dx / d, ny = dy / d, rel = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
         const push = (BALL_R * 2 - d) / 2; a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
         if (rel <= 0) continue;
+        const c = a === cue ? a : b === cue ? b : null, cv = c ? [c.vx, c.vy] : null;
         const k = rel * (1 + BOUNCE) / 2; a.vx -= k * nx; a.vy -= k * ny; b.vx += k * nx; b.vy += k * ny;
+        if (c && roll && !rollUsed) { rollUsed = true; const s0 = Math.hypot(cv[0], cv[1]) || 1; c.vx += cv[0] / s0 * roll * FOLLOW * s0; c.vy += cv[1] / s0 * roll * FOLLOW * s0; } // follow through, or screw back
         if (!firstHit && (a.id === 'c' || b.id === 'c')) firstHit = a.id === 'c' ? b.id : a.id; } }
     t += DT; if (t >= nextFrame) { frames.push(snap(B)); nextFrame += FRAME; }
   }

@@ -404,6 +404,16 @@ body.pane-max .composer textarea{height:70px}
 .scard button.open{background:var(--glass-2,rgba(0,0,0,.05));border:1px solid var(--glass-line,rgba(0,0,0,.1));animation:cpop .3s ease-out}
 .scard button.hit{background:rgba(242,201,76,.35)}
 .scard button:not(.open)::after{content:'?';position:absolute;inset:0;display:grid;place-items:center;font-size:20px;color:rgba(255,255,255,.85);font-weight:800}
+.snkrow{display:flex;gap:8px;align-items:stretch;justify-content:center;width:100%}
+.snkpow{flex:0 0 40px;position:relative;border-radius:14px;background:linear-gradient(180deg,#3A3F48,#23262C);box-shadow:inset 0 2px 6px rgba(0,0,0,.5);touch-action:none;cursor:ns-resize;overflow:hidden}
+.snkpow .fill{position:absolute;left:0;right:0;top:0;background:linear-gradient(180deg,rgba(242,201,76,.25),rgba(217,113,74,.85))}
+.snkpow .stick{position:absolute;left:50%;top:6px;bottom:6px;width:8px;transform:translateX(-50%);border-radius:4px;background:linear-gradient(180deg,#DCC08F 0 70%,#5B3A1E 70% 100%)}
+.snkpow .pct{position:absolute;left:0;right:0;bottom:6px;text-align:center;font-size:10px;font-weight:800;color:#fff;text-shadow:0 1px 2px #000}
+.snkside{flex:0 0 58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.snkspin{width:54px;height:54px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#E8E8E8 55%,#BDBDBD);box-shadow:0 3px 8px rgba(0,0,0,.35);position:relative;touch-action:none;cursor:pointer}
+.snkspin .dot{position:absolute;width:12px;height:12px;border-radius:50%;background:#D63A2F;box-shadow:0 0 0 2px rgba(255,255,255,.8);transform:translate(-50%,-50%)}
+.snkside small{font-size:10px;color:var(--muted);text-align:center;line-height:1.2}
+.snksvg{flex:1 1 auto;min-width:0;max-height:68vh;touch-action:none;display:block}
 .snk .aimrow{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}.snk input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
 .snk .pwr{display:flex;gap:8px;align-items:center;font-size:13px}
 #card.ghplay > dl, #card.ghplay > .row-actions, #card.ghplay > p.hint{display:none}
@@ -3464,41 +3474,17 @@ const GH={ id:null, info:null, at:0, open:false, game:'penalty', bet:100, busy:f
         wrap.append(this.betRow(I), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Start a shootout',disabled:this.busy,onclick:()=>{ const bet=this.betOk(); if(bet) this.act('penalty',{action:'start',bet},r=>{ this.last=r; this.kickAt=0; }); }}))); }
       return wrap; },
     snooker(b,I){ if(Tables.mine&&Tables.mine.game==='snooker'&&Tables.bid===b.id) return Tables.lobby('snooker', b.id);
-      const wrap=el('div',{class:'ghstage snk'}), g=this.last&&this.last.game==='snooker'?this.last:null, live=g&&!g.done;
-      if(this.aim==null) this.aim=0; if(this.power==null) this.power=0.5;
-      const svg=this.svg(`-0.09 -0.09 ${TABLE_W+0.18} ${TABLE_H+0.18}`); svg.style.maxWidth='520px';
-      svg.append(this.mk('rect',{x:-0.09,y:-0.09,width:TABLE_W+0.18,height:TABLE_H+0.18,rx:0.06,fill:'#6B3E22'}), this.mk('rect',{x:0,y:0,width:TABLE_W,height:TABLE_H,fill:'#2E7D46'}),
-        this.mk('line',{x1:0.42,y1:0,x2:0.42,y2:TABLE_H,stroke:'rgba(255,255,255,.25)','stroke-width':0.004}));
-      for(const [px,py,pr] of POCKETS) svg.append(this.mk('circle',{cx:px,cy:Math.min(TABLE_H,Math.max(0,py)),r:pr*0.85,fill:'#111'}));
-      const replay=this.replay&&this.replay.g===g?this.replay:null, balls=replay?null:(g?g.balls:[]), cue=balls&&balls.find(x=>x.id==='c');
-      const group=this.mk('g',{}); svg.append(group);
-      const drawBalls=pos=>{ group.innerHTML=''; for(const [id,[x,y]] of Object.entries(pos)) group.append(this.mk('circle',{cx:x,cy:y,r:BALL_R,fill:id==='c'?'#F7F3E8':'#C0392B',stroke:'rgba(0,0,0,.35)','stroke-width':0.004})); };
-      if(replay){ const step=()=>{ if(!svg.isConnected||this.replay!==replay) return; const i=Math.min(replay.frames.length-1,Math.floor((performance.now()-replay.t0)/1000*30)); drawBalls(replay.frames[i]);
-          if(i<replay.frames.length-1) requestAnimationFrame(step); else { this.replay=null; renderCard(true); } }; drawBalls(replay.frames[0]); requestAnimationFrame(step); }
-      else if(balls) drawBalls(Object.fromEntries(balls.map(x=>[x.id,[x.x,x.y]])));
-      if(live&&cue&&!replay){ // aim line to the first ball or cushion, with a ghost ball where the cue ball would touch
-        const dx=Math.cos(this.aim), dy=Math.sin(this.aim); let tHit=Infinity, hit=null;
-        for(const o of balls){ if(o.id==='c') continue; const fx=o.x-cue.x, fy=o.y-cue.y, proj=fx*dx+fy*dy; if(proj<=0) continue; const perp=Math.abs(fx*dy-fy*dx); if(perp>=BALL_R*2) continue; const t=proj-Math.sqrt(4*BALL_R*BALL_R-perp*perp); if(t<tHit){ tHit=t; hit=o; } }
-        const wall=Math.min(dx>0?(TABLE_W-BALL_R-cue.x)/dx:dx<0?(BALL_R-cue.x)/dx:Infinity, dy>0?(TABLE_H-BALL_R-cue.y)/dy:dy<0?(BALL_R-cue.y)/dy:Infinity), t=Math.min(tHit,wall);
-        const gx=cue.x+dx*t, gy=cue.y+dy*t; svg.append(this.mk('line',{x1:cue.x,y1:cue.y,x2:gx,y2:gy,stroke:'rgba(255,255,255,.75)','stroke-width':0.005,'stroke-dasharray':'0.02 0.015'}), this.mk('circle',{cx:gx,cy:gy,r:BALL_R,fill:'none',stroke:'rgba(255,255,255,.8)','stroke-width':0.004}));
-        if(hit){ const nx=hit.x-gx, ny=hit.y-gy, nl=Math.hypot(nx,ny)||1; svg.append(this.mk('line',{x1:hit.x,y1:hit.y,x2:hit.x+nx/nl*0.25,y2:hit.y+ny/nl*0.25,stroke:'rgba(242,201,76,.85)','stroke-width':0.005})); }
-        const zone=this.mk('rect',{x:-0.09,y:-0.09,width:TABLE_W+0.18,height:TABLE_H+0.18,fill:'transparent',style:'cursor:crosshair'});
-        zone.addEventListener('click',ev=>{ const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY; const q=pt.matrixTransform(svg.getScreenCTM().inverse()); this.aim=Math.atan2(q.y-cue.y,q.x-cue.x); renderCard(true); }); svg.append(zone); }
-      wrap.append(svg);
-      if(g) wrap.append(el('div',{class:'mstat'}, el('span',{text:`Shot ${Math.min(g.shots+(live?1:0),g.max)} of ${g.max}`}), el('b',{text:`Reds potted: ${g.potted} of ${g.need}`})));
-      if(g&&g.last&&!replay){ const L=g.last; wrap.append(el('p',{class:'hint',style:'text-align:center',text:L.foul?'In-off! The cue ball went down; it comes back on its spot.':L.potted.length?`Potted ${L.potted.filter(x=>x!=='c').length}!`:'Nothing went down.'})); }
-      if(live&&!replay){ const nudge=(lab,d)=>el('button',{class:'pill',text:lab,onclick:()=>{ this.aim+=d*Math.PI/180; renderCard(true); }});
-        const pw=el('input',{type:'range',min:'5',max:'100',value:String(Math.round(this.power*100)),'aria-label':'Power'}); pw.oninput=()=>{ this.power=pw.value/100; pv.textContent=`${pw.value}%`; }; const pv=el('b',{text:`${Math.round(this.power*100)}%`});
-        wrap.append(el('p',{class:'hint',style:'text-align:center',text:'Tap the table to aim, fine-tune with the arrows, pick the power, then shoot.'}), el('div',{class:'aimrow'}, nudge('◀◀',-2), nudge('◀',-0.3), nudge('▶',0.3), nudge('▶▶',2)),
-          el('div',{class:'pwr'}, el('span',{text:'Power'}), pw, pv), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'🎱 Shoot',disabled:this.busy,onclick:()=>this.act('snooker',{action:'shoot',angle:this.aim,power:this.power},r=>{ this.last=r; if(r.last&&r.last.frames) this.replay={ g:r, frames:r.last.frames, t0:performance.now() }; if(r.done) setTimeout(()=>toast(r.won?(r.paid?`🎱 You did it! ${fmt(r.paid)} coins (today's prize).`:'🎱 You did it! (Today’s prize is already won.)'):'Out of shots. Rack up again!'), Math.min(4000,(r.last?.frames?.length||0)*33)); })})));
-        return wrap; }
+      const wrap=el('div',{class:'ghstage snk'}), g=this.last&&this.last.game==='snooker'?this.last:null, live=g&&!g.done, replay=this.replay&&this.replay.g===g?this.replay:null;
+      if(g){ wrap.append(SnookerUI.view({ balls:g.balls, replay, canShoot:live&&!replay&&!this.busy,
+          onShoot:(angle,power,spin)=>this.act('snooker',{action:'shoot',angle,power,spin},r=>{ this.last=r; if(r.last&&r.last.frames) this.replay={ g:r, frames:r.last.frames, t0:performance.now() }; if(r.done) setTimeout(()=>toast(r.won?(r.paid?`🎱 You did it! ${fmt(r.paid)} coins (today's prize).`:'🎱 You did it! (Today’s prize is already won.)'):'Out of shots. Rack up again!'), Math.min(4000,(r.last?.frames?.length||0)*33)); }),
+          onReplayEnd:()=>{ this.replay=null; renderCard(true); } }));
+        wrap.append(el('div',{class:'mstat'}, el('span',{text:`Shot ${Math.min(g.shots+(live?1:0),g.max)} of ${g.max}`}), el('b',{text:`Reds potted: ${g.potted} of ${g.need}`})));
+        if(g.last&&!replay){ const L=g.last; wrap.append(el('p',{class:'hint',style:'text-align:center',text:L.foul?'In-off! The cue ball went down; it comes back on its spot.':L.potted.length?`Potted ${L.potted.filter(x=>x!=='c').length}!`:'Nothing went down.'})); }
+        if(live&&!replay) wrap.append(el('p',{class:'hint',style:'text-align:center',text:'Drag on the table to aim. Drag the cue down in the bar on the left and let go to shoot. Set spin on the white ball.'})); }
       if(g&&g.done&&!replay) wrap.append(el('div',{class:'cresult '+(g.won?'win':'lose')}, el('b',{text:g.won?(g.paid?`Cleared! You won today's ${fmt(g.paid)}-coin prize.`:'Cleared! (Today’s prize is already won.)'):'Out of shots this time.'})));
-      if(!live&&!replay) wrap.append(el('h4',{class:'bgroup',text:'Practice'}), el('p',{class:'hint',text:I.snookerPrize?`Today's prize for a win: ${fmt(300)} coins.`:'You’ve won today’s prize; practice is still free.'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'🎱 Rack up (free)',disabled:this.busy,onclick:()=>this.act('snooker',{action:'start'},r=>{ this.last=r; this.aim=0; })})));
-      if(!live&&!replay) wrap.append(Tables.lobby('snooker', b.id));
+      if(!live&&!replay){ wrap.append(el('h4',{class:'bgroup',text:'Practice'}), el('p',{class:'hint',text:I.snookerPrize?`Pot 3 reds in 6 shots. Today's prize for a win: ${fmt(300)} coins.`:'Pot 3 reds in 6 shots. You’ve won today’s prize; practice is still free.'}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'🎱 Rack up (free)',disabled:this.busy,onclick:()=>this.act('snooker',{action:'start'},r=>{ this.last=r; SnookerUI.aim=0; SnookerUI.spin={x:0,y:0}; })})));
+        wrap.append(Tables.lobby('snooker', b.id)); }
       return wrap; },
-    whot(b){ return Tables.lobby('whot', b.id); },
-    ludo(b){ return Tables.lobby('ludo', b.id); },
-    ayo(b){ return Tables.lobby('ayo', b.id); },
     darts(b,I){ const wrap=el('div',{class:'ghstage'}), g=this.last&&this.last.game==='darts'?this.last:null, live=g&&!g.done, R0=100;
       const svg=this.svg('-110 -110 220 220'); svg.append(this.mk('circle',{r:108,fill:'#2B2621'}));
       const ring=(r0,r1,i,col)=>{ const a0=(i*18-9-90)*Math.PI/180, a1=a0+18*Math.PI/180, P=(r,a)=>`${r*Math.cos(a)} ${r*Math.sin(a)}`; return this.mk('path',{d:`M${P(r0,a0)} L${P(r1,a0)} A${r1} ${r1} 0 0 1 ${P(r1,a1)} L${P(r0,a1)} A${r0} ${r0} 0 0 0 ${P(r0,a0)} Z`,fill:col}); };
@@ -3515,6 +3501,64 @@ const GH={ id:null, info:null, at:0, open:false, game:'penalty', bet:100, busy:f
         wrap.append(this.betRow(I), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Start a game',disabled:this.busy,onclick:()=>{ const bet=this.betOk(); if(bet) this.act('darts',{action:'start',bet},r=>{ this.last=r; }); }}))); }
       return wrap; },
   } };
+// ---- Snooker table (practice and 1 v 1): a portrait table like a pool app. Drag on the table to aim (guide lines
+// show where the cue ball and the first ball it hits will go), drag the cue down in the power bar and let go to shoot,
+// and set spin on the cue ball at the side (top or back spin, and side spin). Table units: the physics table is 2 × 1;
+// on screen it stands upright with the cue ball's end at the bottom.
+const SnookerUI={ aim:0, power:0, spin:{x:0,y:0},
+  S:(x,y)=>[y, TABLE_W-x], // physics → screen
+  view({ balls, replay, canShoot, onShoot, onReplayEnd }){
+    const mk=GH.mk.bind(GH), M=0.13, svg=GH.svg(`${-M} ${-M} ${TABLE_H+2*M} ${TABLE_W+2*M}`); svg.classList.add('snksvg'); svg.removeAttribute('style');
+    const defs=mk('defs',{}); defs.innerHTML=`<linearGradient id="snkRail" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5B2A12"/><stop offset=".5" stop-color="#8A4523"/><stop offset="1" stop-color="#5B2A12"/></linearGradient>
+      <radialGradient id="snkCloth" cx=".5" cy=".45" r=".75"><stop offset="0" stop-color="#2AA391"/><stop offset="1" stop-color="#17786B"/></radialGradient>
+      <radialGradient id="snkRed" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#FF9A8C"/><stop offset=".35" stop-color="#E0402F"/><stop offset="1" stop-color="#8E1F16"/></radialGradient>
+      <radialGradient id="snkCue" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".6" stop-color="#F1EFE8"/><stop offset="1" stop-color="#B9B5AA"/></radialGradient>
+      <radialGradient id="snkHole" cx=".5" cy=".5" r=".5"><stop offset=".6" stop-color="#050505"/><stop offset="1" stop-color="#2A2A2A"/></radialGradient>
+      <linearGradient id="snkStick" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3B82C4"/><stop offset=".02" stop-color="#F4E4C1"/><stop offset=".72" stop-color="#D9B57A"/><stop offset=".73" stop-color="#4A2A14"/><stop offset="1" stop-color="#2B170A"/></linearGradient>`; svg.append(defs);
+    svg.append(mk('rect',{x:-M,y:-M,width:TABLE_H+2*M,height:TABLE_W+2*M,rx:0.07,fill:'url(#snkRail)'}), mk('rect',{x:-0.035,y:-0.035,width:TABLE_H+0.07,height:TABLE_W+0.07,rx:0.02,fill:'#11594F'}), mk('rect',{x:0,y:0,width:TABLE_H,height:TABLE_W,fill:'url(#snkCloth)'}));
+    for(const f of [0.25,0.5,0.75]) svg.append(mk('circle',{cx:f*TABLE_H,cy:-0.08,r:0.008,fill:'#F4E4C1'}), mk('circle',{cx:f*TABLE_H,cy:TABLE_W+0.08,r:0.008,fill:'#F4E4C1'}));
+    for(const f of [0.25,0.75,1.25,1.75]) svg.append(mk('circle',{cx:-0.08,cy:f,r:0.008,fill:'#F4E4C1'}), mk('circle',{cx:TABLE_H+0.08,cy:f,r:0.008,fill:'#F4E4C1'}));
+    const [bx,by]=this.S(0.42,0); svg.append(mk('line',{x1:0,y1:by,x2:TABLE_H,y2:by,stroke:'rgba(255,255,255,.28)','stroke-width':0.004}));
+    for(const [px,py,pr] of POCKETS){ const [sx,sy]=this.S(px,py); svg.append(mk('circle',{cx:Math.min(TABLE_H+0.01,Math.max(-0.01,sx)),cy:Math.min(TABLE_W+0.01,Math.max(-0.01,sy)),r:pr*1.05+0.012,fill:'#E8DCC0',opacity:.9}), mk('circle',{cx:Math.min(TABLE_H+0.01,Math.max(-0.01,sx)),cy:Math.min(TABLE_W+0.01,Math.max(-0.01,sy)),r:pr*1.05,fill:'url(#snkHole)'})); }
+    const guide=mk('g',{}), ballsG=mk('g',{}), stickG=mk('g',{}); svg.append(guide, ballsG, stickG);
+    const circles={}; const ball=(id,x,y)=>{ const [sx,sy]=this.S(x,y); let c=circles[id]; if(!c){ const g=mk('g',{}); g.append(mk('ellipse',{cx:0.004,cy:0.012,rx:BALL_R*0.95,ry:BALL_R*0.75,fill:'rgba(0,0,0,.35)'}), mk('circle',{r:BALL_R,fill:id==='c'?'url(#snkCue)':'url(#snkRed)'}), mk('circle',{cx:-BALL_R*0.35,cy:-BALL_R*0.4,r:BALL_R*0.22,fill:'rgba(255,255,255,.55)'})); ballsG.append(g); c=circles[id]=g; }
+      c.setAttribute('transform',`translate(${sx} ${sy})`); c.style.display=''; };
+    const place=pos=>{ for(const id in circles) if(!pos[id]) circles[id].style.display='none'; for(const [id,[x,y]] of Object.entries(pos)) ball(id,x,y); };
+    if(replay){ const step=()=>{ if(!svg.isConnected) return; const i=Math.min(replay.frames.length-1,Math.floor((performance.now()-replay.t0)/1000*30)); place(replay.frames[i]); if(i<replay.frames.length-1) requestAnimationFrame(step); else onReplayEnd&&onReplayEnd(); }; place(replay.frames[0]); requestAnimationFrame(step); }
+    else place(Object.fromEntries((balls||[]).map(b=>[b.id,[b.x,b.y]])));
+    const cue=!replay&&(balls||[]).find(b=>b.id==='c');
+    const draw=()=>{ guide.innerHTML=''; stickG.innerHTML=''; if(!cue||!canShoot) return;
+      const dx=Math.cos(this.aim), dy=Math.sin(this.aim); let tHit=Infinity, hit=null;
+      for(const o of balls){ if(o.id==='c') continue; const fx=o.x-cue.x, fy=o.y-cue.y, proj=fx*dx+fy*dy; if(proj<=0) continue; const perp=Math.abs(fx*dy-fy*dx); if(perp>=BALL_R*2) continue; const t=proj-Math.sqrt(4*BALL_R*BALL_R-perp*perp); if(t<tHit){ tHit=t; hit=o; } }
+      const wall=Math.min(dx>0?(TABLE_W-BALL_R-cue.x)/dx:dx<0?(BALL_R-cue.x)/dx:Infinity, dy>0?(TABLE_H-BALL_R-cue.y)/dy:dy<0?(BALL_R-cue.y)/dy:Infinity), t=Math.min(tHit,wall);
+      const gx=cue.x+dx*t, gy=cue.y+dy*t, [c0x,c0y]=this.S(cue.x,cue.y), [g0x,g0y]=this.S(gx,gy);
+      guide.append(mk('line',{x1:c0x,y1:c0y,x2:g0x,y2:g0y,stroke:'#fff','stroke-width':0.006,opacity:.9}), mk('circle',{cx:g0x,cy:g0y,r:BALL_R,fill:'none',stroke:'#fff','stroke-width':0.005}));
+      if(hit){ const nx=hit.x-gx, ny=hit.y-gy, nl=Math.hypot(nx,ny)||1, [hx,hy]=this.S(hit.x,hit.y), [ex,ey]=this.S(hit.x+nx/nl*0.3,hit.y+ny/nl*0.3); guide.append(mk('line',{x1:hx,y1:hy,x2:ex,y2:ey,stroke:'#fff','stroke-width':0.005,opacity:.85}));
+        const tx=dx-(dx*nx+dy*ny)/nl*nx/nl, ty=dy-(dx*nx+dy*ny)/nl*ny/nl, tl=Math.hypot(tx,ty); if(tl>0.05){ const [qx,qy]=this.S(gx+tx/tl*0.12,gy+ty/tl*0.12); guide.append(mk('line',{x1:g0x,y1:g0y,x2:qx,y2:qy,stroke:'#fff','stroke-width':0.004,opacity:.55})); } }
+      // the cue stick, drawn back from the cue ball as the power goes up
+      const ux=Math.sin(this.aim), uy=-Math.cos(this.aim), pull=BALL_R*1.5+this.power*0.22, L=1.15, w0=0.008, w1=0.017;
+      const ax=c0x-ux*pull, ay=c0y-uy*pull;
+      // drawn in its own frame so the wood grain and the tip run along it
+      const ang=Math.atan2(-uy,-ux)*180/Math.PI; const sg=mk('g',{transform:`translate(${ax} ${ay}) rotate(${ang})`}); sg.append(mk('polygon',{points:`0,${-w0} 0,${w0} ${L},${w1} ${L},${-w1}`,fill:'url(#snkStick)',stroke:'rgba(0,0,0,.35)','stroke-width':0.002})); stickG.append(sg); };
+    draw(); this.redraw=draw;
+    if(cue&&canShoot){ const aimAt=ev=>{ const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY; const q=pt.matrixTransform(svg.getScreenCTM().inverse()), [cx,cy]=this.S(cue.x,cue.y), sx=q.x-cx, sy=q.y-cy; if(Math.hypot(sx,sy)<0.01) return; this.aim=Math.atan2(sx,-sy); draw(); };
+      let down=false; svg.addEventListener('pointerdown',ev=>{ down=true; svg.setPointerCapture(ev.pointerId); aimAt(ev); }); svg.addEventListener('pointermove',ev=>{ if(down) aimAt(ev); }); svg.addEventListener('pointerup',()=>{ down=false; }); svg.addEventListener('pointercancel',()=>{ down=false; }); }
+    // the power bar (drag the cue down, let go to shoot) and the spin ball
+    const pow=el('div',{class:'snkpow','aria-label':'Power: drag down and let go to shoot'}), fill=el('div',{class:'fill'}), stick=el('div',{class:'stick'}), pct=el('div',{class:'pct',text:''}); pow.append(fill, stick, pct);
+    const setPow=v=>{ this.power=Math.max(0,Math.min(1,v)); fill.style.height=`${this.power*100}%`; stick.style.transform=`translate(-50%, ${this.power*40}%)`; pct.textContent=this.power>0.02?`${Math.round(this.power*100)}%`:''; draw(); };
+    if(canShoot&&cue){ let start=null; pow.addEventListener('pointerdown',ev=>{ pow.setPointerCapture(ev.pointerId); const r=pow.getBoundingClientRect(); start=r; setPow((ev.clientY-r.top)/r.height); });
+      pow.addEventListener('pointermove',ev=>{ if(start) setPow((ev.clientY-start.top)/start.height); });
+      pow.addEventListener('pointerup',()=>{ if(!start) return; start=null; const p=this.power; setPow(0); if(p>=0.05) onShoot(this.aim, p, { ...this.spin }); });
+      pow.addEventListener('pointercancel',()=>{ start=null; setPow(0); }); }
+    else pow.style.opacity=.45;
+    const spinBall=el('div',{class:'snkspin','aria-label':'Spin'}), dot=el('div',{class:'dot'}); spinBall.append(dot);
+    const spinName=()=>this.spin.y>0.2?'Top spin':this.spin.y<-0.2?'Back spin':Math.abs(this.spin.x)>0.2?'Side spin':'Spin', spinLab=el('small',{text:spinName()});
+    const showSpin=()=>{ dot.style.left=`${50+this.spin.x*38}%`; dot.style.top=`${50-this.spin.y*38}%`; }; showSpin();
+    if(canShoot){ let on=false; const setSpin=ev=>{ const r=spinBall.getBoundingClientRect(); let x=((ev.clientX-r.left)/r.width-0.5)/0.38, y=-((ev.clientY-r.top)/r.height-0.5)/0.38; const m=Math.hypot(x,y); if(m>1){ x/=m; y/=m; } if(m<0.18){ x=0; y=0; } this.spin={x:Math.round(x*100)/100,y:Math.round(y*100)/100}; showSpin(); if(spinLab) spinLab.textContent=spinName(); };
+      spinBall.addEventListener('pointerdown',ev=>{ on=true; spinBall.setPointerCapture(ev.pointerId); setSpin(ev); }); spinBall.addEventListener('pointermove',ev=>{ if(on) setSpin(ev); }); spinBall.addEventListener('pointerup',()=>{ on=false; }); }
+    const side=el('div',{class:'snkside'}, spinBall, spinLab,
+      canShoot?el('button',{class:'pill',text:'◀',title:'Fine aim',onclick:()=>{ this.aim-=0.3*Math.PI/180; draw(); }}):'', canShoot?el('button',{class:'pill',text:'▶',title:'Fine aim',onclick:()=>{ this.aim+=0.3*Math.PI/180; draw(); }}):'');
+    return el('div',{class:'snkrow'}, pow, svg, side); } };
 // ---- Tables: colonists playing each other (Whot, Ludo, Ayo, Snooker at a Game House; Hold'em at a Casino) ----
 const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, seats:2, quick:true, timer:null, sig:'', aim:0, power:0.55, replay:null, lastShotSig:'',
   async load(game,bid,quiet){ this.game=game; this.bid=bid; this.error=null; try{ const r=await api(`/api/me/tables?building=${encodeURIComponent(bid)}&game=${game}`); const ls=JSON.stringify(r.tables.map(t=>[t.id,t.status,t.players.length])); const changed=ls!==this.listSig||this.set(r.mine); this.listSig=ls; this.list=r.tables; if(!quiet||changed) renderCard(true); }catch(e){ if(!quiet){ this.list=[]; this.error=e.message; renderCard(true); } } this.poll(); },
@@ -3636,20 +3680,11 @@ const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, s
       const names=i=>i===t.seat?'You':(t.players[i]?.bot?'🤖 ':'')+'@'+(t.players[i]?.handle||'?');
       if(v.log.length) w.append(el('p',{class:'hint',style:'text-align:center',text:v.log.slice(-3).map(([s,a,x,y,d])=>`${names(s)} ${a==='rolled'?`rolled ${Array.isArray(x)?x.join(' + '):x}`:a==='captured'?'captured a token!':a==='moved'?`moved ${d||''}`:a==='no move'?'couldn’t move':a}`).join(' · ')}));
       return w; },
-    snooker(t,v){ const w=el('div',{class:'ghstage snk'}), my=t.canMove;
-      const svg=GH.svg(`-0.09 -0.09 ${TABLE_W+0.18} ${TABLE_H+0.18}`), mk=GH.mk.bind(GH); svg.style.maxWidth='520px';
-      svg.append(mk('rect',{x:-0.09,y:-0.09,width:TABLE_W+0.18,height:TABLE_H+0.18,rx:0.06,fill:'#6B3E22'}), mk('rect',{x:0,y:0,width:TABLE_W,height:TABLE_H,fill:'#2E7D46'}));
-      for(const [px,py,pr] of POCKETS) svg.append(mk('circle',{cx:px,cy:Math.min(TABLE_H,Math.max(0,py)),r:pr*0.85,fill:'#111'}));
-      const group=mk('g',{}); svg.append(group); const draw=pos=>{ group.innerHTML=''; for(const [id,[x,y]] of Object.entries(pos)) group.append(mk('circle',{cx:x,cy:y,r:BALL_R,fill:id==='c'?'#F7F3E8':'#C0392B',stroke:'rgba(0,0,0,.35)','stroke-width':0.004})); };
-      const rp=this.replay; if(rp){ const step=()=>{ if(!svg.isConnected||this.replay!==rp) return; const i=Math.min(rp.frames.length-1,Math.floor((performance.now()-rp.t0)/1000*30)); draw(rp.frames[i]); if(i<rp.frames.length-1) requestAnimationFrame(step); else { this.replay=null; renderCard(true); } }; draw(rp.frames[0]); requestAnimationFrame(step); }
-      else draw(Object.fromEntries(v.balls.map(b=>[b.id,[b.x,b.y]])));
-      const cue=v.balls.find(b=>b.id==='c');
-      if(my&&!rp&&cue){ const dx=Math.cos(this.aim), dy=Math.sin(this.aim); svg.append(mk('line',{x1:cue.x,y1:cue.y,x2:cue.x+dx*0.8,y2:cue.y+dy*0.8,stroke:'rgba(255,255,255,.7)','stroke-width':0.005,'stroke-dasharray':'0.02 0.015'}));
-        const zone=mk('rect',{x:-0.09,y:-0.09,width:TABLE_W+0.18,height:TABLE_H+0.18,fill:'transparent',style:'cursor:crosshair'}); zone.addEventListener('click',ev=>{ const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY; const q=pt.matrixTransform(svg.getScreenCTM().inverse()); this.aim=Math.atan2(q.y-cue.y,q.x-cue.x); renderCard(true); }); svg.append(zone); }
-      w.append(svg, el('div',{class:'mstat'}, el('span',{text:`First to ${v.race} reds`}), el('b',{text:`You ${v.score[t.seat]??0} · Them ${v.score[1-(t.seat<0?0:t.seat)]??0}`})));
+    snooker(t,v){ const w=el('div',{class:'ghstage snk'}), my=t.canMove, rp=this.replay;
+      w.append(SnookerUI.view({ balls:v.balls, replay:rp, canShoot:my&&!rp&&!this.busy, onShoot:(angle,power,spin)=>this.move({shot:true,angle,power,spin}), onReplayEnd:()=>{ this.replay=null; renderCard(true); } }));
+      w.append(el('div',{class:'mstat'}, el('span',{text:`First to ${v.race} reds`}), el('b',{text:`You ${v.score[t.seat]??0} · Them ${v.score[1-(t.seat<0?0:t.seat)]??0}`})));
       if(v.last&&!rp) w.append(el('p',{class:'hint',style:'text-align:center',text:`${v.last.seat===t.seat?'You':'They'} ${v.last.foul?'fouled':v.last.potted.filter(x=>x!=='c').length?`potted ${v.last.potted.filter(x=>x!=='c').length}`:'missed'}.`}));
-      if(my&&!rp){ const nudge=(lab,d)=>el('button',{class:'pill',text:lab,onclick:()=>{ this.aim+=d*Math.PI/180; renderCard(true); }}); const pw=el('input',{type:'range',min:'5',max:'100',value:String(Math.round(this.power*100)),'aria-label':'Power'}); pw.oninput=()=>{ this.power=pw.value/100; };
-        w.append(el('div',{class:'aimrow'}, nudge('◀◀',-2), nudge('◀',-0.3), nudge('▶',0.3), nudge('▶▶',2)), el('div',{class:'pwr'}, el('span',{text:'Power'}), pw), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎱 Shoot',disabled:this.busy,onclick:()=>this.move({shot:true,angle:this.aim,power:this.power})}))); }
+      if(my&&!rp) w.append(el('p',{class:'hint',style:'text-align:center',text:'Your shot: drag on the table to aim, then drag the cue down on the left and let go.'}));
       else if(!rp&&v.turn!=null) w.append(el('p',{class:'hint',style:'text-align:center',text:'Their shot…'}));
       return w; },
     poker(t,v){ const w=el('div',{class:'ghstage'}), card=c=>{ const red=/[♥♦]$/.test(c); return el('span',{class:'pcard'+(red?' red':''),text:c.replace('T','10')}); }, back=()=>el('span',{class:'pcard back',text:'🂠'});

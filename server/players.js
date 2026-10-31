@@ -224,7 +224,7 @@ export function playersRouter({ limit, send, admin, world }) {
       case 'scratch': return gh.scratch(p.id, bid, b.price);
       case 'penalty': return gh.penalty(p.id, bid, { action: String(b.action || ''), bet: b.bet, spot: String(b.spot || '') });
       case 'darts': return gh.darts(p.id, bid, { action: String(b.action || ''), bet: b.bet, x: b.x, y: b.y });
-      case 'snooker': return gh.snooker(p.id, bid, { action: String(b.action || ''), angle: b.angle, power: b.power });
+      case 'snooker': return gh.snooker(p.id, bid, { action: String(b.action || ''), angle: b.angle, power: b.power, spin: b.spin });
       default: throw new HttpError(404, 'No such game.');
     } })));
   // Tables where colonists play each other (Whot, Ludo, Ayo, Snooker at a Game House; Hold'em at a Casino).

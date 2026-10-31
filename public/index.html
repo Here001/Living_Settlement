@@ -3575,11 +3575,40 @@ const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, s
       const names=i=>i===t.seat?'You':(t.players[i]?.bot?'🤖 ':'')+'@'+(t.players[i]?.handle||'?');
       if(v.log.length) w.append(el('p',{class:'hint',style:'text-align:center',text:v.log.slice(-3).map(([s,a,c,k])=>`${names(s)} ${a==='drew'?'drew':`played ${c?c.replace('whot:20','Whot').replace(/(\w+):(\d+)/,(m,a2,b2)=>`${WHOT_SHAPES[a2]||''}${b2}`):''}${k?` (called ${k})`:''}`}`).join(' · ')}));
       return w; },
-    ayo(t,v){ const w=el('div',{class:'ghstage'}), me=t.seat<0?0:t.seat, my=t.canMove, board=el('div',{class:'ayo'});
-      const mineIdx=me===0?[0,1,2,3,4,5]:[6,7,8,9,10,11], theirs=me===0?[11,10,9,8,7,6]:[5,4,3,2,1,0];
-      const pit=i=>el('button',{class:'pit'+(my&&v.turn===me&&mineIdx.includes(i)&&v.pits[i]>0?' go':'')+(v.last===i?' last':''),'aria-label':`Pit with ${v.pits[i]} seeds`,text:String(v.pits[i]),disabled:!(my&&mineIdx.includes(i)&&v.pits[i]>0),onclick:()=>this.move({pit:i})});
-      board.append(el('div',{class:'store'}, String(v.store[1-me]), el('small',{text:'theirs'}))); theirs.forEach(i=>board.append(pit(i))); board.append(el('div',{class:'store'}, String(v.store[me]), el('small',{text:'yours'})));
-      mineIdx.forEach(i=>board.append(pit(i))); w.append(board, el('p',{class:'hint',style:'text-align:center',text:my?'Your turn: tap one of your pits (bottom row) to sow.':v.turn==null?'':'Their turn…'})); return w; },
+    ayo(t,v){ const w=el('div',{class:'ghstage'}), me=t.seat<0?0:t.seat, my=t.canMove, mk=GH.mk.bind(GH);
+      // A vertical wooden board: your pits down the left (sowing runs anticlockwise: down your side, up theirs),
+      // your store at the bottom and theirs at the top. Each pit shows its pebbles, with the count beside it.
+      const W=300, H=640, svg=GH.svg(`0 0 ${W} ${H}`); svg.style.maxHeight='66vh'; svg.style.width='auto'; svg.style.maxWidth='100%';
+      const defs=mk('defs',{}); defs.innerHTML=`<linearGradient id="ayoWood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EBD3A2"/><stop offset=".55" stop-color="#DDBE84"/><stop offset="1" stop-color="#C9A267"/></linearGradient>
+        <radialGradient id="ayoPit" cx=".5" cy=".62" r=".62"><stop offset="0" stop-color="#E9D2A3"/><stop offset=".7" stop-color="#C9A56C"/><stop offset="1" stop-color="#9C7744"/></radialGradient>
+        <radialGradient id="pebBlue" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#C9D8FF"/><stop offset=".45" stop-color="#7F9FE6"/><stop offset="1" stop-color="#3F5FA8"/></radialGradient>
+        <radialGradient id="pebDark" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#8A8F99"/><stop offset=".45" stop-color="#4A4F59"/><stop offset="1" stop-color="#1E2128"/></radialGradient>
+        <radialGradient id="pebWhite" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".5" stop-color="#E4E4E4"/><stop offset="1" stop-color="#A9A9A9"/></radialGradient>
+        <filter id="pebShadow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="1.5" stdDeviation="1.2" flood-color="#3B2A12" flood-opacity=".45"/></filter>`; svg.append(defs);
+      svg.append(mk('rect',{x:58,y:10,width:184,height:H-20,rx:30,fill:'url(#ayoWood)',stroke:'#B08A55','stroke-width':2}));
+      for(let k=0;k<9;k++){ const x=70+k*20; svg.append(mk('path',{d:`M${x} 16 C ${x+12} ${H*0.3}, ${x-10} ${H*0.6}, ${x+6} ${H-16}`,stroke:'rgba(140,100,50,.13)','stroke-width':1.4,fill:'none'})); } // the grain
+      const seeded=(a)=>{ let h=2166136261^a; return ()=>{ h=Math.imul(h^(h>>>15),2246822507); h=Math.imul(h^(h>>>13),3266489909); return ((h^=h>>>16)>>>0)/4294967296; }; };
+      const COLS=['url(#pebBlue)','url(#pebDark)','url(#pebBlue)','url(#pebDark)','url(#pebWhite)'];
+      const pebbles=(g,cx,cy,rx,ry,n,key)=>{ const r=seeded(key*977+13), shown=Math.min(n,rx>40?28:14);
+        for(let k=0;k<shown;k++){ const a=r()*Math.PI*2, d=Math.sqrt(r())*0.78, x=cx+Math.cos(a)*rx*d, y=cy+Math.sin(a)*ry*d, rot=r()*180;
+          g.append(mk('ellipse',{cx:x,cy:y,rx:7.2,ry:6,transform:`rotate(${rot} ${x} ${y})`,fill:COLS[Math.floor(r()*COLS.length)],filter:'url(#pebShadow)'})); } };
+      const mine=me===0?[0,1,2,3,4,5]:[6,7,8,9,10,11], theirs=(me===0?[6,7,8,9,10,11]:[0,1,2,3,4,5]).slice().reverse();
+      const stores=[{y:22,h:76,count:v.store[1-me],label:'theirs'},{y:H-98,h:76,count:v.store[me],label:'yours'}];
+      for(const st of stores){ svg.append(mk('rect',{x:84,y:st.y,width:132,height:st.h,rx:40,fill:'url(#ayoPit)',stroke:'rgba(120,85,40,.35)'})); const g=mk('g',{}); pebbles(g,150,st.y+st.h/2,52,22,st.count,st.label==='yours'?101:202); svg.append(g);
+        svg.append(mk('text',{x:st.label==='yours'?40:260,y:st.y+st.h/2+7,'text-anchor':'middle','font-size':20,'font-weight':800,fill:'currentColor'},String(st.count)),
+          mk('text',{x:st.label==='yours'?40:260,y:st.y+st.h/2+24,'text-anchor':'middle','font-size':9,'font-weight':600,fill:'currentColor',opacity:.7},st.label)); }
+      const y0=22+76+14+34, dy=((H-98-14-34)-y0)/5;
+      const pit=(i,x,y,side)=>{ const n=v.pits[i], go=my&&side==='mine'&&n>0;
+        svg.append(mk('circle',{cx:x,cy:y,r:34,fill:'url(#ayoPit)',stroke:go?'#F2C94C':v.last===i?'rgba(217,113,74,.8)':'rgba(120,85,40,.35)','stroke-width':go?4:v.last===i?3:1.5}));
+        const g=mk('g',{}); pebbles(g,x,y,24,24,n,i+1); svg.append(g);
+        svg.append(mk('text',{x:side==='mine'?40:260,y:y+7,'text-anchor':'middle','font-size':18,'font-weight':800,fill:'currentColor'},String(n)));
+        if(go){ const hit=mk('circle',{cx:x,cy:y,r:36,fill:'transparent',style:'cursor:pointer'}); hit.addEventListener('click',()=>this.move({pit:i})); svg.append(hit); } };
+      mine.forEach((i,k)=>pit(i,104,y0+k*dy,'mine')); theirs.forEach((i,k)=>pit(i,196,y0+k*dy,'theirs'));
+      const names=i=>i===t.seat?'You':(t.players[i]?.bot?'🤖 ':'')+'@'+(t.players[i]?.handle||'?');
+      w.append(svg, el('p',{class:'hint',style:'text-align:center',text:my?'Your turn: tap one of your pits (the left side, glowing) to sow.':v.turn==null?'':'Their turn…'}));
+      const lg=v.log.slice(-2).map(([s,a,pt,got])=>a==='sowed'?`${names(s)} sowed${got?` and captured ${got}`:''}`:a==='side empty'?`${names(s)} ran out: the rest went to the other side`:a==='forfeited'?`${names(s)} forfeited`:'').filter(Boolean);
+      if(lg.length) w.append(el('p',{class:'hint',style:'text-align:center',text:lg.join(' · ')}));
+      return w; },
     ludo(t,v){ const w=el('div',{class:'ghstage'}), N=15, sz=20, svg=GH.svg(`0 0 ${N*sz} ${N*sz}`), mk=GH.mk.bind(GH), my=t.canMove;
       const COL={0:'#D6483C',13:'#3FA65A',26:'#E8B92F',39:'#3E7CC9'};
       const PATH=[[1,6],[2,6],[3,6],[4,6],[5,6],[6,5],[6,4],[6,3],[6,2],[6,1],[6,0],[7,0],[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[9,6],[10,6],[11,6],[12,6],[13,6],[14,6],[14,7],[14,8],[13,8],[12,8],[11,8],[10,8],[9,8],[8,9],[8,10],[8,11],[8,12],[8,13],[8,14],[7,14],[6,14],[6,13],[6,12],[6,11],[6,10],[6,9],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8],[0,7],[0,6]];

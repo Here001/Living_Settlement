@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#5E7F45">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-180.png">
@@ -52,8 +52,9 @@ html{background-color:var(--edge-bot,#5E7F45)} body{background:transparent} /* S
 #edgeTop{top:0;height:2px;background:var(--edge-top,#5E7F45)}
 #edgeBot{bottom:0;height:6px;background:var(--edge-bot,#5E7F45)}
 #world{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100lvh;display:block;touch-action:none} /* the whole screen, behind the browser's bars too */
-/* iPhone Home Screen app: the manifest asks for "standalone", not "fullscreen". iOS has no fullscreen mode, and asking for
-   it makes Safari lay the app out one status bar short, leaving an empty strip along the bottom. */
+/* iPhone Home Screen app: the manifest asks for "standalone" (iOS has no fullscreen), and the status bar is a solid black
+   band ("black", not "black-translucent"): with a see-through status bar iOS lays the app out one status bar short and
+   leaves an empty strip along the bottom. Now the app starts below the status bar and reaches the bottom edge. */
 /* Taps belong to the game: no page zoom on double tap, no text selection, magnifier or copy menu on long press */
 html,body{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}

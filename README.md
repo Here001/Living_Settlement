@@ -246,7 +246,9 @@ Whot, Ludo, Ayo, Snooker, 8-ball and 9-ball pool (at a Game House) and Texas Hol
 
 ## Your own card: Work · Crime · Go here
 
-A signed-in colonist with a home sees these on their own card. They see one at a time.
+A signed-in colonist with a home sees these on their own card. The tab buttons (Earn, Work, Home, Wallet, Cars, Crime, Stars) work like switches: they're all closed when the card opens, a tap opens one, and tapping it again closes it.
+
+On a phone only one thing is open at a time: tapping a bottom button (Town Square, Colonists, Races, Chats) closes an open card, and opening a card closes the open panel, so the card never gets pushed up the screen.
 
 Every colonist's card has a full-screen button beside Share and ×, like Town Square, chat and the Casino. It stays full screen as you switch tabs, and closing the card puts it back to normal size.
 
@@ -415,7 +417,8 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
 - **Limits.** Messages are up to 500 characters, with a short pause between sends. The last 500 messages of each chat are kept.
 - **Opening their card.** Tap the name or picture at the top of a chat to open that colonist's card.
 - **Replies.** Tap any message, then **↩ Reply**. A bar above the box shows what you're answering, and the reply carries a short quote of it; tap the quote to jump back to the original.
-- **Message requests.** A first message from someone you've never written to lands under **Requests** (beside **Chats**, with a count), not in your chats. **Accept** or reply to move it over; **Delete** clears it; **Block** is there too.
+- **Message requests.** A chat someone else starts with you lands under **Requests** (beside **Chats**, with a count), not in your chats. You can reply without accepting it; it stays a request until you tap **Accept**. **Delete** clears it; **Block** is there too.
+- **@ suggestions.** Type @ in any text box (a gift, a pickpocket target, group or crew invites, searches, messages) and the people you chat with pop up, most messages first: chats you started and requests you accepted (`GET /api/dm-contacts`). Tap one (or press Enter) to fill in their @username.
 - **The far-away fee.** Messaging a colonist whose home is within 40 tiles of yours (your area) is free. Anyone further away, or without a home, costs **2 coins a message** from your cash, paid to the treasury. The chat shows which applies above the message box. In a group, a message is free only if every other member lives near you.
 - **Pin and delete.** **⋯ → 📌 Pin chat** keeps a chat at the top. **⋯ → 🗑 Delete chat** clears it for you only (tap twice to confirm); the other person keeps theirs, and a new message brings it back starting fresh.
 - **Group chats.** **➕ New group** on the Chats tab: give it a name and pick colonists from your chats or who's online, or type @handles (up to 30 people). Each invitee gets a message from the colony (for example "🪐 Gliese-12b: @zara invited you to join the group chat “Night owls”. Do you want to join?"), live and as a phone notification, and it waits at the top of their Chats tab with **Join** and **Decline**. Members see who joins and leaves, can invite more people, pin, clear the chat for themselves, or **Leave group**. Tap a sender's name to open their card.

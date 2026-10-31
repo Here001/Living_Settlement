@@ -59,10 +59,11 @@ export class Chat {
     const other = r => (r.sender_id === me ? r.recipient_id : r.sender_id), st = await this.states(me);
     const people = new Map((await pool.query('select id, handle, display_name, gender, last_seen from citizens where id = any($1)', [rows.map(other)])).rows.map(r => [r.id, person(r)]));
     const unread = new Map((await pool.query('select sender_id, count(*) n from dms where recipient_id = $1 and not read and sender_id not in (select blocked_id from blocks where blocker_id = $1) group by sender_id', [me])).rows.map(r => [r.sender_id, Number(r.n)]));
-    const wrote = new Set((await pool.query('select distinct pair from dms where sender_id = $1', [me])).rows.map(r => r.pair));
+    // who started each chat: a chat someone else started stays a request until you accept it (replying doesn't accept it)
+    const starter = new Map((await pool.query('select distinct on (pair) pair, sender_id from dms where pair = any($1) order by pair, t asc', [rows.map(r => r.pair)])).rows.map(r => [r.pair, r.sender_id]));
     return rows.map(r => { const o = other(r), s = st.get('dm:' + o) || {};
       return { with: people.get(o), last: { text: r.text, t: Number(r.t), mine: r.sender_id === me }, unread: unread.get(o) || 0, pinned: !!s.pinned,
-        request: !wrote.has(r.pair) && !s.accepted, cleared: Number(r.t) <= Number(s.cleared_at || 0) }; })
+        request: starter.get(r.pair) !== me && !s.accepted, cleared: Number(r.t) <= Number(s.cleared_at || 0) }; })
       .filter(c => c.with && !c.cleared).sort((a, b) => (b.pinned - a.pinned) || (b.last.t - a.last.t));
   }
   // ---- The fee for messaging someone who doesn't live nearby ----
@@ -89,9 +90,16 @@ export class Chat {
     const o = await this.other(handle), pair = pairOf(me, o.id), s = (await this.states(me)).get('dm:' + o.id) || {};
     const msgs = (await pool.query('select id, sender_id, text, t, reply_to, reply_text, reply_from from dms where pair = $1 and t > $2 order by t desc limit 100', [pair, Number(s.cleared_at || 0)])).rows.reverse();
     await pool.query('update dms set read = true where pair = $1 and recipient_id = $2 and not read', [pair, me]);
-    const b = await this.blockState(me, o.id), wrote = Number((await pool.query('select count(*) n from dms where pair = $1 and sender_id = $2', [pair, me])).rows[0].n) > 0;
+    const b = await this.blockState(me, o.id), first = (await pool.query('select sender_id from dms where pair = $1 order by t asc limit 1', [pair])).rows[0];
     return { with: { ...person(o), verified: o.verified }, iBlocked: b.iBlocked, canSend: !b.iBlocked && !b.blockedMe && o.verified && o.id !== me,
-      request: !wrote && !s.accepted && msgs.length > 0, pinned: !!s.pinned, cost: await this.feeFor(me, [o.id]), messages: msgs.map(m => msgOut(m, me)) };
+      request: !!first && first.sender_id !== me && !s.accepted, pinned: !!s.pinned, cost: await this.feeFor(me, [o.id]), messages: msgs.map(m => msgOut(m, me)) };
+  }
+  // People you chat with (chats you started, or requests you accepted), most messages first: for @ suggestions.
+  async contacts(me) {
+    const rows = (await pool.query(`select pair, count(*) n, min(t) first_t from dms where sender_id = $1 or recipient_id = $1 group by pair order by count(*) desc limit 60`, [me])).rows; if (!rows.length) return [];
+    const st = await this.states(me), starter = new Map((await pool.query('select distinct on (pair) pair, sender_id from dms where pair = any($1) order by pair, t asc', [rows.map(r => r.pair)])).rows.map(r => [r.pair, r.sender_id]));
+    const others = rows.map(r => r.pair.split(':').find(x => x !== me)), people = new Map((await pool.query('select id, handle, display_name, gender, last_seen from citizens where id = any($1) and id not in (select blocked_id from blocks where blocker_id = $2)', [others, me])).rows.map(r => [r.id, person(r)]));
+    return rows.map((r, i) => ({ ...people.get(others[i]), count: Number(r.n), ok: starter.get(r.pair) === me || !!st.get('dm:' + others[i])?.accepted })).filter(x => x.h && x.ok).map(({ ok, seen, ...x }) => x);
   }
   async accept(me, handle) { const o = await this.other(handle); await this.setState(me, 'dm:' + o.id, { accepted: true }); return { ok: true }; }
   async pin(me, key, on) { await this.setState(me, key, { pinned: !!on }); return { ok: true, pinned: !!on }; }

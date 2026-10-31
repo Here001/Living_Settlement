@@ -786,7 +786,10 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await call('GET', '/api/dm', undefined, PB)).json[0].unread === 0, 'and marks it read');
     await sleep(800); await call('POST', '/api/dm/zara_ng', { text: 'Hi Zara!' }, PB); await sleep(400);
     ok(wa.msgs.some(m => m.type === 'dm' && m.data.text === 'Hi Zara!'), 'replies arrive live too');
-    ok((await call('GET', '/api/dm', undefined, PB)).json[0].request === false, 'replying accepts the request');
+    ok((await call('GET', '/api/dm', undefined, PB)).json[0].request === true && (await call('GET', '/api/dm/zara_ng', undefined, PB)).json.request === true, 'replying to a request doesn’t accept it');
+    ok(!(await call('GET', '/api/dm-contacts', undefined, PB)).json.some(x => x.h === 'zara_ng') && (await call('GET', '/api/dm-contacts', undefined, P)).json[0]?.h === 'jobfill_a', '@ suggestions list people you chat with (not unaccepted requests)');
+    ok((await call('POST', '/api/dm/zara_ng/accept', {}, PB)).status === 200 && (await call('GET', '/api/dm', undefined, PB)).json[0].request === false, 'accepting moves it to your chats');
+    ok((await call('GET', '/api/dm-contacts', undefined, PB)).json.some(x => x.h === 'zara_ng' && x.count >= 2), 'and then they show up in your @ suggestions');
     // replies, the far-away fee, pin and delete
     { const zid = (await whoDev('zara_ng')).id, zh = (await pool.query('select home_id from citizens where id = $1', [zid])).rows[0].home_id;
       const old = (await pool.query('select home_id from citizens where id = $1', [bid])).rows[0].home_id;

@@ -52,6 +52,10 @@ html{background-color:var(--edge-bot,#5E7F45)} body{background:transparent} /* S
 #edgeTop{top:0;height:2px;background:var(--edge-top,#5E7F45)}
 #edgeBot{bottom:0;height:6px;background:var(--edge-bot,#5E7F45)}
 #world{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100lvh;display:block;touch-action:none} /* the whole screen, behind the browser's bars too */
+/* Saved to the Home Screen on iPhone, the page is sometimes laid out shorter than the screen (by the height of the status
+   bar), leaving a strip at the bottom. Then the whole page is stretched to the real screen height (see fitHomeScreen). */
+html.sa-fix body{position:fixed;top:0;left:0;right:0;height:calc(100% + var(--sa-gap,0px));transform:translateZ(0);overflow:hidden}
+html.sa-fix #world{height:100%}
 /* Taps belong to the game: no page zoom on double tap, no text selection, magnifier or copy menu on long press */
 html,body{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
@@ -482,6 +486,8 @@ body.pane-max .composer textarea{height:70px}
 .srow{display:inline-flex;gap:1px;align-items:center}.sstrip{display:flex;align-items:center;gap:6px;margin:4px 0 2px;flex-wrap:wrap}.sstrip.tap{cursor:pointer}.scount{font-size:12px;font-weight:700;opacity:.8}
 .sbig{display:flex;justify-content:center;margin:6px 0 10px}.sbig .srow{gap:2px;flex-wrap:wrap;justify-content:center}
 .sladder{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:8px}.sstep{display:flex;flex-direction:column;align-items:center;gap:1px;padding:5px 2px;border-radius:10px;background:var(--glass-2,rgba(0,0,0,.04));font-size:12px;font-weight:700}.sstep small{font-size:10px;font-weight:500;opacity:.6}.sstep.got{background:rgba(242,201,76,.15)}
+.atsug{position:fixed;z-index:60;max-height:300px;overflow-y:auto;border-radius:14px;padding:4px;background:var(--panel,#FBF8F1);color:var(--ink);box-shadow:0 10px 28px rgba(0,0,0,.28);border:1px solid var(--glass-line,rgba(0,0,0,.12))}
+.atopt{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:6px 8px;border-radius:10px;text-align:left;font:inherit;color:inherit;cursor:pointer}.atopt:hover,.atopt:first-child{background:rgba(217,113,74,.1)}.att{display:flex;flex-direction:column;min-width:0}.att small{font-size:11px;opacity:.65}
 .ludosvg{max-width:400px;filter:drop-shadow(0 8px 16px rgba(0,0,0,.3))}
 .ltok.go{animation:ltokb .9s ease-in-out infinite}.ltok.hop{animation:ltokh .17s ease-out}
 @keyframes ltokb{0%,100%{translate:0 0}50%{translate:0 -3px}} @keyframes ltokh{0%{translate:0 0}50%{translate:0 -5px}100%{translate:0 0}}
@@ -1217,6 +1223,13 @@ function edgeColours(){ if(document.hidden||!cv.width) return;
     const top=row(Math.min(h-1,2)), bot=row(Math.max(0,h-3)), key=top+bot; if(key===edgeLast) return; edgeLast=key;
     const st=document.documentElement.style; st.setProperty('--edge-top',top); st.setProperty('--edge-bot',bot); if(edgeMeta) edgeMeta.setAttribute('content',top); }catch(e){} }
 setInterval(edgeColours, 5000); setTimeout(edgeColours, 1500);
+// On an iPhone Home Screen app: if the page is laid out shorter than the screen, stretch it (body becomes the frame
+// that fixed things are placed in, so the bottom bar sits at the real bottom). Measured with no keyboard open.
+function fitHomeScreen(){ const ios=/iPhone|iPad|iPod/.test(navigator.userAgent), sa=navigator.standalone||matchMedia('(display-mode: standalone)').matches; if(!ios||!sa) return;
+  const a=document.activeElement; if(a&&/INPUT|TEXTAREA/.test(a.tagName)) return; // the keyboard shrinks the window: don't measure then
+  const portrait=innerHeight>=innerWidth, full=portrait?Math.max(screen.height,screen.width):Math.min(screen.height,screen.width), gap=Math.round(full-innerHeight);
+  const root=document.documentElement; if(gap>0&&gap<=80){ root.style.setProperty('--sa-gap',gap+'px'); root.classList.add('sa-fix'); } else { root.classList.remove('sa-fix'); root.style.removeProperty('--sa-gap'); } }
+fitHomeScreen(); addEventListener('orientationchange',()=>setTimeout(()=>{ fitHomeScreen(); resize(); },400));
 addEventListener('resize', resize); if(window.visualViewport) visualViewport.addEventListener('resize', resize); resize();
 function screenToWorld(sx,sy){ return { x:(sx-cw/2)/cam.z+cam.x, y:(sy-ch/2)/cam.z+cam.y }; }
 function worldToTileF(wx,wy){ const a=(wx/HW + wy/HH)/2, b=(wy/HH - wx/HW)/2; if(!VIEW||RAW) return { x:a, y:b }; const w=fromView(a,b); return { x:w[0], y:w[1] }; }
@@ -2748,7 +2761,7 @@ let activeTab=null, feedMode='posts';
 function syncMyCardBtn(){ const b=document.querySelector('#toolsRow .tb[data-me]'); if(b) b.setAttribute('aria-pressed',String(myCardOpen())); }
 function myHandle(){ if(Store.canWrite) return S.meta&&S.meta.founder; let h=(Me&&Me.handle)||null; if(!h){ try{ const v=localStorage.getItem('settlement-me'); h=v&&v.startsWith('"')?JSON.parse(v):v; }catch(e){} } return h; }
 function myCardOpen(){ const h=myHandle(); if(!h||!sel||sel.kind!=='c') return false; const c=S.citizens.get(sel.id); return !!c&&c.handle===h; }
-function openMyCard(){ if(myCardOpen()){ closeCard&&closeCard(); buildToolbar(); return; } if(innerWidth<900) openTab(null); findMe(); setTimeout(buildToolbar,60); }
+function openMyCard(){ if(myCardOpen()){ closeCard&&closeCard(); buildToolbar(); return; } actTab=null; if(innerWidth<900) openTab(null); findMe(); setTimeout(buildToolbar,60); }
 const PLAYER_TABS=new Set(['feed','people','races','top','chats']); // everyone's tabs; the rest are the developer's build menus
 // Find me is for signing in: once you're signed in (you have a password), My card does the same job, so it goes.
 function syncFindChip(){ const b=$('findBtn'); if(b&&b.parentElement) b.parentElement.style.display=(Me&&Me.token&&Me.handle)?'none':''; }
@@ -2757,7 +2770,9 @@ function buildToolbar(){ const row=$('toolsRow'); row.innerHTML=''; syncFindChip
   const all = Store.canWrite ? tabs.concat([{id:'reports',name:'Reports'},{id:'stats',name:'Stats'},{sep:true}],CATS) : tabs;
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
     const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(c.id==='me'?myCardOpen():activeTab===c.id),onclick:()=>c.id==='me'?openMyCard():openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='me') btn.dataset.me='1'; if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); if(c.id==='reports'&&typeof Reports!=='undefined'&&Reports.open) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Reports.open))})); row.append(btn); } }
-function openTab(name){ if(!name) document.body.classList.remove('pane-max'); activeTab=name; if((PLAYER_TABS.has(name)||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
+function openTab(name){ if(!name) document.body.classList.remove('pane-max');
+  if(name && PLAYER_TABS.has(name) && innerWidth<900 && !$('card').hidden) closeCard(); /* on a phone a bottom button replaces the open card */
+  activeTab=name; if((PLAYER_TABS.has(name)||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
 function applyPermissions(){ buildToolbar(); refreshHUD(); refreshUndo(); refreshDraftBar(); if(Store.canWrite && !draftLoaded){ draftLoaded=true; loadDraft(); if(typeof Reports!=='undefined') Reports.load(); } $('spawnBoxNote')&&0; if(!Store.canWrite && activeTab && !PLAYER_TABS.has(activeTab)) openTab(null); }
 
 const subTab={}; let brushSize=2;
@@ -3100,6 +3115,28 @@ var Badges={ data:null, at:0, loading:false,
           el('div',{class:'bmeta',text:(b.t?`Earned ${ago(b.t)} · `:'')+(b.pct?`${b.pct}% of colonists have it`:'Nobody has it yet')})))); } }
     const G=GuideUI.data; if(G&&G.hidden&&!G.finished) box.append(el('button',{class:'linkb',text:'🧭 Show the getting-started guide again',onclick:()=>GuideUI.unhide()}));
     return box; } };
+// ---- @ suggestions: type @ in any box and the people you chat with come up (most messages first) ----
+const AtSuggest={ list:null, at:0, box:null, input:null, token:null,
+  async load(){ if(!(Me&&Me.token)) return []; if(this.list&&Date.now()-this.at<60000) return this.list; try{ this.list=await api('/api/dm-contacts'); this.at=Date.now(); }catch(e){ this.list=this.list||[]; } return this.list; },
+  // the "@word" the caret is in, if any
+  tokenAt(inp){ const v=inp.value, end=inp.selectionStart??v.length, m=/(^|[\s,])@([\w.]{0,30})$/.exec(v.slice(0,end)); return m?{ start:end-m[2].length-1, end, q:m[2].toLowerCase() }:null; },
+  hide(){ this.box?.remove(); this.box=null; this.input=null; this.token=null; },
+  pick(h){ const inp=this.input, t=this.token; if(!inp||!t) return; const v=inp.value, ins='@'+h+' '; inp.value=v.slice(0,t.start)+ins+v.slice(t.end); const pos=t.start+ins.length;
+    try{ inp.setSelectionRange(pos,pos); }catch(e){} inp.dispatchEvent(new Event('input',{bubbles:true})); this.hide(); inp.focus(); },
+  async show(inp){ const t=this.tokenAt(inp); if(!t){ this.hide(); return; } const L=(await this.load()).filter(p=>!t.q||p.h.toLowerCase().startsWith(t.q)||(p.n||'').toLowerCase().split(' ').some(w=>w.startsWith(t.q))).slice(0,8);
+    if(document.activeElement!==inp||!this.tokenAt(inp)){ this.hide(); return; } if(!L.length){ this.hide(); return; }
+    this.input=inp; this.token=t; this.box?.remove(); const r=inp.getBoundingClientRect(), below=r.bottom+6, room=innerHeight-below;
+    const box=el('div',{class:'atsug',role:'listbox'}); box.style.left=Math.max(8,Math.min(r.left,innerWidth-268))+'px'; box.style.width=Math.min(260,innerWidth-16)+'px';
+    if(room>220) box.style.top=below+'px'; else box.style.bottom=(innerHeight-r.top+6)+'px';
+    for(const p of L){ const av=el('span',{class:'ava sm'+(p.online?' on':'')}); av.innerHTML=avatarSVG({handle:p.h,id:p.id,gender:p.g});
+      const b=el('button',{class:'atopt',role:'option'}, av, el('span',{class:'att'}, el('b',{text:p.n||'@'+p.h}), el('small',{text:`${p.n?'@'+p.h+' · ':''}${p.count} message${p.count===1?'':'s'}`})));
+      b.addEventListener('pointerdown',e=>{ e.preventDefault(); this.pick(p.h); }); box.append(b); }
+    document.body.append(box); this.box=box; } };
+// Every text box (but not passwords) gets the suggestions.
+document.addEventListener('input',e=>{ const t=e.target; if(!(t instanceof HTMLInputElement||t instanceof HTMLTextAreaElement)) return; if(t.type==='password'||t.type==='number'||t.closest('.atsug')) return;
+  if(!(Me&&Me.token)) return; if(t.value.includes('@')) AtSuggest.show(t); else AtSuggest.hide(); },true);
+document.addEventListener('focusout',e=>{ if(e.target===AtSuggest.input) setTimeout(()=>{ if(document.activeElement!==AtSuggest.input) AtSuggest.hide(); },150); },true);
+document.addEventListener('keydown',e=>{ if(!AtSuggest.box) return; if(e.key==='Escape') AtSuggest.hide(); else if(e.key==='Enter'||e.key==='Tab'){ const f=AtSuggest.box.querySelector('.atopt'); if(f){ e.preventDefault(); e.stopPropagation(); f.dispatchEvent(new Event('pointerdown')); } } },true);
 // ---- Stars: 1 to 12, for how much a colonist actually plays (their own actions, and the days they play) ----
 const STAR_GRAD=[['#E3A77A','#8A5230'],['#E9B486','#93603A'],['#F0C092','#A06C42'],['#EEF2F6','#8C97A4'],['#F4F7FA','#9AA6B3'],['#FFFFFF','#A9B5C2'],['#FFE58A','#D29A12'],['#FFDB66','#C7860A'],['#FFD140','#B87300'],['#BFF6FF','#2E9BD0'],['#D6C8FF','#6E4FDB'],['#FFB3EC','#B8299E']];
 const STAR_NAMES=['Bronze','Bronze','Bronze','Silver','Silver','Silver','Gold','Gold','Gold','Diamond','Amethyst','Supernova'];
@@ -3328,7 +3365,6 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
   incoming(m){ if(Blocks.has(m.from.h)) return; const mine=this.isMe(m.from.h), other=mine?m.to.h:m.from.h, msg={id:m.id,mine,text:m.text,t:m.t,reply:m.reply||null};
     if(this.with&&this.with.toLowerCase()===other.toLowerCase()&&this.thread&&activeTab==='chats'){ if(!this.thread.messages.some(x=>x.id===m.id)){ this.thread.messages.push(msg); this.addBubble(msg); } if(!mine) api('/api/dm/'+encodeURIComponent(other)+'/read',{method:'POST'}).catch(()=>{}); return; }
     let c=this.list.find(x=>x.with.h.toLowerCase()===other.toLowerCase()); if(!c){ c={ with:{h:other,n:mine?'':m.from.n,g:mine?'m':m.from.g,online:true}, last:null, unread:0, request:!mine }; this.list.unshift(c); }
-    if(mine) c.request=false;
     c.last={text:m.text,t:m.t,mine}; if(!mine){ c.unread++; c.with.online=true; this.count();
       if(c.request) toast(`📩 Message request from @${m.from.h}`,'View',()=>{ this.view='requests'; this.open(m.from.h); });
       else toast(`💬 @${m.from.h}: ${m.text.length>60?m.text.slice(0,60)+'…':m.text}`,'Reply',()=>this.open(m.from.h)); }
@@ -3347,8 +3383,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     const url=this.gid?'/api/chat/groups/'+encodeURIComponent(this.gid):'/api/dm/'+encodeURIComponent(this.with);
     try{ const r=await api(url,{method:'POST',body:{text,replyTo:this.reply?this.reply.id:undefined}}); this.draft=''; if(ta){ ta.value=''; ta.focus(); }
       if(this.reply){ this.reply=null; $('dmReply')?.remove(); }
-      if(r.fee){ if(myMoney) { myMoney={...myMoney,coins:Math.max(0,(myMoney.coins||0)-r.fee)}; refreshHUD(); } }
-      if(this.thread&&this.thread.request){ this.thread.request=false; $('dmReq')?.remove(); } }catch(e){ toast(e.message); } this.busy=false; },
+      if(r.fee){ if(myMoney) { myMoney={...myMoney,coins:Math.max(0,(myMoney.coins||0)-r.fee)}; refreshHUD(); } } }catch(e){ toast(e.message); } this.busy=false; },
   addBubble(m){ const body=$('dmBody'); if(!body) return; body.querySelector('.dmempty')?.remove(); const near=body.scrollHeight-body.scrollTop-body.clientHeight<60; body.append(this.bubble(m)); if(near||m.mine) body.scrollTop=body.scrollHeight; },
   replyTo(m){ this.reply={id:m.id,text:m.text,from:m.mine?Me.handle:(m.from?m.from.h:this.with)}; const bar=$('dmBar'); $('dmReply')?.remove();
     if(bar) bar.before(this.replyBar()); document.querySelectorAll('.dm.flagon').forEach(x=>x.classList.remove('flagon')); $('dmText')?.focus(); },
@@ -3397,7 +3432,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       if(!this.thread) body.append(el('p',{class:'hint',text:'Opening the chat…'}));
       else if(!this.thread.messages.length) body.append(el('p',{class:'hint dmempty',text:`Say hello to @${this.with}. Only the two of you can see this chat.`}));
       else for(const m of this.thread.messages) body.append(this.bubble(m));
-      const req=T&&T.request?el('div',{class:'dmreq',id:'dmReq'}, el('p',null,el('b',{text:'📩 Message request. '}),'Accept or reply to move it to your chats.'),
+      const req=T&&T.request?el('div',{class:'dmreq',id:'dmReq'}, el('p',null,el('b',{text:'📩 Message request. '}),'You can reply without accepting; accept to move it to your chats.'),
         el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Accept',onclick:()=>this.act(`/api/dm/${H}/accept`,{},()=>{ T.request=false; this.view='chats'; const c=this.list.find(x=>x.with.h.toLowerCase()===this.with.toLowerCase()); if(c) c.request=false; this.renderNow(); })}),
           el('button',{class:'btn danger',text:'Delete',onclick:()=>this.act(`/api/dm/${H}/delete`,{},()=>{ toast('Request deleted.'); this.back(); })}),
           el('button',{class:'btn',text:'🚫 Block',onclick:()=>Blocks.ask(this.with)}))):null;
@@ -3415,7 +3450,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       return el('button',{class:'person dmrow'+(c.unread?' unread':''),onclick:()=>this.open(c.with.h)}, av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:(c.pinned?'📌 ':'')+(c.with.n?`${c.with.n} · @${c.with.h}`:'@'+c.with.h)}), el('div',{class:'what',text:c.last?(c.last.mine?'You: ':'')+c.last.text:''})),
         c.unread?el('b',{class:'tbadge',text:String(c.unread)}):el('time',{class:'hint',text:c.last?ago(c.last.t):''})); };
     if(this.view==='requests'){
-      body.append(el('p',{class:'hint',text:'Messages from colonists you haven’t chatted with yet. They can’t tell whether you’ve read them. Accept or reply to move them to your chats.'}));
+      body.append(el('p',{class:'hint',text:'Chats other colonists started with you. You can reply to them here; accept one to move it to your chats.'}));
       if(!reqs.length) body.append(el('p',{class:'hint',text:'No message requests.'}));
       for(const c of reqs) body.append(row(c));
       p.append(body); if(Date.now()-this.loadedAt>8000) this.load(); return; }
@@ -4289,7 +4324,7 @@ function casinoPanel(c){ const box=el('div',{class:'authbox casino'}, el('div',{
   if(casino.last) box.append(resultLine(casino.last));
   return box; }
 // ---- Your own card: Work · Go out · Casino · Crime · Pet, one at a time ----
-let actTab='earn';
+let actTab=null; // the card's tabs start closed; each one opens and closes like a switch
 // Jump to one of your own card's tabs (e.g. "Play here" on the casino opens the games straight away).
 async function openMyTab(tab, panel){ if(!(Me&&Me.handle)) return; actTab=tab; await openCitizen(Me.handle); actTab=tab;
   if(tab==='casino'&&casino) casino.open=true; renderCard(true);
@@ -4299,8 +4334,8 @@ const BUYABLE=new Set(['housing','shops','offices','industry']); // what players
 function actionTabs(c){ const wrap=el('div',null); const gb=GuideUI.box(); if(gb) wrap.append(gb); const dr=Daily.row(); if(dr) wrap.append(dr);
   if(!PushUI.st&&!PushUI.busy) PushUI.load().then(()=>{ if(sel&&sel.kind==='c') renderCard(true); });
   wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}), el('button',{class:'btn sm',text:'⚙️ Settings',onclick:()=>PushUI.sheet()}))); const row=el('div',{class:'acttabs',role:'tablist'});
-  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['crime','Crime'],['badges','⭐ Stars']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=id; renderCard(true); }}));
-  if(actTab==='bank') actTab='wallet'; if(actTab==='pet'||actTab==='casino'||actTab==='out') actTab='earn'; const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>Stars.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
+  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['crime','Crime'],['badges','⭐ Stars']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=actTab===id?null:id; renderCard(true); }}));
+  if(actTab==='bank') actTab='wallet'; if(actTab==='pet'||actTab==='casino'||actTab==='out') actTab='earn'; if(!actTab){ wrap.append(row); return wrap; } const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>Stars.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
 // ---- Home (rent or move, and the buildings you own), Bank, Cars ----
 const Money={ id:null, at:0, homes:null, props:null, bank:null, busy:false };
@@ -4651,7 +4686,9 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(Store.canWrite) card.append(el('div',{class:'row-actions'}, b.done===false?el('button',{class:'btn primary',text:'Finish now',onclick:async()=>{ try{ await api(`/api/admin/buildings/${encodeURIComponent(b.id)}/finish`,{method:'POST'}); toast(`${b.name||t.name} is finished`); }catch(e){ toast(e.message); } }}):null,
       el('button',{class:'btn',text:'Move',onclick:()=>{ setTool({kind:'move',id:b.id,rot:b.rot||0}); }}), el('button',{class:'btn',text:'⟲ Turn',onclick:()=>rotateBuilding(b.id)}), el('button',{class:'btn',text:'One more',onclick:()=>{ setTool({kind:'place',type:b.type}); }}), el('button',{class:'btn danger',text:'Demolish',onclick:()=>removeBuilding(b.id)})));
   }
-  card.hidden=false; syncMyCardBtn();
+  const fresh=card.hidden; card.hidden=false; syncMyCardBtn();
+  // On a phone the card takes the place of an open panel (Town Square, Colonists…), rather than being pushed up above it.
+  if(fresh && innerWidth<900 && activeTab && PLAYER_TABS.has(activeTab)){ activeTab=null; document.body.classList.remove('pane-max'); buildToolbar(); renderPane(); }
 }
 async function removeCitizen(c){ try{ await api('/api/admin/citizens/'+encodeURIComponent(c.id),{method:'DELETE'}); closeCard(); toast(`Removed @${c.handle}`); }catch(e){ toast(e.message); } }
 let peopleQuery='', searchTimer=null, searchSeq=0;
@@ -4794,7 +4831,7 @@ var Mayor={ data:null, at:0, busy:false, pick:'jobs',
     else if(!D0.iRun){ // run for mayor
       const form=el('div',{class:'runbox'}, el('h4',{class:'bgroup',text:'Run for mayor'}), el('p',{class:'hint',text:`Costs ${fmt(D0.fee)} coins (cash). If you win you're mayor for a week, your pledge takes effect for everyone, and you earn ${fmt(D0.pay)} coins a game day.`}));
       const pills=el('div',{class:'polpick'}); for(const [id,pp] of Object.entries(P)) pills.append(el('button',{class:'pill'+(this.pick===id?' on':''),'aria-pressed':String(this.pick===id),onclick:()=>{ this.pick=id; feedDirty=true; renderFeed(true); }}, `${pp.icon} ${pp.name}`));
-      const ta=el('textarea',{maxlength:String(D0.pitchMax),placeholder:'Your pitch to the colony (optional)','aria-label':'Your pitch'});
+      const ta=el('textarea',{maxlength:String(D0.pitchMax),placeholder:'Your pitch to the colony (optional)','aria-label':'Your pitch'}); ta.value=this.pitchDraft||''; ta.oninput=()=>{ this.pitchDraft=ta.value; };
       form.append(pills, el('p',{class:'hint',text:(P[this.pick]||{}).does||''}), ta, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Run for ${fmt(D0.fee)} coins`,onclick:()=>toast(`Run for mayor pledging ${P[this.pick].name}? It costs ${fmt(D0.fee)} coins.`,'Run',()=>this.act('/api/me/election/run',{policy:this.pick,pitch:ta.value},'POST','You’re running for mayor! Ask your friends to vote.'))})));
       body.append(form); }
     if(D0.past.length){ body.append(el('h4',{class:'bgroup',text:'Past elections'}));
@@ -5028,6 +5065,8 @@ const composerBusy = () => { const a=document.activeElement; return !!(a && a.cl
 function renderFeed(force){
   const body=$('feedBody'); if(!body || activeTab!=='feed' || !feedDirty) return;
   if(!force && composerBusy()) return;
+  // Never rebuild the feed while someone is typing in one of its boxes (the mayor pitch, a search…): it would wipe what they wrote.
+  { const a=document.activeElement; if(a&&body.contains(a)&&/INPUT|TEXTAREA/.test(a.tagName)&&!(a.closest&&a.closest('.composer'))){ a.addEventListener('blur',()=>setTimeout(()=>{ feedDirty=true; renderFeed(); },150),{once:true}); return; } }
   if(feedMode==='posts' && S.meta){ const items=postItems(); const key=feedMode+'|'+(Me&&Me.handle)+'|'+S.chat.filter(m=>m.p).map(m=>m.id).join(',')+'|'+items.map(i=>(i.msg?i.msg.id:(i.gazette?'g':'@'+(i.c&&i.c.id)))+':'+Math.floor(i.g)).join(','); if(!force && key===feedKey){ feedDirty=false; return; } feedKey=key; } else feedKey='';
   feedDirty=false; const keep=body.scrollTop; body.innerHTML='';
   if(feedMode==='story'){ body.append(storyPage()); return; }
@@ -5207,6 +5246,8 @@ const Share={ o:null, pic:null, clipFile:null, busy:false,
     if(this.canShare(this.pic)) row.append(el('button',{class:'btn primary',text:'Share…',onclick:()=>this.native(this.pic,caption())}));
     row.append(el('button',{class:'btn shx',onclick:()=>{ window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(ta.value.trim())+'&url='+encodeURIComponent(url),'_blank','noopener'); }}, el('b',{text:'𝕏'}), ' Post on X'),
       el('button',{class:'btn',text:'Save picture',onclick:()=>this.save(this.pic)}),
+      Me&&Me.token?el('button',{class:'btn',text:'📣 Post in Town Square',onclick:async()=>{ const t=ta.value.trim().slice(0,280); if(!t){ toast('Write something to post first.'); return; }
+        try{ const m=await api('/api/square',{method:'POST',body:{text:t}}); if(m&&m.id&&!S.chat.some(x=>x.id===m.id)) S.chat.push(m); wrap.remove(); toast('Posted in the Town Square.','See it',()=>{ feedMode='posts'; openTab('feed'); }); feedDirty=true; renderFeed(); }catch(e){ toast(e.message); } }}):'',
       el('button',{class:'btn',text:'Copy link',onclick:async()=>{ try{ await navigator.clipboard.writeText(caption()); toast('Copied. Paste it anywhere.'); }catch(e){ toast(url); } }}));
     const yt=el('div',{class:'shyt'}), ytBtn=el('button',{class:'btn shyt-b',onclick:()=>this.record(yt,ytBtn,ta)}, el('b',{text:'▶'}), ' Make a YouTube Short');
     yt.append(ytBtn, el('p',{class:'hint',text:'Records an 8-second vertical clip of the colony right now, with your caption. Post it as a Short, or on TikTok, Reels or your Status.'}));

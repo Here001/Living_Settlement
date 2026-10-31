@@ -165,6 +165,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/admin/reports', admin, send(req => world.chat.reports(req.query.status)));
   r.post('/admin/reports/:id', admin, send(req => world.chat.resolve(req.params.id, (req.body || {}).action)));
   r.get('/dm', limit, send(async req => world.chat.conversations((await me(req)).id)));
+  r.get('/dm-contacts', limit, send(async req => world.chat.contacts((await me(req)).id)));
   r.get('/dm/:handle', limit, send(async req => world.chat.thread((await me(req)).id, req.params.handle)));
   r.post('/dm/:handle', limit, send(async req => world.chat.send(await me(req), req.params.handle, (req.body || {}).text, (req.body || {}).replyTo)));
   r.post('/dm/:handle/read', limit, send(async req => world.chat.read((await me(req)).id, req.params.handle)));

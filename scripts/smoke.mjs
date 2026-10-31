@@ -686,7 +686,9 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(gb.status === 200 && gb.json.fromBank === 0 && zz.coins === 0 && zz.bank === 50, 'a gift comes out of your pocket only', JSON.stringify(gb.json));
     await pool.query("update citizens set pass_hash = null where handle = 'jobfill_a'"); }
   // ---- private chats and who's online ----
-  { const sleep = ms => new Promise(r => setTimeout(r, ms));
+  { const sleep = ms => new Promise(r => setTimeout(r, ms)), set = (h, sql) => pool.query(`update citizens set ${sql} where handle = $1`, [h]);
+    const cash = async h => Number((await pool.query('select coins_base from citizens where handle = $1', [h])).rows[0].coins_base);
+    await set('zara_ng', 'coins_base = 5000');
     const bid = (await whoDev('jobfill_a')).id, link = (await call('POST', `/api/admin/citizens/${bid}/setup-link`)).json.claimId;
     const tokB = (await call('POST', `/api/claim/${link}/password`, { password: 'secret88' }, { auth: false })).json.token, PB = { auth: false, headers: { 'x-player': tokB } };
     const sock = token => new Promise(res => { const w = { msgs: [] }; w.ws = new WebSocket(BASE.replace(/^http/, 'ws') + '/ws'); w.ws.on('message', d => { try { w.msgs.push(JSON.parse(d)); } catch {} }); w.ws.on('open', () => { if (token) w.ws.send(JSON.stringify({ type: 'auth', token })); setTimeout(() => res(w), 400); }); });
@@ -706,11 +708,62 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(!stranger.msgs.some(m => m.type === 'dm' || JSON.stringify(m).includes('Hello from Zara')), 'nobody else receives it');
     const convB = (await call('GET', '/api/dm', undefined, PB)).json;
     ok(convB.length === 1 && convB[0].with.h === 'zara_ng' && convB[0].unread === 1, 'it shows as unread in their chats', JSON.stringify(convB));
+    ok(convB[0].request === true && (await call('GET', '/api/dm', undefined, P)).json[0].request === false, 'a first message lands in their message requests, not the sender’s');
     const th = (await call('GET', '/api/dm/zara_ng', undefined, PB)).json;
     ok(th.messages.length === 1 && !th.messages[0].mine && th.with.online, 'opening the chat shows the message');
     ok((await call('GET', '/api/dm', undefined, PB)).json[0].unread === 0, 'and marks it read');
     await sleep(800); await call('POST', '/api/dm/zara_ng', { text: 'Hi Zara!' }, PB); await sleep(400);
     ok(wa.msgs.some(m => m.type === 'dm' && m.data.text === 'Hi Zara!'), 'replies arrive live too');
+    ok((await call('GET', '/api/dm', undefined, PB)).json[0].request === false, 'replying accepts the request');
+    // replies, the far-away fee, pin and delete
+    { const zid = (await whoDev('zara_ng')).id, zh = (await pool.query('select home_id from citizens where id = $1', [zid])).rows[0].home_id;
+      const old = (await pool.query('select home_id from citizens where id = $1', [bid])).rows[0].home_id;
+      await pool.query('update citizens set home_id = null where id = $1', [bid]);
+      const far = (await call('GET', '/api/dm/jobfill_a', undefined, P)).json;
+      ok(far.cost.fee === 2 && far.cost.near === false, 'messaging someone who doesn’t live nearby costs 2 coins', JSON.stringify(far.cost));
+      const c0 = await cash('zara_ng'); await sleep(800);
+      const rp1 = await call('POST', '/api/dm/jobfill_a', { text: 'replying to you', replyTo: far.messages.find(m => !m.mine).id }, P); await sleep(300);
+      ok(rp1.status === 200 && rp1.json.fee === 2 && await cash('zara_ng') === c0 - 2, 'and the 2 coins come out of their cash', JSON.stringify(rp1.json));
+      const rpm = (await call('GET', '/api/dm/zara_ng', undefined, PB)).json.messages.at(-1);
+      ok(rpm.reply && rpm.reply.text === 'Hi Zara!' && rpm.reply.from === 'jobfill_a', 'a reply carries the message it answers', JSON.stringify(rpm));
+      ok(wb.msgs.some(m => m.type === 'dm' && m.data.reply?.text === 'Hi Zara!'), 'and the quote arrives live too');
+      if (zh) { await pool.query('update citizens set home_id = $2 where id = $1', [bid, zh]);
+        const nr = (await call('GET', '/api/dm/jobfill_a', undefined, P)).json; ok(nr.cost.fee === 0 && nr.cost.near, 'neighbours message for free', JSON.stringify(nr.cost)); }
+      await set('zara_ng', 'coins_base = 1'); await pool.query('update citizens set home_id = null where id = $1', [bid]); await sleep(800);
+      ok((await call('POST', '/api/dm/jobfill_a', { text: 'broke' }, P)).status === 400, "without 2 coins you can't message far-away colonists");
+      await pool.query('update citizens set home_id = $2 where id = $1', [bid, old]); await set('zara_ng', 'coins_base = 5000');
+      ok((await call('POST', '/api/dm/zara_ng/pin', { on: true }, PB)).json.pinned === true && (await call('GET', '/api/dm', undefined, PB)).json[0].pinned, 'a chat can be pinned');
+      ok((await call('POST', '/api/dm/zara_ng/delete', {}, PB)).status === 200 && !(await call('GET', '/api/dm', undefined, PB)).json.some(c => c.with.h === 'zara_ng'), 'deleting a chat takes it off your list');
+      ok((await call('GET', '/api/dm', undefined, P)).json.some(c => c.with.h === 'jobfill_a'), "but not off theirs");
+      ok((await call('GET', '/api/dm/zara_ng', undefined, PB)).json.messages.length === 0, 'and its old messages are gone for you');
+      await sleep(800); await call('POST', '/api/dm/jobfill_a', { text: 'still there?' }, P);
+      const back = (await call('GET', '/api/dm', undefined, PB)).json.find(c => c.with.h === 'zara_ng');
+      ok(back && !back.pinned && (await call('GET', '/api/dm/zara_ng', undefined, PB)).json.messages.length === 1, 'a new message brings it back, starting fresh', JSON.stringify(back)); }
+    // group chats
+    { ok((await call('POST', '/api/chat/groups', { name: 'x', members: ['jobfill_a'] }, P)).status === 400, 'a group needs a name');
+      ok((await call('POST', '/api/chat/groups', { name: 'Night shift', members: ['jobfill_b'] }, P)).status === 403, "unverified colonists can't be invited");
+      wb.msgs.length = 0;
+      const g = await call('POST', '/api/chat/groups', { name: 'Night shift', members: ['@jobfill_a'] }, P); await sleep(400);
+      ok(g.status === 200 && g.json.invited.includes('jobfill_a'), 'zara_ng creates a group chat and invites jobfill_a', JSON.stringify(g.json));
+      const inv = wb.msgs.find(m => m.type === 'chatInvite');
+      ok(inv && /@zara_ng invited you to join the group chat “Night shift”/.test(inv.data.text) && inv.data.from, 'the invite comes from the colony, saying who invited them', JSON.stringify(inv?.data));
+      const lb = (await call('GET', '/api/chat/groups', undefined, PB)).json;
+      ok(lb.invites.length === 1 && lb.invites[0].by === 'zara_ng' && !lb.groups.length, 'it waits in their invites until they answer', JSON.stringify(lb));
+      ok((await call('GET', `/api/chat/groups/${g.json.id}`, undefined, PB)).status === 403, "they can't read the group before joining");
+      ok((await call('POST', `/api/chat/groups/${g.json.id}/join`, {}, PB)).json.joined === true, 'jobfill_a joins');
+      const gt = (await call('GET', `/api/chat/groups/${g.json.id}`, undefined, PB)).json;
+      ok(gt.members.length === 2 && gt.messages.some(m => m.system && /@jobfill_a joined/.test(m.text)), 'the group shows its members and who joined', JSON.stringify(gt.messages));
+      await sleep(800); wb.msgs.length = 0;
+      const gm = await call('POST', `/api/chat/groups/${g.json.id}`, { text: 'Evening all' }, P); await sleep(400);
+      ok(gm.status === 200 && wb.msgs.some(m => m.type === 'gm' && m.data.text === 'Evening all' && m.data.from.h === 'zara_ng'), 'group messages arrive live for members');
+      ok(!stranger.msgs.some(m => m.type === 'gm'), 'and nobody else');
+      ok((await call('GET', '/api/chat/groups', undefined, PB)).json.groups[0].unread === 1, 'unread group messages are counted');
+      await sleep(800); const gr = await call('POST', `/api/chat/groups/${g.json.id}`, { text: 'Evening!', replyTo: gm.json.id }, PB);
+      ok(gr.status === 200 && (await call('GET', `/api/chat/groups/${g.json.id}`, undefined, P)).json.messages.at(-1).reply?.text === 'Evening all', 'replies work in groups too');
+      ok((await call('POST', `/api/chat/groups/${g.json.id}/pin`, { on: true }, PB)).json.pinned, 'a group can be pinned');
+      ok((await call('POST', `/api/chat/groups/${g.json.id}/leave`, {}, PB)).status === 200 && !(await call('GET', '/api/chat/groups', undefined, PB)).json.groups.length, 'leaving a group takes it off your list');
+      const g2 = await call('POST', '/api/chat/groups', { name: 'Second', members: ['jobfill_a'] }, P);
+      ok((await call('POST', `/api/chat/groups/${g2.json.id}/decline`, {}, PB)).json.joined === false && !(await call('GET', '/api/chat/groups', undefined, PB)).json.invites.length, 'an invite can be declined'); }
     ok((await call('POST', '/api/dm/zara_ng', { text: 'again' }, PB)).status === 429, 'sending is slowed down a little');
     // ---- reporting and blocking ----
     ok((await call('POST', '/api/report', { kind: 'dm', id: sent.json.id, reason: 'nope' }, PB)).status === 400, 'a report needs a reason');

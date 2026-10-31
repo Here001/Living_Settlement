@@ -215,6 +215,16 @@ const MIGRATIONS = [
    create index game_tables_open on game_tables (building_id, game, status);
    create index game_tables_turn on game_tables (status, turn_at);
    alter table citizens add column table_id text;`,
+  // v42: chats: replies, message requests, pinned and deleted chats (per person), the fee for far-away messages, and group chats
+  `alter table dms add column reply_to text, add column reply_text text, add column reply_from text, add column fee int not null default 0;
+   create table chat_state (citizen_id text not null, key text not null, pinned boolean not null default false, cleared_at bigint not null default 0,
+     accepted boolean not null default false, read_at bigint not null default 0, primary key (citizen_id, key));
+   create table chat_groups (id text primary key, name text not null, owner_id text not null, created_at bigint not null);
+   create table group_members (group_id text not null, citizen_id text not null, status text not null, invited_by text, t bigint not null, primary key (group_id, citizen_id));
+   create index group_members_citizen on group_members (citizen_id, status);
+   create table group_msgs (id text primary key, group_id text not null, sender_id text not null, text text not null, t bigint not null,
+     reply_to text, reply_text text, reply_from text, fee int not null default 0);
+   create index group_msgs_group on group_msgs (group_id, t);`,
 ];
 
 export async function migrate() {

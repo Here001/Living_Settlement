@@ -47,7 +47,7 @@ const world = new World(bus);
 const races = new Races(world); world.races = races;
 const lottery = new Lottery(world); world.lottery = lottery;
 const economy = new Economy(world); world.economy = economy;
-const chat = new Chat(bus); world.chat = chat;
+const chat = new Chat(bus); world.chat = chat; chat.world = world;
 const push = new Push(); world.push = push; chat.push = push;
 const achievements = new Achievements(world, bus); world.achievements = achievements;
 const leaderboards = new Leaderboards(world); world.leaderboards = leaderboards;

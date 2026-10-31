@@ -158,6 +158,9 @@ export function crimeOdds(kind, dist, wave = 0, night = false) {
 export const NO_GO = new Set(['jail', 'police', 'commissariat']);
 export const canGoTo = type => { const t = BUILDING_TYPES[type]; return !!t && !NO_GO.has(type) && t.cat !== 'nature' && t.cat !== 'decor'; };
 export const TILE_MILES = 0.05;
+// Chatting: messaging a neighbour (someone whose home is within NEIGHBOUR_TILES of yours, about 2 miles: the same
+// district) is free. Anyone further away costs MESSAGE_FEE coins a message, paid from your cash to the treasury.
+export const NEIGHBOUR_TILES = 40, MESSAGE_FEE = 2, GROUP_MAX = 30;
 // Getting around: trips of 14 tiles (0.7 mi) or more are made by car if the colonist owns one, otherwise by cab; shorter
 // ones are walked. A car costs fuel, a cab costs a fare; someone who can't afford the cab walks.
 export const TRIP_DRIVE = 14, CAB_BASE = 10, CAB_PER_MILE = 6, FUEL_PER_MILE = 2;

@@ -295,7 +295,21 @@ body.pane-max .composer textarea{height:70px}
 .dm p{margin:0;white-space:pre-wrap}.dm time{display:block;text-align:right;font-size:10px;opacity:.6;margin-top:1px}
 .dm.them{align-self:flex-start;background:var(--glass-2,rgba(0,0,0,.05));border-bottom-left-radius:5px}
 .dm.me{align-self:flex-end;background:linear-gradient(180deg,rgba(244,150,112,.92),rgba(217,113,74,.82));color:#fff;border-color:rgba(255,255,255,.5);border-bottom-right-radius:5px}
-.dm.them{cursor:pointer}.dmflag{display:none;margin-top:3px;border:0;background:none;padding:0;font:inherit;font-size:11px;color:var(--red,#c0392b);cursor:pointer}.dm.flagon .dmflag{display:block}
+.dm{cursor:pointer}
+.dmcard{display:flex;align-items:center;gap:8px;flex:1;min-width:0;border:0;background:none;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.dmacts{display:none;gap:10px;margin-top:3px}.dm.flagon .dmacts{display:flex}.dmact{border:0;background:none;padding:0;font:inherit;font-size:11.5px;font-weight:700;color:inherit;cursor:pointer;opacity:.85}.dm .dmflag{display:block;color:var(--red,#c0392b)}.dm.me .dmact{color:#fff}
+.dmquote{display:flex;flex-direction:column;width:100%;text-align:left;border:0;border-left:3px solid currentColor;background:rgba(0,0,0,.07);border-radius:6px;padding:3px 7px;margin:1px 0 4px;font:inherit;font-size:11.5px;color:inherit;cursor:pointer}.dm.me .dmquote{background:rgba(255,255,255,.2)}
+.dmquote span,.dmq span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.85}.dmfrom{border:0;background:none;padding:0;font:inherit;font-size:11.5px;font-weight:800;color:var(--accent,#d9714a);cursor:pointer;display:block}
+.dmreply{display:flex;align-items:center;gap:6px;margin:0 11px;padding:5px 8px;border-left:3px solid var(--accent,#d9714a);background:var(--glass-2,rgba(0,0,0,.05));border-radius:8px;font-size:12px}.dmq{display:flex;flex-direction:column;min-width:0;flex:1}
+.dmsys{align-self:center;font-size:11.5px;opacity:.7;padding:2px 10px;border-radius:10px;background:var(--glass-2,rgba(0,0,0,.05))}
+.dmflash{outline:2px solid var(--accent,#d9714a);outline-offset:2px;transition:outline .3s}
+.feenote{margin:0 11px;font-size:11.5px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.feenote.free{color:var(--green,#2e7d4f);opacity:.9}
+.dmreq{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:2px 11px;padding:6px 9px;border-radius:12px;background:var(--glass-2,rgba(0,0,0,.05));font-size:12.5px}.dmreq p{margin:0;flex:1 1 100%}.dmreq .row-actions{margin:0;gap:6px}.dmreq .btn{padding:4px 10px;font-size:12.5px;min-height:0}
+.chatseg{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:2px 0 8px}.chatseg .tbadge{position:static;margin-left:5px}.chatseg .newg{margin-left:auto}
+.ginv{padding:9px 11px;border-radius:12px;border:1px solid var(--glass-line,rgba(0,0,0,.1));background:var(--glass-2,rgba(0,0,0,.04));margin-bottom:8px;font-size:13px}.ginv p{margin:4px 0 7px}.ginvfrom{font-weight:800}
+.gava{display:grid;place-items:center;font-size:17px}
+.gsel{display:flex;flex-direction:column;gap:4px;margin:4px 0 8px}.gsel input{margin-top:6px}.gin{display:block;width:100%;box-sizing:border-box;padding:8px 11px;border-radius:12px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:var(--glass-2,rgba(255,255,255,.5));color:var(--ink);font:inherit;font-size:15px}.gmk .pane-title{flex:1}.gperson{display:flex;align-items:center;gap:8px;border:1px solid var(--glass-line,rgba(0,0,0,.1));background:none;border-radius:10px;padding:5px 8px;font:inherit;font-size:13px;color:inherit;text-align:left;cursor:pointer}.gperson>span:not(.ava){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gperson>.ava{flex:none}.gperson.on{border-color:var(--accent,#d9714a);background:rgba(217,113,74,.1)}
+.gmenu{display:flex;flex-direction:column;gap:6px}.gmenu>.btn{align-self:flex-start}.gmenu>.hint{font-size:11.5px}.gmembers{display:flex;flex-direction:column;gap:4px}
 .dmmenu{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:4px 11px 8px}.dmmenu .hint{flex-basis:100%;font-size:11.5px}
 .dmshut{justify-content:center;font-size:13px;padding:10px 11px 12px}.blkrow{display:flex;justify-content:space-between;align-items:center;padding:6px 2px;border-bottom:1px solid var(--glass-line,rgba(0,0,0,.08));font-size:13px}
 .card .x.shr{font-size:17px}
@@ -831,6 +845,8 @@ function connect(){
     else if(m.type==='resync') reloadAll();
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
+    else if(m.type==='gm' && m.data) Chats.gincoming(m.data);
+    else if(m.type==='chatInvite' && m.data) Chats.invited(m.data);
     else if(m.type==='notice' && m.data) Notices.incoming(m.data);
     else if(m.type==='dmGone' && m.id) Chats.gone(m.id);
     else if(m.type==='badge' && m.data) Badges.got(m.data.ids||[]); };
@@ -3197,67 +3213,184 @@ var Reports={ data:null, view:'open', open:undefined, t:0,
       else card.append(el('p',{class:'hint',text:`${DONE[r.action]||r.action}${r.resolvedAt?' · '+ago(r.resolvedAt):''}`}));
       body.append(card); } } };
 setInterval(()=>{ if(!document.hidden&&Store.canWrite) Reports.load(); },60000);
-var Chats={ list:[], online:[], unread:0, with:null, thread:null, draft:'', busy:false, loadedAt:0,
-  menu:false,
-  reset(){ this.list=[]; this.online=[]; this.unread=0; this.with=null; this.thread=null; this.draft=''; this.menu=false; Blocks.put([]); Daily.info=null; },
-  async load(){ if(!(Me&&Me.token)) return; try{ const [l,o,b]=await Promise.all([api('/api/dm'),api('/api/online'),api('/api/blocks')]); this.list=l; this.online=o; this.loadedAt=Date.now(); this.count(); Blocks.put(b); }catch(e){} if(activeTab==='chats'&&!this.with) this.renderNow(); },
+var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:null, thread:null, draft:'', busy:false, loadedAt:0,
+  menu:false, view:'chats', reply:null, making:null, sure:null,
+  reset(){ this.list=[]; this.groups=[]; this.invites=[]; this.online=[]; this.unread=0; this.with=null; this.gid=null; this.thread=null; this.draft=''; this.menu=false; this.reply=null; this.making=null; Blocks.put([]); Daily.info=null; },
+  async load(){ if(!(Me&&Me.token)) return; try{ const [l,o,b,g]=await Promise.all([api('/api/dm'),api('/api/online'),api('/api/blocks'),api('/api/chat/groups').catch(()=>({groups:[],invites:[]}))]);
+      this.list=l; this.online=o; this.groups=g.groups||[]; this.invites=g.invites||[]; this.loadedAt=Date.now(); this.count(); Blocks.put(b); }catch(e){} if(activeTab==='chats'&&!this.with&&!this.gid) this.renderNow(); },
   // After blocking or unblocking someone: refresh the open chat with them (if any) and the list.
   async after(h){ if(this.with&&this.with.toLowerCase()===String(h).toLowerCase()){ try{ this.thread=await api('/api/dm/'+encodeURIComponent(this.with)); }catch(e){} this.menu=false; this.renderNow(); } this.load(); },
   gone(id){ if(this.thread){ this.thread.messages=this.thread.messages.filter(m=>m.id!==id); document.querySelector(`#dmBody [data-id="${CSS.escape(id)}"]`)?.remove(); } this.load(); },
-  count(){ const n=this.list.reduce((a,c)=>a+c.unread,0); if(n!==this.unread){ this.unread=n; buildToolbar(); } },
-  async open(handle){ if(!(Me&&Me.token)){ toast('Sign in to your colonist to chat.'); return; } this.with=handle; this.thread=null; this.draft=''; this.menu=false; closeCard(); openTab('chats');
+  requests(){ return this.list.filter(c=>c.request); },
+  count(){ const n=this.list.reduce((a,c)=>a+c.unread,0)+this.groups.reduce((a,g)=>a+g.unread,0)+this.invites.length; if(n!==this.unread){ this.unread=n; buildToolbar(); } },
+  isMe(h){ return String(h||'').toLowerCase()===(Me&&Me.handle||'').toLowerCase(); },
+  async open(handle){ if(!(Me&&Me.token)){ toast('Sign in to your colonist to chat.'); return; } this.with=handle; this.gid=null; this.thread=null; this.draft=''; this.menu=false; this.reply=null; this.making=null; this.sure=null; closeCard(); openTab('chats');
     try{ this.thread=await api('/api/dm/'+encodeURIComponent(handle)); const c=this.list.find(x=>x.with.h.toLowerCase()===handle.toLowerCase()); if(c){ c.unread=0; this.count(); } }catch(e){ toast(e.message); this.with=null; }
     this.renderNow(); },
-  back(){ this.with=null; this.thread=null; this.menu=false; this.load(); this.renderNow(); },
-  incoming(m){ if(Blocks.has(m.from.h)) return; const meId=this.thread&&this.thread.with; const other=m.from.h.toLowerCase()===(Me&&Me.handle||'').toLowerCase()?m.to.h:m.from.h, mine=m.from.h.toLowerCase()===(Me&&Me.handle||'').toLowerCase();
-    if(this.with&&this.with.toLowerCase()===other.toLowerCase()&&this.thread&&activeTab==='chats'){ if(!this.thread.messages.some(x=>x.id===m.id)){ this.thread.messages.push({id:m.id,mine,text:m.text,t:m.t}); this.addBubble({id:m.id,mine,text:m.text,t:m.t}); } if(!mine) api('/api/dm/'+encodeURIComponent(other)+'/read',{method:'POST'}).catch(()=>{}); return; }
-    let c=this.list.find(x=>x.with.h.toLowerCase()===other.toLowerCase()); if(!c){ c={ with:{h:other,n:mine?'':m.from.n,g:mine?'m':m.from.g,online:true}, last:null, unread:0 }; this.list.unshift(c); }
-    c.last={text:m.text,t:m.t,mine}; if(!mine){ c.unread++; c.with.online=true; this.count(); toast(`💬 @${m.from.h}: ${m.text.length>60?m.text.slice(0,60)+'…':m.text}`,'Reply',()=>this.open(m.from.h)); }
-    this.list.sort((a,b)=>(b.last?b.last.t:0)-(a.last?a.last.t:0)); if(activeTab==='chats'&&!this.with) this.renderNow(); },
-  async send(){ const ta=$('dmText'); const text=(ta?ta.value:this.draft).trim(); if(!text||this.busy||!this.with) return; this.busy=true;
-    try{ await api('/api/dm/'+encodeURIComponent(this.with),{method:'POST',body:{text}}); this.draft=''; if(ta){ ta.value=''; ta.focus(); } }catch(e){ toast(e.message); } this.busy=false; },
-  addBubble(m){ const body=$('dmBody'); if(!body) return; const near=body.scrollHeight-body.scrollTop-body.clientHeight<60; body.append(this.bubble(m)); if(near||m.mine) body.scrollTop=body.scrollHeight; },
-  bubble(m){ const b=el('div',{class:'dm '+(m.mine?'me':'them'),'data-id':m.id||null}, el('p',{text:m.text}), el('time',{text:hhmm(m.t)}));
-    // Tap someone else's message to see "Report" under it.
-    if(!m.mine&&m.id){ b.title='Tap to report'; b.append(el('button',{class:'dmflag',text:'⚑ Report',onclick:e=>{ e.stopPropagation(); reportSheet({kind:'dm',id:m.id,handle:this.with,text:m.text}); }}));
+  async openGroup(id){ if(!(Me&&Me.token)) return; this.gid=id; this.with=null; this.thread=null; this.draft=''; this.menu=false; this.reply=null; this.making=null; this.sure=null; closeCard(); openTab('chats');
+    try{ this.thread=await api('/api/chat/groups/'+encodeURIComponent(id)); const g=this.groups.find(x=>x.id===id); if(g){ g.unread=0; this.count(); } }catch(e){ toast(e.message); this.gid=null; }
+    this.renderNow(); },
+  back(){ this.with=null; this.gid=null; this.thread=null; this.menu=false; this.reply=null; this.sure=null; this.load(); this.renderNow(); },
+  incoming(m){ if(Blocks.has(m.from.h)) return; const mine=this.isMe(m.from.h), other=mine?m.to.h:m.from.h, msg={id:m.id,mine,text:m.text,t:m.t,reply:m.reply||null};
+    if(this.with&&this.with.toLowerCase()===other.toLowerCase()&&this.thread&&activeTab==='chats'){ if(!this.thread.messages.some(x=>x.id===m.id)){ this.thread.messages.push(msg); this.addBubble(msg); } if(!mine) api('/api/dm/'+encodeURIComponent(other)+'/read',{method:'POST'}).catch(()=>{}); return; }
+    let c=this.list.find(x=>x.with.h.toLowerCase()===other.toLowerCase()); if(!c){ c={ with:{h:other,n:mine?'':m.from.n,g:mine?'m':m.from.g,online:true}, last:null, unread:0, request:!mine }; this.list.unshift(c); }
+    if(mine) c.request=false;
+    c.last={text:m.text,t:m.t,mine}; if(!mine){ c.unread++; c.with.online=true; this.count();
+      if(c.request) toast(`📩 Message request from @${m.from.h}`,'View',()=>{ this.view='requests'; this.open(m.from.h); });
+      else toast(`💬 @${m.from.h}: ${m.text.length>60?m.text.slice(0,60)+'…':m.text}`,'Reply',()=>this.open(m.from.h)); }
+    this.sortList(); if(activeTab==='chats'&&!this.with&&!this.gid) this.renderNow(); },
+  // A message in one of your group chats.
+  gincoming(m){ if(m.from&&Blocks.has(m.from.h)) return; const mine=!!(m.from&&this.isMe(m.from.h)), msg=m.system?{id:m.id,system:true,text:m.text,t:m.t}:{id:m.id,mine,text:m.text,t:m.t,reply:m.reply||null,from:m.from};
+    if(this.gid===m.group&&this.thread&&activeTab==='chats'){ if(!this.thread.messages.some(x=>x.id===m.id)){ this.thread.messages.push(msg); this.addBubble(msg); }
+      if(m.system) api('/api/chat/groups/'+encodeURIComponent(m.group)).then(t=>{ if(this.gid===m.group){ this.thread=t; if(!$('dmText')||!$('dmText').value) this.renderNow(); } }).catch(()=>{}); return; }
+    const g=this.groups.find(x=>x.id===m.group); if(!g){ this.load(); return; }
+    g.last={text:m.text,t:m.t,mine,from:m.from&&m.from.h}; if(!mine&&!m.system){ g.unread++; this.count(); toast(`👥 ${g.name} · @${m.from.h}: ${m.text.length>50?m.text.slice(0,50)+'…':m.text}`,'Open',()=>this.openGroup(g.id)); }
+    this.groups.sort((a,b)=>(b.pinned-a.pinned)||(b.last.t-a.last.t)); if(activeTab==='chats'&&!this.with&&!this.gid) this.renderNow(); },
+  // The colony asking whether you want to join someone's group.
+  invited(d){ if(Blocks.has(d.by)) return; toast(`🪐 ${d.from}: ${d.text}`,'View',()=>{ this.view='chats'; this.back(); openTab('chats'); }); this.load(); },
+  sortList(){ this.list.sort((a,b)=>((b.pinned?1:0)-(a.pinned?1:0))||((b.last?b.last.t:0)-(a.last?a.last.t:0))); },
+  async send(){ const ta=$('dmText'); const text=(ta?ta.value:this.draft).trim(); if(!text||this.busy||!(this.with||this.gid)) return; this.busy=true;
+    const url=this.gid?'/api/chat/groups/'+encodeURIComponent(this.gid):'/api/dm/'+encodeURIComponent(this.with);
+    try{ const r=await api(url,{method:'POST',body:{text,replyTo:this.reply?this.reply.id:undefined}}); this.draft=''; if(ta){ ta.value=''; ta.focus(); }
+      if(this.reply){ this.reply=null; $('dmReply')?.remove(); }
+      if(r.fee){ if(myMoney) { myMoney={...myMoney,coins:Math.max(0,(myMoney.coins||0)-r.fee)}; refreshHUD(); } }
+      if(this.thread&&this.thread.request){ this.thread.request=false; $('dmReq')?.remove(); } }catch(e){ toast(e.message); } this.busy=false; },
+  addBubble(m){ const body=$('dmBody'); if(!body) return; body.querySelector('.dmempty')?.remove(); const near=body.scrollHeight-body.scrollTop-body.clientHeight<60; body.append(this.bubble(m)); if(near||m.mine) body.scrollTop=body.scrollHeight; },
+  replyTo(m){ this.reply={id:m.id,text:m.text,from:m.mine?Me.handle:(m.from?m.from.h:this.with)}; const bar=$('dmBar'); $('dmReply')?.remove();
+    if(bar) bar.before(this.replyBar()); document.querySelectorAll('.dm.flagon').forEach(x=>x.classList.remove('flagon')); $('dmText')?.focus(); },
+  replyBar(){ const R=this.reply; return el('div',{class:'dmreply',id:'dmReply'}, el('span',{class:'dmq'}, el('b',{text:'↩ Replying to '+(this.isMe(R.from)?'yourself':'@'+R.from)}), el('span',{text:R.text})),
+    el('button',{class:'x','aria-label':'Cancel reply',text:'×',onclick:()=>{ this.reply=null; $('dmReply')?.remove(); }})); },
+  jump(id){ const t=document.querySelector(`#dmBody [data-id="${CSS.escape(id)}"]`); if(!t) return; t.scrollIntoView({block:'center',behavior:'smooth'}); t.classList.add('dmflash'); setTimeout(()=>t.classList.remove('dmflash'),1200); },
+  bubble(m){ if(m.system) return el('div',{class:'dmsys','data-id':m.id||null,text:m.text});
+    const b=el('div',{class:'dm '+(m.mine?'me':'them'),'data-id':m.id||null});
+    if(this.gid&&!m.mine&&m.from) b.append(el('button',{class:'dmfrom',text:m.from.n||'@'+m.from.h,onclick:e=>{ e.stopPropagation(); openCitizen(m.from.h); }}));
+    if(m.reply) b.append(el('button',{class:'dmquote',onclick:e=>{ e.stopPropagation(); this.jump(m.reply.id); }}, el('b',{text:this.isMe(m.reply.from)?'You':'@'+m.reply.from}), el('span',{text:m.reply.text})));
+    b.append(el('p',{text:m.text}), el('time',{text:hhmm(m.t)}));
+    // Tap a message for its options: reply, and (for theirs in a private chat) report.
+    if(m.id){ const acts=el('div',{class:'dmacts'}, el('button',{class:'dmact',text:'↩ Reply',onclick:e=>{ e.stopPropagation(); this.replyTo(m); }}));
+      if(!m.mine&&!this.gid) acts.append(el('button',{class:'dmact dmflag',text:'⚑ Report',onclick:e=>{ e.stopPropagation(); reportSheet({kind:'dm',id:m.id,handle:this.with,text:m.text}); }}));
+      b.append(acts); b.title='Tap to reply';
       b.onclick=()=>{ const on=!b.classList.contains('flagon'); document.querySelectorAll('.dm.flagon').forEach(x=>x.classList.remove('flagon')); b.classList.toggle('flagon',on); }; }
     return b; },
   dot(p){ return el('span',{class:'odot'+(p&&p.online?' on':''),title:p&&p.online?'Online':'Offline'}); },
   renderNow(){ if(activeTab!=='chats') return; const p=$('pane'); if(p) { p.innerHTML=''; this.render(p); } },
+  async act(url, body, then){ try{ const r=await api(url,{method:'POST',body:body||{}}); if(then) await then(r); }catch(e){ toast(e.message); } },
+  feeNote(T){ const c=T&&T.cost; if(!c) return null;
+    if(!c.fee) return el('div',{class:'feenote free',text:this.gid?'✓ Free: everyone here lives near you':'✓ Free: you live near each other'});
+    return el('div',{class:'feenote',title:'Messages to colonists who live in your area are free.',text:this.gid?`🪙 ${c.fee} coins a message · some members live far away`:`🪙 ${c.fee} coins a message · @${this.with} lives ${c.miles?c.miles+' away':'far away'}`}); },
+  composer(T){ const ta=el('textarea',{id:'dmText',rows:'1',maxlength:'500',placeholder:'Message…','aria-label':'Message'}); ta.value=this.draft; ta.oninput=()=>{ this.draft=ta.value; };
+    ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); this.send(); } });
+    return el('div',{class:'dmbar',id:'dmBar'}, ta, el('button',{class:'btn primary',text:'Send',onclick:()=>this.send()})); },
   render(p){
     if(!(Me&&Me.token)){ p.append(paneHead('Chats')); p.append(el('div',{class:'pane-body'}, el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to chat.'}))); return; }
+    if(this.gid) return this.renderGroup(p);
     if(this.with){ const w=this.thread&&this.thread.with; const av=el('span',{class:'ava sm'+(w&&w.online?' on':'')}); if(w) av.innerHTML=avatarSVG({handle:w.h,id:w.id,gender:w.g});
-      const head=el('div',{class:'pane-head dmhead'}, el('button',{class:'x',text:'‹','aria-label':'Back to chats',onclick:()=>this.back()}), av,
-        el('div',{class:'dmwho'}, el('b',{text:w?(w.n||'@'+w.h):'@'+this.with}), el('span',{class:'hint'+(w&&w.online?' onl-now':''),text:w?(w.online?'● Online now':w.seen?`Last seen ${ago(w.seen)}`:'Offline'):'…'})),
-        el('button',{class:'x dmmore','aria-label':'More','aria-expanded':String(this.menu),text:'⋯',onclick:()=>{ this.menu=!this.menu; this.renderNow(); }}),
+      const card=()=>openCitizen(this.with);
+      const head=el('div',{class:'pane-head dmhead'}, el('button',{class:'x',text:'‹','aria-label':'Back to chats',onclick:()=>this.back()}),
+        el('button',{class:'dmcard',title:`Open @${this.with}'s card`,onclick:card}, av,
+          el('div',{class:'dmwho'}, el('b',{text:w?(w.n||'@'+w.h):'@'+this.with}), el('span',{class:'hint'+(w&&w.online?' onl-now':''),text:w?(w.online?'● Online now':w.seen?`Last seen ${ago(w.seen)}`:'Offline'):'…'}))),
+        el('button',{class:'x dmmore','aria-label':'More','aria-expanded':String(this.menu),text:'⋯',onclick:()=>{ this.menu=!this.menu; this.sure=null; this.renderNow(); }}),
         maxBtn(), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>openTab(null)}));
-      const T=this.thread, lastTheirs=T&&[...T.messages].reverse().find(m=>!m.mine);
+      const T=this.thread, lastTheirs=T&&[...T.messages].reverse().find(m=>!m.mine), H=encodeURIComponent(this.with);
       const menu=this.menu&&T?el('div',{class:'dmmenu'},
+        el('button',{class:'btn',text:'👤 View card',onclick:card}),
+        el('button',{class:'btn',text:T.pinned?'📌 Unpin':'📌 Pin chat',onclick:()=>this.act(`/api/dm/${H}/pin`,{on:!T.pinned},r=>{ T.pinned=r.pinned; this.menu=false; this.renderNow(); toast(r.pinned?'Chat pinned to the top.':'Chat unpinned.'); })}),
+        el('button',{class:'btn danger',text:this.sure==='del'?'Tap again to delete':'🗑 Delete chat',onclick:()=>{ if(this.sure!=='del'){ this.sure='del'; this.renderNow(); return; } this.act(`/api/dm/${H}/delete`,{},()=>{ toast('Chat deleted.'); this.back(); }); }}),
         T.iBlocked?el('button',{class:'btn',text:`Unblock @${this.with}`,onclick:()=>Blocks.unblock(this.with)}):el('button',{class:'btn',text:`🚫 Block @${this.with}`,onclick:()=>Blocks.ask(this.with)}),
         el('button',{class:'btn',text:'⚑ Report',disabled:!lastTheirs,title:lastTheirs?'Report their latest message':'They haven’t sent you anything to report',onclick:()=>reportSheet({kind:'dm',id:lastTheirs.id,handle:this.with,text:lastTheirs.text})}),
-        el('span',{class:'hint',text:'Or tap any of their messages to report that one.'})):null;
+        el('span',{class:'hint',text:'Tap any message to reply to it, or to report one of theirs. Deleting a chat only clears it for you.'})):null;
       const body=el('div',{class:'pane-body dmbody',id:'dmBody'});
       if(!this.thread) body.append(el('p',{class:'hint',text:'Opening the chat…'}));
-      else if(!this.thread.messages.length) body.append(el('p',{class:'hint',text:`Say hello to @${this.with}. Only the two of you can see this chat.`}));
+      else if(!this.thread.messages.length) body.append(el('p',{class:'hint dmempty',text:`Say hello to @${this.with}. Only the two of you can see this chat.`}));
       else for(const m of this.thread.messages) body.append(this.bubble(m));
-      const ta=el('textarea',{id:'dmText',rows:'1',maxlength:'500',placeholder:'Message…','aria-label':'Message'}); ta.value=this.draft; ta.oninput=()=>{ this.draft=ta.value; };
-      ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); this.send(); } });
-      const bar=(!T||T.canSend)?el('div',{class:'dmbar'}, ta, el('button',{class:'btn primary',text:'Send',onclick:()=>this.send()}))
+      const req=T&&T.request?el('div',{class:'dmreq',id:'dmReq'}, el('p',null,el('b',{text:'📩 Message request. '}),'Accept or reply to move it to your chats.'),
+        el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Accept',onclick:()=>this.act(`/api/dm/${H}/accept`,{},()=>{ T.request=false; this.view='chats'; const c=this.list.find(x=>x.with.h.toLowerCase()===this.with.toLowerCase()); if(c) c.request=false; this.renderNow(); })}),
+          el('button',{class:'btn danger',text:'Delete',onclick:()=>this.act(`/api/dm/${H}/delete`,{},()=>{ toast('Request deleted.'); this.back(); })}),
+          el('button',{class:'btn',text:'🚫 Block',onclick:()=>Blocks.ask(this.with)}))):null;
+      const bar=(!T||T.canSend)?this.composer(T)
         :el('div',{class:'dmbar dmshut'}, T.iBlocked?el('span',null,`You blocked @${this.with}. `, el('button',{class:'linkb',text:'Unblock',onclick:()=>Blocks.unblock(this.with)})):el('span',{class:'hint',text:T.with&&!T.with.verified?`@${this.with} hasn't verified their avatar yet, so they can't receive messages.`:`You can't reply to this chat.`}));
-      p.append(head); if(menu) p.append(menu); p.append(body, bar); requestAnimationFrame(()=>{ body.scrollTop=body.scrollHeight; }); return; }
+      p.append(head); if(menu) p.append(menu); if(req) p.append(req); p.append(body); if(T&&T.canSend){ const f=this.feeNote(T); if(f) p.append(f); if(this.reply) p.append(this.replyBar()); } p.append(bar); requestAnimationFrame(()=>{ body.scrollTop=body.scrollHeight; }); return; }
+    if(this.making) return this.renderMaker(p);
+    const reqs=this.requests(), rq=reqs.reduce((a,c)=>a+(c.unread||1),0);
     p.append(paneHead('Chats')); const body=el('div',{class:'pane-body'});
-    const others=this.online.filter(o=>o.h.toLowerCase()!==Me.handle.toLowerCase());
-    if(others.length){ body.append(el('h3',{text:`Online now (${others.length})`})); const row=el('div',{class:'onlinerow'});
-      for(const o of others.slice(0,30)){ const av=el('span',{class:'ava sm on'}); av.innerHTML=avatarSVG({handle:o.h,id:o.id,gender:o.g}); row.append(el('button',{class:'onl',title:'@'+o.h,onclick:()=>this.open(o.h)}, av, el('span',{text:o.n||'@'+o.h}))); }
-      body.append(row); }
+    body.append(el('div',{class:'chatseg',role:'tablist'},
+      el('button',{class:'pill'+(this.view==='chats'?' on':''),role:'tab','aria-selected':String(this.view==='chats'),text:'Chats',onclick:()=>{ this.view='chats'; this.renderNow(); }}),
+      el('button',{class:'pill'+(this.view==='requests'?' on':''),role:'tab','aria-selected':String(this.view==='requests'),onclick:()=>{ this.view='requests'; this.renderNow(); }}, 'Requests', reqs.length?el('b',{class:'tbadge',text:String(reqs.length)}):null),
+      el('button',{class:'pill newg',text:'➕ New group',onclick:()=>{ this.making={name:'',pick:new Set(),extra:''}; this.renderNow(); }})));
+    const row=c=>{ const av=el('span',{class:'ava sm'+(c.with.online?' on':'')}); av.innerHTML=avatarSVG({handle:c.with.h,id:c.with.id||c.with.h,gender:c.with.g});
+      return el('button',{class:'person dmrow'+(c.unread?' unread':''),onclick:()=>this.open(c.with.h)}, av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:(c.pinned?'📌 ':'')+(c.with.n?`${c.with.n} · @${c.with.h}`:'@'+c.with.h)}), el('div',{class:'what',text:c.last?(c.last.mine?'You: ':'')+c.last.text:''})),
+        c.unread?el('b',{class:'tbadge',text:String(c.unread)}):el('time',{class:'hint',text:c.last?ago(c.last.t):''})); };
+    if(this.view==='requests'){
+      body.append(el('p',{class:'hint',text:'Messages from colonists you haven’t chatted with yet. They can’t tell whether you’ve read them. Accept or reply to move them to your chats.'}));
+      if(!reqs.length) body.append(el('p',{class:'hint',text:'No message requests.'}));
+      for(const c of reqs) body.append(row(c));
+      p.append(body); if(Date.now()-this.loadedAt>8000) this.load(); return; }
+    // Invitations to join a group, sent by the colony.
+    for(const iv of this.invites){ body.append(el('div',{class:'ginv'}, el('div',{class:'ginvfrom',text:`🪐 ${iv.from}`}), el('p',{text:iv.text}),
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Join',onclick:()=>this.act(`/api/chat/groups/${encodeURIComponent(iv.id)}/join`,{},()=>{ this.invites=this.invites.filter(x=>x.id!==iv.id); this.openGroup(iv.id); })}),
+        el('button',{class:'btn',text:'Decline',onclick:()=>this.act(`/api/chat/groups/${encodeURIComponent(iv.id)}/decline`,{},()=>{ this.invites=this.invites.filter(x=>x.id!==iv.id); this.count(); this.renderNow(); })})))); }
+    const others=this.online.filter(o=>!this.isMe(o.h));
+    if(others.length){ body.append(el('h3',{text:`Online now (${others.length})`})); const orow=el('div',{class:'onlinerow'});
+      for(const o of others.slice(0,30)){ const av=el('span',{class:'ava sm on'}); av.innerHTML=avatarSVG({handle:o.h,id:o.id,gender:o.g}); orow.append(el('button',{class:'onl',title:'@'+o.h,onclick:()=>this.open(o.h)}, av, el('span',{text:o.n||'@'+o.h}))); }
+      body.append(orow); }
     body.append(el('h3',{text:'Your chats'}));
-    if(!this.list.length) body.append(el('p',{class:'hint',text:'No chats yet. Open a verified colonist’s card and tap 💬 Message, or tap someone who’s online above.'}));
-    for(const c of this.list){ const av=el('span',{class:'ava sm'+(c.with.online?' on':'')}); av.innerHTML=avatarSVG({handle:c.with.h,id:c.with.id||c.with.h,gender:c.with.g});
-      body.append(el('button',{class:'person dmrow'+(c.unread?' unread':''),onclick:()=>this.open(c.with.h)}, av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:c.with.n?`${c.with.n} · @${c.with.h}`:'@'+c.with.h}), el('div',{class:'what',text:c.last?(c.last.mine?'You: ':'')+c.last.text:''})),
-        c.unread?el('b',{class:'tbadge',text:String(c.unread)}):el('time',{class:'hint',text:c.last?ago(c.last.t):''}))); }
+    // Private chats and groups together: pinned first, then the newest.
+    const items=[...this.list.filter(c=>!c.request).map(c=>({c,t:c.last?c.last.t:0,pin:c.pinned})),...this.groups.map(g=>({g,t:g.last?g.last.t:0,pin:g.pinned}))].sort((a,b)=>((b.pin?1:0)-(a.pin?1:0))||(b.t-a.t));
+    if(!items.length) body.append(el('p',{class:'hint',text:'No chats yet. Open a verified colonist’s card and tap 💬 Message, tap someone who’s online above, or start a group.'}));
+    for(const it of items){ if(it.c){ body.append(row(it.c)); continue; } const g=it.g;
+      body.append(el('button',{class:'person dmrow'+(g.unread?' unread':''),onclick:()=>this.openGroup(g.id)}, el('span',{class:'ava sm gava',text:'👥'}),
+        el('span',{class:'dmtxt'}, el('div',{class:'who',text:(g.pinned?'📌 ':'')+g.name+` · ${g.members}`}), el('div',{class:'what',text:g.last?(g.last.mine?'You: ':g.last.from?'@'+g.last.from+': ':'')+g.last.text:''})),
+        g.unread?el('b',{class:'tbadge',text:String(g.unread)}):el('time',{class:'hint',text:g.last?ago(g.last.t):''}))); }
     if(Blocks.list.length){ body.append(el('h3',{text:`Blocked (${Blocks.list.length})`}), el('p',{class:'hint',text:'They can’t message you, and you don’t see their Town Square posts.'}));
       for(const b of Blocks.list) body.append(el('div',{class:'blkrow'}, el('span',{text:b.n?`${b.n} · @${b.h}`:'@'+b.h}), el('button',{class:'linkb',text:'Unblock',onclick:()=>Blocks.unblock(b.h)}))); }
-    p.append(body); if(Date.now()-this.loadedAt>8000) this.load(); } };
+    p.append(body); if(Date.now()-this.loadedAt>8000) this.load(); },
+  // Picking people for a group: from your chats and who's online, or by typing handles.
+  pickList(skip){ const seen=new Set((skip||[]).map(h=>h.toLowerCase())), out=[]; seen.add((Me.handle||'').toLowerCase());
+    for(const c of this.list) if(!c.request&&!seen.has(c.with.h.toLowerCase())){ seen.add(c.with.h.toLowerCase()); out.push(c.with); }
+    for(const o of this.online) if(!seen.has(o.h.toLowerCase())){ seen.add(o.h.toLowerCase()); out.push(o); }
+    return out; },
+  picker(M, skip){ const wrap=el('div',{class:'gsel'}); const people=this.pickList(skip);
+    if(!people.length) wrap.append(el('p',{class:'hint',text:'Chat with someone first, or type their @handle below.'}));
+    for(const o of people){ const on=M.pick.has(o.h), av=el('span',{class:'ava sm'+(o.online?' on':'')}); av.innerHTML=avatarSVG({handle:o.h,id:o.id||o.h,gender:o.g});
+      wrap.append(el('button',{class:'gperson'+(on?' on':''),'aria-pressed':String(on),onclick:()=>{ on?M.pick.delete(o.h):M.pick.add(o.h); this.renderNow(); }}, av, el('span',{text:o.n?`${o.n} · @${o.h}`:'@'+o.h}), el('b',{text:on?'✓':'+'}))); }
+    const ex=el('input',{class:'gin',type:'text',placeholder:'Or type @handles, separated by spaces','aria-label':'More handles',value:M.extra}); ex.oninput=()=>{ M.extra=ex.value; };
+    wrap.append(ex); return wrap; },
+  handles(M){ return [...M.pick, ...String(M.extra||'').split(/[\s,]+/).map(s=>s.replace(/^@+/,'')).filter(Boolean)]; },
+  renderMaker(p){ const M=this.making;
+    p.append(el('div',{class:'pane-head dmhead gmk'}, el('button',{class:'x',text:'‹','aria-label':'Back to chats',onclick:()=>{ this.making=null; this.renderNow(); }}), el('h2',{class:'pane-title',text:'New group chat'}), maxBtn(), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>openTab(null)})));
+    const body=el('div',{class:'pane-body'}), nm=el('input',{class:'gin',type:'text',maxlength:'40',placeholder:'Group name','aria-label':'Group name',value:M.name}); nm.oninput=()=>{ M.name=nm.value; };
+    body.append(nm, el('h3',{text:`Invite colonists${M.pick.size?` (${M.pick.size})`:''}`}), this.picker(M),
+      el('p',{class:'hint',text:`Each person gets a message from ${S.meta?S.meta.name:'the colony'} saying you invited them, and joins if they accept. Messages are free when everyone lives near you; otherwise ${2} coins each.`}),
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:M.busy?'Creating…':'Create group',disabled:!!M.busy,onclick:async()=>{
+        const members=this.handles(M); if(M.name.trim().length<2){ toast('Give the group a name.'); return; } if(!members.length){ toast('Invite at least one colonist.'); return; }
+        M.busy=true; this.renderNow(); try{ const r=await api('/api/chat/groups',{method:'POST',body:{name:M.name,members}}); toast(`Group created. Invited ${r.invited.map(h=>'@'+h).join(', ')||'nobody new'}.`); this.making=null; await this.load(); this.openGroup(r.id); }catch(e){ toast(e.message); M.busy=false; this.renderNow(); } }})));
+    p.append(body); },
+  renderGroup(p){ const T=this.thread, G=T&&T.group, id=encodeURIComponent(this.gid);
+    const head=el('div',{class:'pane-head dmhead'}, el('button',{class:'x',text:'‹','aria-label':'Back to chats',onclick:()=>this.back()}),
+      el('button',{class:'dmcard',title:'Members',onclick:()=>{ this.menu=!this.menu; this.sure=null; this.renderNow(); }}, el('span',{class:'ava sm gava',text:'👥'}),
+        el('div',{class:'dmwho'}, el('b',{text:G?G.name:'Group'}), el('span',{class:'hint',text:T?(n=>`${n} member${n===1?'':'s'} · ${T.members.filter(m=>m.status==='member'&&m.online).length} online`)(T.members.filter(m=>m.status==='member').length):'…'}))),
+      el('button',{class:'x dmmore','aria-label':'More','aria-expanded':String(this.menu),text:'⋯',onclick:()=>{ this.menu=!this.menu; this.sure=null; this.renderNow(); }}),
+      maxBtn(), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>openTab(null)}));
+    p.append(head);
+    if(this.menu&&T){ const menu=el('div',{class:'pane-body gmenu'}); const mem=el('div',{class:'gmembers'});
+      for(const m of T.members){ const av=el('span',{class:'ava sm'+(m.online?' on':'')}); av.innerHTML=avatarSVG({handle:m.h,id:m.h,gender:m.g});
+        mem.append(el('button',{class:'gperson',onclick:()=>openCitizen(m.h)}, av, el('span',{text:(m.n?`${m.n} · @${m.h}`:'@'+m.h)+(m.me?' (you)':'')}), el('i',{class:'hint',text:m.status==='invited'?'invited':''}))); }
+      menu.append(el('b',{text:'Members'}), mem);
+      if(this.inviting){ const M=this.inviting; menu.append(el('b',{text:'Invite more'}), this.picker(M, T.members.map(m=>m.h)), el('div',{class:'row-actions'},
+        el('button',{class:'btn primary',text:'Send invites',onclick:()=>{ const members=this.handles(M); if(!members.length){ toast('Pick someone to invite.'); return; }
+          this.act(`/api/chat/groups/${id}/invite`,{members},async r=>{ toast(r.invited.length?`Invited ${r.invited.map(h=>'@'+h).join(', ')}.`:'They’re already in the group.'); this.inviting=null; this.thread=await api('/api/chat/groups/'+id); this.renderNow(); }); }}),
+        el('button',{class:'btn',text:'Cancel',onclick:()=>{ this.inviting=null; this.renderNow(); }}))); }
+      else menu.append(el('button',{class:'btn',text:'➕ Invite',onclick:()=>{ this.inviting={pick:new Set(),extra:''}; this.renderNow(); }}));
+      menu.append(el('button',{class:'btn',text:T.pinned?'📌 Unpin':'📌 Pin chat',onclick:()=>this.act(`/api/chat/groups/${id}/pin`,{on:!T.pinned},r=>{ T.pinned=r.pinned; this.menu=false; this.renderNow(); toast(r.pinned?'Group pinned to the top.':'Group unpinned.'); })}),
+        el('button',{class:'btn',text:this.sure==='del'?'Tap again to clear':'🗑 Delete chat',onclick:()=>{ if(this.sure!=='del'){ this.sure='del'; this.renderNow(); return; } this.act(`/api/chat/groups/${id}/delete`,{},()=>{ toast('Chat cleared. You’re still in the group.'); this.back(); }); }}),
+        el('button',{class:'btn danger',text:this.sure==='leave'?'Tap again to leave':'🚪 Leave group',onclick:()=>{ if(this.sure!=='leave'){ this.sure='leave'; this.renderNow(); return; } this.act(`/api/chat/groups/${id}/leave`,{},()=>{ toast('You left the group.'); this.back(); }); }}),
+        el('span',{class:'hint',text:'Deleting clears the messages for you; leaving takes you out of the group.'}));
+      p.append(menu); return; } // the group's details take the place of the messages until closed
+    const body=el('div',{class:'pane-body dmbody',id:'dmBody'});
+    if(!T) body.append(el('p',{class:'hint',text:'Opening the group…'}));
+    else if(!T.messages.length) body.append(el('p',{class:'hint dmempty',text:'Say hello to the group.'}));
+    else for(const m of T.messages) body.append(this.bubble(m));
+    p.append(body); if(T){ const f=this.feeNote(T); if(f) p.append(f); if(this.reply) p.append(this.replyBar()); } p.append(this.composer(T)); requestAnimationFrame(()=>{ body.scrollTop=body.scrollHeight; }); } };
 setInterval(()=>{ if(!document.hidden && Me&&Me.token && Date.now()-Chats.loadedAt>45000) Chats.load(); },15000);
 
 // ---- Creature races: the Races tab, the live race on the track, and the 2½-minute call ----
@@ -4723,7 +4856,7 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
 let frameStats={}, lastVeh=[];
-window.__dbg={ openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+window.__dbg={ chats:()=>Chats, tab:t=>openTab(t), openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

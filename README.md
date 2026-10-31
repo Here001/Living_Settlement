@@ -396,6 +396,13 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
   - The Chats tab lists your conversations with unread counts, plus an **Online now** row.
 - **Delivery.** Messages arrive live, with a pop-up and an unread badge, and go only to the two people's own screens, never to anyone else.
 - **Limits.** Messages are up to 500 characters, with a short pause between sends. The last 500 messages of each chat are kept.
+- **Opening their card.** Tap the name or picture at the top of a chat to open that colonist's card.
+- **Replies.** Tap any message, then **↩ Reply**. A bar above the box shows what you're answering, and the reply carries a short quote of it; tap the quote to jump back to the original.
+- **Message requests.** A first message from someone you've never written to lands under **Requests** (beside **Chats**, with a count), not in your chats. **Accept** or reply to move it over; **Delete** clears it; **Block** is there too.
+- **The far-away fee.** Messaging a colonist whose home is within 40 tiles of yours (your area) is free. Anyone further away, or without a home, costs **2 coins a message** from your cash, paid to the treasury. The chat shows which applies above the message box. In a group, a message is free only if every other member lives near you.
+- **Pin and delete.** **⋯ → 📌 Pin chat** keeps a chat at the top. **⋯ → 🗑 Delete chat** clears it for you only (tap twice to confirm); the other person keeps theirs, and a new message brings it back starting fresh.
+- **Group chats.** **➕ New group** on the Chats tab: give it a name and pick colonists from your chats or who's online, or type @handles (up to 30 people). Each invitee gets a message from the colony (for example "🪐 Gliese-12b: @zara invited you to join the group chat “Night owls”. Do you want to join?"), live and as a phone notification, and it waits at the top of their Chats tab with **Join** and **Decline**. Members see who joins and leaves, can invite more people, pin, clear the chat for themselves, or **Leave group**. Tap a sender's name to open their card.
+- **Under the hood.** Migration 42 adds reply and fee columns to `dms`, `chat_state` (per-person pin, cleared-at, accepted, read-at), `chat_groups`, `group_members` and `group_msgs`. Group messages go out as the private live op `gm`, invites as `chatInvite`.
 - **Online status.** A colonist is online while they're signed in with the colony open. Verified colonists show a green dot and "● Online now" or "Last seen 5 min ago" on their card, in the Colonists list and in chats.
 
 ## Colony events

@@ -453,7 +453,8 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     const h1 = (await hl({ action: 'higher' })).json; ok(!h1.done && h1.cards.length === 2 && h1.mult === C.hiloStep(1, 'higher'), 'higher than an ace is always right (and pays least)', JSON.stringify(h1));
     const hb = (await whoDev('zara_ng')).coins, hc = (await hl({ action: 'cashout' })).json; ok(hc.done && hc.paid === Math.floor(100 * h1.mult) && (await whoDev('zara_ng')).coins === hb + hc.paid, 'cashing out pays the multiplier', JSON.stringify(hc));
     ok([...Array(13).keys()].every(i => C.hiloChance(i + 1, 'higher') * C.hiloStep(i + 1, 'higher') < 1 && C.hiloChance(i + 1, 'lower') * C.hiloStep(i + 1, 'lower') < 1), 'every Hi-Lo guess keeps a house edge');
-    // The Game House
+    // The Game House (with enough in the treasury that no prize is capped)
+    await pool.query("update meta set data = jsonb_set(data, '{treasuryBase}', to_jsonb((data->>'treasuryBase')::numeric + 500000))");
     const gh = await call('POST', '/api/admin/buildings', { type: 'gamehouse', x: 820, y: 900 }); await call('POST', `/api/admin/buildings/${gh.json.building?.id}/finish`); const ghId = gh.json.building?.id;
     ok(gh.status === 200 && (await call('GET', `/api/me/games?building=${(await pool.query("select id from buildings where type <> 'gamehouse' limit 1")).rows[0].id}`, undefined, P)).status === 409, "games are played at a Game House, not anywhere");
     const gi = (await call('GET', `/api/me/games?building=${ghId}`, undefined, P)).json; ok(gi.freeSpin === true && gi.housed && gi.maxBet === G.GH_MAX_BET, 'the Game House: a free spin is waiting', JSON.stringify(gi));
@@ -677,28 +678,43 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok((await call('POST', '/api/me/bank/withdraw', { amount: 50, buildingId: mfb }, P)).json.bank === 200, 'and pays out withdrawals');
       const C = await import('../shared/catalog.js'); ok(C.BANK_TYPES.length === 4 && C.BANK_TYPES.every(t => C.BUILDING_TYPES[t]) && C.BUILDING_TYPES.bank.work.slots === 24, 'four kinds of bank (microfinance, community, local, international); the Local bank has 24 jobs'); }
     ok((await who('zara_ng')).bank === undefined && (await whoDev('zara_ng')).bank === 200, 'bank balances are private');
-    // cars
-    ok((await call('POST', '/api/me/cars', { model: 'hatch', color: '#D9544A' }, P)).status === 400, "can't afford a car with 300 coins on you");
+    // cars: bought at a Car dealership
+    const lot = await build('cardealer', 1300, 1240);
+    ok((await call('POST', '/api/me/cars', { model: 'hatch', color: '#D9544A', buildingId: bankId }, P)).status === 409, 'cars are only sold at a Car dealership');
+    ok((await call('POST', '/api/me/cars', { model: 'hatch', color: '#D9544A', buildingId: lot }, P)).status === 400, "can't afford a car with 300 coins on you");
     await set('zara_ng', 'coins_base = 200000');
-    const c1 = await call('POST', '/api/me/cars', { model: 'hatch', color: '#5B8DB8' }, P);
+    const c1 = await call('POST', '/api/me/cars', { model: 'hatch', color: '#5B8DB8', buildingId: lot }, P);
     ok(c1.status === 200 && c1.json.coins === 175000 && c1.json.car.paid === 25000, 'buy a hatchback for 25,000', JSON.stringify(c1.json));
     ok(JSON.stringify((await who('zara_ng')).car) === JSON.stringify(['hatch', '#5B8DB8']), 'everyone sees which car they drive');
-    const c2 = await call('POST', '/api/me/cars', { model: 'sedan', color: '#2F4A7A' }, P);
+    const c2 = await call('POST', '/api/me/cars', { model: 'sedan', color: '#2F4A7A', buildingId: lot }, P);
     ok((await call('PUT', '/api/me/cars/active', { id: c2.json.car.id }, P)).status === 200 && (await who('zara_ng')).car[0] === 'sedan', 'switch to driving the sedan');
-    await call('POST', '/api/me/cars', { model: 'hatch' }, P);
-    ok((await call('POST', '/api/me/cars', { model: 'hatch' }, P)).status === 409, 'the garage holds 3 cars');
+    await call('POST', '/api/me/cars', { model: 'hatch', buildingId: lot }, P);
+    ok((await call('POST', '/api/me/cars', { model: 'hatch', buildingId: lot }, P)).status === 409, 'the garage holds 3 cars');
     const sold = await call('DELETE', `/api/me/cars/${c1.json.car.id}`, undefined, P);
     ok(sold.status === 200 && sold.json.back === 15000, 'sell a car for 60% of what you paid');
     { const C = await import('../shared/catalog.js'); ok(C.carPaid({ m: 'hatch' }) === 1500 && C.carPaid({ m: 'hatch', paid: 25000 }) === 25000, 'a car bought before the repricing sells for 60% of its old price, not the new one'); }
     { const Rr = await import('../shared/rules.js'); const hp = Rr.propertyPrice('house'), inc = Rr.fullIncome('house') * 48;
       ok(hp === 37000 && hp / inc > 28 && hp / inc < 32 && Rr.propertyPrice('tent') === 5000, 'a full building pays for itself in about a real month (a House: 37,000)', JSON.stringify({ hp, inc })); }
-    ok((await call('POST', '/api/me/cars', { model: 'tank' }, P)).status === 400, 'only cars the dealer sells');
+    ok((await call('POST', '/api/me/cars', { model: 'tank', buildingId: lot }, P)).status === 400, 'only cars the dealer sells');
     // moving home
     const spare = await build('house', 950, 900);
     const hl = (await call('GET', '/api/me/homes', undefined, P)).json;
     ok(hl.housed && hl.homes.some(h => h.id === spare), 'homes with space are listed', JSON.stringify(hl).slice(0, 160));
-    ok((await call('POST', '/api/me/home', { buildingId: spare }, P)).status === 200 && (await who('zara_ng')).home[0] === spare, 'rent and move into a new home');
+    { const Rr = await import('../shared/rules.js'), sb = (await pool.query('select x, y, type from buildings where id = $1', [spare])).rows[0], cur = (await pool.query('select x, y from buildings where id = $1', [hl.current.id])).rows[0];
+      const cost = Rr.rentCost(sb.type, [cur.x, cur.y], [sb.x, sb.y]); await set('zara_ng', 'coins_base = 100');
+      ok((await call('POST', '/api/me/home', { buildingId: spare }, P)).status === 400, "renting needs the moving-in fee and the movers in cash");
+      await set('zara_ng', 'coins_base = 50000'); const rh = await call('POST', '/api/me/home', { buildingId: spare }, P);
+      ok(rh.status === 200 && rh.json.paid === cost.total && rh.json.fee === cost.fee && rh.json.movers === cost.movers && (await whoDev('zara_ng')).coins === 50000 - cost.total && (await who('zara_ng')).home[0] === spare, 'Rent here: pay the moving-in fee plus the movers, and you move out of your old home', JSON.stringify({ r: rh.json, cost }));
+      const lg = (await call('GET', '/api/me/ledger', undefined, P)).json;
+      ok(lg.list.some(x => x.key === 'rent:movers' && x.coins === -cost.movers) && lg.list.some(x => x.key === 'rent:fee' && x.coins === -cost.fee) && lg.list.some(x => x.key === 'car:buy' && x.coins === -25000), 'the Wallet history shows money in and out', JSON.stringify(lg.list.slice(0, 4))); }
     ok((await call('POST', '/api/me/home', { buildingId: hl.current.id }, P)).status === 429, 'one move per game day');
+    { const lv = await call('POST', '/api/me/home/leave', {}, P), mh = (await call('GET', '/api/me/home', undefined, P)).json;
+      ok(lv.status === 200 && mh.home === null && mh.leftHome && (await whoDev('zara_ng')).leftHome === true, 'leave home: no home (and no job) until you rent again', JSON.stringify(mh));
+      await call('POST', '/api/admin/test/fill', {}).catch(() => {}); ok(!(await who('zara_ng')).home, "someone who left isn't put back in a home by the housing queue");
+      await pool.query("update citizens set home_changed_day = null where handle = 'zara_ng'");
+      const back = await call('POST', '/api/me/home', { buildingId: spare }, P); const zb = await who('zara_ng');
+      ok(back.status === 200 && zb.home[0] === spare && zb.job, 'Rent here works from no home too, and finds you a job nearby', JSON.stringify(back.json));
+      await pool.query("update citizens set home_changed_day = null where handle = 'zara_ng'"); }
     // owning buildings
     await set('zara_ng', 'coins_base = 500');
     ok((await call('POST', '/api/me/properties/buy', { buildingId: spare }, P)).status === 400, "can't buy what you can't afford");
@@ -820,6 +836,33 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok((await call('POST', `/api/chat/groups/${g.json.id}/leave`, {}, PB)).status === 200 && !(await call('GET', '/api/chat/groups', undefined, PB)).json.groups.length, 'leaving a group takes it off your list');
       const g2 = await call('POST', '/api/chat/groups', { name: 'Second', members: ['jobfill_a'] }, P);
       ok((await call('POST', `/api/chat/groups/${g2.json.id}/decline`, {}, PB)).json.joined === false && !(await call('GET', '/api/chat/groups', undefined, PB)).json.invites.length, 'an invite can be declined'); }
+    // group crimes (heists)
+    { await pool.query("update citizens set crime_at = 0, heist_at = 0, jailed_until = 0, coins_base = 20000 where handle in ('zara_ng', 'jobfill_a')");
+      const hi = (await call('GET', '/api/me/heists', undefined, P)).json;
+      ok(hi.types.armored && hi.types.bank && hi.types.mayor && hi.types.jailbreak && hi.types.armored.chance > 0, 'four group crimes, each with its odds', JSON.stringify(Object.keys(hi.types)));
+      ok((await call('POST', '/api/me/heists', { kind: 'bank', inMinutes: 10, members: ['jobfill_a'] }, P)).status === 400, 'a bank heist needs a crew of three');
+      const pl = await call('POST', '/api/me/heists', { kind: 'armored', inMinutes: 10, members: ['jobfill_a'] }, P);
+      ok(pl.status === 200 && pl.json.group && pl.json.invited.includes('jobfill_a'), 'planning a job invites the crew to a group chat', JSON.stringify(pl.json));
+      const inv = (await call('GET', '/api/chat/groups', undefined, PB)).json.invites.find(x => x.id === pl.json.group); ok(inv && /invited you/.test(inv.text), 'the crew gets the invite from the colony');
+      ok((await call('POST', `/api/me/heists/${pl.json.id}/go`, {}, P)).status === 409, "it can't go ahead until enough of the crew have joined");
+      await call('POST', `/api/chat/groups/${pl.json.group}/join`, {}, PB);
+      ok((await call('POST', `/api/me/heists/${pl.json.id}/go`, {}, PB)).status === 403, 'only the planner says go');
+      const t0 = Number((await pool.query("select data->>'treasuryBase' t from meta")).rows[0].t), m0 = Number((await pool.query("select sum(coins_base) s from citizens where handle in ('zara_ng','jobfill_a')")).rows[0].s);
+      const go = await call('POST', `/api/me/heists/${pl.json.id}/go`, {}, P);
+      ok(go.status === 200 && typeof go.json.win === 'boolean' && go.json.got.length + go.json.caught.length === 2, 'the job happens: it comes off or not, and each member gets away or is caught', JSON.stringify(go.json));
+      const t1 = Number((await pool.query("select data->>'treasuryBase' t from meta")).rows[0].t), m1 = Number((await pool.query("select sum(coins_base) s from citizens where handle in ('zara_ng','jobfill_a')")).rows[0].s);
+      ok(Math.abs((m1 - m0) + (t1 - t0)) < 1, 'coins only move between the crew and the treasury (nothing is made up)', JSON.stringify({ crew: m1 - m0, treasury: t1 - t0 }));
+      const caughtMe = go.json.caught.find(x => x.h === 'zara_ng'); if (caughtMe) ok((await whoDev('zara_ng')).jailedUntil > Date.now(), 'anyone caught goes to jail');
+      ok((await call('GET', `/api/chat/groups/${pl.json.group}`, undefined, PB)).json.messages.some(m => m.system && /(came off|went wrong)/.test(m.text)), 'the result is posted in the crew chat');
+      ok((await call('POST', '/api/me/heists', { kind: 'armored', inMinutes: 10, members: ['jobfill_a'] }, PB)).status === 429 || (await whoDev('jobfill_a')).jailedUntil > Date.now(), 'and the crew lies low for a while afterwards');
+      // solo: con a tourist
+      await pool.query("update citizens set crime_at = 0, jailed_until = 0, coins_base = 5000 where handle = 'zara_ng'"); const sc = await call('POST', '/api/me/crime', { kind: 'scam' }, P);
+      ok(sc.status === 200 && (sc.json.caught ? sc.json.fine >= 250 : sc.json.loot >= 800 && sc.json.loot <= 2000), 'a new solo crime: con a tourist (800–2,000 coins)', JSON.stringify(sc.json));
+      await pool.query("update citizens set jailed_until = 0, heist_at = 0, crime_at = 0, coins_base = 5000 where handle in ('zara_ng', 'jobfill_a')"); }
+    // stars
+    { const st = (await call('GET', '/api/me/stars', undefined, P)).json;
+      ok(st.acts > 5 && st.stars >= 1 && st.stars <= 12 && st.score === st.acts + 20 * st.days && st.steps.length === 12, 'stars count the things you do yourself, plus the days you play', JSON.stringify(st));
+      ok((await who('zara_ng')).stars === st.stars, 'and everyone sees your stars on your card'); }
     ok((await call('POST', '/api/dm/zara_ng', { text: 'again' }, PB)).status === 429, 'sending is slowed down a little');
     // ---- reporting and blocking ----
     ok((await call('POST', '/api/report', { kind: 'dm', id: sent.json.id, reason: 'nope' }, PB)).status === 400, 'a report needs a reason');

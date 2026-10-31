@@ -278,6 +278,11 @@ Every colonist's card has a full-screen button beside Share and ×, like Town Sq
   - **Getting caught:** a fine of twice the amount they tried to take, at least 250, which goes to the treasury.
   - **Jail:** if the colony has a Jail, 10 minutes in it, seen inside. A jailed colonist can't gamble, bet, go out, adopt or commit crimes.
   - **News:** successes are reported anonymously in the Colony Log; arrests name the culprit.
+  - **More solo crimes** (`SOLO_CRIMES` in `shared/rules.js`): **🎭 Con a tourist** (800–2,000 coins; 85% / 60% / 35%) and **🏧 Hack an ATM** at the nearest Bank (8,000–15,000; 50% / 28% / 10%). Same cooldown, fines, jail, night and crime-wave bonuses.
+- **Group crimes (heists)** (`server/heists.js`, `HEISTS` in `shared/rules.js`), at the bottom of the Crime tab:
+  - **🚚 Hit an armoured truck** (crew 2–5, 20,000–50,000, jail 20 min), **👑 Rob the Mayor** (crew 2–5, 30–50% of the cash on the Mayor, jail 25 min; needs a Mayor), **🔓 Break someone out of jail** (crew 2–6, frees the inmate and pays a 6,000–12,000 bounty; fail and the inmate gets 10 more minutes; jail 30 min), **🏦 Bank heist** (crew 3–6, 60,000–150,000 from the vault, jail 30 min). Odds use the same police bands (armoured 50/30/14%, Mayor 50/30/15%, jailbreak 45/28/12%, bank 40/24/10%), plus night, a crime wave or the Mayor's pledge, and +4 points for each crew member beyond the minimum.
+  - **Planning:** pick the job, when it goes down (5, 10, 20, 30 or 60 real minutes away) and who to invite. The crew get a group chat named after the job, with an invite from the colony saying who invited them, to agree the plan. Joining the chat is joining the crew; the Crime tab shows each job, its crew, a countdown, **💬 Crew chat**, and for the planner **Go now** (once the minimum crew has joined) and **Call it off**.
+  - **What happens:** at the set time (checked every 15 seconds) one roll decides whether the job comes off; then each member is caught or not (15% if it came off, 70% if it went wrong, 10 points less at night). Everyone who gets away splits the loot equally; anyone caught is fined twice their share (at least 1,000, never more than they have) and jailed. Members who are in jail or homeless when it happens sit it out; with too few left, it's called off. The result goes to the crew chat, the Colony Log and each member's notices. Loot comes from the treasury (from the Mayor's own pocket for that job), so no coins are made up. Afterwards the crew lie low for 30 minutes.
 - **Pet.** Adopt one of the six native creatures at a Pet store (2,500–10,000 coins), name it, and it walks beside you on the map. You can rename it or let it go.
 
 ## Finding a building to build
@@ -375,14 +380,16 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
 - **Bank.**
   - **All pay is cash.** Wages, rent, profits and winnings arrive as cash on you, and cash can be pickpocketed.
   - **Deposits and withdrawals happen at a Bank.** Tap any bank on the map (Microfinance, Community, Local or International, all under Offices; or type "bank" in the build menu search): its card has **🏦 Your account**, with Deposit, Withdraw and Deposit all my cash. The server refuses both unless the request names a finished Bank.
-  - The **👛 Wallet** tab on your own card shows your cash and savings, and has **Go to the nearest Bank**.
+  - The **👛 Wallet** tab on your own card shows your cash and savings, and has **Go to the nearest Bank**, the buildings you own, and **📒 Cash flow**: everything that came in (green) or went out (red), newest first, grouped by day, with totals for the last 24 hours and All / Money in / Money out filters. It covers wages (once a game day), gigs, rewards, winnings and bets, fares, rent and movers, cars, buildings, bills, gifts sent and received, crimes, fines and bank deposits and withdrawals (`ledger` table, migration 43; kept for a month).
   - Money in the bank can't be pickpocketed.
   - Savings grow 0.02% each game day (about 1% a real day), up to 100 coins a game day. The treasury pays interest only when it can afford to, so the bank never creates coins.
 - **Cars.**
+  - Cars are bought at a **🚘 Car dealership** (a new building, under Shops → Large): its card has the showroom and a list of your cars to sell. The **Cars** tab on your card just lists your cars (drive or sell) and has **Go to the Car dealership**.
   - The dealer sells five models (Hatchback 25,000, Sedan 45,000, Pickup 70,000, SUV 95,000, Sports car 300,000), each in a choice of colours.
   - Colonists keep up to 3 in their garage, pick which one they drive, and can sell for 60% of what they paid (cars bought before the October 2026 repricing sell for 60% of their old price).
   - Signed-in colonists drive their own car on longer trips and commutes; without one they take a cab. Everyone else keeps the old rule, where about half own a car.
-- **Moving home.** Rent any home with free space and move there, once per game day. Rent comes out of wages as before. You can always move into a home you own, and if it's full, the newest tenant who hasn't claimed their avatar moves out.
+- **Home and renting.** The **Home** tab shows where you live, with **Go see it** and **Leave this home** (you move out, and leave your job too, until you rent again; the housing queue won't put you back). With no home it says so and offers **🔎 Find a home to rent**. Every home's card has **🔑 Rent here**: a moving-in fee (a tenth of what one flat there is worth, `rentCost()` in `shared/rules.js`; it goes to the owner less the treasury's 20%, or to the colony) plus the movers (500 + 15 coins a tile from your old home), paid in cash. If you live somewhere else you move out of there automatically; from no home you're given a job nearby. A home you own has no moving-in fee. Once per game day.
+- **Old move rule.** Rent any home with free space and move there, once per game day. Rent comes out of wages as before. You can always move into a home you own, and if it's full, the newest tenant who hasn't claimed their avatar moves out.
 - **Owning buildings.**
   - A home or business (housing, shops, offices, industry) can be bought from its card on the map, up to 5 per colonist. Public buildings, parks, landmarks and utilities stay the colony's.
   - Every game day owners are paid automatically: 80% of the rent their residents pay, or 80% of a business's profit (25% of its wage bill). The treasury keeps 20%.
@@ -476,18 +483,13 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
 - **The list.** Each board shows the top 10 with 🥇🥈🥉, your own place (even below the top 10), and when it starts over. Tapping someone opens their card.
 - **Champions.** When a week ends, its winners are crowned once, shown as "🏆 Last week's champion" on each weekly board, and announced in the Colony Log. Weekly scores are kept per week in `scores`, and winners in `weekly_champions`.
 
-## Badges
+## Stars
 
-- **What they are.** 25 badges in 7 groups (`shared/achievements.js`): Settling in, Money, Things you own, Luck, Friends, Coming back, On the wrong side. Each is Bronze, Silver or Gold.
-- **Earning them.** Badges are worked out from what a colonist has: their home, coins, cars, buildings, race and lottery wins, chats, streaks and so on. Things that leave no other trace (casino wins, the biggest casino win, gifts, crimes, jail, cars bought, pets) are counted in `citizens.stats`.
-  - Only verified colonists earn them.
-  - A colonist is checked right after anything they do, and every minute while they have the colony open, so race and lottery wins count too.
-- **Showing them.**
-  - New badges pop up live ("🏅 New badge: …", with **See**).
-  - Gold ones are announced in the Colony Log.
-  - Every colonist's card shows a row of their badges, gold first, for anyone to see.
-  - Your own card has a **Badges** tab with all 25: earned or locked, how to earn each, and what share of colonists has it.
-- **Coins.** Badges are cosmetic and pay no coins.
+- **What they are.** 1 to 12 stars for how active a colonist is (`STAR_STEPS` in `shared/rules.js`, `server/stars.js`). They replaced the old badges.
+- **Points.** Every action a signed-in player takes themself (anything that changes something: shifts, gigs, games, trips, chats, crimes, buying and selling, and so on; at most one every 5 seconds; reading and settings don't count) is a point, and every real day they play adds 20.
+- **Steps.** 10, 30, 70, 130, 220, 350, 520, 750, 1,050, 1,450, 2,000 and 2,800 points. Stars 1–3 are bronze, 4–6 silver, 7–9 gold, then diamond, amethyst and supernova, each a slightly different gradient.
+- **Showing them.** Every verified colonist's card shows their stars. A new star pops up live; reaching 4 or more is announced in the Colony Log. Your own card's **⭐ Stars** tab shows all 12, your points and how many more to the next star.
+- **Coins.** Stars are cosmetic.
 
 ## Sharing to X, YouTube and anywhere else
 
@@ -589,6 +591,8 @@ In Development mode, Meta only sends comments from accounts with a role on the a
 `curl -X PUT https://YOUR-APP/api/admin/build-post -H "authorization: Bearer $ADMIN_TOKEN" -H "content-type: application/json" -d '{"mediaId":"1789..."}'` and `GET /api/admin/requests` · `POST /api/admin/buildings/:id/finish|repair` · `POST /api/admin/construction/finish-all` · `POST /api/admin/bulldoze` · `POST /api/admin/citizens/bulk` · `PATCH /api/admin/citizens/:id` · `POST /api/admin/water` · `POST|DELETE /api/admin/vehicles` · `POST /api/admin/disasters` · `POST /api/admin/ruins/clear` · `PUT /api/admin/weather`.
 
 ## Settings
+
+**⚙️ Settings** on your own card has **Your name** (the name shown above your avatar; it used to be on the card itself), phone notifications and the getting-started guide.
 
 | Variable | Needed | What it's for |
 |---|---|---|

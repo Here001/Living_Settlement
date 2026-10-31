@@ -11,6 +11,25 @@ export const realDay = (t = Date.now()) => Math.floor(t / 86400000);
 // Record a flow inside a change; it's saved with the change (and dropped if the change fails).
 export function track(ch, key, coins = 0, citizenId = null) {
   if (!ch || !key) return; (ch.flows ||= []).push([key, Math.round(Number(coins) || 0), citizenId || null]);
+  const sg = signOf(key); if (citizenId && sg) ledger(ch, citizenId, sg * (Number(coins) || 0), key);
+}
+// The cash-flow history each player sees in their Wallet: money in (+) and out (-), by kind. Most entries come from
+// track(); a few (gifts received, a picked pocket, bank deposits, wages) are added where they happen.
+const IN = /^(casino:win|game:\w+:win|table:\w+:(win|refund)|race:win|property:(sell|refund|income)|mayor:pay|lottery:win|guide|daily|car:sell|earn:.*|crime:(pickpocket|rob|scam|atm)|heist:loot|bank:interest|rent:income)$/;
+const OUT = /^(casino:bet|game:\w+:bet|table:\w+:stake|travel|race:bet|property:buy|pet|lottery:ticket|election:fee|crime:fine|chat:fee|car:buy|bills:\w+|gift|rent:(fee|movers)|heist:fine)$/;
+export const signOf = key => (key === 'dev:adjust' ? 1 : IN.test(key) ? 1 : OUT.test(key) ? -1 : 0);
+export function ledger(ch, citizenId, coins, key, note = null) {
+  coins = Math.round(Number(coins) || 0); if (!ch || !citizenId || !coins) return; (ch.ledger ||= []).push([citizenId, coins, key, note]);
+}
+export async function flushLedger(db, rows) {
+  if (!rows?.length) return; const t = Date.now();
+  await db.query('insert into ledger (citizen_id, t, key, coins, note) select i, $1, k, c, n from unnest($2::text[], $3::text[], $4::bigint[], $5::text[]) x(i, k, c, n)',
+    [t, rows.map(r => r[0]), rows.map(r => r[2]), rows.map(r => r[1]), rows.map(r => r[3])]);
+}
+export async function history(id, limit = 60, before = null) {
+  const rows = (await pool.query(`select id, t, key, coins, note from ledger where citizen_id = $1 ${before ? 'and id < $3' : ''} order by id desc limit $2`, before ? [id, limit, before] : [id, limit])).rows;
+  const day = Date.now() - 86400000, sums = (await pool.query(`select coalesce(sum(case when coins > 0 then coins end), 0) inn, coalesce(sum(case when coins < 0 then -coins end), 0) outt from ledger where citizen_id = $1 and t > $2 and key not like 'bank:%'`, [id, day])).rows[0];
+  return { list: rows.map(r => ({ id: Number(r.id), t: Number(r.t), key: r.key, coins: Number(r.coins), note: r.note })), day: { in: Number(sums.inn), out: Number(sums.outt) } };
 }
 export async function flushFlows(db, flows) {
   if (!flows?.length) return;

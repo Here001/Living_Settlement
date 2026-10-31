@@ -5,7 +5,7 @@ import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES, carPaid } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
-import { track, snapshot } from './stats.js';
+import { track, snapshot, ledger } from './stats.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 import { MAYOR_PAY } from '../shared/elections.js';
@@ -100,6 +100,7 @@ export class Economy {
       }
       ch.touch(c); await ch.saveCitizen(c); await ch.q('update citizens set bank = $2 where id = $1', [c.id, c.bank]);
       if (kind === 'deposit') await bump(ch, c.id, { deposits: 1 });
+      ledger(ch, c.id, kind === 'deposit' ? -amount : amount, kind === 'deposit' ? 'bank:deposit' : 'bank:withdraw');
       return { ok: true, wallet: c.coins_base, bank: c.bank, coins: c.coins_base };
     });
   }
@@ -142,7 +143,8 @@ export class Economy {
       // Gifts are paid in cash, from what you have on you (savings stay in the bank until you withdraw them at a Bank).
       if (c.coins_base < amount) throw new HttpError(400, `You have ${fmt(c.coins_base)} coins on you. Gifts are paid in cash${bank ? ': withdraw some at a Bank first' : ''}.`);
       const fromPocket = amount, fromBank = 0;
-      ch.coins(r); c.coins_base -= fromPocket; r.coins_base += amount; track(ch, 'gift', amount, c.id);
+      ch.coins(r); c.coins_base -= fromPocket; r.coins_base += amount; track(ch, 'gift', amount, c.id); ledger(ch, r.id, amount, 'gift:in', '@' + c.handle);
+      ch.ledger[ch.ledger.length - 2][3] = '@' + r.handle; // the sender's line says who it went to
       ch.touch(c); ch.touch(r); await ch.saveCitizen(c); await ch.saveCitizen(r);
       if (fromBank) await ch.q('update citizens set bank = bank - $2 where id = $1', [c.id, fromBank]);
       await ch.q('update citizens set gift_day = $2, gift_sent = $3 where id = $1', [c.id, today, sent + amount]);
@@ -153,10 +155,13 @@ export class Economy {
   }
 
   // ---------- cars ----------
-  async buyCar(id, model, color) {
+  // Cars are bought at a Car dealership: tap one on the map.
+  async buyCar(id, model, color, buildingId) {
     const M = CAR_MODELS[model]; if (!M) throw new HttpError(400, 'Pick a car from the dealer.');
     if (!M.colors.includes(color)) color = M.colors[0];
     return this.world.change(async ch => {
+      const lot = (await ch.q("select id from buildings where id = $1 and type = 'cardealer' and done and not ruin", [String(buildingId || '')])).rows[0];
+      if (!lot) throw new HttpError(409, 'Cars are sold at a Car dealership. Tap one on the map.');
       const c = await this.lockMe(ch, id); if (!c.home_id) throw new HttpError(400, 'You need a home (and a driveway) before you buy a car.');
       const cars = Array.isArray(c.cars) ? c.cars : [];
       if (cars.length >= MAX_CARS) throw new HttpError(409, `Your garage holds ${MAX_CARS} cars. Sell one first.`);
@@ -199,26 +204,56 @@ export class Economy {
     for (const b of rows) out.homes.push({ id: b.id, name: nameOf(b), rent: BUILDING_TYPES[b.type]?.home?.rent || 0, space: b.home_cap - b.home_used, mine: b.owner_id === c.id, dist: Math.abs(b.x - x) + Math.abs(b.y - y), owner: b.owner_handle || null });
     return out;
   }
-  async moveHome(id, buildingId) {
+  // Renting: "Rent here" on any home with space (or one you own). You pay a moving-in fee and the movers; if you live
+  // somewhere else you move out of there first. A home you own has no moving-in fee. Once a game day.
+  async rentHere(id, buildingId) {
     return this.world.change(async ch => {
-      const c = await this.lockMe(ch, id); if (!c.home_id) throw new HttpError(400, "You're still in cryosleep. You'll be given a home when one is free.");
+      const c = await this.lockMe(ch, id); if (!c.pass_hash) throw new HttpError(403, 'Claim your colonist first.');
       if (c.home_changed_day === ch.today) throw new HttpError(429, "You've already moved today. You can move again tomorrow (game time).");
       const h = (await ch.q('select * from buildings where id = $1 for update', [String(buildingId)])).rows[0];
       if (!h || !h.done || h.ruin || !h.home_cap) throw new HttpError(400, "You can't live there.");
-      if (h.id === c.home_id) return { ok: true };
-      if (h.home_used >= h.home_cap) {
-        // Owners can always move into their own home: the newest tenant who hasn't claimed their avatar makes room.
-        if (h.owner_id !== c.id) throw new HttpError(409, 'That home is full. Pick one with space.');
+      if (h.id === c.home_id) throw new HttpError(409, 'You already live here.');
+      if (h.home_used >= h.home_cap && h.owner_id !== c.id) throw new HttpError(409, 'That home is full. Pick one with space.');
+      const cur = c.home_id ? (await ch.q('select type, x, y from buildings where id = $1', [c.home_id])).rows[0] : null;
+      const cost = R.rentCost(h.type, cur ? [cur.x, cur.y] : null, [h.x, h.y]), fee = h.owner_id === c.id ? 0 : cost.fee, total = fee + cost.movers;
+      ch.coins(c); if (c.coins_base < total) throw new HttpError(400, `Moving in costs ${fmt(total)} coins (${fee ? `${fmt(fee)} moving-in fee + ` : ''}${fmt(cost.movers)} for the movers). You have ${fmt(c.coins_base)} on you${c.bank ? '; withdraw some at a Bank first' : ''}.`);
+      c.coins_base -= total; ch.touch(c); await ch.saveCitizen(c);
+      track(ch, 'rent:movers', cost.movers, c.id); treasuryAdd(ch, cost.movers);
+      if (fee) { track(ch, 'rent:fee', fee, c.id);
+        const owner = h.owner_id ? (await ch.q('select * from citizens where id = $1 for update', [h.owner_id])).rows[0] : null;
+        if (owner) { const cut = Math.floor(fee * TREASURY_CUT), got = fee - cut; ch.coins(owner); owner.coins_base += got; ch.touch(owner); await ch.saveCitizen(owner); treasuryAdd(ch, cut); track(ch, 'rent:income', got, owner.id);
+          await this.world.actions?.notify(ch, owner.id, 'property', `🏠 @${c.handle} moved into ${nameOf(h)}. You got ${fmt(got)} coins of their moving-in fee.`); }
+        else treasuryAdd(ch, fee); }
+      if (h.home_used >= h.home_cap) { // an owner moving into their own full building: the newest unclaimed tenant makes room
         const out = (await ch.q(`select r.*, j.type jtype from citizens r left join buildings j on j.id = r.job_id where r.home_id = $1 and r.pass_hash is null order by r.seq desc limit 1 for update of r`, [h.id])).rows[0];
         if (!out) throw new HttpError(409, 'Everyone living there has claimed their avatar, so nobody can be moved out.');
-        const jt = out.jtype; delete out.jtype; await ch.moveOut(out, { home: h.type, job: jt });
-      }
-      const cur = (await ch.q('select type from buildings where id = $1', [c.home_id])).rows[0], job = c.job_id ? (await ch.q('select type from buildings where id = $1', [c.job_id])).rows[0] : null;
-      await ch.rehome(c, h, { home: cur?.type, job: job?.type });
-      await ch.q('update citizens set home_changed_day = $2 where id = $1', [c.id, ch.today]);
+        const jt = out.jtype; delete out.jtype; await ch.moveOut(out, { home: h.type, job: jt }); }
+      const c2 = (await ch.q('select * from citizens where id = $1', [c.id])).rows[0];
+      if (c2.home_id) { const job = c2.job_id ? (await ch.q('select type from buildings where id = $1', [c2.job_id])).rows[0] : null; await ch.rehome(c2, h, { home: cur?.type, job: job?.type }); }
+      else await ch.moveIn(c2, h);
+      await ch.q('update citizens set home_changed_day = $2, left_home = false where id = $1', [c.id, ch.today]);
       await ch.fillVacancies();
-      return { ok: true, home: nameOf(h) };
+      return { ok: true, home: nameOf(h), paid: total, fee, movers: cost.movers, coins: c.coins_base };
     });
+  }
+  // Leaving home: you move out (and leave your job, which came with living nearby) until you rent somewhere else.
+  async leaveHome(id) {
+    return this.world.change(async ch => {
+      const c = await this.lockMe(ch, id); if (!c.home_id) throw new HttpError(409, "You don't live anywhere right now.");
+      const h = (await ch.q('select type from buildings where id = $1', [c.home_id])).rows[0], j = c.job_id ? (await ch.q('select type from buildings where id = $1', [c.job_id])).rows[0] : null;
+      await ch.moveOut(c, { home: h?.type, job: j?.type });
+      await ch.q('update citizens set left_home = true where id = $1', [c.id]);
+      await ch.fillVacancies();
+      return { ok: true };
+    });
+  }
+  // Where you live, for the Home tab.
+  async myHome(id) {
+    const c = (await pool.query('select c.home_id, c.left_home, c.home_changed_day, c.job_id, h.type, h.name, h.x, h.y, h.owner_id from citizens c left join buildings h on h.id = c.home_id where c.id = $1', [id])).rows[0];
+    if (!c) throw new HttpError(404, 'No such citizen.');
+    const today = this.world.meta ? R.gameDay(Date.now(), this.world.meta.epoch) : 0;
+    return { home: c.home_id ? { id: c.home_id, name: c.name || BUILDING_TYPES[c.type]?.name, type: c.type, rent: BUILDING_TYPES[c.type]?.home?.rent || 0, x: c.x, y: c.y, mine: c.owner_id === id } : null,
+      leftHome: !!c.left_home, canMoveToday: c.home_changed_day !== today, hasJob: !!c.job_id };
   }
 
   // ---------- owning buildings ----------
@@ -309,6 +344,9 @@ export class Economy {
       }
     }
     if (rent || interest) treasuryAdd(ch, -(rent + interest));
+    // Wages (after rent) build up in each player's pocket through the day; the ledger notes them once a day.
+    for (const w of (await ch.q('select id, net from citizens where pass_hash is not null and net > 0')).rows) ledger(ch, w.id, Number(w.net) * days, 'wages');
+    await ch.q('delete from ledger where t < $1', [Date.now() - 30 * 86400000]); // a month of history is plenty
     // The mayor's salary, in cash, while the treasury can pay it.
     if (mayor) { const pay = Math.min(MAYOR_PAY * days, Math.floor(R.treasuryOn(ch.meta, ch.today))); const m = pay > 0 && (await ch.q('select * from citizens where id = $1 for update', [mayor.id])).rows[0];
       if (m) { ch.coins(m); m.coins_base += pay; treasuryAdd(ch, -pay); track(ch, 'mayor:pay', pay, m.id); ch.touch(m); await ch.saveCitizen(m); } }

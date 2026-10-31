@@ -225,6 +225,14 @@ const MIGRATIONS = [
    create table group_msgs (id text primary key, group_id text not null, sender_id text not null, text text not null, t bigint not null,
      reply_to text, reply_text text, reply_from text, fee int not null default 0);
    create index group_msgs_group on group_msgs (group_id, t);`,
+  // v43: renting by choice, the cash-flow ledger, group crimes (heists) and the activity stars
+  `alter table citizens add column left_home boolean not null default false, add column acts bigint not null default 0, add column stars int not null default 0,
+     add column heist_at bigint not null default 0;
+   create table ledger (id bigserial primary key, citizen_id text not null, t bigint not null, key text not null, coins bigint not null, note text);
+   create index ledger_citizen on ledger (citizen_id, id desc);
+   create table heists (id text primary key, kind text not null, planner_id text not null, group_id text not null, target_id text, target_label text,
+     building_id text, at bigint not null, status text not null, result jsonb, created_at bigint not null);
+   create index heists_status on heists (status, at);`,
 ];
 
 export async function migrate() {

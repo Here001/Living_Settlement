@@ -1,4 +1,4 @@
-import { noteActive } from './stats.js';
+import { noteActive, history } from './stats.js';
 import { assertNotMuted } from './chat.js';
 import express from 'express';
 import crypto from 'node:crypto';
@@ -78,7 +78,7 @@ export function playersRouter({ limit, send, admin, world }) {
   const me = async req => { const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.'); return p; };
   // Anything a signed-in colonist changes may earn a badge, so check them shortly after.
   r.use((req, res, next) => {
-    if (req.method !== 'GET' && req.get('x-player') && world.achievements) res.on('finish', () => { if (res.statusCode < 300) playerFrom(req).then(p => p && world.achievements.soon(p.id)).catch(() => {}); });
+    if (req.method !== 'GET' && req.get('x-player') && world.achievements) res.on('finish', () => { if (res.statusCode < 300) playerFrom(req).then(p => { if (!p) return; world.achievements.soon(p.id); world.stars?.act(p, req.path); }).catch(() => {}); });
     next();
   });
 
@@ -184,6 +184,12 @@ export function playersRouter({ limit, send, admin, world }) {
     const m = (await world.chat.members(g.id)).find(x => x.citizen_id === p.id); if (!m || m.status !== 'member') throw new HttpError(403, "You're not in this group.");
     return { ok: true, invited: await world.chat.inviteTo(p, g, (req.body || {}).members) }; }));
   r.get('/leaderboards/:board', limit, send(async req => { const p = await playerFrom(req); const b = await world.leaderboards.board(req.params.board, p?.id || null); if (!b) throw new HttpError(404, 'No such leaderboard.'); return b; }));
+  r.get('/me/heists', limit, send(async req => world.heists.info((await me(req)).id)));
+  r.post('/me/heists', limit, send(async req => world.heists.plan(await me(req), req.body || {})));
+  r.post('/me/heists/:id/go', limit, send(async req => world.heists.goNow((await me(req)).id, req.params.id)));
+  r.post('/me/heists/:id/cancel', limit, send(async req => world.heists.cancel((await me(req)).id, req.params.id)));
+  r.get('/me/stars', limit, send(async req => world.stars.info((await me(req)).id)));
+  r.get('/me/ledger', limit, send(async req => history((await me(req)).id, Math.min(100, Number(req.query.n) || 60), Number(req.query.before) || null)));
   r.get('/me/badges', limit, send(async req => world.achievements.list((await me(req)).id)));
   r.get('/me/daily', limit, send(async req => world.economy.dailyInfo((await me(req)).id)));
   r.post('/me/daily', limit, send(async req => world.economy.daily((await me(req)).id)));
@@ -192,11 +198,13 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/me/bank', limit, send(async req => world.economy.bankInfo((await me(req)).id)));
   r.post('/me/bank/deposit', limit, send(async req => world.economy.bank((await me(req)).id, 'deposit', (req.body || {}).amount, (req.body || {}).buildingId)));
   r.post('/me/bank/withdraw', limit, send(async req => world.economy.bank((await me(req)).id, 'withdraw', (req.body || {}).amount, (req.body || {}).buildingId)));
-  r.post('/me/cars', limit, send(async req => { const b = req.body || {}; return world.economy.buyCar((await me(req)).id, String(b.model || ''), String(b.color || '')); }));
+  r.post('/me/cars', limit, send(async req => { const b = req.body || {}; return world.economy.buyCar((await me(req)).id, String(b.model || ''), String(b.color || ''), b.buildingId); }));
   r.delete('/me/cars/:id', limit, send(async req => world.economy.sellCar((await me(req)).id, req.params.id)));
   r.put('/me/cars/active', limit, send(async req => world.economy.driveCar((await me(req)).id, String((req.body || {}).id || ''))));
   r.get('/me/homes', limit, send(async req => world.economy.homes((await me(req)).id)));
-  r.post('/me/home', limit, send(async req => world.economy.moveHome((await me(req)).id, (req.body || {}).buildingId)));
+  r.post('/me/home', limit, send(async req => world.economy.rentHere((await me(req)).id, (req.body || {}).buildingId)));
+  r.get('/me/home', limit, send(async req => world.economy.myHome((await me(req)).id)));
+  r.post('/me/home/leave', limit, send(async req => world.economy.leaveHome((await me(req)).id)));
   r.get('/me/properties', limit, send(async req => world.economy.properties((await me(req)).id)));
   r.post('/me/properties/buy', limit, send(async req => world.economy.buy((await me(req)).id, (req.body || {}).buildingId)));
   r.post('/me/properties/sell', limit, send(async req => world.economy.sell((await me(req)).id, (req.body || {}).buildingId)));

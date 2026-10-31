@@ -144,7 +144,24 @@ export function cleanName(n) {
 // Crime odds depend on how far the nearest Police station is from where the crime happens.
 // More than 40 tiles away (or no police at all): high. 16 to 40 tiles: mid. Within 15 tiles: low.
 export const CRIME_NEAR = 15, CRIME_FAR = 40;
-export const CRIME_RATES = { pickpocket: { high: 0.75, mid: 0.45, low: 0.2 }, rob: { high: 0.6, mid: 0.32, low: 0.12 } };
+export const CRIME_RATES = { pickpocket: { high: 0.75, mid: 0.45, low: 0.2 }, rob: { high: 0.6, mid: 0.32, low: 0.12 },
+  scam: { high: 0.85, mid: 0.6, low: 0.35 }, atm: { high: 0.5, mid: 0.28, low: 0.1 },
+  armored: { high: 0.5, mid: 0.3, low: 0.14 }, mayor: { high: 0.5, mid: 0.3, low: 0.15 }, jailbreak: { high: 0.45, mid: 0.28, low: 0.12 }, bank: { high: 0.4, mid: 0.24, low: 0.1 } };
+// Solo crimes beyond pickpocketing and shop robberies: loot in coins (paid by the colony, i.e. the treasury).
+export const SOLO_CRIMES = {
+  scam: { name: 'Con a tourist', icon: '🎭', loot: [800, 2000], blurb: 'Sell a visitor a "genuine" Gliese moon rock. Small takings, easy to get away with.' },
+  atm: { name: 'Hack an ATM', icon: '🏧', loot: [8000, 15000], blurb: 'Crack the cash machine outside the nearest Bank. Better money, more risk.', needs: 'bank' },
+};
+// Group crimes (heists): planned with a crew, who get a group chat to agree the time. Everyone shares the loot equally;
+// each member can be caught separately (more likely if it goes wrong), and those caught are fined and jailed.
+// A bigger crew than the minimum adds 4 points to the odds per extra member.
+export const HEISTS = {
+  armored: { name: 'Hit an armoured truck', icon: '🚚', min: 2, max: 5, loot: [20000, 50000], jail: 20, blurb: 'Stop the cash truck between the Banks.' },
+  mayor: { name: 'Rob the Mayor', icon: '👑', min: 2, max: 5, lootShare: [0.3, 0.5], lootMin: 2000, jail: 25, blurb: "Corner the Mayor and empty their pockets (30–50% of the cash on them). Can't be done without a Mayor." },
+  jailbreak: { name: 'Break someone out of jail', icon: '🔓', min: 2, max: 6, loot: [6000, 12000], jail: 30, blurb: 'Free an inmate. The underworld pays a bounty to the crew; fail, and the inmate gets 10 more minutes.' },
+  bank: { name: 'Bank heist', icon: '🏦', min: 3, max: 6, loot: [60000, 150000], jail: 30, blurb: 'The big one: the vault of the nearest Bank. Needs a crew of three or more.', needs: 'bank' },
+};
+export const HEIST_CREW_BONUS = 0.04, HEIST_CAUGHT = { win: 0.15, lose: 0.7 }, HEIST_COOLDOWN = 30 * 60 * 1000, HEIST_WAIT = [5, 10, 20, 30, 60];
 // Night (20:00 game time, through midnight, until 06:00): dark streets add 15 points.
 export const NIGHT_FROM = 20 * 60, NIGHT_TO = 6 * 60, NIGHT_BONUS = 0.15;
 export const isNight = gm => { const m = ((gm % 1440) + 1440) % 1440; return m >= NIGHT_FROM || m < NIGHT_TO; };
@@ -161,6 +178,8 @@ export const TILE_MILES = 0.05;
 // Chatting: messaging a neighbour (someone whose home is within NEIGHBOUR_TILES of yours, about 2 miles: the same
 // district) is free. Anyone further away costs MESSAGE_FEE coins a message, paid from your cash to the treasury.
 export const NEIGHBOUR_TILES = 40, MESSAGE_FEE = 2, GROUP_MAX = 30;
+// Renting a home: a moving-in fee (a tenth of what one flat in the building is worth) plus the movers.
+export const RENT_FEE_SHARE = 0.1, MOVERS_BASE = 500, MOVERS_PER_TILE = 15;
 // Getting around: trips of 14 tiles (0.7 mi) or more are made by car if the colonist owns one, otherwise by cab; shorter
 // ones are walked. A car costs fuel, a cab costs a fare; someone who can't afford the cab walks.
 export const TRIP_DRIVE = 14, CAB_BASE = 10, CAB_PER_MILE = 6, FUEL_PER_MILE = 2;
@@ -188,3 +207,16 @@ export const propertyPrice = type => nicePrice(Math.max(PROPERTY_MIN, fullIncome
 export const UPKEEP_RATE = 0.001;
 export function miles(tiles) { const m = Math.max(0, Number(tiles) || 0) * TILE_MILES;
   return m < 0.1 ? 'under 0.1 mi' : m < 10 ? `${Math.round(m * 10) / 10} mi` : `${Math.round(m)} mi`; }
+
+// What renting a home costs up front: the moving-in fee (to the owner, less the treasury's cut, or to the colony) and the movers.
+export function rentCost(type, fromXY, toXY) {
+  const cap = capacities(type).homeCap || 1, fee = Math.max(100, Math.round(propertyPrice(type) / cap * RENT_FEE_SHARE / 10) * 10);
+  const d = fromXY ? Math.abs(fromXY[0] - toXY[0]) + Math.abs(fromXY[1] - toXY[1]) : 0, movers = MOVERS_BASE + Math.round(d * MOVERS_PER_TILE);
+  return { fee, movers, total: fee + movers, dist: d };
+}
+
+// Stars: how active a colonist is, from 1 to 12. Points come from things the player does themself (each action
+// they take in the game, at most one every few seconds) plus 20 for every real day they play.
+export const STAR_STEPS = [10, 30, 70, 130, 220, 350, 520, 750, 1050, 1450, 2000, 2800];
+export const starsFor = score => STAR_STEPS.filter(s => score >= s).length;
+export const STAR_DAY_POINTS = 20;

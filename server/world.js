@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { pool, worldTx } from './db.js';
-import { flushFlows, track } from './stats.js';
+import { flushFlows, flushLedger, track } from './stats.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 import { playRound, GAMES, MAX_BET, validRoulette } from '../shared/casino.js';
@@ -166,7 +166,7 @@ class Change {
     while (moved < budget) {
       const h = (await this.q('select * from buildings where home_used < home_cap order by built_at, id limit 1 for update')).rows[0];
       if (!h) break;
-      const queue = (await this.q('select * from citizens where home_id is null order by seq limit $1 for update', [h.home_cap - h.home_used])).rows;
+      const queue = (await this.q('select * from citizens where home_id is null and not left_home order by seq limit $1 for update', [h.home_cap - h.home_used])).rows;
       if (!queue.length) break;
       for (const c of queue) await this.moveIn(c, h);
       moved += queue.length;
@@ -273,6 +273,7 @@ export class World {
       const ch = new Change(db, row ? row.data : null);
       const r = await changeScope.run(ch, () => fn(ch));
       if (ch.flows) await flushFlows(db, ch.flows); // developer stats: coins earned and spent
+      if (ch.ledger) await flushLedger(db, ch.ledger); // each player's cash-flow history
       if (ch.meta) await db.query('insert into meta (id, data) values (1, $1) on conflict (id) do update set data = $1', [ch.meta]);
       const ops = await this.collectOps(db, ch);
       return { r, ops, pushes: ch.pushes };
@@ -334,7 +335,9 @@ export class World {
     out.online = Number(r.last_seen || 0) > Date.now() - 90000; out.seen = Number(r.last_seen || 0);
     out.bank = Number(r.bank || 0); out.cars = Array.isArray(r.cars) ? r.cars : []; out.carActive = r.car_active || null;
     out.badges = r.has_pw ? (await pool.query('select id from achievements where citizen_id = $1 order by t', [r.id])).rows.map(x => x.id) : [];
-    if (!r.hid) out.queue = Number((await pool.query('select count(*) n from citizens where home_id is null and seq < $1', [r.seq])).rows[0].n) + 1;
+    const lh = (await pool.query('select left_home, acts, stars from citizens where id = $1', [r.id])).rows[0]; out.stars = Number(lh?.stars || 0);
+    if (!r.hid && lh?.left_home) out.leftHome = true;
+    else if (!r.hid) out.queue = Number((await pool.query('select count(*) n from citizens where home_id is null and seq < $1', [r.seq])).rows[0].n) + 1;
     return out;
   }
 

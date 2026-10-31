@@ -5,10 +5,10 @@ import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
-import { BUILDING_TYPES } from '../shared/catalog.js';
+import { BUILDING_TYPES, BANK_TYPES } from '../shared/catalog.js';
 import { CREATURES, petPrice } from '../shared/creatures.js';
 import { treasuryAdd } from './races.js';
-import { track } from './stats.js';
+import { track, ledger } from './stats.js';
 
 export const CRIME_COOLDOWN = 10 * 60 * 1000;    // one crime every 10 real minutes
 export const JAIL_TIME = 10 * 60 * 1000;         // caught: 10 real minutes in the Jail
@@ -17,7 +17,8 @@ const fmt = n => Math.round(n).toLocaleString('en-US');
 const rand = () => crypto.randomInt(0, 1e9) / 1e9;
 const nameOf = b => b.name || BUILDING_TYPES[b.type]?.name || 'a building';
 const POLICE = ['police', 'commissariat'];
-const SHOPS = Object.keys(BUILDING_TYPES).filter(k => BUILDING_TYPES[k].cat === 'shops');
+const SHOPS = Object.keys(BUILDING_TYPES).filter(k => BUILDING_TYPES[k].cat === 'shops' && k !== 'cardealer');
+const BANKS = BANK_TYPES;
 // Places a colonist can go: anywhere people hang out, shop or eat, plus landmarks and parks.
 const VISITABLE = Object.keys(BUILDING_TYPES).filter(k => { const t = BUILDING_TYPES[k]; return t.leisure || ['shops', 'parks', 'landmarks'].includes(t.cat); });
 
@@ -121,11 +122,14 @@ export class Actions {
       else { const where = await this.whereIs(pool, v, now), scene = await this.sceneOf(pool, v, where);
         const blocked = !v.home_id ? 'still in cryosleep' : where === 'home' ? 'safe at home' : where === 'jail' ? 'locked up' : where === 'work' && v.job_id !== c.job_id ? 'at work' : null;
         pick = { handle: v.handle, where, at: scene.name, blocked, ...(await this.odds('pickpocket', await this.policeDist(pool, scene.x, scene.y), wave)) }; } }
-    return { housed: !!c.home_id, jailedFor: Math.max(0, Number(c.jailed_until || 0) - now), waitFor: Math.max(0, Number(c.crime_at || 0) + CRIME_COOLDOWN - now), wave,
+    const solo = {}; for (const [k, S] of Object.entries(R.SOLO_CRIMES)) { let x = c.hx, y = c.hy, at = null;
+      if (S.needs === 'bank' && c.home_id) { const bk = (await pool.query(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [c.hx, c.hy, BANKS])).rows[0]; if (!bk) continue; x = bk.x; y = bk.y; at = nameOf(bk); }
+      if (c.home_id) solo[k] = { ...(await this.odds(k, await this.policeDist(pool, x, y), wave)), at }; }
+    return { solo, housed: !!c.home_id, jailedFor: Math.max(0, Number(c.jailed_until || 0) - now), waitFor: Math.max(0, Number(c.crime_at || 0) + CRIME_COOLDOWN - now), wave,
       rates: R.CRIME_RATES, near: R.CRIME_NEAR, far: R.CRIME_FAR, rob, pick };
   }
   async crime(id, { kind, target }) {
-    if (kind !== 'pickpocket' && kind !== 'rob') throw new HttpError(400, 'Pick a crime: pickpocket or rob a shop.');
+    if (!['pickpocket', 'rob', ...Object.keys(R.SOLO_CRIMES)].includes(kind)) throw new HttpError(400, 'Pick a crime.');
     return this.world.change(async ch => {
       const { c, hx, hy } = await this.load(ch, id), now = Date.now();
       const wait = Number(c.crime_at || 0) + CRIME_COOLDOWN - now;
@@ -145,6 +149,11 @@ export class Actions {
         const scene = await this.sceneOf(ch.db, victim, where); px = scene.x; py = scene.y; delete victim.hx; delete victim.hy; // where they are now
         ch.coins(victim); if (victim.coins_base < 5) throw new HttpError(400, `@${victim.handle}'s pockets are empty.`);
         loot = Math.max(1, Math.min(1500, Math.floor(victim.coins_base * (0.1 + rand() * 0.15))));
+      } else if (R.SOLO_CRIMES[kind]) { // a con on the street near home, or the ATM at the nearest Bank
+        const S = R.SOLO_CRIMES[kind];
+        if (S.needs === 'bank') { shop = (await ch.q(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [hx, hy, BANKS])).rows[0];
+          if (!shop) throw new HttpError(409, "There's no Bank, so no ATM to hack."); px = shop.x; py = shop.y; }
+        loot = Math.max(1, Math.min(R.treasuryOn(ch.meta, ch.today), Math.floor(S.loot[0] + rand() * (S.loot[1] - S.loot[0] + 1))));
       } else {
         shop = (await ch.q(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [hx, hy, SHOPS])).rows[0];
         if (!shop) throw new HttpError(409, 'There are no shops to rob.');
@@ -155,16 +164,16 @@ export class Actions {
       await ch.q('update citizens set crime_at = $2 where id = $1', [c.id, now]);
       ch.coins(c);
       if (rand() < chance) {
-        c.coins_base += loot; ch.touch(c); await ch.saveCitizen(c); track(ch, victim ? 'crime:pickpocket' : 'crime:rob', loot, c.id); await bump(ch, c.id, { crimes: 1 }); await score(ch, c.id, 'crimes', 1);
-        if (victim) { victim.coins_base -= loot; ch.touch(victim); await ch.saveCitizen(victim); await ch.event(`👛 Someone picked @${victim.handle}'s pocket and got away with ${fmt(loot)} coins!`, 'crime');
+        c.coins_base += loot; ch.touch(c); await ch.saveCitizen(c); track(ch, victim ? 'crime:pickpocket' : 'crime:' + kind, loot, c.id); await bump(ch, c.id, { crimes: 1 }); await score(ch, c.id, 'crimes', 1);
+        if (victim) { victim.coins_base -= loot; ledger(ch, victim.id, -loot, 'crime:victim', 'Pickpocketed'); ch.touch(victim); await ch.saveCitizen(victim); await ch.event(`👛 Someone picked @${victim.handle}'s pocket and got away with ${fmt(loot)} coins!`, 'crime');
           await this.notify(ch, victim.id, 'pickpocket', `👛 Someone just picked your pocket and got away with ${fmt(loot)} coins. Keep your cash in a Bank to keep it safe.`); }
-        else { treasuryAdd(ch, -loot); await ch.event(`🚨 ${nameOf(shop)} was robbed of ${fmt(loot)} coins! The thief got away.`, 'crime'); }
+        else { treasuryAdd(ch, -loot); await ch.event(kind === 'scam' ? `🎭 A tourist was conned out of ${fmt(loot)} coins. The con artist vanished.` : kind === 'atm' ? `🏧 The ATM at ${nameOf(shop)} was hacked for ${fmt(loot)} coins!` : `🚨 ${nameOf(shop)} was robbed of ${fmt(loot)} coins! The thief got away.`, 'crime'); }
         return { ok: true, caught: false, loot, coins: c.coins_base, chance, band: odds.band, police: odds.dist };
       }
       // Caught: a fine (twice what they tried to take, at least 250, never more than they have), and jail if the colony has one.
       const fine = Math.min(c.coins_base, Math.max(250, loot * 2)); c.coins_base -= fine; treasuryAdd(ch, fine); track(ch, 'crime:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
       const jail = (await ch.q(`select * from buildings where type = 'jail' and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [px, py])).rows[0];
-      const what = victim ? `pickpocketing @${victim.handle}` : `robbing ${nameOf(shop)}`;
+      const what = victim ? `pickpocketing @${victim.handle}` : kind === 'scam' ? 'conning a tourist' : kind === 'atm' ? `hacking the ATM at ${nameOf(shop)}` : `robbing ${nameOf(shop)}`;
       if (victim) await this.notify(ch, victim.id, 'pickpocket', `🚓 @${c.handle} picked your pocket but got caught by the police. Your ${fmt(loot)} coins have been refunded.`);
       if (jail) {
         const until = now + JAIL_TIME; await ch.q('update citizens set jailed_until = $2 where id = $1', [c.id, until]); await bump(ch, c.id, { jailed: 1 }); await this.setVisit(ch, c, jail, until);

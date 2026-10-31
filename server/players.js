@@ -247,7 +247,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/me/table', limit, send(async req => world.gametables.mine((await me(req)).id)));
   r.post('/me/tables', limit, send(req => tableMove(req, (p, b) => { const T = world.gametables;
     switch (String(b.action || '')) {
-      case 'create': return T.create(p.id, { buildingId: b.buildingId, game: String(b.game || ''), stake: b.stake, seats: b.seats, quick: !!b.quick, computer: !!b.computer });
+      case 'create': return T.create(p.id, { buildingId: b.buildingId, game: String(b.game || ''), stake: b.stake, seats: b.seats, quick: !!b.quick, street: !!b.street, computer: !!b.computer });
       case 'join': return T.join(p.id, b.id);
       case 'leave': return T.leave(p.id);
       case 'move': return T.move(p.id, b.id, b.move && typeof b.move === 'object' ? b.move : {});

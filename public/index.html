@@ -444,11 +444,41 @@ body.pane-max .composer textarea{height:70px}
 .wcard{width:56px;height:80px;border-radius:9px;background:#FBF8F1;color:#7A1F2B;border:2px solid #7A1F2B;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:13px;cursor:pointer;padding:0}
 .wcard .ws{font-size:26px;line-height:1}.wcard.whot{background:#7A1F2B;color:#FBF8F1}.wcard.no{opacity:.45;cursor:default}.wcard.big{width:76px;height:108px;font-size:16px}.wcard.big .ws{font-size:38px}
 .wtop{display:flex;align-items:center;justify-content:center;gap:16px}
-.ldie{font-size:44px;line-height:1;border:0;background:none;color:inherit;padding:0 4px;border-radius:10px;cursor:pointer}.ldie.on{outline:3px solid var(--accent);background:var(--gbtn-on,rgba(217,113,74,.2))}.ldie.used{opacity:.3}
+
 .ayo{display:grid;grid-template-columns:44px repeat(6,1fr) 44px;gap:6px;align-items:center;background:#8A5A33;border-radius:18px;padding:10px}
 .ayo .pit{aspect-ratio:1;border-radius:50%;background:#5E3A1E;color:#FBF1DC;display:grid;place-items:center;font-weight:800;font-size:16px;border:0;cursor:default;box-shadow:inset 0 3px 8px rgba(0,0,0,.45)}
 .ayo .pit.go{cursor:pointer;outline:3px solid #F2C94C}.ayo .pit.last{background:#7A4A26}
 .ayo .store{grid-row:span 2;height:100%;border-radius:22px;background:#5E3A1E;color:#FBF1DC;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:18px;box-shadow:inset 0 3px 8px rgba(0,0,0,.45)}
+.whot .wopps{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:8px}.wopp{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 10px;border-radius:12px;font-size:12px}.wopp.on{background:rgba(217,113,74,.15);box-shadow:0 0 0 2px rgba(217,113,74,.5)}
+.wfan{display:flex}.wfan .wc{margin-left:-14px}.wfan .wc:first-child{margin-left:0}
+.wc{position:relative;width:62px;height:90px;border-radius:9px;background:linear-gradient(160deg,#FFFDF6,#F1E8D4);color:#7A1F2B;border:1px solid rgba(122,31,43,.35);box-shadow:0 2px 6px rgba(0,0,0,.25),inset 0 0 0 3px #FFFDF6,inset 0 0 0 4px rgba(122,31,43,.25);display:flex;align-items:center;justify-content:center;padding:0;flex:none;font-family:Georgia,'Times New Roman',serif;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease}
+.wc .wcn{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:1;font-weight:800;font-size:13px;gap:1px}.wc .wcn.tl{top:5px;left:6px}.wc .wcn.br{bottom:5px;right:6px;transform:rotate(180deg)}.wc .wcn i{font-style:normal;font-size:9px}
+.wc .wmid{display:grid;place-items:center}.wc .wsh{display:block}
+.wc .wtag{position:absolute;bottom:14px;left:0;right:0;text-align:center;font:700 7.5px/1 system-ui,sans-serif;text-transform:uppercase;letter-spacing:.04em;opacity:.7}
+.wc.wild{background:linear-gradient(160deg,#9A2A39,#6A1824);color:#FBEFD9;box-shadow:0 2px 6px rgba(0,0,0,.3),inset 0 0 0 3px #7A1F2B,inset 0 0 0 4px rgba(251,239,217,.4)}
+.wc .wword{font:900 13px/1 Georgia,serif;letter-spacing:.06em}
+.wc.back{background:repeating-linear-gradient(45deg,#7A1F2B 0 6px,#8E2735 6px 12px);color:#FBEFD9;box-shadow:0 2px 5px rgba(0,0,0,.3),inset 0 0 0 3px #7A1F2B,inset 0 0 0 4px rgba(251,239,217,.5);cursor:default}.wc.back .wword{font-size:11px;transform:rotate(-30deg)}
+.wc.mini{width:30px;height:44px;border-radius:5px}.wc.mini .wcn{font-size:9px}.wc.mini .wmid,.wc.mini .wtag,.wc.mini .wcn.br{display:none}.wc.back.mini .wword{font-size:6px}
+.wc.big{width:86px;height:124px;border-radius:12px}.wc.big .wcn{font-size:17px}.wc.big .wword{font-size:18px}
+.wtable{display:flex;justify-content:center;gap:28px;align-items:flex-start;padding:14px;border-radius:18px;background:radial-gradient(ellipse at 50% 40%,#2F8C6A,#1B5C45);box-shadow:inset 0 2px 12px rgba(0,0,0,.4)}
+.wcol{display:flex;flex-direction:column;align-items:center;gap:6px;color:#EAF6EF}.wcol small{font-size:11px;opacity:.9}
+.wmarket{position:relative;width:96px;height:132px;border:0;background:none;padding:0;cursor:pointer}.wmarket:disabled{cursor:default}.wmarket .wc{position:absolute;left:0;top:0}.wmarket .m2{left:4px;top:3px}.wmarket .m3{left:8px;top:6px}
+.wmarket:not(:disabled):hover .m3{transform:translateY(-4px)}.wmc{position:absolute;right:-6px;top:-8px;background:#F2C94C;color:#2B2621;border-radius:12px;padding:2px 7px;font:800 12px/1.2 system-ui,sans-serif;box-shadow:0 2px 4px rgba(0,0,0,.3)}
+.wpile{position:relative;width:96px;height:132px}.wpile .wc{position:absolute;left:4px;top:3px}.wpile .ghost{background:#EFE6D2;transform:rotate(-8deg)}.wpile .ghost.g2{transform:rotate(6deg)}
+.wc.land{animation:wland .45s cubic-bezier(.2,.8,.3,1)}@keyframes wland{0%{transform:translate(-40px,120px) rotate(-25deg) scale(.8);opacity:.3}100%{transform:none;opacity:1}}
+.whand2{display:flex;justify-content:center;padding:16px 8px 4px;overflow-x:auto}.whand2 .wc{margin-left:-18px}.whand2 .wc:first-child{margin-left:0}
+.whand2 .wc.ok{transform:translateY(-12px);box-shadow:0 8px 14px rgba(0,0,0,.3),inset 0 0 0 3px #FFFDF6,inset 0 0 0 4px #F2C94C}.whand2 .wc.ok.wild{box-shadow:0 8px 14px rgba(0,0,0,.3),inset 0 0 0 3px #7A1F2B,inset 0 0 0 4px #F2C94C}
+.whand2 .wc.no{filter:saturate(.6) brightness(.92);cursor:default}.whand2 .wc.new{animation:wdraw .45s ease-out}@keyframes wdraw{0%{transform:translate(0,-120px) scale(.8);opacity:0}100%{opacity:1}}
+.wcall{display:flex;align-items:center;justify-content:center;gap:4px;font-weight:700;margin:8px 0 0}.wpickc{display:inline-flex;align-items:center;gap:3px}
+.wfinal{margin-top:10px;padding:10px;border-radius:14px;background:var(--glass-2,rgba(0,0,0,.05));display:flex;flex-direction:column;gap:6px}.wfrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.wfrow.won{color:var(--green,#2e7d4f)}
+.wfwho{font-weight:700;min-width:70px}.wfcards{display:flex;gap:3px;flex-wrap:wrap;flex:1}.wftot{font-size:16px;white-space:nowrap}
+.ludosvg{max-width:400px;filter:drop-shadow(0 8px 16px rgba(0,0,0,.3))}
+.ltok.go{animation:ltokb .9s ease-in-out infinite}.ltok.hop{animation:ltokh .17s ease-out}
+@keyframes ltokb{0%,100%{translate:0 0}50%{translate:0 -3px}} @keyframes ltokh{0%{translate:0 0}50%{translate:0 -5px}100%{translate:0 0}}
+.ldie{padding:0;border:0;background:none;width:52px;height:52px;border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,.25);cursor:pointer}.ldie .ldsvg{width:100%;height:100%;display:block}
+.ldie.on{outline:3px solid var(--accent,#d9714a);outline-offset:2px}.ldie.used{opacity:.4}.ldie.roll{animation:ldroll .6s cubic-bezier(.3,.7,.4,1)}
+@keyframes ldroll{0%{transform:rotate(-200deg) scale(.6) translateY(-18px)}60%{transform:rotate(20deg) scale(1.08)}100%{transform:none}}
+.ayofly{transition:transform .28s cubic-bezier(.3,.7,.4,1)}
 .ayo .store small{font-size:9px;font-weight:600;opacity:.8}
 .pkcards{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
 .kicks{display:flex;gap:6px;justify-content:center;font-size:20px}
@@ -702,6 +732,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 <script type="module">
 import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank, carPaid } from '/shared/catalog.js';
 import { TABLE_W, TABLE_H, BALL_R, POCKETS } from '/shared/snooker.js';
+import { placeOk, placeAuto, HEAD_X, BAULK_X, D_R } from '/shared/cuegames.js';
 import { TABLE_GAMES, WHOT_SHAPES, LUDO_SAFE, RAKE, MAX_STAKE } from '/shared/boardgames.js';
 import { GH_GAMES, GH_MAX_BET, WHEEL_PAID, WHEEL_FREE, SCRATCH_TIERS, SCRATCH_SYMBOLS, PEN_SPOTS, DART_ORDER, DART_RINGS } from '/shared/games.js';
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt, PLINKO, PLINKO_ROWS, MINES_TILES, MINES_CHOICES, minesMultiple } from '/shared/casino.js';
@@ -3705,6 +3736,7 @@ const GH={ id:null, info:null, at:0, open:false, game:'penalty', bet:100, busy:f
 // on screen it stands upright with the cue ball's end at the bottom.
 const SnookerUI={ aim:0, power:0, spin:{x:0,y:0}, M:0.13,
   S:(x,y)=>[y, TABLE_W-x], // physics → screen (table units, portrait)
+  SNK:{yellow:'#F2C230',green:'#1D7A3A',brown:'#7A4A22',blue:'#1F55C0',pink:'#F28DB2',black:'#141414'},
   COLORS:{1:'#F2B705',2:'#1E4FB8',3:'#D3261C',4:'#5A2A8C',5:'#EE6C17',6:'#16804A',7:'#7C1A22',8:'#151515'},
   // A small noise tile for the cloth, made once.
   noise(){ if(this._noise) return this._noise; const c=document.createElement('canvas'); c.width=c.height=96; const x=c.getContext('2d'), d=x.createImageData(96,96);
@@ -3735,10 +3767,10 @@ const SnookerUI={ aim:0, power:0, spin:{x:0,y:0}, M:0.13,
       const hg=x.createRadialGradient(sx-r*0.2,sy-r*0.2,0,sx,sy,r); hg.addColorStop(0,'#000'); hg.addColorStop(.75,'#050505'); hg.addColorStop(1,'#262626'); x.fillStyle=hg; x.beginPath(); x.arc(sx,sy,r,0,Math.PI*2); x.fill(); }
     this._base={key,c}; return c; },
   // One ball: a coloured sphere (striped for 9–15) with its number, a highlight and a shadow on the cloth.
-  ball(x,id,sx,sy){ const R=BALL_R, n=id==='c'?0:id[0]==='b'?Number(id.slice(1)):-1;
+  ball(x,id,sx,sy){ const R=BALL_R, n=id==='c'?0:this.SNK[id]?-2:/^b\d+$/.test(id)?Number(id.slice(1)):-1;
     x.fillStyle='rgba(0,0,0,.32)'; x.beginPath(); x.ellipse(sx+R*0.18,sy+R*0.38,R*0.95,R*0.7,0,0,Math.PI*2); x.fill();
     x.save(); x.beginPath(); x.arc(sx,sy,R,0,Math.PI*2); x.clip();
-    const col=n===0?'#F6F3EA':n<0?'#C8231A':this.COLORS[n>8?n-8:n];
+    const col=n===0?'#F6F3EA':n===-2?this.SNK[id]:n<0?'#C8231A':this.COLORS[n>8?n-8:n];
     x.fillStyle=n>8?'#F6F3EA':col; x.fillRect(sx-R,sy-R,2*R,2*R);
     if(n>8){ x.fillStyle=col; x.fillRect(sx-R,sy-R*0.55,2*R,R*1.1); }
     if(n>0){ x.fillStyle='#FBFAF5'; x.beginPath(); x.arc(sx,sy,R*0.47,0,Math.PI*2); x.fill(); x.fillStyle='#151515'; x.font=`800 ${R*(n>9?0.56:0.66)}px system-ui,sans-serif`; x.textAlign='center'; x.textBaseline='middle'; x.fillText(String(n),sx,sy+R*0.04); }
@@ -3751,15 +3783,19 @@ const SnookerUI={ aim:0, power:0, spin:{x:0,y:0}, M:0.13,
     seg(0,0.008,'#4C8FD6','#22507F'); seg(0.008,0.026,'#FFFFFF','#BEBAB0'); seg(0.026,0.72,'#F2DDB0','#B98F55'); seg(0.72,0.735,'#E9E4D8','#9A948A'); seg(0.735,1.2,'#5A2E14','#24110A');
     for(const r of [0.8,0.82,1.12]) seg(r,r+0.006,'#E8D9B5','#8F7A55');
     x.restore(); },
-  view({ balls, replay, canShoot, onShoot, onReplayEnd, on, mode }){
+  view({ balls, replay, canShoot, onShoot, onReplayEnd, on, mode, inHand }){
     const M=this.M, cv=el('canvas',{class:'snkcv','aria-label':'The table'}), x=cv.getContext('2d'), self=this;
-    const cue=!replay&&(balls||[]).find(b=>b.id==='c'); let pos=Object.fromEntries((balls||[]).map(b=>[b.id,[b.x,b.y]]));
+    // With ball in hand the cue ball can be dragged to where you want it (anywhere, behind the line, or in the D).
+    const zone=!replay&&canShoot&&inHand?inHand:null, others=(balls||[]).filter(b=>b.id!=='c');
+    let cue=!replay&&(balls||[]).find(b=>b.id==='c'); if(!replay&&!cue&&zone) cue=placeAuto(others,zone);
+    if(cue) cue={...cue}; if(zone&&this.place&&this.placeKey===JSON.stringify(others)&&placeOk(others,this.place,zone)){ cue.x=this.place.x; cue.y=this.place.y; } this.placeKey=JSON.stringify(others); this.place=zone&&cue?{x:cue.x,y:cue.y}:null;
+    let pos=Object.fromEntries((balls||[]).filter(b=>b.id!=='c').map(b=>[b.id,[b.x,b.y]])); if(cue) pos.c=[cue.x,cue.y];
     let k=1, dpr=1, W=0, H=0;
     const fit=()=>{ const w=cv.clientWidth; if(!w) return false; dpr=Math.min(3,window.devicePixelRatio||1); W=w; H=w*(TABLE_W+2*M)/(TABLE_H+2*M); if(cv.width!==Math.round(W*dpr)){ cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); } k=W/(TABLE_H+2*M); return true; };
     const stickGeo=()=>{ const [c0x,c0y]=this.S(cue.x,cue.y), ux=Math.sin(this.aim), uy=-Math.cos(this.aim), pull=BALL_R*1.4+this.power*0.22; return { c0x,c0y, ux:-ux, uy:-uy, ax:c0x-ux*pull, ay:c0y-uy*pull }; };
-    const draw=()=>{ if(!cv.isConnected||!fit()) return; x.setTransform(1,0,0,1,0,0); x.clearRect(0,0,cv.width,cv.height); x.drawImage(this.base(W,H,dpr),0,0);
+    const draw=()=>{ if(!cv.isConnected||!fit()) return; if(cue&&pos.c&&!replay){ pos.c=[cue.x,cue.y]; } x.setTransform(1,0,0,1,0,0); x.clearRect(0,0,cv.width,cv.height); x.drawImage(this.base(W,H,dpr),0,0);
       x.setTransform(k*dpr,0,0,k*dpr,M*k*dpr,M*k*dpr);
-      if(mode==='snooker'){ const [,by]=this.S(0.42,0); x.strokeStyle='rgba(255,255,255,.3)'; x.lineWidth=0.004; x.beginPath(); x.moveTo(0,by); x.lineTo(TABLE_H,by); x.stroke(); x.beginPath(); x.arc(TABLE_H/2,by,0.16,0,Math.PI); x.stroke(); }
+      if(mode==='snooker'){ const [,by]=this.S(BAULK_X,0); x.strokeStyle='rgba(255,255,255,.3)'; x.lineWidth=0.004; x.beginPath(); x.moveTo(0,by); x.lineTo(TABLE_H,by); x.stroke(); x.beginPath(); x.arc(TABLE_H/2,by,D_R,0,Math.PI); x.stroke(); for(const k of ['blue','pink','black']){ const [qx,qy]=this.S(k==='blue'?1:k==='pink'?1.5:1.818,0.5); x.fillStyle='rgba(255,255,255,.35)'; x.beginPath(); x.arc(qx,qy,0.005,0,Math.PI*2); x.fill(); } }
       else { const [fx,fy]=this.S(1.45,0.5), [hx,hy]=this.S(0.42,0.5); x.fillStyle='rgba(255,255,255,.35)'; for(const [a,b] of [[fx,fy],[hx,hy]]){ x.beginPath(); x.arc(a,b,0.006,0,Math.PI*2); x.fill(); } }
       // which ball you must hit first
       if(on&&on.length===1&&!replay&&canShoot) for(const id of on){ const p=pos[id]; if(!p) continue; const [sx,sy]=this.S(p[0],p[1]); x.strokeStyle='rgba(255,236,150,.85)'; x.lineWidth=0.005; x.beginPath(); x.arc(sx,sy,BALL_R*1.45,0,Math.PI*2); x.stroke(); }
@@ -3772,29 +3808,39 @@ const SnookerUI={ aim:0, power:0, spin:{x:0,y:0}, M:0.13,
         x.lineWidth=0.004; x.beginPath(); x.arc(g0x,g0y,BALL_R,0,Math.PI*2); x.stroke();
         if(hit){ const nx=hit.x-gx, ny=hit.y-gy, nl=Math.hypot(nx,ny)||1, [hx,hy]=this.S(hit.x,hit.y), [ex,ey]=this.S(hit.x+nx/nl*0.3,hit.y+ny/nl*0.3); x.strokeStyle='rgba(255,255,255,.8)'; x.beginPath(); x.moveTo(hx,hy); x.lineTo(ex,ey); x.stroke();
           const tx=dx-(dx*nx+dy*ny)/nl*nx/nl, ty=dy-(dx*nx+dy*ny)/nl*ny/nl, tl=Math.hypot(tx,ty); if(tl>0.05){ const [qx,qy]=this.S(gx+tx/tl*0.12,gy+ty/tl*0.12); x.strokeStyle='rgba(255,255,255,.45)'; x.setLineDash([0.012,0.01]); x.beginPath(); x.moveTo(g0x,g0y); x.lineTo(qx,qy); x.stroke(); x.setLineDash([]); } } }
+      if(zone){ x.save(); x.fillStyle='rgba(255,255,255,.08)'; x.strokeStyle='rgba(255,236,150,.7)'; x.lineWidth=0.004; x.setLineDash([0.015,0.01]);
+        if(zone==='D'){ const [cx,cy]=this.S(BAULK_X,0.5); x.beginPath(); x.arc(cx,cy,D_R,0,Math.PI); x.closePath(); x.fill(); x.stroke(); }
+        else if(zone==='kitchen'){ const [,hy]=this.S(HEAD_X,0); x.fillRect(0,hy,TABLE_H,TABLE_W-hy); x.beginPath(); x.moveTo(0,hy); x.lineTo(TABLE_H,hy); x.stroke(); }
+        x.setLineDash([]); const [qx,qy]=this.S(cue.x,cue.y); x.strokeStyle='rgba(255,255,255,.9)'; x.beginPath(); x.arc(qx,qy,BALL_R*1.7,0,Math.PI*2); x.stroke(); x.restore(); }
       for(const [id,[bx,by]] of Object.entries(pos)){ const [sx,sy]=this.S(bx,by); this.ball(x,id,sx,sy); }
       if(cue&&canShoot){ const s=stickGeo(); this.stick(x,s.ax,s.ay,s.ux,s.uy); } };
     this.redraw=draw;
     const start=()=>{ if(!cv.isConnected){ requestAnimationFrame(start); return; } draw();
-      if(replay){ const step=()=>{ if(!cv.isConnected) return; const i=Math.min(replay.frames.length-1,Math.max(0,Math.floor((performance.now()-replay.t0)/1000*30))); pos=replay.frames[i]; draw(); if(i<replay.frames.length-1) requestAnimationFrame(step); else onReplayEnd&&onReplayEnd(); }; requestAnimationFrame(step); } };
+      // Replays run at the screen's frame rate, sliding each ball between the 30-a-second positions the server sent.
+      if(replay){ const F=replay.frames, last=F.length-1; let ended=false; const step=()=>{ if(!cv.isConnected||ended) return; const f=Math.max(0,(performance.now()-replay.t0)/1000*30), i=Math.min(last,Math.floor(f)), u=Math.min(1,f-i), A=F[i], B=F[Math.min(last,i+1)], P={};
+          for(const id in A){ const a=A[id], b2=B[id]; P[id]=b2?[a[0]+(b2[0]-a[0])*u,a[1]+(b2[1]-a[1])*u]:a; } pos=P; draw();
+          if(f<last) requestAnimationFrame(step); else { ended=true; onReplayEnd&&onReplayEnd(); } }; requestAnimationFrame(step); } };
     requestAnimationFrame(start);
     if(typeof ResizeObserver!=='undefined'){ const ro=new ResizeObserver(()=>{ if(!cv.isConnected){ ro.disconnect(); return; } draw(); }); requestAnimationFrame(()=>ro.observe(cv)); }
     // Aim by moving the stick itself: press on the cue and swing it round the white ball. Touches anywhere else do nothing.
     if(cue&&canShoot){ const toTable=ev=>{ const r=cv.getBoundingClientRect(); return [(ev.clientX-r.left)/k-M,(ev.clientY-r.top)/k-M]; };
       const onStick=(px,py)=>{ const s=stickGeo(), vx=px-s.ax, vy=py-s.ay, along=vx*s.ux+vy*s.uy, across=Math.abs(vx*s.uy-vy*s.ux); return along>-0.05&&along<1.2&&across<0.055; };
       let grab=null;
-      cv.addEventListener('pointerdown',ev=>{ const [px,py]=toTable(ev); if(!onStick(px,py)) return; ev.preventDefault(); cv.setPointerCapture(ev.pointerId); const s=stickGeo(); grab={ a0:Math.atan2(py-s.c0y,px-s.c0x), aim0:this.aim }; cv.classList.add('grab'); });
-      cv.addEventListener('pointermove',ev=>{ const [px,py]=toTable(ev); if(!grab){ cv.style.cursor=onStick(px,py)?'grab':''; return; } const s=stickGeo(); let d=Math.atan2(py-s.c0y,px-s.c0x)-grab.a0; d=Math.atan2(Math.sin(d),Math.cos(d)); this.aim=grab.aim0+d; draw(); });
-      const end=()=>{ grab=null; cv.classList.remove('grab'); }; cv.addEventListener('pointerup',end); cv.addEventListener('pointercancel',end); }
+      let drag=null; const onCue=(px,py)=>{ const [qx,qy]=this.S(cue.x,cue.y); return Math.hypot(px-qx,py-qy)<BALL_R*2.6; };
+      cv.addEventListener('pointerdown',ev=>{ const [px,py]=toTable(ev); if(zone&&onCue(px,py)){ ev.preventDefault(); cv.setPointerCapture(ev.pointerId); drag=true; return; } if(!onStick(px,py)) return; ev.preventDefault(); cv.setPointerCapture(ev.pointerId); const s=stickGeo(); grab={ a0:Math.atan2(py-s.c0y,px-s.c0x), aim0:this.aim }; cv.classList.add('grab'); });
+      cv.addEventListener('pointermove',ev=>{ const [px,py]=toTable(ev);
+        if(drag){ const p={x:TABLE_W-py,y:px}; if(placeOk(others,p,zone)){ cue.x=p.x; cue.y=p.y; this.place={x:p.x,y:p.y}; draw(); } return; }
+        if(!grab){ cv.style.cursor=onStick(px,py)?'grab':''; return; } const s=stickGeo(); let d=Math.atan2(py-s.c0y,px-s.c0x)-grab.a0; d=Math.atan2(Math.sin(d),Math.cos(d)); this.aim=grab.aim0+d; draw(); });
+      const end=()=>{ grab=null; drag=null; cv.classList.remove('grab'); }; cv.addEventListener('pointerup',end); cv.addEventListener('pointercancel',end); }
     // the power bar (drag the cue down, let go to shoot)
     const pow=el('div',{class:'snkpow','aria-label':'Power: drag down and let go to shoot'}), fill=el('div',{class:'fill'}), stick=el('div',{class:'stick'}), pct=el('div',{class:'pct',text:''}); pow.append(fill, stick, pct);
-    const setPow=v=>{ this.power=Math.max(0,Math.min(1,v)); fill.style.height=`${this.power*100}%`; stick.style.transform=`translate(-50%, ${this.power*40}%)`; pct.textContent=this.power>0.02?`${Math.round(this.power*100)}%`:''; draw(); };
+    const setPow=v=>{ this.power=Math.max(0,Math.min(1,v)); fill.style.height=`${this.power*100}%`; stick.style.transform=`translate(-50%, calc(${this.power*100}% + ${this.power*12}px))`; pct.textContent=this.power>0.02?`${Math.round(this.power*100)}%`:''; draw(); };
     const spinBall=el('div',{class:'snkspin','aria-label':'Spin'}), dot=el('div',{class:'dot'}); spinBall.append(dot);
     const spinName=()=>this.spin.y>0.2?'Top spin':this.spin.y<-0.2?'Back spin':Math.abs(this.spin.x)>0.2?'Side spin':'Spin', spinLab=el('small',{text:spinName()});
     const showSpin=()=>{ dot.style.left=`${50+this.spin.x*38}%`; dot.style.top=`${50-this.spin.y*38}%`; spinLab.textContent=spinName(); }; showSpin();
     if(canShoot&&cue){ let start2=null; pow.addEventListener('pointerdown',ev=>{ pow.setPointerCapture(ev.pointerId); const r=pow.getBoundingClientRect(); start2=r; setPow((ev.clientY-r.top)/r.height); });
       pow.addEventListener('pointermove',ev=>{ if(start2) setPow((ev.clientY-start2.top)/start2.height); });
-      pow.addEventListener('pointerup',()=>{ if(!start2) return; start2=null; const p=this.power, sp={ ...this.spin }; setPow(0); if(p>=0.05){ this.spin={x:0,y:0}; showSpin(); onShoot(this.aim, p, sp); } }); // spin goes back to the centre after every shot
+      pow.addEventListener('pointerup',()=>{ if(!start2) return; start2=null; const p=this.power, sp={ ...this.spin }; setPow(0); if(p>=0.05){ this.spin={x:0,y:0}; showSpin(); onShoot(this.aim, p, sp, zone&&cue?{x:Math.round(cue.x*10000)/10000,y:Math.round(cue.y*10000)/10000}:undefined); } }); // spin goes back to the centre after every shot
       pow.addEventListener('pointercancel',()=>{ start2=null; setPow(0); }); }
     else pow.style.opacity=.45;
     if(canShoot){ let son=false; const setSpin=ev=>{ const r=spinBall.getBoundingClientRect(); let sx=((ev.clientX-r.left)/r.width-0.5)/0.38, sy=-((ev.clientY-r.top)/r.height-0.5)/0.38; const m=Math.hypot(sx,sy); if(m>1){ sx/=m; sy/=m; } if(m<0.18){ sx=0; sy=0; } this.spin={x:Math.round(sx*100)/100,y:Math.round(sy*100)/100}; showSpin(); };
@@ -3802,20 +3848,25 @@ const SnookerUI={ aim:0, power:0, spin:{x:0,y:0}, M:0.13,
     // The fine-aim wheel: roll it up or down to nudge the stick a fraction of a degree.
     const wheel=el('div',{class:'snkwheel','aria-label':'Fine aim: roll up or down'}), ridges=el('div',{class:'ridges'}); wheel.append(ridges);
     if(canShoot&&cue){ let wy=null, off=0; wheel.addEventListener('pointerdown',ev=>{ wheel.setPointerCapture(ev.pointerId); wy=ev.clientY; wheel.classList.add('on'); });
-      wheel.addEventListener('pointermove',ev=>{ if(wy==null) return; const d=ev.clientY-wy; wy=ev.clientY; off+=d; ridges.style.backgroundPositionY=`${off}px`; this.aim+=d*0.0011; draw(); });
+      wheel.addEventListener('pointermove',ev=>{ if(wy==null) return; const d=ev.clientY-wy; wy=ev.clientY; off+=d; ridges.style.backgroundPositionY=`${off}px`; this.aim+=d*0.00022; draw(); });
       const wend=()=>{ wy=null; wheel.classList.remove('on'); }; wheel.addEventListener('pointerup',wend); wheel.addEventListener('pointercancel',wend);
-      wheel.addEventListener('wheel',ev=>{ ev.preventDefault(); off-=ev.deltaY*0.3; ridges.style.backgroundPositionY=`${off}px`; this.aim-=ev.deltaY*0.0003; draw(); },{passive:false}); }
+      wheel.addEventListener('wheel',ev=>{ ev.preventDefault(); off-=ev.deltaY*0.3; ridges.style.backgroundPositionY=`${off}px`; this.aim-=ev.deltaY*0.00006; draw(); },{passive:false}); }
     else wheel.style.opacity=.45;
     const side=el('div',{class:'snkside'}, spinBall, spinLab, wheel, el('small',{text:'Fine aim'}));
     return el('div',{class:'snkrow'}, pow, cv, side); } };
 // ---- Tables: colonists playing each other (Whot, Ludo, Ayo, Snooker at a Game House; Hold'em at a Casino) ----
 const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, seats:2, quick:true, timer:null, sig:'', aim:0, power:0.55, replay:null, lastShotSig:'',
   async load(game,bid,quiet){ this.game=game; this.bid=bid; this.error=null; try{ const r=await api(`/api/me/tables?building=${encodeURIComponent(bid)}&game=${game}`); const ls=JSON.stringify(r.tables.map(t=>[t.id,t.status,t.players.length])); const changed=ls!==this.listSig||this.set(r.mine); this.listSig=ls; this.list=r.tables; if(!quiet||changed) renderCard(true); }catch(e){ if(!quiet){ this.list=[]; this.error=e.message; renderCard(true); } } this.poll(); },
-  set(t){ const was=this.mine&&this.mine.status; this.mine=t; const sig=t?JSON.stringify({...t, now:0}):''; const changed=sig!==this.sig; this.sig=sig; if(t&&/^(snooker|pool8|pool9)$/.test(t.game)&&t.view&&t.view.last){ const ls=JSON.stringify(t.view.last.potted)+t.view.log.length; if(ls!==this.lastShotSig){ this.lastShotSig=ls; if(this.lastShotSig&&t.view.last.frames) this.replay={ frames:t.view.last.frames, t0:performance.now() }; } } if(changed&&(was!==(t&&t.status))) this.poll(); return changed; },
+  set(t){ const was=this.mine&&this.mine.status; this.mine=t; const sig=t?JSON.stringify({...t, now:0}):''; const changed=sig!==this.sig; this.sig=sig;
+    // Cue games: replay every shot taken since we last looked, one after another (the computer's too).
+    if(t&&/^(snooker|pool8|pool9)$/.test(t.game)&&t.view){ const v=t.view; if(this.seenTable!==t.id){ this.seenTable=t.id; this.seen=v.seq||0; this.queue=[]; this.replay=null; }
+      const fresh=(v.shots||[]).filter(x=>x.seq>this.seen); if(fresh.length){ this.seen=Math.max(...fresh.map(x=>x.seq)); for(const x of fresh) if(x.frames&&x.frames.length) this.queue.push(x.frames); if(!this.replay) this.nextReplay(); } }
+    if(changed&&(was!==(t&&t.status))) this.poll(); return changed; },
+  nextReplay(){ const f=(this.queue||[]).shift(); this.replay=f?{ frames:f, t0:performance.now() }:null; return !!f; },
   // While a table is on screen: follow the game (every 1.5 s), or keep the list of open tables fresh (every 4 s).
   poll(){ clearInterval(this.timer); const playing=this.mine&&this.mine.status!=='done';
     this.timer=setInterval(async()=>{ if(!document.querySelector('#card .tbl')){ clearInterval(this.timer); this.timer=null; return; }
-      try{ if(playing){ const r=await api('/api/me/table'); if(this.set(r.table)) renderCard(true); else { const el2=document.querySelector('#card .tbl .timer'); if(el2&&this.mine) el2.textContent=this.left(); } }
+      try{ if(playing){ const r=await api('/api/me/table'), anim=!!this.replay||Date.now()<(this.animUntil||0); if(this.set(r.table)&&!anim) renderCard(true); else { const el2=document.querySelector('#card .tbl .timer'); if(el2&&this.mine) el2.textContent=this.left(); } }
         else if(!this.busy) await this.load(this.game,this.bid,true); }catch(e){} }, playing?1500:4000); },
   left(){ const t=this.mine; if(!t||t.status!=='playing') return ''; const s=Math.max(0,Math.ceil((t.turnAt-Date.now()-skew)/1000)); return `⏱ ${s}s`; },
   async act(body){ if(this.busy) return; this.busy=true; renderCard(true);
@@ -3831,7 +3882,7 @@ const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, s
     // the lobby: open tables, open one, or play the computer
     const open=(this.list||[]).filter(x=>x.status==='waiting'), live=(this.list||[]).filter(x=>x.status==='playing');
     box.append(el('h4',{class:'bgroup',text:`Play someone at ${G.name}`}));
-    if(open.length){ const L=el('div',{class:'tlist'}); for(const x of open) L.append(el('div',{class:'trow'}, el('div',{class:'tl'}, el('b',{text:`${x.stake?fmt(x.stake)+' coins':'Friendly'} · ${x.players.length} of ${x.seats}${x.opts.quick?' · quick':''}`}), el('span',{class:'hint',text:x.players.map(p=>'@'+p.handle).join(', ')})),
+    if(open.length){ const L=el('div',{class:'tlist'}); for(const x of open) L.append(el('div',{class:'trow'}, el('div',{class:'tl'}, el('b',{text:`${x.stake?fmt(x.stake)+' coins':'Friendly'} · ${x.players.length} of ${x.seats}${x.opts.quick?' · quick':''}${x.opts.street?' · street':''}`}), el('span',{class:'hint',text:x.players.map(p=>'@'+p.handle).join(', ')})),
         el('button',{class:'btn primary sm',text:x.stake?`Join (${fmt(x.stake)})`:'Join',disabled:this.busy,onclick:()=>this.act({action:'join',id:x.id})}))); box.append(L); }
     else box.append(el('p',{class:'hint',text:'No open tables right now. Open one and others can join.'}));
     if(live.length) box.append(el('p',{class:'hint',text:`${live.length} game${live.length>1?'s':''} being played here now.`}));
@@ -3840,13 +3891,15 @@ const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, s
     if(Number(this.seats)<G.min||Number(this.seats)>G.max) this.seats=G.min;
     box.append(el('h4',{class:'bgroup',text:'Open a table'}), el('div',{class:'cbet'}, el('span',{text:'Stake'}), st, el('button',{class:'pill',text:'Friendly',onclick:()=>{ this.stake=0; renderCard(true); }}), el('button',{class:'pill',text:'500',onclick:()=>{ this.stake=500; renderCard(true); }}), el('button',{class:'pill',text:'2k',onclick:()=>{ this.stake=2000; renderCard(true); }})));
     if(seatsRow) box.append(seatsRow);
+    if(game==='whot') box.append(el('div',{class:'cpicks'}, el('button',{class:'pill'+(!this.street?' on':''),text:'Classic Whot',onclick:()=>{ this.street=false; renderCard(true); }}), el('button',{class:'pill'+(this.street?' on':''),text:'Street Whot',onclick:()=>{ this.street=true; renderCard(true); }})),
+      el('p',{class:'hint',text:this.street?'Street Whot: no 2s, 14s or Whot cards, and 5 and 8 are ordinary cards. When the market runs out the game ends: lowest total of cards in hand wins.':'Classic: 1 hold on, 2 pick two, 5 pick three, 8 suspension, 14 general market, 20 Whot.'}));
     if(game==='ludo') box.append(el('div',{class:'cpicks'}, el('button',{class:'pill'+(this.quick?' on':''),text:'Quick (2 tokens)',onclick:()=>{ this.quick=true; renderCard(true); }}), el('button',{class:'pill'+(!this.quick?' on':''),text:'Classic (4 tokens)',onclick:()=>{ this.quick=false; renderCard(true); }})));
     box.append(el('p',{class:'hint',text:`Everyone puts in the stake; the winner takes the pot less ${Math.round(RAKE*100)}% for the house. A draw splits it. Slow players get ${45} seconds a turn.`}),
-      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Open a table',disabled:this.busy,onclick:()=>this.act({action:'create',buildingId:bid,game,stake:Math.max(0,Math.floor(Number(this.stake)||0)),seats:Number(this.seats),quick:this.quick})}),
-        el('button',{class:'btn',text:'🤖 Play the computer (free)',disabled:this.busy,onclick:()=>this.act({action:'create',buildingId:bid,game,stake:0,seats:Number(this.seats)||G.min,quick:this.quick,computer:true})})));
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Open a table',disabled:this.busy,onclick:()=>this.act({action:'create',buildingId:bid,game,stake:Math.max(0,Math.floor(Number(this.stake)||0)),seats:Number(this.seats),quick:this.quick,street:!!this.street})}),
+        el('button',{class:'btn',text:'🤖 Play the computer (free)',disabled:this.busy,onclick:()=>this.act({action:'create',buildingId:bid,game,stake:0,seats:Number(this.seats)||G.min,quick:this.quick,street:!!this.street,computer:true})})));
     return box; },
   table(t, box){ const G=TABLE_GAMES[t.game], v=t.view, mine=t.seat;
-    box.append(el('div',{class:'tbar'}, el('b',{text:`${G.icon} ${G.name}${t.stake?` · pot ${fmt(t.pot)}`:' · friendly'}`}), el('span',{class:'timer',text:this.left()})));
+    box.append(el('div',{class:'tbar'}, el('b',{text:`${G.icon} ${t.opts&&t.opts.street?'Street ':''}${G.name}${t.stake?` · pot ${fmt(t.pot)}`:' · friendly'}`}), el('span',{class:'timer',text:this.left()})));
     const seats=el('div',{class:'seats'}); t.players.forEach((p,i)=>seats.append(el('span',{class:'seat'+(v&&v.turn===i?' on':'')+(i===mine?' me':'')+(p.left||(v&&v.out&&v.out[i])?' gone':''),text:`${p.missed&&!p.left?'⚠️ ':''}${p.bot?'🤖 ':''}${i===mine?'You':'@'+p.handle}${v&&v.counts?` · ${v.counts[i]}🂠`:''}${v&&v.store?` · ${v.store[i]}`:''}${v&&v.score?` · ${v.score[i]}`:''}`})));
     for(let i=t.players.length;i<t.seats;i++) seats.append(el('span',{class:'seat',text:'empty seat'})); box.append(seats);
     if(t.status==='waiting'){ box.append(el('p',{class:'hint',style:'text-align:center',text:`Waiting for ${t.seats-t.players.length} more player${t.seats-t.players.length>1?'s':''}…`}), el('div',{class:'row-actions'}, el('button',{class:'linkb',text:t.stake?`Leave and get ${fmt(t.stake)} back`:'Leave',onclick:()=>this.act({action:'leave'})}))); return box; }
@@ -3858,20 +3911,48 @@ const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, s
     else box.append(el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Leave the game',onclick:()=>toast(t.stake?'Leave now? You lose your stake and the game plays on without you.':'Leave this game?','Leave',()=>this.act({action:'leave'}))})));
     return box; },
   boards:{
-    whot(t,v){ const w=el('div',{class:'ghstage'}), my=t.canMove, legal=new Set();
-      const card=(c,big,on)=>{ const [s,n]=c.split(':'); return el('button',{class:'wcard'+(s==='whot'?' whot':'')+(big?' big':'')+(on===false?' no':''),disabled:big||on===false||!my,onclick:()=>{ if(s==='whot'){ this.pickCall=c; renderCard(true); } else this.move({card:c}); }}, el('span',{class:'ws',text:s==='whot'?'W':WHOT_SHAPES[s]}), el('span',{text:n})); };
+    whot(t,v){ const w=el('div',{class:'ghstage whot'+(v.street?' street':'')}), my=t.canMove, me=t.seat<0?0:t.seat, mk=GH.mk.bind(GH);
+      // A card: cream with maroon shapes and numbers in the corners, like the printed Nigerian deck; Whot cards are maroon.
+      const shapeSVG=(sh,size,col)=>{ const sv=GH.svg('-10 -10 20 20'); sv.classList.add('wsh'); sv.style.width=sv.style.height=size+'px';
+        const P={circle:()=>mk('circle',{r:8.2}),triangle:()=>mk('path',{d:'M0 -8.6 L8.6 7 L-8.6 7 Z'}),cross:()=>mk('path',{d:'M-2.8 -8.6 H2.8 V-2.8 H8.6 V2.8 H2.8 V8.6 H-2.8 V2.8 H-8.6 V-2.8 H-2.8 Z'}),square:()=>mk('rect',{x:-7.6,y:-7.6,width:15.2,height:15.2}),
+          star:()=>mk('path',{d:'M0 -9 L2.6 -2.9 L9 -2.6 L4 1.5 L5.6 8 L0 4.4 L-5.6 8 L-4 1.5 L-9 -2.6 L-2.6 -2.9 Z'})}[sh]; if(P){ const e=P(); e.setAttribute('fill',col); sv.append(e); } return sv; };
+      const face=(c,cls='',on)=>{ const [s,n]=c.split(':'), whot=s==='whot', b=el('button',{class:'wc '+cls+(whot?' wild':'')+(on===false?' no':'')+(on===true?' ok':''),'aria-label':whot?'Whot 20':`${s} ${n}`});
+        const corner=k=>el('span',{class:'wcn '+k}, el('b',{text:n}), whot?el('i',{text:'W'}):shapeSVG(s,9,'currentColor'));
+        b.append(corner('tl'), el('span',{class:'wmid'}, whot?el('span',{class:'wword',text:'WHOT'}):shapeSVG(s,cls.includes('big')?52:34,'currentColor')), corner('br'));
+        if(!whot&&[1,2,5,8,14].includes(Number(n))&&!v.street) b.append(el('span',{class:'wtag',text:{1:'hold on',2:'pick 2',5:'pick 3',8:'suspend',14:'market'}[n]}));
+        else if(v.street&&Number(n)===1) b.append(el('span',{class:'wtag',text:'hold on'}));
+        return b; };
+      const back=cls=>el('span',{class:'wc back '+(cls||'')}, el('span',{class:'wword',text:'WHOT'}));
       const top=v.top, [ts]=top.split(':'), topN=Number(top.split(':')[1]), shape=v.call||ts;
-      w.append(el('div',{class:'wtop'}, card(top,true,true), el('div',null, el('p',{text:`Market: ${v.market} cards`}), v.call?el('p',{text:`Called: ${WHOT_SHAPES[v.call]} ${v.call}`}):'', my?el('button',{class:'btn',text:'Draw from market',onclick:()=>this.move({draw:true})}):el('p',{class:'hint',text:'Their turn…'}))));
       const can=c=>{ const [s,n]=c.split(':'); return s==='whot'||s===shape||(Number(n)===topN&&ts!=='whot'); };
-      w.append(el('div',{class:'whand'}, ...v.hand.map(c=>card(c,false,my?can(c):false))));
-      if(this.pickCall&&my) w.append(el('div',{class:'cpicks',style:'justify-content:center'}, el('span',{text:'Call a shape:'}), ...Object.entries(WHOT_SHAPES).map(([k,sym])=>el('button',{class:'pill',text:`${sym} ${k}`,onclick:()=>{ const c=this.pickCall; this.pickCall=null; this.move({card:c,call:k}); }}))));
+      // opponents: their cards face down
+      const opp=el('div',{class:'wopps'}); t.players.forEach((p,i)=>{ if(i===t.seat) return; const n=v.counts[i]||0, row=el('div',{class:'wopp'+(v.turn===i?' on':'')}, el('b',{text:(p.bot?'🤖 ':'')+'@'+p.handle+` · ${n}`}));
+        const fan=el('div',{class:'wfan'}); for(let k=0;k<Math.min(n,10);k++) fan.append(back('mini')); row.append(fan); opp.append(row); }); w.append(opp);
+      // the table: the market (face down) and the pile, with the last couple of cards peeking out underneath
+      const pileKey=t.id+':'+v.pile+':'+top, fresh=this.whotPile!==pileKey&&this.whotPileTable===t.id; this.whotPile=pileKey; this.whotPileTable=t.id;
+      const market=el('button',{class:'wmarket',disabled:!my,onclick:()=>this.move({draw:true}),'aria-label':'Draw from the market'}, back('big'), back('big m2'), back('big m3'), el('span',{class:'wmc',text:String(v.market)}));
+      const pile=el('div',{class:'wpile'}, el('span',{class:'wc big ghost g1'}), el('span',{class:'wc big ghost g2'}), face(top,'big'+(fresh?' land':'')));
+      w.append(el('div',{class:'wtable'}, el('div',{class:'wcol'}, market, el('small',{text:v.street?`Market: ${v.market} (game ends at 0)`:`Market: ${v.market}`})), el('div',{class:'wcol'}, pile, el('small',{text:v.call?`Called: ${v.call}`:'The pile'}))));
+      if(v.call) w.append(el('p',{class:'wcall'}, 'Whot! They want ', shapeSVG(v.call,16,'#7A1F2B'), ` ${v.call}`));
+      // your hand: fanned, playable cards lifted
+      const seen=new Set(this.whotHand||[]); this.whotHand=v.hand.slice();
+      const hand=el('div',{class:'whand2'}); v.hand.forEach(c=>{ const ok=my?can(c):null, b=face(c,(seen.size&&!seen.has(c)?'new ':''),ok);
+        b.disabled=!my||!ok; b.onclick=()=>{ if(c.startsWith('whot')){ this.pickCall=c; renderCard(true); } else this.move({card:c}); }; hand.append(b); });
+      if(t.status!=='done') w.append(el('p',{class:'hint',style:'text-align:center;margin:6px 0 2px',text:my?(v.hand.some(can)?'Your turn: tap a lifted card, or tap the market to draw.':'Nothing matches: tap the market to draw.'):v.turn==null?'':'Their turn…'}), hand);
+      if(this.pickCall&&my) w.append(el('div',{class:'cpicks',style:'justify-content:center'}, el('span',{text:'Call a shape:'}), ...Object.keys(WHOT_SHAPES).map(k=>{ const b=el('button',{class:'pill wpickc',onclick:()=>{ const c=this.pickCall; this.pickCall=null; this.move({card:c,call:k}); }}); b.append(shapeSVG(k,16,'#7A1F2B'), document.createTextNode(' '+k)); return b; })));
+      // the end: everyone's cards and totals
+      if(v.final){ const box=el('div',{class:'wfinal'}, el('b',{text:v.counted?(v.street?'The market ran out. Cards are counted:':'Cards are counted:'):'Cards left:'}));
+        v.final.forEach((f,i)=>{ if(f.out) return; const won=v.winners&&v.winners.includes(i), row=el('div',{class:'wfrow'+(won?' won':'')}, el('span',{class:'wfwho',text:(won?'🏆 ':'')+(i===t.seat?'You':(t.players[i]?.bot?'🤖 ':'')+'@'+(t.players[i]?.handle||'?'))}));
+          const cards=el('span',{class:'wfcards'}); f.hand.forEach(c=>cards.append(face(c,'mini'))); row.append(cards, el('b',{class:'wftot',text:`total = ${f.total}`})); box.append(row); });
+        w.append(box); }
       const names=i=>i===t.seat?'You':(t.players[i]?.bot?'🤖 ':'')+'@'+(t.players[i]?.handle||'?');
-      if(v.log.length) w.append(el('p',{class:'hint',style:'text-align:center',text:v.log.slice(-3).map(([s,a,c,k])=>`${names(s)} ${a==='drew'?'drew':`played ${c?c.replace('whot:20','Whot').replace(/(\w+):(\d+)/,(m,a2,b2)=>`${WHOT_SHAPES[a2]||''}${b2}`):''}${k?` (called ${k})`:''}`}`).join(' · ')}));
+      if(v.log.length) w.append(el('p',{class:'hint',style:'text-align:center',text:v.log.slice(-3).map(([s,a,c,k])=>`${names(s)} ${a==='drew'?'drew':a==='forfeited'?'forfeited':`played ${c?c.replace('whot:20','Whot').replace(/(\w+):(\d+)/,(m,a2,b2)=>`${a2} ${b2}`):''}${k?` (called ${k})`:''}`}`).join(' · ')}));
       return w; },
     ayo(t,v){ const w=el('div',{class:'ghstage'}), me=t.seat<0?0:t.seat, my=t.canMove, mk=GH.mk.bind(GH);
       // A vertical wooden board: your pits down the left (sowing runs anticlockwise: down your side, up theirs),
       // your store at the bottom and theirs at the top. Each pit shows its pebbles, with the count beside it.
-      const W=300, H=640, svg=GH.svg(`0 0 ${W} ${H}`); svg.style.maxHeight='66vh'; svg.style.width='auto'; svg.style.maxWidth='100%';
+      const W=300, H=640, holder=el('div',{class:'ayohold'}), mine=me===0?[0,1,2,3,4,5]:[6,7,8,9,10,11], theirs=(me===0?[6,7,8,9,10,11]:[0,1,2,3,4,5]).slice().reverse(), y0=22+76+14+34, dy=((H-98-14-34)-y0)/5;
+      const draw=(P,ST,o={})=>{ const svg=GH.svg(`0 0 ${W} ${H}`); svg.style.maxHeight='66vh'; svg.style.width='auto'; svg.style.maxWidth='100%'; const live=!o.anim&&my;
       const defs=mk('defs',{}); defs.innerHTML=`<linearGradient id="ayoWood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EBD3A2"/><stop offset=".55" stop-color="#DDBE84"/><stop offset="1" stop-color="#C9A267"/></linearGradient>
         <radialGradient id="ayoPit" cx=".5" cy=".62" r=".62"><stop offset="0" stop-color="#E9D2A3"/><stop offset=".7" stop-color="#C9A56C"/><stop offset="1" stop-color="#9C7744"/></radialGradient>
         <radialGradient id="pebBlue" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#C9D8FF"/><stop offset=".45" stop-color="#7F9FE6"/><stop offset="1" stop-color="#3F5FA8"/></radialGradient>
@@ -3885,65 +3966,115 @@ const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, s
       const pebbles=(g,cx,cy,rx,ry,n,key)=>{ const r=seeded(key*977+13), shown=Math.min(n,rx>40?28:14);
         for(let k=0;k<shown;k++){ const a=r()*Math.PI*2, d=Math.sqrt(r())*0.78, x=cx+Math.cos(a)*rx*d, y=cy+Math.sin(a)*ry*d, rot=r()*180;
           g.append(mk('ellipse',{cx:x,cy:y,rx:7.2,ry:6,transform:`rotate(${rot} ${x} ${y})`,fill:COLS[Math.floor(r()*COLS.length)],filter:'url(#pebShadow)'})); } };
-      const mine=me===0?[0,1,2,3,4,5]:[6,7,8,9,10,11], theirs=(me===0?[6,7,8,9,10,11]:[0,1,2,3,4,5]).slice().reverse();
-      const stores=[{y:22,h:76,count:v.store[1-me],label:'theirs'},{y:H-98,h:76,count:v.store[me],label:'yours'}];
+      const stores=[{y:22,h:76,count:ST[1-me],label:'theirs'},{y:H-98,h:76,count:ST[me],label:'yours'}];
       for(const st of stores){ svg.append(mk('rect',{x:84,y:st.y,width:132,height:st.h,rx:40,fill:'url(#ayoPit)',stroke:'rgba(120,85,40,.35)'})); const g=mk('g',{}); pebbles(g,150,st.y+st.h/2,52,22,st.count,st.label==='yours'?101:202); svg.append(g);
         svg.append(mk('text',{x:st.label==='yours'?40:260,y:st.y+st.h/2+7,'text-anchor':'middle','font-size':20,'font-weight':800,fill:'currentColor'},String(st.count)),
           mk('text',{x:st.label==='yours'?40:260,y:st.y+st.h/2+24,'text-anchor':'middle','font-size':9,'font-weight':600,fill:'currentColor',opacity:.7},st.label)); }
-      const y0=22+76+14+34, dy=((H-98-14-34)-y0)/5;
-      const pit=(i,x,y,side)=>{ const n=v.pits[i], go=my&&side==='mine'&&n>0;
-        svg.append(mk('circle',{cx:x,cy:y,r:34,fill:'url(#ayoPit)',stroke:go?'#F2C94C':v.last===i?'rgba(217,113,74,.8)':'rgba(120,85,40,.35)','stroke-width':go?4:v.last===i?3:1.5}));
+      const pit=(i,x,y,side)=>{ const n=P[i], go=live&&side==='mine'&&n>0, hl=o.hl===i||(o.capt&&o.capt.includes(i));
+        svg.append(mk('circle',{cx:x,cy:y,r:34,fill:'url(#ayoPit)',stroke:go?'#F2C94C':hl?'#F2C94C':(o.from===i||(!o.anim&&v.last===i))?'rgba(217,113,74,.8)':'rgba(120,85,40,.35)','stroke-width':go||hl?4:(o.from===i||v.last===i)?3:1.5}));
         const g=mk('g',{}); pebbles(g,x,y,24,24,n,i+1); svg.append(g);
         svg.append(mk('text',{x:side==='mine'?40:260,y:y+7,'text-anchor':'middle','font-size':18,'font-weight':800,fill:'currentColor'},String(n)));
         if(go){ const hit=mk('circle',{cx:x,cy:y,r:36,fill:'transparent',style:'cursor:pointer'}); hit.addEventListener('click',()=>this.move({pit:i})); svg.append(hit); } };
       mine.forEach((i,k)=>pit(i,104,y0+k*dy,'mine')); theirs.forEach((i,k)=>pit(i,196,y0+k*dy,'theirs'));
+      // the pebble in flight: from the last pit to the next one
+      if(o.fly){ const [a0,a1]=o.fly.map(at), pb=mk('ellipse',{cx:0,cy:0,rx:8,ry:6.6,fill:'url(#pebBlue)',filter:'url(#pebShadow)',class:'ayofly'}); pb.style.transform=`translate(${a0[0]}px,${a0[1]-6}px)`; svg.append(pb);
+        requestAnimationFrame(()=>requestAnimationFrame(()=>{ pb.style.transform=`translate(${a1[0]}px,${a1[1]}px)`; })); }
+      return svg; };
+      // Where each pit (or a store, -1 mine / -2 theirs) is on the board.
+      const at=i=>{ if(i===-1) return [150,H-60]; if(i===-2) return [150,60]; const k1=mine.indexOf(i); if(k1>=0) return [104,y0+k1*dy]; const k2=theirs.indexOf(i); return [196,y0+k2*dy]; };
       const names=i=>i===t.seat?'You':(t.players[i]?.bot?'🤖 ':'')+'@'+(t.players[i]?.handle||'?');
-      w.append(svg, el('p',{class:'hint',style:'text-align:center',text:my?'Your turn: tap one of your pits (the left side, glowing) to sow.':v.turn==null?'':'Their turn…'}));
+      // A new move: replay it. The pebbles are lifted from the pit, dropped one by one round the board, then any capture
+      // flies to the player's store. Otherwise just show the board as it is.
+      const A=v.anim, key=t.id+':'+(A&&A.seq);
+      if(A&&this.ayoSeen!==key&&this.ayoSeen!==undefined&&this.ayoSeenTable===t.id){ this.ayoSeen=key; const steps=[], P=A.before.slice(), ST=A.storeBefore.slice(); let n=P[A.pit], i=A.pit; P[A.pit]=0; steps.push({P:P.slice(),ST:ST.slice(),o:{anim:1,from:A.pit}});
+        let prev=A.pit; while(n){ i=(i+1)%12; if(i===A.pit) continue; P[i]++; n--; steps.push({P:P.slice(),ST:ST.slice(),o:{anim:1,from:A.pit,hl:i,fly:[prev,i]}}); prev=i; }
+        if(A.capt&&A.capt.length){ steps.push({P:P.slice(),ST:ST.slice(),o:{anim:1,capt:A.capt}}); let got=0; for(const c of A.capt){ got+=P[c]; P[c]=0; } ST[A.seat]+=got; steps.push({P:P.slice(),ST:ST.slice(),o:{anim:1,capt:A.capt,fly:[A.capt[0],A.seat===me?-1:-2]}}); }
+        const STEP=330; this.animUntil=Date.now()+steps.length*STEP+400; let k=0; const show=()=>{ if(!holder.isConnected&&k>0) return; const st=steps[k]; holder.replaceChildren(draw(st.P,st.ST,st.o)); k++; if(k<steps.length) setTimeout(show,STEP); else setTimeout(()=>{ this.animUntil=0; renderCard(true); },450); };
+        show(); }
+      else { this.ayoSeen=key; this.ayoSeenTable=t.id; holder.replaceChildren(draw(v.pits,v.store)); }
+      w.append(holder, el('p',{class:'hint',style:'text-align:center',text:my?'Your turn: tap one of your pits (the left side, glowing) to sow.':v.turn==null?'':'Their turn…'}));
       const lg=v.log.slice(-2).map(([s,a,pt,got])=>a==='sowed'?`${names(s)} sowed${got?` and captured ${got}`:''}`:a==='side empty'?`${names(s)} ran out: the rest went to the other side`:a==='forfeited'?`${names(s)} forfeited`:'').filter(Boolean);
       if(lg.length) w.append(el('p',{class:'hint',style:'text-align:center',text:lg.join(' · ')}));
       return w; },
-    ludo(t,v){ const w=el('div',{class:'ghstage'}), N=15, sz=20, svg=GH.svg(`0 0 ${N*sz} ${N*sz}`), mk=GH.mk.bind(GH), my=t.canMove;
-      const COL={0:'#D6483C',13:'#3FA65A',26:'#E8B92F',39:'#3E7CC9'};
+    ludo(t,v){ const w=el('div',{class:'ghstage'}), N=15, sz=20, mk=GH.mk.bind(GH), my=t.canMove;
+      const COL={0:'#D9433A',13:'#2FA35A',26:'#F0B429',39:'#2F78D0'}, DARK={0:'#9E2A22',13:'#1C7440',26:'#B98112',39:'#1D5296'}, LIGHT={0:'#FF8A7D',13:'#7FDCA0',26:'#FFE08A',39:'#86B8F2'};
       const PATH=[[1,6],[2,6],[3,6],[4,6],[5,6],[6,5],[6,4],[6,3],[6,2],[6,1],[6,0],[7,0],[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[9,6],[10,6],[11,6],[12,6],[13,6],[14,6],[14,7],[14,8],[13,8],[12,8],[11,8],[10,8],[9,8],[8,9],[8,10],[8,11],[8,12],[8,13],[8,14],[7,14],[6,14],[6,13],[6,12],[6,11],[6,10],[6,9],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8],[0,7],[0,6]];
       const HOMECOL={0:[[1,7],[2,7],[3,7],[4,7],[5,7]],13:[[7,1],[7,2],[7,3],[7,4],[7,5]],26:[[13,7],[12,7],[11,7],[10,7],[9,7]],39:[[7,13],[7,12],[7,11],[7,10],[7,9]]};
       const YARD={0:[0,0],13:[9,0],26:[9,9],39:[0,9]};
-      svg.append(mk('rect',{x:0,y:0,width:N*sz,height:N*sz,fill:'#FBF8F1',rx:10}));
-      for(const [st,[yx,yy]] of Object.entries(YARD)){ svg.append(mk('rect',{x:yx*sz,y:yy*sz,width:6*sz,height:6*sz,fill:COL[st],rx:8}), mk('rect',{x:yx*sz+sz,y:yy*sz+sz,width:4*sz,height:4*sz,fill:'#FBF8F1',rx:6})); }
-      PATH.forEach(([x,y],i)=>svg.append(mk('rect',{x:x*sz+1,y:y*sz+1,width:sz-2,height:sz-2,fill:COL[i]||(LUDO_SAFE.includes(i)?'#EFE7D8':'#fff'),stroke:'#D8CFBF','stroke-width':1,rx:3})));
-      PATH.forEach(([x,y],i)=>{ if(LUDO_SAFE.includes(i)&&!COL[i]) svg.append(mk('text',{x:x*sz+sz/2,y:y*sz+sz*0.72,'text-anchor':'middle','font-size':11,fill:'#B9A985'},'★')); });
-      for(const [st,cells] of Object.entries(HOMECOL)) cells.forEach(([x,y])=>svg.append(mk('rect',{x:x*sz+1,y:y*sz+1,width:sz-2,height:sz-2,fill:COL[st],opacity:0.75,rx:3})));
-      svg.append(mk('polygon',{points:`${6*sz},${6*sz} ${9*sz},${6*sz} ${7.5*sz},${7.5*sz}`,fill:COL[13]}), mk('polygon',{points:`${9*sz},${6*sz} ${9*sz},${9*sz} ${7.5*sz},${7.5*sz}`,fill:COL[26]}), mk('polygon',{points:`${9*sz},${9*sz} ${6*sz},${9*sz} ${7.5*sz},${7.5*sz}`,fill:COL[39]}), mk('polygon',{points:`${6*sz},${9*sz} ${6*sz},${6*sz} ${7.5*sz},${7.5*sz}`,fill:COL[0]}));
+      // Where a token is drawn: in its yard, on the track, up its home column, or in the centre.
+      const spot=(st,p,i)=>{ const [yx,yy]=YARD[st]; if(p===-1) return [(yx+1.75+(i%2)*2.5)*sz,(yy+1.75+Math.floor(i/2)*2.5)*sz];
+        if(p===56){ const a=[0,13,26,39].indexOf(Number(st))*Math.PI/2+Math.PI*0.75; return [7.5*sz+Math.cos(a)*sz*0.7+(i%2-0.5)*5,7.5*sz+Math.sin(a)*sz*0.7+(Math.floor(i/2)-0.5)*5]; }
+        if(p>50){ const [x,y]=HOMECOL[st][p-51]; return [(x+0.5)*sz,(y+0.5)*sz]; } const [x,y]=PATH[(Number(st)+p)%52]; return [(x+0.5)*sz,(y+0.5)*sz]; };
+      const board=(tokPos,o={})=>{ const svg=GH.svg(`-8 -8 ${N*sz+16} ${N*sz+16}`); svg.classList.add('ludosvg');
+        const defs=mk('defs',{}); defs.innerHTML=`<linearGradient id="ldFrame" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8A5530"/><stop offset=".5" stop-color="#6B3E1F"/><stop offset="1" stop-color="#4A2812"/></linearGradient>
+          <linearGradient id="ldBoard" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFDF7"/><stop offset="1" stop-color="#F1EAD9"/></linearGradient>
+          <linearGradient id="ldCell" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EFE9DC"/></linearGradient>
+          <radialGradient id="ldWell" cx=".5" cy=".4" r=".6"><stop offset="0" stop-color="#E9E2D2"/><stop offset="1" stop-color="#C9BFA9"/></radialGradient>
+          ${[0,13,26,39].map(k=>`<linearGradient id="ldY${k}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${LIGHT[k]}"/><stop offset=".55" stop-color="${COL[k]}"/><stop offset="1" stop-color="${DARK[k]}"/></linearGradient>
+          <radialGradient id="ldT${k}" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".9"/><stop offset=".25" stop-color="${LIGHT[k]}"/><stop offset=".7" stop-color="${COL[k]}"/><stop offset="1" stop-color="${DARK[k]}"/></radialGradient>`).join('')}
+          <filter id="ldSh" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="1.6" stdDeviation="1.2" flood-color="#000" flood-opacity=".35"/></filter>`; svg.append(defs);
+        svg.append(mk('rect',{x:-8,y:-8,width:N*sz+16,height:N*sz+16,rx:14,fill:'url(#ldFrame)'}), mk('rect',{x:0,y:0,width:N*sz,height:N*sz,rx:8,fill:'url(#ldBoard)'}));
+        for(const [st,[yx,yy]] of Object.entries(YARD)){ svg.append(mk('rect',{x:yx*sz+2,y:yy*sz+2,width:6*sz-4,height:6*sz-4,fill:`url(#ldY${st})`,rx:12,filter:'url(#ldSh)'}), mk('rect',{x:yx*sz+sz*0.8,y:yy*sz+sz*0.8,width:4.4*sz,height:4.4*sz,fill:'#FFFDF7',rx:14,stroke:DARK[st],'stroke-width':1.5,'stroke-opacity':.4}));
+          for(let i=0;i<4;i++) svg.append(mk('circle',{cx:(yx+1.75+(i%2)*2.5)*sz,cy:(yy+1.75+Math.floor(i/2)*2.5)*sz,r:sz*0.55,fill:'url(#ldWell)',stroke:COL[st],'stroke-width':1.6,'stroke-opacity':.6})); }
+        PATH.forEach(([x,y],i)=>svg.append(mk('rect',{x:x*sz+0.8,y:y*sz+0.8,width:sz-1.6,height:sz-1.6,fill:COL[i]?`url(#ldY${i})`:'url(#ldCell)',stroke:'#D9CFBB','stroke-width':.8,rx:3.5})));
+        PATH.forEach(([x,y],i)=>{ if(COL[i]) svg.append(mk('path',{d:`M${x*sz+5} ${y*sz+sz/2} h${sz-10} m-4 -4 l4 4 l-4 4`,stroke:'#fff','stroke-width':1.8,fill:'none','stroke-linecap':'round','stroke-linejoin':'round',transform:`rotate(${[0,13,26,39].indexOf(i)*90-0} ${x*sz+sz/2} ${y*sz+sz/2})`}));
+          else if(LUDO_SAFE.includes(i)) svg.append(mk('path',{d:'M0 -6 L1.8 -1.9 L6 -1.9 L2.6 0.8 L3.8 5 L0 2.5 L-3.8 5 L-2.6 0.8 L-6 -1.9 L-1.8 -1.9 Z',fill:'#D8C089',transform:`translate(${x*sz+sz/2} ${y*sz+sz/2+0.5})`})); });
+        for(const [st,cells] of Object.entries(HOMECOL)) cells.forEach(([x,y])=>svg.append(mk('rect',{x:x*sz+0.8,y:y*sz+0.8,width:sz-1.6,height:sz-1.6,fill:`url(#ldY${st})`,rx:3.5})));
+        const c=7.5*sz; svg.append(mk('polygon',{points:`${6*sz},${6*sz} ${9*sz},${6*sz} ${c},${c}`,fill:`url(#ldY13)`}), mk('polygon',{points:`${9*sz},${6*sz} ${9*sz},${9*sz} ${c},${c}`,fill:`url(#ldY26)`}), mk('polygon',{points:`${9*sz},${9*sz} ${6*sz},${9*sz} ${c},${c}`,fill:`url(#ldY39)`}), mk('polygon',{points:`${6*sz},${9*sz} ${6*sz},${6*sz} ${c},${c}`,fill:`url(#ldY0)`}),
+          mk('circle',{cx:c,cy:c,r:sz*0.62,fill:'#FFFDF7',filter:'url(#ldSh)'}), mk('text',{x:c,y:c+5,'text-anchor':'middle','font-size':14},'🏆'));
+        // the tokens: little pawns with a shadow and a shine; ones you can move bounce
+        const all=[]; v.tokens.forEach((toks,seat)=>toks.forEach((p,i)=>{ if(p!==-2) all.push({seat,i,p,xy:tokPos(seat,i,p)}); }));
+        const stack={}; for(const T of all){ const k=T.xy.map(Math.round).join(','); stack[k]=(stack[k]||0)+1; T.k=k; T.n=stack[k]; }
+        for(const T of all){ const st=v.starts[T.seat], [cx0,cy0]=T.xy, off=stack[T.k]>1&&T.p>=0&&T.p<56?(T.n-1-(stack[T.k]-1)/2)*4:0, cx=cx0+off, cy=cy0;
+          const go=!o.anim&&T.seat===t.seat&&o.movable&&o.movable.has(T.i), moving=o.moving&&o.moving[0]===T.seat&&o.moving[1]===T.i;
+          const g=mk('g',{transform:`translate(${cx} ${cy})`,class:'ltok'+(go?' go':'')+(moving?' hop':''),style:go?'cursor:pointer':''});
+          g.append(mk('ellipse',{cx:0,cy:sz*0.3,rx:sz*0.34,ry:sz*0.12,fill:'rgba(0,0,0,.28)'}), mk('path',{d:`M${-sz*0.3} ${sz*0.28} Q0 ${-sz*0.05} ${sz*0.3} ${sz*0.28} Z`,fill:`url(#ldT${st})`,stroke:DARK[st],'stroke-width':.8}),
+            mk('circle',{cx:0,cy:-sz*0.1,r:sz*0.24,fill:`url(#ldT${st})`,stroke:go?'#2B2621':DARK[st],'stroke-width':go?1.8:.8}), mk('circle',{cx:-sz*0.08,cy:-sz*0.18,r:sz*0.07,fill:'rgba(255,255,255,.75)'}));
+          if(go) g.addEventListener('click',()=>this.move({token:T.i,die:this.die})); svg.append(g); }
+        return svg; };
       // Two dice: pick a die (the first unused one is picked for you), then tap a token to move it by that die.
       const dice=v.dice, used=v.used||[false,false]; if(dice&&(this.die==null||used[this.die])) this.die=used[0]?1:0; if(!dice) this.die=null;
       const canMove=(p,d)=>p!==56&&p!==-2&&(p===-1?d===6:p+d<=56);
       const movable=new Set(my&&dice?(v.tokens[t.seat]||[]).map((p,i)=>canMove(p,dice[this.die])?i:-1).filter(i=>i>=0):[]);
-      v.tokens.forEach((toks,seat)=>{ const st=v.starts[seat], [yx,yy]=YARD[st];
-        toks.forEach((p,i)=>{ if(p===-2) return; let cx,cy; if(p===-1){ cx=(yx+1.5+(i%2)*3)*sz; cy=(yy+1.5+Math.floor(i/2)*3)*sz; } else if(p===56){ cx=(7.5+(i%2-0.5)*0.6)*sz; cy=(7.5+(Math.floor(i/2)-0.5)*0.6)*sz; }
-          else if(p>50){ const [x,y]=HOMECOL[st][p-51]; cx=(x+0.5)*sz; cy=(y+0.5)*sz; } else { const [x,y]=PATH[(st+p)%52]; cx=(x+0.5)*sz+(i-1.5)*1.5; cy=(y+0.5)*sz; }
-          const go=seat===t.seat&&movable.has(i), tok=mk('circle',{cx,cy,r:sz*0.36,fill:COL[st],stroke:go?'#2B2621':'#fff','stroke-width':go?3:2,style:go?'cursor:pointer':''});
-          if(go) tok.addEventListener('click',()=>this.move({token:i,die:this.die})); svg.append(tok); }); });
-      w.append(svg);
-      const DIE=['⚀','⚁','⚂','⚃','⚄','⚅'], dieBtn=k=>el('button',{class:'ldie'+(used[k]?' used':'')+(my&&!used[k]&&this.die===k?' on':''),disabled:!my||used[k],'aria-label':`Die showing ${dice[k]}`,onclick:()=>{ this.die=k; renderCard(true); }}, DIE[dice[k]-1]);
+      const holder=el('div',{class:'ludohold'}), here=(seat,i,p)=>spot(v.starts[seat],p,i);
+      // A new move: walk the token square by square (a captured token then flies home); a new roll tumbles the dice.
+      const A=v.anim, key=t.id+':'+(A&&A.seq), fresh=A&&this.ludoSeen!==key&&this.ludoSeenTable===t.id; this.ludoSeen=key; this.ludoSeenTable=t.id;
+      if(fresh&&A.kind==='move'){ const path=[]; if(A.from===-1) path.push(0); else for(let q=A.from+1;q<=A.to;q++) path.push(q);
+        const capt=A.capt||[], STEP=170; this.animUntil=Date.now()+(path.length+(capt.length?3:0))*STEP+300; let k=0;
+        const posAt=(stepP,cap)=>(seat,i,p)=>{ if(seat===A.seat&&i===A.token) return spot(v.starts[seat],stepP,i); const c=cap&&capt.find(x=>x[0]===seat&&x[1]===i); if(c) return spot(v.starts[seat],c[2],i); return here(seat,i,p); };
+        const show=()=>{ if(k>0&&!holder.isConnected) return; if(k<path.length){ holder.replaceChildren(board(posAt(path[k],true),{anim:1,moving:[A.seat,A.token]})); k++; setTimeout(show,STEP); }
+          else { holder.replaceChildren(board(here,{anim:1})); setTimeout(()=>{ this.animUntil=0; renderCard(true); },capt.length?STEP*3:250); } };
+        show(); }
+      else holder.replaceChildren(board(here,{movable}));
+      w.append(holder);
+      const PIPS={1:[[.5,.5]],2:[[.27,.27],[.73,.73]],3:[[.27,.27],[.5,.5],[.73,.73]],4:[[.27,.27],[.73,.27],[.27,.73],[.73,.73]],5:[[.27,.27],[.73,.27],[.5,.5],[.27,.73],[.73,.73]],6:[[.27,.25],[.73,.25],[.27,.5],[.73,.5],[.27,.75],[.73,.75]]};
+      const die=(n,cls)=>{ const s2=GH.svg('0 0 40 40'); s2.classList.add('ldsvg'); s2.append(mk('rect',{x:2,y:2,width:36,height:36,rx:9,fill:'#FFFDF7',stroke:'#CFC6B4','stroke-width':1.5})); for(const [px,py] of PIPS[n]) s2.append(mk('circle',{cx:2+px*36,cy:2+py*36,r:3.6,fill:n===1?'#D9433A':'#2B2621'})); return s2; };
+      const rolling=fresh&&A.kind==='roll';
+      const dieBtn=k=>{ const b2=el('button',{class:'ldie'+(used[k]?' used':'')+(my&&!used[k]&&this.die===k?' on':'')+(rolling?' roll':''),disabled:!my||used[k],'aria-label':`Die showing ${dice[k]}`,onclick:()=>{ this.die=k; renderCard(true); }}); b2.append(die(dice[k])); return b2; };
       w.append(el('div',{class:'row-actions',style:'justify-content:center;align-items:center;gap:12px'}, ...(dice?[dieBtn(0),dieBtn(1)]:[]),
         my&&!dice?el('button',{class:'btn primary',text:'🎲🎲 Roll',onclick:()=>this.move({roll:true})}):el('span',{class:'hint',text:my?(movable.size?`Tap a token to move it ${dice[this.die]}.`:'That die can’t move anything: pick the other.'):v.turn==null?'':'Their turn…'})));
       const names=i=>i===t.seat?'You':(t.players[i]?.bot?'🤖 ':'')+'@'+(t.players[i]?.handle||'?');
       if(v.log.length) w.append(el('p',{class:'hint',style:'text-align:center',text:v.log.slice(-3).map(([s,a,x,y,d])=>`${names(s)} ${a==='rolled'?`rolled ${Array.isArray(x)?x.join(' + '):x}`:a==='captured'?'captured a token!':a==='moved'?`moved ${d||''}`:a==='no move'?'couldn’t move':a}`).join(' · ')}));
       return w; },
-    snooker(t,v){ const w=el('div',{class:'ghstage snk'}), my=t.canMove, rp=this.replay;
-      w.append(SnookerUI.view({ mode:'snooker', balls:v.balls, replay:rp, canShoot:my&&!rp&&!this.busy, onShoot:(angle,power,spin)=>this.move({shot:true,angle,power,spin}), onReplayEnd:()=>{ this.replay=null; renderCard(true); } }));
-      w.append(el('div',{class:'mstat'}, el('span',{text:`First to ${v.race} reds`}), el('b',{text:`You ${v.score[t.seat]??0} · Them ${v.score[1-(t.seat<0?0:t.seat)]??0}`})));
-      if(v.last&&!rp) w.append(el('p',{class:'hint',style:'text-align:center',text:`${v.last.seat===t.seat?'You':'They'} ${v.last.foul?'fouled':v.last.potted.filter(x=>x!=='c').length?`potted ${v.last.potted.filter(x=>x!=='c').length}`:'missed'}.`}));
-      if(my&&!rp) w.append(el('p',{class:'hint',style:'text-align:center',text:'Your shot: press the cue and swing it to aim, roll the wheel for fine aim, then pull the power bar down and let go.'}));
-      else if(!rp&&v.turn!=null) w.append(el('p',{class:'hint',style:'text-align:center',text:'Their shot…'}));
-      return w; },
-    pool8(t,v){ return this.boards.pool.call(this,t,v); }, pool9(t,v){ return this.boards.pool.call(this,t,v); },
-    pool(t,v){ const w=el('div',{class:'ghstage snk'}), my=t.canMove, rp=this.replay, me=t.seat<0?0:t.seat, who=s=>s===t.seat?'You':t.players[s]?(t.players[s].bot?'The computer':'@'+t.players[s].handle):'They';
-      w.append(SnookerUI.view({ mode:'pool', balls:v.balls, on:v.on, replay:rp, canShoot:my&&!rp&&!this.busy, onShoot:(angle,power,spin)=>this.move({shot:true,angle,power,spin}), onReplayEnd:()=>{ this.replay=null; renderCard(true); } }));
-      if(v.mode===8){ const g=v.groups[me], o=v.groups[1-me]; w.append(el('div',{class:'mstat'}, el('span',{text:g?`You: ${g}${v.left[me]===0?' · on the 8':` · ${v.left[me]} left`}`:'Open table: pot any ball to claim its group'}), el('b',{text:o?`Them: ${o}${v.left[1-me]===0?' · on the 8':` · ${v.left[1-me]} left`}`:''}))); }
-      else { const lo=v.on&&v.on[0]; w.append(el('div',{class:'mstat'}, el('span',{text:lo?`Ball on: ${lo.slice(1)}`:''}), el('b',{text:`${v.balls.filter(b=>b.id!=='c').length} balls left`}))); }
-      if(v.last&&!rp){ const L=v.last, n=L.potted.filter(x=>x!=='c').length; w.append(el('p',{class:'hint',style:'text-align:center',text:L.eight?(L.eight==='won'?`${who(L.seat)} sank the 8!`:`${who(L.seat)} sank the 8 too early.`):L.nine?`${who(L.seat)} sank the 9!`:`${who(L.seat)} ${L.foul?`fouled (${L.why})`:n?`potted ${n}`:'missed'}.${L.took?` ${L.seat===t.seat?'You take':'They take'} ${L.took}.`:''}${L.respot?' The 9 goes back on its spot.':''}`})); }
-      if(my&&!rp) w.append(el('p',{class:'hint',style:'text-align:center',text:'Your shot: press the cue and swing it to aim, roll the wheel for fine aim, then pull the power bar down and let go.'}));
-      else if(!rp&&v.turn!=null) w.append(el('p',{class:'hint',style:'text-align:center',text:'Their shot…'}));
+    snooker(t,v){ return this.boards.cue.call(this,t,v); }, pool8(t,v){ return this.boards.cue.call(this,t,v); }, pool9(t,v){ return this.boards.cue.call(this,t,v); },
+    // One table for all three cue games; what's shown around it depends on the game.
+    cue(t,v){ const w=el('div',{class:'ghstage snk'}), my=t.canMove, rp=this.replay, me=t.seat<0?0:t.seat, who=s=>s===t.seat?'You':t.players[s]?(t.players[s].bot?'The computer':'@'+t.players[s].handle):'They';
+      w.append(SnookerUI.view({ mode:v.mode==='snooker'?'snooker':'pool', balls:v.balls, on:v.on, inHand:v.inHand, replay:rp, canShoot:my&&!rp&&!this.busy,
+        onShoot:(angle,power,spin,cue)=>this.move({shot:true,angle,power,spin,cue}), onReplayEnd:()=>{ this.nextReplay(); renderCard(true); } }));
+      const name={red:'a red',colour:'any colour'}[v.onName]||v.onName;
+      if(v.mode==='snooker') w.append(el('div',{class:'mstat'}, el('span',{text:v.turn!=null?`Ball on: ${name}${v.brk?` · break ${v.brk}`:''}`:''}), el('b',{text:`You ${v.score[me]} · Them ${v.score[1-me]}`})),
+        el('p',{class:'hint',style:'text-align:center',text:`${v.reds} red${v.reds===1?'':'s'} left · ${v.remaining} points still on the table`}));
+      else if(v.mode===8){ const g=v.groups[me], o=v.groups[1-me]; w.append(el('div',{class:'mstat'}, el('span',{text:g?`You: ${g}${v.left[me]===0?' · on the 8':` · ${v.left[me]} left`}`:v.broken?'Open table':'Break: hit the rack hard'}), el('b',{text:o?`Them: ${o}${v.left[1-me]===0?' · on the 8':` · ${v.left[1-me]} left`}`:''}))); }
+      else { const lo=v.on&&v.on[0]; w.append(el('div',{class:'mstat'}, el('span',{text:lo?`Ball on: ${lo.slice(1)}`:''}), el('b',{text:`${v.balls.filter(b=>b.id!=='c').length} balls left${v.fouls&&v.fouls[me]?` · your fouls in a row: ${v.fouls[me]}`:''}`}))); }
+      if(v.last&&!rp){ const L=v.last, n=L.potted.filter(x=>x!=='c').length; let txt;
+        if(L.eight) txt=L.eight==='won'?`${who(L.seat)} sank the 8!`:`${who(L.seat)} lost on the 8${L.foul?` (${L.foul})`:''}.`;
+        else if(L.nine) txt=`${who(L.seat)} sank the 9!`; else if(L.threeFouls) txt=`${who(L.seat)} fouled three times in a row and lose${L.seat===t.seat?'':'s'}.`;
+        else if(L.foul) txt=`Foul: ${who(L.seat)} ${L.foul}${L.penalty?` (${L.penalty} points to ${L.seat===t.seat?'them':'you'})`:''}.${v.inHand==='table'?' Ball in hand.':v.inHand==='D'?' Cue ball in the D.':''}`;
+        else if(v.mode==='snooker') txt=L.pts?`${who(L.seat)} scored ${L.pts}${L.brk>L.pts?` (break ${L.brk})`:''}.`:`${who(L.seat)} missed.`;
+        else txt=`${who(L.seat)} ${n?`potted ${n}`:'missed'}.${L.took?` ${L.seat===t.seat?'You take':'They take'} ${L.took}.`:''}${L.respot?' The 9 goes back on its spot.':''}`;
+        w.append(el('p',{class:'hint',style:'text-align:center',text:txt})); }
+      if(my&&!rp) w.append(el('p',{class:'hint',style:'text-align:center',text:(v.inHand?(v.inHand==='D'?'Drag the white ball to place it in the D. ':v.inHand==='kitchen'?'Drag the white ball anywhere behind the line. ':'Ball in hand: drag the white ball anywhere. '):'')+'Press the cue and swing it to aim, roll the wheel for fine aim, then pull the power bar down and let go.'}));
+      else if(!rp&&v.turn!=null) w.append(el('p',{class:'hint',style:'text-align:center',text:t.players[v.turn]&&t.players[v.turn].bot?'The computer is lining up…':'Their shot…'}));
       return w; },
     poker(t,v){ const w=el('div',{class:'ghstage'}), card=c=>{ const red=/[♥♦]$/.test(c); return el('span',{class:'pcard'+(red?' red':''),text:c.replace('T','10')}); }, back=()=>el('span',{class:'pcard back',text:'🂠'});
       w.append(el('p',{class:'hint',style:'text-align:center',text:['Before the flop','The flop','The turn','The river'][v.street]+` · pot ${fmt(v.put.reduce((a,b)=>a+b,0))}${t.stake?'':' chips'}`}),
@@ -4981,7 +5112,7 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
 let frameStats={}, lastVeh=[];
-window.__dbg={ snk:()=>SnookerUI, chats:()=>Chats, tab:t=>openTab(t), openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+window.__dbg={ tables:()=>Tables, snk:()=>SnookerUI, chats:()=>Chats, tab:t=>openTab(t), openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

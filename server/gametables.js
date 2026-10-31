@@ -61,7 +61,7 @@ export class GameTables {
     if (!stake) return; if (c.coins_base < stake) throw new HttpError(400, `The stake is ${fmt(stake)} coins. You have ${fmt(c.coins_base)} on you.`);
     c.coins_base -= stake; track(ch, `table:${game}:stake`, stake, c.id);
   }
-  async create(id, { buildingId, game, stake, seats, quick, computer }) {
+  async create(id, { buildingId, game, stake, seats, quick, street, computer }) {
     const G = TABLE_GAMES[game]; if (!G) throw new HttpError(400, 'Pick a game.');
     stake = Math.floor(Number(stake) || 0); if (stake < 0 || stake > MAX_STAKE) throw new HttpError(400, `Stakes go from 0 (a friendly game) to ${fmt(MAX_STAKE)} coins.`);
     if (game === 'poker' && stake && stake < 10) throw new HttpError(400, "Hold'em needs a stake of at least 10 coins (it's the ante and the bet size), or 0 for a friendly game.");
@@ -70,7 +70,7 @@ export class GameTables {
     return this.world.change(async ch => {
       const b = await this.place(ch, buildingId, game), c = await this.lockMe(ch, id); this.pay(ch, c, stake, game);
       const players = [{ id: c.id, handle: c.handle }]; if (computer) for (let i = 1; i < seats; i++) players.push(BOT(i - 1));
-      const t = { id: crypto.randomUUID(), game, building_id: b.id, stake, seats, opts: { quick: !!quick, computer: !!computer }, players, state: null, status: 'waiting', created_at: Date.now(), turn_at: null };
+      const t = { id: crypto.randomUUID(), game, building_id: b.id, stake, seats, opts: { quick: !!quick, street: game === 'whot' && !!street, computer: !!computer }, players, state: null, status: 'waiting', created_at: Date.now(), turn_at: null };
       await ch.q(`insert into game_tables (id, game, building_id, stake, seats, opts, players, state, status, created_at) values ($1, $2, $3, $4, $5, $6, $7, null, 'waiting', $8)`,
         [t.id, game, b.id, stake, seats, JSON.stringify(t.opts), JSON.stringify(players), t.created_at]);
       await ch.q('update citizens set table_id = $2 where id = $1', [c.id, t.id]); ch.touch(c); await ch.saveCitizen(c);
@@ -114,7 +114,7 @@ export class GameTables {
 
   // ---------- playing ----------
   async start(ch, t) {
-    t.state = ENGINES[t.game].setup(t.seats, { stake: t.stake || 10, quick: !!t.opts?.quick }, rand); t.status = 'playing'; // a friendly Hold'em game uses 10-chip bets
+    t.state = ENGINES[t.game].setup(t.seats, { stake: t.stake || 10, quick: !!t.opts?.quick, street: !!t.opts?.street }, rand); t.status = 'playing'; // a friendly Hold'em game uses 10-chip bets
     await this.advance(ch, t);
   }
   async move(id, tableId, move) {
@@ -140,16 +140,15 @@ export class GameTables {
     try { t.state = E.play(t.state, seat, m, rand); } catch (e) { throw new HttpError(409, e.message); }
   }
   // Let the computer (and anyone who left) move, then save; settle the table if the game is over.
+  // The computer doesn't move at once: its turn is due a moment later (after the last shot has rolled to a stop on
+  // screen), so players see each of its moves. Whoever looks at the table next (or the sweep) makes it move.
   async advance(ch, t) {
-    const E = ENGINES[t.game];
-    for (let k = 0; k < 400 && t.state.turn != null; k++) {
-      const p = t.players[t.state.turn]; if (!p.bot) break;
-      const m = p.bot && E.bot ? E.bot(t.state, t.state.turn, rand) : E.auto(t.state, t.state.turn, rand);
-      t.state = E.play(t.state, t.state.turn, m, rand);
-    }
     if (t.state.turn == null) return this.settle(ch, t);
-    await ch.q("update game_tables set state = $2, status = 'playing', players = $3, turn_at = $4 where id = $1", [t.id, JSON.stringify(t.state), JSON.stringify(t.players), Date.now() + TURN_MS]);
+    const p = t.players[t.state.turn], due = p?.bot ? Date.now() + this.botDelay(t) : Date.now() + TURN_MS;
+    await ch.q("update game_tables set state = $2, status = 'playing', players = $3, turn_at = $4 where id = $1", [t.id, JSON.stringify(t.state), JSON.stringify(t.players), due]);
   }
+  botDelay(t) { const f = t.state?.last?.frames?.length; if (f && t.state.last.seq) return Math.round(f / 30 * 1000) + 900; return t.game === 'ludo' ? 800 : 1100; }
+  botMove(t) { const E = ENGINES[t.game], seat = t.state.turn; const m = E.bot ? E.bot(t.state, seat, rand) : E.auto(t.state, seat, rand); t.state = E.play(t.state, seat, m, rand); }
   async settle(ch, t) {
     const pot = t.stake ? potOf(t.game, t.state, t.stake) : 0, rake = Math.floor(pot * RAKE), winners = t.state.winners || [], share = winners.length ? Math.floor((pot - rake) / winners.length) : 0;
     const paid = {};
@@ -171,6 +170,7 @@ export class GameTables {
       const t = (await ch.q('select * from game_tables where id = $1 for update', [tableId])).rows[0];
       if (!t || t.status !== 'playing' || Number(t.turn_at) > Date.now()) return;
       const seat = t.state.turn, E = ENGINES[t.game], p = t.players[seat];
+      if (p.bot) { try { this.botMove(t); } catch (e) { try { t.state = E.play(t.state, seat, E.auto(t.state, seat, rand), rand); } catch { t.state = E.drop(t.state, seat); } } await this.advance(ch, t); return; } // the computer's turn has come
       // Missing a turn: a move is made for you. Miss two turns in a match and you forfeit it.
       p.missed = (p.missed || 0) + 1;
       if (p.missed >= MISS_LIMIT) { p.left = true; t.state = E.drop(t.state, seat); await ch.q('update citizens set table_id = null where id = $1 and table_id = $2', [p.id, t.id]);

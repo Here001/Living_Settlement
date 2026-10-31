@@ -2,8 +2,10 @@
 // tiny wobble) and sends back where the balls went, so the browser can replay it. Units: the table is 2 × 1.
 export const TABLE_W = 2, TABLE_H = 1, BALL_R = 0.028;
 export const POCKETS = [[0, 0, 0.064], [1, -0.012, 0.054], [2, 0, 0.064], [0, 1, 0.064], [1, 1.012, 0.054], [2, 1, 0.064]]; // x, y, mouth radius
-const FRICTION = 0.85, CUSHION = 0.78, BOUNCE = 0.94, DT = 1 / 400, FRAME = 1 / 30, MAX_T = 14;
-export const MAX_SPEED = 4.2, AIM_WOBBLE = 0.006, POWER_WOBBLE = 0.025; // radians (about a third of a degree), share of power
+// Slowing down: a little rolling resistance plus drag that grows with speed, so a hard shot runs several lengths of
+// the table and a soft one glides to a stop (about 3 s for a gentle shot, 6–7 s for a full-power one).
+const ROLL = 0.25, DRAG = 0.35, CUSHION = 0.8, BOUNCE = 0.95, DT = 1 / 400, FRAME = 1 / 30, MAX_T = 16;
+export const MAX_SPEED = 6, AIM_WOBBLE = 0.006, POWER_WOBBLE = 0.025; // radians (about a third of a degree), share of power
 
 export const CUE_SPOT = [0.42, 0.5];
 // Reds racked in a triangle pointing at the cue ball.
@@ -55,18 +57,20 @@ export function shoot(balls, angle, power, spin) {
   const cue = B.find(b => b.id === 'c'); if (!cue) throw new Error('no cue ball');
   const sp = Math.max(0.05, Math.min(1, power)) * MAX_SPEED; cue.vx = Math.cos(angle) * sp; cue.vy = Math.sin(angle) * sp;
   let { x: side, y: roll } = cleanSpin(spin), rollUsed = false;
-  const potted = [], frames = [snap(B)]; let firstHit = null, t = 0, nextFrame = FRAME, cushions = 0;
+  const potted = [], frames = [snap(B)], railBalls = new Set(); let firstHit = null, t = 0, nextFrame = FRAME, cushions = 0, railAfter = false;
+  // A cushion touch: counted for the rules (a ball must reach a cushion after contact, and a break must drive balls to them).
+  const rail = b => { cushions++; if (b.id !== 'c') railBalls.add(b.id); if (firstHit) railAfter = true; };
   while (t < MAX_T) {
     let moving = false;
-    for (const b of B) { if (!b.on) continue; const v = Math.hypot(b.vx, b.vy); if (v < 1e-3) { b.vx = b.vy = 0; continue; }
-      moving = true; const nv = Math.max(0, v - FRICTION * DT); b.vx *= nv / v; b.vy *= nv / v; b.x += b.vx * DT; b.y += b.vy * DT; }
+    for (const b of B) { if (!b.on) continue; const v = Math.hypot(b.vx, b.vy); if (v < 4e-3) { b.vx = b.vy = 0; continue; }
+      moving = true; const nv = Math.max(0, v - (ROLL + DRAG * v) * DT); b.vx *= nv / v; b.vy *= nv / v; b.x += b.vx * DT; b.y += b.vy * DT; }
     if (!moving) break;
     for (const b of B) { if (!b.on) continue;
       for (const [px, py, pr] of POCKETS) if (Math.hypot(b.x - px, b.y - py) < pr) { b.on = false; b.vx = b.vy = 0; potted.push(b.id); break; }
       if (!b.on) continue;
       const kick = (v, along) => { if (b !== cue || !side) return along; const k = side * SIDE * Math.abs(v); side *= 0.5; return along + k; }; // side spin bends the cue ball off a cushion
-      if (b.x < BALL_R) { b.x = BALL_R; b.vy = kick(b.vx, b.vy); b.vx = -b.vx * CUSHION; cushions++; } else if (b.x > TABLE_W - BALL_R) { b.x = TABLE_W - BALL_R; b.vy = kick(b.vx, b.vy); b.vx = -b.vx * CUSHION; cushions++; }
-      if (b.y < BALL_R) { b.y = BALL_R; b.vx = kick(b.vy, b.vx); b.vy = -b.vy * CUSHION; cushions++; } else if (b.y > TABLE_H - BALL_R) { b.y = TABLE_H - BALL_R; b.vx = kick(b.vy, b.vx); b.vy = -b.vy * CUSHION; cushions++; } }
+      if (b.x < BALL_R) { b.x = BALL_R; b.vy = kick(b.vx, b.vy); b.vx = -b.vx * CUSHION; rail(b); } else if (b.x > TABLE_W - BALL_R) { b.x = TABLE_W - BALL_R; b.vy = kick(b.vx, b.vy); b.vx = -b.vx * CUSHION; rail(b); }
+      if (b.y < BALL_R) { b.y = BALL_R; b.vx = kick(b.vy, b.vx); b.vy = -b.vy * CUSHION; rail(b); } else if (b.y > TABLE_H - BALL_R) { b.y = TABLE_H - BALL_R; b.vx = kick(b.vy, b.vx); b.vy = -b.vy * CUSHION; rail(b); } }
     for (let i = 0; i < B.length; i++) { const a = B[i]; if (!a.on) continue;
       for (let j = i + 1; j < B.length; j++) { const b = B[j]; if (!b.on) continue;
         const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy); if (d >= BALL_R * 2 || d === 0) continue;
@@ -80,7 +84,7 @@ export function shoot(balls, angle, power, spin) {
     t += DT; if (t >= nextFrame) { frames.push(snap(B)); nextFrame += FRAME; }
   }
   frames.push(snap(B));
-  return { balls: B.filter(b => b.on).map(b => ({ id: b.id, x: round(b.x), y: round(b.y) })), potted, firstHit, cushions, frames, time: Math.round(t * 100) / 100 };
+  return { balls: B.filter(b => b.on).map(b => ({ id: b.id, x: round(b.x), y: round(b.y) })), potted, firstHit, cushions, railAfter, railBalls: [...railBalls], frames, time: Math.round(t * 100) / 100 };
 }
 const round = v => Math.round(v * 10000) / 10000;
 function snap(B) { const o = {}; for (const b of B) if (b.on) o[b.id] = [Math.round(b.x * 1000) / 1000, Math.round(b.y * 1000) / 1000]; return o; }

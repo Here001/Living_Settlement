@@ -3,7 +3,7 @@
 //   setup(n, opts, rand) → state        legal(state, seat) → moves        play(state, seat, move, rand) → state
 //   view(state, seat) → what that seat may see        auto(state, seat, rand) → a move (for timeouts and the computer)
 // state.turn is the seat to move (null when the game is over); state.winners lists the winning seats once it ends.
-import { shoot, startTable, respot, rack8, rack9, ballNo, footSpot, AIM_WOBBLE, POWER_WOBBLE, BALL_R, POCKETS } from './snooker.js';
+import { CUE_ENGINES } from './cuegames.js';
 
 export const TABLE_GAMES = {
   whot: { name: 'Whot', icon: '🃏', min: 2, max: 4, where: 'gamehouse' },
@@ -34,14 +34,17 @@ function dropSeat(s, seat, clear) {
 // 8 suspension (the next player misses a turn), 14 general market (everyone else draws one), 20 Whot (wild: call a shape).
 export const WHOT_SHAPES = { circle: '●', triangle: '▲', cross: '✚', square: '■', star: '★' };
 const WHOT_NUMBERS = { circle: [1, 2, 3, 4, 5, 7, 8, 10, 11, 12, 13, 14], triangle: [1, 2, 3, 4, 5, 7, 8, 10, 11, 12, 13, 14], cross: [1, 2, 3, 5, 7, 10, 11, 13, 14], square: [1, 2, 3, 5, 7, 10, 11, 13, 14], star: [1, 2, 3, 4, 5, 7, 8] };
-export const whotDeck = () => { const d = []; for (const [s, ns] of Object.entries(WHOT_NUMBERS)) for (const n of ns) d.push(`${s}:${n}`); for (let i = 0; i < 5; i++) d.push('whot:20'); return d; };
+export const whotDeck = street => { const d = []; for (const [s, ns] of Object.entries(WHOT_NUMBERS)) for (const n of ns) if (!street || (n !== 2 && n !== 14)) d.push(`${s}:${n}`); if (!street) for (let i = 0; i < 5; i++) d.push('whot:20'); return d; };
+// Street Whot: no 2s, 14s or Whot cards; 5 and 8 are ordinary cards (1 still holds on). The game ends the moment the
+// market runs out: everyone adds up their cards and the lowest total wins.
+const handTotal = (hand, street) => street ? hand.reduce((t, c) => t + wc(c).n, 0) : whotScore(hand);
 const wc = c => { const [s, n] = c.split(':'); return { s, n: Number(n) }; };
 const whotScore = hand => hand.reduce((t, c) => { const { s, n } = wc(c); return t + (s === 'star' ? n * 2 : n); }, 0);
 const whot = {
   setup(n, opts, rand) {
-    const deck = shuffle(whotDeck(), rand), hands = []; for (let i = 0; i < n; i++) hands.push(deck.splice(0, 5));
+    const street = !!opts?.street, deck = shuffle(whotDeck(street), rand), hands = []; for (let i = 0; i < n; i++) hands.push(deck.splice(0, 5));
     let k = deck.findIndex(c => ![1, 2, 5, 8, 14, 20].includes(wc(c).n)); if (k < 0) k = 0; const top = deck.splice(k, 1)[0];
-    return { n, hands, market: deck, pile: [top], call: null, turn: 0, winners: null, log: [] };
+    return { n, street, hands, market: deck, pile: [top], call: null, turn: 0, winners: null, log: [] };
   },
   legal(s, seat) {
     if (s.turn !== seat) return [];
@@ -53,12 +56,13 @@ const whot = {
   },
   play(s, seat, m, rand) {
     s = structuredClone(s); if (s.turn !== seat) throw new Error('Not your turn.');
-    const draw = (p, k) => { for (let i = 0; i < k; i++) { if (!s.market.length) { const top = s.pile.pop(); s.market = shuffle(s.pile, rand); s.pile = [top]; } if (!s.market.length) break; s.hands[p].push(s.market.pop()); } };
+    const draw = (p, k) => { for (let i = 0; i < k; i++) { if (!s.market.length) { if (s.street) break; const top = s.pile.pop(); s.market = shuffle(s.pile, rand); s.pile = [top]; } if (!s.market.length) break; s.hands[p].push(s.market.pop()); } };
     if (m.draw) { draw(seat, 1); s.log.push([seat, 'drew']); s.turn = next(s, seat); return this.end(s); }
     const ok = this.legal(s, seat).some(x => x.card === m.card && (x.call || null) === (m.call || null)); if (!ok) throw new Error("You can't play that card now.");
     s.hands[seat].splice(s.hands[seat].indexOf(m.card), 1); s.pile.push(m.card); s.call = m.call || null;
     const { n } = wc(m.card); s.log.push([seat, 'played', m.card, m.call || null]);
-    if (!s.hands[seat].length) { s.winners = [seat]; s.turn = null; return s; }
+    if (!s.hands[seat].length) { s.winners = [seat]; s.turn = null; return this.reveal(s); }
+    if (s.street) { s.turn = n === 1 ? seat : next(s, seat); return this.end(s); } // street: only 1 (hold on) is special
     const nx = next(s, seat);
     if (n === 1) s.turn = seat;                                    // hold on: play again
     else if (n === 2) { draw(nx, 2); s.turn = next(s, nx); }       // pick two
@@ -68,14 +72,17 @@ const whot = {
     else s.turn = nx;
     return this.end(s);
   },
-  end(s) { // the market and the pile have both run out (or the game has gone on too long): the lowest hand wins
+  end(s) { // the market has run out (street), the market and the pile both have, or it's gone on too long: the lowest hand wins
     s.moves = (s.moves || 0) + 1;
-    if (s.moves >= 300 || (!s.market.length && s.pile.length <= 1 && !this.legal(s, s.turn).some(m => m.card))) {
-      const sc = s.hands.map((h, i) => s.out && s.out[i] ? Infinity : whotScore(h)), best = Math.min(...sc); s.winners = sc.map((v, i) => v === best ? i : -1).filter(i => i >= 0); s.turn = null; }
+    if (s.moves >= 300 || (s.street && !s.market.length) || (!s.market.length && s.pile.length <= 1 && !this.legal(s, s.turn).some(m => m.card))) {
+      const sc = s.hands.map((h, i) => s.out && s.out[i] ? Infinity : handTotal(h, s.street)), best = Math.min(...sc); s.winners = sc.map((v, i) => v === best ? i : -1).filter(i => i >= 0); s.turn = null; s.counted = true; return this.reveal(s); }
     return s;
   },
+  // At the end everyone's cards are shown, with each hand's total.
+  reveal(s) { s.final = s.hands.map((h, i) => ({ hand: h.slice(), total: handTotal(h, s.street), out: !!(s.out && s.out[i]) })); return s; },
   drop(s, seat) { return dropSeat(s, seat, (st, i) => { st.market.unshift(...st.hands[i]); st.hands[i] = []; }); },
-  view(s, seat) { return { n: s.n, out: s.out || null, hand: s.hands[seat] || [], counts: s.hands.map(h => h.length), top: s.pile[s.pile.length - 1], call: s.call, market: s.market.length, turn: s.turn, winners: s.winners, log: s.log.slice(-6) }; },
+  view(s, seat) { return { n: s.n, street: !!s.street, out: s.out || null, hand: s.hands[seat] || [], counts: s.hands.map(h => h.length), top: s.pile[s.pile.length - 1], call: s.call, market: s.market.length, turn: s.turn, winners: s.winners, log: s.log.slice(-6),
+    final: s.turn == null ? s.final || null : null, counted: !!s.counted, pile: s.pile.length }; },
   auto(s, seat, rand) { const L = this.legal(s, seat), cards = L.filter(m => m.card && !m.call);
     if (cards.length) return cards.sort((a, b) => wc(b.card).n - wc(a.card).n)[0];
     const w = L.filter(m => m.call); if (w.length) { const counts = {}; for (const c of s.hands[seat]) { const x = wc(c).s; if (x !== 'whot') counts[x] = (counts[x] || 0) + 1; } const best = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || 'circle'; return w.find(m => m.call === best) || w[0]; }
@@ -104,22 +111,24 @@ const ludo = {
     s = structuredClone(s); if (s.turn !== seat) throw new Error('Not your turn.');
     if (m.roll) { if (s.dice != null) throw new Error('Move a token first.');
       s.dice = [1 + Math.floor(rand() * 6), 1 + Math.floor(rand() * 6)]; s.used = [false, false]; s.bonus = false; s.log.push([seat, 'rolled', s.dice.slice()]);
+      s.seq = (s.seq || 0) + 1; s.anim = { seq: s.seq, kind: 'roll', seat, dice: s.dice.slice() };
       if (!this.legal(s, seat).length) { s.log.push([seat, 'no move']); return this.endTurn(s, seat); }
       return s; }
     if (s.dice == null) throw new Error('Roll first.');
     let k = Number(m.die); if (!(k === 0 || k === 1) || s.used[k]) k = s.used[0] ? 1 : 0; // the die to use (the first unused one if not given)
     if (!this.moves(s, seat, s.dice[k]).includes(m.token)) { const o = 1 - k; if (!s.used[o] && this.moves(s, seat, s.dice[o]).includes(m.token)) k = o; else throw new Error("That token can't move with that die."); }
     const d = s.dice[k], p = s.tokens[seat][m.token], np = p === -1 ? 0 : p + d; s.tokens[seat][m.token] = np; s.used[k] = true;
+    s.seq = (s.seq || 0) + 1; s.anim = { seq: s.seq, kind: 'move', seat, token: m.token, from: p, to: np, capt: [] }; // for the screens to walk the token
     if (np <= 50) { const a = ludoAbs(s.starts[seat], np);
       if (!LUDO_SAFE.includes(a)) for (let o = 0; o < s.n; o++) { if (o === seat) continue; const hit = s.tokens[o].map((q, i) => q >= 0 && q <= 50 && ludoAbs(s.starts[o], q) === a ? i : -1).filter(i => i >= 0);
-        if (hit.length === 1) { s.tokens[o][hit[0]] = -1; s.bonus = true; s.log.push([seat, 'captured', o]); } } }
+        if (hit.length === 1) { s.anim.capt.push([o, hit[0], s.tokens[o][hit[0]]]); s.tokens[o][hit[0]] = -1; s.bonus = true; s.log.push([seat, 'captured', o]); } } }
     if (np === LUDO_HOME) s.bonus = true;
     s.log.push([seat, 'moved', m.token, np, d]);
     if (s.tokens[seat].every(q => q === LUDO_HOME)) { s.winners = [seat]; s.turn = null; s.dice = null; return s; }
     if (s.used.every(Boolean) || !this.legal(s, seat).length) return this.endTurn(s, seat);
     return s; },
   drop(s, seat) { return dropSeat(s, seat, (st, i) => { st.tokens[i] = st.tokens[i].map(() => -2); if (st.turn === i) { st.dice = null; st.used = null; st.bonus = false; } }); },
-  view(s) { return { n: s.n, out: s.out || null, starts: s.starts, tokens: s.tokens, turn: s.turn, dice: s.dice, used: s.used, winners: s.winners, log: s.log.slice(-6) }; },
+  view(s) { return { n: s.n, out: s.out || null, starts: s.starts, tokens: s.tokens, turn: s.turn, dice: s.dice, used: s.used, winners: s.winners, log: s.log.slice(-6), anim: s.anim || null }; },
   auto(s, seat) { const L = this.legal(s, seat); if (L[0]?.roll) return L[0];
     // prefer a capture, then getting home, then coming out, then the token furthest along
     let best = null, score = -1; for (const m of L) { const p = s.tokens[seat][m.token], d = s.dice[m.die], np = p === -1 ? 0 : p + d; let v = np;
@@ -138,13 +147,16 @@ const ayo = {
   sow(pits, pit) { const p = pits.slice(); let seeds = p[pit], i = pit; p[pit] = 0; while (seeds) { i = (i + 1) % 12; if (i === pit) continue; p[i]++; seeds--; } return { p, last: i }; },
   side: (seat, i) => seat === 0 ? i < 6 : i >= 6,
   result(s, seat, pit) { const { p, last } = this.sow(s.pits, pit); let got = 0; const q = p.slice();
-    if (!this.side(seat, last)) { let i = last; while (!this.side(seat, i) && (q[i] === 2 || q[i] === 3)) { got += q[i]; q[i] = 0; i = (i + 11) % 12; } }
-    return { pits: q, got }; },
+    const capt = []; if (!this.side(seat, last)) { let i = last; while (!this.side(seat, i) && (q[i] === 2 || q[i] === 3)) { got += q[i]; q[i] = 0; capt.push(i); i = (i + 11) % 12; } }
+    return { pits: q, got, capt }; },
   legal(s, seat) { if (s.turn !== seat) return []; return [...Array(12).keys()].filter(i => this.side(seat, i) && s.pits[i] > 0).map(pit => ({ pit })); },
   sideSum(s, seat) { let t = 0; for (let i = 0; i < 12; i++) if (this.side(seat, i)) t += s.pits[i]; return t; },
   play(s, seat, m) { s = structuredClone(s); if (s.turn !== seat) throw new Error('Not your turn.');
     if (!this.legal(s, seat).some(x => x.pit === m.pit)) throw new Error("You can't play that pit.");
-    const r = this.result(s, seat, m.pit); s.pits = r.pits; s.store[seat] += r.got; s.last = m.pit; s.log.push([seat, 'sowed', m.pit, r.got]);
+    const r = this.result(s, seat, m.pit);
+    // what the screens need to replay the move pebble by pebble
+    s.seq = (s.seq || 0) + 1; s.anim = { seq: s.seq, seat, pit: m.pit, before: s.pits.slice(), storeBefore: s.store.slice(), capt: r.capt, got: r.got };
+    s.pits = r.pits; s.store[seat] += r.got; s.last = m.pit; s.log.push([seat, 'sowed', m.pit, r.got]);
     const other = 1 - seat;
     s.moves = (s.moves || 0) + 1;
     if (s.store[seat] > 24) return this.finish(s);
@@ -157,100 +169,8 @@ const ayo = {
     s.turn = other; return s; },
   drop(s, seat) { return dropSeat(s, seat); },
   finish(s) { s.turn = null; s.winners = s.store[0] === s.store[1] ? [0, 1] : [s.store[0] > s.store[1] ? 0 : 1]; return s; },
-  view(s) { return { n: 2, out: s.out || null, pits: s.pits, store: s.store, turn: s.turn, winners: s.winners, last: s.last, log: s.log.slice(-6) }; },
+  view(s) { return { n: 2, out: s.out || null, pits: s.pits, store: s.store, turn: s.turn, winners: s.winners, last: s.last, log: s.log.slice(-6), anim: s.anim || null }; },
   auto(s, seat) { const L = this.legal(s, seat); let best = L[0], v = -1; for (const m of L) { const g = this.result(s, seat, m.pit).got; if (g > v) { v = g; best = m; } } return best; },
-};
-
-// ======================= Snooker (1 v 1) =======================
-// Nine reds. Pot a red and you shoot again; miss and it's the other player's turn. Potting the cue ball, or not hitting
-// a red at all, is a foul: the cue ball comes back on its spot and the turn passes. First to pot 5 reds wins.
-export const SNOOKER_RACE = 5;
-const snooker = {
-  setup() { return { n: 2, balls: startTable(9), score: [0, 0], turn: 0, winners: null, last: null, log: [] }; },
-  legal(s, seat) { return s.turn === seat ? [{ shot: true }] : []; },
-  play(s, seat, m, rand) { s = structuredClone(s); if (s.turn !== seat) throw new Error('Not your turn.');
-    const angle = Number(m.angle), power = Number(m.power); if (!Number.isFinite(angle) || !(power > 0 && power <= 1)) throw new Error('Aim and pick a power.');
-    const g = () => { const u = Math.max(1e-9, rand()), v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
-    const r = shoot(s.balls, angle + g() * AIM_WOBBLE, power * (1 + g() * POWER_WOBBLE), m.spin);
-    const reds = r.potted.filter(p => p !== 'c').length, foul = r.potted.includes('c') || !r.firstHit;
-    s.balls = r.potted.includes('c') ? [...r.balls, respot(r.balls)] : r.balls; s.score[seat] += reds;
-    s.last = { seat, potted: r.potted, foul, frames: r.frames }; s.log.push([seat, foul ? 'foul' : reds ? 'potted' : 'missed', reds]);
-    if (s.score[seat] >= SNOOKER_RACE || !s.balls.some(b => b.id !== 'c')) { s.turn = null; s.winners = s.score[0] === s.score[1] ? [0, 1] : [s.score[0] > s.score[1] ? 0 : 1]; return s; }
-    if (!reds || foul) s.turn = 1 - seat; return s; },
-  drop(s, seat) { return dropSeat(s, seat); },
-  view(s) { return { n: 2, out: s.out || null, balls: s.balls, score: s.score, turn: s.turn, winners: s.winners, last: s.last, race: SNOOKER_RACE, log: s.log.slice(-6) }; },
-  auto(s, seat, rand) { // the computer: line up the easiest red with a pocket (with the same wobble as a player)
-    const cue = s.balls.find(b => b.id === 'c'); let best = null;
-    for (const r of s.balls) if (r.id !== 'c') for (const [px, py] of POCKETS) { const dx = px - r.x, dy = py - r.y, d = Math.hypot(dx, dy), gx = r.x - dx / d * BALL_R * 2, gy = r.y - dy / d * BALL_R * 2;
-      const ax = gx - cue.x, ay = gy - cue.y, cut = Math.acos(Math.max(-1, Math.min(1, (ax * dx + ay * dy) / (Math.hypot(ax, ay) * d)))); if (!best || cut < best.cut) best = { cut, angle: Math.atan2(ay, ax) }; }
-    return { shot: true, angle: (best ? best.angle : 0) + (rand() - 0.5) * 0.06, power: 0.45 + rand() * 0.2 }; },
-};
-
-// ======================= Pool: 8-ball and 9-ball (1 v 1) =======================
-// One shot, with the same small wobble a real cue has.
-function cueShot(balls, m, rand) {
-  const angle = Number(m.angle), power = Number(m.power); if (!Number.isFinite(angle) || !(power > 0 && power <= 1)) throw new Error('Aim and pick a power.');
-  const g = () => { const u = Math.max(1e-9, rand()), v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
-  return shoot(balls, angle + g() * AIM_WOBBLE, power * (1 + g() * POWER_WOBBLE), m.spin);
-}
-// The computer: for each ball it may play, find the pocket with the gentlest cut and aim the cue ball at the ghost spot.
-function aimAt(balls, targets, rand) {
-  const cue = balls.find(b => b.id === 'c'); let best = null;
-  for (const r of balls) if (targets.includes(r.id)) for (const [px, py] of POCKETS) { const dx = px - r.x, dy = py - r.y, d = Math.hypot(dx, dy), gx = r.x - dx / d * BALL_R * 2, gy = r.y - dy / d * BALL_R * 2;
-    const ax = gx - cue.x, ay = gy - cue.y, cut = Math.acos(Math.max(-1, Math.min(1, (ax * dx + ay * dy) / (Math.hypot(ax, ay) * d)))); if (!best || cut < best.cut) best = { cut, angle: Math.atan2(ay, ax) }; }
-  if (!best) { const t = balls.find(b => targets.includes(b.id)); best = { angle: t ? Math.atan2(t.y - cue.y, t.x - cue.x) : 0 }; }
-  return { shot: true, angle: best.angle + (rand() - 0.5) * 0.05, power: 0.45 + rand() * 0.25 };
-}
-const POOL_CAP = 300; // a game that somehow drags on this long ends (fewest balls left wins 8-ball; 9-ball is a draw)
-const SOLIDS = [1, 2, 3, 4, 5, 6, 7], STRIPES = [9, 10, 11, 12, 13, 14, 15];
-const groupOf = n => (n >= 1 && n <= 7 ? 'solids' : n >= 9 && n <= 15 ? 'stripes' : null);
-// 8-ball: the first player to pot a ball (without a foul) takes that group, solids (1–7) or stripes (9–15). Pot one of
-// yours and you shoot again. Fouls (cue ball down, hitting nothing, or hitting the other group or the 8 first) pass the
-// turn. Clear your group, then pot the 8 to win; the 8 down early, or with a foul, loses the game.
-const pool8 = {
-  setup(n, opts, rand) { return { n: 2, mode: 8, balls: rack8(rand), groups: [null, null], turn: 0, winners: null, last: null, log: [] }; },
-  legal(s, seat) { return s.turn === seat ? [{ shot: true }] : []; },
-  left(s, seat) { const g = s.groups[seat]; if (!g) return null; const want = g === 'solids' ? SOLIDS : STRIPES; return s.balls.filter(b => want.includes(ballNo(b.id))).length; },
-  targets(s, seat) { const g = s.groups[seat]; if (!g) return s.balls.filter(b => b.id !== 'c' && b.id !== 'b8').map(b => b.id);
-    const mine = s.balls.filter(b => groupOf(ballNo(b.id)) === g).map(b => b.id); return mine.length ? mine : ['b8']; },
-  play(s, seat, m, rand) { s = structuredClone(s); if (s.turn !== seat) throw new Error('Not your turn.');
-    const on = this.targets(s, seat), onEight = on.length === 1 && on[0] === 'b8', r = cueShot(s.balls, m, rand);
-    const down = r.potted.filter(p => p !== 'c'), scratch = r.potted.includes('c'), first = r.firstHit;
-    let foul = scratch || !first || (s.groups[seat] ? !on.includes(first) : first === 'b8');
-    s.balls = scratch ? [...r.balls, respot(r.balls)] : r.balls;
-    const why = !first ? 'hit nothing' : scratch ? 'potted the cue ball' : foul ? 'hit the wrong ball first' : null;
-    s.last = { seat, potted: r.potted, foul, why, frames: r.frames };
-    if (down.includes('b8')) { const win = onEight && !foul; s.winners = [win ? seat : 1 - seat]; s.turn = null; s.last.eight = win ? 'won' : 'lost'; s.log.push([seat, win ? 'potted the 8' : 'lost on the 8']); return s; }
-    if (!foul && !s.groups[seat] && down.length) { const g = groupOf(ballNo(down[0])); s.groups[seat] = g; s.groups[1 - seat] = g === 'solids' ? 'stripes' : 'solids'; s.last.took = g; }
-    const mine = s.groups[seat] ? down.filter(id => groupOf(ballNo(id)) === s.groups[seat]) : down;
-    s.log.push([seat, foul ? 'foul' : mine.length ? 'potted' : 'missed', mine.length]);
-    if (foul || !mine.length) s.turn = 1 - seat;
-    if ((s.shots = (s.shots || 0) + 1) >= POOL_CAP) { const l = [0, 1].map(i => this.left(s, i) ?? 7); s.turn = null; s.winners = l[0] === l[1] ? [0, 1] : [l[0] < l[1] ? 0 : 1]; } return s; },
-  drop(s, seat) { return dropSeat(s, seat); },
-  view(s) { return { n: 2, mode: 8, out: s.out || null, balls: s.balls, groups: s.groups, left: [this.left(s, 0), this.left(s, 1)], turn: s.turn, winners: s.winners, last: s.last, log: s.log.slice(-6),
-    on: s.turn == null ? null : this.targets(s, s.turn) }; },
-  auto(s, seat, rand) { return aimAt(s.balls, this.targets(s, seat), rand); },
-};
-// 9-ball: always hit the lowest-numbered ball on the table first. Pot anything on a fair shot and you go again.
-// Pot the 9 on a fair shot (even with a combination) to win; a 9 potted on a foul comes back to the foot spot.
-const pool9 = {
-  setup(n, opts, rand) { return { n: 2, mode: 9, balls: rack9(rand), turn: 0, winners: null, last: null, log: [] }; },
-  legal(s, seat) { return s.turn === seat ? [{ shot: true }] : []; },
-  lowest(s) { let lo = null; for (const b of s.balls) { const n = ballNo(b.id); if (n && (lo == null || n < lo)) lo = n; } return lo; },
-  play(s, seat, m, rand) { s = structuredClone(s); if (s.turn !== seat) throw new Error('Not your turn.');
-    const lo = 'b' + this.lowest(s), r = cueShot(s.balls, m, rand), down = r.potted.filter(p => p !== 'c'), scratch = r.potted.includes('c');
-    const foul = scratch || r.firstHit !== lo, why = !r.firstHit ? 'hit nothing' : scratch ? 'potted the cue ball' : foul ? `didn't hit the ${lo.slice(1)} first` : null;
-    let balls = scratch ? [...r.balls, respot(r.balls)] : r.balls;
-    s.last = { seat, potted: r.potted, foul, why, frames: r.frames };
-    if (down.includes('b9')) { if (!foul) { s.balls = balls; s.winners = [seat]; s.turn = null; s.last.nine = true; s.log.push([seat, 'potted the 9']); return s; }
-      balls = [...balls, footSpot(balls, 'b9')]; s.last.respot = true; }
-    s.balls = balls; s.log.push([seat, foul ? 'foul' : down.length ? 'potted' : 'missed', down.length]);
-    if (foul || !down.length) s.turn = 1 - seat;
-    if ((s.shots = (s.shots || 0) + 1) >= POOL_CAP) { s.turn = null; s.winners = [0, 1]; } return s; },
-  drop(s, seat) { return dropSeat(s, seat); },
-  view(s) { return { n: 2, mode: 9, out: s.out || null, balls: s.balls, turn: s.turn, winners: s.winners, last: s.last, log: s.log.slice(-6), on: s.turn == null ? null : ['b' + this.lowest(s)] }; },
-  auto(s, seat, rand) { const lo = 'b' + this.lowest(s); // try to pot the lowest ball, or the 9 off it if that lines up better
-    return aimAt(s.balls, [lo], rand); },
 };
 
 // ======================= Texas Hold'em (one hand, fixed limit) =======================
@@ -310,7 +230,7 @@ const poker = {
     return L.find(m => m.act === 'check') || L.find(m => m.act === 'fold'); },
 };
 
-export const ENGINES = { whot, ludo, ayo, snooker, pool8, pool9, poker };
+export const ENGINES = { whot, ludo, ayo, ...CUE_ENGINES, poker };
 // What a seat sees, plus whose turn it is.
 export const tableView = (game, s, seat) => ENGINES[game].view(s, seat);
 // How much each seat has put in (poker grows the pot as it goes; the others are the stake each).

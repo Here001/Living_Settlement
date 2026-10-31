@@ -485,7 +485,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       const r8 = SN.rack8(Math.random), r9 = SN.rack9(Math.random), ids = a => a.map(b => b.id).sort().join();
       ok(r8.length === 16 && new Set(r8.map(b => b.id)).size === 16 && r9.length === 10 && r9.find(b => b.id === 'b9') && r9.find(b => b.id === 'b1').x < r9.find(b => b.id === 'b9').x, '8-ball racks 15 numbered balls; 9-ball racks 1–9 with the 1 in front', ids(r9));
       // 8-ball: a lone stripe straight in front of the cue ball and a pocket → it takes stripes and shoots again
-      let s8 = P8.setup(2, {}, Math.random); s8.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'b12', x: 1.85, y: 0.85 }, { id: 'b3', x: 0.3, y: 0.3 }, { id: 'b8', x: 0.3, y: 0.7 }];
+      let s8 = P8.setup(2, {}, Math.random); s8.broken = true; s8.inHand = null; s8.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'b12', x: 1.85, y: 0.85 }, { id: 'b3', x: 0.3, y: 0.3 }, { id: 'b8', x: 0.3, y: 0.7 }];
       let n8 = P8.play(s8, 0, { shot: true, angle: Math.PI / 4, power: 0.4 }, rnd);
       ok(n8.groups[0] === 'stripes' && n8.groups[1] === 'solids' && n8.turn === 0, '8-ball: potting a stripe on an open table takes stripes and you shoot again', JSON.stringify({ g: n8.groups, t: n8.turn, p: n8.last.potted }));
       n8.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'b8', x: 1.85, y: 0.85 }, { id: 'b3', x: 0.3, y: 0.3 }, { id: 'b10', x: 0.3, y: 0.8 }];
@@ -498,7 +498,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       const wrong = P8.play(n8, 0, { shot: true, angle: Math.PI / 4, power: 0.4 }, rnd);
       ok(wrong.last.foul && wrong.turn === 1, 'hitting the other group first is a foul and the turn passes');
       // 9-ball
-      let s9 = P9.setup(2, {}, Math.random); s9.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'b9', x: 1.85, y: 0.85 }, { id: 'b2', x: 0.3, y: 0.3 }];
+      let s9 = P9.setup(2, {}, Math.random); s9.broken = true; s9.inHand = null; s9.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'b9', x: 1.85, y: 0.85 }, { id: 'b2', x: 0.3, y: 0.3 }];
       const foul9 = P9.play(s9, 0, { shot: true, angle: Math.PI / 4, power: 0.4 }, rnd);
       ok(foul9.last.foul && foul9.turn === 1 && foul9.balls.some(b => b.id === 'b9'), "9-ball: potting the 9 without hitting the lowest ball first is a foul and the 9 comes back");
       s9.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'b2', x: 1.85, y: 0.85 }, { id: 'b9', x: 0.3, y: 0.3 }];
@@ -506,6 +506,37 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok(!ok9.last.foul && ok9.turn === 0 && ok9.view === undefined && P9.view(ok9).on[0] === 'b9', 'pot the lowest ball and you go again; the 9 is next');
       let sims = 0, finished = 0; for (const E of [P8, P9]) for (let k = 0; k < 10; k++) { let st = E.setup(2, {}, Math.random), n = 0; while (st.turn != null && n < 400) { st = E.play(st, st.turn, E.auto(st, st.turn, Math.random), Math.random); n++; } sims++; if (st.winners) finished++; }
       ok(finished === sims, 'computer-v-computer pool games always finish'); }
+    { const BG = await import('../shared/boardgames.js'), SK = BG.ENGINES.snooker, CG = await import('../shared/cuegames.js'), rnd = () => 0.5;
+      const s0 = SK.setup(); ok(s0.balls.filter(b => b.id[0] === 'r').length === 15 && ['yellow', 'green', 'brown', 'blue', 'pink', 'black'].every(c => s0.balls.some(b => b.id === c)) && s0.inHand === 'D', 'snooker: 15 reds, six colours on their spots, cue ball in hand in the D');
+      ok(CG.placeOk(s0.balls, { x: 0.3, y: 0.5 }, 'D') && !CG.placeOk(s0.balls, { x: 0.6, y: 0.5 }, 'D'), 'the cue ball can only be placed inside the D');
+      // a red straight into the corner pocket, then a colour
+      let st = structuredClone(s0); st.inHand = null; st.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'r0', x: 1.85, y: 0.85 }, { id: 'r1', x: 0.6, y: 0.3 }, ...s0.balls.filter(b => CG.COLOURS[b.id])];
+      st = SK.play(st, 0, { shot: true, angle: Math.PI / 4, power: 0.35 }, rnd);
+      ok(st.score[0] === 1 && st.turn === 0 && st.on === 'colour', 'pot a red: 1 point, and now a colour is on', JSON.stringify({ sc: st.score, on: st.on, p: st.last.potted }));
+      st.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'pink', x: 1.85, y: 0.85 }, { id: 'r1', x: 0.6, y: 0.3 }, ...st.balls.filter(b => CG.COLOURS[b.id] && b.id !== 'pink')];
+      st = SK.play(st, 0, { shot: true, angle: Math.PI / 4, power: 0.35 }, rnd);
+      ok(st.score[0] === 7 && st.on === 'red' && st.balls.some(b => b.id === 'pink' && b.x === CG.SPOTS.pink[0]), 'pot the pink: 6 more, and it goes back on its spot while reds remain', JSON.stringify({ sc: st.score, on: st.on }));
+      st.balls = [{ id: 'c', x: 1.7, y: 0.7 }, { id: 'blue', x: 1.85, y: 0.85 }, { id: 'r1', x: 0.6, y: 0.3 }, ...st.balls.filter(b => CG.COLOURS[b.id] && b.id !== 'blue')];
+      const fo = SK.play(st, 0, { shot: true, angle: Math.PI / 4, power: 0.35 }, rnd);
+      ok(fo.last.foul && fo.score[1] === 5 && fo.turn === 1, 'hitting a colour when a red is on is a foul: 5 points (the blue) to the opponent', JSON.stringify({ f: fo.last.foul, sc: fo.score }));
+      let sims = 0; for (let k = 0; k < 2; k++) { let g = SK.setup(), n = 0; while (g.turn != null && n < 450) { g = SK.play(g, g.turn, SK.auto(g, g.turn, Math.random), Math.random); n++; } if (g.winners && n < 400) sims++; }
+      ok(sims === 2, 'computer-v-computer snooker frames finish');
+      // 9-ball: three fouls in a row lose
+      const P9 = BG.ENGINES.pool9; let n9 = P9.setup(2, {}, Math.random); n9.broken = true; n9.inHand = null; n9.fouls = [2, 0]; n9.balls = [{ id: 'c', x: 0.3, y: 0.5 }, { id: 'b1', x: 1.5, y: 0.2 }, { id: 'b5', x: 0.6, y: 0.5 }];
+      const tf = P9.play(n9, 0, { shot: true, angle: 0, power: 0.4 }, rnd); ok(tf.winners?.[0] === 1 && tf.last.threeFouls, '9-ball: a third foul in a row loses the game');
+      const bh = P9.play({ ...structuredClone(n9), fouls: [0, 0] }, 0, { shot: true, angle: 0, power: 0.4 }, rnd); ok(bh.inHand === 'table' && bh.turn === 1, 'a foul gives the opponent ball in hand anywhere');
+      const placed = P9.play(bh, 1, { shot: true, angle: -Math.PI / 2, power: 0.3, cue: { x: 1.5, y: 0.45 } }, rnd); ok(placed.last && placed.inHand !== 'table' || placed.last.foul, 'with ball in hand the cue ball is placed before the shot');
+      // Street Whot
+      const W = BG.ENGINES.whot, sw = W.setup(2, { street: true }, Math.random), all = [...sw.market, ...sw.hands.flat(), ...sw.pile];
+      ok(sw.street && !all.some(c => /:(2|14|20)$/.test(c)), 'Street Whot: no 2s, 14s or Whot cards in the deck');
+      const s5 = { ...structuredClone(sw), hands: [['circle:5', 'star:7'], ['cross:3', 'square:11']], pile: ['circle:4'], market: ['triangle:1'], turn: 0 };
+      const a5 = W.play(s5, 0, { card: 'circle:5' }, Math.random); ok(a5.hands[1].length === 2 && a5.turn === 1, 'in Street Whot a 5 is an ordinary card (no pick three)');
+      const dr = W.play(a5, 1, { draw: true }, Math.random);
+      ok(dr.turn === null && dr.counted && dr.final[0].total === 7 && dr.final[1].total === 15 && dr.winners[0] === 0, 'when the market runs out the game ends: lowest total wins, and both totals are shown', JSON.stringify(dr.final));
+      // Ayo and Ludo moves carry what the screens need to animate them
+      const AY = BG.ENGINES.ayo, am = AY.play(AY.setup(), 0, { pit: 2 }); ok(am.anim && am.anim.pit === 2 && am.anim.before[2] === 4 && am.anim.seq === 1, 'an Ayo move records the board before it, for the sowing animation');
+      const LU = BG.ENGINES.ludo; let lu = LU.setup(2, { quick: true }, Math.random); lu = LU.play(lu, 0, { roll: true }, (() => { const q = [0.9, 0.9]; let i = 0; return () => q[i++ % 2]; })());
+      ok(lu.anim?.kind === 'roll', 'a Ludo roll is recorded for the dice animation'); lu = LU.play(lu, 0, { token: 0, die: 0 }, Math.random); ok(lu.anim?.kind === 'move' && lu.anim.from === -1 && lu.anim.to === 0, 'and a move, square by square'); }
     const sg = (await pool.query("select play_game from citizens where handle = 'zara_ng'")).rows[0].play_game; await pool.query("update citizens set play_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...sg, need: 0 })]);
     const sw = (await g('snooker', { action: 'shoot', angle: 0, power: 0.3 })).json; ok(sw.done && sw.won && sw.paid === SN.PRACTICE.prize, "a practice win pays today's prize", JSON.stringify({ won: sw.won, paid: sw.paid }));
     await g('snooker', { action: 'start' }); const sg2 = (await pool.query("select play_game from citizens where handle = 'zara_ng'")).rows[0].play_game; await pool.query("update citizens set play_game = $1 where handle = 'zara_ng'", [JSON.stringify({ ...sg2, need: 0 })]);
@@ -856,7 +887,10 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     const cw = await T(P, { action: 'create', buildingId: gh, game: 'whot', stake: 0, seats: 3, computer: true });
     ok(cw.status === 200 && cw.json.status === 'playing' && cw.json.players.filter(p => p.bot).length === 2 && cw.json.view.hand.length === 5 && cw.json.view.turn === 0, 'Whot against two computer players starts at once, and you see only your own hand', JSON.stringify(cw.json.view).slice(0, 200));
     ok((await T(P, { action: 'create', buildingId: gh, game: 'ludo', stake: 100, computer: true })).status === 409 || true, 'games against the computer are free');
-    const wd = await T(P, { action: 'move', id: cw.json.id, move: { draw: true } }); ok(wd.status === 200 && wd.json.view.turn === 0 && wd.json.view.log.length >= 2, 'after you draw, the computer players take their turns', JSON.stringify(wd.json.view.log));
+    const botsGo = async (id, who = P) => { let r; for (let i = 0; i < 40; i++) { await pool.query('update game_tables set turn_at = $2 where id = $1', [id, Date.now() - 1]); r = (await call('GET', '/api/me/table', undefined, who)).json.table; if (!r || r.status !== 'playing' || r.canMove) break; } return r; };
+    const wd0 = await T(P, { action: 'move', id: cw.json.id, move: { draw: true } });
+    ok(wd0.json.view.turn !== 0, "the computer doesn't move instantly: its turn comes a moment later, so you can watch it");
+    const wd = { status: wd0.status, json: await botsGo(cw.json.id) }; ok(wd.status === 200 && wd.json.view.turn === 0 && wd.json.view.log.length >= 2, 'after you draw, the computer players take their turns', JSON.stringify(wd.json.view.log));
     const lv = await T(P, { action: 'leave' }); ok(lv.json.forfeited, 'leaving mid-game forfeits');
     // missing two turns forfeits the match
     { await pool.query("update citizens set coins_base = 5000, table_id = null where handle in ('zara_ng', 'jobfill_a')");
@@ -879,7 +913,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     { const p8 = await T(P, { action: 'create', buildingId: gh, game: 'pool8', stake: 0, seats: 2, computer: true });
       ok(p8.status === 200 && p8.json.view.mode === 8 && p8.json.view.balls.length === 16 && p8.json.view.turn === 0, '8-ball against the computer racks up', JSON.stringify(p8.json.view?.groups));
       const sh = await T(P, { action: 'move', id: p8.json.id, move: { shot: true, angle: 0, power: 0.9 } });
-      ok(sh.status === 200 && sh.json.view.last && Array.isArray(sh.json.view.last.frames), 'the break is played and can be replayed', JSON.stringify(sh.json.view?.log));
+      ok(sh.status === 200 && sh.json.view.last && Array.isArray(sh.json.view.shots.at(-1)?.frames) && sh.json.view.shots.at(-1).frames.length > 10, 'the break is played and can be replayed', JSON.stringify(sh.json.view?.log));
       await T(P, { action: 'leave' }); await pool.query("update citizens set table_id = null where handle = 'zara_ng'");
       const p9 = await T(P, { action: 'create', buildingId: gh, game: 'pool9', stake: 0, seats: 2, computer: true });
       ok(p9.status === 200 && p9.json.view.mode === 9 && p9.json.view.on[0] === 'b1', '9-ball starts with the 1 to hit'); await T(P, { action: 'leave' }); await pool.query("update citizens set table_id = null where handle = 'zara_ng'"); }
@@ -890,7 +924,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     const cas = (await pool.query("select id from buildings where type = 'casino' and done limit 1")).rows[0]?.id;
     if (cas) { const pk = await T(P, { action: 'create', buildingId: cas, game: 'poker', stake: 0, seats: 3, computer: true });
       ok(pk.status === 200 && pk.json.view.hole.length === 2 && pk.json.view.legal.length >= 2, "Hold'em: two hole cards and your options", JSON.stringify(pk.json.view).slice(0, 200));
-      let pv = pk.json; for (let i = 0; i < 10 && pv.status === 'playing'; i++) { const L = pv.view.legal; if (!L.length) break; pv = (await T(P, { action: 'move', id: pv.id, move: L.find(m => m.act === 'check' || m.act === 'call') || L[0] })).json; }
+      let pv = pk.json; for (let i = 0; i < 30 && pv.status === 'playing'; i++) { if (!pv.canMove) { pv = await botsGo(pv.id); continue; } const L = pv.view.legal; if (!L.length) break; pv = (await T(P, { action: 'move', id: pv.id, move: L.find(m => m.act === 'check' || m.act === 'call') || L[0] })).json; }
       ok(pv.status === 'done' && pv.result && (pv.view.shown || pv.result.winners.length), "the hand plays out to a showdown (or everyone folds)", JSON.stringify(pv.result)); await T(P, { action: 'leave' }); }
     ok(BG.HAND_NAMES[BG.handRank(['A♠', 'K♠', 'Q♠', 'J♠', 'T♠', '2♥', '3♦'])[0]] === 'Straight flush' && BG.cmpRank(BG.handRank(['A♠', 'A♥', '2♦', '3♠', '9♥', 'J♦', 'Q♣']), BG.handRank(['K♠', 'K♥', '2♦', '3♠', '9♥', 'J♦', 'Q♣'])) > 0, 'poker hands rank correctly');
     await pool.query("update citizens set table_id = null where handle in ('zara_ng', 'jobfill_a')"); }

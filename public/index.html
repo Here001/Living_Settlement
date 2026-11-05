@@ -525,6 +525,8 @@ body.clean #djBubble{display:none}
 #streamOv .so-tick{position:absolute;left:0;right:0;bottom:0;height:7vmin;overflow:hidden;background:rgba(20,24,30,.72);display:flex;align-items:center;white-space:nowrap;font-size:2.4vmin}
 #streamOv .so-tickin{display:inline-block;padding-left:100%;animation:soTick 60s linear infinite}@keyframes soTick{to{transform:translateX(-100%)}}
 @media (orientation:portrait){ #streamOv .so-top{top:3vh} #streamOv .so-radio{top:calc(3vh + 7vmin)} #streamOv .so-stats{top:auto;bottom:24vh;right:auto;left:2.2vmin} #streamOv .so-cap{bottom:30vh;max-width:90vw} #streamOv .so-cta{left:2.2vmin;right:2.2vmin;bottom:9vh;max-width:none;text-align:center} #streamOv .so-tick{height:5vh} }
+.strk{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid rgba(0,0,0,.06)}.strk .gin{flex:1;min-width:0}.strk .hint{white-space:nowrap;margin:0}.strk.off .gin{opacity:.5}
+.hint.warn{color:#b3261e}
 .scam .snap{display:block;width:100%;max-width:480px;border-radius:10px;margin:6px 0;border:1px solid rgba(0,0,0,.12)}.scam .snap.tall{max-width:200px}
 .scam .sline{flex-wrap:nowrap}.scam .sline .gin,.scam .sline select{flex:1;min-width:0}
 .sdest{opacity:.75}.sdest.on{opacity:1}.sdest select{width:100%;padding:8px;border-radius:10px;margin:4px 0;font:inherit}
@@ -883,6 +885,7 @@ function applyOp(o){
   case 'chat': if(!S.chat.some(m=>m.id===o.data.id)){ S.chat.unshift(o.data); if(S.chat.length>200) S.chat.length=200; feedDirty=true; renderFeed(); } break;
   case 'chatPin': { const m=S.chat.find(x=>x.id===o.id); if(m){ m.p=o.pinned?1:0; feedDirty=true; renderFeed(); } break; }
   case 'director': if(STREAM) Stream.setDirector(o.data); break;
+  case 'radioTracks': if(Radio.st) Radio.poll(); break;
   case 'radioConfig': Radio.setLive(o.onAir); if(STREAM) Stream.tuneRadio(); break;
   case 'radio': if(o.talk&&Radio.st===o.talk.station) Radio.queue(o.talk); break;
   case 'chatGone': S.chat=S.chat.filter(m=>m.id!==o.id); feedDirty=true; renderFeed(); break;
@@ -3273,6 +3276,31 @@ const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
   // the director: let the camera pick, or put a shot on air and hold it
   async direct(body){ try{ const d=await api('/api/admin/stream/director',{method:'PUT',body}); this.data.director=d; toast(body.next?'Skipping to the next shot.':d.mode==='manual'?'On air now.':'The camera is choosing again.'); this.renderNow(); }catch(e){ toast(e.message); } },
   pick(shot){ this.direct({mode:'manual',shot,holdMin:this.hold}); },
+  // each station's songs: upload MP3s, switch them on and off, rename, delete
+  songSt:'yoruba', songs(){ const box=el('div',{class:'authbox ssongs'}), L=this.trk; box.append(el('h3',{text:'🎵 Radio songs'}));
+    if(!L){ box.append(el('p',{class:'hint',text:'Loading…'})); api('/api/admin/radio/tracks').then(r=>{ this.trk=r; this.renderNow(); }).catch(e=>toast(e.message)); return box; }
+    const by=k=>L.tracks.filter(t=>t.station===k), mb=b=>(b/1e6).toFixed(b<1e7?1:0)+' MB', mmss=d=>`${Math.floor(d/60)}:${String(Math.round(d%60)).padStart(2,'0')}`;
+    box.append(el('div',{class:'cpicks'}, ...STATION_IDS.map(k=>el('button',{class:'pill'+(this.songSt===k?' on':''),text:`${STATIONS[k].name} (${by(k).filter(t=>t.enabled).length})`,onclick:()=>{ this.songSt=k; this.renderNow(); }}))));
+    const st=this.songSt, list=by(st), on=list.filter(t=>t.enabled).length;
+    box.append(el('p',{class:'jobnow',text:on?`${STATIONS[st].name} plays its ${on} song${on>1?'s':''} in a new shuffled order each time round${on<8?', with a generated song after every second one until it has 8':''}.`:`${STATIONS[st].name} has no songs yet, so it plays generated music.`}));
+    const pick=el('input',{type:'file',accept:'audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.mp3,.m4a',multiple:'',hidden:''});
+    pick.onchange=()=>this.upload(st,[...pick.files]);
+    box.append(pick, el('div',{class:'row-actions'}, el('button',{class:'btn primary sm',text:this.upMsg||`⬆️ Add songs to ${STATIONS[st].name}`,disabled:this.upMsg?'':null,onclick:()=>pick.click()})));
+    for(const t of list){ const name=el('input',{class:'gin',type:'text',value:t.title,'aria-label':'Song title',maxlength:'80'});
+      name.onchange=()=>api(`/api/admin/radio/tracks/${t.id}`,{method:'PATCH',body:{title:name.value}}).then(()=>{ t.title=name.value; toast('Renamed.'); }).catch(e=>toast(e.message));
+      let armed=false; const del=el('button',{class:'btn sm',text:'Delete',onclick:async()=>{ if(!armed){ armed=true; del.textContent='Delete it?'; setTimeout(()=>{ armed=false; del.textContent='Delete'; },3000); return; }
+        try{ await api(`/api/admin/radio/tracks/${t.id}`,{method:'DELETE'}); this.trk=null; this.renderNow(); }catch(e){ toast(e.message); } }});
+      box.append(el('div',{class:'strk'+(t.enabled?'':' off')}, name, el('span',{class:'hint',text:`${mmss(t.dur)} · ${mb(t.size)}`}),
+        uiSwitch(t.enabled,v=>api(`/api/admin/radio/tracks/${t.id}`,{method:'PATCH',body:{enabled:v}}).then(()=>{ t.enabled=v; this.renderNow(); }).catch(e=>toast(e.message)),'Play this song'), del)); }
+    box.append(el('p',{class:'hint'+(L.bytes>3e8?' warn':''),text:`${L.tracks.length} songs · ${mb(L.bytes)} stored in the database.${L.bytes>3e8?' That’s getting big for a free database: delete songs you don’t need, or export smaller MP3s.':''}`}));
+    box.append(el('p',{class:'hint',text:'MP3 or M4A, up to 15 MB each (a 128 kbps MP3 is about 1 MB a minute). Only use songs you have the rights to stream: make them on a paid Suno plan, or use a royalty-free library that allows streaming. Copyrighted songs get live streams muted or taken down.'}));
+    return box; },
+  async upload(st, files){ let n=0; for(const f of files){ n++; this.upMsg=`Uploading ${n} of ${files.length}…`; this.renderNow();
+      try{ const dur=await new Promise((ok,no)=>{ const a=new Audio(), u=URL.createObjectURL(f); a.preload='metadata'; a.onloadedmetadata=()=>{ URL.revokeObjectURL(u); ok(a.duration); }; a.onerror=()=>no(new Error(`${f.name} isn’t a sound file this browser can read.`)); a.src=u; });
+        const r=await fetch(`/api/admin/radio/tracks?station=${st}&dur=${dur.toFixed(2)}&title=${encodeURIComponent(f.name)}`,{method:'POST',headers:{'content-type':f.type||'audio/mpeg',authorization:'Bearer '+Store.token},body:f});
+        const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`Upload failed (${r.status}).`); }
+      catch(e){ toast(`${f.name}: ${e.message}`); } }
+    this.upMsg=null; this.trk=null; this.renderNow(); toast(`Added to ${STATIONS[st].name}.`); },
   // the radio DJs: whether Claude writes their talk and Azure voices it, the latest breaks, and a button to put one on air now
   djs(){ const box=el('div',{class:'authbox'}), R0=this.radio; box.append(el('h3',{text:'🎙️ Radio DJs'}));
     if(!R0){ box.append(el('p',{class:'hint',text:'Loading…'})); api('/api/admin/radio').then(r=>{ this.radio=r; this.renderNow(); }).catch(()=>{}); return box; }
@@ -3318,7 +3346,7 @@ const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
     for(const pl of St.pipelines||[]) box.append(el('p',{class:'jobnow',text:`${pl.up?'🟢':'🔴'} ${pl.layout==='portrait'?'📱 Portrait':'🖥️ Landscape'}: ${pl.dests.join(', ')||'no destinations'}${pl.up&&pl.since?` · live for ${ago(pl.since).replace(' ago','')}`:''}${pl.fps?` · ${pl.fps} fps`:''}${pl.restarts?` · ${pl.restarts} restart${pl.restarts===1?'':'s'}`:''}${pl.error?` · ${pl.error}`:''}`}));
     if(!D0.tokenSet) box.append(el('p',{class:'autherr',text:'STREAM_TOKEN isn’t set on this server yet: add it (any long random text) so the streamer can sign in.'}));
     box.append(el('div',{class:'row-actions'}, el('button',{class:'btn sm',text:'Preview 16:9',onclick:()=>window.open('/?stream=1','_blank','noopener,width=1280,height=720')}), el('button',{class:'btn sm',text:'Preview 9:16',onclick:()=>window.open('/?stream=1','_blank','noopener,width=405,height=720')}), el('button',{class:'btn sm',text:'Refresh',onclick:()=>this.load()})));
-    body.append(box); body.append(this.camera(D0)); body.append(this.djs());
+    body.append(box); body.append(this.camera(D0)); body.append(this.djs()); body.append(this.songs());
     // the call to action shown on the stream
     const cta=el('input',{class:'gin',type:'text',maxlength:'140',value:D0.cta||'','aria-label':'Call to action'}); cta.oninput=()=>{ D0.cta=cta.value; this.dirty=true; };
     const q=el('div',{class:'cpicks'}, el('span',{text:'Quality:'}), ...['720p','1080p'].map(k=>el('button',{class:'pill'+(D0.quality===k?' on':''),text:k,onclick:()=>{ D0.quality=k; this.dirty=true; this.renderNow(); }})));
@@ -5254,12 +5282,15 @@ const Radio={ player:null, st:null, info:null, played:new Set(), timer:null, onA
   async refreshLive(){ try{ const r=await api('/api/radio'); this.info=r; this.setLive(r.onAir); }catch(e){} },
   // the power switch: on plays the station you last had (or the first one that's on air)
   power(on){ if(!on) return this.off(); const st=[this.last,...STATION_IDS].find(k=>k&&STATIONS[k]&&this.isLive(k)); if(st) this.tune(st); else toast('📴 The radio is off air right now.'); },
-  async tune(st){ if(!STATIONS[st]) return; if(!this.isLive(st)){ toast(`📴 ${STATIONS[st].name} is off air right now.`); return; } this.last=st; if(Music.on) Music.stop(); try{ await this.load(); }catch(e){ toast('The radio couldn’t start in this browser.'); return; }
+  async tune(st){ if(!STATIONS[st]) return; if(!this.isLive(st)){ toast(`📴 ${STATIONS[st].name} is off air right now.`); return; } this.last=st;
+    // still inside the tap: wake the sound now (phones only allow it during a tap), then load the station's songs
+    if(this.player){ this.player.ensure(); this.player.unlock(); this.player.ctx.resume().catch(()=>{}); }
+    try{ await this.load(); this.player.ensure(); this.player.unlock(); this.player.setTracks(null); const r=await api('/api/radio?on='+st); this.info=r; this.player.setTracks(r.tracks); }catch(e){} if(Music.on) Music.stop(); try{ await this.load(); }catch(e){ toast('The radio couldn’t start in this browser.'); return; }
     if(this.st!==st){ this.player.hush(); this.onAir=null; } this.st=st; if(!STREAM) ls.set('resurgence-radio',st); await this.player.play(st);
     clearInterval(this.timer); this.timer=setInterval(()=>this.poll(),20000); this.poll(); this.paint(); refreshHUD(); },
   off(keep){ this.st=null; if(!keep) ls.set('resurgence-radio',''); clearInterval(this.timer); if(this.player){ this.player.stop(); this.player.hush(); } this.onAir=null; this.bubble(null); this.paint(); refreshHUD(); },
   setVol(v){ this.vol=v; ls.set('resurgence-radio-vol',v); this.player&&this.player.setVolume(v); },
-  async poll(){ if(!this.st) return; try{ const r=await api('/api/radio?on='+this.st); this.info=r; this.setLive(r.onAir); for(const t of r.talk||[]) this.queue(t); }catch(e){} this.paint(); },
+  async poll(){ if(!this.st) return; try{ const r=await api('/api/radio?on='+this.st); this.info=r; this.setLive(r.onAir); if(this.player&&r.tracks) this.player.setTracks(r.tracks); for(const t of r.talk||[]) this.queue(t); }catch(e){} this.paint(); },
   // a talk break goes on air at its time; tuning in halfway through one joins it where it is
   queue(t){ if(this.played.has(t.id)||t.station!==this.st) return; const now=Date.now()+skew; if(t.at+t.dur*1000<now) return; this.played.add(t.id); setTimeout(()=>this.say(t),Math.max(0,t.at-now)); },
   async say(t){ if(this.st!==t.station) return; const off=Math.max(0,(Date.now()+skew-t.at)/1000); this.onAir=t; this.bubble(t); this.paint(); this.onTalk&&this.onTalk(t);
@@ -5295,6 +5326,7 @@ const Radio={ player:null, st:null, info:null, played:new Set(), timer:null, onA
     box.append(el('div',{class:'rvol'}, el('span',{text:'🔈'}), vol, el('span',{text:'🔊'})));
     box.append(el('p',{class:'hint',text:'The music is composed live for each station, and the DJs talk about what’s happening in the colony.'})); },
 };
+setTimeout(()=>{ (window.requestIdleCallback||setTimeout)(()=>Radio.load().catch(()=>{})); },4000); // warm up the radio so the first tap starts at once
 // Coming back with the radio on: it starts again with the first tap (browsers only play sound after one).
 { const was=ls.get('resurgence-radio'); if(was&&STATIONS[was]&&!STREAM){ const go=async()=>{ removeEventListener('pointerdown',go,true); if(Radio.st) return; await Radio.refreshLive(); if(Radio.isLive(was)) Radio.tune(was); }; addEventListener('pointerdown',go,true); } }
 

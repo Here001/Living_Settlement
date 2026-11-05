@@ -13,7 +13,8 @@ import crypto from 'node:crypto';
 import { pool } from './db.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
-import { STATIONS, STATION_IDS, slotOf, slotStart, talkSlot, songTitle } from '../shared/radio.js';
+import express from 'express';
+import { STATIONS, STATION_IDS, slotOf, slotStart, talkSlot, songTitle, timeline } from '../shared/radio.js';
 
 const uid = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 const LISTEN_MS = 10 * 60000; // a station counts as listened to for 10 minutes after someone last tuned in
@@ -55,6 +56,19 @@ const BANK = {
 
 export class Radio {
   constructor(world, bus) { this.world = world; this.bus = bus; this.listenAt = {}; this.wrote = {}; this.busy = false; }
+  // ---- uploaded songs ----
+  // The list (without the audio) is cached; a change clears it and tells every radio to refresh its running order.
+  async tracks(fresh) { if (!fresh && this.trk && Date.now() - this.trkAt < 60000) return this.trk;
+    const rows = (await pool.query('select id, station, title, dur, size, mime, enabled, t from radio_tracks order by t')).rows; this.trkAt = Date.now();
+    this.trk = { all: rows, by: Object.fromEntries(STATION_IDS.map(k => [k, rows.filter(r => r.station === k && r.enabled).map(r => ({ id: r.id, dur: r.dur, title: r.title }))])) }; return this.trk; }
+  changed() { this.trk = null; this.bus?.publish([{ op: 'radioTracks' }]); }
+  // The audio itself: kept in memory for the songs played lately (up to ~80 MB), so many listeners don't each hit the database.
+  async audio(id) { this.cache ||= new Map(); const hit = this.cache.get(id); if (hit) { this.cache.delete(id); this.cache.set(id, hit); return hit; }
+    const r = (await pool.query('select data, mime from radio_tracks where id = $1', [id])).rows[0]; if (!r) return null;
+    this.cache.set(id, r); let total = 0; for (const v of this.cache.values()) total += v.data.length;
+    for (const [k, v] of this.cache) { if (total <= 80e6) break; this.cache.delete(k); total -= v.data.length; } return r; }
+  // what a station is playing at time t (and its title)
+  async playing(st, t) { return timeline(st, (await this.tracks()).by[st], t); }
   status() { return { writer: process.env.ANTHROPIC_API_KEY ? 'claude' : 'phrases', voice: process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION ? 'azure' : 'text', model: this.model() }; }
   model() { return process.env.RADIO_MODEL || 'claude-haiku-5-5'; }
   // Someone is tuned in (a player's radio or the 24/7 stream). Shared with the leader through the settings table.
@@ -107,7 +121,9 @@ export class Radio {
   async recent(st, n = 12) { return (await pool.query('select text from radio_talk where station = $1 order by t desc limit $2', [st, n])).rows.map(r => r.text); }
 
   async make(st, slot, at, opts = {}) {
-    const S = STATIONS[st], f = await this.facts(st), recent = await this.recent(st), title = songTitle(st, slot >= 0 ? slot : slotOf(st, at));
+    const S = STATIONS[st], f = await this.facts(st), recent = await this.recent(st);
+    // the song to introduce: the one playing when the DJ starts, or the next one if this is nearly over
+    const cur = await this.playing(st, at), song = cur.end - at < 45000 ? await this.playing(st, cur.end + 1) : cur, title = song.title;
     let text = null, source = 'phrases';
     if (process.env.ANTHROPIC_API_KEY) { try { text = await this.write(st, f, recent, title); source = 'claude'; } catch (e) { console.error('radio writer:', e.message); } }
     if (!text) text = this.phrases(st, f, recent, title);
@@ -177,23 +193,56 @@ Do not reuse any joke, catchphrase, opening or sentence from your recent breaks.
   // What a radio needs: each station's song now, and the talk breaks around now for the station being listened to.
   async now(on) {
     const now = Date.now(), stations = {};
-    for (const st of STATION_IDS) { const n = slotOf(st, now); stations[st] = { slot: n, start: slotStart(st, n), title: songTitle(st, n), next: songTitle(st, n + 1) }; }
+    const T = await this.tracks();
+    for (const st of STATION_IDS) { const it = timeline(st, T.by[st], now), nx = timeline(st, T.by[st], it.end + 1); stations[st] = { kind: it.kind, start: it.start, end: it.end, title: it.title, next: nx.title }; }
     let talk = []; const onAir = await this.onAir();
     if (STATIONS[on] && onAir.includes(on)) { await this.listen(on).catch(() => {});
       talk = (await pool.query('select id, station, slot, at, kind, text, focus, dur, audio is not null has_audio from radio_talk where station = $1 and at > $2 and at < $3 order by at', [on, now - 120000, now + 10 * 60000])).rows
         .map(r => ({ id: r.id, station: r.station, at: Number(r.at), kind: r.kind, text: r.text, focus: r.focus, dur: r.dur, audio: r.has_audio ? `/api/radio/voice/${r.id}` : null, dj: STATIONS[r.station].dj.name })); }
-    return { serverNow: now, onAir, stations, talk };
+    return { serverNow: now, onAir, stations, talk, tracks: STATIONS[on] ? T.by[on] : undefined };
   }
 }
 
 export function radioRoutes(app, { radio, admin, send, limit }) {
   app.get('/api/radio', limit, send(async req => radio.now(String(req.query.on || ''))));
+  // a song, with byte ranges so players can start mid-song and phones (Safari) can play it at all
+  app.get('/api/radio/track/:id', async (req, res) => {
+    try { const r = await radio.audio(String(req.params.id)); if (!r) return res.status(404).end(); const buf = r.data, n = buf.length;
+      res.set({ 'content-type': r.mime, 'accept-ranges': 'bytes', 'cache-control': 'public, max-age=31536000, immutable' });
+      const m = /^bytes=(\d*)-(\d*)$/.exec(req.get('range') || '');
+      if (m) { let a = m[1] === '' ? n - Number(m[2]) : Number(m[1]), b = m[1] !== '' && m[2] !== '' ? Number(m[2]) : n - 1; a = Math.max(0, a); b = Math.min(n - 1, b);
+        if (a > b) return res.status(416).set('content-range', `bytes */${n}`).end();
+        return res.status(206).set({ 'content-range': `bytes ${a}-${b}/${n}`, 'content-length': String(b - a + 1) }).end(buf.subarray(a, b + 1)); }
+      res.set('content-length', String(n)).end(buf); } catch (e) { res.status(500).end(); }
+  });
   app.get('/api/radio/voice/:id', limit, async (req, res) => {
     try { const r = (await pool.query('select audio from radio_talk where id = $1', [String(req.params.id)])).rows[0]; if (!r?.audio) return res.status(404).end();
       res.set({ 'content-type': 'audio/mpeg', 'cache-control': 'public, max-age=86400' }).send(r.audio); } catch (e) { res.status(500).end(); }
   });
   app.get('/api/admin/radio', admin, send(async () => ({ ...radio.status(), ...(await radio.config(true)), onAir: await radio.onAir(), listening: await radio.listening(),
     recent: (await pool.query('select id, station, at, text, source, dur, audio is not null has_audio from radio_talk order by t desc limit 30')).rows.map(r => ({ ...r, at: Number(r.at) })) })));
+  // the developer's songs: upload (the file itself as the body; ?station, ?title, ?dur in seconds), list, edit, delete
+  const AUDIO = { 'audio/mpeg': 1, 'audio/mp3': 1, 'audio/mp4': 1, 'audio/x-m4a': 1, 'audio/aac': 1, 'audio/ogg': 1, 'audio/webm': 1, 'audio/wav': 1, 'audio/x-wav': 1 };
+  app.get('/api/admin/radio/tracks', admin, send(async () => { const T = await radio.tracks(true); return { tracks: T.all.map(r => ({ ...r, t: Number(r.t) })), bytes: T.all.reduce((s, r) => s + r.size, 0) }; }));
+  app.post('/api/admin/radio/tracks', admin, express.raw({ type: () => true, limit: '15mb' }), send(async req => {
+    const st = String(req.query.station || ''), mime = String(req.get('content-type') || '').split(';')[0].toLowerCase(), dur = Number(req.query.dur);
+    if (!STATIONS[st]) throw new HttpError(400, 'Pick a station.');
+    if (!AUDIO[mime]) throw new HttpError(400, 'That isn’t a sound file. Use MP3 or M4A.');
+    if (!Buffer.isBuffer(req.body) || req.body.length < 10000) throw new HttpError(400, 'That file is empty.');
+    if (!(dur >= 20 && dur <= 1200)) throw new HttpError(400, 'A song has to be between 20 seconds and 20 minutes long.');
+    const title = clean(req.query.title).replace(/\.(mp3|m4a|aac|ogg|wav|webm)$/i, '').replace(/[_]+/g, ' ').slice(0, 80) || 'Untitled', id = uid();
+    await pool.query('insert into radio_tracks (id, station, title, dur, mime, size, data, t) values ($1,$2,$3,$4,$5,$6,$7,$8)', [id, st, title, dur, mime === 'audio/mp3' ? 'audio/mpeg' : mime, req.body.length, req.body, Date.now()]);
+    radio.changed(); return { id, station: st, title, dur, size: req.body.length };
+  }));
+  app.patch('/api/admin/radio/tracks/:id', admin, send(async req => { const b = req.body || {}, sets = [], vals = [String(req.params.id)];
+    if (typeof b.enabled === 'boolean') { vals.push(b.enabled); sets.push(`enabled = $${vals.length}`); }
+    if (typeof b.title === 'string' && clean(b.title)) { vals.push(clean(b.title).slice(0, 80)); sets.push(`title = $${vals.length}`); }
+    if (STATIONS[b.station]) { vals.push(b.station); sets.push(`station = $${vals.length}`); }
+    if (!sets.length) throw new HttpError(400, 'Nothing to change.');
+    const r = await pool.query(`update radio_tracks set ${sets.join(', ')} where id = $1`, vals); if (!r.rowCount) throw new HttpError(404, 'No such song.');
+    radio.changed(); return { ok: true }; }));
+  app.delete('/api/admin/radio/tracks/:id', admin, send(async req => { const r = await pool.query('delete from radio_tracks where id = $1', [String(req.params.id)]);
+    if (!r.rowCount) throw new HttpError(404, 'No such song.'); radio.cache?.delete(String(req.params.id)); radio.changed(); return { ok: true }; }));
   // the developer's switches: { on: false } takes the whole radio off air; { stations: { hausa: false } } one station
   app.put('/api/admin/radio', admin, send(async req => radio.setConfig(req.body || {})));
   // the developer: put a break on air now (to try a DJ out)

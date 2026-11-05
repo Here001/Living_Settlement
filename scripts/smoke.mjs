@@ -1327,6 +1327,27 @@ console.log('24/7 stream and the colony radio');
   ok(r.json.on === false && r.json.onAir.length === 0 && (await call('GET', '/api/radio?on=pidgin', undefined, { auth: false })).json.talk.length === 0, 'switch the whole radio off: nothing is on air');
   r = await call('PUT', '/api/admin/radio', { on: true, stations: { hausa: true } });
   ok(r.json.onAir.length === 5, 'and back on');
+  // songs the developer uploads: they join the station's running order and stream with byte ranges
+  const mp3 = Buffer.alloc(40000, 7), up = (q, body, type = 'audio/mpeg', auth = true) => fetch(`${BASE}/api/admin/radio/tracks?${q}`, { method: 'POST', headers: { 'content-type': type, ...(auth ? { authorization: 'Bearer ' + TOKEN } : {}) }, body }).then(async x => ({ status: x.status, json: await x.json() }));
+  ok((await up('station=pidgin&dur=60&title=a.mp3', mp3, 'audio/mpeg', false)).status === 401, 'only the developer can upload songs');
+  ok((await up('station=pidgin&dur=60&title=a.mp3', mp3, 'text/plain')).status === 400, 'only sound files');
+  ok((await up('station=pidgin&dur=5&title=a.mp3', mp3)).status === 400, 'a song has a real length');
+  ok((await up('station=nowhere&dur=60&title=a.mp3', mp3)).status === 400, 'a song goes on a real station');
+  const u1 = await up('station=pidgin&dur=61.5&title=Lagos_Nights.mp3', mp3), u2 = await up('station=pidgin&dur=90&title=Owambe.mp3', mp3);
+  ok(u1.status === 200 && u1.json.title === 'Lagos Nights' && u2.status === 200, 'upload songs (the file name becomes the title)', JSON.stringify(u1.json));
+  const rp = (await call('GET', '/api/radio?on=pidgin', undefined, { auth: false })).json;
+  ok(rp.tracks.length === 2 && rp.tracks.some(t => t.title === 'Lagos Nights' && t.dur === 61.5), 'the radio gets the station’s songs to play', JSON.stringify(rp.tracks));
+  const { timeline } = await import('../shared/radio.js'); let seen = new Set(); for (let t = Date.now(); t < Date.now() + 3 * 3600e3; t += 5000) seen.add(timeline('pidgin', rp.tracks, t).kind);
+  ok(seen.has('track') && seen.has('gen'), 'with only a few songs, generated ones fill in between');
+  const rg = await fetch(`${BASE}/api/radio/track/${u1.json.id}`, { headers: { range: 'bytes=100-199' } });
+  ok(rg.status === 206 && rg.headers.get('content-range') === 'bytes 100-199/40000' && (await rg.arrayBuffer()).byteLength === 100, 'songs stream in pieces (needed for phones and for joining mid-song)');
+  r = await call('PATCH', `/api/admin/radio/tracks/${u2.json.id}`, { enabled: false, title: 'Owambe Time' });
+  const after = (await call('GET', '/api/radio?on=pidgin', undefined, { auth: false })).json.tracks;
+  ok(r.status === 200 && after.length === 1 && after[0].title === 'Lagos Nights', 'a song switched off leaves the running order');
+  const lst = (await call('GET', '/api/admin/radio/tracks')).json;
+  ok(lst.tracks.length === 2 && lst.bytes === 80000 && lst.tracks.find(t => t.id === u2.json.id).title === 'Owambe Time', 'the developer sees every song, renamed, and the space they take');
+  ok((await call('DELETE', `/api/admin/radio/tracks/${u1.json.id}`)).status === 200 && (await fetch(`${BASE}/api/radio/track/${u1.json.id}`)).status === 404, 'delete a song');
+  await call('DELETE', `/api/admin/radio/tracks/${u2.json.id}`);
   await call('PUT', '/api/admin/stream', { destinations: [] }); await call('PUT', '/api/admin/stream/director', { mode: 'auto' }); v.ws.close(); }
 
 console.log('Removing people and starting over');

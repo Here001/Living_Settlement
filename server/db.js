@@ -240,6 +240,10 @@ const MIGRATIONS = [
   `create table radio_talk (id text primary key, station text not null, slot int not null, t bigint not null, at bigint not null, kind text,
      text text not null, events text[] not null default '{}', focus jsonb, audio bytea, dur real, source text, unique (station, slot));
    create index radio_talk_t on radio_talk (station, t);`,
+  // v46: colony radio: songs the developer uploads for each station
+  `create table radio_tracks (id text primary key, station text not null, title text not null, dur real not null, mime text not null,
+     size int not null, data bytea not null, enabled boolean not null default true, t bigint not null);
+   create index radio_tracks_station on radio_tracks (station);`,
 ];
 
 export async function migrate() {

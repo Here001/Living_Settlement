@@ -38,3 +38,28 @@ export function songTitle(station, n) {
   const tails = { english: ['', '', ' (Interlude)', ' Pt. 2', ' (Late Mix)'], pidgin: ['', '', ' Remix', ' (Street Mix)', ' ft. The Colony'], default: ['', '', '', ' (Live)', ' Pt. 2'] };
   const t = (tails[station] || tails.default); return a + t[Math.floor(r() * t.length)];
 }
+
+// ---------- the station's running order ----------
+// With uploaded songs, a station plays each of them once per cycle in a shuffled order (a new order every cycle).
+// While it has fewer than 8, a generated song follows every second track, so a short list doesn't repeat too often.
+// With none, it plays generated songs only. Everyone works out the same running order from the same list and clock.
+// tracks: [{ id, dur (seconds), title }]. Returns what's playing at time t: { kind: 'track', track, start, end, title }
+// or { kind: 'gen', n, start, end, title } (n picks the generated song).
+const GAP_MS = 1500;
+export function timeline(station, tracks, t) {
+  const list = (tracks || []).filter(x => x && x.dur >= 20).slice().sort((a, b) => (a.id < b.id ? -1 : 1));
+  if (!list.length) { const n = slotOf(station, t); return { kind: 'gen', n, start: slotStart(station, n), end: slotStart(station, n + 1), title: songTitle(station, n), key: 'g' + n }; }
+  const fill = list.length < 8, gens = fill ? Math.ceil(list.length / 2) : 0;
+  const L = list.reduce((s, x) => s + x.dur * 1000 + GAP_MS, 0) + gens * SLOT_MS, base = OFFSET[station] || 0;
+  const k = Math.floor((t - base) / L); let at = base + k * L;
+  const r = rng(hash(station + ':cycle:' + k)), order = list.slice(); for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+  for (let i = 0, g = 0; i < order.length; i++) {
+    const tr = order[i], end = at + tr.dur * 1000 + GAP_MS;
+    if (t < end) return { kind: 'track', track: tr, start: at, end, title: tr.title, key: 't' + tr.id + ':' + k + ':' + i };
+    at = end;
+    if (fill && i % 2 === 1 || (fill && i === order.length - 1 && g < gens)) { if (g >= gens) continue; const n = 1e6 + (k % 1e5) * 16 + g++, gend = at + SLOT_MS;
+      if (t < gend) return { kind: 'gen', n, start: at, end: gend, title: songTitle(station, n), key: 'g' + n + ':' + k };
+      at = gend; }
+  }
+  return { kind: 'gen', n: 1e6 + 99, start: at, end: at + SLOT_MS, title: songTitle(station, 1e6 + 99), key: 'gx' + k }; // not reached
+}

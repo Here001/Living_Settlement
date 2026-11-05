@@ -1316,6 +1316,17 @@ console.log('24/7 stream and the colony radio');
   ok((await call('GET', `/api/radio/voice/${r.json.id}`, undefined, { auth: false })).status === 404, 'no voice recording without Azure');
   const adm = (await call('GET', '/api/admin/radio')).json;
   ok(adm.writer === (process.env.ANTHROPIC_API_KEY ? 'claude' : 'phrases') && adm.listening.includes('pidgin') && adm.recent.length >= 3, 'the developer sees who writes and voices the DJs, and the latest breaks', JSON.stringify({ w: adm.writer, l: adm.listening }));
+  // the developer's switches: a station, or the whole radio, off air
+  ok((await call('PUT', '/api/admin/radio', { on: false }, { auth: false })).status === 401, 'only the developer can switch the radio');
+  r = await call('PUT', '/api/admin/radio', { stations: { hausa: false } });
+  ok(r.status === 200 && !r.json.onAir.includes('hausa') && r.json.onAir.length === 4, 'switch one station off', JSON.stringify(r.json));
+  ok(await v.saw(o => o.op === 'radioConfig' && !o.onAir.includes('hausa')), 'everyone’s dial hears about it at once');
+  ok(!(await call('GET', '/api/radio', undefined, { auth: false })).json.onAir.includes('hausa'), 'the dial no longer lists it');
+  ok((await call('POST', '/api/admin/radio/talk', { station: 'hausa' })).status === 400, 'a station that is off gets no DJ breaks');
+  r = await call('PUT', '/api/admin/radio', { on: false });
+  ok(r.json.on === false && r.json.onAir.length === 0 && (await call('GET', '/api/radio?on=pidgin', undefined, { auth: false })).json.talk.length === 0, 'switch the whole radio off: nothing is on air');
+  r = await call('PUT', '/api/admin/radio', { on: true, stations: { hausa: true } });
+  ok(r.json.onAir.length === 5, 'and back on');
   await call('PUT', '/api/admin/stream', { destinations: [] }); await call('PUT', '/api/admin/stream/director', { mode: 'auto' }); v.ws.close(); }
 
 console.log('Removing people and starting over');

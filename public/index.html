@@ -490,6 +490,11 @@ body.pane-max .composer textarea{height:70px}
 /* the live-stream overlay (/?stream=1) */
 body.streaming .watchbar,body.streaming #showUi,body.streaming #intro,body.streaming .rsheet-bg,body.streaming #card,body.streaming .atsug{display:none!important}
 .rsheet.radio{width:min(400px,100%)}
+.uiswitch{position:relative;flex:none;width:46px;height:28px;border-radius:999px;border:0;padding:0;background:rgba(0,0,0,.22);cursor:pointer;transition:background .2s}
+.uiswitch i{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
+.uiswitch.on{background:#34c759}.uiswitch.on i{transform:translateX(18px)}.uiswitch:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.rpower{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 2px 10px}.rpower.sm{padding:5px 2px;border-top:1px solid rgba(0,0,0,.06)}.rpower.sm b{color:var(--st)}.rpower small{opacity:.7}
+.rswlist.dim{opacity:.45}
 .rnow{display:flex;align-items:center;gap:12px;padding:10px 12px;margin:4px 0 8px;border-radius:14px;background:color-mix(in srgb,var(--st) 16%,transparent);border:1px solid color-mix(in srgb,var(--st) 40%,transparent)}
 .rnow b{display:block;font-size:15px}.rnow span{font-size:13px;opacity:.85}
 .rbars{display:flex;align-items:flex-end;gap:3px;height:22px}.rbars i{width:4px;border-radius:2px;background:var(--st);animation:rbar 1s ease-in-out infinite}.rbars i:nth-child(2){animation-delay:-.3s}.rbars i:nth-child(3){animation-delay:-.6s}.rbars i:nth-child(4){animation-delay:-.15s}
@@ -878,6 +883,7 @@ function applyOp(o){
   case 'chat': if(!S.chat.some(m=>m.id===o.data.id)){ S.chat.unshift(o.data); if(S.chat.length>200) S.chat.length=200; feedDirty=true; renderFeed(); } break;
   case 'chatPin': { const m=S.chat.find(x=>x.id===o.id); if(m){ m.p=o.pinned?1:0; feedDirty=true; renderFeed(); } break; }
   case 'director': if(STREAM) Stream.setDirector(o.data); break;
+  case 'radioConfig': Radio.setLive(o.onAir); if(STREAM) Stream.tuneRadio(); break;
   case 'radio': if(o.talk&&Radio.st===o.talk.station) Radio.queue(o.talk); break;
   case 'chatGone': S.chat=S.chat.filter(m=>m.id!==o.id); feedDirty=true; renderFeed(); break;
   case 'reports': Reports.soon(); break;
@@ -3272,7 +3278,12 @@ const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
     if(!R0){ box.append(el('p',{class:'hint',text:'Loading…'})); api('/api/admin/radio').then(r=>{ this.radio=r; this.renderNow(); }).catch(()=>{}); return box; }
     box.append(el('p',{class:'jobnow',text:R0.writer==='claude'?`✍️ Claude writes every break fresh (${R0.model}).`:'✍️ Using the DJs’ phrase banks. Set ANTHROPIC_API_KEY on the server so Claude writes every break fresh.'}),
       el('p',{class:'jobnow',text:R0.voice==='azure'?'🗣️ Azure AI Speech reads the breaks aloud.':'🗣️ No voice yet: breaks show as text. Set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION on the server.'}));
-    box.append(el('div',{class:'cpicks'}, el('span',{text:'On air now:'}), ...STATION_IDS.map(k=>el('button',{class:'pill',text:STATIONS[k].dj.name,onclick:async()=>{ try{ await api('/api/admin/radio/talk',{method:'POST',body:{station:k}}); toast(`${STATIONS[k].dj.name} is on air on ${STATIONS[k].name}.`); this.radio=null; this.renderNow(); }catch(e){ toast(e.message); } }}))));
+    const setR=async body=>{ try{ const r=await api('/api/admin/radio',{method:'PUT',body}); Object.assign(R0,r); Radio.setLive(r.onAir); this.renderNow(); }catch(e){ toast(e.message); } };
+    box.append(el('div',{class:'rpower'}, el('b',{text:R0.on?'📻 Radio is on air':'📴 Radio is off air for everyone'}), uiSwitch(R0.on,v=>setR({on:v}),'The whole radio')));
+    const sw=el('div',{class:'rswlist'+(R0.on?'':' dim')});
+    for(const k of STATION_IDS) sw.append(el('div',{class:'rpower sm',style:`--st:${STATIONS[k].color}`}, el('span',{}, el('b',{text:`${STATIONS[k].name} ${STATIONS[k].freq}`}), el('small',{text:` · ${STATIONS[k].dj.name}`})), uiSwitch(R0.stations[k],v=>setR({stations:{[k]:v}}),STATIONS[k].name)));
+    box.append(sw, el('p',{class:'hint',text:'A station that’s off disappears from everyone’s dial and makes no DJ breaks, so it costs nothing.'}));
+    box.append(el('div',{class:'cpicks'}, el('span',{text:'On air now:'}), ...STATION_IDS.filter(k=>R0.on&&R0.stations[k]).map(k=>el('button',{class:'pill',text:STATIONS[k].dj.name,onclick:async()=>{ try{ await api('/api/admin/radio/talk',{method:'POST',body:{station:k}}); toast(`${STATIONS[k].dj.name} is on air on ${STATIONS[k].name}.`); this.radio=null; this.renderNow(); }catch(e){ toast(e.message); } }}))));
     for(const r of (R0.recent||[]).slice(0,5)) box.append(el('p',{class:'hint',text:`${STATIONS[r.station]?STATIONS[r.station].dj.name:r.station} · ${ago(r.at)}${r.has_audio?' · 🔊':''}: ${r.text}`}));
     return box; },
   camera(D0){ const d=D0.director||{mode:'auto'}, St=D0.status||{}, box=el('div',{class:'authbox scam'}), man=d.mode==='manual'&&(!d.until||Date.now()<d.until);
@@ -5228,18 +5239,27 @@ const SPEEDS=[1,10,60];
 $('clockBtn').onclick=()=>{ if(!Store.canWrite){ toast('Colony time on Gliese 12 b. A day here lasts 30 minutes.'); return; } // only the developer can preview faster time
   const i=SPEEDS.indexOf(speed); const n=SPEEDS[(i+1)%SPEEDS.length]; setSpeed(n); const tag=$('speedTag'); tag.hidden=n===1; tag.textContent=`Preview ${n}×`; toast(n===1?'Back to live time':`Previewing the future at ${n}× speed. Tap the clock to return.`); feedDirty=true; };
 $('musicBtn').onclick=()=>Radio.sheet();
+// An on/off switch. onChange gets the new value.
+function uiSwitch(on, onChange, label){ const b=el('button',{class:'uiswitch'+(on?' on':''),role:'switch','aria-checked':String(on),'aria-label':label||'On or off'});
+  b.onclick=e=>{ e.stopPropagation(); const v=b.getAttribute('aria-checked')!=='true'; b.setAttribute('aria-checked',String(v)); b.classList.toggle('on',v); onChange(v); }; b.append(el('i')); return b; }
 /* ---------------- Colony radio ---------------- */
 // Five stations whose music is composed live in the browser (music.js), each with a DJ whose talk breaks the server writes
 // from what's happening in the colony. Everyone on a station hears the same song and the same DJ at the same moment.
-const Radio={ player:null, st:null, info:null, played:new Set(), timer:null, onAir:null, vol:(()=>{ const v=ls.get('resurgence-radio-vol'); return v==null?0.8:v; })(),
+const Radio={ player:null, st:null, info:null, played:new Set(), timer:null, onAir:null, live:null, last:ls.get('resurgence-radio')||null, vol:(()=>{ const v=ls.get('resurgence-radio-vol'); return v==null?0.8:v; })(),
   async load(){ if(!this.mod) this.mod=await import('/music.js');
     if(!this.player){ this.player=new this.mod.RadioPlayer(()=>Date.now()+skew, STREAM?{sampleRate:48000}:undefined); this.player.onSong=s=>{ this.song=s; this.paint(); this.onSong&&this.onSong(s); }; this.player.setVolume(this.vol); } return this.player; },
-  async tune(st){ if(!STATIONS[st]) return; if(Music.on) Music.stop(); try{ await this.load(); }catch(e){ toast('The radio couldn’t start in this browser.'); return; }
+  // which stations are on air (the developer can switch the radio, or any station, off)
+  isLive(st){ return !this.live||this.live.includes(st); },
+  setLive(list){ this.live=Array.isArray(list)?list:null; if(this.st&&!this.isLive(this.st)){ const n=STATIONS[this.st].name; this.off(true); if(!STREAM) toast(`📴 ${n} has gone off air.`); } this.paint(); refreshHUD(); },
+  async refreshLive(){ try{ const r=await api('/api/radio'); this.info=r; this.setLive(r.onAir); }catch(e){} },
+  // the power switch: on plays the station you last had (or the first one that's on air)
+  power(on){ if(!on) return this.off(); const st=[this.last,...STATION_IDS].find(k=>k&&STATIONS[k]&&this.isLive(k)); if(st) this.tune(st); else toast('📴 The radio is off air right now.'); },
+  async tune(st){ if(!STATIONS[st]) return; if(!this.isLive(st)){ toast(`📴 ${STATIONS[st].name} is off air right now.`); return; } this.last=st; if(Music.on) Music.stop(); try{ await this.load(); }catch(e){ toast('The radio couldn’t start in this browser.'); return; }
     if(this.st!==st){ this.player.hush(); this.onAir=null; } this.st=st; if(!STREAM) ls.set('resurgence-radio',st); await this.player.play(st);
     clearInterval(this.timer); this.timer=setInterval(()=>this.poll(),20000); this.poll(); this.paint(); refreshHUD(); },
-  off(){ this.st=null; ls.set('resurgence-radio',''); clearInterval(this.timer); if(this.player){ this.player.stop(); this.player.hush(); } this.onAir=null; this.bubble(null); this.paint(); refreshHUD(); },
+  off(keep){ this.st=null; if(!keep) ls.set('resurgence-radio',''); clearInterval(this.timer); if(this.player){ this.player.stop(); this.player.hush(); } this.onAir=null; this.bubble(null); this.paint(); refreshHUD(); },
   setVol(v){ this.vol=v; ls.set('resurgence-radio-vol',v); this.player&&this.player.setVolume(v); },
-  async poll(){ if(!this.st) return; try{ const r=await api('/api/radio?on='+this.st); this.info=r; for(const t of r.talk||[]) this.queue(t); }catch(e){} this.paint(); },
+  async poll(){ if(!this.st) return; try{ const r=await api('/api/radio?on='+this.st); this.info=r; this.setLive(r.onAir); for(const t of r.talk||[]) this.queue(t); }catch(e){} this.paint(); },
   // a talk break goes on air at its time; tuning in halfway through one joins it where it is
   queue(t){ if(this.played.has(t.id)||t.station!==this.st) return; const now=Date.now()+skew; if(t.at+t.dur*1000<now) return; this.played.add(t.id); setTimeout(()=>this.say(t),Math.max(0,t.at-now)); },
   async say(t){ if(this.st!==t.station) return; const off=Math.max(0,(Date.now()+skew-t.at)/1000); this.onAir=t; this.bubble(t); this.paint(); this.onTalk&&this.onTalk(t);
@@ -5254,15 +5274,18 @@ const Radio={ player:null, st:null, info:null, played:new Set(), timer:null, onA
     b.innerHTML=''; b.append(el('b',{text:`🎙️ ${t.dj} · ${this.stationName(t.station)}`}), el('span',{text:t.text})); },
   paint(){ const box=document.querySelector('.rsheet.radio'); if(box&&!(document.activeElement&&document.activeElement.type==='range'&&box.contains(document.activeElement))) this.fill(box); this.onPaint&&this.onPaint(); },
   sheet(){ document.querySelector('.rsheet-bg')?.remove(); const wrap=el('div',{class:'rsheet-bg'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
-    const box=el('div',{class:'rsheet inked radio',role:'dialog','aria-label':'Colony radio'}); wrap.append(box); document.body.append(wrap); this.fill(box); },
+    const box=el('div',{class:'rsheet inked radio',role:'dialog','aria-label':'Colony radio'}); wrap.append(box); document.body.append(wrap); this.fill(box); this.refreshLive(); },
   fill(box){ box.innerHTML=''; const close=el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>box.parentElement.remove()});
+    const anyLive=STATION_IDS.some(k=>this.isLive(k)), on=!!this.st;
     box.append(el('div',{class:'shhead'}, el('h3',{text:'📻 Colony radio'}), close));
+    if(anyLive) box.append(el('div',{class:'rpower'}, el('span',{text:on?'Radio on':'Radio off'}), uiSwitch(on,v=>this.power(v),'Radio on or off')));
+    else box.append(el('p',{class:'ronair',text:'📴 The radio is off air right now. Check back soon.'}));
     if(this.st){ const S0=STATIONS[this.st];
       box.append(el('div',{class:'rnow',style:`--st:${S0.color}`}, el('div',{class:'rbars','aria-hidden':'true'},el('i'),el('i'),el('i'),el('i')),
         el('div',{}, el('b',{text:this.stationName()}), el('span',{text:this.onAir?`🎙️ ${S0.dj.name} on the mic`:`Now playing: ${this.nowTitle()}`}))));
       if(this.onAir) box.append(el('p',{class:'ronair',text:this.onAir.text})); }
     const list=el('div',{class:'rlist'});
-    for(const id of STATION_IDS){ const S0=STATIONS[id], on=this.st===id;
+    for(const id of STATION_IDS.filter(k=>this.isLive(k))){ const S0=STATIONS[id], on=this.st===id;
       list.append(el('button',{class:'rst'+(on?' on':''),style:`--st:${S0.color}`,onclick:()=>on?this.off():this.tune(id)},
         el('span',{class:'rfreq',text:S0.freq}), el('span',{class:'rmid'}, el('b',{text:S0.name}), el('small',{text:`${S0.style} · ${S0.dj.name}`})), el('span',{class:'rgo',text:on?'❚❚':'▶'}))); }
     list.append(el('button',{class:'rst'+(Music.on?' on':''),style:'--st:#6b8f71',onclick:()=>{ if(Music.on) Music.stop(); else { this.off(); Music.start(); } this.paint(); }},
@@ -5273,7 +5296,7 @@ const Radio={ player:null, st:null, info:null, played:new Set(), timer:null, onA
     box.append(el('p',{class:'hint',text:'The music is composed live for each station, and the DJs talk about what’s happening in the colony.'})); },
 };
 // Coming back with the radio on: it starts again with the first tap (browsers only play sound after one).
-{ const was=ls.get('resurgence-radio'); if(was&&STATIONS[was]&&!STREAM){ const go=()=>{ removeEventListener('pointerdown',go,true); if(!Radio.st) Radio.tune(was); }; addEventListener('pointerdown',go,true); } }
+{ const was=ls.get('resurgence-radio'); if(was&&STATIONS[was]&&!STREAM){ const go=async()=>{ removeEventListener('pointerdown',go,true); if(Radio.st) return; await Radio.refreshLive(); if(Radio.isLive(was)) Radio.tune(was); }; addEventListener('pointerdown',go,true); } }
 
 function findMe(){ let mine=(Me&&Me.handle)||null; if(!mine){ try{ const v=localStorage.getItem('settlement-me'); mine=v&&v.startsWith('"')?JSON.parse(v):v; }catch(e){} }
   const h = Store.canWrite ? (S.meta&&S.meta.founder) : mine;
@@ -5365,8 +5388,9 @@ const Stream={ shot:null, until:0, recent:[], online:[], onlineAt:0, seenEvents:
     this.q('.so-ctat').textContent=this.cta||'playresurgence.com';
     const ev=(S.events||[]).slice(0,10).map(e=>e.text).join('   •   '); if(ev!==this.tick){ this.tick=ev; const t=this.q('.so-tickin'); t.textContent=ev||'Welcome to the colony'; t.style.animationDuration=Math.max(30,ev.length/8)+'s'; } },
   // the stream plays one station all day, or a different station each hour ('rotate')
-  tuneRadio(){ const r=this.radio; if(!r||r==='off'){ if(Radio.st) Radio.off(); this.paintRadio(); return; }
-    const st=r==='rotate'?STATION_IDS[Math.floor((Date.now()+skew)/3600e3)%STATION_IDS.length]:r; if(Radio.st!==st) Radio.tune(st); },
+  async tuneRadio(){ const r=this.radio; if(Radio.live==null) await Radio.refreshLive(); const live=STATION_IDS.filter(k=>Radio.isLive(k));
+    if(!r||r==='off'||!live.length){ if(Radio.st) Radio.off(); this.paintRadio(); return; }
+    const st=r!=='rotate'&&live.includes(r)?r:live[Math.floor((Date.now()+skew)/3600e3)%live.length]; if(Radio.st!==st) Radio.tune(st); },
   paintRadio(){ if(!this.ov) return; const on=!!Radio.st, p=this.q('.so-radio'); p.classList.toggle('on',on); if(!on) return; const S0=STATIONS[Radio.st];
     p.style.setProperty('--st',S0.color); this.q('.so-rst').textContent=`📻 ${S0.name} ${S0.freq}`; this.q('.so-rnow').textContent=Radio.onAir?`🎙️ ${S0.dj.name} on the mic`:`♪ ${Radio.nowTitle()}`; },
   caption(title, sub){ this.q('.so-capt').textContent=title||''; this.q('.so-caps').textContent=sub||''; this.q('.so-cap').classList.toggle('on',!!title); },

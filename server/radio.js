@@ -60,8 +60,19 @@ export class Radio {
   // Someone is tuned in (a player's radio or the 24/7 stream). Shared with the leader through the settings table.
   async listen(st) { if (!STATIONS[st]) return; const now = Date.now(); if (now - (this.wrote[st] || 0) < 60000) return; this.wrote[st] = now;
     await pool.query("insert into settings (key, value) values ($1, $2) on conflict (key) do update set value = $2", ['radio:listen:' + st, now]); }
-  async listening() { const r = (await pool.query("select key, value from settings where key like 'radio:listen:%'")).rows, now = Date.now();
-    return STATION_IDS.filter(st => { const x = r.find(k => k.key === 'radio:listen:' + st); return x && now - Number(x.value) < LISTEN_MS; }); }
+  // The developer's switches: the whole radio on or off, and each station on or off. A station that's off isn't on
+  // anyone's dial and gets no DJ breaks (so nothing is spent on it).
+  async config(fresh) { if (!fresh && this.cfg && Date.now() - this.cfgAt < 30000) return this.cfg;
+    const r = (await pool.query("select value from settings where key = 'radio:config'")).rows[0]?.value || {};
+    this.cfg = { on: r.on !== false, stations: Object.fromEntries(STATION_IDS.map(k => [k, r.stations?.[k] !== false])) }; this.cfgAt = Date.now(); return this.cfg; }
+  async onAir() { const c = await this.config(); return c.on ? STATION_IDS.filter(k => c.stations[k]) : []; }
+  async setConfig(b) { const c = { ...(await this.config(true)) }; c.stations = { ...c.stations };
+    if (typeof b.on === 'boolean') c.on = b.on;
+    if (b.stations && typeof b.stations === 'object') for (const k of STATION_IDS) if (typeof b.stations[k] === 'boolean') c.stations[k] = b.stations[k];
+    await pool.query("insert into settings (key, value) values ('radio:config', $1) on conflict (key) do update set value = $1", [c]); this.cfg = c; this.cfgAt = Date.now();
+    const onAir = await this.onAir(); this.bus?.publish([{ op: 'radioConfig', onAir }]); return { ...c, onAir }; }
+  async listening() { const r = (await pool.query("select key, value from settings where key like 'radio:listen:%'")).rows, now = Date.now(), on = await this.onAir();
+    return on.filter(st => { const x = r.find(k => k.key === 'radio:listen:' + st); return x && now - Number(x.value) < LISTEN_MS; }); }
 
   // Run every 15 s on the leader: write the next break for each station someone is listening to.
   async tick() {
@@ -106,8 +117,9 @@ export class Radio {
     let audio = null, dur = Math.max(6, words(text).length / 2.6);
     if (process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION) { try { audio = await this.voice(st, text); dur = audio.length * 8 / 48000; } catch (e) { console.error('radio voice:', e.message); } }
     const row = { id: uid(), station: st, slot, t: Date.now(), at, kind: opts.kind || 'talk', text, events: f.events.filter((e, i) => text.includes(e.text.slice(0, 18)) || (/@[\w.]+/.exec(e.text) && text.includes(/@[\w.]+/.exec(e.text)[0])) || (source === 'claude' && i === 0)).flatMap(e => e.ids), focus, dur, source };
-    await pool.query(`insert into radio_talk (id, station, slot, t, at, kind, text, events, focus, audio, dur, source) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) on conflict (station, slot) do nothing`,
+    const saved = await pool.query(`insert into radio_talk (id, station, slot, t, at, kind, text, events, focus, audio, dur, source) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) on conflict (station, slot) do nothing`,
       [row.id, st, slot, row.t, at, row.kind, text, row.events, focus, audio, dur, source]);
+    if (!saved.rowCount) throw new HttpError(409, 'That break was already written.'); // another instance got there first
     const out = { id: row.id, station: st, at, kind: row.kind, text, focus, dur, audio: audio ? `/api/radio/voice/${row.id}` : null, dj: S.dj.name };
     this.bus?.publish([{ op: 'radio', talk: out }]); // radios tuned to this station pick it up at once
     return { ...out, slot, events: row.events, source };
@@ -166,11 +178,11 @@ Do not reuse any joke, catchphrase, opening or sentence from your recent breaks.
   async now(on) {
     const now = Date.now(), stations = {};
     for (const st of STATION_IDS) { const n = slotOf(st, now); stations[st] = { slot: n, start: slotStart(st, n), title: songTitle(st, n), next: songTitle(st, n + 1) }; }
-    let talk = [];
-    if (STATIONS[on]) { this.listen(on).catch(() => {});
+    let talk = []; const onAir = await this.onAir();
+    if (STATIONS[on] && onAir.includes(on)) { await this.listen(on).catch(() => {});
       talk = (await pool.query('select id, station, slot, at, kind, text, focus, dur, audio is not null has_audio from radio_talk where station = $1 and at > $2 and at < $3 order by at', [on, now - 120000, now + 10 * 60000])).rows
         .map(r => ({ id: r.id, station: r.station, at: Number(r.at), kind: r.kind, text: r.text, focus: r.focus, dur: r.dur, audio: r.has_audio ? `/api/radio/voice/${r.id}` : null, dj: STATIONS[r.station].dj.name })); }
-    return { serverNow: now, stations, talk };
+    return { serverNow: now, onAir, stations, talk };
   }
 }
 
@@ -180,9 +192,12 @@ export function radioRoutes(app, { radio, admin, send, limit }) {
     try { const r = (await pool.query('select audio from radio_talk where id = $1', [String(req.params.id)])).rows[0]; if (!r?.audio) return res.status(404).end();
       res.set({ 'content-type': 'audio/mpeg', 'cache-control': 'public, max-age=86400' }).send(r.audio); } catch (e) { res.status(500).end(); }
   });
-  app.get('/api/admin/radio', admin, send(async () => ({ ...radio.status(), listening: await radio.listening(),
+  app.get('/api/admin/radio', admin, send(async () => ({ ...radio.status(), ...(await radio.config(true)), onAir: await radio.onAir(), listening: await radio.listening(),
     recent: (await pool.query('select id, station, at, text, source, dur, audio is not null has_audio from radio_talk order by t desc limit 30')).rows.map(r => ({ ...r, at: Number(r.at) })) })));
+  // the developer's switches: { on: false } takes the whole radio off air; { stations: { hausa: false } } one station
+  app.put('/api/admin/radio', admin, send(async req => radio.setConfig(req.body || {})));
   // the developer: put a break on air now (to try a DJ out)
   app.post('/api/admin/radio/talk', admin, send(async req => { const st = String(req.body?.station || ''); if (!STATIONS[st]) throw new HttpError(400, 'Pick a station.');
-    return radio.make(st, -Math.floor(Date.now() / 1000), Date.now() + 2500, { kind: 'live' }); }));
+    if (!(await radio.onAir()).includes(st)) throw new HttpError(400, `${STATIONS[st].name} is switched off. Switch it on first.`);
+    return radio.make(st, -1 - Math.floor(Math.random() * 2e9), Date.now() + 2500, { kind: 'live' }); })); // a break outside the song slots: its own (negative) number
 }

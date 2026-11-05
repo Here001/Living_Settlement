@@ -487,6 +487,21 @@ body.pane-max .composer textarea{height:70px}
 .joinbox{width:min(420px,100%)}.joinbox .gin{margin:6px 0}.gbtn{display:flex;justify-content:center;margin:10px 0 4px;min-height:44px}.tsbox{margin:6px 0}
 .orline{display:flex;align-items:center;gap:8px;margin:10px 0 4px;font-size:12px;opacity:.7}.orline::before,.orline::after{content:'';flex:1;height:1px;background:currentColor;opacity:.35}
 .webtag{font-size:12px;margin-left:4px}
+/* the live-stream overlay (/?stream=1) */
+body.streaming .watchbar,body.streaming #showUi,body.streaming #intro,body.streaming .rsheet-bg,body.streaming #card,body.streaming .atsug{display:none!important}
+#streamOv{position:fixed;inset:0;z-index:30;pointer-events:none;color:#FBF8F1;font-family:'Bricolage Grotesque',system-ui,sans-serif;text-shadow:0 2px 6px rgba(0,0,0,.45)}
+#streamOv .so-top{position:absolute;left:2.2vmin;top:2vmin;display:flex;align-items:center;gap:1.4vmin;padding:1vmin 2vmin;border-radius:999px;background:rgba(20,24,30,.55);backdrop-filter:blur(8px)}
+#streamOv .so-live{background:#E0362C;color:#fff;font-weight:800;font-size:1.8vmin;padding:.4vmin 1.2vmin;border-radius:.8vmin;text-shadow:none;animation:soLive 2s ease-in-out infinite}@keyframes soLive{50%{opacity:.65}}
+#streamOv .so-brand{font-size:2.8vmin;letter-spacing:.12em}#streamOv .so-colony{font-size:2vmin;opacity:.9}
+#streamOv .so-stats{position:absolute;right:2.2vmin;top:2vmin;display:flex;gap:1.6vmin;padding:1vmin 2vmin;border-radius:999px;background:rgba(20,24,30,.55);backdrop-filter:blur(8px);font-size:2.2vmin;font-weight:700}
+#streamOv .so-cap{position:absolute;left:2.2vmin;bottom:11vmin;max-width:60vw;display:flex;flex-direction:column;gap:.4vmin;padding:1.4vmin 2.2vmin;border-radius:2vmin;background:rgba(20,24,30,.6);backdrop-filter:blur(8px);opacity:0;transform:translateY(1vmin);transition:opacity .6s,transform .6s}
+#streamOv .so-cap.on{opacity:1;transform:none}#streamOv .so-capt{font-size:3vmin}#streamOv .so-caps{font-size:2vmin;opacity:.85}
+#streamOv .so-cta{position:absolute;right:2.2vmin;bottom:11vmin;max-width:34vw;display:flex;flex-direction:column;gap:.3vmin;padding:1.4vmin 2.2vmin;border-radius:2vmin;background:linear-gradient(135deg,rgba(217,113,74,.92),rgba(180,80,50,.92));text-align:right}
+#streamOv .so-cta b{font-size:2.6vmin}#streamOv .so-cta span{font-size:1.9vmin}
+#streamOv .so-tick{position:absolute;left:0;right:0;bottom:0;height:7vmin;overflow:hidden;background:rgba(20,24,30,.72);display:flex;align-items:center;white-space:nowrap;font-size:2.4vmin}
+#streamOv .so-tickin{display:inline-block;padding-left:100%;animation:soTick 60s linear infinite}@keyframes soTick{to{transform:translateX(-100%)}}
+@media (orientation:portrait){ #streamOv .so-top{top:3vh} #streamOv .so-stats{top:auto;bottom:24vh;right:auto;left:2.2vmin} #streamOv .so-cap{bottom:30vh;max-width:90vw} #streamOv .so-cta{left:2.2vmin;right:2.2vmin;bottom:9vh;max-width:none;text-align:center} #streamOv .so-tick{height:5vh} }
+.sdest{opacity:.75}.sdest.on{opacity:1}.sdest select{width:100%;padding:8px;border-radius:10px;margin:4px 0;font:inherit}
 .ludosvg{max-width:400px;filter:drop-shadow(0 8px 16px rgba(0,0,0,.3))}
 .ltok.go{animation:ltokb .9s ease-in-out infinite}.ltok.hop{animation:ltokh .17s ease-out}
 @keyframes ltokb{0%,100%{translate:0 0}50%{translate:0 -3px}} @keyframes ltokh{0%{translate:0 0}50%{translate:0 -5px}100%{translate:0 0}}
@@ -822,7 +837,7 @@ function applyOp(o){
     for(const k of o.chunks) if(loading.has(k)){ if(!buffered.has(k)) buffered.set(k,[]); buffered.get(k).push(o); return; }
     if(o.op!=='citizen'&&o.op!=='citizenGone') return; }
   switch(o.op){
-  case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&!PLAYER_TABS.has(activeTab)&&activeTab!=='reports'&&activeTab!=='stats') renderPane(); break;
+  case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&!PLAYER_TABS.has(activeTab)&&activeTab!=='reports'&&activeTab!=='stats'&&activeTab!=='stream') renderPane(); break;
   case 'race': raceSoon(o.data); break;
   case 'lottery': lotterySoon(o.data); break;
   case 'building': { const old=S.buildings.get(o.data.id), n=o.data; putBuilding(n);
@@ -2708,6 +2723,7 @@ const ICONS={
   feed: I('<path d="M5 7h22v14H14l-6 5v-5H5z" fill="#9CC4E4"/><path d="M10 12h12M10 16h8"/>'),
   top: I('<path d="M10 6h12v6a6 6 0 0 1-12 0z" fill="#E2B13C"/><path d="M10 8H6a4 4 0 0 0 4 5M22 8h4a4 4 0 0 1-4 5M16 18v4M11 26h10M13 22h6v4h-6z" fill="none"/>'),
   reports: I('<path d="M8 27V5" fill="none"/><path d="M8 6h15l-3 5 3 5H8z" fill="#E8836B"/>'),
+  stream: I('<rect x="4" y="8" width="18" height="16" rx="3" fill="#E8836B"/><path d="M22 13l6-4v14l-6-4z" fill="#9CC3DE"/><circle cx="9" cy="13" r="2" fill="#fff"/>'),
   stats: I('<path d="M5 27h22" fill="none"/><rect x="7" y="16" width="4" height="11" fill="#9CC3DE"/><rect x="14" y="9" width="4" height="18" fill="#E8836B"/><rect x="21" y="13" width="4" height="14" fill="#F2C94C"/>'),
   chats: I('<path d="M5 8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-7l-5 4v-4a3 3 0 0 1-3-3z" fill="#A8D5BA"/><path d="M11 21h7l5 4v-4a3 3 0 0 0 3-3v-6" fill="none"/>'),
   races: I('<path d="M8 27V5"/><path d="M8 6h16l-3 5 3 5H8z" fill="#F4EDE0"/><path d="M8 6h4v5H8zM16 6h4v5h-4zM12 11h4v5h-4zM20 11h4v5h-4z" fill="#2B2621" stroke="none"/>'),
@@ -2744,7 +2760,7 @@ async function rotateBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
 function setTool(t){ tool=t; ghost=null; roadStart=null; setTimeout(refreshTurn); const chip=$('toolchip');
   if(t.kind==='pan'){ chip.hidden=true; setMini(false); }
   else { chip.hidden=false; $('toolLabel').textContent = t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} onto a road` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
-  if(activeTab && !PLAYER_TABS.has(activeTab) && activeTab!=='reports' && activeTab!=='stats') renderPane(); }
+  if(activeTab && !PLAYER_TABS.has(activeTab) && activeTab!=='reports' && activeTab!=='stats' && activeTab!=='stream') renderPane(); }
 $('toolDone').onclick=()=>setTool({kind:'pan'});
 // Minimise: tuck the menus away while keeping the chosen tool, so the whole map is free to build on.
 let mini=false;
@@ -2769,7 +2785,7 @@ const PLAYER_TABS=new Set(['feed','people','races','top','chats']); // everyone'
 function syncFindChip(){ const b=$('findBtn'); if(b&&b.parentElement) b.parentElement.style.display=(Me&&Me.token&&Me.handle)?'none':''; }
 function buildToolbar(){ const row=$('toolsRow'); row.innerHTML=''; syncFindChip();
   const tabs=[{id:'feed',name:'Town Square'},{id:'me',name:'My card'},{id:'people',name:'Colonists'},{id:'races',name:'Races'}].concat(Me&&Me.token?[{id:'chats',name:'Chats'}]:[]);
-  const all = Store.canWrite ? tabs.concat([{id:'reports',name:'Reports'},{id:'stats',name:'Stats'},{sep:true}],CATS) : tabs;
+  const all = Store.canWrite ? tabs.concat([{id:'reports',name:'Reports'},{id:'stats',name:'Stats'},{id:'stream',name:'Stream'},{sep:true}],CATS) : tabs;
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
     const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(c.id==='me'?myCardOpen():activeTab===c.id),onclick:()=>c.id==='me'?openMyCard():openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='me') btn.dataset.me='1'; if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); if(c.id==='reports'&&typeof Reports!=='undefined'&&Reports.open) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Reports.open))})); row.append(btn); } }
 function openTab(name){ if(!name) document.body.classList.remove('pane-max');
@@ -2818,6 +2834,7 @@ function renderPane(){
   if(activeTab==='chats'){ Chats.render(p); return; }
   if(activeTab==='reports'){ Reports.render(p); return; }
   if(activeTab==='stats'){ Stats.render(p); return; }
+  if(activeTab==='stream'){ StreamAdmin.render(p); return; }
   if(activeTab==='top'){ activeTab='feed'; feedMode='top'; return renderPane(); }
   if(activeTab==='races'){ p.append(paneHead('Races')); const body=el('div',{class:'pane-body',id:'raceBody'}); p.append(body); renderRaces(true); return; }
   if(activeTab==='people'){ p.append(paneHead('Colonists')); const body=el('div',{class:'pane-body'});
@@ -3221,6 +3238,41 @@ function reportSheet({kind,id,handle,text}){ document.querySelector('.rsheet-bg'
     el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Cancel',onclick:()=>wrap.remove()}), send)));
   document.body.append(wrap); }
 // ---- The developer's Reports tab: read what was reported and dismiss it, delete the message, or mute the colonist ----
+// ---- Developer: the 24/7 live stream (where it goes, and how the streamer is doing) ----
+const StreamAdmin={ data:null, busy:false, dirty:false,
+  async load(){ if(!Store.canWrite||this.busy) return; this.busy=true; try{ this.data=await api('/api/admin/stream'); this.dirty=false; }catch(e){ toast(e.message); } this.busy=false; this.renderNow(); },
+  renderNow(){ if(activeTab!=='stream') return; const p=$('pane'); if(p){ const keep=$('streamBody')?.scrollTop||0; p.innerHTML=''; this.render(p); const b=$('streamBody'); if(b) b.scrollTop=keep; } },
+  async save(){ const D0=this.data; try{ await api('/api/admin/stream',{method:'PUT',body:{cta:D0.cta,quality:D0.quality,destinations:D0.destinations}}); toast('Saved. The streamer picks it up within 30 seconds.'); await this.load(); }catch(e){ toast(e.message); } },
+  render(p){ p.append(paneHead('📺 Live stream')); const body=el('div',{class:'pane-body',id:'streamBody'}); p.append(body);
+    if(!this.data){ body.append(el('p',{class:'hint',text:'Loading…'})); this.load(); return; } const D0=this.data, P=D0.platforms, St=D0.status||{};
+    // the streamer's last check-in
+    const fresh=St.at&&Date.now()-St.at<90000, box=el('div',{class:'authbox'}, el('h3',{text:fresh?'🟢 Streamer online':St.at?'🔴 Streamer offline':'⚪ No streamer yet'}));
+    box.append(el('p',{class:'hint',text:St.at?`Last check-in ${ago(St.at)}${St.host?` from ${St.host}`:''}.`:'Set up the streamer on a cloud server (see the README, “24/7 live stream”). It checks in here every 30 seconds.'}));
+    for(const pl of St.pipelines||[]) box.append(el('p',{class:'jobnow',text:`${pl.up?'🟢':'🔴'} ${pl.layout==='portrait'?'📱 Portrait':'🖥️ Landscape'}: ${pl.dests.join(', ')||'no destinations'}${pl.up&&pl.since?` · live for ${ago(pl.since).replace(' ago','')}`:''}${pl.fps?` · ${pl.fps} fps`:''}${pl.restarts?` · ${pl.restarts} restart${pl.restarts===1?'':'s'}`:''}${pl.error?` · ${pl.error}`:''}`}));
+    if(!D0.tokenSet) box.append(el('p',{class:'autherr',text:'STREAM_TOKEN isn’t set on this server yet: add it (any long random text) so the streamer can sign in.'}));
+    box.append(el('div',{class:'row-actions'}, el('button',{class:'btn sm',text:'Preview 16:9',onclick:()=>window.open('/?stream=1','_blank','noopener,width=1280,height=720')}), el('button',{class:'btn sm',text:'Preview 9:16',onclick:()=>window.open('/?stream=1','_blank','noopener,width=405,height=720')}), el('button',{class:'btn sm',text:'Refresh',onclick:()=>this.load()})));
+    body.append(box);
+    // the call to action shown on the stream
+    const cta=el('input',{class:'gin',type:'text',maxlength:'140',value:D0.cta||'','aria-label':'Call to action'}); cta.oninput=()=>{ D0.cta=cta.value; this.dirty=true; };
+    const q=el('div',{class:'cpicks'}, el('span',{text:'Quality:'}), ...['720p','1080p'].map(k=>el('button',{class:'pill'+(D0.quality===k?' on':''),text:k,onclick:()=>{ D0.quality=k; this.dirty=true; this.renderNow(); }})));
+    body.append(el('h4',{class:'bgroup',text:'On screen'}), el('p',{class:'hint',text:'The “Join the colony” box on the stream:'}), cta, q, el('p',{class:'hint',text:'1080p needs a stronger server (4 vCPU for one layout). 720p runs on 2 vCPU.'}));
+    // destinations
+    body.append(el('h4',{class:'bgroup',text:'Where it goes'}));
+    if(!D0.destinations.length) body.append(el('p',{class:'hint',text:'No destinations yet. Add one below.'}));
+    D0.destinations.forEach((d,i)=>{ const card=el('div',{class:'authbox sdest'+(d.enabled?' on':'')}), info=P[d.platform]||P.custom;
+      const set=(k,v,re)=>{ d[k]=v; this.dirty=true; if(re) this.renderNow(); };
+      const sel2=el('select',{'aria-label':'Platform'}); for(const [k,pp] of Object.entries(P)) sel2.append(el('option',{value:k,text:pp.name,selected:k===d.platform?'':null})); sel2.onchange=()=>{ const n=P[sel2.value]; d.platform=sel2.value; d.url=n.url||d.url; d.layout=n.layout; d.maxHours=n.maxHours; d.name=n.name; this.dirty=true; this.renderNow(); };
+      const url=el('input',{class:'gin',type:'text',placeholder:'rtmp://…','aria-label':'Server URL',value:d.url||''}); url.oninput=()=>set('url',url.value.trim());
+      const key=el('input',{class:'gin',type:'password',placeholder:d.hasKey?'Saved (type to replace)':'Stream key','aria-label':'Stream key',value:d.key||'',autocomplete:'off'}); key.oninput=()=>set('key',key.value.trim());
+      card.append(el('div',{class:'row-actions',style:'justify-content:space-between'}, el('b',{text:`${d.name}`}), el('label',{class:'pushk'}, (()=>{ const cb=el('input',{type:'checkbox'}); cb.checked=!!d.enabled; cb.onchange=()=>set('enabled',cb.checked,true); return cb; })(), el('span',{text:d.enabled?'On':'Off'}))),
+        sel2, url, key,
+        el('div',{class:'cpicks'}, el('span',{text:'Shape:'}), ...[['landscape','🖥️ 16:9'],['portrait','📱 9:16']].map(([k,n])=>el('button',{class:'pill'+(d.layout===k?' on':''),text:n,onclick:()=>set('layout',k,true)}))),
+        el('p',{class:'hint',text:info.note+(d.maxHours?` Reconnects every ${d.maxHours} h.`:'')}),
+        el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Remove',onclick:()=>{ D0.destinations.splice(i,1); this.dirty=true; this.renderNow(); }})));
+      body.append(card); });
+    const add=el('div',{class:'cpicks'}, el('span',{text:'Add:'}), ...Object.entries(P).map(([k,pp])=>el('button',{class:'pill',text:pp.name,onclick:()=>{ D0.destinations.push({ id:'', platform:k, name:pp.name, url:pp.url, key:'', enabled:true, layout:pp.layout, maxHours:pp.maxHours }); this.dirty=true; this.renderNow(); }})));
+    body.append(add, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.dirty?'Save changes':'Saved',disabled:!this.dirty,onclick:()=>this.save()})));
+    body.append(el('p',{class:'hint',text:'YouTube, Twitch and Facebook keep the same key, so they run around the clock. Instagram and TikTok give a new key for every live: paste it here each time you start one (Instagram ends a live after 4 hours).'})); } };
 // ---- Developer stats: daily players, coins in circulation, how players earn and spend, and where they drop off ----
 const FLOW_NAMES={ 'earn:shifts':['source','Extra shifts'], 'earn:gigs':['source','Deliveries'], 'earn:fish':['source','Fishing'], 'earn:forage':['source','Foraging'], 'earn:scavenged':['source','Scavenging'],
   'earn:supplies':['source','Supply drops'], daily:['source','Daily rewards'], guide:['source','Getting started rewards'], 'crime:rob':['source','Shop robberies'], 'casino:win':['source','Casino winnings'],
@@ -5172,7 +5224,7 @@ async function playIntro(force){
   const card=el('div',{class:'card2'}); ov.append(el('div',{class:'stars'}), card, skip); let i=0;
   const next=()=>{ if(!document.body.contains(ov)||ov.classList.contains('end')) return; if(i>=lines.length){ finish(); return; } const [a,b]=lines[i++]; card.classList.remove('in'); setTimeout(()=>{ card.innerHTML=''; card.append(el('h2',{text:a}), el('p',{text:b})); card.classList.add('in'); setTimeout(next,4200); },500); };
   next(); }
-setTimeout(()=>{ if(!Store.canWrite && !ls.get('resurgence-intro-seen')) playIntro(); },900);
+setTimeout(()=>{ if(!Store.canWrite && !STREAM && !ls.get('resurgence-intro-seen')) playIntro(); },900);
 $('findBtn').onclick=findMe;
 $('wxBtn').onclick=()=>{ if(Store.canWrite) openTab('weather'); else { const w=weatherAt(S.meta,gmNow()); toast(`Weather: ${WEATHER_TYPES[w].name}`); } };
 function toggleFullscreen(){ const d=document; const on=d.fullscreenElement||d.webkitFullscreenElement;
@@ -5182,6 +5234,57 @@ function toggleFullscreen(){ const d=document; const on=d.fullscreenElement||d.w
   else toast('On iPhone: tap Share, then "Add to Home Screen". The city then opens full screen.'); }
 function setClean(on){ document.body.classList.toggle('clean',on); $('showUi').hidden=!on; if(on) closeCard(); }
 $('fsBtn').onclick=toggleFullscreen; $('hideBtn').onclick=()=>setClean(true); $('showUi').onclick=()=>setClean(false);
+// ---- The live-stream page (/?stream=1): no buttons, an overlay, and a camera that directs itself ----
+// The streamer (streamer/ in this repo) opens this page on a cloud server and sends it to YouTube, Twitch, Facebook,
+// Instagram or TikTok. Landscape at 16:9, or a phone-shaped layout when the window is taller than it is wide.
+const STREAM=new URLSearchParams(location.search).has('stream');
+const Stream={ shot:null, until:0, recent:[], online:[], onlineAt:0, seenEvents:new Set(), tween:null, cta:'',
+  start(){ document.body.classList.add('clean','streaming'); $('showUi').hidden=true; ls.set('resurgence-intro-seen',1);
+    const ov=el('div',{id:'streamOv'}); ov.innerHTML=`<div class="so-top"><span class="so-live">● LIVE</span><b class="so-brand">RESURGENCE</b><span class="so-colony"></span></div>
+      <div class="so-stats"><span class="so-clock"></span><span class="so-wx"></span><span class="so-pop"></span></div>
+      <div class="so-cap"><b class="so-capt"></b><span class="so-caps"></span></div>
+      <div class="so-cta"><b>Join the colony</b><span class="so-ctat"></span></div>
+      <div class="so-tick"><span class="so-tickin"></span></div>`; document.body.append(ov); this.ov=ov;
+    api('/api/stream/public').then(r=>{ this.cta=r.cta||''; this.paint(); }).catch(()=>{});
+    setInterval(()=>this.paint(),1000); setInterval(()=>this.direct(),1000); requestAnimationFrame(t=>this.anim(t)); },
+  q(s){ return this.ov.querySelector(s); },
+  paint(){ if(!this.ov) return; const pop=S.meta&&S.meta.population;
+    this.q('.so-colony').textContent=S.meta?`${S.meta.name} · Gliese 12 b`:''; this.q('.so-clock').textContent=`🕒 ${fmtClock(gmNow())}`;
+    this.q('.so-wx').textContent=($('wxIcon')&&$('wxIcon').textContent)||''; this.q('.so-pop').textContent=pop?`👥 ${fmt(pop)} colonists`:'';
+    this.q('.so-ctat').textContent=this.cta||'playresurgence.com';
+    const ev=(S.events||[]).slice(0,10).map(e=>e.text).join('   •   '); if(ev!==this.tick){ this.tick=ev; const t=this.q('.so-tickin'); t.textContent=ev||'Welcome to the colony'; t.style.animationDuration=Math.max(30,ev.length/8)+'s'; } },
+  caption(title, sub){ this.q('.so-capt').textContent=title||''; this.q('.so-caps').textContent=sub||''; this.q('.so-cap').classList.toggle('on',!!title); },
+  // smooth camera moves between shots
+  fly(x,y,z,ms=2600){ follow=null; this.tween={ x0:cam.x,y0:cam.y,z0:cam.z, x,y,z, t0:performance.now(), ms }; },
+  anim(t){ const w=this.tween; if(w){ const u=Math.min(1,(t-w.t0)/w.ms), e=u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2; cam.x=w.x0+(w.x-w.x0)*e; cam.y=w.y0+(w.y-w.y0)*e; cam.z=w.z0+(w.z-w.z0)*e; if(u>=1){ this.tween=null; if(this.afterFly){ const f=this.afterFly; this.afterFly=null; f(); } } }
+    else if(this.drift){ cam.x+=this.drift[0]; cam.y+=this.drift[1]; }
+    requestAnimationFrame(t2=>this.anim(t2)); },
+  centre(b,w=2,d=2){ return iso(b.x+w/2,b.y+d/2); },
+  // Pick what to show next: a race that's on, someone who just arrived, a player who's online, a busy place, or the whole colony.
+  async direct(){ const now=Date.now(); if(this.busy) return;
+    const tracks=(Race.info&&Race.info.tracks)||[], live=tracks.map(t=>({t,l:liveOfRace(t.live)})).find(x=>x.l&&x.l.el<=Race.info.len/1000+4);
+    if(live&&this.shot!=='race:'+live.t.id){ this.shot='race:'+live.t.id; const p=this.centre(live.t,4,3); this.drift=null; this.fly(p.x,p.y,1.5); this.until=now+(Race.info.len+8000); this.caption(`🏁 Race #${live.l.r.no} is on at ${live.t.name}`,'Bet on the next race at playresurgence.com'); return; }
+    if(this.shot&&this.shot.startsWith('race:')&&live) return;
+    if(now<this.until) return; this.busy=true;
+    try{ if(now-this.onlineAt>60000){ this.onlineAt=now; this.online=await api('/api/online').catch(()=>this.online)||[]; if(now-(Race.loadAt||0)>30000) loadRace(); }
+      const soon=tracks.map(t=>({t,left:t.next?t.next.start-(now+(Race.skew||0)):Infinity})).filter(x=>x.left>0&&x.left<75000).sort((a,b)=>a.left-b.left)[0];
+      const fresh=(S.events||[]).find(e=>now-e.t<5*60000&&!this.seenEvents.has(e.id)&&/@[\w.]+/.test(e.text)&&/(arrived|woke|moved into|joined|won|robbed|caught|heist|crew)/i.test(e.text));
+      const pick=Math.random();
+      if(soon&&this.shot!=='soon:'+soon.t.id){ this.shot='soon:'+soon.t.id; const p=this.centre(soon.t,4,3); this.drift=null; this.fly(p.x,p.y,1.2); this.until=now+18000; this.caption(`🏁 Next race at ${soon.t.name} soon`,'Pick your creature at playresurgence.com'); }
+      else if(fresh){ this.seenEvents.add(fresh.id); const h=fresh.text.match(/@([\w.]+)/)[1]; if(!(await this.followHandle(h,`${fresh.text.length>70?fresh.text.slice(0,70)+'…':fresh.text}`,'',22000))) this.overview(); }
+      else if(pick<0.45&&this.online.length){ const o=this.online[Math.floor(Math.random()*this.online.length)]; if(!(await this.followHandle(o.h,`👀 Following ${o.n||'@'+o.h}`,'Playing right now',24000))) this.place(); }
+      else if(pick<0.8) this.place(); else this.overview(); }
+    catch(e){ this.overview(); } this.busy=false; },
+  async followHandle(h, title, sub, ms){ let c=[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===h.toLowerCase()); if(!c){ const d=await loadDetail(h).catch(()=>null); if(!d) return false; c=normC(d); pinned=c.id; S.citizens.set(c.id,c); }
+    const st=citizenAt(c,gmNow()); if(!st||!st.visible&&!c.home) return false; const p=iso(st.x,st.y); this.shot='c:'+c.id; this.drift=null; this.fly(p.x,p.y-14,1.9,2200); this.afterFly=()=>{ follow=c.id; };
+    this.until=Date.now()+ms; const d=detail.get(c.id); this.caption(title, sub||cardNow(c,d)); return true; },
+  place(){ const list=[...D.buildings.values()].filter(b=>b.done!==false&&!b.ruin&&(T(b).leisure||T(b).cat==='landmarks'||T(b).cat==='shops')); if(!list.length) return this.overview();
+    const b=list[Math.floor(Math.random()*list.length)], t=T(b), [w,d]=t.size, p=this.centre(b,w,d), gm=gmNow(), here=[...S.citizens.values()].filter(c=>{ const st=citizenAt(c,gm); return st&&st.bid===b.id; }).length;
+    this.shot='b:'+b.id; this.drift=[0.06,0.03]; this.fly(p.x,p.y,1.45); this.until=Date.now()+20000; this.caption(`📍 ${b.name||t.name}`, here?`${here} colonist${here===1?'':'s'} here now`:''); },
+  overview(){ const p=iso(HOME_VIEW.tile[0],HOME_VIEW.tile[1]); this.shot='over'; this.drift=[0.12,0.05]; this.fly(p.x+(Math.random()-0.5)*600,p.y+(Math.random()-0.5)*300,0.8,3500); this.until=Date.now()+20000;
+    this.caption(`🌍 ${S.meta?S.meta.name:'The colony'} right now`, S.meta&&S.meta.population?`${fmt(S.meta.population)} colonists on Gliese 12 b`:''); } };
+if(STREAM) Stream.start();
+
 addEventListener('keydown',e=>{ if(e.target.closest&&e.target.closest('input,textarea')) return; if(e.key==='f'||e.key==='F') toggleFullscreen(); else if(e.key==='h'||e.key==='H') setClean(!document.body.classList.contains('clean')); else if(e.key==='Escape'&&document.body.classList.contains('clean')) setClean(false); });
 function refreshHUD(){
   $('wxChip').hidden=!Store.canWrite; // players don't need it; for the developer it opens the weather controls
@@ -5195,7 +5298,7 @@ function refreshHUD(){
     $('chips').hidden=false; }
   const mb=$('musicBtn'); mb.setAttribute('aria-pressed',String(Music.on)); $('musicIcon').textContent=Music.on?'❚❚':'▶'; $('musicLabel').textContent=Music.on?'Music on':'Music';
 }
-function refreshUI(){ refreshHUD(); if(sel) renderCard(); if(activeTab==='people') renderPeople(); else if(activeTab && !['feed','races','chats','top','reports','stats'].includes(activeTab)) renderPane(); feedDirty=true; renderFeed(); }
+function refreshUI(){ refreshHUD(); if(sel) renderCard(); if(activeTab==='people') renderPeople(); else if(activeTab && !['feed','races','chats','top','reports','stats','stream'].includes(activeTab)) renderPane(); feedDirty=true; renderFeed(); }
 setInterval(()=>{ if(!S.meta||document.hidden) return; const gm=gmNow(); $('clockTime').textContent=fmtClock(gm); },250);
 let cardTimer=null; const cardSoon=()=>{ clearTimeout(cardTimer); cardTimer=setTimeout(()=>renderCard(true),150); };
 // Every few seconds: refresh the line saying what the selected colonist is doing (and a building's construction progress).

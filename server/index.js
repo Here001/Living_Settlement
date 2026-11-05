@@ -17,6 +17,7 @@ import { Leaderboards } from './leaderboards.js';
 import { CasinoTables } from './tables.js';
 import { GameHouse } from './gamehouse.js';
 import { Heists } from './heists.js';
+import { streamRoutes } from './streaming.js';
 import { Stars } from './stars.js';
 import { GameTables } from './gametables.js';
 import { Earn } from './earn.js';
@@ -101,6 +102,7 @@ const send = fn => async (req, res) => {
 // ---------- public ----------
 const CHUNK_KEY = /^-?\d{1,6}_-?\d{1,6}$/;
 let eventsCache = { t: 0, rows: [], disasters: [] };
+streamRoutes(app, { admin, send, limit }); // the 24/7 live stream
 app.get('/api/meta', limit, send(async () => {
   if (Date.now() - eventsCache.t > 2000) eventsCache = { t: Date.now(), rows: await world.recentEvents(), disasters: await world.recentDisasters() };
   return { meta: world.publicMeta(), events: eventsCache.rows, disasters: eventsCache.disasters, serverNow: Date.now() };

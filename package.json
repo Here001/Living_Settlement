@@ -12,7 +12,7 @@
     "loadtest": "node scripts/loadtest.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.23.4"
   },
   "dependencies": {
     "compression": "^1.8.2",

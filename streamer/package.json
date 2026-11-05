@@ -1,0 +1,8 @@
+{
+  "name": "resurgence-streamer",
+  "private": true,
+  "type": "module",
+  "description": "Sends the colony to YouTube, Twitch, Facebook, Instagram and TikTok around the clock",
+  "scripts": { "start": "node stream.mjs" },
+  "dependencies": { "playwright": "1.63.0" }
+}

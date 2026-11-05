@@ -12,6 +12,7 @@
 // Optional: MUSIC_FILE=/music/loop.mp3, RELOAD_HOURS=6, and TEST_OUTPUT=/tmp/test.flv (record to a file instead).
 import { spawn } from 'node:child_process';
 import os from 'node:os';
+import fs from 'node:fs';
 import { chromium } from 'playwright';
 
 const GAME = (process.env.GAME_URL || 'https://playresurgence.com').replace(/\/+$/, '');
@@ -22,6 +23,7 @@ const TEST = process.env.TEST_OUTPUT || '';
 const VERSION = '1.0';
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const RATE = 48000;
 const SIZES = { '720p': { landscape: [1280, 720], portrait: [720, 1280], kbps: 3000 }, '1080p': { landscape: [1920, 1080], portrait: [1080, 1920], kbps: 5500 } };
 
 async function getConfig() {
@@ -38,32 +40,47 @@ class Pipeline {
   async start(dests, quality) {
     await this.stop(); this.dests = dests; this.quality = quality; const [w, h] = SIZES[quality][this.layout];
     this.sig = JSON.stringify([quality, dests.map(d => [d.id, d.url, d.key])]);
+    // a virtual screen left over from a crash would block this one: clear it first
+    try { const old = Number(fs.readFileSync(`/tmp/.X${this.display}-lock`, 'utf8').trim()); if (old) { process.kill(old); await sleep(300); } } catch {}
     this.xvfb = spawn('Xvfb', [`:${this.display}`, '-screen', '0', `${w}x${h}x24`, '-nolisten', 'tcp'], { stdio: 'ignore' });
     await sleep(800);
     // one kiosk window (no tabs, address bar or scrollbars), exactly the size of the virtual screen
     this.browser = await chromium.launchPersistentContext('', { headless: false, viewport: null, env: { ...process.env, DISPLAY: `:${this.display}` },
       ignoreDefaultArgs: ['--enable-automation'],
       args: [`--window-size=${w},${h}`, '--window-position=0,0', '--kiosk', '--no-first-run', '--disable-infobars', '--autoplay-policy=no-user-gesture-required', '--disable-features=Translate', '--hide-scrollbars', '--disable-session-crashed-bubble'] });
-    this.page = this.browser.pages()[0] || await this.browser.newPage(); this.page.on('crash', () => { this.error = 'page crashed'; this.restartSoon(); });
+    this.page = this.browser.pages()[0] || await this.browser.newPage();
+    // the page hands over its sound (the colony radio) as raw 16-bit stereo at 48 kHz; see audioPump below
+    this.pcm = []; this.pcmBytes = 0; await this.browser.exposeBinding('__pcm', (_src, data) => { const i = data.indexOf(':'), b = Buffer.from(data.slice(i + 1), 'base64');
+      if (Number(data.slice(0, i)) !== RATE) return; this.pcm.push(b); this.pcmBytes += b.length; while (this.pcmBytes > RATE * 4 * 1.5) this.pcmBytes -= this.pcm.shift().length; }); // keep at most 1.5 s queued
+    this.page.on('pageerror', e => log(this.layout, 'page error:', e.message)); if (process.env.DEBUG) this.page.on('console', m => log(this.layout, 'console:', m.text()));
+    this.page.on('crash', () => { this.error = 'page crashed'; this.restartSoon(); });
     await this.page.goto(GAME + '/?stream=1', { waitUntil: 'domcontentloaded', timeout: 60000 }); this.loadedAt = Date.now();
     await sleep(6000); // let the map and the first shot load
     // film the screen, add sound, encode once, send to every destination
-    const kbps = SIZES[quality].kbps, audio = MUSIC ? ['-stream_loop', '-1', '-re', '-i', MUSIC] : ['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100'];
+    const kbps = SIZES[quality].kbps, audio = MUSIC ? ['-stream_loop', '-1', '-re', '-i', MUSIC] : ['-thread_queue_size', '1024', '-f', 's16le', '-ar', String(RATE), '-ac', '2', '-i', 'pipe:0'];
     const outs = dests.map(d => `[f=flv:onfail=ignore]${target(d)}`).join('|');
-    const args = ['-hide_banner', '-loglevel', 'warning', '-stats_period', '5', '-progress', 'pipe:2',
-      '-f', 'x11grab', '-draw_mouse', '0', '-framerate', '30', '-video_size', `${w}x${h}`, '-i', `:${this.display}.0+0,0`, ...audio,
+    const args = ['-hide_banner', '-y', '-loglevel', 'warning', '-stats_period', '5', '-progress', 'pipe:2',
+      '-thread_queue_size', '512', '-f', 'x11grab', '-draw_mouse', '0', '-framerate', '30', '-video_size', `${w}x${h}`, '-i', `:${this.display}.0+0,0`, ...audio,
       '-map', '0:v', '-map', '1:a', '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-r', '30', '-g', '60', '-keyint_min', '60',
-      '-b:v', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`, '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-shortest_buf_duration', '1',
+      '-b:v', `${kbps}k`, '-maxrate', `${kbps}k`, '-bufsize', `${kbps * 2}k`, '-c:a', 'aac', '-b:a', '128k', '-ar', '48000',
       '-f', 'tee', outs];
     if (TEST) args.splice(args.indexOf('-f', args.indexOf('aac')), 3, '-t', String(Number(process.env.TEST_SECONDS || 15)), '-f', 'flv', TEST);
-    this.ff = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    this.ff = spawn('ffmpeg', args, { stdio: [MUSIC ? 'ignore' : 'pipe', 'ignore', 'pipe'] });
+    if (!MUSIC) this.audioPump(this.ff);
     this.ff.stderr.on('data', b => { const s = String(b), m = /fps=\s*([\d.]+)/.exec(s); if (m) this.fps = Math.round(Number(m[1])); const e = s.split('\n').find(l => /error|failed|refused|denied/i.test(l)); if (e) this.error = e.trim().slice(0, 200); });
-    this.ff.on('exit', code => { this.up = false; if (this.stopping) return; this.error = this.error || `encoder stopped (${code})`; log(this.layout, 'ffmpeg exited', code); if (TEST) { process.exit(code ? 1 : 0); } this.restartSoon(); });
+    this.ff.on('exit', code => { this.up = false; if (this.stopping) return; this.error = this.error || `encoder stopped (${code})`; log(this.layout, 'ffmpeg exited', code, this.error || ''); if (TEST) { process.exit(code ? 1 : 0); } this.restartSoon(); });
     this.up = true; this.since = Date.now(); this.error = ''; log(this.layout, `live → ${dests.map(d => d.name).join(', ')} at ${w}x${h}`);
     // reconnect before a platform's session limit
     const cap = Math.min(...dests.map(d => d.maxHours || Infinity)); clearTimeout(this.capTimer);
     if (Number.isFinite(cap)) this.capTimer = setTimeout(() => { log(this.layout, 'session limit: reconnecting'); this.restartSoon(0); }, Math.max(10 * 60e3, cap * 3600e3 - 5 * 60e3));
   }
+  // Feed ffmpeg exactly real-time audio: the page's sound when it has some, silence when it doesn't (page loading,
+  // reloading, or the radio off), so the encoder never waits and the video never stalls.
+  audioPump(ff) { const t0 = Date.now(); let sent = 0; ff.stdin.on('error', () => {});
+    const iv = setInterval(() => { if (ff.exitCode != null || ff.killed) return clearInterval(iv);
+      const want = Math.floor((Date.now() - t0) / 1000 * RATE) * 4 - sent; if (want <= 0) return; const parts = []; let got = 0;
+      while (got < want && this.pcm.length) { const b = this.pcm[0], take = Math.min(b.length, want - got); parts.push(b.subarray(0, take)); got += take; this.pcmBytes -= take; if (take === b.length) this.pcm.shift(); else this.pcm[0] = b.subarray(take); }
+      if (got < want) parts.push(Buffer.alloc(want - got)); sent += want; ff.stdin.write(Buffer.concat(parts)); }, 20); }
   restartSoon(wait) { if (this.pending) return; this.restarts++; const ms = wait ?? Math.min(60000, 3000 * this.restarts);
     this.pending = setTimeout(async () => { this.pending = null; try { await this.start(this.dests, this.quality); } catch (e) { this.error = e.message; log(this.layout, 'restart failed:', e.message); this.restartSoon(); } }, ms); }
   async stop() { this.stopping = true; clearTimeout(this.capTimer); try { this.ff?.kill('SIGINT'); } catch {} await sleep(this.ff ? 1500 : 0); try { this.ff?.kill('SIGKILL'); } catch {}
@@ -71,8 +88,12 @@ class Pipeline {
   // keep the page healthy: reload it every few hours (the encoder keeps running), and if it has stopped answering
   async check() { if (!this.page || this.pending) return; try {
       if (Date.now() - this.loadedAt > RELOAD_MS) { log(this.layout, 'reloading the page'); this.loadedAt = Date.now(); await this.page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 }); }
-      else await this.page.evaluate('1', { timeout: 10000 }); } catch (e) { this.error = 'page not responding'; this.restartSoon(); } }
-  report() { return { layout: this.layout, up: this.up, since: this.since, fps: this.fps, restarts: this.restarts, error: this.error, dests: this.dests.map(d => d.name) }; }
+      else this.onAir = await this.page.evaluate('window.__onAir ? window.__onAir() : ""', { timeout: 10000 }); } catch (e) { this.error = 'page not responding'; this.restartSoon(); return; }
+    this.snap = await this.snapshot().catch(() => null); }
+  // a small picture of the screen for the developer's Stream tab (taken straight off the virtual screen, so the page isn't disturbed)
+  snapshot() { const [w, h] = SIZES[this.quality][this.layout]; return new Promise((ok, no) => { const ff = spawn('ffmpeg', ['-v', 'error', '-f', 'x11grab', '-video_size', `${w}x${h}`, '-i', `:${this.display}.0+0,0`, '-frames:v', '1', '-vf', `scale=${this.layout === 'portrait' ? '270:-2' : '480:-2'}`, '-q:v', '7', '-f', 'mjpeg', 'pipe:1'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const parts = []; ff.stdout.on('data', b => parts.push(b)); ff.on('exit', c => c === 0 ? ok(Buffer.concat(parts).toString('base64')) : no(new Error('snapshot'))); setTimeout(() => ff.kill(), 8000); }); }
+  report() { return { layout: this.layout, up: this.up, since: this.since, fps: this.fps, restarts: this.restarts, error: this.error, dests: this.dests.map(d => d.name), onAir: this.onAir || '', snap: this.snap || null }; }
 }
 
 const pipes = { landscape: new Pipeline('landscape', 99), portrait: new Pipeline('portrait', 100) };

@@ -18,6 +18,7 @@ import { CasinoTables } from './tables.js';
 import { GameHouse } from './gamehouse.js';
 import { Heists } from './heists.js';
 import { streamRoutes } from './streaming.js';
+import { Radio, radioRoutes } from './radio.js';
 import { Stars } from './stars.js';
 import { GameTables } from './gametables.js';
 import { Earn } from './earn.js';
@@ -58,6 +59,8 @@ world.tables = new CasinoTables(world);
 world.gamehouse = new GameHouse(world);
 world.gametables = new GameTables(world);
 world.heists = new Heists(world);
+world.radio = new Radio(world, bus);
+setInterval(() => { if (isLeader && world.meta) world.radio.tick().catch(e => console.error('radio:', e.message)); }, 15000).unref(); // DJ talk breaks
 world.stars = new Stars(world, bus);
 setInterval(() => world.gametables.sweep().catch(e => console.error('tables:', e.message)), 10000).unref(); // slow turns and unfilled tables
 setInterval(() => world.heists.sweep().catch(e => console.error('heists:', e.message)), 15000).unref(); // planned group crimes that are due
@@ -102,7 +105,8 @@ const send = fn => async (req, res) => {
 // ---------- public ----------
 const CHUNK_KEY = /^-?\d{1,6}_-?\d{1,6}$/;
 let eventsCache = { t: 0, rows: [], disasters: [] };
-streamRoutes(app, { admin, send, limit }); // the 24/7 live stream
+streamRoutes(app, { admin, send, limit, bus }); // the 24/7 live stream
+radioRoutes(app, { radio: world.radio, admin, send, limit }); // colony radio
 app.get('/api/meta', limit, send(async () => {
   if (Date.now() - eventsCache.t > 2000) eventsCache = { t: Date.now(), rows: await world.recentEvents(), disasters: await world.recentDisasters() };
   return { meta: world.publicMeta(), events: eventsCache.rows, disasters: eventsCache.disasters, serverNow: Date.now() };

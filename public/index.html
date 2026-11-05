@@ -489,6 +489,21 @@ body.pane-max .composer textarea{height:70px}
 .webtag{font-size:12px;margin-left:4px}
 /* the live-stream overlay (/?stream=1) */
 body.streaming .watchbar,body.streaming #showUi,body.streaming #intro,body.streaming .rsheet-bg,body.streaming #card,body.streaming .atsug{display:none!important}
+.rsheet.radio{width:min(400px,100%)}
+.rnow{display:flex;align-items:center;gap:12px;padding:10px 12px;margin:4px 0 8px;border-radius:14px;background:color-mix(in srgb,var(--st) 16%,transparent);border:1px solid color-mix(in srgb,var(--st) 40%,transparent)}
+.rnow b{display:block;font-size:15px}.rnow span{font-size:13px;opacity:.85}
+.rbars{display:flex;align-items:flex-end;gap:3px;height:22px}.rbars i{width:4px;border-radius:2px;background:var(--st);animation:rbar 1s ease-in-out infinite}.rbars i:nth-child(2){animation-delay:-.3s}.rbars i:nth-child(3){animation-delay:-.6s}.rbars i:nth-child(4){animation-delay:-.15s}
+@keyframes rbar{0%,100%{height:5px}50%{height:22px}}
+.ronair{margin:0 0 10px;padding:8px 12px;border-radius:12px;background:rgba(0,0,0,.05);font-size:13.5px;line-height:1.4}
+.rlist{display:flex;flex-direction:column;gap:6px}
+.rst{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border-radius:14px;border:1px solid var(--glass-line,rgba(0,0,0,.12));background:var(--glass-2,rgba(255,255,255,.5));color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.rst.on{border-color:var(--st);background:color-mix(in srgb,var(--st) 14%,var(--glass-2,#fff))}
+.rfreq{min-width:46px;font-weight:800;font-size:13px;color:var(--st)}.rmid{flex:1;display:flex;flex-direction:column}.rmid small{opacity:.7;font-size:12px}.rgo{font-size:13px;opacity:.7}
+.rvol{display:flex;align-items:center;gap:8px;margin:12px 0 4px}.rvol input{flex:1}
+#djBubble{position:fixed;z-index:40;left:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 110px);max-width:min(360px,calc(100vw - 90px));display:flex;flex-direction:column;gap:2px;padding:8px 12px;border-radius:14px;text-align:left;font:inherit;font-size:13px;line-height:1.35;color:var(--ink);cursor:pointer;animation:djIn .4s ease-out}
+#djBubble b{font-size:12px;opacity:.8}#djBubble span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+@keyframes djIn{from{opacity:0;transform:translateY(8px)}}
+body.clean #djBubble{display:none}
 #streamOv{position:fixed;inset:0;z-index:30;pointer-events:none;color:#FBF8F1;font-family:'Bricolage Grotesque',system-ui,sans-serif;text-shadow:0 2px 6px rgba(0,0,0,.45)}
 #streamOv .so-top{position:absolute;left:2.2vmin;top:2vmin;display:flex;align-items:center;gap:1.4vmin;padding:1vmin 2vmin;border-radius:999px;background:rgba(20,24,30,.55);backdrop-filter:blur(8px)}
 #streamOv .so-live{background:#E0362C;color:#fff;font-weight:800;font-size:1.8vmin;padding:.4vmin 1.2vmin;border-radius:.8vmin;text-shadow:none;animation:soLive 2s ease-in-out infinite}@keyframes soLive{50%{opacity:.65}}
@@ -498,9 +513,15 @@ body.streaming .watchbar,body.streaming #showUi,body.streaming #intro,body.strea
 #streamOv .so-cap.on{opacity:1;transform:none}#streamOv .so-capt{font-size:3vmin}#streamOv .so-caps{font-size:2vmin;opacity:.85}
 #streamOv .so-cta{position:absolute;right:2.2vmin;bottom:11vmin;max-width:34vw;display:flex;flex-direction:column;gap:.3vmin;padding:1.4vmin 2.2vmin;border-radius:2vmin;background:linear-gradient(135deg,rgba(217,113,74,.92),rgba(180,80,50,.92));text-align:right}
 #streamOv .so-cta b{font-size:2.6vmin}#streamOv .so-cta span{font-size:1.9vmin}
+#streamOv .so-radio{position:absolute;left:2.2vmin;top:9.5vmin;display:none;align-items:center;gap:1.2vmin;padding:.8vmin 1.8vmin;border-radius:999px;background:rgba(20,24,30,.55);backdrop-filter:blur(8px);font-size:2vmin}
+#streamOv .so-radio.on{display:flex}#streamOv .so-rst{color:color-mix(in srgb,var(--st) 55%,#fff)}#streamOv .so-rnow{opacity:.9}
+#streamOv .so-rbars{display:flex;align-items:flex-end;gap:.4vmin;height:2.4vmin}#streamOv .so-rbars i{width:.5vmin;background:var(--st);border-radius:.3vmin;animation:rbar2 1s ease-in-out infinite}#streamOv .so-rbars i:nth-child(2){animation-delay:-.4s}#streamOv .so-rbars i:nth-child(3){animation-delay:-.7s}
+@keyframes rbar2{0%,100%{height:.6vmin}50%{height:2.4vmin}}
 #streamOv .so-tick{position:absolute;left:0;right:0;bottom:0;height:7vmin;overflow:hidden;background:rgba(20,24,30,.72);display:flex;align-items:center;white-space:nowrap;font-size:2.4vmin}
 #streamOv .so-tickin{display:inline-block;padding-left:100%;animation:soTick 60s linear infinite}@keyframes soTick{to{transform:translateX(-100%)}}
-@media (orientation:portrait){ #streamOv .so-top{top:3vh} #streamOv .so-stats{top:auto;bottom:24vh;right:auto;left:2.2vmin} #streamOv .so-cap{bottom:30vh;max-width:90vw} #streamOv .so-cta{left:2.2vmin;right:2.2vmin;bottom:9vh;max-width:none;text-align:center} #streamOv .so-tick{height:5vh} }
+@media (orientation:portrait){ #streamOv .so-top{top:3vh} #streamOv .so-radio{top:calc(3vh + 7vmin)} #streamOv .so-stats{top:auto;bottom:24vh;right:auto;left:2.2vmin} #streamOv .so-cap{bottom:30vh;max-width:90vw} #streamOv .so-cta{left:2.2vmin;right:2.2vmin;bottom:9vh;max-width:none;text-align:center} #streamOv .so-tick{height:5vh} }
+.scam .snap{display:block;width:100%;max-width:480px;border-radius:10px;margin:6px 0;border:1px solid rgba(0,0,0,.12)}.scam .snap.tall{max-width:200px}
+.scam .sline{flex-wrap:nowrap}.scam .sline .gin,.scam .sline select{flex:1;min-width:0}
 .sdest{opacity:.75}.sdest.on{opacity:1}.sdest select{width:100%;padding:8px;border-radius:10px;margin:4px 0;font:inherit}
 .ludosvg{max-width:400px;filter:drop-shadow(0 8px 16px rgba(0,0,0,.3))}
 .ltok.go{animation:ltokb .9s ease-in-out infinite}.ltok.hop{animation:ltokh .17s ease-out}
@@ -721,7 +742,7 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
   <div class="plate inked"><div class="town" id="townName">Waking the colony…</div><div class="sub" id="popLine"></div></div>
   <div class="chips" id="chips" hidden>
     <div class="chip inked" id="coinChip" hidden><span class="coin" aria-hidden="true"></span><b id="coinVal">0</b><small id="coinRate"></small></div>
-    <div class="chip inked"><button id="musicBtn" aria-pressed="false" aria-label="Music"><span class="mi" id="musicIcon">▶</span><span id="musicLabel" class="lbl">Music</span></button></div>
+    <div class="chip inked"><button id="musicBtn" aria-pressed="false" aria-label="Radio"><span class="mi" id="musicIcon">📻</span><span id="musicLabel" class="lbl">Radio</span></button></div>
     <div class="chip inked" hidden><button id="draftBtn" aria-pressed="false" title="Draft mode: build privately, then update the live city"><span aria-hidden="true">✎</span><span id="draftLbl" class="lbl">Draft</span></button></div>
     <div class="chip inked" id="wxChip" hidden><button id="wxBtn" aria-label="Weather"><span id="wxIcon" style="font-size:16px;line-height:1">☀</span><span id="wxLabel" class="lbl">Sunny</span></button></div>
     <div class="chip inked"><button id="findBtn"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 22s7-7.2 7-12.5A7 7 0 0 0 5 9.5C5 14.8 12 22 12 22z" fill="#D9714A" stroke="#2B2621" stroke-width="1.6"/><circle cx="12" cy="9.5" r="2.6" fill="#FBF8F1" stroke="#2B2621" stroke-width="1.4"/></svg><span>Find me</span></button></div>
@@ -768,6 +789,7 @@ import { GH_GAMES, GH_MAX_BET, WHEEL_PAID, WHEEL_FREE, SCRATCH_TIERS, SCRATCH_SY
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt, PLINKO, PLINKO_ROWS, MINES_TILES, MINES_CHOICES, minesMultiple } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
+import { STATIONS, STATION_IDS } from '/shared/radio.js';
 import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
@@ -855,6 +877,8 @@ function applyOp(o){
   case 'disaster': S.disasters.unshift(o.data); if(S.disasters.length>20) S.disasters.length=20; break;
   case 'chat': if(!S.chat.some(m=>m.id===o.data.id)){ S.chat.unshift(o.data); if(S.chat.length>200) S.chat.length=200; feedDirty=true; renderFeed(); } break;
   case 'chatPin': { const m=S.chat.find(x=>x.id===o.id); if(m){ m.p=o.pinned?1:0; feedDirty=true; renderFeed(); } break; }
+  case 'director': if(STREAM) Stream.setDirector(o.data); break;
+  case 'radio': if(o.talk&&Radio.st===o.talk.station) Radio.queue(o.talk); break;
   case 'chatGone': S.chat=S.chat.filter(m=>m.id!==o.id); feedDirty=true; renderFeed(); break;
   case 'reports': Reports.soon(); break;
   case 'cevent': CEvent.set(o.data, true); break;
@@ -3239,10 +3263,42 @@ function reportSheet({kind,id,handle,text}){ document.querySelector('.rsheet-bg'
   document.body.append(wrap); }
 // ---- The developer's Reports tab: read what was reported and dismiss it, delete the message, or mute the colonist ----
 // ---- Developer: the 24/7 live stream (where it goes, and how the streamer is doing) ----
-const StreamAdmin={ data:null, busy:false, dirty:false,
+const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
+  // the director: let the camera pick, or put a shot on air and hold it
+  async direct(body){ try{ const d=await api('/api/admin/stream/director',{method:'PUT',body}); this.data.director=d; toast(body.next?'Skipping to the next shot.':d.mode==='manual'?'On air now.':'The camera is choosing again.'); this.renderNow(); }catch(e){ toast(e.message); } },
+  pick(shot){ this.direct({mode:'manual',shot,holdMin:this.hold}); },
+  // the radio DJs: whether Claude writes their talk and Azure voices it, the latest breaks, and a button to put one on air now
+  djs(){ const box=el('div',{class:'authbox'}), R0=this.radio; box.append(el('h3',{text:'🎙️ Radio DJs'}));
+    if(!R0){ box.append(el('p',{class:'hint',text:'Loading…'})); api('/api/admin/radio').then(r=>{ this.radio=r; this.renderNow(); }).catch(()=>{}); return box; }
+    box.append(el('p',{class:'jobnow',text:R0.writer==='claude'?`✍️ Claude writes every break fresh (${R0.model}).`:'✍️ Using the DJs’ phrase banks. Set ANTHROPIC_API_KEY on the server so Claude writes every break fresh.'}),
+      el('p',{class:'jobnow',text:R0.voice==='azure'?'🗣️ Azure AI Speech reads the breaks aloud.':'🗣️ No voice yet: breaks show as text. Set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION on the server.'}));
+    box.append(el('div',{class:'cpicks'}, el('span',{text:'On air now:'}), ...STATION_IDS.map(k=>el('button',{class:'pill',text:STATIONS[k].dj.name,onclick:async()=>{ try{ await api('/api/admin/radio/talk',{method:'POST',body:{station:k}}); toast(`${STATIONS[k].dj.name} is on air on ${STATIONS[k].name}.`); this.radio=null; this.renderNow(); }catch(e){ toast(e.message); } }}))));
+    for(const r of (R0.recent||[]).slice(0,5)) box.append(el('p',{class:'hint',text:`${STATIONS[r.station]?STATIONS[r.station].dj.name:r.station} · ${ago(r.at)}${r.has_audio?' · 🔊':''}: ${r.text}`}));
+    return box; },
+  camera(D0){ const d=D0.director||{mode:'auto'}, St=D0.status||{}, box=el('div',{class:'authbox scam'}), man=d.mode==='manual'&&(!d.until||Date.now()<d.until);
+    box.append(el('h3',{text:'🎬 Camera'}));
+    const s=d.shot||{}, what={person:`following @${s.handle}`,building:`showing ${(D.buildings.get(s.id)||{}).name||'a place'}`,race:'at the racetrack',overview:'over the whole colony',calm:'on something calm',view:'on your chosen view'}[s.type]||'';
+    box.append(el('p',{class:'jobnow',text:man?`✋ You’re directing: ${what}${d.until?` until ${new Date(d.until).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`:' until you hand it back'}.`:'🤖 Auto: the camera picks races, news, players, busy spots and calm moments, and keeps moving around the map.'}));
+    for(const pl of St.pipelines||[]){ if(pl.onAir) box.append(el('p',{class:'hint',text:`${pl.layout==='portrait'?'📱':'🖥️'} On air: ${pl.onAir}`})); if(pl.snap) box.append(el('img',{class:'snap'+(pl.layout==='portrait'?' tall':''),src:'data:image/jpeg;base64,'+pl.snap,alt:'What the stream is showing'})); }
+    box.append(el('div',{class:'row-actions'}, el('button',{class:'btn sm'+(man?'':' primary'),text:'🤖 Auto',onclick:()=>this.direct({mode:'auto'})}), el('button',{class:'btn sm',text:'⏭ Next shot',onclick:()=>this.direct({next:true})})));
+    box.append(el('div',{class:'cpicks'}, el('span',{text:'Hold for:'}), ...[[1,'1 min'],[5,'5 min'],[15,'15 min'],[0,'Until I release it']].map(([m,n])=>el('button',{class:'pill'+(this.hold===m?' on':''),text:n,onclick:()=>{ this.hold=m; this.renderNow(); }}))));
+    box.append(el('div',{class:'cpicks'}, el('span',{text:'Show:'}),
+      el('button',{class:'pill',text:'🎥 What I’m looking at',onclick:()=>this.pick({type:'view',x:cam.x,y:cam.y,z:cam.z})}),
+      el('button',{class:'pill',text:'🏁 Racetrack',onclick:()=>this.pick({type:'race'})}), el('button',{class:'pill',text:'🌍 Whole colony',onclick:()=>this.pick({type:'overview'})}),
+      el('button',{class:'pill',text:'🌳 Something calm',onclick:()=>this.pick({type:'calm'})})));
+    const who=el('input',{class:'gin',type:'text',placeholder:'@username','aria-label':'Follow a player',autocomplete:'off'}); who.onkeydown=e=>{ if(e.key==='Enter') go(); };
+    const go=()=>{ const h=who.value.trim().replace(/^@/,''); if(h) this.pick({type:'person',handle:h}); };
+    box.append(el('div',{class:'row-actions sline'}, who, el('button',{class:'btn sm',text:'Follow',onclick:go})));
+    const places=[...D.buildings.values()].filter(b=>b.done!==false&&!b.ruin&&(b.name||T(b).leisure||T(b).cat==='landmarks'||T(b).cat==='shops'||T(b).cat==='civic')).map(b=>[b.id,b.name||T(b).name]).sort((a,b)=>a[1].localeCompare(b[1])).slice(0,400);
+    const where=el('select',{'aria-label':'A place'}); where.append(el('option',{value:'',text:'A place…'})); for(const [id,n] of places) where.append(el('option',{value:id,text:n}));
+    box.append(el('div',{class:'row-actions sline'}, where, el('button',{class:'btn sm',text:'Show',onclick:()=>{ if(where.value) this.pick({type:'building',id:where.value,label:`📍 ${where.selectedOptions[0].textContent}`}); }})));
+    box.append(el('p',{class:'hint',text:'Tip: move your own map to any spot, then press “What I’m looking at”. When the hold ends, the camera goes back to choosing by itself.'}));
+    // keep the picture and the on-air line fresh while this tab is open
+    clearTimeout(this.camT); this.camT=setTimeout(()=>{ if(activeTab==='stream'&&!this.dirty){ this.radio=null; this.load(); } },20000);
+    return box; },
   async load(){ if(!Store.canWrite||this.busy) return; this.busy=true; try{ this.data=await api('/api/admin/stream'); this.dirty=false; }catch(e){ toast(e.message); } this.busy=false; this.renderNow(); },
   renderNow(){ if(activeTab!=='stream') return; const p=$('pane'); if(p){ const keep=$('streamBody')?.scrollTop||0; p.innerHTML=''; this.render(p); const b=$('streamBody'); if(b) b.scrollTop=keep; } },
-  async save(){ const D0=this.data; try{ await api('/api/admin/stream',{method:'PUT',body:{cta:D0.cta,quality:D0.quality,destinations:D0.destinations}}); toast('Saved. The streamer picks it up within 30 seconds.'); await this.load(); }catch(e){ toast(e.message); } },
+  async save(){ const D0=this.data; try{ await api('/api/admin/stream',{method:'PUT',body:{cta:D0.cta,quality:D0.quality,radio:D0.radio||'rotate',destinations:D0.destinations}}); toast('Saved. The streamer picks it up within 30 seconds.'); await this.load(); }catch(e){ toast(e.message); } },
   render(p){ p.append(paneHead('📺 Live stream')); const body=el('div',{class:'pane-body',id:'streamBody'}); p.append(body);
     if(!this.data){ body.append(el('p',{class:'hint',text:'Loading…'})); this.load(); return; } const D0=this.data, P=D0.platforms, St=D0.status||{};
     // the streamer's last check-in
@@ -3251,11 +3307,12 @@ const StreamAdmin={ data:null, busy:false, dirty:false,
     for(const pl of St.pipelines||[]) box.append(el('p',{class:'jobnow',text:`${pl.up?'🟢':'🔴'} ${pl.layout==='portrait'?'📱 Portrait':'🖥️ Landscape'}: ${pl.dests.join(', ')||'no destinations'}${pl.up&&pl.since?` · live for ${ago(pl.since).replace(' ago','')}`:''}${pl.fps?` · ${pl.fps} fps`:''}${pl.restarts?` · ${pl.restarts} restart${pl.restarts===1?'':'s'}`:''}${pl.error?` · ${pl.error}`:''}`}));
     if(!D0.tokenSet) box.append(el('p',{class:'autherr',text:'STREAM_TOKEN isn’t set on this server yet: add it (any long random text) so the streamer can sign in.'}));
     box.append(el('div',{class:'row-actions'}, el('button',{class:'btn sm',text:'Preview 16:9',onclick:()=>window.open('/?stream=1','_blank','noopener,width=1280,height=720')}), el('button',{class:'btn sm',text:'Preview 9:16',onclick:()=>window.open('/?stream=1','_blank','noopener,width=405,height=720')}), el('button',{class:'btn sm',text:'Refresh',onclick:()=>this.load()})));
-    body.append(box);
+    body.append(box); body.append(this.camera(D0)); body.append(this.djs());
     // the call to action shown on the stream
     const cta=el('input',{class:'gin',type:'text',maxlength:'140',value:D0.cta||'','aria-label':'Call to action'}); cta.oninput=()=>{ D0.cta=cta.value; this.dirty=true; };
     const q=el('div',{class:'cpicks'}, el('span',{text:'Quality:'}), ...['720p','1080p'].map(k=>el('button',{class:'pill'+(D0.quality===k?' on':''),text:k,onclick:()=>{ D0.quality=k; this.dirty=true; this.renderNow(); }})));
-    body.append(el('h4',{class:'bgroup',text:'On screen'}), el('p',{class:'hint',text:'The “Join the colony” box on the stream:'}), cta, q, el('p',{class:'hint',text:'1080p needs a stronger server (4 vCPU for one layout). 720p runs on 2 vCPU.'}));
+    const rad=el('div',{class:'cpicks'}, el('span',{text:'Radio:'}), ...[['rotate','Each hour a new station'],...STATION_IDS.map(k=>[k,STATIONS[k].name]),['off','Off']].map(([k,n])=>el('button',{class:'pill'+((D0.radio||'rotate')===k?' on':''),text:n,onclick:()=>{ D0.radio=k; this.dirty=true; this.renderNow(); }})));
+    body.append(el('h4',{class:'bgroup',text:'On screen'}), el('p',{class:'hint',text:'The “Join the colony” box on the stream:'}), cta, q, el('p',{class:'hint',text:'1080p needs a stronger server (4 vCPU for one layout). 720p runs on 2 vCPU.'}), el('h4',{class:'bgroup',text:'Sound'}), el('p',{class:'hint',text:'The stream plays the colony radio: music made for each station, and the DJ talks about what’s happening (the camera goes where the DJ is talking about).'}), rad);
     // destinations
     body.append(el('h4',{class:'bgroup',text:'Where it goes'}));
     if(!D0.destinations.length) body.append(el('p',{class:'hint',text:'No destinations yet. Add one below.'}));
@@ -5170,7 +5227,54 @@ const Music={ ac:null, on:false, timer:null, step:0, next:0,
 const SPEEDS=[1,10,60];
 $('clockBtn').onclick=()=>{ if(!Store.canWrite){ toast('Colony time on Gliese 12 b. A day here lasts 30 minutes.'); return; } // only the developer can preview faster time
   const i=SPEEDS.indexOf(speed); const n=SPEEDS[(i+1)%SPEEDS.length]; setSpeed(n); const tag=$('speedTag'); tag.hidden=n===1; tag.textContent=`Preview ${n}×`; toast(n===1?'Back to live time':`Previewing the future at ${n}× speed. Tap the clock to return.`); feedDirty=true; };
-$('musicBtn').onclick=()=>Music.toggle();
+$('musicBtn').onclick=()=>Radio.sheet();
+/* ---------------- Colony radio ---------------- */
+// Five stations whose music is composed live in the browser (music.js), each with a DJ whose talk breaks the server writes
+// from what's happening in the colony. Everyone on a station hears the same song and the same DJ at the same moment.
+const Radio={ player:null, st:null, info:null, played:new Set(), timer:null, onAir:null, vol:(()=>{ const v=ls.get('resurgence-radio-vol'); return v==null?0.8:v; })(),
+  async load(){ if(!this.mod) this.mod=await import('/music.js');
+    if(!this.player){ this.player=new this.mod.RadioPlayer(()=>Date.now()+skew, STREAM?{sampleRate:48000}:undefined); this.player.onSong=s=>{ this.song=s; this.paint(); this.onSong&&this.onSong(s); }; this.player.setVolume(this.vol); } return this.player; },
+  async tune(st){ if(!STATIONS[st]) return; if(Music.on) Music.stop(); try{ await this.load(); }catch(e){ toast('The radio couldn’t start in this browser.'); return; }
+    if(this.st!==st){ this.player.hush(); this.onAir=null; } this.st=st; if(!STREAM) ls.set('resurgence-radio',st); await this.player.play(st);
+    clearInterval(this.timer); this.timer=setInterval(()=>this.poll(),20000); this.poll(); this.paint(); refreshHUD(); },
+  off(){ this.st=null; ls.set('resurgence-radio',''); clearInterval(this.timer); if(this.player){ this.player.stop(); this.player.hush(); } this.onAir=null; this.bubble(null); this.paint(); refreshHUD(); },
+  setVol(v){ this.vol=v; ls.set('resurgence-radio-vol',v); this.player&&this.player.setVolume(v); },
+  async poll(){ if(!this.st) return; try{ const r=await api('/api/radio?on='+this.st); this.info=r; for(const t of r.talk||[]) this.queue(t); }catch(e){} this.paint(); },
+  // a talk break goes on air at its time; tuning in halfway through one joins it where it is
+  queue(t){ if(this.played.has(t.id)||t.station!==this.st) return; const now=Date.now()+skew; if(t.at+t.dur*1000<now) return; this.played.add(t.id); setTimeout(()=>this.say(t),Math.max(0,t.at-now)); },
+  async say(t){ if(this.st!==t.station) return; const off=Math.max(0,(Date.now()+skew-t.at)/1000); this.onAir=t; this.bubble(t); this.paint(); this.onTalk&&this.onTalk(t);
+    let ok=false; if(t.audio){ try{ await this.player.speak(t.audio,off); ok=true; }catch(e){} }
+    if(!ok) await new Promise(res=>{ this.player.setDuck(true); setTimeout(()=>{ this.player.setDuck(false); res(); },Math.max(1,t.dur-off)*1000); }); // no voice yet: the words show on screen
+    if(this.onAir===t){ this.onAir=null; this.bubble(null); this.paint(); } },
+  stationName(st=this.st){ const S0=STATIONS[st]; return S0?`${S0.name} ${S0.freq}`:''; },
+  nowTitle(){ return this.song&&this.st?this.song.title:(this.info&&this.st?this.info.stations[this.st].title:''); },
+  // what the DJ is saying, for players who aren't looking at the radio
+  bubble(t){ if(STREAM) return; let b=$('djBubble'); if(!t){ if(b) b.remove(); return; }
+    if(!b){ b=el('button',{id:'djBubble',class:'inked',onclick:()=>{ b.remove(); }}); document.body.append(b); }
+    b.innerHTML=''; b.append(el('b',{text:`🎙️ ${t.dj} · ${this.stationName(t.station)}`}), el('span',{text:t.text})); },
+  paint(){ const box=document.querySelector('.rsheet.radio'); if(box&&!(document.activeElement&&document.activeElement.type==='range'&&box.contains(document.activeElement))) this.fill(box); this.onPaint&&this.onPaint(); },
+  sheet(){ document.querySelector('.rsheet-bg')?.remove(); const wrap=el('div',{class:'rsheet-bg'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
+    const box=el('div',{class:'rsheet inked radio',role:'dialog','aria-label':'Colony radio'}); wrap.append(box); document.body.append(wrap); this.fill(box); },
+  fill(box){ box.innerHTML=''; const close=el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>box.parentElement.remove()});
+    box.append(el('div',{class:'shhead'}, el('h3',{text:'📻 Colony radio'}), close));
+    if(this.st){ const S0=STATIONS[this.st];
+      box.append(el('div',{class:'rnow',style:`--st:${S0.color}`}, el('div',{class:'rbars','aria-hidden':'true'},el('i'),el('i'),el('i'),el('i')),
+        el('div',{}, el('b',{text:this.stationName()}), el('span',{text:this.onAir?`🎙️ ${S0.dj.name} on the mic`:`Now playing: ${this.nowTitle()}`}))));
+      if(this.onAir) box.append(el('p',{class:'ronair',text:this.onAir.text})); }
+    const list=el('div',{class:'rlist'});
+    for(const id of STATION_IDS){ const S0=STATIONS[id], on=this.st===id;
+      list.append(el('button',{class:'rst'+(on?' on':''),style:`--st:${S0.color}`,onclick:()=>on?this.off():this.tune(id)},
+        el('span',{class:'rfreq',text:S0.freq}), el('span',{class:'rmid'}, el('b',{text:S0.name}), el('small',{text:`${S0.style} · ${S0.dj.name}`})), el('span',{class:'rgo',text:on?'❚❚':'▶'}))); }
+    list.append(el('button',{class:'rst'+(Music.on?' on':''),style:'--st:#6b8f71',onclick:()=>{ if(Music.on) Music.stop(); else { this.off(); Music.start(); } this.paint(); }},
+      el('span',{class:'rfreq',text:'∿'}), el('span',{class:'rmid'}, el('b',{text:'Ambient'}), el('small',{text:'Calm colony sounds, no DJ'})), el('span',{class:'rgo',text:Music.on?'❚❚':'▶'})));
+    box.append(list);
+    const vol=el('input',{type:'range',min:'0',max:'1',step:'0.05',value:String(this.vol),'aria-label':'Volume',oninput:e=>this.setVol(Number(e.target.value))});
+    box.append(el('div',{class:'rvol'}, el('span',{text:'🔈'}), vol, el('span',{text:'🔊'})));
+    box.append(el('p',{class:'hint',text:'The music is composed live for each station, and the DJs talk about what’s happening in the colony.'})); },
+};
+// Coming back with the radio on: it starts again with the first tap (browsers only play sound after one).
+{ const was=ls.get('resurgence-radio'); if(was&&STATIONS[was]&&!STREAM){ const go=()=>{ removeEventListener('pointerdown',go,true); if(!Radio.st) Radio.tune(was); }; addEventListener('pointerdown',go,true); } }
+
 function findMe(){ let mine=(Me&&Me.handle)||null; if(!mine){ try{ const v=localStorage.getItem('settlement-me'); mine=v&&v.startsWith('"')?JSON.parse(v):v; }catch(e){} }
   const h = Store.canWrite ? (S.meta&&S.meta.founder) : mine;
   if(h){ openCitizen(h); return; }
@@ -5242,10 +5346,17 @@ const Stream={ shot:null, until:0, recent:[], online:[], onlineAt:0, seenEvents:
   start(){ document.body.classList.add('clean','streaming'); $('showUi').hidden=true; ls.set('resurgence-intro-seen',1);
     const ov=el('div',{id:'streamOv'}); ov.innerHTML=`<div class="so-top"><span class="so-live">● LIVE</span><b class="so-brand">RESURGENCE</b><span class="so-colony"></span></div>
       <div class="so-stats"><span class="so-clock"></span><span class="so-wx"></span><span class="so-pop"></span></div>
+      <div class="so-radio"><span class="so-rbars"><i></i><i></i><i></i></span><b class="so-rst"></b><span class="so-rnow"></span></div>
       <div class="so-cap"><b class="so-capt"></b><span class="so-caps"></span></div>
       <div class="so-cta"><b>Join the colony</b><span class="so-ctat"></span></div>
       <div class="so-tick"><span class="so-tickin"></span></div>`; document.body.append(ov); this.ov=ov;
-    api('/api/stream/public').then(r=>{ this.cta=r.cta||''; this.paint(); }).catch(()=>{});
+    api('/api/stream/public').then(r=>{ this.cta=r.cta||''; this.radio=r.radio||'rotate'; this.setDirector(r.director); this.paint(); this.tuneRadio(); setInterval(()=>this.tuneRadio(),60000); }).catch(()=>{});
+    // the DJ talking about someone or somewhere: the camera goes there while they talk
+    Radio.onTalk=t=>{ if(this.dir&&this.dir.mode==='manual'&&(!this.dir.until||Date.now()<this.dir.until)){ this.caption(`🎙️ ${t.dj}`,t.text.length>150?t.text.slice(0,150)+'…':t.text); return; } const ms=Math.max(8,t.dur)*1000+5000; this.talking=Date.now()+ms; const sub=t.text.length>150?t.text.slice(0,150)+'…':t.text;
+      if(t.focus&&t.focus.handle) this.followHandle(t.focus.handle,`🎙️ ${t.dj}`,sub,ms).then(ok=>{ if(!ok) this.caption(`🎙️ ${t.dj}`,sub); });
+      else { if(t.focus&&t.focus.x!=null){ const p=iso(t.focus.x+2,t.focus.y+1.5); this.shot='talk'; this.drift=null; this.fly(p.x,p.y,1.4); } this.caption(`🎙️ ${t.dj}`,sub); this.until=Date.now()+ms; } };
+    Radio.onPaint=()=>this.paintRadio();
+    window.__onAir=()=>{ const t=this.q('.so-capt').textContent, u=this.q('.so-caps').textContent; return (t+(u?' · '+u:'')).slice(0,200); }; // for the streamer's report
     setInterval(()=>this.paint(),1000); setInterval(()=>this.direct(),1000); requestAnimationFrame(t=>this.anim(t)); },
   q(s){ return this.ov.querySelector(s); },
   paint(){ if(!this.ov) return; const pop=S.meta&&S.meta.population;
@@ -5253,6 +5364,11 @@ const Stream={ shot:null, until:0, recent:[], online:[], onlineAt:0, seenEvents:
     this.q('.so-wx').textContent=($('wxIcon')&&$('wxIcon').textContent)||''; this.q('.so-pop').textContent=pop?`👥 ${fmt(pop)} colonists`:'';
     this.q('.so-ctat').textContent=this.cta||'playresurgence.com';
     const ev=(S.events||[]).slice(0,10).map(e=>e.text).join('   •   '); if(ev!==this.tick){ this.tick=ev; const t=this.q('.so-tickin'); t.textContent=ev||'Welcome to the colony'; t.style.animationDuration=Math.max(30,ev.length/8)+'s'; } },
+  // the stream plays one station all day, or a different station each hour ('rotate')
+  tuneRadio(){ const r=this.radio; if(!r||r==='off'){ if(Radio.st) Radio.off(); this.paintRadio(); return; }
+    const st=r==='rotate'?STATION_IDS[Math.floor((Date.now()+skew)/3600e3)%STATION_IDS.length]:r; if(Radio.st!==st) Radio.tune(st); },
+  paintRadio(){ if(!this.ov) return; const on=!!Radio.st, p=this.q('.so-radio'); p.classList.toggle('on',on); if(!on) return; const S0=STATIONS[Radio.st];
+    p.style.setProperty('--st',S0.color); this.q('.so-rst').textContent=`📻 ${S0.name} ${S0.freq}`; this.q('.so-rnow').textContent=Radio.onAir?`🎙️ ${S0.dj.name} on the mic`:`♪ ${Radio.nowTitle()}`; },
   caption(title, sub){ this.q('.so-capt').textContent=title||''; this.q('.so-caps').textContent=sub||''; this.q('.so-cap').classList.toggle('on',!!title); },
   // smooth camera moves between shots
   fly(x,y,z,ms=2600){ follow=null; this.tween={ x0:cam.x,y0:cam.y,z0:cam.z, x,y,z, t0:performance.now(), ms }; },
@@ -5260,30 +5376,83 @@ const Stream={ shot:null, until:0, recent:[], online:[], onlineAt:0, seenEvents:
     else if(this.drift){ cam.x+=this.drift[0]; cam.y+=this.drift[1]; }
     requestAnimationFrame(t2=>this.anim(t2)); },
   centre(b,w=2,d=2){ return iso(b.x+w/2,b.y+d/2); },
-  // Pick what to show next: a race that's on, someone who just arrived, a player who's online, a busy place, or the whole colony.
+  // ---- The director ----
+  // Every few seconds, when the current shot is done, it scores what it could show next and picks the best:
+  //   action: a race (always cut to a live one), someone who just arrived / won / got caught, a player who's online, the busiest spot;
+  //   calm:   a quiet park, sunrise or sunset over the skyline, the city lights at night, rainy streets, a neighbourhood, the whole colony.
+  // Variety: the map is cut into areas and the last dozen shots are remembered, so areas and kinds of shot that were just on
+  // score lower (the camera keeps travelling). Rhythm: after two action shots a calm one must follow.
+  // The developer can take over from the Stream tab (manual), and the DJ can pull the camera to whoever they're talking about.
+  hist:[], actions:0, dir:null, dirKey:null,
+  setDirector(d){ const prev=this.dir; this.dir=d; if(d&&d.skip&&(!prev||prev.skip!==d.skip)){ this.until=0; this.talking=0; } if(d&&d.mode!=='manual'&&this.dirKey){ this.dirKey=null; this.until=0; } },
+  sector(x,y){ return Math.floor(x/20)+':'+Math.floor(y/20); },
   async direct(){ const now=Date.now(); if(this.busy) return;
+    if(this.manual(now)) return;
     const tracks=(Race.info&&Race.info.tracks)||[], live=tracks.map(t=>({t,l:liveOfRace(t.live)})).find(x=>x.l&&x.l.el<=Race.info.len/1000+4);
-    if(live&&this.shot!=='race:'+live.t.id){ this.shot='race:'+live.t.id; const p=this.centre(live.t,4,3); this.drift=null; this.fly(p.x,p.y,1.5); this.until=now+(Race.info.len+8000); this.caption(`🏁 Race #${live.l.r.no} is on at ${live.t.name}`,'Bet on the next race at playresurgence.com'); return; }
+    if(live&&this.shot!=='race:'+live.t.id){ this.showRace(live.t,live.l); this.until=now+(Race.info.len+8000); this.remember({type:'race',key:'race:'+live.t.id,kind:'action',x:live.t.x,y:live.t.y}); return; }
     if(this.shot&&this.shot.startsWith('race:')&&live) return;
-    if(now<this.until) return; this.busy=true;
+    if(now<this.until||now<(this.talking||0)) return; this.busy=true;
     try{ if(now-this.onlineAt>60000){ this.onlineAt=now; this.online=await api('/api/online').catch(()=>this.online)||[]; if(now-(Race.loadAt||0)>30000) loadRace(); }
-      const soon=tracks.map(t=>({t,left:t.next?t.next.start-(now+(Race.skew||0)):Infinity})).filter(x=>x.left>0&&x.left<75000).sort((a,b)=>a.left-b.left)[0];
-      const fresh=(S.events||[]).find(e=>now-e.t<5*60000&&!this.seenEvents.has(e.id)&&/@[\w.]+/.test(e.text)&&/(arrived|woke|moved into|joined|won|robbed|caught|heist|crew)/i.test(e.text));
-      const pick=Math.random();
-      if(soon&&this.shot!=='soon:'+soon.t.id){ this.shot='soon:'+soon.t.id; const p=this.centre(soon.t,4,3); this.drift=null; this.fly(p.x,p.y,1.2); this.until=now+18000; this.caption(`🏁 Next race at ${soon.t.name} soon`,'Pick your creature at playresurgence.com'); }
-      else if(fresh){ this.seenEvents.add(fresh.id); const h=fresh.text.match(/@([\w.]+)/)[1]; if(!(await this.followHandle(h,`${fresh.text.length>70?fresh.text.slice(0,70)+'…':fresh.text}`,'',22000))) this.overview(); }
-      else if(pick<0.45&&this.online.length){ const o=this.online[Math.floor(Math.random()*this.online.length)]; if(!(await this.followHandle(o.h,`👀 Following ${o.n||'@'+o.h}`,'Playing right now',24000))) this.place(); }
-      else if(pick<0.8) this.place(); else this.overview(); }
-    catch(e){ this.overview(); } this.busy=false; },
+      let list=this.candidates(now, tracks); const calm=list.filter(c=>c.kind==='calm'); if(this.actions>=2&&calm.length) list=calm;
+      const recent=this.hist.slice(-12);
+      for(const c of list){ const i=recent.map(h=>h.sector).lastIndexOf(c.sector); if(c.sector&&i>=0) c.score-=30*(i+1)/recent.length; // this area was just on
+        if(recent.slice(-3).some(h=>h.type===c.type)) c.score-=15; if(recent.some(h=>h.key===c.key)) c.score-=40; c.score+=Math.random()*12; }
+      list.sort((a,b)=>b.score-a.score);
+      let done=false; for(const c of list.slice(0,4)){ if(await c.go()){ this.remember(c); this.until=Date.now()+(c.ms||(c.kind==='calm'?32000:22000)); done=true; break; } }
+      if(!done){ this.overview(); this.remember({type:'overview',key:'over',kind:'calm'}); this.until=Date.now()+20000; } }
+    catch(e){ this.overview(); this.until=Date.now()+20000; } this.busy=false; },
+  remember(c){ const s=c.x!=null?this.sector(c.x,c.y):null; this.hist.push({type:c.type,key:c.key,kind:c.kind,sector:c.sector||s}); if(this.hist.length>24) this.hist.shift(); this.actions=c.kind==='action'?this.actions+1:0; },
+  candidates(now, tracks){ const out=[], gm=gmNow(), hour=((gm%1440)+1440)%1440/60, wx=S.meta?weatherAt(S.meta,gm):'sunny', B=[...D.buildings.values()].filter(b=>b.done!==false&&!b.ruin);
+    const add=(kind,type,key,score,x,y,go,ms)=>out.push({kind,type,key,score,x,y,sector:x!=null?this.sector(x,y):null,go,ms});
+    // action
+    const soon=tracks.map(t=>({t,left:t.next?t.next.start-(now+(Race.skew||0)):Infinity})).filter(x=>x.left>0&&x.left<75000).sort((a,b)=>a.left-b.left)[0];
+    if(soon) add('action','race','soon:'+soon.t.id,60,soon.t.x,soon.t.y,async()=>{ const p=this.centre(soon.t,4,3); this.shot='soon:'+soon.t.id; this.drift=null; this.fly(p.x,p.y,1.2); this.caption(`🏁 Next race at ${soon.t.name} soon`,'Pick your creature at playresurgence.com'); return true; },18000);
+    const fresh=(S.events||[]).find(e=>now-e.t<5*60000&&!this.seenEvents.has(e.id)&&/@[\w.]+/.test(e.text)&&/(arrived|woke|moved into|joined|won|robbed|caught|heist|crew|bought|mayor)/i.test(e.text));
+    if(fresh) add('action','event','e:'+fresh.id,70,null,null,async()=>{ this.seenEvents.add(fresh.id); const h=fresh.text.match(/@([\w.]+)/)[1]; return this.followHandle(h,fresh.text.length>70?fresh.text.slice(0,70)+'…':fresh.text,'',22000); });
+    for(const o of this.online.slice().sort(()=>Math.random()-0.5).slice(0,2)) add('action','person','p:'+o.h,40,null,null,()=>this.followHandle(o.h,`👀 Following ${o.n||'@'+o.h}`,'Playing right now',24000));
+    const gmNowV=gmNow(), count=new Map(); for(const c of S.citizens.values()){ const st=citizenAt(c,gmNowV); if(st&&st.bid) count.set(st.bid,(count.get(st.bid)||0)+1); }
+    const busy=B.filter(b=>T(b).leisure||T(b).cat==='shops'||T(b).cat==='landmarks').map(b=>[b,count.get(b.id)||0]).filter(x=>x[1]>=3).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    for(const [b,n] of busy) add('action','busy','b:'+b.id,45+Math.min(15,n),b.x,b.y,async()=>{ this.placeShot(b,`📍 ${b.name||T(b).name}`,`${n} colonists here now`,[0.05,0.02],1.5); return true; });
+    // calm
+    const parks=B.filter(b=>/park|garden|plaza|fountain|lake|beach|square|forest|pond/i.test(b.type+' '+(T(b).name||'')));
+    if(parks.length){ const b=parks[Math.floor(Math.random()*parks.length)]; add('calm','park','b:'+b.id,35,b.x,b.y,async()=>{ this.placeShot(b,`🌳 A quiet moment at ${b.name||T(b).name}`,'',[0.03,0.015],1.3); return true; },34000); }
+    if((hour>=5.5&&hour<7.5)||(hour>=17.5&&hour<19.5)) add('calm','golden','golden',55,null,null,async()=>{ this.wide(hour<12?`🌅 Sunrise over ${S.meta.name}`:`🌇 Sunset over ${S.meta.name}`,'Golden hour on Gliese 12 b',0.75); return true; },30000);
+    if(hour>=20||hour<4.5){ const dense=busy[0]?busy[0][0]:B[Math.floor(Math.random()*B.length)]; if(dense) add('calm','night','night:'+dense.id,45,dense.x,dense.y,async()=>{ this.placeShot(dense,`🌃 ${S.meta.name} at night`,'The lights are on',[0.06,0.02],0.95); return true; },32000); }
+    if(wx==='rain'||wx==='storm'||wx==='fog'){ const b=B[Math.floor(Math.random()*B.length)]; if(b) add('calm','weather','wx:'+b.id,45,b.x,b.y,async()=>{ this.placeShot(b,{rain:'🌧️ Rain on the streets',storm:'⛈️ A storm rolls in',fog:'🌫️ Fog over the colony'}[wx],'',[0.04,0.02],1.6); return true; },30000); }
+    // a neighbourhood the camera hasn't visited lately: different sections of the map
+    const seen=new Set(this.hist.slice(-12).map(h=>h.sector)), far=B.filter(b=>!seen.has(this.sector(b.x,b.y)));
+    if(far.length){ const b=far[Math.floor(Math.random()*far.length)], near=B.filter(x=>x.name&&Math.hypot(x.x-b.x,x.y-b.y)<12)[0];
+      add('calm','area','a:'+this.sector(b.x,b.y),38,b.x,b.y,async()=>{ this.placeShot(b,`🏘️ Around ${near?near.name:(b.name||T(b).name)}`,`Life in ${S.meta.name}`,[0.05,0.03],1.35); return true; },30000); }
+    add('calm','overview','over',25,null,null,async()=>{ this.overview(); return true; },22000);
+    return out; },
+  placeShot(b,title,sub,drift,z){ const t=T(b), [w,d]=t.size, p=this.centre(b,w,d); this.shot='b:'+b.id; this.drift=drift; this.fly(p.x,p.y,z); this.caption(title,sub); },
+  wide(title,sub,z){ const p=iso(HOME_VIEW.tile[0],HOME_VIEW.tile[1]); this.shot='wide'; this.drift=[0.1,0.03]; this.fly(p.x+(Math.random()-0.5)*400,p.y+(Math.random()-0.5)*200,z,4000); this.caption(title,sub); },
+  showRace(t,l){ this.shot='race:'+t.id; const p=this.centre(t,4,3); this.drift=null; this.fly(p.x,p.y,1.5); this.caption(`🏁 Race #${l.r.no} is on at ${t.name}`,'Bet on the next race at playresurgence.com'); },
+  // the developer's pick from the Stream tab: shown and held until it's released or its time runs out
+  manual(now){ const d=this.dir; if(!d||d.mode!=='manual'||(d.until&&now>d.until)){ if(this.dirKey){ this.dirKey=null; this.until=0; } return false; }
+    if(this.dirKey===d.n) return true; this.dirKey=d.n; this.talking=0; const s=d.shot||{}, label=s.label;
+    if(s.type==='person') this.followHandle(s.handle,label||`👀 Following @${s.handle}`,'',864e5).then(ok=>{ if(!ok) this.caption(`@${s.handle} isn’t in the colony right now`,''); });
+    else if(s.type==='building'){ const b=D.buildings.get(s.id); if(b) this.placeShot(b,label||`📍 ${b.name||T(b).name}`,'',[0.03,0.015],1.45); }
+    else if(s.type==='race'){ const t=((Race.info&&Race.info.tracks)||[])[0]; if(t){ const p=this.centre(t,4,3); this.shot='race:'+t.id; this.drift=null; this.fly(p.x,p.y,1.4); this.caption(label||`🏁 ${t.name}`,'Bet on the next race at playresurgence.com'); } }
+    else if(s.type==='view'){ this.shot='view'; this.drift=null; this.fly(s.x,s.y,s.z); this.caption(label||'',''); }
+    else if(s.type==='calm'){ const c=this.candidates(now,[]).filter(c=>c.kind==='calm').sort(()=>Math.random()-0.5)[0]; c&&c.go(); }
+    else this.overview();
+    return true; },
   async followHandle(h, title, sub, ms){ let c=[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===h.toLowerCase()); if(!c){ const d=await loadDetail(h).catch(()=>null); if(!d) return false; c=normC(d); pinned=c.id; S.citizens.set(c.id,c); }
     const st=citizenAt(c,gmNow()); if(!st||!st.visible&&!c.home) return false; const p=iso(st.x,st.y); this.shot='c:'+c.id; this.drift=null; this.fly(p.x,p.y-14,1.9,2200); this.afterFly=()=>{ follow=c.id; };
     this.until=Date.now()+ms; const d=detail.get(c.id); this.caption(title, sub||cardNow(c,d)); return true; },
-  place(){ const list=[...D.buildings.values()].filter(b=>b.done!==false&&!b.ruin&&(T(b).leisure||T(b).cat==='landmarks'||T(b).cat==='shops')); if(!list.length) return this.overview();
-    const b=list[Math.floor(Math.random()*list.length)], t=T(b), [w,d]=t.size, p=this.centre(b,w,d), gm=gmNow(), here=[...S.citizens.values()].filter(c=>{ const st=citizenAt(c,gm); return st&&st.bid===b.id; }).length;
-    this.shot='b:'+b.id; this.drift=[0.06,0.03]; this.fly(p.x,p.y,1.45); this.until=Date.now()+20000; this.caption(`📍 ${b.name||t.name}`, here?`${here} colonist${here===1?'':'s'} here now`:''); },
-  overview(){ const p=iso(HOME_VIEW.tile[0],HOME_VIEW.tile[1]); this.shot='over'; this.drift=[0.12,0.05]; this.fly(p.x+(Math.random()-0.5)*600,p.y+(Math.random()-0.5)*300,0.8,3500); this.until=Date.now()+20000;
+  overview(){ const p=iso(HOME_VIEW.tile[0],HOME_VIEW.tile[1]); this.shot='over'; this.drift=[0.12,0.05]; this.fly(p.x+(Math.random()-0.5)*600,p.y+(Math.random()-0.5)*300,0.8,3500);
     this.caption(`🌍 ${S.meta?S.meta.name:'The colony'} right now`, S.meta&&S.meta.population?`${fmt(S.meta.population)} colonists on Gliese 12 b`:''); } };
-if(STREAM) Stream.start();
+// On the 24/7 stream the streamer films the screen, and the page hands it the sound directly: everything the radio plays
+// is copied out as raw 16-bit stereo audio (the streamer fills any gap with silence, so the video never waits for it).
+async function streamAudio(){ if(!window.__pcm) return; await Radio.load(); const P=Radio.player; P.ensure(); const ctx=P.ctx; if(ctx.state!=='running') try{ await ctx.resume(); }catch(e){}
+  const code=`class Tap extends AudioWorkletProcessor{ constructor(){ super(); this.buf=new Int16Array(4410*2); this.n=0; }
+    process(ins){ const i=ins[0]; if(!i||!i.length) return true; const L=i[0], R=i[1]||i[0]; for(let k=0;k<L.length;k++){ this.buf[this.n++]=Math.max(-1,Math.min(1,L[k]))*32767; this.buf[this.n++]=Math.max(-1,Math.min(1,R[k]))*32767;
+      if(this.n>=this.buf.length){ this.port.postMessage(this.buf.buffer,[this.buf.buffer]); this.buf=new Int16Array(4410*2); this.n=0; } } return true; } } registerProcessor('tap',Tap);`;
+  await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([code],{type:'text/javascript'})));
+  const tap=new AudioWorkletNode(ctx,'tap',{numberOfInputs:1,numberOfOutputs:0,channelCount:2,channelCountMode:'explicit'}); P.master.connect(tap);
+  tap.port.onmessage=e=>{ const u=new Uint8Array(e.data); let b=''; for(let i=0;i<u.length;i+=0x8000) b+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000)); window.__pcm(ctx.sampleRate+':'+btoa(b)); }; }
+if(STREAM){ Stream.start(); streamAudio().catch(e=>console.error('stream audio:',e.message)); }
 
 addEventListener('keydown',e=>{ if(e.target.closest&&e.target.closest('input,textarea')) return; if(e.key==='f'||e.key==='F') toggleFullscreen(); else if(e.key==='h'||e.key==='H') setClean(!document.body.classList.contains('clean')); else if(e.key==='Escape'&&document.body.classList.contains('clean')) setClean(false); });
 function refreshHUD(){
@@ -5296,7 +5465,7 @@ function refreshHUD(){
     else if(Me&&Me.token&&myMoney){ cc.hidden=false; cc.title='Your coins'; $('coinVal').textContent=fmt(myMoney.coins); $('coinRate').textContent=myMoney.net>0?`+${fmt(myMoney.net)}/day`:myMoney.net<0?`${fmt(myMoney.net)}/day`:'no job yet'; }
     else cc.hidden=true;
     $('chips').hidden=false; }
-  const mb=$('musicBtn'); mb.setAttribute('aria-pressed',String(Music.on)); $('musicIcon').textContent=Music.on?'❚❚':'▶'; $('musicLabel').textContent=Music.on?'Music on':'Music';
+  const mb=$('musicBtn'), on=Music.on||!!Radio.st; mb.setAttribute('aria-pressed',String(on)); $('musicIcon').textContent='📻'; $('musicLabel').textContent=Radio.st?STATIONS[Radio.st].name:Music.on?'Ambient':'Radio';
 }
 function refreshUI(){ refreshHUD(); if(sel) renderCard(); if(activeTab==='people') renderPeople(); else if(activeTab && !['feed','races','chats','top','reports','stats','stream'].includes(activeTab)) renderPane(); feedDirty=true; renderFeed(); }
 setInterval(()=>{ if(!S.meta||document.hidden) return; const gm=gmNow(); $('clockTime').textContent=fmtClock(gm); },250);

@@ -572,6 +572,53 @@ Results on a simulated low-end Android (360×780 screen, CPU slowed 6×, 9,000 c
 
 At full speed the town centre runs at about 46–60 frames a second (it was 18). A two-minute session of wandering, zooming and opening tabs keeps memory flat at 20–30 MB.
 
+## 📺 24/7 live stream
+
+The colony streams itself around the clock to YouTube, Twitch, Facebook, Instagram and TikTok, with the colony radio as its soundtrack.
+
+**How it works.** A small cloud server runs the streamer (`streamer/`). It opens the stream page (`/?stream=1`) in a browser on a virtual screen, films it, adds the radio's sound and sends one stream to every destination that's switched on. A 16:9 picture goes to YouTube, Twitch and Facebook; a 9:16 picture goes to Instagram and TikTok. Anything that stops is restarted. Facebook (8 h) and Instagram (4 h) end lives after a while, so the streamer reconnects just before that. It checks in every 30 seconds, and the **Stream** tab shows what's live, what's on screen and a small picture of it.
+
+**Setting it up**
+1. On the game server, set `STREAM_TOKEN` to any long random text.
+2. Get a cloud server with Ubuntu: 2 vCPU / 4 GB for one 720p picture, or 4 vCPU / 8 GB for 1080p or for both shapes at once. Run:
+   `curl -fsSL https://raw.githubusercontent.com/Here001/Living_Settlement/main/streamer/setup.sh | sudo bash -s -- <STREAM_TOKEN>`
+   If the repo is private, add `REPO=https://<github-token>@github.com/Here001/Living_Settlement.git` in front of `bash`. Run the same command again to update. Logs: `sudo docker logs -f streamer`.
+3. In the game, open **Stream** (developer toolbar), add each platform's stream key, switch it on and press **Save**. The streamer picks it up within 30 seconds.
+   - **YouTube**: YouTube Studio → Go live → Stream. Copy the stream key and turn on Auto-start.
+   - **Twitch**: Dashboard → Settings → Stream. Copy the primary stream key.
+   - **Facebook**: Live Producer → Streaming software → use a persistent stream key.
+   - **Instagram**: on a computer, Create → Live video. Copy the URL and key. The key works for one live only, so paste a new one each time.
+   - **TikTok**: LIVE Studio, or "LIVE with streaming software" (needs LIVE access). Paste the server URL and key; TikTok also gives a new key for each live.
+
+**The camera (director).** In **Auto** it keeps choosing what to show:
+- **Action:** a race (it always cuts to a live one), someone who just arrived, won or got caught, a player who's online, the busiest spot.
+- **Calm:** a quiet park, sunrise or sunset over the skyline, the city lights at night, rainy streets, a neighbourhood it hasn't shown lately, the whole colony.
+
+It remembers its last dozen shots so it keeps moving to new parts of the map, and after two action shots it always shows a calm one. When a DJ talks about someone, the camera goes to them. In the Stream tab's **Camera** box you can take over instead:
+- follow a @player, show a place, the racetrack, the whole colony or something calm;
+- or move your own map anywhere and press **What I'm looking at**.
+
+Pick how long to hold it (1, 5 or 15 minutes, or until you release it). **Auto** hands it back and **Next shot** skips ahead.
+
+## 📻 Colony radio
+
+Tap **📻 Radio** (top left) to pick a station. Each one has its own sound and its own DJ:
+
+| Station | Sound | DJ |
+|---|---|---|
+| Ìlú FM 88.1 | Yoruba: Fuji, Jùjú, Apala (talking drum, iron bell, shekere) | DJ Àyìnkẹ́ |
+| Obodo FM 91.5 | Igbo: Highlife guitars, congas, horns | Uncle Obiora |
+| Gari FM 94.3 | Hausa: kalangu, calabash, Sahel flute | Malam Sani |
+| Colony 101 101.1 | English: Afrobeats and chill | Tolu Waves |
+| Gbedu FM 105.9 | Pidgin: Amapiano log drums, street-pop | Oga Gbedu |
+
+- **The music is composed live** in the browser for each station (`public/music.js`), so it never repeats and needs no licence; streams won't be muted for copyright. Everyone on a station hears the same song at the same moment, like real radio. Each song gets a title made from the station's language.
+- **The DJs.** Every second song opens with a talk break written from what just happened: the Colony Log, the Town Square, the mayor's race and the next race. An event is only told once per station. Breaks are only made for stations someone is listening to.
+  - `ANTHROPIC_API_KEY` (from console.anthropic.com): Claude writes every break fresh, in the DJ's voice, without reusing their recent jokes or lines. Optional `RADIO_MODEL` (default `claude-haiku-5-5`). Without the key, the DJs use their phrase banks, still never repeating a recent phrase.
+  - `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION` (portal.azure.com → create a **Speech** resource → Keys and Endpoint): the DJs speak in Nigerian-English voices and the music dips under them. Without them, the words show on screen. You can pick other voices with `AZURE_VOICE_YORUBA`, `AZURE_VOICE_IGBO`, `AZURE_VOICE_HAUSA`, `AZURE_VOICE_ENGLISH` and `AZURE_VOICE_PIDGIN`.
+- The **Stream** tab shows whether Claude and Azure are set up and the latest breaks, and has buttons to put any DJ on air right away. The stream plays one station all day or a new one each hour (**Radio** under Sound).
+- The old calm background music is still there as **Ambient**.
+
 ## Run it on your computer
 
 With Docker: `docker compose up --build`, then open http://localhost:3000/#builder (token `local-dev-token-please-change`).

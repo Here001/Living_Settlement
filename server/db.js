@@ -236,6 +236,10 @@ const MIGRATIONS = [
   // v44: joining without Instagram (a username and password on the website, or Google)
   `alter table citizens add column google_sub text, add column email text;
    create unique index citizens_google on citizens (google_sub) where google_sub is not null;`,
+  // v45: colony radio: each DJ talk break (its script, what it talked about, and the voice recording)
+  `create table radio_talk (id text primary key, station text not null, slot int not null, t bigint not null, at bigint not null, kind text,
+     text text not null, events text[] not null default '{}', focus jsonb, audio bytea, dur real, source text, unique (station, slot));
+   create index radio_talk_t on radio_talk (station, t);`,
 ];
 
 export async function migrate() {

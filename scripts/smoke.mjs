@@ -1270,6 +1270,54 @@ ok((await call('GET', '/api/cron/tick?key=wrong', undefined, { auth: false })).s
 r = await call('GET', `/api/cron/tick?key=${encodeURIComponent(process.env.CRON_KEY)}`, undefined, { auth: false });
 ok(r.status === 200 && r.json.ok, 'cron ping works', JSON.stringify(r.json));
 
+console.log('24/7 stream and the colony radio');
+{ // the developer's stream settings: keys are kept back from everyone else and shown masked
+  ok((await call('GET', '/api/admin/stream', undefined, { auth: false })).status === 401, 'stream settings are for the developer only');
+  let r = await call('PUT', '/api/admin/stream', { cta: 'Join us!', quality: '720p', radio: 'pidgin', destinations: [{ platform: 'youtube', key: 'abcd-efgh-ijkl', enabled: true }, { platform: 'instagram', url: 'ftp://nope', key: 'x' }] });
+  ok(r.status === 400, 'a stream address has to be rtmp:// or rtmps://');
+  r = await call('PUT', '/api/admin/stream', { cta: 'Join us!', quality: '720p', radio: 'pidgin', destinations: [{ platform: 'youtube', key: 'abcd-efgh-ijkl', enabled: true }, { platform: 'instagram', key: 'igkey123', enabled: false }] });
+  const st = (await call('GET', '/api/admin/stream')).json, yt = st.destinations[0];
+  ok(r.status === 200 && yt.url === 'rtmp://a.rtmp.youtube.com/live2' && yt.key === 'abc••••jkl' && yt.hasKey && st.destinations[1].layout === 'portrait' && st.destinations[1].maxHours === 4, 'destinations get the platform address, shape and session limit; keys come back masked', JSON.stringify(st.destinations));
+  await call('PUT', '/api/admin/stream', { destinations: st.destinations });
+  ok((await call('GET', '/api/admin/stream?keys=1')).json.destinations[0].key === 'abcd-efgh-ijkl', 'saving with the masked key keeps the real one');
+  const pub = (await call('GET', '/api/stream/public', undefined, { auth: false })).json;
+  ok(pub.cta === 'Join us!' && pub.radio === 'pidgin' && !JSON.stringify(pub).includes('abcd'), 'the stream page gets the call to action and radio, never a key');
+  // the streamer signs in with STREAM_TOKEN (or the builder token) and only gets switched-on destinations
+  ok((await call('GET', '/api/stream/config', undefined, { auth: false })).status === 401, 'the streamer needs its token');
+  const cfg = (await call('GET', '/api/stream/config')).json;
+  ok(cfg.destinations.length === 1 && cfg.destinations[0].key === 'abcd-efgh-ijkl', 'the streamer gets only switched-on destinations, with their keys');
+  r = await call('POST', '/api/stream/status', { host: 'vps-1', version: '1.0', pipelines: [{ layout: 'landscape', up: true, since: Date.now(), fps: 30, dests: ['YouTube Live'], onAir: '🏁 Race #3', snap: 'abc=' }] });
+  const s2 = (await call('GET', '/api/admin/stream')).json.status;
+  ok(r.status === 200 && s2.host === 'vps-1' && s2.pipelines[0].up && s2.pipelines[0].onAir === '🏁 Race #3' && s2.pipelines[0].snap === 'abc=', 'the streamer reports in, with what is on air');
+  // the director: the developer can put a shot on air, and every stream page hears about it at once
+  const v = viewer(['0_0']); await v.ready;
+  ok((await call('PUT', '/api/admin/stream/director', { mode: 'manual', shot: { type: 'person', handle: 'bad handle!' } })).status === 400, 'a shot needs a real username');
+  r = await call('PUT', '/api/admin/stream/director', { mode: 'manual', shot: { type: 'person', handle: '@chioma' }, holdMin: 5 });
+  ok(r.status === 200 && r.json.mode === 'manual' && r.json.shot.handle === 'chioma' && r.json.until > Date.now() + 4 * 60000, 'manual: follow a player for 5 minutes', JSON.stringify(r.json));
+  ok(await v.saw(o => o.op === 'director' && o.data.shot?.handle === 'chioma'), 'stream pages get the pick at once');
+  ok((await call('GET', '/api/stream/public', undefined, { auth: false })).json.director.mode === 'manual', 'a stream page that opens later gets it too');
+  r = await call('PUT', '/api/admin/stream/director', { next: true });
+  ok(r.json.mode === 'auto' && r.json.skip === r.json.n, 'next shot hands the camera back and skips ahead');
+  // the radio: five stations on one clock, the song in each, and DJ talk breaks
+  const radio = (await call('GET', '/api/radio', undefined, { auth: false })).json;
+  ok(Object.keys(radio.stations).length === 5 && radio.stations.pidgin.title && radio.stations.yoruba.start <= Date.now(), 'five stations, each with a song now', JSON.stringify(radio.stations.pidgin));
+  await call('POST', '/api/admin/citizens/bulk', { handles: ['dj_fan'] });
+  await pool.query("insert into events (id, t, kind, text) values ('radio-ev', $1, 'race', '🏁 @dj_fan won race #7 and took home 900 coins')", [Date.now()]);
+  ok((await call('POST', '/api/admin/radio/talk', { station: 'pidgin' }, { auth: false })).status === 401, 'only the developer can put a DJ on air');
+  r = await call('POST', '/api/admin/radio/talk', { station: 'pidgin' });
+  ok(r.status === 200 && r.json.dj === 'Oga Gbedu' && r.json.text.includes('@dj_fan won race #7') && r.json.focus?.handle === 'dj_fan' && r.json.at > Date.now(), 'a DJ break talks about the news and points the camera at who it is about', JSON.stringify(r.json));
+  ok(await v.saw(o => o.op === 'radio' && o.talk.id === r.json.id), 'radios hear the break at once');
+  const r2 = await call('POST', '/api/admin/radio/talk', { station: 'pidgin' });
+  ok(r2.status === 200 && !r2.json.text.includes('@dj_fan won race #7'), 'the same news is not told twice on a station', r2.json.text);
+  const r3 = await call('POST', '/api/admin/radio/talk', { station: 'yoruba' });
+  ok(r3.json.text.includes('@dj_fan won race #7') && r3.json.dj === 'DJ Àyìnkẹ́', 'another station can still tell it, in its own words');
+  const now = (await call('GET', '/api/radio?on=pidgin', undefined, { auth: false })).json;
+  ok(now.talk.some(t => t.id === r.json.id && t.audio === null), 'the radio lists the breaks around now (text only until a voice is set up)');
+  ok((await call('GET', `/api/radio/voice/${r.json.id}`, undefined, { auth: false })).status === 404, 'no voice recording without Azure');
+  const adm = (await call('GET', '/api/admin/radio')).json;
+  ok(adm.writer === (process.env.ANTHROPIC_API_KEY ? 'claude' : 'phrases') && adm.listening.includes('pidgin') && adm.recent.length >= 3, 'the developer sees who writes and voices the DJs, and the latest breaks', JSON.stringify({ w: adm.writer, l: adm.listening }));
+  await call('PUT', '/api/admin/stream', { destinations: [] }); await call('PUT', '/api/admin/stream/director', { mode: 'auto' }); v.ws.close(); }
+
 console.log('Removing people and starting over');
 await call('POST', '/api/admin/citizens/bulk', { handles: ['gone_a', 'gone_b', 'stay_c'] });
 r = await call('POST', '/api/admin/citizens/remove', { handles: ['gone_a', 'GONE_B', 'nobody_here'] });

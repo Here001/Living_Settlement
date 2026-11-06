@@ -253,15 +253,20 @@ function charges(list, base, skip) {
   return { lines, total: lines.reduce((s, l) => s + l.amount, 0) };
 }
 
-// The price of land: every tile of grass costs more nearer the middle of the colony and among more buildings.
-// `near` is how many buildings stand within 12 tiles; `dist` is how far the plot's middle is from the landing station.
-export const LAND_BASE = 120;
-export function landTilePrice(dist, near) {
-  const centre = 1 + 2.5 * Math.exp(-Math.max(0, dist) / 45), busy = 1 + Math.min(1.5, Math.max(0, near) / 25);
-  return Math.round(LAND_BASE * centre * busy / 5) * 5;
+// The price of land follows what the buildings around it are worth. `value` is what a typical home or business within
+// 12 tiles sells for (more for an upgraded one; nearer ones count more), and `weight` how many buildings that is drawn from.
+// A tile costs from 150 coins (bare outskirts) to 1,015 among the dearest buildings, so the biggest plot, 8×8, tops out at
+// about 65,000. The price climbs steeply with what's around: next to cabins land is cheap, next to towers it's dear.
+export const LAND_TILE_MIN = 150, LAND_TILE_MAX = 1015, LAND_RADIUS = 12, LAND_DEAR = 2000000;
+export function landTilePrice(value, weight = 1) {
+  if (!(value > 0) || !(weight > 0)) return LAND_TILE_MIN;
+  const f = Math.min(1, Math.sqrt(value / LAND_DEAR)) * Math.min(1, weight / 3); // one lonely building lifts it less than a street of them
+  return Math.round((LAND_TILE_MIN + (LAND_TILE_MAX - LAND_TILE_MIN) * f) / 5) * 5;
 }
-export function landQuote(w, d, dist, near) {
-  const perTile = landTilePrice(dist, near), land = perTile * w * d, ch = charges(LAND_CHARGES, land);
+// What one nearby building adds: its sale price if it's a home or business (0 for parks, trees, decorations and the like).
+export function siteValue(type, level = 1) { return earns(type) && BUILDING_TYPES[type]?.cat !== 'nature' ? propertyPrice(type) * levelMul(level) : 0; }
+export function landQuote(w, d, value, weight) {
+  const perTile = landTilePrice(value, weight), land = perTile * w * d, ch = charges(LAND_CHARGES, land);
   return { w, d, tiles: w * d, perTile, land, charges: ch.lines, chargesTotal: ch.total, total: land + ch.total };
 }
 

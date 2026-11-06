@@ -835,7 +835,7 @@ import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULET
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
 import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
-import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX } from '/shared/rules.js';
+import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
@@ -4724,7 +4724,7 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
   grassCard(card, close){ const {x,y}=sel, k=x+','+y, q=this.grassQ&&this.grassQ.k===k?this.grassQ.q:null;
     if(!q&&!(this.grassQ&&this.grassQ.k===k)){ this.grassQ={k,q:null}; api(`/api/land/quote?x=${x}&y=${y}&w=2&d=2`).then(r=>{ if(this.grassQ&&this.grassQ.k===k) this.grassQ.q=r; }).catch(()=>{}).finally(()=>{ if(sel&&sel.kind==='g'&&sel.id===k) renderCard(true); }); }
     card.append(close, el('div',{class:'chead'}, el('div',{class:'cthumb plotthumb',text:'🌱'}), el('div',null, el('h2',{text:'Empty land'}), el('p',{class:'now',text:q&&q.where?q.where[0].toUpperCase()+q.where.slice(1):'Open grass'}))));
-    const dl=el('dl',null); dl.append(el('dt',{text:'Land price'}), el('dd',{text:q?`About ${fmt(q.perTile)} coins a tile, plus government charges`:'…'}),
+    const dl=el('dl',null); dl.append(el('dt',{text:'Land price'}), el('dd',{text:q?`About ${fmt(q.perTile)} coins a tile, plus government charges (an 8×8 plot: about ${fmt(q.perTile*64)})`:'…'}), ...(q&&q.homes?[el('dt',{text:'Nearby buildings'}), el('dd',{text:`Worth about ${fmt(q.homeValue)} coins each`})]:[]),
       el('dt',{text:'Plot size'}), el('dd',{text:`${PLOT_MIN}×${PLOT_MIN} up to ${PLOT_MAX}×${PLOT_MAX} tiles, beside a road`}));
     if(q) dl.append(el('dt',{text:'You own'}), el('dd',{text:`${q.props} of ${q.max} properties`}));
     card.append(dl, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🗺️ Buy land here',onclick:()=>this.markAt(x,y)})));
@@ -4742,7 +4742,7 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
     showAbove(r.x,r.y,r.w,r.d,0); landSel={a:[r.x,r.y],b:[r.x+r.w-1,r.y+r.d-1],held:true}; const {box,close,wrap}=sheetBox(`🗺️ Buy this land`,'dock'); wrap.onClose=()=>{ if(landSel&&landSel.held) landSel=null; }; const nm=el('input',{type:'text',maxlength:'30',placeholder:'Name it (optional)','aria-label':'Plot name'});
     box.append(el('p',{class:'hint',text:`${q.w}×${q.d} tiles (${q.tiles}) ${q.where||''}.`}),
       bill([[`Land: ${q.tiles} tiles × ${fmt(q.perTile)}`,q.land], ...q.charges.map(c=>[c.name,c.amount])], q.total),
-      el('p',{class:'hint',text:`Charges go to the colony treasury. Land near the landing station and among many buildings costs more. You'll pay ${fmt(Math.round(q.land*0.001))} a week in land tax. You own ${q.props} of ${q.max} properties.`}));
+      el('p',{class:'hint',text:`${q.homes?`Buildings around here are worth about ${fmt(q.homeValue)} coins each, and land follows them: the dearer the neighbourhood, the dearer the land (up to ${fmt(LAND_TILE_MAX*PLOT_MAX*PLOT_MAX)} for an ${PLOT_MAX}×${PLOT_MAX} plot).`:'No homes or businesses nearby yet, so the land is cheap. It gets dearer as buildings go up around it.'} Charges go to the colony treasury. You'll pay ${fmt(Math.round(q.land*0.001))} a week in land tax. You own ${q.props} of ${q.max} properties.`}));
     if(q.problem) box.append(el('p',{class:'warnline',text:q.problem}));
     else if(q.props>=q.max) box.append(el('p',{class:'warnline',text:`You're at your limit of ${q.max} properties. Sell one, or earn more stars.`}));
     else box.append(nm, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(q.total)}`,onclick:async()=>{ const res=await meAction('/api/me/land',{x:q.x,y:q.y,w:q.w,d:q.d,name:nm.value},r=>`The land is yours! Paid ${fmt(r.paid)} coins. Tap it to build.`); if(res){ close(); landSel=null; setTool({kind:'pan'}); Money.at=0; MyHome.at=0;

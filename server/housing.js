@@ -58,9 +58,14 @@ export class Housing {
     return { x, y, w, d };
   }
   price({ x, y, w, d }) {
-    const L = this.landing(), mx = x + w / 2, my = y + d / 2, dist = L ? Math.hypot(mx - L.x, my - L.y) : 0;
-    const near = this.around(Math.round(mx), Math.round(my), 12).filter(b => BUILDING_TYPES[b.type]?.cat !== 'nature').length;
-    return { ...R.landQuote(w, d, dist, near), where: this.placeName(Math.round(mx), Math.round(my)) };
+    const mx = x + w / 2, my = y + d / 2;
+    // a typical home or business nearby: those within 12 tiles, the nearest counting most (fully next door, a tenth at the edge)
+    let sum = 0, weight = 0, homes = 0;
+    for (const b of this.around(Math.round(mx), Math.round(my), R.LAND_RADIUS)) { if (b.ruin || b.done === false) continue; const v = R.siteValue(b.type, b.lv); if (!v) continue;
+      const bw = b.w || 1, bd = b.d || 1, dd = Math.max(0, Math.hypot(b.x + bw / 2 - mx, b.y + bd / 2 - my) - (w + bw) / 4), k = Math.max(0.1, 1 - dd / (R.LAND_RADIUS + 1));
+      sum += v * k; weight += k; homes++; }
+    const value = weight ? sum / weight : 0;
+    return { ...R.landQuote(w, d, value, weight), homes, homeValue: Math.round(value), where: this.placeName(Math.round(mx), Math.round(my)) };
   }
   // What's in the way of buying this patch: water, roads, buildings (trees, rocks and benches are cleared), others' land, and no road beside it.
   async landProblems(q, { x, y, w, d }) {

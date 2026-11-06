@@ -3306,18 +3306,20 @@ const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
   djs(){ const box=el('div',{class:'authbox'}), R0=this.radio; box.append(el('h3',{text:'🎙️ Radio DJs'}));
     if(!R0){ box.append(el('p',{class:'hint',text:'Loading…'})); api('/api/admin/radio').then(r=>{ this.radio=r; this.renderNow(); }).catch(()=>{}); return box; }
     box.append(el('p',{class:'jobnow',text:R0.writer==='claude'?`✍️ Claude writes every break fresh (${R0.model}).`:'✍️ Using the DJs’ phrase banks. Set ANTHROPIC_API_KEY on the server so Claude writes every break fresh.'}),
-      el('p',{class:'jobnow',text:R0.voice==='elevenlabs'?'🗣️ ElevenLabs reads the breaks aloud.':R0.voice==='azure'?'🗣️ Azure AI Speech reads the breaks aloud.':'🗣️ No voice yet: breaks show as text. Set ELEVENLABS_API_KEY on the server.'}));
+      el('p',{class:'jobnow',text:R0.voice==='fish'?'🗣️ Fish Audio reads the breaks aloud.':R0.voice==='elevenlabs'?'🗣️ ElevenLabs reads the breaks aloud.':R0.voice==='azure'?'🗣️ Azure AI Speech reads the breaks aloud.':'🗣️ No voice yet: breaks show as text. Set FISH_API_KEY on the server.'}));
     // ElevenLabs: the month's characters, and a voice for each DJ
-    const Q=R0.quota; if(Q&&Q.error) box.append(el('p',{class:'hint warn',text:`ElevenLabs: ${Q.error}`}));
+    const Q=R0.quota; if(Q&&Q.error) box.append(el('p',{class:'hint warn',text:`${R0.voice==='fish'?'Fish Audio':'ElevenLabs'}: ${Q.error}`}));
+    else if(Q&&Q.kind==='fish'){ const perHour=Math.round(60/(3*R0.talkEvery)*350), costH=perHour/1e6*15;
+      box.append(el('p',{class:(Q.credit<1?'hint warn':'hint'),text:`💳 Fish Audio credit left: $${Q.credit.toFixed(2)}. Each station someone is listening to costs about $${(costH*24).toFixed(2)} a day (${perHour.toLocaleString()} characters an hour). When it runs out the DJs switch to text only; top up at fish.audio.`})); }
     else if(Q&&Q.limit){ const pct=Math.min(100,Math.round(Q.used/Q.limit*100)), perHour=Math.round(60/(3*R0.talkEvery)*350);
       box.append(el('div',{class:'quota'}, el('div',{class:'qbar'},el('i',{style:`width:${pct}%;background:${pct>90?'#d93025':pct>70?'#f4a300':'#34c759'}`})),
         el('p',{class:'hint',text:`${Q.used.toLocaleString()} of ${Q.limit.toLocaleString()} characters used this month${Q.resets?` · resets ${new Date(Q.resets).toLocaleDateString([], {day:'numeric',month:'short'})}`:''}. Each station someone is listening to uses about ${perHour.toLocaleString()} an hour. Near the limit the DJs switch to text only.`}))); }
     box.append(el('div',{class:'cpicks'}, el('span',{text:'DJ talks every:'}), ...[1,2,3,4,6].map(n=>el('button',{class:'pill'+(R0.talkEvery===n?' on':''),text:n===1?'song':`${n} songs`,onclick:()=>setR({talkEvery:n})}))));
-    if(R0.voice==='elevenlabs'){
+    if(R0.voice==='elevenlabs'||R0.voice==='fish'){
       if(!this.vcs&&!this.vcsBusy){ this.vcsBusy=true; api('/api/admin/radio/voices').then(r=>{ this.vcs=r.voices; this.vcsBusy=false; this.renderNow(); }).catch(e=>{ this.vcsBusy=false; this.vcs=[]; toast(e.message); }); }
-      const vl=el('div',{class:'rswlist'}); vl.append(el('p',{class:'hint',text:'Voices: add Nigerian voices to “My Voices” from the ElevenLabs Voice Library, then pick one for each DJ here.'}));
+      const vl=el('div',{class:'rswlist'}); vl.append(el('p',{class:'hint',text:R0.voice==='fish'?'Voices: your own Fish Audio voices come first, then the most used Nigerian voices from the Fish Audio library. Pick one for each DJ (try it with the DJ’s “On air now” button).':'Voices: add Nigerian voices to “My Voices” from the ElevenLabs Voice Library, then pick one for each DJ here.'}));
       for(const k of STATION_IDS){ const sel=el('select',{'aria-label':`${STATIONS[k].dj.name}’s voice`}); sel.append(el('option',{value:'',text:'Automatic (best match)'}));
-        for(const v of this.vcs||[]) sel.append(el('option',{value:v.id,text:`${v.name}${v.accent?' · '+v.accent:''}${v.gender?' · '+v.gender:''}`}));
+        for(const v of this.vcs||[]) sel.append(el('option',{value:v.id,text:`${v.category==='mine'?'⭐ ':''}${v.name}${v.accent?' · '+v.accent:''}${v.gender?' · '+v.gender:''}`.slice(0,70)}));
         if(R0.voices&&R0.voices[k]&&!(this.vcs||[]).some(v=>v.id===R0.voices[k])) sel.append(el('option',{value:R0.voices[k],text:R0.voices[k]})); sel.value=(R0.voices&&R0.voices[k])||'';
         sel.onchange=()=>setR({voices:{[k]:sel.value}}).then(()=>toast(`${STATIONS[k].dj.name}’s voice saved.`));
         vl.append(el('div',{class:'rpower sm',style:`--st:${STATIONS[k].color}`}, el('span',{}, el('b',{text:STATIONS[k].dj.name}), el('small',{text:` · ${STATIONS[k].name}`})), sel)); }

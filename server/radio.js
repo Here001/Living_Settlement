@@ -5,7 +5,10 @@
 //   - With ANTHROPIC_API_KEY set, Claude writes each break in the DJ's own voice. It is shown the DJ's last breaks and
 //     told not to reuse their jokes or lines; a break that still comes out too close to a recent one is rewritten.
 //   - Without it, breaks are built from each DJ's phrase bank, never reusing a recent phrase.
-//   - With ELEVENLABS_API_KEY set, ElevenLabs reads it aloud, in the voice picked for each DJ in the Stream tab (or one
+//   - With FISH_API_KEY set, Fish Audio reads it aloud, in the voice picked for each DJ in the Stream tab (your own
+//     voices and Nigerian voices from the Fish Audio library), or a Nigerian voice chosen automatically. When the
+//     prepaid credit is nearly gone, breaks switch to text only.
+//   - Or with ELEVENLABS_API_KEY set, ElevenLabs reads it aloud, in the voice picked for each DJ in the Stream tab (or one
 //     chosen from your ElevenLabs voices). Before the account's monthly characters run out, breaks switch to text only,
 //     so the radio never stops. (AZURE_SPEECH_KEY + AZURE_SPEECH_REGION also work, for Azure AI Speech.)
 //     Without a voice the break still shows as on-air text.
@@ -71,7 +74,7 @@ export class Radio {
     for (const [k, v] of this.cache) { if (total <= 80e6) break; this.cache.delete(k); total -= v.data.length; } return r; }
   // what a station is playing at time t (and its title)
   async playing(st, t) { return timeline(st, (await this.tracks()).by[st], t); }
-  voiceKind() { return process.env.ELEVENLABS_API_KEY ? 'elevenlabs' : process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION ? 'azure' : 'text'; }
+  voiceKind() { return process.env.FISH_API_KEY ? 'fish' : process.env.ELEVENLABS_API_KEY ? 'elevenlabs' : process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION ? 'azure' : 'text'; }
   status() { return { writer: process.env.ANTHROPIC_API_KEY ? 'claude' : 'phrases', voice: this.voiceKind(), model: this.model() }; }
   model() { return process.env.RADIO_MODEL || 'claude-haiku-5-5'; }
   // Someone is tuned in (a player's radio or the 24/7 stream). Shared with the leader through the settings table.
@@ -186,24 +189,44 @@ Do not reuse any joke, catchphrase, opening or sentence from your recent breaks.
   }
 
   // Azure AI Speech reads the break (a Nigerian-English voice, paced to the DJ).
+  // ---- Fish Audio ----
+  async fish(path, opts = {}) { const r = await fetch('https://api.fish.audio' + path, { ...opts, headers: { authorization: 'Bearer ' + process.env.FISH_API_KEY, ...(opts.headers || {}) }, signal: AbortSignal.timeout(45000) });
+    if (!r.ok) throw new Error(`Fish Audio ${r.status}: ${(await r.text()).slice(0, 200)}`); return r; }
+  // your own voices, and the most used Nigerian voices in the Fish Audio library
+  async fishVoices() { const get = q => this.fish('/model?' + new URLSearchParams(q)).then(r => r.json()).then(j => j.items || []).catch(() => []);
+    const [mine, ...found] = await Promise.all([get({ self: 'true', page_size: '50' }), ...['nigerian', 'naija', 'pidgin', 'yoruba', 'igbo', 'hausa', 'lagos'].map(t => get({ title: t, page_size: '15', sort_by: 'task_count' }))]);
+    const seen = new Set(), out = [];
+    for (const [list, cat] of [[mine, 'mine'], [found.flat().sort((a, b) => (b.task_count || 0) - (a.task_count || 0)), 'library']]) for (const m of list) { if (seen.has(m._id) || (m.type && m.type !== 'tts')) continue; seen.add(m._id);
+      const tags = (m.tags || []).map(t => String(t).toLowerCase()); out.push({ id: m._id, name: m.title, accent: tags.filter(t => !['male', 'female'].includes(t)).slice(0, 3).join(', '), gender: tags.includes('female') ? 'female' : tags.includes('male') ? 'male' : '', category: cat, uses: m.task_count || 0 }); }
+    return out.slice(0, 80); }
   // ---- ElevenLabs ----
   async eleven(path, opts = {}) { const r = await fetch('https://api.elevenlabs.io' + path, { ...opts, headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY, ...(opts.headers || {}) }, signal: AbortSignal.timeout(30000) });
     if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}`); return r; }
   // the voices on the account (your own and ones added from the Voice Library), cached for 10 minutes
   async voices(fresh) { if (!fresh && this.vcs && Date.now() - this.vcsAt < 600000) return this.vcs;
+    if (this.voiceKind() === 'fish') { this.vcsAt = Date.now(); return (this.vcs = await this.fishVoices()); }
     const j = await (await this.eleven('/v1/voices')).json(); this.vcsAt = Date.now();
     return (this.vcs = (j.voices || []).map(v => ({ id: v.voice_id, name: v.name, accent: v.labels?.accent || '', gender: v.labels?.gender || '', category: v.category || '' }))); }
   // how much of the month's characters are used (checked at most every 5 minutes)
   async quota(fresh) { if (!fresh && this.qta && Date.now() - this.qtaAt < 300000) return this.qta;
+    if (this.voiceKind() === 'fish') { const j = await (await this.fish('/wallet/self/api-credit')).json(); this.qtaAt = Date.now(); return (this.qta = { credit: Number(j.credit) || 0, kind: 'fish' }); }
     const j = await (await this.eleven('/v1/user/subscription')).json(); this.qtaAt = Date.now();
     return (this.qta = { used: j.character_count || 0, limit: j.character_limit || 0, resets: (j.next_character_count_reset_unix || 0) * 1000, tier: j.tier || '' }); }
   // the DJ's voice: the one picked in the Stream tab, or else the best match from the account (a Nigerian voice of
   // the DJ's gender if there is one)
   async voiceFor(st) { const c = await this.config(); if (c.voices[st]) return c.voices[st];
     const all = await this.voices().catch(() => []), female = ['yoruba', 'english'].includes(st), want = v => (v.gender || '').toLowerCase() === (female ? 'female' : 'male');
-    const ng = all.filter(v => /nigeria|african|yoruba|igbo|hausa/i.test(v.accent + ' ' + v.name));
-    return (ng.find(want) || ng[0] || all.find(want) || all[0])?.id || (female ? 'EXAVITQu4vr4xnSDxMaL' : 'JBFqnCBsd6RMkjVDRZzb'); }
+    const ng = all.filter(v => /nigeria|naija|pidgin|african|yoruba|igbo|hausa|lagos/i.test(v.accent + ' ' + v.name));
+    return (ng.find(want) || ng[0] || all.find(want) || all[0])?.id || (this.voiceKind() === 'fish' ? null : female ? 'EXAVITQu4vr4xnSDxMaL' : 'JBFqnCBsd6RMkjVDRZzb'); }
   async voice(st, text) {
+    const speedOf = { pidgin: 1.06, yoruba: 1.02, igbo: 1, hausa: 0.94, english: 0.98 };
+    if (this.voiceKind() === 'fish') {
+      const q = await this.quota().catch(() => null); if (q && q.credit < 0.05) { console.log('radio voice: Fish Audio credit used up; text only'); return null; }
+      const ref = await this.voiceFor(st), body = { text: speakable(text), format: 'mp3', mp3_bitrate: 64, normalize: true, latency: 'normal', prosody: { speed: speedOf[st] || 1, volume: 0 } };
+      if (ref) body.reference_id = ref;
+      const r = await this.fish('/v1/tts', { method: 'POST', headers: { 'content-type': 'application/json', model: process.env.FISH_MODEL || 's2.1-pro' }, body: JSON.stringify(body) });
+      if (this.qta) this.qta.credit -= Buffer.byteLength(body.text) / 1e6 * 15; return { audio: Buffer.from(await r.arrayBuffer()), bps: 64000 };
+    }
     if (process.env.ELEVENLABS_API_KEY) {
       const words = speakable(text), q = await this.quota().catch(() => null);
       if (q && q.limit && q.used + words.length > q.limit - 300) { console.log('radio voice: ElevenLabs characters used up for this month; text only'); return null; }
@@ -252,8 +275,8 @@ export function radioRoutes(app, { radio, admin, send, limit }) {
       res.set({ 'content-type': 'audio/mpeg', 'cache-control': 'public, max-age=86400' }).send(r.audio); } catch (e) { res.status(500).end(); }
   });
   // the ElevenLabs voices to choose from
-  app.get('/api/admin/radio/voices', admin, send(async () => { if (!process.env.ELEVENLABS_API_KEY) throw new HttpError(400, 'Set ELEVENLABS_API_KEY on the server first.'); return { voices: await radio.voices(true) }; }));
-  app.get('/api/admin/radio', admin, send(async () => ({ ...radio.status(), quota: process.env.ELEVENLABS_API_KEY ? await radio.quota(true).catch(e => ({ error: e.message })) : null, ...(await radio.config(true)), onAir: await radio.onAir(), listening: await radio.listening(),
+  app.get('/api/admin/radio/voices', admin, send(async () => { if (!['fish', 'elevenlabs'].includes(radio.voiceKind())) throw new HttpError(400, 'Set FISH_API_KEY (or ELEVENLABS_API_KEY) on the server first.'); return { voices: await radio.voices(true) }; }));
+  app.get('/api/admin/radio', admin, send(async () => ({ ...radio.status(), quota: ['fish', 'elevenlabs'].includes(radio.voiceKind()) ? await radio.quota(true).catch(e => ({ error: e.message })) : null, ...(await radio.config(true)), onAir: await radio.onAir(), listening: await radio.listening(),
     recent: (await pool.query('select id, station, at, text, source, dur, audio is not null has_audio from radio_talk order by t desc limit 30')).rows.map(r => ({ ...r, at: Number(r.at) })) })));
   // the developer's songs: upload (the file itself as the body; ?station, ?title, ?dur in seconds), list, edit, delete
   const AUDIO = { 'audio/mpeg': 1, 'audio/mp3': 1, 'audio/mp4': 1, 'audio/x-m4a': 1, 'audio/aac': 1, 'audio/ogg': 1, 'audio/webm': 1, 'audio/wav': 1, 'audio/x-wav': 1 };

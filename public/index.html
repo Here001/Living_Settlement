@@ -5649,7 +5649,7 @@ async function streamAudio(){ if(!window.__pcm) return; await Radio.load(); cons
     process(ins){ const i=ins[0]; if(!i||!i.length) return true; const L=i[0], R=i[1]||i[0]; for(let k=0;k<L.length;k++){ this.buf[this.n++]=Math.max(-1,Math.min(1,L[k]))*32767; this.buf[this.n++]=Math.max(-1,Math.min(1,R[k]))*32767;
       if(this.n>=this.buf.length){ this.port.postMessage(this.buf.buffer,[this.buf.buffer]); this.buf=new Int16Array(4410*2); this.n=0; } } return true; } } registerProcessor('tap',Tap);`;
   await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([code],{type:'text/javascript'})));
-  const tap=new AudioWorkletNode(ctx,'tap',{numberOfInputs:1,numberOfOutputs:0,channelCount:2,channelCountMode:'explicit'}); P.master.connect(tap);
+  const tap=new AudioWorkletNode(ctx,'tap',{numberOfInputs:1,numberOfOutputs:0,channelCount:2,channelCountMode:'explicit'}); (P.out||P.master).connect(tap);
   tap.port.onmessage=e=>{ const u=new Uint8Array(e.data); let b=''; for(let i=0;i<u.length;i+=0x8000) b+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000)); window.__pcm(ctx.sampleRate+':'+btoa(b)); }; }
 if(STREAM){ Stream.start(); streamAudio().catch(e=>console.error('stream audio:',e.message)); }
 

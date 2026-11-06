@@ -6,6 +6,9 @@
 // mid-song hears exactly the same bar as everyone else.
 import { STATIONS, SLOT_MS, slotOf, slotStart, hash, rng, songTitle, timeline } from '/shared/radio.js';
 
+// How loud the DJs are against the music: while a DJ talks the music drops to DUCK (0.14, about -17 dB) and the voice
+// plays at VOICE_GAIN (1.6, about +4 dB) through its own compressor.
+const DUCK = 0.14, VOICE_GAIN = 1.6;
 const NOTE = m => 440 * Math.pow(2, (m - 69) / 12);
 const SCALES = { major: [0, 2, 4, 5, 7, 9, 11], penta: [0, 2, 4, 7, 9], minpenta: [0, 3, 5, 7, 10], dorian: [0, 2, 3, 5, 7, 9, 10], hijaz: [0, 1, 4, 5, 7, 8, 10], mixo: [0, 2, 4, 5, 7, 9, 10] };
 const pick = (r, a) => a[Math.floor(r() * a.length)];
@@ -277,8 +280,10 @@ export class RadioPlayer {
   ensure() {
     if (this.ctx) return; const C = window.AudioContext || window.webkitAudioContext; this.ctx = this.opts ? new C(this.opts) : new C();
     this.master = this.ctx.createGain(); this.master.gain.value = this.vol;
-    const comp = this.ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4; const lim = this.ctx.createDynamicsCompressor(); lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.1; comp.connect(lim).connect(this.master); this.master.connect(this.ctx.destination);
-    this.music = this.ctx.createGain(); this.mbus = this.ctx.createGain(); this.mbus.gain.value = 0.7; this.music.connect(this.mbus).connect(comp); this.voice = this.ctx.createGain(); this.voice.gain.value = 1; this.voice.connect(this.master);
+    const comp = this.ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4; const lim = this.ctx.createDynamicsCompressor(); lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.1; comp.connect(lim).connect(this.master); /* a last safety limiter so a loud voice over music never crackles */ const out = this.out = this.ctx.createDynamicsCompressor(); out.threshold.value = -1.5; out.knee.value = 0; out.ratio.value = 20; out.attack.value = 0.001; out.release.value = 0.08; this.master.connect(out).connect(this.ctx.destination);
+    this.music = this.ctx.createGain(); this.mbus = this.ctx.createGain(); this.mbus.gain.value = 0.7; this.music.connect(this.mbus).connect(comp); this.voice = this.ctx.createGain(); this.voice.gain.value = VOICE_GAIN;
+    // the DJs' voices: evened out (quiet words lifted, loud ones held) and made louder, so they sit clearly over the music
+    const vc = this.ctx.createDynamicsCompressor(); vc.threshold.value = -24; vc.knee.value = 8; vc.ratio.value = 3; vc.attack.value = 0.005; vc.release.value = 0.2; this.voice.connect(vc).connect(this.master);
     // a touch of room so the synths sit together
     const d = this.ctx.createDelay(1), fb = this.ctx.createGain(), wet = this.ctx.createGain(); d.delayTime.value = 0.23; fb.gain.value = 0.22; wet.gain.value = 0.12; this.music.connect(d); d.connect(fb).connect(d); d.connect(wet).connect(comp);
     this.kit = makeKits(this.ctx, this.music);
@@ -319,7 +324,7 @@ export class RadioPlayer {
   setVolume(v) { this.vol = v; if (this.master) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05); this.plainVol(); }
   plainVol() { if (this.plain) try { this.plain.volume = Math.max(0, Math.min(1, this.vol * this.duck)); } catch {} }
   // turn the music down while the DJ talks
-  setDuck(on) { this.duck = on ? 0.28 : 1; if (this.music && this.station) { this.music.gain.setTargetAtTime(this.duck, this.ctx.currentTime, on ? 0.25 : 0.8); if (this.trackKey) this.tbus.gain.setTargetAtTime(this.duck, this.ctx.currentTime, on ? 0.25 : 0.8); } this.plainVol(); }
+  setDuck(on) { this.duck = on ? DUCK : 1; if (this.music && this.station) { this.music.gain.setTargetAtTime(this.duck, this.ctx.currentTime, on ? 0.25 : 0.8); if (this.trackKey) this.tbus.gain.setTargetAtTime(this.duck, this.ctx.currentTime, on ? 0.25 : 0.8); } this.plainVol(); }
   // the context's clock against the shared wall clock
   ctxAt(wall) { return this.ctx.currentTime + (wall - this.now()) / 1000; }
   // Walk the station's running order (shared/radio.js timeline) on the shared clock: generated songs are scheduled bar by

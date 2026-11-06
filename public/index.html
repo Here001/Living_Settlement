@@ -2935,8 +2935,8 @@ function drawFrame(ts){
   if(cam.z>=0.45){
     for(const r of tileList(D.roads)){ const k=r.k, x=r.x, y=r.y; if(r.h%(cam.z<0.6?27:cam.z<0.8?14:9)!==0||x<tminX-9||x>tmaxX+9||y<tminY-9||y>tmaxY+9||!carOK(k)) continue; // a roamer can be up to 7 tiles from its street
       const vt=ambientType(k), V=VEHICLE_TYPES[vt], st=roam('amb:'+k,x,y,gm,V,true); if(st) items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(k)%V.colors.length],st,key:'a:'+k} }); }
-    for(const v of D.vehicles.values()){ if(v.x<tminX-14||v.x>tmaxX+14||v.y<tminY-14||v.y>tmaxY+14) continue; const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car, st=V.mode==='water'?sailRoam(v.id,v.x,v.y,gm,V):V.mode==='air'?skyRoam(v.id,v.x,v.y,gm,V):roam(v.id,v.x,v.y,gm,V,false); if(!st) continue; if(V.mode==='air'){ airborne.push({V,st,col:V.colors[hash(v.id)%V.colors.length],id:v.id}); vehicleHits.push({id:v.id,st,alt:V.alt}); continue; }
-      items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(v.id)%V.colors.length],st,siren:v.type==='police'&&Math.floor(gm/LEG)%5===0,id:v.id,key:'v:'+v.id} }); vehicleHits.push({id:v.id,st}); }
+    for(const v of D.vehicles.values()){ if(v.x<tminX-14||v.x>tmaxX+14||v.y<tminY-14||v.y>tmaxY+14) continue; const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car, st=V.mode==='water'?sailRoam(v.id,v.x,v.y,gm,V):V.mode==='air'?skyRoam(v.id,v.x,v.y,gm,V):roam(v.id,v.x,v.y,gm,V,false); if(!st) continue; if(V.mode==='air'){ airborne.push({V,st,col:V.colors[hash(v.id)%V.colors.length],id:v.id}); vehicleHits.push({id:v.id,st,V,alt:V.alt}); continue; }
+      items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(v.id)%V.colors.length],st,siren:v.type==='police'&&Math.floor(gm/LEG)%5===0,id:v.id,key:'v:'+v.id} }); vehicleHits.push({id:v.id,st,V}); }
     for(const w of tileList(D.water)){ if(w.h%97!==0||w.x<tminX-6||w.x>tmaxX+6||w.y<tminY-6||w.y>tmaxY+6) continue; const ids=['boat','sailboat','boat','ferry'], vt=ids[w.h%4], V=VEHICLE_TYPES[vt], st=sailRoam('aw:'+w.k,w.x,w.y,gm,V); if(st&&waterCands(w.x,w.y).length>=40) items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[w.h%V.colors.length],st,key:'w:'+w.k} }); } // boats out on the water
     for(const r of responders(gm)) items.push({ k:vdepth(r.st.x,r.st.y), veh:{V:r.V,col:r.V.colors[0],st:r.st,siren:r.siren} });
     try{ const vs=items.filter(i=>i.veh&&i.veh.key); queueTraffic(vs); lastVeh=vs; }catch(e){}
@@ -3210,7 +3210,11 @@ function tap(sx,sy){
   const gm=gmNow(); let best=null, bd=18;
   for(const [id,st] of lastStates){ const c=S.citizens.get(id); if(!c||!st.visible) continue; const p=iso(st.x,st.y); const sp={ x:(p.x-cam.x)*cam.z+cw/2, y:(p.y-12-cam.y)*cam.z+ch/2 }; const dd=Math.hypot(sp.x-sx,sp.y-sy)/Math.max(1,cam.z*0.8); if(dd<bd){ bd=dd; best=c; } }
   if(best){ selectCitizen(best.id); return; }
-  for(const h of vehicleHits){ const p=iso(h.st.x,h.st.y); const sp={ x:(p.x-cam.x)*cam.z+cw/2, y:(p.y-6-(h.alt||0)-cam.y)*cam.z+ch/2 }; if(Math.hypot(sp.x-sx,sp.y-sy)<16*Math.max(1,cam.z*0.8)){ sel={kind:'v',id:h.id}; follow=null; renderCard(); return; } }
+  // Vehicles answer anywhere on their body: the tap area grows with the vehicle (a bus, a cargo ship) and a balloon's whole envelope counts.
+  let vbest=null, vbd=1e9; for(const h of vehicleHits){ const V=h.V||{}, p=iso(h.st.x,h.st.y), lift=(h.alt||0)+(V.shape==='balloon'?14:(V.h||6)/2);
+    const sp={ x:(p.x-cam.x)*cam.z+cw/2, y:(p.y-lift-cam.y)*cam.z+ch/2 }, r=Math.max(16, (V.len||0.6)*HW*0.9, V.shape==='balloon'?22:V.shape==='plane'?34:0)*Math.max(0.8,cam.z), dd=Math.hypot(sp.x-sx,sp.y-sy);
+    if(dd<r&&dd<vbd){ vbd=dd; vbest=h; } }
+  if(vbest){ sel={kind:'v',id:vbest.id}; follow=null; renderCard(); return; }
   const id=buildingAt(sx,sy); if(id){ selectBuilding(id); return; }
   const pid=D.plotOcc.get(x+','+y); if(pid){ sel={kind:'p',id:pid}; follow=null; renderCard(); return; }
   // Empty grass: with nothing open, a signed-in player gets a card to buy land right here (a tap with a card open just closes it).

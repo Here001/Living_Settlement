@@ -2,7 +2,8 @@
 # compromised eMudhra certificates no longer trusted). The build stops if the image is older, so an out-of-date
 # cached image can never be deployed by mistake.
 FROM node:22-alpine
-RUN apk upgrade --no-cache && apk add --no-cache ca-certificates && update-ca-certificates \
+# ffmpeg gets uploaded radio songs ready (evened-out loudness, a 128 kbps copy and a small data-saver copy)
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates ffmpeg && update-ca-certificates \
  && node -e "const [a,b,c]=process.versions.node.split('.').map(Number); if(a!==22||b<23||(b===23&&c<4)){ console.error('Node '+process.versions.node+' is too old: need 22.23.4 or later. Clear the build cache and deploy again.'); process.exit(1); }"
 WORKDIR /app
 COPY package*.json ./

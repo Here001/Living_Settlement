@@ -19,6 +19,8 @@ import { pool } from './db.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import express from 'express';
+import * as store from './storage.js';
+import { prepare } from './audio.js';
 import { STATIONS, STATION_IDS, slotOf, slotStart, talkSlot, songTitle, timeline, hostsOn, hash, rng } from '../shared/radio.js';
 
 const uid = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16);
@@ -84,14 +86,25 @@ export class Radio {
   // ---- uploaded songs ----
   // The list (without the audio) is cached; a change clears it and tells every radio to refresh its running order.
   async tracks(fresh) { if (!fresh && this.trk && Date.now() - this.trkAt < 60000) return this.trk;
-    const rows = (await pool.query('select id, station, title, dur, size, mime, enabled, t from radio_tracks order by t')).rows; this.trkAt = Date.now();
-    this.trk = { all: rows, by: Object.fromEntries(STATION_IDS.map(k => [k, rows.filter(r => r.station === k && r.enabled).map(r => ({ id: r.id, dur: r.dur, title: r.title }))])) }; return this.trk; }
+    const rows = (await pool.query('select id, station, title, artist, dur, size, lite_size, mime, enabled, t, url, lite_url, data is not null in_db from radio_tracks order by t')).rows; this.trkAt = Date.now();
+    // where a player gets each song: Cloudflare (normal and data-saver copies) or, for songs still in the database, this server
+    const src = r => { const own = `/api/radio/track/${r.id}`; return { url: r.url || own, lite: r.lite_url || r.url || own }; };
+    this.trk = { all: rows, by: Object.fromEntries(STATION_IDS.map(k => [k, rows.filter(r => r.station === k && r.enabled).map(r => ({ id: r.id, dur: r.dur, title: r.title, artist: r.artist || undefined, ...src(r) }))])) }; return this.trk; }
+  // Make a song ready: smaller, evenly loud copies (when ffmpeg is there), put in Cloudflare R2 (when it's set up),
+  // otherwise kept in the database. Returns the columns to save.
+  async storeSong(id, buf, mime) {
+    let hi = buf, lite = null, dur = 0, type = mime;
+    try { const p = await prepare(buf); if (p) { hi = p.hi; lite = p.lite; dur = p.dur; type = 'audio/mpeg'; } } catch (e) { console.error('radio song:', e.message); }
+    if (store.r2On()) { const key = `radio/${id}`, ext = type === 'audio/mpeg' ? 'mp3' : type.split('/')[1] || 'audio';
+      const url = await store.put(`${key}.${ext}`, hi, type), liteUrl = lite ? await store.put(`${key}-lite.mp3`, lite, 'audio/mpeg') : null;
+      return { data: null, url, lite_url: liteUrl, r2key: key, size: hi.length, lite_size: lite ? lite.length : null, mime: type, dur }; }
+    return { data: hi, url: null, lite_url: null, r2key: null, size: hi.length, lite_size: null, mime: type, dur }; }
   // the songs changed: upcoming breaks were timed for the old running order, so they're written again for the new one
   changed(station) { this.trk = null; this.bus?.publish([{ op: 'radioTracks' }]);
     pool.query("delete from radio_talk where kind = 'talk' and slot > 0 and at > $1" + (station ? ' and station = $2' : ''), station ? [Date.now() + 10000, station] : [Date.now() + 10000]).catch(() => {}); }
   // The audio itself: kept in memory for the songs played lately (up to ~80 MB), so many listeners don't each hit the database.
   async audio(id) { this.cache ||= new Map(); const hit = this.cache.get(id); if (hit) { this.cache.delete(id); this.cache.set(id, hit); return hit; }
-    const r = (await pool.query('select data, mime from radio_tracks where id = $1', [id])).rows[0]; if (!r) return null;
+    const r = (await pool.query('select data, mime, url from radio_tracks where id = $1', [id])).rows[0]; if (!r) return null; if (!r.data) return { url: r.url };
     this.cache.set(id, r); let total = 0; for (const v of this.cache.values()) total += v.data.length;
     for (const [k, v] of this.cache) { if (total <= 80e6) break; this.cache.delete(k); total -= v.data.length; } return r; }
   // what a station is playing at time t (and its title)
@@ -159,7 +172,7 @@ export class Radio {
   async make(st, slot, at, opts = {}) {
     const S = STATIONS[st], f = await this.facts(st), recent = await this.recent(st);
     // the song to introduce: the one playing when the DJ starts, or the next one if this is nearly over
-    const cur = await this.playing(st, at), song = cur.end - at < 45000 ? await this.playing(st, cur.end + 1) : cur, title = song.title;
+    const cur = await this.playing(st, at), song = cur.end - at < 45000 ? await this.playing(st, cur.end + 1) : cur, title = song.title + (song.track?.artist ? ` by ${song.track.artist}` : '');
     // who's on: this shift's pair; most breaks are the two of them, some are the lead alone
     const on = hostsOn(st, at), duo = typeof opts.duo === 'boolean' ? opts.duo : rng(hash(st + ':duo:' + slot))() < 0.65, cast = { lead: on.lead, support: duo ? on.support : null };
     let lines = null, source = 'phrases';
@@ -348,7 +361,7 @@ export function radioRoutes(app, { radio, admin, send, limit }) {
   app.get('/api/radio', limit, send(async req => radio.now(String(req.query.on || ''))));
   // a song, with byte ranges so players can start mid-song and phones (Safari) can play it at all
   app.get('/api/radio/track/:id', async (req, res) => {
-    try { const r = await radio.audio(String(req.params.id)); if (!r) return res.status(404).end(); const buf = r.data, n = buf.length;
+    try { const r = await radio.audio(String(req.params.id)); if (!r) return res.status(404).end(); if (!r.data) return r.url ? res.redirect(302, r.url) : res.status(404).end(); const buf = r.data, n = buf.length;
       res.set({ 'content-type': r.mime, 'accept-ranges': 'bytes', 'cache-control': 'public, max-age=31536000, immutable' });
       const m = /^bytes=(\d*)-(\d*)$/.exec(req.get('range') || '');
       if (m) { let a = m[1] === '' ? n - Number(m[2]) : Number(m[1]), b = m[1] !== '' && m[2] !== '' ? Number(m[2]) : n - 1; a = Math.max(0, a); b = Math.min(n - 1, b);
@@ -365,26 +378,38 @@ export function radioRoutes(app, { radio, admin, send, limit }) {
   app.get('/api/admin/radio', admin, send(async () => ({ ...radio.status(), quota: ['fish', 'elevenlabs'].includes(radio.voiceKind()) ? await radio.quota(true).catch(e => ({ error: e.message })) : null, ...(await radio.config(true)), onAir: await radio.onAir(), listening: await radio.listening(),
     recent: (await pool.query('select id, station, at, text, source, dur, dj, audio is not null has_audio from radio_talk order by t desc limit 30')).rows.map(r => ({ ...r, at: Number(r.at) })) })));
   // the developer's songs: upload (the file itself as the body; ?station, ?title, ?dur in seconds), list, edit, delete
-  const AUDIO = { 'audio/mpeg': 1, 'audio/mp3': 1, 'audio/mp4': 1, 'audio/x-m4a': 1, 'audio/aac': 1, 'audio/ogg': 1, 'audio/webm': 1, 'audio/wav': 1, 'audio/x-wav': 1 };
-  app.get('/api/admin/radio/tracks', admin, send(async () => { const T = await radio.tracks(true); return { tracks: T.all.map(r => ({ ...r, t: Number(r.t) })), bytes: T.all.reduce((s, r) => s + r.size, 0) }; }));
-  app.post('/api/admin/radio/tracks', admin, express.raw({ type: () => true, limit: '15mb' }), send(async req => {
-    const st = String(req.query.station || ''), mime = String(req.get('content-type') || '').split(';')[0].toLowerCase(), dur = Number(req.query.dur);
+  const AUDIO = { 'audio/flac': 1, 'audio/x-flac': 1, 'audio/mpeg': 1, 'audio/mp3': 1, 'audio/mp4': 1, 'audio/x-m4a': 1, 'audio/aac': 1, 'audio/ogg': 1, 'audio/webm': 1, 'audio/wav': 1, 'audio/x-wav': 1 };
+  app.get('/api/admin/radio/tracks', admin, send(async () => { const T = await radio.tracks(true); return { tracks: T.all.map(r => ({ ...r, t: Number(r.t) })), bytes: T.all.filter(r => r.in_db).reduce((s, r) => s + r.size, 0), cloudBytes: T.all.filter(r => !r.in_db).reduce((s, r) => s + r.size + (r.lite_size || 0), 0), r2: store.r2On() }; }));
+  app.post('/api/admin/radio/tracks', admin, express.raw({ type: () => true, limit: '40mb' }), send(async req => {
+    const st = String(req.query.station || ''), mime = String(req.get('content-type') || '').split(';')[0].toLowerCase(), dur0 = Number(req.query.dur);
     if (!STATIONS[st]) throw new HttpError(400, 'Pick a station.');
-    if (!AUDIO[mime]) throw new HttpError(400, 'That isn’t a sound file. Use MP3 or M4A.');
+    if (!AUDIO[mime]) throw new HttpError(400, 'That isn’t a sound file. Use MP3, M4A or WAV.');
     if (!Buffer.isBuffer(req.body) || req.body.length < 10000) throw new HttpError(400, 'That file is empty.');
-    if (!(dur >= 20 && dur <= 1200)) throw new HttpError(400, 'A song has to be between 20 seconds and 20 minutes long.');
-    const title = clean(req.query.title).replace(/\.(mp3|m4a|aac|ogg|wav|webm)$/i, '').replace(/[_]+/g, ' ').slice(0, 80) || 'Untitled', id = uid();
-    await pool.query('insert into radio_tracks (id, station, title, dur, mime, size, data, t) values ($1,$2,$3,$4,$5,$6,$7,$8)', [id, st, title, dur, mime === 'audio/mp3' ? 'audio/mpeg' : mime, req.body.length, req.body, Date.now()]);
-    radio.changed(st); return { id, station: st, title, dur, size: req.body.length };
+    if (!(dur0 >= 20 && dur0 <= 1200)) throw new HttpError(400, 'A song has to be between 20 seconds and 20 minutes long.');
+    const title = clean(req.query.title).replace(/\.(mp3|m4a|aac|ogg|wav|webm)$/i, '').replace(/[_]+/g, ' ').slice(0, 80) || 'Untitled', artist = clean(req.query.artist).slice(0, 60) || null, id = uid();
+    const S = await radio.storeSong(id, req.body, mime === 'audio/mp3' ? 'audio/mpeg' : mime), dur = S.dur >= 20 ? Math.round(S.dur * 100) / 100 : dur0;
+    await pool.query('insert into radio_tracks (id, station, title, artist, dur, mime, size, data, url, lite_url, lite_size, r2key, t) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
+      [id, st, title, artist, dur, S.mime, S.size, S.data, S.url, S.lite_url, S.lite_size, S.r2key, Date.now()]);
+    radio.changed(st); return { id, station: st, title, artist, dur, size: S.size, lite: !!S.lite_url, where: S.url ? 'cloud' : 'database' };
   }));
+  // move songs kept in the database to Cloudflare R2 (a few per call; the Stream tab repeats it until none are left)
+  app.post('/api/admin/radio/tracks/move', admin, send(async () => { if (!store.r2On()) throw new HttpError(400, 'Set up Cloudflare R2 first (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_URL).');
+    const rows = (await pool.query('select id, data, mime from radio_tracks where data is not null order by t limit 3')).rows;
+    for (const r of rows) { const S = await radio.storeSong(r.id, r.data, r.mime);
+      await pool.query('update radio_tracks set data = null, url = $2, lite_url = $3, lite_size = $4, r2key = $5, size = $6, mime = $7, dur = case when $8::real >= 20 then $8::real else dur end where id = $1', [r.id, S.url, S.lite_url, S.lite_size, S.r2key, S.size, S.mime, S.dur]);
+      radio.cache?.delete(r.id); }
+    const left = Number((await pool.query('select count(*) n from radio_tracks where data is not null')).rows[0].n); if (rows.length) radio.changed();
+    return { moved: rows.length, left }; }));
   app.patch('/api/admin/radio/tracks/:id', admin, send(async req => { const b = req.body || {}, sets = [], vals = [String(req.params.id)];
     if (typeof b.enabled === 'boolean') { vals.push(b.enabled); sets.push(`enabled = $${vals.length}`); }
     if (typeof b.title === 'string' && clean(b.title)) { vals.push(clean(b.title).slice(0, 80)); sets.push(`title = $${vals.length}`); }
+    if (typeof b.artist === 'string') { vals.push(clean(b.artist).slice(0, 60) || null); sets.push(`artist = $${vals.length}`); }
     if (STATIONS[b.station]) { vals.push(b.station); sets.push(`station = $${vals.length}`); }
     if (!sets.length) throw new HttpError(400, 'Nothing to change.');
     const r = await pool.query(`update radio_tracks set ${sets.join(', ')} where id = $1`, vals); if (!r.rowCount) throw new HttpError(404, 'No such song.');
     radio.changed(); return { ok: true }; }));
-  app.delete('/api/admin/radio/tracks/:id', admin, send(async req => { const r = await pool.query('delete from radio_tracks where id = $1', [String(req.params.id)]);
+  app.delete('/api/admin/radio/tracks/:id', admin, send(async req => { const r = await pool.query('delete from radio_tracks where id = $1 returning r2key, mime', [String(req.params.id)]);
+    const k = r.rows[0]?.r2key; if (k && store.r2On()) { await store.del(`${k}.${r.rows[0].mime === 'audio/mpeg' ? 'mp3' : (r.rows[0].mime.split('/')[1] || 'audio')}`).catch(() => {}); await store.del(`${k}-lite.mp3`).catch(() => {}); }
     if (!r.rowCount) throw new HttpError(404, 'No such song.'); radio.cache?.delete(String(req.params.id)); radio.changed(); return { ok: true }; }));
   // the developer: an announcement every chosen station reads out now ({ text, stations: 'all' | [...], rewrite, screen })
   app.post('/api/admin/radio/announce', admin, send(async req => radio.announce(req.body || {})));

@@ -246,6 +246,9 @@ const MIGRATIONS = [
    create index radio_tracks_station on radio_tracks (station);`,
   // v47: colony radio: who spoke in a break (the lead alone, or the lead and their sidekick) and their lines
   `alter table radio_talk add column dj text, add column lines jsonb;`,
+  // v48: radio songs can live in Cloudflare R2 (url and a data-saver copy) instead of the database; who the artist is
+  `alter table radio_tracks alter column data drop not null, add column url text, add column lite_url text, add column lite_size int,
+     add column r2key text, add column artist text;`,
 ];
 
 export async function migrate() {

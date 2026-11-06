@@ -531,7 +531,7 @@ body.clean #djBubble{display:none}
 #streamOv .so-tick{position:absolute;left:0;right:0;bottom:0;height:7vmin;overflow:hidden;background:rgba(20,24,30,.72);display:flex;align-items:center;white-space:nowrap;font-size:2.4vmin}
 #streamOv .so-tickin{display:inline-block;padding-left:100%;animation:soTick 60s linear infinite}@keyframes soTick{to{transform:translateX(-100%)}}
 @media (orientation:portrait){ #streamOv .so-top{top:3vh} #streamOv .so-radio{top:calc(3vh + 7vmin)} #streamOv .so-stats{top:auto;bottom:24vh;right:auto;left:2.2vmin} #streamOv .so-cap{bottom:30vh;max-width:90vw} #streamOv .so-cta{left:2.2vmin;right:2.2vmin;bottom:9vh;max-width:none;text-align:center} #streamOv .so-tick{height:5vh} }
-.strk{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid rgba(0,0,0,.06)}.strk .gin{flex:1;min-width:0}.strk .hint{white-space:nowrap;margin:0}.strk.off .gin{opacity:.5}
+.strk{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid rgba(0,0,0,.06)}.strk .gin{flex:1;min-width:0}.strk .gin.art{flex:.7}.strk .hint{white-space:nowrap;margin:0}.strk.off .gin{opacity:.5}
 .hint.warn{color:#b3261e}
 .sobs .obssteps{margin:6px 0 4px;padding-left:20px;font-size:13.5px;line-height:1.45}.sobs .obssteps li{margin:3px 0}
 .scam .snap{display:block;width:100%;max-width:480px;border-radius:10px;margin:6px 0;border:1px solid rgba(0,0,0,.12)}.scam .snap.tall{max-width:200px}
@@ -3307,21 +3307,28 @@ const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
     box.append(el('div',{class:'cpicks'}, ...STATION_IDS.map(k=>el('button',{class:'pill'+(this.songSt===k?' on':''),text:`${STATIONS[k].name} (${by(k).filter(t=>t.enabled).length})`,onclick:()=>{ this.songSt=k; this.renderNow(); }}))));
     const st=this.songSt, list=by(st), on=list.filter(t=>t.enabled).length;
     box.append(el('p',{class:'jobnow',text:on?`${STATIONS[st].name} plays its ${on} song${on>1?'s':''} in a new shuffled order each time round${on<8?', with a generated song after every second one until it has 8':''}.`:`${STATIONS[st].name} has no songs yet, so it plays generated music.`}));
-    const pick=el('input',{type:'file',accept:'audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,.mp3,.m4a',multiple:'',hidden:''});
-    pick.onchange=()=>this.upload(st,[...pick.files]);
+    const artist=el('input',{class:'gin',type:'text',maxlength:'60',placeholder:'Artist (optional, e.g. the artist’s stage name)','aria-label':'Artist for these songs',value:this.upArtist||''}); artist.oninput=()=>{ this.upArtist=artist.value; };
+    const pick=el('input',{type:'file',accept:'audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/flac,.mp3,.m4a,.wav,.flac',multiple:'',hidden:''});
+    pick.onchange=()=>this.upload(st,[...pick.files]); box.append(el('div',{class:'row-actions sline'}, artist));
     box.append(pick, el('div',{class:'row-actions'}, el('button',{class:'btn primary sm',text:this.upMsg||`⬆️ Add songs to ${STATIONS[st].name}`,disabled:this.upMsg?'':null,onclick:()=>pick.click()})));
-    for(const t of list){ const name=el('input',{class:'gin',type:'text',value:t.title,'aria-label':'Song title',maxlength:'80'});
+    for(const t of list){ const name=el('input',{class:'gin',type:'text',value:t.title,'aria-label':'Song title',maxlength:'80'}), art=el('input',{class:'gin art',type:'text',value:t.artist||'',placeholder:'Artist','aria-label':'Artist',maxlength:'60'});
       name.onchange=()=>api(`/api/admin/radio/tracks/${t.id}`,{method:'PATCH',body:{title:name.value}}).then(()=>{ t.title=name.value; toast('Renamed.'); }).catch(e=>toast(e.message));
+      art.onchange=()=>api(`/api/admin/radio/tracks/${t.id}`,{method:'PATCH',body:{artist:art.value}}).then(()=>{ t.artist=art.value; toast('Artist saved.'); }).catch(e=>toast(e.message));
       let armed=false; const del=el('button',{class:'btn sm',text:'Delete',onclick:async()=>{ if(!armed){ armed=true; del.textContent='Delete it?'; setTimeout(()=>{ armed=false; del.textContent='Delete'; },3000); return; }
         try{ await api(`/api/admin/radio/tracks/${t.id}`,{method:'DELETE'}); this.trk=null; this.renderNow(); }catch(e){ toast(e.message); } }});
-      box.append(el('div',{class:'strk'+(t.enabled?'':' off')}, name, el('span',{class:'hint',text:`${mmss(t.dur)} · ${mb(t.size)}`}),
+      box.append(el('div',{class:'strk'+(t.enabled?'':' off')}, name, art, el('span',{class:'hint',text:`${mmss(t.dur)} · ${t.in_db?'💾 '+mb(t.size):'☁️'}`,title:t.in_db?'Stored in the database':'In Cloudflare R2'}),
         uiSwitch(t.enabled,v=>api(`/api/admin/radio/tracks/${t.id}`,{method:'PATCH',body:{enabled:v}}).then(()=>{ t.enabled=v; this.renderNow(); }).catch(e=>toast(e.message)),'Play this song'), del)); }
-    box.append(el('p',{class:'hint'+(L.bytes>3e8?' warn':''),text:`${L.tracks.length} songs · ${mb(L.bytes)} stored in the database.${L.bytes>3e8?' That’s getting big for a free database: delete songs you don’t need, or export smaller MP3s.':''}`}));
-    box.append(el('p',{class:'hint',text:'MP3 or M4A, up to 15 MB each (a 128 kbps MP3 is about 1 MB a minute). Only use songs you have the rights to stream: make them on a paid Suno plan, or use a royalty-free library that allows streaming. Copyrighted songs get live streams muted or taken down.'}));
+    const inDb=L.tracks.filter(t=>t.in_db).length;
+    box.append(el('p',{class:'jobnow',text:L.r2?`☁️ Songs are stored in Cloudflare R2 and play straight from Cloudflare (${mb(L.cloudBytes||0)} so far, 10 GB free).`:'💾 Songs are stored in the database. For a big catalogue, set up Cloudflare R2 (see the README): songs then play from Cloudflare and the database stays small.'}));
+    if(inDb) box.append(el('p',{class:'hint'+(L.bytes>3e8?' warn':''),text:`${inDb} song${inDb>1?'s':''} · ${mb(L.bytes)} in the database.${L.bytes>3e8?' That’s getting big for a free database.':''}`}));
+    if(L.r2&&inDb) box.append(el('div',{class:'row-actions'}, el('button',{class:'btn sm',text:this.moving||`☁️ Move ${inDb} song${inDb>1?'s':''} to Cloudflare`,disabled:this.moving?'':null,onclick:async()=>{
+      try{ let left=inDb, moved=0; while(left>0){ this.moving=`Moving… ${moved} of ${inDb}`; this.renderNow(); const r=await api('/api/admin/radio/tracks/move',{method:'POST'}); moved+=r.moved; left=r.left; if(!r.moved) break; } toast(`☁️ Moved ${moved} songs to Cloudflare.`); }
+      catch(e){ toast(e.message); } this.moving=null; this.trk=null; this.renderNow(); }})));
+    box.append(el('p',{class:'hint',text:'MP3, M4A, WAV or FLAC, up to 40 MB each. Each song is evened out in loudness and saved as a 128 kbps copy plus a small data-saver copy for slow connections. Fill in the artist to credit them: it shows in Now playing and the DJs name them. Only use songs you have the rights to stream: make them on a paid Suno plan, or use a royalty-free library that allows streaming. Copyrighted songs get live streams muted or taken down.'}));
     return box; },
   async upload(st, files){ let n=0; for(const f of files){ n++; this.upMsg=`Uploading ${n} of ${files.length}…`; this.renderNow();
       try{ const dur=await new Promise((ok,no)=>{ const a=new Audio(), u=URL.createObjectURL(f); a.preload='metadata'; a.onloadedmetadata=()=>{ URL.revokeObjectURL(u); ok(a.duration); }; a.onerror=()=>no(new Error(`${f.name} isn’t a sound file this browser can read.`)); a.src=u; });
-        const r=await fetch(`/api/admin/radio/tracks?station=${st}&dur=${dur.toFixed(2)}&title=${encodeURIComponent(f.name)}`,{method:'POST',headers:{'content-type':f.type||'audio/mpeg',authorization:'Bearer '+Store.token},body:f});
+        const r=await fetch(`/api/admin/radio/tracks?station=${st}&dur=${dur.toFixed(2)}&title=${encodeURIComponent(f.name)}&artist=${encodeURIComponent(this.upArtist||'')}`,{method:'POST',headers:{'content-type':f.type||'audio/mpeg',authorization:'Bearer '+Store.token},body:f});
         const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`Upload failed (${r.status}).`); }
       catch(e){ toast(`${f.name}: ${e.message}`); } }
     this.upMsg=null; this.trk=null; this.renderNow(); toast(`Added to ${STATIONS[st].name}.`); },
@@ -5343,9 +5350,13 @@ const Announce={ show(text){ if(!text) return;
 // from what's happening in the colony. Everyone on a station hears the same song and the same DJ at the same moment.
 const Radio={ player:null, st:null, info:null, played:new Set(), timer:null, onAir:null, live:null, last:ls.get('resurgence-radio')||null, vol:(()=>{ const v=ls.get('resurgence-radio-vol'); return v==null?0.8:v; })(),
   async load(){ if(!this.mod) this.mod=await import('/music.js');
-    if(!this.player){ this.player=new this.mod.RadioPlayer(()=>Date.now()+skew, STREAM?{sampleRate:48000}:undefined); this.player.onSong=s=>{ this.song=s; this.paint(); this.onSong&&this.onSong(s); }; this.player.setVolume(this.vol); } return this.player; },
+    if(!this.player){ this.player=new this.mod.RadioPlayer(()=>Date.now()+skew, STREAM?{sampleRate:48000}:undefined); this.player.lite=this.dataSaver();
+      this.player.onLite=()=>{ if(!STREAM) toast('📶 Slow connection: the radio switched to data saver.'); this.paint(); }; this.player.onSong=s=>{ this.song=s; this.paint(); this.onSong&&this.onSong(s); }; this.player.setVolume(this.vol); } return this.player; },
   // which stations are on air (the developer can switch the radio, or any station, off)
   isLive(st){ return !this.live||this.live.includes(st); },
+  // data saver: smaller song files. On when chosen, or automatically on a slow or data-saving connection (never on the stream).
+  dataSaver(){ if(STREAM) return false; const v=ls.get('resurgence-radio-lite'); if(v===true||v===false) return v; const c=navigator.connection; return !!(c&&(c.saveData||/(^|-)2g|3g/.test(c.effectiveType||''))); },
+  setLite(v){ ls.set('resurgence-radio-lite',v); if(this.player){ this.player.lite=v; this.player.liteAuto=false; this.player.trackKey=null; } this.paint(); },
   setLive(list){ this.live=Array.isArray(list)?list:null; if(this.st&&!this.isLive(this.st)){ const n=STATIONS[this.st].name; this.off(true); if(!STREAM) toast(`📴 ${n} has gone off air.`); } this.paint(); refreshHUD(); },
   async refreshLive(){ try{ const r=await api('/api/radio'); this.info=r; this.setLive(r.onAir); }catch(e){} },
   // the power switch: on plays the station you last had (or the first one that's on air)
@@ -5370,7 +5381,7 @@ const Radio={ player:null, st:null, info:null, played:new Set(), timer:null, onA
     if(!ok) await new Promise(res=>{ this.player.setDuck(true); setTimeout(()=>{ this.player.setDuck(false); res(); },Math.max(1,t.dur-off)*1000); }); // no voice yet: the words show on screen
     if(this.onAir===t){ this.onAir=null; this.bubble(null); this.paint(); } },
   stationName(st=this.st){ const S0=STATIONS[st]; return S0?`${S0.name} ${S0.freq}`:''; },
-  nowTitle(){ return this.song&&this.st?this.song.title:(this.info&&this.st?this.info.stations[this.st].title:''); },
+  nowTitle(){ const s0=this.song&&this.st?this.song:null; return s0?s0.title+(s0.artist?` · ${s0.artist}`:''):(this.info&&this.st?this.info.stations[this.st].title:''); },
   // what the DJ is saying, for players who aren't looking at the radio
   bubble(t){ if(STREAM) return; let b=$('djBubble'); if(!t){ if(b) b.remove(); return; }
     if(!b){ b=el('button',{id:'djBubble',class:'inked',onclick:()=>{ b.remove(); }}); document.body.append(b); }
@@ -5403,6 +5414,8 @@ const Radio={ player:null, st:null, info:null, played:new Set(), timer:null, onA
     box.append(list);
     const vol=el('input',{type:'range',min:'0',max:'1',step:'0.05',value:String(this.vol),'aria-label':'Volume',oninput:e=>this.setVol(Number(e.target.value))});
     box.append(el('div',{class:'rvol'}, el('span',{text:'🔈'}), vol, el('span',{text:'🔊'})));
+    const lite=this.player?this.player.lite:this.dataSaver();
+    box.append(el('div',{class:'rpower sm'}, el('span',{}, el('b',{text:'📶 Data saver'}), el('small',{text:this.player&&this.player.liteAuto?' · switched on for your slow connection':' · smaller song files, for slow or costly data'})), uiSwitch(lite,v=>this.setLite(v),'Data saver')));
     box.append(el('p',{class:'hint',text:'The music is composed live for each station, and the DJs talk about what’s happening in the colony.'})); },
 };
 setTimeout(()=>{ (window.requestIdleCallback||setTimeout)(()=>Radio.load().catch(()=>{})); },4000); // warm up the radio so the first tap starts at once

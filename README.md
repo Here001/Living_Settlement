@@ -621,7 +621,26 @@ Tap **📻 Radio** (top left) to pick a station. Each one has its own sound and 
 
 - **Four presenters per station.** They work in two pairs that take turns in 3-hour shifts. In each pair, the lead runs the show and the sidekick is the funny one: jokes about everything, hypes up the lead and compliments them. About two breaks in three are the pair together as a back-and-forth, and the rest are the lead alone. Each presenter has their own voice, which you pick in the Stream tab, and the sidekick talks a little faster and livelier. Announcements are read by the lead on shift.
 
-- **Real songs.** In the **Stream** tab, under **🎵 Radio songs**, pick a station and press **Add songs** to upload MP3 or M4A files (up to 15 MB each). A station plays its songs in a new shuffled order every time round. You can rename songs, switch them off or delete them. While a station has fewer than 8 songs, a generated song plays after every second one. The songs are stored in the database, so keep an eye on the size shown there (a free Neon database holds 0.5 GB, about 60 songs at 128 kbps alongside the game). Only upload songs you have the right to stream: make them on a **paid** Suno plan, or use a royalty-free library whose licence allows live streaming. Copyrighted songs get live streams muted or taken down.
+- **Real songs.** In the **Stream** tab, under **🎵 Radio songs**, pick a station, optionally type the **artist**, and press **Add songs**. You can upload several MP3, M4A, WAV or FLAC files at once, up to 40 MB each.
+  - Each song is evened out in loudness (so none is much louder than the next) and saved twice: a 128 kbps copy, about 1 MB a minute, and a 48 kbps **data-saver** copy, about 0.35 MB a minute.
+  - A station plays its songs in a new shuffled order every round, and the DJs name the artist when they introduce a song.
+  - You can rename songs, set the artist, switch songs off or delete them.
+  - While a station has fewer than 8 songs, a generated song plays after every second one.
+  - Only upload songs you have the right to stream: your own (for example from a **paid** Suno plan), or artists who gave permission. Copyrighted songs get live streams muted or taken down.
+- **Big catalogues: Cloudflare R2.** With R2 set up, songs are kept in R2 instead of the database, and players download them straight from Cloudflare's network, so the game server and database stay light however big the catalogue gets. R2 is free up to 10 GB (about 2,500 songs), with no charge for downloads. To set it up:
+  1. In Cloudflare, go to **R2 → Create bucket** (for example `resurgence-music`).
+  2. In the bucket's **Settings**, under **Public access**, turn on the **r2.dev** URL, or connect your own domain such as `music.playresurgence.com`.
+  3. In the bucket's **Settings → CORS policy**, paste this, so the game can play the files:
+     `[{"AllowedOrigins":["https://playresurgence.com"],"AllowedMethods":["GET","HEAD"],"AllowedHeaders":["*"],"ExposeHeaders":["Content-Length","Content-Range","Accept-Ranges"],"MaxAgeSeconds":86400}]`
+  4. Go to **R2 → Manage API tokens → Create API token** with **Object Read & Write** for that bucket.
+  5. In Render, set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` and `R2_PUBLIC_URL` (the bucket's public address).
+  6. In the Stream tab, press **☁️ Move songs to Cloudflare** to move any songs already in the database.
+
+  Without R2, songs are stored in the database.
+- **Slow connections.** The radio only loads when someone turns it on, so it never slows down the game itself.
+  - The next song is loaded while the current one plays.
+  - Players can turn on **📶 Data saver** in the Radio sheet. It's on automatically for phones on data-saver or 2G/3G connections, and the radio switches to it by itself if a song keeps stalling.
+  - If a song can't load at all, a generated song plays in its place, so the radio never goes silent.
 - **Generated music** fills in when a station has few or no songs. It's composed live in the browser in each station's style (`public/music.js`), so it never repeats and needs no licence. Each song has an intro, verses and hooks, chants and a "Hey!" in the hooks, drum fills, a build-up that drops into the last hooks (the final one a step higher) and an outro, with the instruments spread left and right.
 - Everyone on a station hears the same song at the same moment, like real radio.
 - **The DJs.** Every second song opens with a talk break written from what just happened: the Colony Log, the Town Square, the mayor's race and the next race. An event is only told once per station. Breaks are only made for stations someone is listening to.

@@ -604,13 +604,15 @@ Pick how long to hold it (1, 5 or 15 minutes, or until you release it). **Auto**
 
 Tap **📻 Radio** (top left) to pick a station. Each one has its own sound and its own DJ:
 
-| Station | Sound | DJ |
+| Station | Sound | Presenters (lead & funny sidekick) |
 |---|---|---|
-| Ìlú FM 88.1 | Yoruba: Fuji, Jùjú, Apala (talking drum, iron bell, shekere) | DJ Àyìnkẹ́ |
-| Obodo FM 91.5 | Igbo: Highlife guitars, congas, horns | Uncle Obiora |
-| Gari FM 94.3 | Hausa: kalangu, calabash, Sahel flute | Malam Sani |
-| Colony 101 101.1 | English: Afrobeats and chill | Tolu Waves |
-| Gbedu FM 105.9 | Pidgin: Amapiano log drums, street-pop | Oga Gbedu |
+| Ìlú FM 88.1 | Yoruba: Fuji, Jùjú, Apala (talking drum, iron bell, shekere) | DJ Àyìnkẹ́ & Kọ́lá · Bàbá Fẹ́mi & Tòpẹ́ |
+| Obodo FM 91.5 | Igbo: Highlife guitars, congas, horns | Uncle Obiora & Chioma · Nneka & Emeka |
+| Gari FM 94.3 | Hausa: kalangu, calabash, Sahel flute | Malam Sani & Hauwa · Zainab & Danladi |
+| Colony 101 101.1 | English: Afrobeats and chill | Tolu Waves & Big Dayo · David Ace & Lola Laughs |
+| Gbedu FM 105.9 | Pidgin: Amapiano log drums, street-pop | Oga Gbedu & Ada Wahala · Madam Rita & Bobo Chuks |
+
+- **Four presenters per station.** They work in two pairs that take turns in 3-hour shifts. In each pair, the lead runs the show and the sidekick is the funny one: jokes about everything, hypes up the lead and compliments them. About two breaks in three are the pair together as a back-and-forth, and the rest are the lead alone. Each presenter has their own voice, which you pick in the Stream tab, and the sidekick talks a little faster and livelier. Announcements are read by the lead on shift.
 
 - **Real songs.** In the **Stream** tab, under **🎵 Radio songs**, pick a station and press **Add songs** to upload MP3 or M4A files (up to 15 MB each). A station plays its songs in a new shuffled order every time round. You can rename songs, switch them off or delete them. While a station has fewer than 8 songs, a generated song plays after every second one. The songs are stored in the database, so keep an eye on the size shown there (a free Neon database holds 0.5 GB, about 60 songs at 128 kbps alongside the game). Only upload songs you have the right to stream: make them on a **paid** Suno plan, or use a royalty-free library whose licence allows live streaming. Copyrighted songs get live streams muted or taken down.
 - **Generated music** fills in when a station has few or no songs. It's composed live in the browser in each station's style (`public/music.js`), so it never repeats and needs no licence. Each song has an intro, verses and hooks, chants and a "Hey!" in the hooks, drum fills, a build-up that drops into the last hooks (the final one a step higher) and an outro, with the instruments spread left and right.

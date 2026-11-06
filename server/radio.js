@@ -19,7 +19,7 @@ import { pool } from './db.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import express from 'express';
-import { STATIONS, STATION_IDS, slotOf, slotStart, talkSlot, songTitle, timeline } from '../shared/radio.js';
+import { STATIONS, STATION_IDS, slotOf, slotStart, talkSlot, songTitle, timeline, hostsOn, hash, rng } from '../shared/radio.js';
 
 const uid = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 // how long a break is: the words Claude aims for, and how much the phrase banks say
@@ -61,6 +61,24 @@ const BANK = {
     close: ['Make I drop {title} for una. Shake body!', 'Na {title} be this, no dull yourself!', 'Oya, {title}. Turn am up!', 'Make we enjoy {title}, sharp sharp!'] },
 };
 
+// What the sidekick says when there's no AI writer: jokes and hype for the lead ({lead} is the lead's name).
+const SUPPORT = {
+  yoruba: ['Ehn! {lead}, this one sweet me pass jollof for owambe!', 'Ó tì o! See as this colony dey move, I need to sit down small.', '{lead}, you see why I say you be the best? Correct gist every time!', 'Àṣẹ! If I no laugh now, my belle go burst.',
+    'Abeg {lead}, make we dance small before more news land!', 'Me I dey practise my victory dance since morning, nobody invite me!', 'Ah! {lead}, you dey carry better news come like delivery man!', 'Ẹ wò ó! This colony no dey carry last at all!'],
+  igbo: ['Uncle, ehn! Chineke, this news fresh pass morning bread!', 'See {lead} smiling like somebody wey see free money!', 'Me, I would have opened a shop for that! Business is business!', '{lead}, na why you be the oga of this radio, sharp gist every time!',
+    'Chai! This colony no dey sleep at all at all!', 'Let me laugh first, ha! Okay, I am serious now. Small.', 'If laughter na coins, I for don buy that whole street!', 'You see? I told you this colony is the place to be!'],
+  hausa: ['Kai! Haba {lead}, this one is too sweet!', 'Hmm, if I hear this kind of news every day, I go grow taller!', '{lead}, you said it with style, that is why we love you!', 'Haba! Even the wind outside is clapping for that one!',
+    'Let me tell you, I would have bought the whole market just to celebrate!', 'Kai, kai, kai! This colony is not a small place o!', 'Me, I am just here for the jokes and the music, and today both are correct!', 'Na gode {lead}, you always bring the correct news!'],
+  english: ["{lead}, that's why they call you the voice of the colony!", 'Hold on, let me catch my breath, this colony is too dramatic!', "I'm not saying I'm jealous, but I am absolutely jealous.", 'If gossip was a sport, this colony would win gold every day!',
+    'Somebody give that person a medal, and give me a sandwich!', "{lead}, I'll pretend I knew that already. I did not.", "Breaking news: I'm still the funniest person in this studio.", "That's the kind of news that makes me dance in my chair!"],
+  pidgin: ['Ehen! {lead}, I no fit shout!', 'Na who dey breathe? This colony don hot pass pepper soup!', 'Omo! {lead} talk am, e enter my body!', 'Abeg make una hold me, I wan faint for joy!',
+    'If I hear this kind gist every day, my belle go full without food!', 'Na wa o! This colony get more drama than film!', '{lead}, na you biko, nobody fit carry gist like you!', 'Me sef I dey find my own luck, make e reach me small!'],
+};
+// MP3 clips can be joined end to end once the tag at the front of each is removed
+function stripId3(b) { let s = 0; if (b.length > 10 && b.toString('latin1', 0, 3) === 'ID3') { s = 10 + ((b[6] & 127) << 21 | (b[7] & 127) << 14 | (b[8] & 127) << 7 | (b[9] & 127)) + (b[5] & 16 ? 10 : 0); }
+  let e = b.length; if (e - s > 128 && b.toString('latin1', e - 128, e - 125) === 'TAG') e -= 128; return b.subarray(s, e); }
+const WORDS = { short: ['25 to 45', '3'], normal: ['50 to 90', '4 to 6'], long: ['100 to 160', '6 to 9'] };
+
 export class Radio {
   constructor(world, bus) { this.world = world; this.bus = bus; this.listenAt = {}; this.wrote = {}; this.busy = false; }
   // ---- uploaded songs ----
@@ -96,7 +114,7 @@ export class Radio {
     if (b.stations && typeof b.stations === 'object') for (const k of STATION_IDS) if (typeof b.stations[k] === 'boolean') c.stations[k] = b.stations[k];
     if (LENGTHS[b.talkLength]) c.talkLength = b.talkLength; // how long each break is
     if (b.talkEvery != null) c.talkEvery = Math.max(1, Math.min(6, Math.round(Number(b.talkEvery)) || 2)); // a DJ break every N songs
-    if (b.voices && typeof b.voices === 'object') { c.voices = { ...c.voices }; for (const k of STATION_IDS) if (k in b.voices) { const v = String(b.voices[k] || '').trim();
+    if (b.voices && typeof b.voices === 'object') { c.voices = { ...c.voices }; for (const k of [...STATION_IDS, ...STATION_IDS.flatMap(x => STATIONS[x].hosts.map(h => h.id))]) if (k in b.voices) { const v = String(b.voices[k] || '').trim();
       if (v && !/^[A-Za-z0-9]{8,40}$/.test(v)) throw new HttpError(400, 'That isn’t an ElevenLabs voice ID.'); if (v) c.voices[k] = v; else delete c.voices[k]; } }
     await pool.query("insert into settings (key, value) values ('radio:config', $1) on conflict (key) do update set value = $1", [c]); this.cfg = c; this.cfgAt = Date.now();
     const onAir = await this.onAir(); this.bus?.publish([{ op: 'radioConfig', onAir }]); return { ...c, onAir }; }
@@ -142,19 +160,22 @@ export class Radio {
     const S = STATIONS[st], f = await this.facts(st), recent = await this.recent(st);
     // the song to introduce: the one playing when the DJ starts, or the next one if this is nearly over
     const cur = await this.playing(st, at), song = cur.end - at < 45000 ? await this.playing(st, cur.end + 1) : cur, title = song.title;
-    let text = null, source = 'phrases';
-    if (process.env.ANTHROPIC_API_KEY) { try { text = await this.write(st, f, recent, title); source = 'claude'; } catch (e) { console.error('radio writer:', e.message); } }
-    if (!text) text = this.phrases(st, f, recent, title);
+    // who's on: this shift's pair; most breaks are the two of them, some are the lead alone
+    const on = hostsOn(st, at), duo = typeof opts.duo === 'boolean' ? opts.duo : rng(hash(st + ':duo:' + slot))() < 0.65, cast = { lead: on.lead, support: duo ? on.support : null };
+    let lines = null, source = 'phrases';
+    if (process.env.ANTHROPIC_API_KEY) { try { lines = await this.write(st, f, recent, title, cast); source = 'claude'; } catch (e) { console.error('radio writer:', e.message); } }
+    if (!lines) lines = this.phrases(st, f, recent, title, cast);
+    const text = lines.map(l => (cast.support ? `${l.who.name}: ` : '') + l.text).join(' '), dj = cast.support ? `${cast.lead.name} & ${cast.support.name}` : cast.lead.name;
     // what the camera should look at while the DJ talks: the first person or place in the break
     const ev = f.events.find(e => text.includes(e.text.slice(0, 18))) || f.events[0], handle = /@([\w.]+)/.exec(text)?.[1] || (ev && /@([\w.]+)/.exec(ev.text)?.[1]);
     const focus = handle ? { handle } : (f.race && /race|track/i.test(text) && f.race.inMinutes < 5) ? { x: f.race.x, y: f.race.y, race: true } : null;
     let audio = null, dur = Math.max(6, words(text).length / 2.6);
-    if (this.voiceKind() !== 'text') { try { const v = await this.voice(st, text); if (v) { audio = v.audio; dur = audio.length * 8 / v.bps; } } catch (e) { console.error('radio voice:', e.message); } }
+    if (this.voiceKind() !== 'text') { try { const v = await this.speakLines(st, lines); if (v) { audio = v.audio; dur = audio.length * 8 / v.bps; } } catch (e) { console.error('radio voice:', e.message); } }
     const row = { id: uid(), station: st, slot, t: Date.now(), at, kind: opts.kind || 'talk', text, events: f.events.filter((e, i) => text.includes(e.text.slice(0, 18)) || (/@[\w.]+/.exec(e.text) && text.includes(/@[\w.]+/.exec(e.text)[0])) || (source === 'claude' && i === 0)).flatMap(e => e.ids), focus, dur, source };
-    const saved = await pool.query(`insert into radio_talk (id, station, slot, t, at, kind, text, events, focus, audio, dur, source) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) on conflict (station, slot) do nothing`,
-      [row.id, st, slot, row.t, at, row.kind, text, row.events, focus, audio, dur, source]);
+    const saved = await pool.query(`insert into radio_talk (id, station, slot, t, at, kind, text, events, focus, audio, dur, source, dj, lines) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) on conflict (station, slot) do nothing`,
+      [row.id, st, slot, row.t, at, row.kind, text, row.events, focus, audio, dur, source, dj, JSON.stringify(lines.map(l => ({ who: l.who.id, name: l.who.name, text: l.text })))]);
     if (!saved.rowCount) throw new HttpError(409, 'That break was already written.'); // another instance got there first
-    const out = { id: row.id, station: st, at, kind: row.kind, text, focus, dur, audio: audio ? `/api/radio/voice/${row.id}` : null, dj: S.dj.name };
+    const out = { id: row.id, station: st, at, kind: row.kind, text, focus, dur, audio: audio ? `/api/radio/voice/${row.id}` : null, dj, lines: cast.support ? lines.map(l => ({ name: l.who.name, role: l.who.role, text: l.text })) : null };
     this.bus?.publish([{ op: 'radio', talk: out }]); // radios tuned to this station pick it up at once
     return { ...out, slot, events: row.events, source };
   }
@@ -168,49 +189,64 @@ export class Radio {
     const LEAD = { english: 'This is an important announcement for everyone in {colony}.', pidgin: 'Una listen well well, important announcement for {colony}.',
       yoruba: 'Ẹ jọ̀wọ́, ẹ tẹ́tí sílẹ̀. An important announcement for {colony}.', igbo: 'Biko, nụrụ m. An important announcement for {colony}.', hausa: 'Don Allah, ku saurara. An important announcement for {colony}.' };
     const at = Date.now() + 2500, out = [];
-    await Promise.all(want.map(async st => { const S = STATIONS[st]; let say = null;
-      if (rewrite && process.env.ANTHROPIC_API_KEY) { try { say = await this.rewriteAlert(st, text); } catch (e) { console.error('radio announce:', e.message); } }
+    await Promise.all(want.map(async st => { const S = STATIONS[st], lead = hostsOn(st, at).lead; let say = null;
+      if (rewrite && process.env.ANTHROPIC_API_KEY) { try { say = await this.rewriteAlert(st, text, lead); } catch (e) { console.error('radio announce:', e.message); } }
       if (!say) say = `${LEAD[st].replace('{colony}', this.world.meta?.name || 'the colony')} ${text}${text.length < 220 ? ` I repeat. ${text}` : ''}`;
       let audio = null, dur = Math.max(5, words(say).length / 2.6);
-      if (this.voiceKind() !== 'text') { try { const v = await this.voice(st, say); if (v) { audio = v.audio; dur = audio.length * 8 / v.bps; } } catch (e) { console.error('radio voice:', e.message); } }
+      if (this.voiceKind() !== 'text') { try { const v = await this.voice(st, say, lead); if (v) { audio = v.audio; dur = audio.length * 8 / v.bps; } } catch (e) { console.error('radio voice:', e.message); } }
       const id = uid(); await pool.query(`insert into radio_talk (id, station, slot, t, at, kind, text, audio, dur, source) values ($1,$2,$3,$4,$5,'alert',$6,$7,$8,'announce')`, [id, st, -1 - Math.floor(Math.random() * 2e9), Date.now(), at, say, audio, dur]);
-      const talk = { id, station: st, at, kind: 'alert', text: say, focus: null, dur, audio: audio ? `/api/radio/voice/${id}` : null, dj: S.dj.name };
+      await pool.query('update radio_talk set dj = $2 where id = $1', [id, lead.name]);
+      const talk = { id, station: st, at, kind: 'alert', text: say, focus: null, dur, audio: audio ? `/api/radio/voice/${id}` : null, dj: lead.name };
       this.bus?.publish([{ op: 'radio', talk }]); out.push(talk); }));
     if (screen !== false) { this.bus?.publish([{ op: 'announce', text, at }]); await this.world.change?.(async ch => { await ch.event(`📢 ${text}`, 'announce'); }).catch(e => console.error('radio announce log:', e.message)); }
     return { ok: true, stations: out.map(t => t.station), talks: out };
   }
-  async rewriteAlert(st, text) { const S = STATIONS[st];
+  async rewriteAlert(st, text, lead) { const S = STATIONS[st];
     const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: this.model(), max_tokens: 300, temperature: 0.5, system: `You are ${S.dj.name}, DJ of ${S.name} in the game Resurgence. Personality: ${S.dj.vibe}. Interrupt the music to read an important announcement in your own voice. Keep every fact, name, number, time and instruction exactly right; add nothing new; no jokes if it is about danger or loss. Calm and clear, 20 to 70 words, plain spoken words only.`,
+      body: JSON.stringify({ model: this.model(), max_tokens: 300, temperature: 0.5, system: `You are ${lead.name}, presenter on ${S.name} in the game Resurgence. Personality: ${lead.vibe}. Interrupt the music to read an important announcement in your own voice. Keep every fact, name, number, time and instruction exactly right; add nothing new; no jokes if it is about danger or loss. Calm and clear, 20 to 70 words, plain spoken words only.`,
         messages: [{ role: 'user', content: 'The announcement:\n' + text }] }), signal: AbortSignal.timeout(20000) });
     if (!r.ok) throw new Error(`Claude API ${r.status}`); const t = clean((await r.json()).content?.map(c => c.text || '').join(' ')); if (!t) throw new Error('empty'); return t.slice(0, 700); }
 
-  // Claude writes the break in the DJ's voice, from the facts, without reusing their recent lines.
-  async write(st, f, recent, title, retry = 0) {
-    const S = STATIONS[st], len = LENGTHS[(await this.config()).talkLength];
-    const system = `You are ${S.dj.name}, the DJ of ${S.name} (${S.freq}), a ${S.lang}-flavoured music station in ${f.colony}, a colony on the planet ${f.planet} in the game Resurgence, where every colonist is a real player.
-Personality: ${S.dj.vibe}. Chill and funny, never mean.
-Write ONE radio talk break, spoken aloud, ${len.words} words. Plain spoken words only: no emojis, hashtags, stage directions, quotation marks or lists.
+  // Claude writes the break: the lead alone, or the lead and their funny sidekick as a short back-and-forth, from the
+  // facts, without reusing the station's recent lines. Returns the lines: [{ who, text }].
+  async write(st, f, recent, title, cast, retry = 0) {
+    const S = STATIONS[st], lenKey = (await this.config()).talkLength, len = LENGTHS[lenKey], { lead, support } = cast;
+    const rules = `Plain spoken words only: no emojis, hashtags, stage directions, sound effects, quotation marks or lists.
 Use one or two of the facts you are given, the most interesting first, and say them accurately. Refer to players by their @handle exactly as written.
 Tease lightly, never insult anyone, never joke about ethnicity, religion, gender, money troubles or real-world politics. Nothing sexual.
-End by introducing the next song by its title.
-Do not reuse any joke, catchphrase, opening or sentence from your recent breaks. Every break must feel new.`;
-    const user = `Facts right now:\n${JSON.stringify({ ...f, events: f.events.map(({ id, ids, ...e }) => e) }, null, 1)}\n\nNext song: "${title}"\n\nYour recent breaks (do not repeat them):\n${recent.map(t => '- ' + t).join('\n') || '(none yet)'}\n\nWrite the break.`;
+Do not reuse any joke, catchphrase, opening or sentence from the station's recent breaks. Every break must feel new.`;
+    const where = `${S.name} (${S.freq}), a ${S.lang}-flavoured music station in ${f.colony}, a colony on the planet ${f.planet} in the game Resurgence, where every colonist is a real player.`;
+    const system = support
+      ? `You write the on-air talk for the two presenters of ${where}
+LEAD: ${lead.name}. ${lead.vibe}. The lead runs the show: brings the news and introduces the next song.
+SUPPORT: ${support.name}. ${support.vibe}. The support reacts to everything with humour and jokes, hypes the lead up and compliments them.
+Write ${WORDS[lenKey][1]} short turns, ${WORDS[lenKey][0]} words in all, alternating and starting with the lead. The lead introduces the next song by its title near the end; the support may add a last one-liner.
+Format: one turn per line, each starting exactly with "LEAD:" or "SUPPORT:".
+${rules}`
+      : `You are ${lead.name}, a presenter on ${where}
+Personality: ${lead.vibe}. Chill and funny, never mean.
+Write ONE radio talk break, spoken aloud, ${len.words} words. End by introducing the next song by its title.
+${rules}`;
+    const user = `Facts right now:\n${JSON.stringify({ ...f, events: f.events.map(({ id, ids, ...e }) => e) }, null, 1)}\n\nNext song: "${title}"\n\nThe station's recent breaks (do not repeat them):\n${recent.map(t => '- ' + t).join('\n') || '(none yet)'}\n\nWrite the break.`;
     const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: this.model(), max_tokens: len.tokens, temperature: 1, system, messages: [{ role: 'user', content: user }] }), signal: AbortSignal.timeout(25000) });
+      body: JSON.stringify({ model: this.model(), max_tokens: len.tokens + (support ? 150 : 0), temperature: 1, system, messages: [{ role: 'user', content: user }] }), signal: AbortSignal.timeout(25000) });
     if (!r.ok) throw new Error(`Claude API ${r.status}: ${(await r.text()).slice(0, 160)}`);
-    const text = clean((await r.json()).content?.map(c => c.text || '').join(' ')).replace(/^["']|["']$/g, '').slice(0, 700);
-    if (!text) throw new Error('empty break');
-    if (retry < 1 && recent.some(p => similarity(p, text) > 0.3)) return this.write(st, f, [text, ...recent], title, retry + 1);
-    return text;
+    const raw = (await r.json()).content?.map(c => c.text || '').join('\n') || '';
+    let lines = [];
+    if (support) for (const ln of raw.split(/\n+/)) { const m = /^\s*\**\s*(LEAD|SUPPORT)\s*\**\s*:\s*(.+)$/i.exec(ln); if (m && clean(m[2])) lines.push({ who: m[1].toUpperCase() === 'LEAD' ? lead : support, text: clean(m[2]).replace(/^["']|["']$/g, '') }); }
+    if (!lines.length) { const t = clean(raw.replace(/^(LEAD|SUPPORT)\s*:/gim, '')).replace(/^["']|["']$/g, '').slice(0, 900); if (!t) throw new Error('empty break'); lines = [{ who: lead, text: t }]; }
+    const text = lines.map(l => l.text).join(' ');
+    if (retry < 1 && recent.some(p => similarity(p, text) > 0.3)) return this.write(st, f, [text, ...recent], title, cast, retry + 1);
+    return lines.slice(0, 12);
   }
 
   // The phrase bank: an opener, one or two pieces of news and a song intro, avoiding anything said recently.
-  phrases(st, f, recent, title) {
+  phrases(st, f, recent, title, cast) {
+    const lead = cast?.lead || STATIONS[st].hosts[0], support = cast?.support || null;
     const len = LENGTHS[this.cfg?.talkLength] || LENGTHS.normal;
     const B = BANK[st], S = STATIONS[st], said = recent.join(' \n ');
     const fresh = list => { const unused = list.filter(p => !said.includes(p.split('{')[0].trim().slice(0, 24) || '~')); return pick(unused.length ? unused : list); };
-    const fill = p => p.replace(/\{dj\}/g, S.dj.name).replace(/\{station\}/g, S.name).replace(/\{colony\}/g, f.colony).replace(/\{title\}/g, title).replace(/\{time\}/g, f.time)
+    const fill = p => p.replace(/\{dj\}/g, lead.name).replace(/\{lead\}/g, lead.name).replace(/\{station\}/g, S.name).replace(/\{colony\}/g, f.colony).replace(/\{title\}/g, title).replace(/\{time\}/g, f.time)
       .replace(/\{weather\}/g, { sunny: 'sunny outside', cloudy: 'a bit cloudy', rain: 'raining', fog: 'foggy out there', storm: 'stormy, so stay indoors' }[f.weather] || f.weather).replace(/\{pop\}/g, f.population.toLocaleString('en-US'))
       .replace(/\{pod\}/g, (st === 'yoruba' ? YORUBA_POD : GREET)[f.partOfDay]).replace(/\{podh\}/g, HAUSA_POD[f.partOfDay]);
     const parts = len.open ? [fill(fresh(B.open))] : [];
@@ -220,9 +256,14 @@ Do not reuse any joke, catchphrase, opening or sentence from your recent breaks.
     if (!news.length && f.townSquare.length) news.push(`over in the Town Square, ${f.townSquare[0]}`);
     if (len.news > 2 && f.townSquare.length && news.length < 3) news.push(`over in the Town Square, ${f.townSquare[0]}`);
     if (len.news > 2 && f.election?.candidates.length && news.length < 3) news.push(`the mayor's race has ${f.election.candidates.length} candidates, and voting closes in ${f.election.closesInHours} hours`);
-    for (const e of news) parts.push(fill(fresh(B.news)).replace('{e}', e));
-    parts.push(fill(fresh(B.close)));
-    return parts.join(' ');
+    const newsLines = news.map(e => fill(fresh(B.news)).replace('{e}', e)), close = fill(fresh(B.close));
+    if (!support) return [{ who: lead, text: [...parts, ...newsLines, close].join(' ') }];
+    // the pair: the lead brings each piece of news, the sidekick jokes about it, then the lead brings in the song
+    const quips = SUPPORT[st].filter(q => !said.includes(fill(q).slice(0, 24))), quip = () => fill((quips.length ? quips : SUPPORT[st]).splice(Math.floor(Math.random() * Math.max(1, quips.length)), 1)[0] || pick(SUPPORT[st]));
+    const out = []; newsLines.forEach((n, i) => { out.push({ who: lead, text: (i === 0 ? parts.join(' ') + ' ' : '') + n }); out.push({ who: support, text: quip() }); });
+    if (!out.length) { out.push({ who: lead, text: parts.join(' ') || fill(fresh(B.open)) }); out.push({ who: support, text: quip() }); }
+    out.push({ who: lead, text: close }); if (Math.random() < 0.5) out.push({ who: support, text: quip() });
+    return out.map(l => ({ ...l, text: l.text.trim() }));
   }
 
   // Azure AI Speech reads the break (a Nigerian-English voice, paced to the DJ).
@@ -251,15 +292,23 @@ Do not reuse any joke, catchphrase, opening or sentence from your recent breaks.
     return (this.qta = { used: j.character_count || 0, limit: j.character_limit || 0, resets: (j.next_character_count_reset_unix || 0) * 1000, tier: j.tier || '' }); }
   // the DJ's voice: the one picked in the Stream tab, or else the best match from the account (a Nigerian voice of
   // the DJ's gender if there is one)
-  async voiceFor(st) { const c = await this.config(); if (c.voices[st]) return c.voices[st];
-    const all = await this.voices().catch(() => []), female = ['yoruba', 'english'].includes(st), want = v => (v.gender || '').toLowerCase() === (female ? 'female' : 'male');
-    const ng = all.filter(v => /nigeria|naija|pidgin|african|yoruba|igbo|hausa|lagos/i.test(v.accent + ' ' + v.name));
-    return (ng.find(want) || ng[0] || all.find(want) || all[0])?.id || (this.voiceKind() === 'fish' ? null : female ? 'EXAVITQu4vr4xnSDxMaL' : 'JBFqnCBsd6RMkjVDRZzb'); }
-  async voice(st, text) {
+  // each presenter's voice: the one picked in the Stream tab, or else a Nigerian voice of their gender from the account
+  // (different presenters get different voices where the account has enough)
+  async voiceFor(st, host) { host ||= STATIONS[st].hosts[0]; const c = await this.config(); if (c.voices[host.id]) return c.voices[host.id]; if (host === STATIONS[st].hosts[0] && c.voices[st]) return c.voices[st];
+    const all = await this.voices().catch(() => []), female = host.gender === 'female', want = v => (v.gender || '').toLowerCase() === host.gender;
+    const ng = all.filter(v => /nigeria|naija|pidgin|african|yoruba|igbo|hausa|lagos/i.test(v.accent + ' ' + v.name)), pool_ = ng.filter(want).length ? ng.filter(want) : all.filter(want).length ? all.filter(want) : ng.length ? ng : all;
+    const same = STATION_IDS.flatMap(k => STATIONS[k].hosts).filter(h => h.gender === host.gender), i = same.indexOf(host);
+    return pool_.length ? pool_[Math.max(0, i) % pool_.length].id : (this.voiceKind() === 'fish' ? null : female ? 'EXAVITQu4vr4xnSDxMaL' : 'JBFqnCBsd6RMkjVDRZzb'); }
+  // a break with several presenters: each line in its own voice, joined into one clip
+  async speakLines(st, lines) { const parts = []; let bps = 0;
+    for (const l of lines) { const v = await this.voice(st, l.text, l.who); if (!v) return null; bps = v.bps; parts.push(parts.length ? stripId3(v.audio) : v.audio); }
+    return parts.length ? { audio: Buffer.concat(parts), bps } : null; }
+  async voice(st, text, host) {
+    host ||= STATIONS[st].hosts[0]; const sidekick = host.role === 'support';
     const speedOf = { pidgin: 1.06, yoruba: 1.02, igbo: 1, hausa: 0.94, english: 0.98 };
     if (this.voiceKind() === 'fish') {
       const q = await this.quota().catch(() => null); if (q && q.credit < 0.05) { console.log('radio voice: Fish Audio credit used up; text only'); return null; }
-      const ref = await this.voiceFor(st), body = { text: speakable(text), format: 'mp3', mp3_bitrate: 64, normalize: true, latency: 'normal', prosody: { speed: speedOf[st] || 1, volume: 0 } };
+      const ref = await this.voiceFor(st, host), body = { text: speakable(text), format: 'mp3', mp3_bitrate: 64, normalize: true, latency: 'normal', prosody: { speed: (speedOf[st] || 1) + (sidekick ? 0.04 : 0), volume: 0 } };
       if (ref) body.reference_id = ref;
       const r = await this.fish('/v1/tts', { method: 'POST', headers: { 'content-type': 'application/json', model: process.env.FISH_MODEL || 's2.1-pro' }, body: JSON.stringify(body) });
       if (this.qta) this.qta.credit -= Buffer.byteLength(body.text) / 1e6 * 15; return { audio: Buffer.from(await r.arrayBuffer()), bps: 64000 };
@@ -267,14 +316,14 @@ Do not reuse any joke, catchphrase, opening or sentence from your recent breaks.
     if (process.env.ELEVENLABS_API_KEY) {
       const words = speakable(text), q = await this.quota().catch(() => null);
       if (q && q.limit && q.used + words.length > q.limit - 300) { console.log('radio voice: ElevenLabs characters used up for this month; text only'); return null; }
-      const speed = { pidgin: 1.06, yoruba: 1.02, igbo: 1, hausa: 0.94, english: 0.98 }[st] || 1;
-      const r = await this.eleven(`/v1/text-to-speech/${await this.voiceFor(st)}?output_format=mp3_44100_64`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'audio/mpeg' },
-        body: JSON.stringify({ text: words, model_id: process.env.ELEVENLABS_MODEL || 'eleven_flash_v2_5', voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.35, use_speaker_boost: true, speed } }) });
+      const speed = Math.min(1.2, (speedOf[st] || 1) + (sidekick ? 0.04 : 0));
+      const r = await this.eleven(`/v1/text-to-speech/${await this.voiceFor(st, host)}?output_format=mp3_44100_64`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'audio/mpeg' },
+        body: JSON.stringify({ text: words, model_id: process.env.ELEVENLABS_MODEL || 'eleven_flash_v2_5', voice_settings: { stability: sidekick ? 0.3 : 0.4, similarity_boost: 0.8, style: sidekick ? 0.55 : 0.35, use_speaker_boost: true, speed } }) });
       if (this.qta) this.qta.used += words.length; return { audio: Buffer.from(await r.arrayBuffer()), bps: 64000 };
     }
     const S = STATIONS[st], esc = s => s.replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
     const rate = { pidgin: '+8%', yoruba: '+3%', igbo: '0%', hausa: '-6%', english: '-2%' }[st] || '0%';
-    const ssml = `<speak version="1.0" xml:lang="en-NG"><voice name="${process.env['AZURE_VOICE_' + st.toUpperCase()] || S.dj.voice}"><prosody rate="${rate}">${esc(speakable(text))}</prosody></voice></speak>`;
+    const ssml = `<speak version="1.0" xml:lang="en-NG"><voice name="${process.env['AZURE_VOICE_' + host.id.replace('.', '_').toUpperCase()] || (host === S.hosts[0] && process.env['AZURE_VOICE_' + st.toUpperCase()]) || (host.gender === 'female' ? 'en-NG-EzinneNeural' : 'en-NG-AbeoNeural')}"><prosody rate="${rate}">${esc(speakable(text))}</prosody></voice></speak>`;
     const r = await fetch(`https://${process.env.AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`, { method: 'POST',
       headers: { 'Ocp-Apim-Subscription-Key': process.env.AZURE_SPEECH_KEY, 'Content-Type': 'application/ssml+xml', 'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3', 'User-Agent': 'resurgence-radio' },
       body: ssml, signal: AbortSignal.timeout(25000) });
@@ -286,11 +335,11 @@ Do not reuse any joke, catchphrase, opening or sentence from your recent breaks.
   async now(on) {
     const now = Date.now(), stations = {};
     const T = await this.tracks();
-    for (const st of STATION_IDS) { const it = timeline(st, T.by[st], now), nx = timeline(st, T.by[st], it.end + 1); stations[st] = { kind: it.kind, start: it.start, end: it.end, title: it.title, next: nx.title }; }
+    for (const st of STATION_IDS) { const it = timeline(st, T.by[st], now), nx = timeline(st, T.by[st], it.end + 1), h = hostsOn(st, now); stations[st] = { kind: it.kind, start: it.start, end: it.end, title: it.title, next: nx.title, hosts: [h.lead.name, h.support.name], shiftEnds: h.until }; }
     let talk = []; const onAir = await this.onAir();
     if (STATIONS[on] && onAir.includes(on)) { await this.listen(on).catch(() => {});
-      talk = (await pool.query('select id, station, slot, at, kind, text, focus, dur, audio is not null has_audio from radio_talk where station = $1 and at > $2 and at < $3 order by at', [on, now - 120000, now + 10 * 60000])).rows
-        .map(r => ({ id: r.id, station: r.station, at: Number(r.at), kind: r.kind, text: r.text, focus: r.focus, dur: r.dur, audio: r.has_audio ? `/api/radio/voice/${r.id}` : null, dj: STATIONS[r.station].dj.name })); }
+      talk = (await pool.query('select id, station, slot, at, kind, text, focus, dur, dj, lines, audio is not null has_audio from radio_talk where station = $1 and at > $2 and at < $3 order by at', [on, now - 120000, now + 10 * 60000])).rows
+        .map(r => ({ id: r.id, station: r.station, at: Number(r.at), kind: r.kind, text: r.text, focus: r.focus, dur: r.dur, audio: r.has_audio ? `/api/radio/voice/${r.id}` : null, dj: r.dj || STATIONS[r.station].dj.name, lines: Array.isArray(r.lines) && r.lines.length > 1 ? r.lines.map(l => ({ name: l.name, text: l.text })) : null })); }
     return { serverNow: now, onAir, stations, talk, tracks: STATIONS[on] ? T.by[on] : undefined };
   }
 }
@@ -314,7 +363,7 @@ export function radioRoutes(app, { radio, admin, send, limit }) {
   // the ElevenLabs voices to choose from
   app.get('/api/admin/radio/voices', admin, send(async () => { if (!['fish', 'elevenlabs'].includes(radio.voiceKind())) throw new HttpError(400, 'Set FISH_API_KEY (or ELEVENLABS_API_KEY) on the server first.'); return { voices: await radio.voices(true) }; }));
   app.get('/api/admin/radio', admin, send(async () => ({ ...radio.status(), quota: ['fish', 'elevenlabs'].includes(radio.voiceKind()) ? await radio.quota(true).catch(e => ({ error: e.message })) : null, ...(await radio.config(true)), onAir: await radio.onAir(), listening: await radio.listening(),
-    recent: (await pool.query('select id, station, at, text, source, dur, audio is not null has_audio from radio_talk order by t desc limit 30')).rows.map(r => ({ ...r, at: Number(r.at) })) })));
+    recent: (await pool.query('select id, station, at, text, source, dur, dj, audio is not null has_audio from radio_talk order by t desc limit 30')).rows.map(r => ({ ...r, at: Number(r.at) })) })));
   // the developer's songs: upload (the file itself as the body; ?station, ?title, ?dur in seconds), list, edit, delete
   const AUDIO = { 'audio/mpeg': 1, 'audio/mp3': 1, 'audio/mp4': 1, 'audio/x-m4a': 1, 'audio/aac': 1, 'audio/ogg': 1, 'audio/webm': 1, 'audio/wav': 1, 'audio/x-wav': 1 };
   app.get('/api/admin/radio/tracks', admin, send(async () => { const T = await radio.tracks(true); return { tracks: T.all.map(r => ({ ...r, t: Number(r.t) })), bytes: T.all.reduce((s, r) => s + r.size, 0) }; }));
@@ -344,5 +393,5 @@ export function radioRoutes(app, { radio, admin, send, limit }) {
   // the developer: put a break on air now (to try a DJ out)
   app.post('/api/admin/radio/talk', admin, send(async req => { const st = String(req.body?.station || ''); if (!STATIONS[st]) throw new HttpError(400, 'Pick a station.');
     if (!(await radio.onAir()).includes(st)) throw new HttpError(400, `${STATIONS[st].name} is switched off. Switch it on first.`);
-    return radio.make(st, -1 - Math.floor(Math.random() * 2e9), Date.now() + 2500, { kind: 'live' }); })); // a break outside the song slots: its own (negative) number
+    return radio.make(st, -1 - Math.floor(Math.random() * 2e9), Date.now() + 2500, { kind: 'live', duo: typeof req.body?.duo === 'boolean' ? req.body.duo : undefined }); })); // a break outside the song slots: its own (negative) number
 }

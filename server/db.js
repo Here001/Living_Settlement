@@ -244,6 +244,8 @@ const MIGRATIONS = [
   `create table radio_tracks (id text primary key, station text not null, title text not null, dur real not null, mime text not null,
      size int not null, data bytea not null, enabled boolean not null default true, t bigint not null);
    create index radio_tracks_station on radio_tracks (station);`,
+  // v47: colony radio: who spoke in a break (the lead alone, or the lead and their sidekick) and their lines
+  `alter table radio_talk add column dj text, add column lines jsonb;`,
 ];
 
 export async function migrate() {

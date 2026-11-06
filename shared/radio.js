@@ -23,6 +23,26 @@ export const STATIONS = {
     dj: { name: 'Oga Gbedu', voice: 'en-NG-AbeoNeural', vibe: 'loud, hilarious street MC who speaks Nigerian Pidgin (Wetin dey happen, How far, E choke, No wahala, Na so, Omo); roasts people kindly, hypes races and gist' },
     words: ['No Wahala', 'Soft Life', 'Owo Dey', 'Enjoyment', 'Gbedu', 'E Choke', 'Jaiye', 'Wetin Dey', 'Small Small', 'Sharp Sharp', 'Body Dey Sweet', 'Colony Vibes', 'Steady', 'Na God'] },
 };
+// Each station has four presenters in two pairs that take turns on air (a 3-hour shift each). In a pair, the lead
+// runs the show and the support is the funny one: jokes about everything, hypes the lead up. Some breaks are the lead
+// alone, most are the two of them together. (dj above is the first pair's lead, used where one name is needed.)
+const H = (id, name, gender, role, vibe) => ({ id, name, gender, role, vibe });
+const FUNNY = 'the comic sidekick: always funny, full of humour, jokes about everything, quick comebacks and playful exaggeration; backs the lead up, compliments them, and never steals the show or insults anyone';
+STATIONS.yoruba.hosts = [H('yoruba.0', 'DJ Àyìnkẹ́', 'female', 'lead', STATIONS.yoruba.dj.vibe), H('yoruba.1', 'Kọ́lá', 'male', 'support', FUNNY + '; drops Yoruba expressions (Ehn!, Ó tì o!, Àṣẹ!) and calls her "Àyìnkẹ́ my sister"'),
+  H('yoruba.2', 'Bàbá Fẹ́mi', 'male', 'lead', 'warm, wise elder of the airwaves who loves old Jùjú stories; Yoruba proverbs and greetings in Nigerian English'), H('yoruba.3', 'Tòpẹ́', 'female', 'support', FUNNY + '; teases Bàbá Fẹ́mi about being "old school" with love')];
+STATIONS.igbo.hosts = [H('igbo.0', 'Uncle Obiora', 'male', 'lead', STATIONS.igbo.dj.vibe), H('igbo.1', 'Chioma', 'female', 'support', FUNNY + '; sassy, laughs loudly, says "Uncle, ehn!" and "Chineke!"'),
+  H('igbo.2', 'Nneka', 'female', 'lead', 'bright, sharp morning-show host, proud of her people, Igbo greetings (Ndewo, Kedu, Daalụ) in Nigerian English'), H('igbo.3', 'Emeka', 'male', 'support', FUNNY + '; always has a "business idea" for everything that happens')];
+STATIONS.hausa.hosts = [H('hausa.0', 'Malam Sani', 'male', 'lead', STATIONS.hausa.dj.vibe), H('hausa.1', 'Hauwa', 'female', 'support', FUNNY + '; quick, clever wordplay, says "Kai!" and "Haba Malam!"'),
+  H('hausa.2', 'Zainab', 'female', 'lead', 'graceful, calm evening host with a gentle sense of fun; Hausa greetings (Sannu, Barka da yamma, Na gode) in Nigerian English'), H('hausa.3', 'Danladi', 'male', 'support', FUNNY + '; dramatic storyteller who exaggerates everything')];
+STATIONS.english.hosts = [H('english.0', 'Tolu Waves', 'female', 'lead', STATIONS.english.dj.vibe), H('english.1', 'Big Dayo', 'male', 'support', FUNNY + '; big laugh, punny one-liners, calls her "the voice of the colony"'),
+  H('english.2', 'David Ace', 'male', 'lead', 'upbeat drive-time host, crisp colony news and race updates'), H('english.3', 'Lola Laughs', 'female', 'support', FUNNY + '; witty, sarcastic in a friendly way, loves roasting David\'s jokes')];
+STATIONS.pidgin.hosts = [H('pidgin.0', 'Oga Gbedu', 'male', 'lead', STATIONS.pidgin.dj.vibe), H('pidgin.1', 'Ada Wahala', 'female', 'support', FUNNY + '; speaks Nigerian Pidgin, hypes everything with "Ehen!", "I no fit shout!", "Na who dey breathe?"'),
+  H('pidgin.2', 'Madam Rita', 'female', 'lead', 'bold, no-nonsense Pidgin-speaking host who keeps the show moving'), H('pidgin.3', 'Bobo Chuks', 'male', 'support', FUNNY + '; speaks Nigerian Pidgin, cracks jokes about everything, always "hungry"')];
+export const SHIFT_MS = 3 * 3600e3;
+const SHIFT_OFF = { yoruba: 0, igbo: 1, hausa: 0, english: 1, pidgin: 0 }; // neighbouring stations swap at different times
+// the pair on air at time t, and when their shift ends
+export function hostsOn(station, t) { const k = Math.floor(t / SHIFT_MS), p = (k + (SHIFT_OFF[station] || 0)) % 2, Hs = STATIONS[station].hosts;
+  return { pair: p, lead: Hs[p * 2], support: Hs[p * 2 + 1], until: (k + 1) * SHIFT_MS }; }
 export const STATION_IDS = Object.keys(STATIONS);
 // Each station starts its slots at a different moment, so the stations don't all change song together.
 const OFFSET = { yoruba: 0, igbo: 37000, hausa: 74000, english: 111000, pidgin: 148000 };

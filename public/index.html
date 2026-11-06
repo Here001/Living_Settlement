@@ -1025,7 +1025,8 @@ const lvCache=new Map();
 function lvType(type,lv,slv){ const k=type+'|'+lv+'|'+slv; let r=lvCache.get(k); if(r) return r; const t=BUILDING_TYPES[type], cap=capacities(type,lv);
   r={...t, size:levelSize(type,slv), lv, ...(t.height?{height:Math.round(t.height*(1+0.12*(lv-1)))}:{}), ...(t.home?{home:{...t.home,capacity:cap.homeCap}}:{}), ...(t.work?{work:{...t.work,slots:cap.jobCap}}:{}), ...(t.leisure?{visitors:cap.hangCap}:{})};
   lvCache.set(k,r); return r; }
-const T = b => { let t=BUILDING_TYPES[b.type] || BUILDING_TYPES.tent; const lv=b.lv||1, slv=b.upAt?Math.min(MAX_LEVEL,lv+1):lv; if((lv>1||slv>1)&&BUILDING_TYPES[b.type]) t=lvType(b.type,lv,slv); return b.rot ? rotType(t) : t; };
+const SPOT_T={ name:'the spot you picked', cat:'nature', size:[1,1], outdoor:true, style:'house' }; // a trip to a tile the player picked ('spot:x,y')
+const T = b => { if(b.type==='spot') return SPOT_T; let t=BUILDING_TYPES[b.type] || BUILDING_TYPES.tent; const lv=b.lv||1, slv=b.upAt?Math.min(MAX_LEVEL,lv+1):lv; if((lv>1||slv>1)&&BUILDING_TYPES[b.type]) t=lvType(b.type,lv,slv); return b.rot ? rotType(t) : t; };
 const sizeOf = (type,rot) => footprint(BUILDING_TYPES[type].size, rot);
 function drawB(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>drawB(v,T(v))); }
   if(!b.rot){ (DRAW[t.style]||DRAW.house)(b,t); return; }
@@ -1135,6 +1136,7 @@ function centerTile(){ if(centerGen===planGen&&centerAt) return centerAt; center
   return centerAt = st ? [st.x+1,st.y+2] : fire ? [fire.x,fire.y] : [2,1]; }
 function placeFor(b, r, label){
   if(!b){ const [cx,cy]=centerTile(); const a=r()*Math.PI*2; const tx=Math.round(cx+Math.cos(a)*1.6), ty=Math.round(cy+Math.sin(a)*1.6); return { tile:[tx,ty], pos:[tx+0.5,ty+0.5], indoor:false, bid:null, name:label||'the collement' }; }
+  if(b.type==='spot'){ const tx=b.x, ty=b.y; return { tile:[tx,ty], pos:[tx+0.3+r()*0.4, ty+0.3+r()*0.4], indoor:false, bid:b.id, name:'the spot you picked' }; }
   const t=T(b), [w,d]=t.size;
   if(t.outdoor){
     let tx,ty;
@@ -1251,7 +1253,7 @@ function tripPlan(c, v){
   // they went. Without that, where their day would have them.
   const g0=gmAt(v[5]), g1=gmAt(v[4]), o=v[6], ob=o&&o.b&&D.buildings.get(o.b), walk=!!(o&&o.walk);
   const start=ob?placeFor(ob, rng(hash(c.id+'visit'))):o&&Number.isFinite(o.x)?{ tile:[Math.floor(o.x),Math.floor(o.y)], pos:[o.x,o.y], indoor:false, bid:null, name:'the street' }:placeOf(dayAt(c,g0));
-  const at=/^the /i.test(nm)?nm:`the ${nm}`, act=b.type==='jail'?'Locked up in the Jail':T(b).home?`Visiting ${nm}`:`At ${at}`, stopAt={...dest, name:at};
+  const at=/^the /i.test(nm)?nm:`the ${nm}`, act=b.type==='jail'?'Locked up in the Jail':b.type==='spot'?'Out and about':T(b).home?`Visiting ${nm}`:`At ${at}`, stopAt={...dest, name:at};
   const segs=[], out=tripLeg(c,start,stopAt,g0,walk&&kind==='go'?'walk':kind); let t=g0; if(out){ segs.push(out); t=out.to; }
   if(t<g1) segs.push({ type:'stay', from:t, to:g1, p:stopAt, act, kind:'leisure' });
   const back=placeOf(dayAt(c,g1)); const ret=tripLeg(c,stopAt,{...back,name:back.name||'home'},Math.max(g1,t),walk?'walk':'go'); if(ret){ ret.verb=ret.mode==='car'?(ret.V===VEHICLE_TYPES.taxi?'Taking a cab home':'Driving home'):'Walking home'; segs.push(ret); }
@@ -4727,7 +4729,7 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
     const dl=el('dl',null); dl.append(el('dt',{text:'Land price'}), el('dd',{text:q?`About ${fmt(q.perTile)} coins a tile, plus government charges (an 8×8 plot: about ${fmt(q.perTile*64)})`:'…'}), ...(q&&q.homes?[el('dt',{text:'Nearby buildings'}), el('dd',{text:`Worth about ${fmt(q.homeValue)} coins each`})]:[]),
       el('dt',{text:'Plot size'}), el('dd',{text:`${PLOT_MIN}×${PLOT_MIN} up to ${PLOT_MAX}×${PLOT_MAX} tiles, beside a road`}));
     if(q) dl.append(el('dt',{text:'You own'}), el('dd',{text:`${q.props} of ${q.max} properties`}));
-    card.append(dl, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🗺️ Buy land here',onclick:()=>this.markAt(x,y)})));
+    card.append(dl, goHereRow({ id:`spot:${x},${y}`, type:'spot', x, y, name:'the spot you picked' }), el('div',{class:'row-actions'}, el('button',{class:'btn',text:'🗺️ Buy land here',onclick:()=>this.markAt(x,y)})));
   },
   markAt(x,y){ try{ localStorage.setItem('land-tip-seen','1'); }catch(e){} document.querySelector('.landtip')?.remove(); closeCard();
     setTool({kind:'land',mark:true}); landSel={a:[x-1,y-1],b:[x+1,y+1],held:true,hint:true};
@@ -5398,7 +5400,7 @@ function goHereRow(b){ const me=myCitizen(), [w,d]=T(b).size, bx=b.x+w/2, by=b.y
   const go=dist!=null?tripFare(dist,own):{mode:'walk',fare:0}, ret=tripFare(back,own), fare=mine?go.fare:go.fare+ret.fare, mode=go.mode!=='walk'?go.mode:ret.mode;
   const how=mode==='car'?`🚗 ${fmt(fare)} fuel`:mode==='cab'?`🚕 ${fmt(fare)} cab fare`:'🚶 on foot, free';
   return el('div',{class:'row-actions gohere'}, here?el('span',{class:'badge ok',text:'📍 You’re here'}):
-    el('button',{class:'btn primary',text:mine?'🏠 Go home':'🚶 Go here',onclick:async()=>{ try{ const r=await api('/api/me/visit',{method:'POST',body:{buildingId:b.id}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
+    el('button',{class:'btn primary',text:mine?'🏠 Go home':'🚶 Go here',onclick:async()=>{ try{ const r=await api('/api/me/visit',{method:'POST',body:b.type==='spot'?{spot:{x:b.x,y:b.y}}:{buildingId:b.id}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
         toast((mine?'Heading home.':`On your way to ${name}.`)+(r.fare?` ${r.mode==='cab'?'🚕 Cab fare':'🚗 Fuel'}: ${fmt(r.fare)} coins.`:r.mode==='walk'&&fare>0?' Walking (not enough cash for the ride).':'')); Watch.start(0, mine?'Heading home':`Going to ${name}`, b.id); }catch(e){ toast(e.message); } }}),
     dist!=null&&!here?el('span',{class:'hint',text:`${dist<=1?'right next to you':miles(dist)+' away'} · ${how}`}):''); }
 

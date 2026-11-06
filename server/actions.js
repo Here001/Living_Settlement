@@ -86,6 +86,7 @@ export class Actions {
   async sceneOf(db, v, where) {
     const at = async id => id ? (await db.query('select id, x, y, type, name from buildings where id = $1', [id])).rows[0] : null;
     const now = Date.now(), visiting = v.visit_id && Number(v.visit_until || 0) > now && Number(v.visit_from || 0) <= now;
+    if (visiting && /^spot:/.test(v.visit_id)) { const [x, y] = String(v.visit_id).slice(5).split(',').map(Number); return { x, y, name: 'the street' }; } // out on foot somewhere
     const b = (visiting && await at(v.visit_id)) || (where === 'work' && await at(v.job_id)) || (where === 'out' && await at(v.hang_id)) || await at(v.home_id);
     return b ? { x: b.x, y: b.y, name: b.name || BUILDING_TYPES[b.type]?.name || 'town' } : { x: v.hx, y: v.hy, name: 'town' };
   }
@@ -189,17 +190,23 @@ export class Actions {
     if (!c) throw new HttpError(404, 'No such citizen.'); if (!c.home_id) return { housed: false, places: [] };
     const rows = (await pool.query(`select id, type, name, x, y from buildings where type = any($3) and done and not ruin
       order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 15`, [c.hx, c.hy, VISITABLE])).rows;
-    const v = c.visit_id && Number(c.visit_until) > Date.now() ? (await pool.query('select id, type, name from buildings where id = $1', [c.visit_id])).rows[0] : null;
+    const v = c.visit_id && Number(c.visit_until) > Date.now() ? (/^spot:/.test(c.visit_id) ? { id: c.visit_id, type: 'spot', name: 'a spot you picked on the map' } : (await pool.query('select id, type, name from buildings where id = $1', [c.visit_id])).rows[0]) : null;
     return { housed: true, jailed: Number(c.jailed_until || 0) > Date.now(), visiting: v ? { id: v.id, name: nameOf(v), until: Number(c.visit_until) } : null,
       places: rows.map(b => ({ id: b.id, name: nameOf(b), type: b.type, dist: Math.abs(b.x - c.hx) + Math.abs(b.y - c.hy) })) };
   }
   // Send the colonist to a place, or to a friend's home (by username). null ends the visit.
-  async visit(id, { buildingId, friend }) {
+  // `spot` {x, y}: any tile on the map (a patch of grass, a street corner); they go there, stay a while, and come back.
+  async visit(id, { buildingId, friend, spot }) {
     return this.world.change(async ch => {
       const { c } = await this.load(ch, id);
-      if (!buildingId && !friend) { await this.setVisit(ch, c, null); return { ok: true, home: true }; }
+      if (!buildingId && !friend && !spot) { await this.setVisit(ch, c, null); return { ok: true, home: true }; }
       let b, label;
-      if (friend) {
+      if (spot) {
+        const x = Math.trunc(Number(spot.x)), y = Math.trunc(Number(spot.y));
+        if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 100000 || Math.abs(y) > 100000) throw new HttpError(400, 'Bad spot.');
+        if ((await ch.q('select 1 from water where x = $1 and y = $2', [x, y])).rowCount) throw new HttpError(400, "That's water: pick a spot on dry land.");
+        const [cx, cy] = R.chunkOf(x, y); b = { id: `spot:${x},${y}`, type: 'spot', x, y, cx, cy }; label = 'that spot';
+      } else if (friend) {
         const f = (await ch.q('select c.handle, h.* from citizens c join buildings h on h.id = c.home_id where lower(c.handle) = lower($1)', [R.cleanHandle(friend)])).rows[0];
         if (!f) throw new HttpError(404, `@${R.cleanHandle(friend)} doesn't have a home yet.`);
         if (f.handle.toLowerCase() === c.handle.toLowerCase()) throw new HttpError(400, "That's your own home.");

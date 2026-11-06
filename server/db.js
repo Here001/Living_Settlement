@@ -5,8 +5,11 @@ import { capacities } from '../shared/rules.js';
 // Postgres returns bigint as text by default; our bigints are timestamps and sequence numbers that fit in a JS number.
 pg.types.setTypeParser(20, v => Number(v));
 
+// sslmode=require (what Neon gives you) already means "check the certificate fully" in this version of pg; it's
+// spelled out as verify-full so the connection stays exactly as safe when pg changes what "require" means.
+const dbUrl = (process.env.DATABASE_URL || '').replace(/([?&]sslmode=)(require|prefer|verify-ca)\b/, process.env.PGSSL === '1' ? '$1$2' : '$1verify-full');
 export const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: dbUrl || undefined,
   ssl: process.env.PGSSL === '1' ? { rejectUnauthorized: false } : undefined,
   max: Number(process.env.PG_POOL_SIZE || 8),
   idleTimeoutMillis: 10000,

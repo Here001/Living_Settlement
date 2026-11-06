@@ -1651,6 +1651,51 @@ const glowCache=new Map();
 function glowSprite(col){ let c=glowCache.get(col); if(c) return c; c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d');
   const gr=g.createRadialGradient(64,64,0,64,64,64); gr.addColorStop(0,`rgba(${col},1)`); gr.addColorStop(1,`rgba(${col},0)`); g.fillStyle=gr; g.fillRect(0,0,128,128); glowCache.set(col,c); return c; }
 function star(x,y,r){ ctx.beginPath(); for(let i=0;i<10;i++){ const a=i*Math.PI/5-Math.PI/2, rr=i%2?r*0.45:r; ctx.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); } ctx.closePath(); ctx.fill(); }
+/* ---- Neon name signs: police, fire, hospitals, casinos, banks, towers, stadiums, landmarks and the like carry a glowing
+   name tag with an icon above them, so they're easy to find on the map. The tags are drawn at screen size (readable at any
+   zoom); zoomed out only the biggest places keep theirs, and tags never overlap (the dearer building wins). Each tag is drawn
+   once into a small picture and reused every frame. */
+const NEON_KIND = [ // [test on the type, icon, colour]
+  [/^(police|policeplaza|commissariat|dispatch)$/,'🚓','#4FA8FF'], [/^(jail|prison)$/,'⛓️','#FF9F43'], [/^(fire|firetower|firehq)$/,'🚒','#FF4B3A'],
+  [/^(clinic|hospital|ambulance|pharmacy)$/,'🏥','#38E58C'], [/^(school|openschool|college|university|kindergarten)$/,'🎓','#FFD53D'], [/^library$/,'📚','#FFD53D'],
+  [/^postoffice$/,'📮','#FF6B6B'], [/^(townhall|cityhall|parliament|courthouse)$/,'🏛️','#C69CFF'], [/^embassy$/,'🏳️','#C69CFF'], [/^busdepot$/,'🚌','#3FD8FF'],
+  [/^trainstation$/,'🚆','#3FD8FF'], [/^coastguard$/,'⚓','#3FD8FF'], [/^baths$/,'♨️','#7FE3FF'], [/casino/,'🎰','#FF3FB4'], [/^(gamehouse|gamearena|arcade)$/,'🎮','#A77BFF'],
+  [/mall|deptstore/,'🛍️','#FF7AD9'], [/^cinema$/,'🎬','#FF5577'], [/^hotel$/,'🏨','#FFB347'], [/^cardealer$/,'🚗','#4FE0D0'], [/^petstore$/,'🐾','#FFB347'],
+  [/^(supermarket|markethall)$/,'🛒','#7CFF6B'], [/bank$/,'🏦','#FFD700'], [/stadium|^football$/,'🏟️','#7CFF6B'], [/racetrack/,'🏁','#FF5A5A'], [/^gym$/,'💪','#FF8A3D'],
+  [/^(cathedral|chapel)$/,'⛪','#FFE08A'], [/^museum$/,'🖼️','#FFC46B'], [/^opera$/,'🎭','#FF7AD9'], [/^observatory$/,'🔭','#9FB8FF'], [/^castle$/,'🏰','#FFC46B'],
+  [/^lighthouse$/,'🗼','#FFE08A'], [/^ferris$/,'🎡','#FF7AD9'], [/^tvtower$/,'📡','#5CE1FF'], [/^(powerplant|chp)$/,'⚡','#FFE53D'], [/^(waterworks|sewageplant)$/,'💧','#5CC8FF'],
+];
+const NEON_CAT = { offices:['🏢','#5CE1FF',10000], industry:['🏭','#FFA24C',30000], landmarks:['📍','#FFB347',4000], parks:['🏟️','#7CFF6B',9000], services:['🏛️','#C69CFF',0], shops:['🏪','#FF7AD9',6000], utilities:['⚡','#6BE7FF',8000], housing:['🏙️','#5CE1FF',90000] };
+const neonCache=new Map(), neonList=[];
+function neonOf(type){ if(neonCache.has(type)) return neonCache.get(type); const t=BUILDING_TYPES[type]; let out=null;
+  if(t&&t.cat!=='decor'&&t.cat!=='nature'&&t.cat!=='roads'){ const k=NEON_KIND.find(([re])=>re.test(type)), c=NEON_CAT[t.cat];
+    if(k) out={icon:k[1],col:k[2],cost:Math.max(40000,t.cost||0)}; else if(c&&(t.cost||0)>=c[2]) out={icon:c[0],col:c[1],cost:t.cost||0}; } /* named places (police, fire, casino…) count as big ones, so they keep their sign zoomed out */
+  neonCache.set(type,out); return out; }
+const neonSprites=new Map();
+function neonSprite(text,icon,col){ const key=text+'|'+icon+'|'+col+'|'+dpr; let s=neonSprites.get(key); if(s) return s;
+  if(neonSprites.size>400) neonSprites.clear();
+  const fnt='800 11.5px system-ui,-apple-system,sans-serif', ifnt='12px system-ui,"Apple Color Emoji","Segoe UI Emoji",sans-serif', m=document.createElement('canvas').getContext('2d');
+  m.font=fnt; const tw=Math.ceil(m.measureText(text).width), w=tw+38, h=24, pad=8, c=document.createElement('canvas'); c.width=Math.ceil((w+pad*2)*dpr); c.height=Math.ceil((h+pad*2+6)*dpr);
+  const g=c.getContext('2d'); g.scale(dpr,dpr); g.translate(pad,pad);
+  const rr=(x,y,W,H,r)=>{ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+W,y,x+W,y+H,r); g.arcTo(x+W,y+H,x,y+H,r); g.arcTo(x,y+H,x,y,r); g.arcTo(x,y,x+W,y,r); g.closePath(); };
+  g.fillStyle='rgba(16,12,34,.86)'; rr(0,0,w,h,h/2); g.fill(); /* the little pointer under the sign */
+  g.beginPath(); g.moveTo(w/2-5,h); g.lineTo(w/2,h+6); g.lineTo(w/2+5,h); g.closePath(); g.fill();
+  g.shadowColor=col; g.shadowBlur=7; g.strokeStyle=col; g.lineWidth=1.6; rr(0.8,0.8,w-1.6,h-1.6,(h-1.6)/2); g.stroke();
+  g.font=ifnt; g.textAlign='center'; g.textBaseline='middle'; g.shadowBlur=0; g.fillText(icon,14,h/2+0.5);
+  g.font=fnt; g.textAlign='left'; g.shadowColor=col; g.shadowBlur=6; g.fillStyle=col; g.fillText(text,26,h/2+0.5); g.shadowBlur=2; g.fillStyle='rgba(255,255,255,.92)'; g.fillText(text,26,h/2+0.5);
+  s={c,w:w+pad*2,h:h+pad*2+6,bw:w,bh:h+6,pad}; neonSprites.set(key,s); return s; }
+function drawNeonTags(selB){ if(!neonList.length) return; const z=cam.z, minCost=z<0.3?1e9:z<0.45?40000:z<0.7?9000:z<1?3000:0;
+  const tags=[]; for(const b of neonList){ const n=neonOf(b.type), isSel=selB&&selB.id===b.id; if(!isSel&&n.cost<minCost) continue; const t=T(b), [w,d]=t.size, p=iso(b.x+w/2,b.y+d/2), top=Math.min(160,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24));
+    const sx=(p.x-cam.x)*z+cw/2+shake.x, sy=(p.y-top-cam.y)*z+ch/2+shake.y-8; if(sx<-120||sx>cw+120||sy<-30||sy>ch+60) continue;
+    let name=b.name||t.name; if(name.length>26) name=name.slice(0,25)+'…'; tags.push({b,n,sx,sy,name,pri:isSel?1e12:n.cost+(b.name?1:0)}); }
+  if(!tags.length) return; tags.sort((a,b)=>b.pri-a.pri); ctx.setTransform(dpr,0,0,dpr,0,0); const placed=[]; let drawn=0;
+  const hits=r=>placed.some(q=>r[0]<q[2]&&r[2]>q[0]&&r[1]<q[3]&&r[3]>q[1]);
+  for(const g of tags){ if(drawn>=60) break; const S0=neonSprite(g.name,g.n.icon,g.n.col), x0=g.sx-S0.bw/2; let r=null, y0=0;
+    /* where a sign would cover one already placed, it tries a step or two higher before giving up */
+    for(const lift of [0,28,56]){ y0=g.sy-S0.bh-lift; const rr=[x0-2,y0-2,x0+S0.bw+2,y0+S0.bh+2]; if(g.pri>=1e12||!hits(rr)){ r=rr; break; } }
+    if(!r) continue; placed.push(r); drawn++;
+    ctx.drawImage(S0.c, x0-S0.pad, y0-S0.pad, S0.w, S0.h); }
+  worldT(); }
 function label(text, x, y, strong){ const k=Math.min(1,1.25/cam.z); if(k<1){ ctx.save(); ctx.translate(x,y); ctx.scale(k,k); label0(text,0,0,strong); ctx.restore(); return; } label0(text,x,y,strong); }
 function label0(text, x, y, strong){ ctx.font=`${strong?700:600} 11px "Bricolage Grotesque",system-ui,sans-serif`; const w=ctx.measureText(text).width+12; ctx.fillStyle=strong?'rgba(31,45,38,.92)':'rgba(251,252,247,.92)'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x-w/2,y-16,w,17,8) : ctx.rect(x-w/2,y-16,w,17); ctx.fill(); ctx.fillStyle=strong?'#FBFCF7':'#1F2D26'; ctx.textAlign='center'; ctx.fillText(text,x,y-4); ctx.textAlign='start'; }
 
@@ -2976,8 +3021,11 @@ function drawFrame(ts){
   const wx=S.meta?weatherAt(S.meta,gm):'sunny'; if(wx!=='sunny') drawWeather(wx,gm); if(wx!==lastWx){ lastWx=wx; refreshHUD(); }
   if(GRAIN&&Quality.grain){ ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=GRAIN; ctx.fillRect(0,0,cw,ch); worldT(); }
   if(tool.kind==='water'||tool.kind==='drain'){ if(hoverTile){ const [hx,hy]=hoverTile, r=Math.floor((tool.size||1)/2); poly([iso(hx-r,hy-r),iso(hx-r+(tool.size||1),hy-r),iso(hx-r+(tool.size||1),hy-r+(tool.size||1)),iso(hx-r,hy-r+(tool.size||1))],'rgba(255,255,255,.25)','#fff',2); } }
+  neonList.length=0;
   for(const b of D.buildings.values()){ if(b.done===false && cam.z>=0.6){ const t=T(b); const [w,d]=t.size; const p=iso(b.x+w/2,b.y+d/2); label(`Building ${Math.round(progressOf(b)*100)}%`, p.x, p.y-Math.min(120,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24))*Math.max(.3,progressOf(b))-18, selB&&selB.id===b.id); continue; }
+    if(!b.ruin&&neonOf(b.type)){ neonList.push(b); continue; }
     if(!b.name && !(selB&&selB.id===b.id)) continue; if(cam.z<0.8 && !(selB&&selB.id===b.id)) continue; const t=T(b); const [w,d]=t.size; const p=iso(b.x+w/2,b.y+d/2); label(b.name||t.name, p.x, p.y-Math.min(120,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24))-14, selB&&selB.id===b.id); }
+  drawNeonTags(selB);
   if(sel&&sel.kind==='c'){ const st=states.get(sel.id); if(st&&!st.visible&&st.bid){ const c=S.citizens.get(sel.id); const tup=[c.home,c.job,c.hang].find(p=>p&&p[0]===st.bid); const b=D.buildings.get(st.bid)||(tup&&bOf(tup)); if(b){ const t=T(b); const [w,d]=t.size; const p=iso(b.x+w/2,b.y+d/2); const top=p.y-Math.min(140,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24))-16; const bob=Math.sin(T_NOW/300)*2; ctx.fillStyle='#D9714A'; ctx.strokeStyle=INK; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(p.x-6,top-4+bob); ctx.lineTo(p.x+6,top-4+bob); ctx.lineTo(p.x,top+5+bob); ctx.closePath(); ctx.fill(); ctx.stroke(); label(`@${c.handle} is inside`, p.x, top-6+bob, true); } } }
   // Name tags: the selected person and the founder always; others only when zoomed in, nearest the centre first, never overlapping.
   { const placed=[], tags=[]; for(const [id,st] of states){ if(!st.visible||st.car) continue; const c=S.citizens.get(id); const isSel=sel&&sel.kind==='c'&&sel.id===id; const p=iso(st.x,st.y);

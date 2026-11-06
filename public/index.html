@@ -2438,7 +2438,7 @@ function drawLevelExtras(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(
   if(lv>=5){ const c={x:roof.x+8,y:roof.y-16}, glow=LAMPS>0?1:0.75; ctx.save(); ctx.globalAlpha=glow; ctx.fillStyle='#F2C94C'; ctx.strokeStyle=INK; ctx.lineWidth=0.9; ctx.beginPath();
     for(let i=0;i<10;i++){ const r=i%2?2.6:6.2, a=-Math.PI/2+i*Math.PI/5; ctx.lineTo(c.x+r*Math.cos(a),c.y+r*Math.sin(a)); } ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); } }
 // Land colonists own: a tinted patch with a dashed edge and a post at each corner (yours in orange), and the owner's name close up.
-function drawPlots(x0,x1,y0,y1){ if(!D.plots.size) return; const me=Me&&Me.handle?Me.handle.toLowerCase():null;
+function drawPlots(x0,x1,y0,y1){ if(sel&&sel.kind==='g'){ const {x,y}=sel; poly([iso(x,y),iso(x+1,y),iso(x+1,y+1),iso(x,y+1)],'rgba(255,255,255,.35)','#3F8A4E',2.5); } if(!D.plots.size) return; const me=Me&&Me.handle?Me.handle.toLowerCase():null;
   for(const p of D.plots.values()){ if(p.x+p.w<x0-1||p.x>x1+1||p.y+p.d<y0-1||p.y>y1+1) continue; const mine=me&&p.owner&&p.owner.toLowerCase()===me, on=sel&&sel.kind==='p'&&sel.id===p.id;
     const q=[iso(p.x,p.y),iso(p.x+p.w,p.y),iso(p.x+p.w,p.y+p.d),iso(p.x,p.y+p.d)]; poly(q, mine?'rgba(228,87,46,.13)':'rgba(255,248,230,.16)', false);
     ctx.save(); ctx.setLineDash(on?[]:[7,5]); poly(q,false,mine?'#E4572E':'#F4EDE0',on?3:1.6); ctx.restore();
@@ -2831,6 +2831,8 @@ function tap(sx,sy){
   for(const h of vehicleHits){ const p=iso(h.st.x,h.st.y); const sp={ x:(p.x-cam.x)*cam.z+cw/2, y:(p.y-6-cam.y)*cam.z+ch/2 }; if(Math.hypot(sp.x-sx,sp.y-sy)<16*Math.max(1,cam.z*0.8)){ sel={kind:'v',id:h.id}; follow=null; renderCard(); return; } }
   const id=D.occ.get(x+','+y); if(id){ selectBuilding(id); return; }
   const pid=D.plotOcc.get(x+','+y); if(pid){ sel={kind:'p',id:pid}; follow=null; renderCard(); return; }
+  // Empty grass: with nothing open, a signed-in player gets a card to buy land right here (a tap with a card open just closes it).
+  if(!sel&&!Store.canWrite&&Me&&Me.token&&!D.roads.has(x+','+y)&&!D.water.has(x+','+y)&&!draftOn){ sel={kind:'g',id:x+','+y,x,y}; follow=null; renderCard(); return; }
   closeCard();
 }
 async function placeBuilding(type,x,y){ const t=BUILDING_TYPES[type];
@@ -4718,12 +4720,23 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
       el('div',{class:'tiphand',text:'👆'}),
       el('button',{class:'btn primary',text:'Got it',onclick:()=>{ try{ localStorage.setItem('land-tip-seen','1'); }catch(e){} box.remove(); }}));
     document.body.append(box); },
+  // The card for a patch of empty grass: what land costs here, and a button to start marking a plot on this spot.
+  grassCard(card, close){ const {x,y}=sel, k=x+','+y, q=this.grassQ&&this.grassQ.k===k?this.grassQ.q:null;
+    if(!q&&!(this.grassQ&&this.grassQ.k===k)){ this.grassQ={k,q:null}; api(`/api/land/quote?x=${x}&y=${y}&w=2&d=2`).then(r=>{ if(this.grassQ&&this.grassQ.k===k) this.grassQ.q=r; }).catch(()=>{}).finally(()=>{ if(sel&&sel.kind==='g'&&sel.id===k) renderCard(true); }); }
+    card.append(close, el('div',{class:'chead'}, el('div',{class:'cthumb plotthumb',text:'🌱'}), el('div',null, el('h2',{text:'Empty land'}), el('p',{class:'now',text:q&&q.where?q.where[0].toUpperCase()+q.where.slice(1):'Open grass'}))));
+    const dl=el('dl',null); dl.append(el('dt',{text:'Land price'}), el('dd',{text:q?`About ${fmt(q.perTile)} coins a tile, plus government charges`:'…'}),
+      el('dt',{text:'Plot size'}), el('dd',{text:`${PLOT_MIN}×${PLOT_MIN} up to ${PLOT_MAX}×${PLOT_MAX} tiles, beside a road`}));
+    if(q) dl.append(el('dt',{text:'You own'}), el('dd',{text:`${q.props} of ${q.max} properties`}));
+    card.append(dl, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🗺️ Buy land here',onclick:()=>this.markAt(x,y)})));
+  },
+  markAt(x,y){ try{ localStorage.setItem('land-tip-seen','1'); }catch(e){} document.querySelector('.landtip')?.remove(); closeCard();
+    setTool({kind:'land',mark:true}); landSel={a:[x-1,y-1],b:[x+1,y+1],held:true,hint:true};
+    const q=iso(x+0.5,y+0.5); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.4); follow=null;
+    toast(`Drag over the grass to mark your plot, ${PLOT_MIN}×${PLOT_MIN} up to ${PLOT_MAX}×${PLOT_MAX}, beside a road.`); },
   tapLand(sx,sy,x,y){ const now=performance.now(), L=this.lastTap; this.lastTap={t:now,sx,sy};
     if(tool.mark){ return; }
     if(!(L&&now-L.t<400&&Math.hypot(sx-L.sx,sy-L.sy)<36)) return; this.lastTap=null; document.querySelector('.landtip')?.remove(); try{ localStorage.setItem('land-tip-seen','1'); }catch(e){}
-    tool.mark=true; landSel={a:[x-1,y-1],b:[x+1,y+1],held:true,hint:true}; setTool(tool);
-    const q=iso(x+0.5,y+0.5); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.4); follow=null;
-    toast(`Now drag over the grass to mark your plot, ${PLOT_MIN}×${PLOT_MIN} up to ${PLOT_MAX}×${PLOT_MAX}.`); },
+    this.markAt(x,y); },
   async quote(r){ const bad=landProblem(r); if(bad){ toast(bad+'. Try another spot.'); return; }
     let q; try{ q=await api(`/api/land/quote?x=${r.x}&y=${r.y}&w=${r.w}&d=${r.d}`); }catch(e){ toast(e.message); return; }
     showAbove(r.x,r.y,r.w,r.d,0); landSel={a:[r.x,r.y],b:[r.x+r.w-1,r.y+r.d-1],held:true}; const {box,close,wrap}=sheetBox(`🗺️ Buy this land`,'dock'); wrap.onClose=()=>{ if(landSel&&landSel.held) landSel=null; }; const nm=el('input',{type:'text',maxlength:'30',placeholder:'Name it (optional)','aria-label':'Plot name'});
@@ -5104,6 +5117,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
         if(c.claimed) card.append(giftBox(c.handle)); else card.append(el('p',{class:'hint',text:`@${c.handle} hasn't verified their avatar yet, so they can't receive gifts.`})); }
       else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}))); }
   } else if(sel.kind==='p'){ Plots.card(card, close);
+  } else if(sel.kind==='g'){ Plots.grassCard(card, close);
   } else if(sel.kind==='v'){ const v=D.vehicles.get(sel.id); if(!v){ closeCard(); return; } const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car;
     const head=el('div',{class:'chead'}); head.append(el('img',{class:'cthumb',alt:'',src:vehicleThumb(v.type)}), el('div',null, el('h2',{text:V.name}), el('p',{class:'now',text:'Driving around the neighbourhood'})));
     card.append(close, head); if(Store.canWrite) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:'Remove vehicle',onclick:async()=>{ if(draftOn){ draftEdit(`removing a ${V.name.toLowerCase()}`,d=>{ if(isDraftId(v.id)) d.vehicles=d.vehicles.filter(q=>q.tid!==v.id); else d.removeVehicles.push(v.id); }); closeCard(); return; } try{ await api('/api/admin/vehicles/'+encodeURIComponent(v.id),{method:'DELETE'}); closeCard(); toast(`Removed the ${V.name.toLowerCase()}`); }catch(e){ toast(e.message); } }})));
@@ -5869,7 +5883,7 @@ let cardTimer=null; const cardSoon=()=>{ clearTimeout(cardTimer); cardTimer=setT
 function refreshCardLive(){ if(!sel) return;
   if(sel.kind==='c'){ const c=S.citizens.get(sel.id), p=document.querySelector('#card .chead .now'); if(c&&p){ p.textContent=cardNow(c, detail.get(c.id)); return; } }
   else if(sel.kind==='b'){ const b=S.buildings.get(sel.id); if(b&&b.done!==false&&!b.ruin&&!b.upAt) return; }
-  else if(sel.kind==='p') return;
+  else if(sel.kind==='p'||sel.kind==='g') return;
   renderCard(); }
 setInterval(()=>{ if(document.hidden) return; feedDirty=true; renderFeed(); refreshCardLive(); if(activeTab==='people'&&document.activeElement!==$('search')) renderPeople(); refreshHUD(); },4000);
 // The second line at the top is a news flash: when something new happens in the colony (a race winner, an event, an arrest…)

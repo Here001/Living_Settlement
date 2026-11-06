@@ -3327,6 +3327,17 @@ const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
     box.append(det, el('p',{class:'hint warn',text:'Don’t use the same stream key in OBS and the cloud streamer at the same time: a platform takes one feed per key. Switch that destination off below while OBS uses it.'}));
     return box; },
   // each station's songs: upload MP3s, switch them on and off, rename, delete
+  // Can this browser play the song the way listeners will? Says exactly what's wrong if not.
+  async testSong(t,btn){ btn.disabled=true; btn.textContent='Testing…'; const done=(msg,ok)=>{ btn.disabled=false; btn.textContent='Test'; toast(msg); if(!ok) console.warn('song test:',msg); };
+    try{ const r=await api('/api/radio?on='+t.station), tr=(r.tracks||[]).find(x=>x.id===t.id); if(!tr) return done('This song is switched off, or its station is off air.',false);
+      const url=tr.url, own=url.startsWith('/');
+      try{ const res=await fetch(url,{headers:{Range:'bytes=0-1'},mode:'cors',cache:'no-store'}); if(!res.ok) return done(`🚫 The file isn’t there (error ${res.status}). Check R2_PUBLIC_URL in Render, and that the custom domain says Active in the bucket’s settings.`,false); }
+      catch(e){ if(own) return done('🚫 The game server couldn’t send the file.',false);
+        const reach=await fetch(url,{mode:'no-cors',cache:'no-store'}).then(()=>true,()=>false);
+        return done(reach?'🚫 Blocked by the bucket’s CORS policy. In Cloudflare: R2 → resurgence-music → Settings → CORS policy, paste the policy from the README (AllowedOrigins https://playresurgence.com) and save.':`🚫 Can’t reach ${new URL(url).host}. Check the custom domain is connected and Active in the bucket’s settings, and R2_PUBLIC_URL in Render.`,false); }
+      const ok=await new Promise(res=>{ const a=new Audio(); a.crossOrigin='anonymous'; a.preload='auto'; const tm=setTimeout(()=>res(false),10000); a.oncanplay=()=>{ clearTimeout(tm); res(true); }; a.onerror=()=>{ clearTimeout(tm); res(false); }; a.src=url; a.load(); });
+      done(ok?`✅ Plays fine${own?' (from the database)':' (from Cloudflare)'}.`:'🚫 The file loads but this browser can’t play it. Try exporting it again as MP3.',ok); }
+    catch(e){ done(e.message,false); } },
   async refreshSongs(){ try{ this.trk=await api('/api/admin/radio/tracks'); }catch(e){} this.renderNow(); },
   songSt:'yoruba', songs(){ const box=el('div',{class:'authbox ssongs'}), L=this.trk; box.append(el('h3',{text:'🎵 Radio songs'}));
     if(!L){ box.append(el('p',{class:'hint',text:'Loading…'})); api('/api/admin/radio/tracks').then(r=>{ this.trk=r; this.renderNow(); }).catch(e=>toast(e.message)); return box; }
@@ -3343,7 +3354,8 @@ const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
       art.onchange=()=>api(`/api/admin/radio/tracks/${t.id}`,{method:'PATCH',body:{artist:art.value}}).then(()=>{ t.artist=art.value; toast('Artist saved.'); }).catch(e=>toast(e.message));
       let armed=false; const del=el('button',{class:'btn sm',text:'Delete',onclick:async()=>{ if(!armed){ armed=true; del.textContent='Delete it?'; setTimeout(()=>{ armed=false; del.textContent='Delete'; },3000); return; }
         try{ await api(`/api/admin/radio/tracks/${t.id}`,{method:'DELETE'}); this.refreshSongs(); }catch(e){ toast(e.message); } }});
-      box.append(el('div',{class:'strk'+(t.enabled?'':' off')}, name, art, el('span',{class:'hint',text:`${mmss(t.dur)} · ${t.in_db?'💾 '+mb(t.size):'☁️'}`,title:t.in_db?'Stored in the database':'In Cloudflare R2'}),
+      const test=el('button',{class:'btn sm',text:'Test',onclick:()=>this.testSong(t,test)});
+      box.append(el('div',{class:'strk'+(t.enabled?'':' off')}, name, art, test, el('span',{class:'hint',text:`${mmss(t.dur)} · ${t.in_db?'💾 '+mb(t.size):'☁️'}`,title:t.in_db?'Stored in the database':'In Cloudflare R2'}),
         uiSwitch(t.enabled,v=>api(`/api/admin/radio/tracks/${t.id}`,{method:'PATCH',body:{enabled:v}}).then(()=>{ t.enabled=v; this.renderNow(); }).catch(e=>toast(e.message)),'Play this song'), del)); }
     const inDb=L.tracks.filter(t=>t.in_db).length;
     box.append(el('p',{class:'jobnow',text:L.r2?`☁️ Songs are stored in Cloudflare R2 and play straight from Cloudflare (${mb(L.cloudBytes||0)} so far, 10 GB free).`:'💾 Songs are stored in the database. For a big catalogue, set up Cloudflare R2 (see the README): songs then play from Cloudflare and the database stays small.'}));
@@ -5413,7 +5425,7 @@ const Radio={ player:null, st:null, info:null, played:new Set(), timer:null, onA
     if(!ok) await new Promise(res=>{ this.player.setDuck(true); setTimeout(()=>{ this.player.setDuck(false); res(); },Math.max(1,t.dur-off)*1000); }); // no voice yet: the words show on screen
     if(this.onAir===t){ this.onAir=null; this.bubble(null); this.paint(); } },
   stationName(st=this.st){ const S0=STATIONS[st]; return S0?`${S0.name} ${S0.freq}`:''; },
-  nowTitle(){ const s0=this.song&&this.st?this.song:null; return s0?s0.title+(s0.artist?` · ${s0.artist}`:''):(this.info&&this.st?this.info.stations[this.st].title:''); },
+  nowTitle(){ const s0=this.song&&this.st?this.song:null; if(s0&&s0.stoodIn) return `${s0.title} (filling in: “${s0.stoodIn}” couldn’t load)`; return s0?s0.title+(s0.artist?` · ${s0.artist}`:''):(this.info&&this.st?this.info.stations[this.st].title:''); },
   // what the DJ is saying, for players who aren't looking at the radio
   bubble(t){ if(STREAM) return; let b=$('djBubble'); if(!t){ if(b) b.remove(); return; }
     if(!b){ b=el('button',{id:'djBubble',class:'inked',onclick:()=>{ b.remove(); }}); document.body.append(b); }

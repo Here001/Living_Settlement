@@ -287,18 +287,26 @@ export class RadioPlayer {
     // two audio elements take turns, so the next song can load while this one plays
     this.tbus = this.ctx.createGain(); this.tbus.gain.value = 0; this.tbus.connect(this.master); this.els = []; this.cur = 0; this.failed = new Set();
     for (let i = 0; i < 2; i++) { const a = new Audio(); a.crossOrigin = 'anonymous'; a.preload = 'auto'; a.setAttribute('playsinline', ''); this.ctx.createMediaElementSource(a).connect(this.tbus);
-      a.addEventListener('error', () => { const id = a.dataset.track; if (id && a.getAttribute('src')) { console.warn('radio: a song could not load; playing generated music instead', id); this.failed.add(id); if (this.trackKey && this.trackKey.includes(id)) this.trackKey = null; this.cursor = null; /* start the stand-in music now */ } });
+      // a song that won't load this way (often the storage's CORS setting is missing) is tried again on a plain player
+      a.addEventListener('error', () => { const id = a.dataset.track; if (!id || !a.getAttribute('src') || a.getAttribute('src').startsWith('blob:')) return;
+        if (!this.plainIds.has(id)) { console.warn('radio: a song could not load through the mixer (check the storage CORS policy); playing it directly', id); this.plainIds.add(id); }
+        if (this.trackKey && this.trackKey.includes(id)) this.trackKey = null; });
       this.els.push(a); }
+    // the plain player: plays straight to the speakers (no mixer), used only when a song can't go through the mixer.
+    // Its volume follows the radio's, but phones may ignore that and it isn't heard on the 24/7 stream.
+    this.plainIds = new Set(); this.plain = new Audio(); this.plain.preload = 'auto'; this.plain.setAttribute('playsinline', '');
+    this.plain.addEventListener('error', () => { const id = this.plain.dataset.track; if (!id || !this.plain.getAttribute('src') || this.plain.getAttribute('src').startsWith('blob:')) return;
+      console.warn('radio: a song could not load at all; playing generated music instead', id); this.failed.add(id); if (this.trackKey && this.trackKey.includes(id)) this.trackKey = null; this.cursor = null; });
   }
   get el() { return this.els && this.els[this.cur]; }
   // where to get a song: the small data-saver copy on a slow connection, else the normal one
   srcOf(tr) { return (this.lite ? tr.lite : tr.url) || tr.url || this.base + '/api/radio/track/' + encodeURIComponent(tr.id); }
   // what's playing at t, with a song that won't load replaced by a generated one of the same length
-  itemAt(t) { const it = timeline(this.station, this.tracks, t); if (it.kind === 'track' && this.failed.has(it.track.id)) return { kind: 'gen', n: 2e6 + (hash(it.key) % 1e6), start: it.start, end: it.end, title: it.title, key: 'f' + it.key, seq: it.seq }; return it; }
+  itemAt(t) { const it = timeline(this.station, this.tracks, t); if (it.kind === 'track' && this.failed.has(it.track.id)) { const n = 2e6 + (hash(it.key) % 1e6); return { kind: 'gen', n, start: it.start, end: it.end, title: songTitle(this.station, n), key: 'f' + it.key, seq: it.seq, stoodIn: it.title }; } return it; }
   // Phones only let a page play sound after a tap: start the audio element (silently) during the tap that turned the radio on.
   unlock() { if (this.unlocked || !this.els) return; this.unlocked = true; const n = 800, b = new ArrayBuffer(44 + n * 2), v = new DataView(b), w = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
     w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 8000, true); v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
-    const u = URL.createObjectURL(new Blob([b], { type: 'audio/wav' })); for (const a of this.els) { a.src = u; a.play().catch(() => {}); } }
+    const u = URL.createObjectURL(new Blob([b], { type: 'audio/wav' })); for (const a of [...this.els, this.plain]) { a.src = u; a.play().catch(() => {}); } }
   async play(station) {
     this.ensure(); this.unlock(); if (this.ctx.state !== 'running') try { await this.ctx.resume(); } catch {}
     if (this.station === station && this.timer) return; this.stopMusic(); this.stopTrack(); this.station = station; this.song = null; this.cursor = null; this.item = null;
@@ -307,10 +315,11 @@ export class RadioPlayer {
   }
   stopMusic() { clearInterval(this.timer); this.timer = null; }
   stop() { this.stopMusic(); this.stopTrack(); this.station = null; if (this.ctx) { this.music.gain.setTargetAtTime(0, this.ctx.currentTime, 0.2); } }
-  stopTrack() { this.trackKey = null; if (!this.els) return; this.tbus.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15); setTimeout(() => { if (!this.trackKey) for (const a of this.els) a.pause(); }, 600); }
-  setVolume(v) { this.vol = v; if (this.master) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05); }
+  stopTrack() { this.trackKey = null; if (!this.els) return; this.tbus.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15); setTimeout(() => { if (!this.trackKey) for (const a of [...this.els, this.plain]) a.pause(); }, 600); }
+  setVolume(v) { this.vol = v; if (this.master) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05); this.plainVol(); }
+  plainVol() { if (this.plain) try { this.plain.volume = Math.max(0, Math.min(1, this.vol * this.duck)); } catch {} }
   // turn the music down while the DJ talks
-  setDuck(on) { this.duck = on ? 0.28 : 1; if (this.music && this.station) { this.music.gain.setTargetAtTime(this.duck, this.ctx.currentTime, on ? 0.25 : 0.8); if (this.trackKey) this.tbus.gain.setTargetAtTime(this.duck, this.ctx.currentTime, on ? 0.25 : 0.8); } }
+  setDuck(on) { this.duck = on ? 0.28 : 1; if (this.music && this.station) { this.music.gain.setTargetAtTime(this.duck, this.ctx.currentTime, on ? 0.25 : 0.8); if (this.trackKey) this.tbus.gain.setTargetAtTime(this.duck, this.ctx.currentTime, on ? 0.25 : 0.8); } this.plainVol(); }
   // the context's clock against the shared wall clock
   ctxAt(wall) { return this.ctx.currentTime + (wall - this.now()) / 1000; }
   // Walk the station's running order (shared/radio.js timeline) on the shared clock: generated songs are scheduled bar by
@@ -318,7 +327,7 @@ export class RadioPlayer {
   plan(it) { let s = this.plans.get(it.key); if (!s) { s = songPlan(this.station, it.n); s.n = it.n; s.start = it.start; this.plans.set(it.key, s); if (this.plans.size > 6) this.plans.delete(this.plans.keys().next().value); } return s; }
   schedule() {
     if (!this.station || !this.ctx) return; const nowW = this.now(), horizon = nowW + 250, cur = this.itemAt(nowW);
-    if (!this.item || this.item.key !== cur.key) { this.item = cur; this.song = { title: cur.title, kind: cur.kind, artist: cur.track?.artist || '' }; this.onSong && this.onSong(this.song); }
+    if (!this.item || this.item.key !== cur.key) { this.item = cur; this.song = { title: cur.title, kind: cur.kind, artist: cur.track?.artist || '', stoodIn: cur.stoodIn || '' }; this.onSong && this.onSong(this.song); }
     if (cur.kind === 'track') this.keepTrack(cur, nowW); else if (this.trackKey) this.stopTrack();
     if (this.cursor == null || this.cursor < nowW - 2000) this.cursor = nowW;
     for (let guard = 0; guard < 16 && this.cursor < horizon; guard++) {
@@ -332,7 +341,12 @@ export class RadioPlayer {
     }
   }
   keepTrack(it, nowW) {
-    const want = (nowW - it.start) / 1000, src = this.srcOf(it.track);
+    const want = (nowW - it.start) / 1000, src = this.srcOf(it.track), plain = this.plainIds.has(it.track.id);
+    if (this.trackKey !== it.key && plain) { this.trackKey = it.key; this.checkAt = 0; if (want > it.track.dur - 1) return;
+      for (const a of this.els) a.pause(); this.tbus.gain.setValueAtTime(0, this.ctx.currentTime); const el = this.plain;
+      if (el.dataset.track !== it.track.id) { el.dataset.track = it.track.id; el.src = src; } el.currentTime = Math.max(0, want); this.plainVol(); el.play().catch(() => {}); return; }
+    if (plain) { if (nowW < this.checkAt) return; this.checkAt = nowW + 2000; const el = this.plain; if (want < it.track.dur - 0.5) { if (el.paused && el.readyState >= 2) el.play().catch(() => {}); if (el.readyState >= 1 && Math.abs(el.currentTime - want) > 2.5) el.currentTime = want; } return; }
+    if (!plain && this.plain && !this.plain.paused) this.plain.pause();
     if (this.trackKey !== it.key) { this.trackKey = it.key; this.checkAt = 0; this.stall = 0; if (want > it.track.dur - 1) return;
       // use the element that already loaded this song, if there is one; stop the other
       const other = 1 - this.cur; if (this.preKey === it.key && this.els[other].dataset.track === it.track.id) this.cur = other;

@@ -361,6 +361,9 @@ body.pane-max .composer textarea{height:70px}
 .rsheet-bg{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;background:rgba(10,20,15,.28);padding:16px}
 .rsheet{width:min(380px,100%);padding:14px 16px;max-height:86vh;overflow:auto}.rsheet h3{margin:0 0 8px;font-size:16px}
 .rsheet.wide{width:min(560px,100%)}
+.dmlocc{display:flex;gap:9px;align-items:center;min-width:190px}.dmlocmap{flex:none;width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;background:repeating-linear-gradient(45deg,rgba(143,196,99,.55) 0 6px,rgba(143,196,99,.35) 6px 12px)}
+.dmloct{display:flex;flex-direction:column;gap:1px}.dmloct b{font-size:13.5px;line-height:1.25}.dmloct small{opacity:.7;font-size:11px}.dmlocacts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.dmbar .dmloc{flex:none;padding:6px 9px;font-size:16px}.rsheet .btn.wide{display:block;width:100%;margin:6px 0;text-align:left}.locwho{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}.locwho small{width:100%}.locwho .pill{cursor:pointer;border:1.4px solid var(--ink,#2B2621);background:transparent;padding:4px 10px;border-radius:999px;font:inherit;font-size:13px}
 .landtip{position:fixed;z-index:320;left:50%;top:22%;transform:translateX(-50%);width:min(320px,calc(100% - 32px));padding:14px 16px;text-align:left;animation:tipin .35s ease-out}
 .landtip h3{margin:0 0 6px;font-size:16px}.landtip ol{margin:0 0 8px;padding-left:20px;font-size:14px;line-height:1.45}.landtip li{margin:3px 0}
 .landtip .tiphand{font-size:30px;text-align:center;animation:tiphand 2.4s ease-in-out infinite}.landtip .btn{width:100%}
@@ -3705,14 +3708,14 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     let c=this.list.find(x=>x.with.h.toLowerCase()===other.toLowerCase()); if(!c){ c={ with:{h:other,n:mine?'':m.from.n,g:mine?'m':m.from.g,online:true}, last:null, unread:0, request:!mine }; this.list.unshift(c); }
     c.last={text:m.text,t:m.t,mine}; if(!mine){ c.unread++; c.with.online=true; this.count();
       if(c.request) toast(`📩 Message request from @${m.from.h}`,'View',()=>{ this.view='requests'; this.open(m.from.h); });
-      else toast(`💬 @${m.from.h}: ${m.text.length>60?m.text.slice(0,60)+'…':m.text}`,'Reply',()=>this.open(m.from.h)); }
+      else toast(`💬 @${m.from.h}: ${plainMsg(m.text).length>60?plainMsg(m.text).slice(0,60)+'…':plainMsg(m.text)}`,'Reply',()=>this.open(m.from.h)); }
     this.sortList(); if(activeTab==='chats'&&!this.with&&!this.gid) this.renderNow(); },
   // A message in one of your group chats.
   gincoming(m){ if(m.from&&Blocks.has(m.from.h)) return; const mine=!!(m.from&&this.isMe(m.from.h)), msg=m.system?{id:m.id,system:true,text:m.text,t:m.t}:{id:m.id,mine,text:m.text,t:m.t,reply:m.reply||null,from:m.from};
     if(this.gid===m.group&&this.thread&&activeTab==='chats'){ if(!this.thread.messages.some(x=>x.id===m.id)){ this.thread.messages.push(msg); this.addBubble(msg); }
       if(m.system) api('/api/chat/groups/'+encodeURIComponent(m.group)).then(t=>{ if(this.gid===m.group){ this.thread=t; if(!$('dmText')||!$('dmText').value) this.renderNow(); } }).catch(()=>{}); return; }
     const g=this.groups.find(x=>x.id===m.group); if(!g){ this.load(); return; }
-    g.last={text:m.text,t:m.t,mine,from:m.from&&m.from.h}; if(!mine&&!m.system){ g.unread++; this.count(); toast(`👥 ${g.name} · @${m.from.h}: ${m.text.length>50?m.text.slice(0,50)+'…':m.text}`,'Open',()=>this.openGroup(g.id)); }
+    g.last={text:m.text,t:m.t,mine,from:m.from&&m.from.h}; if(!mine&&!m.system){ g.unread++; this.count(); toast(`👥 ${g.name} · @${m.from.h}: ${plainMsg(m.text).length>50?plainMsg(m.text).slice(0,50)+'…':plainMsg(m.text)}`,'Open',()=>this.openGroup(g.id)); }
     this.groups.sort((a,b)=>(b.pinned-a.pinned)||(b.last.t-a.last.t)); if(activeTab==='chats'&&!this.with&&!this.gid) this.renderNow(); },
   // The colony asking whether you want to join someone's group.
   invited(d){ if(Blocks.has(d.by)) return; toast(`🪐 ${d.from}: ${d.text}`,'View',()=>{ this.view='chats'; this.back(); openTab('chats'); }); this.load(); },
@@ -3732,7 +3735,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     const b=el('div',{class:'dm '+(m.mine?'me':'them'),'data-id':m.id||null});
     if(this.gid&&!m.mine&&m.from) b.append(el('button',{class:'dmfrom',text:m.from.n||'@'+m.from.h,onclick:e=>{ e.stopPropagation(); openCitizen(m.from.h); }}));
     if(m.reply) b.append(el('button',{class:'dmquote',onclick:e=>{ e.stopPropagation(); this.jump(m.reply.id); }}, el('b',{text:this.isMe(m.reply.from)?'You':'@'+m.reply.from}), el('span',{text:m.reply.text})));
-    b.append(el('p',{text:m.text}), el('time',{text:hhmm(m.t)}));
+    const loc=Loc.parse(m.text); if(loc) b.append(Loc.bubble(loc, m.mine)); else b.append(el('p',{text:m.text})); b.append(el('time',{text:hhmm(m.t)}));
     // Tap a message for its options: reply, and (for theirs in a private chat) report.
     if(m.id){ const acts=el('div',{class:'dmacts'}, el('button',{class:'dmact',text:'↩ Reply',onclick:e=>{ e.stopPropagation(); this.replyTo(m); }}));
       if(!m.mine&&!this.gid) acts.append(el('button',{class:'dmact dmflag',text:'⚑ Report',onclick:e=>{ e.stopPropagation(); reportSheet({kind:'dm',id:m.id,handle:this.with,text:m.text}); }}));
@@ -3747,7 +3750,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     return el('div',{class:'feenote',title:'Messages to colonists who live in your area are free.',text:this.gid?`🪙 ${c.fee} coins a message · some members live far away`:`🪙 ${c.fee} coins a message · @${this.with} lives ${c.miles?c.miles+' away':'far away'}`}); },
   composer(T){ const ta=el('textarea',{id:'dmText',rows:'1',maxlength:'500',placeholder:'Message…','aria-label':'Message'}); ta.value=this.draft; ta.oninput=()=>{ this.draft=ta.value; };
     ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); this.send(); } });
-    return el('div',{class:'dmbar',id:'dmBar'}, ta, el('button',{class:'btn primary',text:'Send',onclick:()=>this.send()})); },
+    return el('div',{class:'dmbar',id:'dmBar'}, el('button',{class:'btn dmloc','aria-label':'Send a location',title:'Send a location',text:'📍',onclick:()=>Loc.fromChat()}), ta, el('button',{class:'btn primary',text:'Send',onclick:()=>this.send()})); },
   render(p){
     if(!(Me&&Me.token)){ p.append(paneHead('Chats')); p.append(el('div',{class:'pane-body'}, el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to chat.'}))); return; }
     if(this.gid) return this.renderGroup(p);
@@ -3785,7 +3788,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       el('button',{class:'pill'+(this.view==='requests'?' on':''),role:'tab','aria-selected':String(this.view==='requests'),onclick:()=>{ this.view='requests'; this.renderNow(); }}, 'Requests', reqs.length?el('b',{class:'tbadge',text:String(reqs.length)}):null),
       el('button',{class:'pill newg',text:'➕ New group',onclick:()=>{ this.making={name:'',pick:new Set(),extra:''}; this.renderNow(); }})));
     const row=c=>{ const av=el('span',{class:'ava sm'+(c.with.online?' on':'')}); av.innerHTML=avatarSVG({handle:c.with.h,id:c.with.id||c.with.h,gender:c.with.g});
-      return el('button',{class:'person dmrow'+(c.unread?' unread':''),onclick:()=>this.open(c.with.h)}, av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:(c.pinned?'📌 ':'')+(c.with.n?`${c.with.n} · @${c.with.h}`:'@'+c.with.h)}), el('div',{class:'what',text:c.last?(c.last.mine?'You: ':'')+c.last.text:''})),
+      return el('button',{class:'person dmrow'+(c.unread?' unread':''),onclick:()=>this.open(c.with.h)}, av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:(c.pinned?'📌 ':'')+(c.with.n?`${c.with.n} · @${c.with.h}`:'@'+c.with.h)}), el('div',{class:'what',text:c.last?(c.last.mine?'You: ':'')+plainMsg(c.last.text):''})),
         c.unread?el('b',{class:'tbadge',text:String(c.unread)}):el('time',{class:'hint',text:c.last?ago(c.last.t):''})); };
     if(this.view==='requests'){
       body.append(el('p',{class:'hint',text:'Chats other colonists started with you. You can reply to them here; accept one to move it to your chats.'}));
@@ -3806,7 +3809,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     if(!items.length) body.append(el('p',{class:'hint',text:'No chats yet. Open a verified colonist’s card and tap 💬 Message, tap someone who’s online above, or start a group.'}));
     for(const it of items){ if(it.c){ body.append(row(it.c)); continue; } const g=it.g;
       body.append(el('button',{class:'person dmrow'+(g.unread?' unread':''),onclick:()=>this.openGroup(g.id)}, el('span',{class:'ava sm gava',text:'👥'}),
-        el('span',{class:'dmtxt'}, el('div',{class:'who',text:(g.pinned?'📌 ':'')+g.name+` · ${g.members}`}), el('div',{class:'what',text:g.last?(g.last.mine?'You: ':g.last.from?'@'+g.last.from+': ':'')+g.last.text:''})),
+        el('span',{class:'dmtxt'}, el('div',{class:'who',text:(g.pinned?'📌 ':'')+g.name+` · ${g.members}`}), el('div',{class:'what',text:g.last?(g.last.mine?'You: ':g.last.from?'@'+g.last.from+': ':'')+plainMsg(g.last.text):''})),
         g.unread?el('b',{class:'tbadge',text:String(g.unread)}):el('time',{class:'hint',text:g.last?ago(g.last.t):''}))); }
     if(Blocks.list.length){ body.append(el('h3',{text:`Blocked (${Blocks.list.length})`}), el('p',{class:'hint',text:'They can’t message you, and you don’t see their Town Square posts.'}));
       for(const b of Blocks.list) body.append(el('div',{class:'blkrow'}, el('span',{text:b.n?`${b.n} · @${b.h}`:'@'+b.h}), el('button',{class:'linkb',text:'Unblock',onclick:()=>Blocks.unblock(b.h)}))); }
@@ -4701,6 +4704,46 @@ function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🏠
   const ob=ownedBox(c); if(ob) box.append(ob);
   const of=Plots.offersBox(); if(of) box.append(of);
   return box; }
+// ---- Sending a location: a spot on the map travels in a message as "📍 label" plus a tag [at:x,y] that chats show as a
+// little card with "View on map" and "Go there". Anyone can send one from a building, a plot, empty grass, or a chat.
+const LOC_RE=/\s*\[at:(-?\d{1,6}),(-?\d{1,6})\]\s*$/;
+const plainMsg = t => String(t||'').replace(/\s*\[at:-?\d{1,6},-?\d{1,6}\]/g,'');
+const Loc={
+  parse(t){ const m=String(t||'').match(LOC_RE); if(!m) return null; return { x:+m[1], y:+m[2], label:String(t).replace(LOC_RE,'').replace(/^📍\s*/,'').trim()||'A spot on the map' }; },
+  text(label,x,y){ return `📍 ${String(label||'A spot on the map').slice(0,200)} [at:${Math.floor(x)},${Math.floor(y)}]`; },
+  // what stands at a tile, for the label and for opening the right card
+  at(x,y){ const id=D.occ.get(x+','+y), b=id&&D.buildings.get(id), pid=D.plotOcc.get(x+','+y), p=pid&&D.plots.get(pid); return { b, p }; },
+  bubble(l, mine){ const box=el('div',{class:'dmlocc'}, el('div',{class:'dmlocmap',text:'📍'}), el('div',{class:'dmloct'}, el('b',{text:l.label}), el('small',{text:`Tile ${l.x}, ${l.y}`})));
+    const acts=el('div',{class:'dmlocacts'}, el('button',{class:'btn sm',text:'🗺️ View on map',onclick:e=>{ e.stopPropagation(); this.view(l); }}));
+    if(!mine&&Me&&Me.token) acts.append(el('button',{class:'btn sm primary',text:'🚶 Go there',onclick:e=>{ e.stopPropagation(); this.go(l); }}));
+    return el('div',null, box, acts); },
+  // fly there and open what's on that tile (a building, a plot, or the empty-land card)
+  view(l){ if(innerWidth<900||activeTab==='chats') openTab(null); document.body.classList.remove('pane-max'); const q=iso(l.x+0.5,l.y+0.5); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.4); follow=null; sel=null;
+    const open=()=>{ const {b,p}=this.at(l.x,l.y); if(b) sel={kind:'b',id:b.id}; else if(p) sel={kind:'p',id:p.id}; else if(!D.roads.has(l.x+','+l.y)) sel={kind:'g',id:l.x+','+l.y,x:l.x,y:l.y}; else { sel=null; toast(`📍 ${l.label}`); return true; } renderCard(true); return true; };
+    Promise.resolve(syncChunks()).catch(()=>{}).then(()=>setTimeout(open,500)); },
+  async go(l){ const {b}=this.at(l.x,l.y); try{ const r=await api('/api/me/visit',{method:'POST',body:b&&canGoTo(b.type)&&b.done!==false?{buildingId:b.id}:{spot:{x:l.x,y:l.y}}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
+      toast(`On your way to ${b&&canGoTo(b.type)?(b.name||T(b).name):l.label}.`+(r.fare?` ${r.mode==='cab'?'🚕 Cab fare':'🚗 Fuel'}: ${fmt(r.fare)} coins.`:'')); openTab(null); Watch.start(0,`Going to ${l.label}`, b?b.id:`spot:${l.x},${l.y}`); }catch(e){ toast(e.message); } },
+  // the 📍 button in a chat: send where your colonist is now, or the middle of the map on screen
+  fromChat(){ const target=Chats.gid?{gid:Chats.gid}:{handle:Chats.with}; const {box,close}=sheetBox('📍 Send a location'), me=myCitizen(), st=me&&citizenAt(me,gmNow());
+    const send=async(label,x,y)=>{ close(); await this.send(target,label,x,y); };
+    if(st) box.append(el('button',{class:'btn primary wide',text:'📍 Where I am now',onclick:()=>send(`Where I am${st.where?`: ${st.where}`:''}`,st.x,st.y)}));
+    const hb=me&&me.home&&bOf(me.home); if(hb) box.append(el('button',{class:'btn wide',text:'🏠 My home',onclick:()=>send(`My home: ${hb.name||T(hb).name}`,hb.x,hb.y)}));
+    const c=worldToTileF(cam.x,cam.y), cx=Math.floor(c.x), cy=Math.floor(c.y), {b,p}=this.at(cx,cy);
+    box.append(el('button',{class:'btn wide',text:'🎯 The middle of the map on screen',onclick:()=>send(b?(b.name||T(b).name):p?(p.name||`@${p.owner}'s land`):'A spot on the map',cx,cy)}),
+      el('p',{class:'hint',text:'Or tap any building, plot or patch of grass on the map and choose 📤 Send location.'})); },
+  // from a map card: pick who gets it
+  async pick(label,x,y){ const {box,close}=sheetBox('📤 Send this location'); box.append(el('p',{class:'hint',text:`📍 ${label}`}));
+    const inp=el('input',{type:'text',placeholder:'@username',autocomplete:'off','aria-label':'Send to'}), list=el('div',{class:'locwho'});
+    box.append(el('div',{class:'cbet'}, inp, el('button',{class:'btn primary',text:'Send',onclick:async()=>{ const h=cleanHandle(inp.value); if(!h){ toast('Type who to send it to.'); return; } close(); await this.send({handle:h},label,x,y); }})), list);
+    try{ await Chats.load(); }catch(e){}
+    const people=(Chats.list||[]).slice(0,8), groups=(Chats.groups||[]).slice(0,4);
+    if(people.length||groups.length) list.append(el('small',{class:'hint',text:'Recent chats'}));
+    for(const c of people) list.append(el('button',{class:'pill',text:'@'+c.with.h,onclick:async()=>{ close(); await this.send({handle:c.with.h},label,x,y); }}));
+    for(const g of groups) list.append(el('button',{class:'pill',text:'👥 '+g.name,onclick:async()=>{ close(); await this.send({gid:g.id},label,x,y); }})); },
+  async send(target,label,x,y){ const text=this.text(label,x,y), url=target.gid?'/api/chat/groups/'+encodeURIComponent(target.gid):'/api/dm/'+encodeURIComponent(target.handle);
+    try{ const r=await api(url,{method:'POST',body:{text}}); if(r&&r.fee&&myMoney){ myMoney={...myMoney,coins:Math.max(0,(myMoney.coins||0)-r.fee)}; refreshHUD(); }
+      toast(`📍 Location sent${target.handle?` to @${target.handle}`:''}${r&&r.fee?` (${fmt(r.fee)} coins: they live far away)`:''}.`); }catch(e){ toast(e.message); } },
+  btn(label,x,y){ return (Me&&Me.token)?el('button',{class:'btn',text:'📤 Send location',onclick:()=>this.pick(label,x,y)}):''; } };
 // ---- Land: buying plots, building on them, upgrades and offers between colonists ----
 // While choosing where to build, the camera moves the spot into the top part of the screen so the docked panel below doesn't cover it.
 function showAbove(x,y,w,d,h){ const q=iso(x+w/2,y+d/2); cam.x=q.x; cam.y=q.y-(h||0)/2+ch*0.24/cam.z; follow=null; }
@@ -4729,7 +4772,7 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
     const dl=el('dl',null); dl.append(el('dt',{text:'Land price'}), el('dd',{text:q?`About ${fmt(q.perTile)} coins a tile, plus government charges (an 8×8 plot: about ${fmt(q.perTile*64)})`:'…'}), ...(q&&q.homes?[el('dt',{text:'Nearby buildings'}), el('dd',{text:`Worth about ${fmt(q.homeValue)} coins each`})]:[]),
       el('dt',{text:'Plot size'}), el('dd',{text:`${PLOT_MIN}×${PLOT_MIN} up to ${PLOT_MAX}×${PLOT_MAX} tiles, beside a road`}));
     if(q) dl.append(el('dt',{text:'You own'}), el('dd',{text:`${q.props} of ${q.max} properties`}));
-    card.append(dl, goHereRow({ id:`spot:${x},${y}`, type:'spot', x, y, name:'the spot you picked' }), el('div',{class:'row-actions'}, el('button',{class:'btn',text:'🗺️ Buy land here',onclick:()=>this.markAt(x,y)})));
+    card.append(dl, goHereRow({ id:`spot:${x},${y}`, type:'spot', x, y, name:'the spot you picked' }), el('div',{class:'row-actions'}, el('button',{class:'btn',text:'🗺️ Buy land here',onclick:()=>this.markAt(x,y)}), Loc.btn(q&&q.where?`A spot ${q.where}`:'A spot on the map',x,y)));
   },
   markAt(x,y){ try{ localStorage.setItem('land-tip-seen','1'); }catch(e){} document.querySelector('.landtip')?.remove(); closeCard();
     setTool({kind:'land',mark:true}); landSel={a:[x-1,y-1],b:[x+1,y+1],held:true,hint:true};
@@ -4791,6 +4834,7 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
     const head=el('div',{class:'chead'}, el('div',{class:'cthumb plotthumb',text:'🗺️'}), el('div',null, el('h2',{text:p.name||`Plot of land, ${p.w}×${p.d}`}), el('div',{class:'chips2'}, el('span',{class:'pill',text:`${p.w}×${p.d} tiles`}), el('span',{class:'pill',text:mine?'Yours':`@${p.owner}'s land`}))));
     const dl=el('dl',null), add=(k,v)=>dl.append(el('dt',{text:k}),el('dd',{text:v}));
     card.append(close, head, dl); add('Owner',`@${p.owner}`); if(!info){ add('Where','…'); return; }
+    card.append(el('div',{class:'row-actions'}, Loc.btn(`${info.name||`@${info.owner}'s ${info.w}×${info.d} plot`}${info.where?`, ${info.where}`:''}`, info.x+(info.w>>1), info.y+(info.d>>1))));
     add('Where', info.where||'—'); add('Space', `${info.used} of ${info.w*info.d} tiles built on`);
     if(mine){ add('Paid for land', `${fmt(info.price)} coins`); add('Worth', `${fmt(info.worth)} coins with what's on it`); }
     if(info.buildings.length){ const ul=el('ul',{class:'joblist'}); for(const b of info.buildings){ const t=BUILDING_TYPES[b.type]||{};
@@ -5146,6 +5190,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(forSale && !Store.canWrite && b.done!==false && !b.ruin && Me&&Me.token&&Me.handle){
       if(!b.owner) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(price)}`,onclick:()=>toast(`Buy ${b.name||t.name} for ${fmt(price)} coins? You'll collect 80% of its rent or profit every game day.`,'Buy',async()=>{ const r=await meAction('/api/me/properties/buy',{buildingId:b.id},r=>`It's yours! About ${fmt(r.income)} coins a day.`); if(r){ b.owner=Me.handle; Money.at=0; renderCard(true); } })})));
       else if(b.owner.toLowerCase()===Me.handle.toLowerCase()&&!b.plot) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
+    if(!Store.canWrite&&Me&&Me.token) card.append(el('div',{class:'row-actions'}, Loc.btn(b.name||t.name, b.x, b.y)));
     Plots.buildingBits(card,b,t);
     if(t.home && !Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin) card.append(rentBox(b,t));
     if(!Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin && canGoTo(b.type)) card.append(goHereRow(b));

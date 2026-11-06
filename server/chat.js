@@ -8,6 +8,8 @@ import * as R from '../shared/rules.js';
 import { treasuryAdd } from './races.js';
 import { track } from './stats.js';
 
+// A shared location travels as "📍 label [at:x,y]"; previews and phone notifications show just the label.
+const plain = t => String(t || '').replace(/\s*\[at:-?\d{1,6},-?\d{1,6}\]/g, '');
 export const ONLINE_WINDOW = 90 * 1000, MAX_DM = 500, REPORTS_PER_DAY = 20;
 export const REPORT_REASONS = { spam: 'Spam', abuse: 'Abuse or harassment', scam: 'Scam or cheating', other: 'Something else' };
 const HOUR = 3600 * 1000;
@@ -108,7 +110,7 @@ export class Chat {
   // The message being replied to: its text (shortened) and who wrote it, saved with the reply.
   async quote(table, where, args, id) {
     if (!id) return null; const q = (await pool.query(`select m.text, c.handle from ${table} m join citizens c on c.id = m.sender_id where m.id = $1 and ${where}`, [String(id), ...args])).rows[0];
-    return q ? { id: String(id), text: q.text.length > 140 ? q.text.slice(0, 140) + '…' : q.text, from: q.handle } : null;
+    return q ? { id: String(id), text: (t => t.length > 140 ? t.slice(0, 140) + '…' : t)(plain(q.text)), from: q.handle } : null;
   }
   async send(meP, handle, text, replyTo) {
     text = String(text || '').replace(/\s+$/g, '').replace(/^\s+/g, ''); if (!text) throw new HttpError(400, 'Write something first.');
@@ -129,7 +131,7 @@ export class Chat {
     await pool.query('insert into dms (id, pair, sender_id, recipient_id, text, t, reply_to, reply_text, reply_from, fee) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)', [m.id, m.pair, m.sender_id, m.recipient_id, m.text, m.t, rq?.id || null, rq?.text || null, rq?.from || null, cost.fee]);
     // Delivered only to the two people's own connections, never broadcast.
     this.bus.publish([{ op: 'dm', private: true, to: [meP.id, o.id], data: { id: m.id, from: { id: meP.id, h: meP.handle, n: meP.name || '', g: meP.gender || 'm' }, to: { id: o.id, h: o.handle }, text, t: now, reply: rq, first } }]);
-    if (this.push && !isOnline(o.last_seen)) this.push.send([o.id], { kind: 'chat', title: `💬 ${meP.name || '@' + meP.handle}`, body: text.length > 120 ? text.slice(0, 120) + '…' : text, tag: 'dm-' + meP.id, url: '/?chat=' + encodeURIComponent(meP.handle) }).catch(() => {});
+    if (this.push && !isOnline(o.last_seen)) this.push.send([o.id], { kind: 'chat', title: `💬 ${meP.name || '@' + meP.handle}`, body: (t => t.length > 120 ? t.slice(0, 120) + '…' : t)(plain(text)), tag: 'dm-' + meP.id, url: '/?chat=' + encodeURIComponent(meP.handle) }).catch(() => {});
     await pool.query('delete from dms where pair = $1 and t < (select t from dms where pair = $1 order by t desc offset 500 limit 1)', [m.pair]); // keep the last 500 per chat
     return { ok: true, id: m.id, t: now, fee: cost.fee };
   }
@@ -266,7 +268,7 @@ export class Chat {
     await pool.query('insert into group_msgs (id, group_id, sender_id, text, t, reply_to, reply_text, reply_from, fee) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)', [m.id, g.id, meP.id, text, now, rq?.id || null, rq?.text || null, rq?.from || null, cost.fee]);
     this.bus.publish([{ op: 'gm', private: true, to: [meP.id, ...others], data: { group: g.id, name: g.name, id: m.id, from: { id: meP.id, h: meP.handle, n: meP.name || '', g: meP.gender || 'm' }, text, t: now, reply: rq } }]);
     if (this.push) { const away = (await pool.query('select id, last_seen from citizens where id = any($1)', [others])).rows.filter(r => !isOnline(r.last_seen)).map(r => r.id);
-      if (away.length) this.push.send(away, { kind: 'chat', title: `💬 ${g.name}`, body: `@${meP.handle}: ${text.length > 110 ? text.slice(0, 110) + '…' : text}`, tag: 'g-' + g.id, url: '/?chats=1' }).catch(() => {}); }
+      if (away.length) this.push.send(away, { kind: 'chat', title: `💬 ${g.name}`, body: `@${meP.handle}: ${(t => t.length > 110 ? t.slice(0, 110) + '…' : t)(plain(text))}`, tag: 'g-' + g.id, url: '/?chats=1' }).catch(() => {}); }
     return { ok: true, id: m.id, t: now, fee: cost.fee };
   }
   async gclear(me, gid) { const g = await this.group(gid); await this.setState(me, 'g:' + g.id, { cleared_at: Date.now(), pinned: false }); return { ok: true }; }

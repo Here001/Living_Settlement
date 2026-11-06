@@ -254,10 +254,10 @@ function charges(list, base, skip) {
 }
 
 // The price of land follows what the buildings around it are worth. `value` is what a typical home or business within
-// 12 tiles sells for (more for an upgraded one; nearer ones count more), and `weight` how many buildings that is drawn from.
+// 36 tiles sells for (more for an upgraded one; nearer ones count more), and `weight` how many buildings that is drawn from.
 // A tile costs from 150 coins (bare outskirts) to 3,905 among the dearest buildings, so the biggest plot, 8×8, tops out at
 // about 250,000. The price climbs steeply with what's around: next to cabins land is cheap, next to towers it's dear.
-export const LAND_TILE_MIN = 150, LAND_TILE_MAX = 3905, LAND_RADIUS = 12, LAND_DEAR = 2000000;
+export const LAND_TILE_MIN = 150, LAND_TILE_MAX = 3905, LAND_RADIUS = 36, LAND_DEAR = 2000000;
 export function landTilePrice(value, weight = 1) {
   if (!(value > 0) || !(weight > 0)) return LAND_TILE_MIN;
   const f = Math.min(1, Math.sqrt(value / LAND_DEAR)) * Math.min(1, weight / 3); // one lonely building lifts it less than a street of them

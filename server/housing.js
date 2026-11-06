@@ -59,7 +59,7 @@ export class Housing {
   }
   price({ x, y, w, d }) {
     const mx = x + w / 2, my = y + d / 2;
-    // a typical home or business nearby: those within 12 tiles, the nearest counting most (fully next door, a tenth at the edge)
+    // a typical home or business nearby: those within 36 tiles, the nearest counting most (fully next door, a tenth at the edge)
     let sum = 0, weight = 0, homes = 0;
     for (const b of this.around(Math.round(mx), Math.round(my), R.LAND_RADIUS)) { if (b.ruin || b.done === false) continue; const v = R.siteValue(b.type, b.lv); if (!v) continue;
       const bw = b.w || 1, bd = b.d || 1, dd = Math.max(0, Math.hypot(b.x + bw / 2 - mx, b.y + bd / 2 - my) - (w + bw) / 4), k = Math.max(0.1, 1 - dd / (R.LAND_RADIUS + 1));

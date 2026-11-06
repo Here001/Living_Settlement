@@ -794,7 +794,22 @@ body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
     <button class="btn primary" type="submit">Found the colony</button>
   </form>
 </div>
+<script>
+// If the game's code fails to start (most often a phone holding an old copy of one part right after an update), reload
+// once, fresh. If it still won't start, show a message instead of a black screen. A slow connection is not a failure:
+// only a real error reloads; with no error, the message only appears after a long wait.
+(function(){ var k='resurgence-reloaded', done=false;
+  function rescue(why){ if(window.__booted||done) return; done=true; var n=0; try{ n=+sessionStorage.getItem(k)||0; }catch(e){}
+    if(n<1&&why==='error'){ try{ sessionStorage.setItem(k,'1'); }catch(e){} var u=new URL(location.href); u.searchParams.set('r',Date.now().toString(36)); location.replace(u.toString()); return; }
+    var d=document.createElement('div'); d.setAttribute('role','alert'); d.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0b1020;color:#fff;font:16px/1.4 system-ui,sans-serif;text-align:center;padding:24px';
+    d.innerHTML=why==='error'?'<b style="font-size:20px">Resurgence couldn’t start</b><span>Please close this tab and open playresurgence.com again. If it keeps happening, clear this site’s data in your browser settings.</span>':'<b style="font-size:20px">Still loading…</b><span>Your connection is slow. Keep waiting, or try again.</span>';
+    var btn=document.createElement('button'); btn.textContent='Try again'; btn.style.cssText='font:inherit;padding:10px 18px;border-radius:999px;border:0;background:#e2703a;color:#fff';
+    btn.onclick=function(){ try{ sessionStorage.removeItem(k); }catch(e){} location.reload(); }; d.appendChild(btn); if(why!=='error') setInterval(function(){ if(window.__booted) d.remove(); },1000); document.body.appendChild(d); }
+  window.addEventListener('error',function(e){ if(window.__booted) return; var t=e.target; if((t&&t.tagName==='SCRIPT')||/module|export|import|SyntaxError|Unexpected/i.test(e.message||'')) setTimeout(function(){ rescue('error'); },200); },true);
+  setTimeout(function(){ rescue('slow'); },45000); })();
+</script>
 <script type="module">
+window.__booted=true; try{ sessionStorage.removeItem('resurgence-reloaded'); const u=new URL(location.href); if(u.searchParams.has('r')){ u.searchParams.delete('r'); history.replaceState(null,'',u.pathname+u.search+u.hash); } }catch(e){} /* the code loaded: no rescue needed */
 import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank, carPaid } from '/shared/catalog.js';
 import { TABLE_W, TABLE_H, BALL_R, POCKETS } from '/shared/snooker.js';
 import { placeOk, placeAuto, HEAD_X, BAULK_X, D_R } from '/shared/cuegames.js';

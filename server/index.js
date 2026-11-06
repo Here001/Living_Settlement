@@ -229,7 +229,11 @@ app.use('/api', playersRouter({ limit, send, admin, world }));
 setInterval(() => { if (isLeader) sweepPlayers().catch(e => console.error('sweep:', e.message)); }, 3600 * 1000).unref();
 
 // ---------- the city in the browser ----------
-app.use('/shared', express.static(path.join(root, 'shared'), { maxAge: '5m' }));
+// The game's code (the page, /shared/*.js, music.js) is always revalidated: the browser asks "still the same?" and gets a
+// tiny 304 if so. With a cache time, a phone could keep an old part next to a new page right after an update, and a
+// mismatched part stops the game from starting. Pictures, video and sound keep their cache times.
+const fresh = (res, file) => { if (/\.(html|js|mjs|css|json|webmanifest)$/i.test(file)) res.setHeader('Cache-Control', 'no-cache'); };
+app.use('/shared', express.static(path.join(root, 'shared'), { maxAge: '5m', setHeaders: fresh }));
 // A shared colonist link (/?c=handle) gets its own title in link previews on X, WhatsApp and so on.
 app.get('/', async (req, res, next) => {
   const h = typeof req.query.c === 'string' ? R.cleanHandle(req.query.c) : ''; if (!h) return next();
@@ -241,10 +245,10 @@ app.get('/', async (req, res, next) => {
     html = html.replace(/(<meta (?:property="og:title"|name="twitter:title") content=")[^"]*/g, `$1${esc(title)}`)
       .replace(/(<meta (?:property="og:description"|name="twitter:description"|name="description") content=")[^"]*/g, `$1${esc(desc)}`)
       .replace(/(<meta property="og:url" content=")[^"]*/, `$1${esc(url)}`);
-    res.set('cache-control', 'public, max-age=300').type('html').send(html);
+    res.set('cache-control', 'no-cache').type('html').send(html);
   } catch (e) { next(); }
 });
-app.use(express.static(path.join(root, 'public'), { maxAge: '5m' }));
+app.use(express.static(path.join(root, 'public'), { maxAge: '5m', setHeaders: fresh }));
 
 // ---------- live updates ----------
 // Each viewer subscribes to the map chunks on their screen and only hears about those, plus town-wide news.

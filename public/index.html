@@ -1340,6 +1340,16 @@ function edgeColours(){ if(document.hidden||!cv.width) return;
     const st=document.documentElement.style; st.setProperty('--edge-top',top); st.setProperty('--edge-bot',bot); if(edgeMeta) edgeMeta.setAttribute('content',top); }catch(e){} }
 setInterval(edgeColours, 5000); setTimeout(edgeColours, 1500);
 addEventListener('resize', resize); if(window.visualViewport) visualViewport.addEventListener('resize', resize); resize();
+// The building drawn under a point on screen: any part of it (walls and roof as well as the ground it stands on), the
+// one in front when several overlap. Falls back to whatever stands on the tile.
+function buildingAt(sx,sy){ const w=screenToWorld(sx,sy), [tx,ty]=tileAt(sx,sy); let best=null, bk=-1e9;
+  const inPoly=(pts,x,y)=>{ let c=false; for(let i=0,j=pts.length-1;i<pts.length;j=i++){ const a=pts[i], b=pts[j]; if(((a.y>y)!==(b.y>y))&&(x<(b.x-a.x)*(y-a.y)/((b.y-a.y)||1e-9)+a.x)) c=!c; } return c; };
+  for(const b of D.buildings.values()){ if(b.draftDel||Math.abs(b.x-tx)>24||Math.abs(b.y-ty)>24) continue; // a tall tower's roof can be many tiles from its base
+    const t=T(b), [bw,bd]=t.size, h=Math.max(SHADOW_H[t.style]?SHADOW_H[t.style](t):24, t.height||0, 6);
+    const g=[iso(b.x,b.y),iso(b.x+bw,b.y),iso(b.x+bw,b.y+bd),iso(b.x,b.y+bd)], pts=hull([...g,...g.map(p=>up(p,h))]);
+    if(!inPoly(pts,w.x,w.y)) continue; const k=(VIEW?viewRect(b.x,b.y,bw,bd):{x:b.x,y:b.y,w:bw,d:bd}), depth=k.x+k.w+k.y+k.d;
+    if(depth>bk){ bk=depth; best=b; } }
+  return best?best.id:D.occ.get(tx+','+ty)||null; }
 function screenToWorld(sx,sy){ return { x:(sx-cw/2)/cam.z+cam.x, y:(sy-ch/2)/cam.z+cam.y }; }
 function worldToTileF(wx,wy){ const a=(wx/HW + wy/HH)/2, b=(wy/HH - wx/HW)/2; if(!VIEW||RAW) return { x:a, y:b }; const w=fromView(a,b); return { x:w[0], y:w[1] }; }
 function tileAt(sx,sy){ const w=screenToWorld(sx,sy); const t=worldToTileF(w.x,w.y); return [Math.floor(t.x), Math.floor(t.y)]; }
@@ -3122,10 +3132,10 @@ cv.addEventListener('pointerdown', e=>{ cv.setPointerCapture(e.pointerId); point
   if(pointers.size===1){ gesture={ type:'one', sx:e.clientX, sy:e.clientY, lx:e.clientX, ly:e.clientY, t:performance.now(), moved:false };
     if(e.pointerType==='mouse' && e.button!==0){ /* right or middle mouse button always moves the map */ }
     else if(ghostTool()){ gesture.type='ghost'; if(tool.pending){ delete tool.pending; document.querySelector('.rsheet-bg.dock')?.remove(); } updateGhost(e.clientX,e.clientY); }
-    else if(tool.kind==='pan' && Store.canWrite){ const t=tileAt(e.clientX,e.clientY), id=D.occ.get(t[0]+','+t[1]); clearTimeout(holdTimer);
+    else if(tool.kind==='pan' && Store.canWrite){ const t=tileAt(e.clientX,e.clientY), id=buildingAt(e.clientX,e.clientY); clearTimeout(holdTimer);
       // Press and hold a building to pick it up, then drag it somewhere else.
       if(id) holdTimer=setTimeout(()=>{ const b=D.buildings.get(id); if(!b||!gesture||gesture.type!=='one'||gesture.moved||pointers.size!==1) return;
-        setTool({kind:'move',id,rot:b.rot||0}); ghost={ tile:t, off:[t[0]-b.x,t[1]-b.y] }; gesture.type='ghost'; gesture.pickup=true; try{ navigator.vibrate&&navigator.vibrate(18); }catch(_){} }, 450); }
+        setTool({kind:'move',id,rot:b.rot||0}); const [bw,bd]=T(b).size; ghost={ tile:t, off:[Math.max(0,Math.min(bw-1,t[0]-b.x)),Math.max(0,Math.min(bd-1,t[1]-b.y))] }; /* held by the part that was pressed (under a roof: its nearest tile) */ gesture.type='ghost'; gesture.pickup=true; try{ navigator.vibrate&&navigator.vibrate(18); }catch(_){} }, 450); }
     if(gesture.type!=='one'){}
     else if(paints()){ paintBuf=new Map(); paintPrev=new Map(); paintAt(e.clientX,e.clientY); }
     else if(tool.kind==='road'&&roadMode==='line'){ gesture.type='roadline'; const t=tileAt(e.clientX,e.clientY); hoverTile=t; if(!roadStart){ roadStart=t; gesture.fresh=true; } }
@@ -3174,11 +3184,11 @@ function paintAt(sx,sy){ const [x,y]=tileAt(sx,sy); const k=x+','+y;
 async function commitPaint(){ const buf=paintBuf, prev=paintPrev; paintBuf=null; paintPrev=new Map(); const mode=tool.kind, erase=tool.kind==='erase'&&tool.mode==='all', g=gesture;
   if(draftOn && buf.size){ const water=mode==='water'||mode==='drain', live=water?S.water:S.roads;
     draftEdit(water?`${buf.size} tiles of water`:`${buf.size} road tiles`,d=>{ const m=water?d.water:d.roads; for(const [k,v] of buf){ if((live.get(k)||null)===(v||null)) delete m[k]; else m[k]=v||null; } }); return; }
-  if(draftOn && !buf.size){ if(erase && g){ const [x,y]=tileAt(g.sx,g.sy); const id=D.occ.get(x+','+y); if(id) removeBuilding(id); } return; }
+  if(draftOn && !buf.size){ if(erase && g){ const id=buildingAt(g.sx,g.sy); if(id) removeBuilding(id); } return; }
   if(mode==='water'||mode==='drain'){ if(!buf.size) return; const set={}, remove=[]; for(const [k,v] of buf){ if(v) set[k]=v; else remove.push(k); }
     try{ const r=await api('/api/admin/water',{method:'POST',body:{set,remove}}); remember(mode==='water'?`${r.changed} tiles of water`:`draining ${r.changed} tiles`,()=>{ const s2={}, r2=[]; for(const [k,v] of prev){ if(v) s2[k]=v; else r2.push(k); } return api('/api/admin/water',{method:'POST',body:{set:s2,remove:r2}}); }); toast(mode==='water'?`Added ${fmt(r.changed)} tile${r.changed===1?'':'s'} of ${WATER_TYPES[tool.water].name.toLowerCase()}${r.skipped?` (${r.skipped} under buildings skipped)`:''}`:`Drained ${fmt(r.changed)} tile${r.changed===1?'':'s'}`); }
     catch(e){ for(const [k,v] of buf){ if(v) D.water.delete(k); } toast(e.message); } changed(); return; }
-  if(!buf.size){ if(erase && g){ const [x,y]=tileAt(g.sx,g.sy); const id=D.occ.get(x+','+y); if(id) removeBuilding(id); } return; }
+  if(!buf.size){ if(erase && g){ const id=buildingAt(g.sx,g.sy); if(id) removeBuilding(id); } return; }
   const set={}, remove=[]; for(const [k,v] of buf){ if(v) set[k]=v; else remove.push(k); }
   try{ const r=await api('/api/admin/roads',{method:'POST',body:{set,remove}}); remember(mode==='road'?`${r.changed} tiles of road`:`removing ${r.changed} road tiles`, roadUndo(prev,r.cleared));
     toast(mode==='road'?`Laid ${r.changed} tile${r.changed===1?'':'s'}${clearedText(r.cleared)}${r.cost?` for ${fmt(r.cost)} coins`:''}`:`Removed ${r.changed} road tile${r.changed===1?'':'s'}`); }
@@ -3196,12 +3206,12 @@ function tap(sx,sy){
   if(tool.kind==='pbuild'){ const [gx,gy]=ghostOrigin(tool.type,x,y); const bl=blockers(tool.type,gx,gy,null,tool.rot||0); if(bl.some(b=>b.why)){ toast(blockedText(bl)+'.'); return; } Plots.place(gx,gy); return; }
   if(tool.kind==='vehicle'){ api('/api/admin/vehicles',{method:'POST',body:{type:tool.vtype,x,y}}).then(()=>toast(`${VEHICLE_TYPES[tool.vtype].name} is on the road`)).catch(e=>toast(e.message)); return; }
   if(tool.kind==='disaster'){ api('/api/admin/disasters',{method:'POST',body:{kind:tool.dtype,x,y}}).then(r=>toast(r.ruined?`${DISASTER_TYPES[tool.dtype].name}: ${r.ruined} building${r.ruined===1?'':'s'} in ruins`:`${DISASTER_TYPES[tool.dtype].name}: nothing was destroyed`)).catch(e=>toast(e.message)); setTool({kind:'pan'}); return; }
-  if(tool.kind==='erase'){ if(tool.mode!=='roads'){ const id=D.occ.get(x+','+y); if(id) removeBuilding(id); } return; }
+  if(tool.kind==='erase'){ if(tool.mode!=='roads'){ const id=buildingAt(sx,sy); if(id) removeBuilding(id); } return; }
   const gm=gmNow(); let best=null, bd=18;
   for(const [id,st] of lastStates){ const c=S.citizens.get(id); if(!c||!st.visible) continue; const p=iso(st.x,st.y); const sp={ x:(p.x-cam.x)*cam.z+cw/2, y:(p.y-12-cam.y)*cam.z+ch/2 }; const dd=Math.hypot(sp.x-sx,sp.y-sy)/Math.max(1,cam.z*0.8); if(dd<bd){ bd=dd; best=c; } }
   if(best){ selectCitizen(best.id); return; }
   for(const h of vehicleHits){ const p=iso(h.st.x,h.st.y); const sp={ x:(p.x-cam.x)*cam.z+cw/2, y:(p.y-6-(h.alt||0)-cam.y)*cam.z+ch/2 }; if(Math.hypot(sp.x-sx,sp.y-sy)<16*Math.max(1,cam.z*0.8)){ sel={kind:'v',id:h.id}; follow=null; renderCard(); return; } }
-  const id=D.occ.get(x+','+y); if(id){ selectBuilding(id); return; }
+  const id=buildingAt(sx,sy); if(id){ selectBuilding(id); return; }
   const pid=D.plotOcc.get(x+','+y); if(pid){ sel={kind:'p',id:pid}; follow=null; renderCard(); return; }
   // Empty grass: with nothing open, a signed-in player gets a card to buy land right here (a tap with a card open just closes it).
   if(!sel&&!Store.canWrite&&Me&&Me.token&&!D.roads.has(x+','+y)&&!D.water.has(x+','+y)&&!draftOn){ sel={kind:'g',id:x+','+y,x,y}; follow=null; renderCard(); return; }

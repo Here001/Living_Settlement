@@ -21,6 +21,8 @@ export const PLATFORMS = {
 };
 const DEFAULT = { destinations: [], cta: 'Comment SPAWN on our Instagram, or join at playresurgence.com', fps: 30, quality: '720p', radio: 'rotate' };
 const status = { at: 0, pipelines: [], host: null, version: null };
+// stream pages that are open right now (in OBS, the cloud streamer, or a browser), so the developer can see OBS is working
+const pages = new Map();
 
 export async function getConfig() { const r = (await pool.query("select value from settings where key = 'stream'")).rows[0]; return { ...DEFAULT, ...(r ? r.value : {}) }; }
 async function saveConfig(v) { await pool.query("insert into settings (key, value) values ('stream', $1) on conflict (key) do update set value = $1", [v]); }
@@ -52,9 +54,13 @@ export function streamRoutes(app, { admin, send, limit, bus }) {
     if (admin.check(req)) return next(); return res.status(401).json({ error: 'Stream token required.' }); };
   // the stream page: the call to action and the radio choice (no keys)
   app.get('/api/stream/public', limit, send(async () => { const c = await getConfig(); return { cta: c.cta, radio: c.radio, director: await getDirector() }; }));
+  // a stream page checks in every 30 s: what it is (OBS, the cloud streamer, a browser), its size, the station and whether sound is running
+  app.post('/api/stream/ping', limit, send(async req => { const b = req.body || {}, id = clean(b.id).slice(0, 24); if (!/^[\w-]{6,24}$/.test(id)) throw new HttpError(400, 'Bad page.');
+    pages.set(id, { kind: ['obs', 'streamer', 'browser'].includes(b.kind) ? b.kind : 'browser', w: Math.min(8000, Number(b.w) || 0), h: Math.min(8000, Number(b.h) || 0), station: STATIONS[b.station] ? b.station : null, audio: clean(b.audio).slice(0, 12), at: Date.now() });
+    for (const [k, v] of pages) if (Date.now() - v.at > 120000 || pages.size > 60) pages.delete(k); return { ok: true }; }));
   // the developer
   app.get('/api/admin/stream', admin, send(async req => { const c = await getConfig(), show = req.query.keys === '1';
-    return { ...c, destinations: c.destinations.map(d => ({ ...d, key: show ? d.key : mask(d.key), hasKey: !!d.key })), platforms: PLATFORMS, status, director: await getDirector(), tokenSet: !!process.env.STREAM_TOKEN }; }));
+    return { ...c, destinations: c.destinations.map(d => ({ ...d, key: show ? d.key : mask(d.key), hasKey: !!d.key })), platforms: PLATFORMS, status, director: await getDirector(), tokenSet: !!process.env.STREAM_TOKEN, pages: [...pages.values()].filter(p => Date.now() - p.at < 90000) }; }));
   app.put('/api/admin/stream', admin, send(async req => {
     const b = req.body || {}, cur = await getConfig(), out = { ...cur };
     if (b.cta != null) out.cta = clean(b.cta).slice(0, 140);

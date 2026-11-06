@@ -590,6 +590,13 @@ The colony streams itself around the clock to YouTube, Twitch, Facebook, Instagr
    - **Instagram**: on a computer, Create → Live video. Copy the URL and key. The key works for one live only, so paste a new one each time.
    - **TikTok**: LIVE Studio, or "LIVE with streaming software" (needs LIVE access). Paste the server URL and key; TikTok also gives a new key for each live.
 
+**Streaming from OBS instead (or as well).** The Stream tab's **🎥 OBS** box gives the link to add in OBS as a **Browser Source**: `https://playresurgence.com/?stream=1`. Add `&station=pidgin` to fix that scene's station, or `&radio=off` to use your own music.
+- Size: 1280 × 720, or 720 × 1280 for a phone-shaped scene (the screen rearranges itself).
+- Tick **Control audio via OBS**, then set the platform and stream key in OBS's Settings → Stream.
+- Within a minute the box shows "🟢 OBS is showing the stream", with its size, station and whether its sound is running. The camera, radio, DJs and announcements work exactly as on the cloud streamer.
+- OBS only streams while your computer is on, so use it for testing or for streams with your own commentary, and the cloud streamer for 24/7.
+- Don't send the same stream key from both at once: a platform takes one feed per key.
+
 **The camera (director).** In **Auto** it keeps choosing what to show:
 - **Action:** a race (it always cuts to a live one), someone who just arrived, won or got caught, a player who's online, the busiest spot.
 - **Calm:** a quiet park, sunrise or sunset over the skyline, the city lights at night, rainy streets, a neighbourhood it hasn't shown lately, the whole colony.

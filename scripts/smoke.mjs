@@ -1289,6 +1289,11 @@ console.log('24/7 stream and the colony radio');
   r = await call('POST', '/api/stream/status', { host: 'vps-1', version: '1.0', pipelines: [{ layout: 'landscape', up: true, since: Date.now(), fps: 30, dests: ['YouTube Live'], onAir: '🏁 Race #3', snap: 'abc=' }] });
   const s2 = (await call('GET', '/api/admin/stream')).json.status;
   ok(r.status === 200 && s2.host === 'vps-1' && s2.pipelines[0].up && s2.pipelines[0].onAir === '🏁 Race #3' && s2.pipelines[0].snap === 'abc=', 'the streamer reports in, with what is on air');
+  // OBS (or any stream page) checks in, so the developer can see it's open
+  ok((await call('POST', '/api/stream/ping', { id: 'x' }, { auth: false })).status === 400, 'a stream page needs an id');
+  await call('POST', '/api/stream/ping', { id: 'obspage01', kind: 'obs', w: 1280, h: 720, station: 'hausa', audio: 'running' }, { auth: false });
+  const pg0 = (await call('GET', '/api/admin/stream')).json.pages.find(p => p.kind === 'obs');
+  ok(pg0 && pg0.w === 1280 && pg0.station === 'hausa' && pg0.audio === 'running', 'the Stream tab sees an OBS page: its size, station and sound', JSON.stringify(pg0));
   // the director: the developer can put a shot on air, and every stream page hears about it at once
   const v = viewer(['0_0']); await v.ready;
   ok((await call('PUT', '/api/admin/stream/director', { mode: 'manual', shot: { type: 'person', handle: 'bad handle!' } })).status === 400, 'a shot needs a real username');

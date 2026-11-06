@@ -533,6 +533,7 @@ body.clean #djBubble{display:none}
 @media (orientation:portrait){ #streamOv .so-top{top:3vh} #streamOv .so-radio{top:calc(3vh + 7vmin)} #streamOv .so-stats{top:auto;bottom:24vh;right:auto;left:2.2vmin} #streamOv .so-cap{bottom:30vh;max-width:90vw} #streamOv .so-cta{left:2.2vmin;right:2.2vmin;bottom:9vh;max-width:none;text-align:center} #streamOv .so-tick{height:5vh} }
 .strk{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid rgba(0,0,0,.06)}.strk .gin{flex:1;min-width:0}.strk .hint{white-space:nowrap;margin:0}.strk.off .gin{opacity:.5}
 .hint.warn{color:#b3261e}
+.sobs .obssteps{margin:6px 0 4px;padding-left:20px;font-size:13.5px;line-height:1.45}.sobs .obssteps li{margin:3px 0}
 .scam .snap{display:block;width:100%;max-width:480px;border-radius:10px;margin:6px 0;border:1px solid rgba(0,0,0,.12)}.scam .snap.tall{max-width:200px}
 .scam .sline{flex-wrap:nowrap}.scam .sline .gin,.scam .sline select{flex:1;min-width:0}
 .sdest{opacity:.75}.sdest.on{opacity:1}.sdest select{width:100%;padding:8px;border-radius:10px;margin:4px 0;font:inherit}
@@ -3283,6 +3284,22 @@ const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
   // the director: let the camera pick, or put a shot on air and hold it
   async direct(body){ try{ const d=await api('/api/admin/stream/director',{method:'PUT',body}); this.data.director=d; toast(body.next?'Skipping to the next shot.':d.mode==='manual'?'On air now.':'The camera is choosing again.'); this.renderNow(); }catch(e){ toast(e.message); } },
   pick(shot){ this.direct({mode:'manual',shot,holdMin:this.hold}); },
+  // OBS on your own computer: the links to use as a Browser Source, the settings, and which stream pages are open now
+  obsSt:'', obs(D0){ const box=el('div',{class:'authbox sobs'}); box.append(el('h3',{text:'🎥 OBS (stream from your computer)'}));
+    const pages=D0.pages||[], obsOn=pages.filter(p=>p.kind==='obs');
+    box.append(el('p',{class:'jobnow',text:obsOn.length?`🟢 OBS is showing the stream (${obsOn.map(p=>`${p.w}×${p.h}${p.station?' · '+STATIONS[p.station].name:''}${p.audio==='running'?' · sound on':p.station?' · sound not started yet':''}`).join('; ')}).`:'⚪ No OBS open right now. Add the link below as a Browser Source and it shows up here within a minute.'}));
+    const others=pages.filter(p=>p.kind!=='obs'); if(others.length) box.append(el('p',{class:'hint',text:`Also open: ${others.map(p=>`${p.kind==='streamer'?'cloud streamer':'a browser'} ${p.w}×${p.h}`).join(', ')}.`}));
+    const q=this.obsSt?(this.obsSt==='off'?'&radio=off':`&station=${this.obsSt}`):'', url=`${location.origin}/?stream=1${q}`;
+    box.append(el('div',{class:'cpicks'}, el('span',{text:'Sound in this scene:'}), ...[['','As set below (Radio)'],...STATION_IDS.map(k=>[k,STATIONS[k].name]),['off','No radio (use your own music)']].map(([k,n])=>el('button',{class:'pill'+(this.obsSt===k?' on':''),text:n,onclick:()=>{ this.obsSt=k; this.renderNow(); }}))));
+    const copy=t=>{ (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('Link copied.')).catch(()=>{ prompt('Copy this link:',t); }); };
+    box.append(el('div',{class:'row-actions sline'}, el('input',{class:'gin',type:'text',readonly:'',value:url,'aria-label':'Browser Source link',onclick:e=>e.target.select()}), el('button',{class:'btn sm primary',text:'Copy link',onclick:()=>copy(url)})));
+    const steps=el('ol',{class:'obssteps'});
+    for(const t of ['In OBS, under Sources press +, then Browser. Paste the link above.','Width 1280 and Height 720 (or 1920 × 1080). For a phone-shaped TikTok or Instagram scene use Width 720, Height 1280: the screen rearranges itself.',
+      'Tick “Control audio via OBS” so the radio goes out on the stream. Leave “Shutdown source when not visible” and “Refresh browser when scene becomes active” off.',
+      'Settings → Stream: pick the platform and paste its stream key. Settings → Video: 1280×720 at 30 FPS. Settings → Output: about 3000–4500 kbps.','Press Start Streaming. The camera, radio, DJs and announcements all work exactly as they do on the cloud streamer.'])
+      steps.append(el('li',{text:t}));
+    box.append(steps, el('p',{class:'hint warn',text:'Don’t use the same stream key in OBS and the cloud streamer at the same time: a platform takes one feed per key. Switch that destination off below while OBS uses it.'}));
+    return box; },
   // each station's songs: upload MP3s, switch them on and off, rename, delete
   songSt:'yoruba', songs(){ const box=el('div',{class:'authbox ssongs'}), L=this.trk; box.append(el('h3',{text:'🎵 Radio songs'}));
     if(!L){ box.append(el('p',{class:'hint',text:'Loading…'})); api('/api/admin/radio/tracks').then(r=>{ this.trk=r; this.renderNow(); }).catch(e=>toast(e.message)); return box; }
@@ -3390,7 +3407,7 @@ const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
     for(const pl of St.pipelines||[]) box.append(el('p',{class:'jobnow',text:`${pl.up?'🟢':'🔴'} ${pl.layout==='portrait'?'📱 Portrait':'🖥️ Landscape'}: ${pl.dests.join(', ')||'no destinations'}${pl.up&&pl.since?` · live for ${ago(pl.since).replace(' ago','')}`:''}${pl.fps?` · ${pl.fps} fps`:''}${pl.restarts?` · ${pl.restarts} restart${pl.restarts===1?'':'s'}`:''}${pl.error?` · ${pl.error}`:''}`}));
     if(!D0.tokenSet) box.append(el('p',{class:'autherr',text:'STREAM_TOKEN isn’t set on this server yet: add it (any long random text) so the streamer can sign in.'}));
     box.append(el('div',{class:'row-actions'}, el('button',{class:'btn sm',text:'Preview 16:9',onclick:()=>window.open('/?stream=1','_blank','noopener,width=1280,height=720')}), el('button',{class:'btn sm',text:'Preview 9:16',onclick:()=>window.open('/?stream=1','_blank','noopener,width=405,height=720')}), el('button',{class:'btn sm',text:'Refresh',onclick:()=>this.load()})));
-    body.append(box); body.append(this.camera(D0)); body.append(this.djs()); body.append(this.songs());
+    body.append(box); body.append(this.obs(D0)); body.append(this.camera(D0)); body.append(this.djs()); body.append(this.songs());
     // the call to action shown on the stream
     const cta=el('input',{class:'gin',type:'text',maxlength:'140',value:D0.cta||'','aria-label':'Call to action'}); cta.oninput=()=>{ D0.cta=cta.value; this.dirty=true; };
     const q=el('div',{class:'cpicks'}, el('span',{text:'Quality:'}), ...['720p','1080p'].map(k=>el('button',{class:'pill'+(D0.quality===k?' on':''),text:k,onclick:()=>{ D0.quality=k; this.dirty=true; this.renderNow(); }})));
@@ -5473,6 +5490,12 @@ const Stream={ shot:null, until:0, recent:[], online:[], onlineAt:0, seenEvents:
       if(t.focus&&t.focus.handle) this.followHandle(t.focus.handle,`🎙️ ${t.dj}`,sub,ms).then(ok=>{ if(!ok) this.caption(`🎙️ ${t.dj}`,sub); });
       else { if(t.focus&&t.focus.x!=null){ const p=iso(t.focus.x+2,t.focus.y+1.5); this.shot='talk'; this.drift=null; this.fly(p.x,p.y,1.4); } this.caption(`🎙️ ${t.dj}`,sub); this.until=Date.now()+ms; } };
     Radio.onPaint=()=>this.paintRadio();
+    // check in every 30 s so the Stream tab shows this page is open (and whether its sound is running); OBS's browser
+    // may start the sound suspended, so keep nudging it on
+    const pid=Math.random().toString(36).slice(2,12), kind=(window.obsstudio||/OBS\//.test(navigator.userAgent))?'obs':navigator.webdriver?'streamer':'browser';
+    const ping=()=>{ const ctx=Radio.player&&Radio.player.ctx; if(ctx&&ctx.state!=='running') ctx.resume().catch(()=>{});
+      api('/api/stream/ping',{method:'POST',body:{id:pid,kind,w:innerWidth,h:innerHeight,station:Radio.st,audio:ctx?ctx.state:'none'}}).catch(()=>{}); };
+    setTimeout(ping,6000); setInterval(ping,30000);
     window.__onAir=()=>{ const t=this.q('.so-capt').textContent, u=this.q('.so-caps').textContent; return (t+(u?' · '+u:'')).slice(0,200); }; // for the streamer's report
     setInterval(()=>this.paint(),1000); setInterval(()=>this.direct(),1000); requestAnimationFrame(t=>this.anim(t)); },
   q(s){ return this.ov.querySelector(s); },
@@ -5482,7 +5505,8 @@ const Stream={ shot:null, until:0, recent:[], online:[], onlineAt:0, seenEvents:
     this.q('.so-ctat').textContent=this.cta||'playresurgence.com';
     const ev=(S.events||[]).slice(0,10).map(e=>e.text).join('   •   '); if(ev!==this.tick){ this.tick=ev; const t=this.q('.so-tickin'); t.textContent=ev||'Welcome to the colony'; t.style.animationDuration=Math.max(30,ev.length/8)+'s'; } },
   // the stream plays one station all day, or a different station each hour ('rotate')
-  async tuneRadio(){ const r=this.radio; if(Radio.live==null) await Radio.refreshLive(); const live=STATION_IDS.filter(k=>Radio.isLive(k));
+  /* ?station=pidgin or ?radio=off (for an OBS scene) beat the Stream tab's choice */
+  async tuneRadio(){ const U=new URLSearchParams(location.search), r=U.get('radio')==='off'?'off':(STATIONS[U.get('station')]?U.get('station'):this.radio); if(Radio.live==null) await Radio.refreshLive(); const live=STATION_IDS.filter(k=>Radio.isLive(k));
     if(!r||r==='off'||!live.length){ if(Radio.st) Radio.off(); this.paintRadio(); return; }
     const st=r!=='rotate'&&live.includes(r)?r:live[Math.floor((Date.now()+skew)/3600e3)%live.length]; if(Radio.st!==st) Radio.tune(st); },
   paintRadio(){ if(!this.ov) return; const on=!!Radio.st, p=this.q('.so-radio'); p.classList.toggle('on',on); if(!on) return; const S0=STATIONS[Radio.st];

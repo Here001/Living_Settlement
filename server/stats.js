@@ -15,8 +15,8 @@ export function track(ch, key, coins = 0, citizenId = null) {
 }
 // The cash-flow history each player sees in their Wallet: money in (+) and out (-), by kind. Most entries come from
 // track(); a few (gifts received, a picked pocket, bank deposits, wages) are added where they happen.
-const IN = /^(casino:win|game:\w+:win|table:\w+:(win|refund)|race:win|property:(sell|refund|income)|mayor:pay|lottery:win|guide|daily|car:sell|earn:.*|crime:(pickpocket|rob|scam|atm)|heist:loot|bank:interest|rent:income)$/;
-const OUT = /^(casino:bet|game:\w+:bet|table:\w+:stake|travel|race:bet|property:buy|pet|lottery:ticket|election:fee|crime:fine|chat:fee|car:buy|bills:\w+|gift|rent:(fee|movers)|heist:fine)$/;
+const IN = /^(casino:win|game:\w+:win|table:\w+:(win|refund)|race:win|property:(sell|refund|income|sale)|land:sell|mayor:pay|lottery:win|guide|daily|car:sell|earn:.*|crime:(pickpocket|rob|scam|atm)|heist:loot|bank:interest|rent:income)$/;
+const OUT = /^(casino:bet|game:\w+:bet|table:\w+:stake|travel|race:bet|property:buy|property:offer|land:buy|land:charges|build:own|build:charges|build:rush|build:upgrade|pet|lottery:ticket|election:fee|crime:fine|chat:fee|car:buy|bills:\w+|gift|rent:(fee|movers)|heist:fine)$/;
 export const signOf = key => (key === 'dev:adjust' ? 1 : IN.test(key) ? 1 : OUT.test(key) ? -1 : 0);
 export function ledger(ch, citizenId, coins, key, note = null) {
   coins = Math.round(Number(coins) || 0); if (!ch || !citizenId || !coins) return; (ch.ledger ||= []).push([citizenId, coins, key, note]);

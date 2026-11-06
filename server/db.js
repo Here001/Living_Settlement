@@ -252,6 +252,19 @@ const MIGRATIONS = [
   // v48: radio songs can live in Cloudflare R2 (url and a data-saver copy) instead of the database; who the artist is
   `alter table radio_tracks alter column data drop not null, add column url text, add column lite_url text, add column lite_size int,
      add column r2key text, add column artist text;`,
+  // v49: land plots players buy and build on, building upgrade levels, and offers between colonists for each other's property
+  `create table if not exists plots (id text primary key, owner_id text not null, owner_handle text not null, x int not null, y int not null,
+     w int not null, d int not null, cx int not null, cy int not null, price numeric not null default 0, bought_at bigint not null, name text not null default '');
+   create index if not exists plots_owner on plots (owner_id);
+   create index if not exists plots_chunk on plots (cx, cy);
+   alter table buildings add column if not exists plot_id text, add column if not exists level int not null default 1,
+     add column if not exists up_at bigint not null default 0, add column if not exists up_cost numeric not null default 0;
+   create index if not exists buildings_plot on buildings (plot_id);
+   create table if not exists offers (id text primary key, kind text not null, target_id text not null, label text not null default '',
+     from_id text not null, from_handle text not null, to_id text not null, to_handle text not null, amount numeric not null, counter numeric,
+     message text not null default '', reply text not null default '', status text not null default 'open', created_at bigint not null, expires_at bigint not null, closed_at bigint);
+   create index if not exists offers_to on offers (to_id, status);
+   create index if not exists offers_from on offers (from_id, status);`
 ];
 
 export async function migrate() {
@@ -276,10 +289,10 @@ export async function migrate() {
       console.log(`Database migrated to version ${v}`);
     }
     // Keep each building's capacities in step with the catalog, so changing a number there takes effect on restart.
-    for (const [type, t] of Object.entries(BUILDING_TYPES)) {
-      const cap = capacities(type);
-      await c.query('update buildings set home_cap = $2, job_cap = $3, hang_cap = $4, leisure = $5 where type = $1 and done and not ruin and (home_cap, job_cap, hang_cap, leisure) is distinct from ($2, $3, $4, $5)',
-        [type, cap.homeCap, cap.jobCap, cap.hangCap, cap.leisure]);
+    for (const lv of (await c.query('select distinct level from buildings')).rows.map(r => r.level)) for (const [type, t] of Object.entries(BUILDING_TYPES)) {
+      const cap = capacities(type, lv);
+      await c.query('update buildings set home_cap = $2, job_cap = $3, hang_cap = $4, leisure = $5 where type = $1 and level = $6 and done and not ruin and (home_cap, job_cap, hang_cap, leisure) is distinct from ($2, $3, $4, $5)',
+        [type, cap.homeCap, cap.jobCap, cap.hangCap, cap.leisure, lv]);
     }
   } catch (e) { await c.query('rollback').catch(() => {}); throw e; }
   finally { await c.query('select pg_advisory_unlock(90210)').catch(() => {}); c.release(); }

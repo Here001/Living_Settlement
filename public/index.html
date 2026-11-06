@@ -360,6 +360,13 @@ body.pane-max .composer textarea{height:70px}
 .rsheet-bg.recording{background:transparent;pointer-events:none}.rsheet-bg.recording .rsheet{opacity:.35}
 .rsheet-bg{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;background:rgba(10,20,15,.28);padding:16px}
 .rsheet{width:min(380px,100%);padding:14px 16px;max-height:86vh;overflow:auto}.rsheet h3{margin:0 0 8px;font-size:16px}
+.rsheet.wide{width:min(560px,100%)}.rsheet input[type=text],.rsheet input[type=number],.rsheet textarea{width:100%;box-sizing:border-box;margin:6px 0;padding:8px 10px;border-radius:10px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:var(--glass-2,#fff);font:inherit;color:inherit}
+.bill{width:100%;border-collapse:collapse;margin:8px 0;font-size:13.5px}.bill td{padding:4px 2px;border-bottom:1px dashed rgba(0,0,0,.12)}.bill td:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.bill tr.tot td{font-weight:800;border-bottom:none;border-top:1.5px solid currentColor}
+.warnline{margin:8px 0;padding:7px 10px;border-radius:10px;background:rgba(210,56,46,.12);color:#9E2A22;font-size:13px}
+.plotthumb{display:flex;align-items:center;justify-content:center;font-size:30px;background:rgba(143,196,99,.35);border-radius:12px}
+.pcards{flex-wrap:wrap;overflow-x:visible;justify-content:flex-start;padding:4px 0 8px}.pcards .cardb{width:calc(50% - 5px)}@media(min-width:520px){.pcards .cardb{width:150px}}.pcards .cardb.cant{opacity:.45}
+.rsheet .ctabs{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}.rsheet .ctabs .pill{cursor:pointer;border:1.4px solid var(--ink,#2B2621);background:transparent;padding:4px 10px;border-radius:999px;font:inherit;font-size:12.5px}.rsheet .ctabs .pill.on{background:var(--accent,#D9714A);color:#fff;border-color:var(--accent,#D9714A)}
+.joblist.offers li{flex-direction:column;align-items:stretch}.joblist.offers .jt{display:flex;flex-direction:column;gap:2px}.joblist.offers .row-actions{margin-top:4px}
 .rsheet blockquote,.rep blockquote{margin:6px 0;padding:6px 10px;border-left:3px solid #E8836B;background:rgba(0,0,0,.04);border-radius:6px;font-size:13px;white-space:pre-wrap;word-wrap:break-word}
 .rreasons{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.rblock{display:flex;align-items:center;gap:6px;font-size:13px;margin:8px 0}
 .rep{padding:10px 0;border-bottom:1px solid var(--glass-line,rgba(0,0,0,.1))}.rep .ph{display:flex;gap:8px;align-items:center}.rep .ph time{margin-left:auto;font-size:11px;opacity:.7}
@@ -821,7 +828,7 @@ import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULET
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
 import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
-import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT } from '/shared/rules.js';
+import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
@@ -846,8 +853,8 @@ const $ = id => document.getElementById(id);
 /* ---------------- state + live connection to the server ---------------- */
 // The browser only holds the part of the map near the screen, in 32×32-tile chunks. It subscribes to those chunks
 // and hears only about them, plus town-wide news. Citizens arrive with the chunks their home, job or hangout is in.
-const S = { meta:null, buildings:new Map(), roads:new Map(), water:new Map(), vehicles:new Map(), disasters:[], citizens:new Map(), events:[], chunks:new Map() };
-const D = { roads:new Map(), occ:new Map(), buildings:new Map(), water:new Map(), vehicles:new Map() }; // what this screen shows: the live city, plus the developer's draft
+const S = { meta:null, buildings:new Map(), roads:new Map(), water:new Map(), vehicles:new Map(), plots:new Map(), disasters:[], citizens:new Map(), events:[], chunks:new Map() };
+const D = { roads:new Map(), occ:new Map(), buildings:new Map(), water:new Map(), vehicles:new Map(), plots:new Map(), plotOcc:new Map() }; // what this screen shows: the live city, plus the developer's draft
 const Store = { canWrite:false, ready:false, token:null, online:false };
 const CHUNK = CHUNK_SIZE, ck=(cx,cy)=>cx+'_'+cy, ckTile=(x,y)=>ck(Math.floor(x/CHUNK),Math.floor(y/CHUNK));
 const loading=new Set(), buffered=new Map(); let ws=null, subKey='', pinned=null;
@@ -905,6 +912,8 @@ function applyOp(o){
   case 'water': { const slot=S.chunks.get(o.chunks[0]); for(const k in o.set){ S.water.set(k,o.set[k]); slot?.water.add(k); } for(const k of o.remove){ S.water.delete(k); slot?.water.delete(k); } changed(); break; }
   case 'vehicle': { const v=o.data, slot=S.chunks.get(ck(v.cx,v.cy)); if(slot){ S.vehicles.set(v.id,v); slot.vehicles.add(v.id); } break; }
   case 'removeVehicle': { S.vehicles.delete(o.id); S.chunks.get(o.chunks[0])?.vehicles.delete(o.id); if(sel&&sel.id===o.id) closeCard(); break; }
+  case 'plot': { const p=o.data, old=S.plots.get(p.id); if(old) S.chunks.get(ck(old.cx,old.cy))?.plots.delete(p.id); const slot=S.chunks.get(ck(p.cx,p.cy)); if(slot){ S.plots.set(p.id,p); slot.plots.add(p.id); } else S.plots.delete(p.id); Plots.drop(p.id); changed(); if(sel&&sel.kind==='p'&&sel.id===p.id) cardSoon(); break; }
+  case 'removePlot': { S.plots.delete(o.id); S.chunks.get(o.chunks[0])?.plots.delete(o.id); Plots.drop(o.id); changed(); if(sel&&sel.kind==='p'&&sel.id===o.id) closeCard(); break; }
   case 'disaster': S.disasters.unshift(o.data); if(S.disasters.length>20) S.disasters.length=20; break;
   case 'chat': if(!S.chat.some(m=>m.id===o.data.id)){ S.chat.unshift(o.data); if(S.chat.length>200) S.chat.length=200; feedDirty=true; renderFeed(); } break;
   case 'chatPin': { const m=S.chat.find(x=>x.id===o.id); if(m){ m.p=o.pinned?1:0; feedDirty=true; renderFeed(); } break; }
@@ -926,7 +935,7 @@ function viewChunks(){
   let x0=Math.floor(Math.min(...cs.map(c=>c.x))/CHUNK)-1, x1=Math.floor(Math.max(...cs.map(c=>c.x))/CHUNK)+1, y0=Math.floor(Math.min(...cs.map(c=>c.y))/CHUNK)-1, y1=Math.floor(Math.max(...cs.map(c=>c.y))/CHUNK)+1;
   const mx=Math.floor((x0+x1)/2), my=Math.floor((y0+y1)/2); x0=Math.max(x0,mx-4); x1=Math.min(x1,mx+4); y0=Math.max(y0,my-4); y1=Math.min(y1,my+4);
   const out=[]; for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++) out.push(ck(x,y)); return out; }
-function dropChunk(k){ const slot=S.chunks.get(k); if(!slot) return; for(const id of slot.buildings) S.buildings.delete(id); for(const r of slot.roads) S.roads.delete(r); for(const w of slot.water) S.water.delete(w); for(const v of slot.vehicles) S.vehicles.delete(v); S.chunks.delete(k); }
+function dropChunk(k){ const slot=S.chunks.get(k); if(!slot) return; for(const id of slot.buildings) S.buildings.delete(id); for(const r of slot.roads) S.roads.delete(r); for(const w of slot.water) S.water.delete(w); for(const v of slot.vehicles) S.vehicles.delete(v); for(const p of slot.plots) S.plots.delete(p); S.chunks.delete(k); }
 function subscribe(){ const keys=[...new Set([...S.chunks.keys(),...loading])].sort(); const key=keys.join(','); if(key===subKey||!ws||ws.readyState!==1) return; subKey=key; ws.send(JSON.stringify({type:'sub',chunks:keys})); }
 let syncing=false;
 async function syncChunks(){
@@ -939,7 +948,7 @@ async function syncChunks(){
     missing.forEach(k=>loading.add(k)); subscribe();
     for(let i=0;i<missing.length;i+=25){ const batch=missing.slice(i,i+25);
       try{ const r=await api('/api/chunks?keys='+batch.join(','));
-        for(const k of batch){ const c=r.chunks[k]||{buildings:[],roads:{}}; S.chunks.set(k,{buildings:new Set(),roads:new Set(),water:new Set(),vehicles:new Set()}); for(const b of c.buildings) putBuilding(b); const slot=S.chunks.get(k); for(const rk in c.roads){ S.roads.set(rk,c.roads[rk]); slot.roads.add(rk); } for(const wk in (c.water||{})){ S.water.set(wk,c.water[wk]); slot.water.add(wk); } for(const v of (c.vehicles||[])){ S.vehicles.set(v.id,v); slot.vehicles.add(v.id); } }
+        for(const k of batch){ const c=r.chunks[k]||{buildings:[],roads:{}}; S.chunks.set(k,{buildings:new Set(),roads:new Set(),water:new Set(),vehicles:new Set(),plots:new Set()}); for(const b of c.buildings) putBuilding(b); const slot=S.chunks.get(k); for(const rk in c.roads){ S.roads.set(rk,c.roads[rk]); slot.roads.add(rk); } for(const wk in (c.water||{})){ S.water.set(wk,c.water[wk]); slot.water.add(wk); } for(const v of (c.vehicles||[])){ S.vehicles.set(v.id,v); slot.vehicles.add(v.id); } for(const p of (c.plots||[])){ S.plots.set(p.id,p); slot.plots.add(p.id); } }
         for(const raw of r.citizens){ const c=normC(raw); if(keepCitizen(c)) S.citizens.set(c.id,c); }
         for(const k of batch){ loading.delete(k); for(const o of buffered.get(k)||[]) applyOp(o); buffered.delete(k); }
       }catch(e){ batch.forEach(k=>{ loading.delete(k); buffered.delete(k); }); }
@@ -1003,7 +1012,13 @@ const rotCache=new Map();
 const rotType = t => { let r=rotCache.get(t); if(!r){ r={...t, size:[t.size[1],t.size[0]], base:t}; rotCache.set(t,r); } return r; };
 // What to call someone on screen: their chosen name, or @username until they set one.
 const nameOf = c => (c && c.name) ? c.name : '@'+(c&&c.handle);
-const T = b => { const t=BUILDING_TYPES[b.type] || BUILDING_TYPES.tent; return b.rot ? rotType(t) : t; };
+// An upgraded building (level 2–5) is its type with more room inside, a taller build, and (levels 3 and 5) a bigger
+// footprint. While an upgrade is under way the scaffolding already covers the new ground.
+const lvCache=new Map();
+function lvType(type,lv,slv){ const k=type+'|'+lv+'|'+slv; let r=lvCache.get(k); if(r) return r; const t=BUILDING_TYPES[type], cap=capacities(type,lv);
+  r={...t, size:levelSize(type,slv), lv, ...(t.height?{height:Math.round(t.height*(1+0.12*(lv-1)))}:{}), ...(t.home?{home:{...t.home,capacity:cap.homeCap}}:{}), ...(t.work?{work:{...t.work,slots:cap.jobCap}}:{}), ...(t.leisure?{visitors:cap.hangCap}:{})};
+  lvCache.set(k,r); return r; }
+const T = b => { let t=BUILDING_TYPES[b.type] || BUILDING_TYPES.tent; const lv=b.lv||1, slv=b.upAt?Math.min(MAX_LEVEL,lv+1):lv; if((lv>1||slv>1)&&BUILDING_TYPES[b.type]) t=lvType(b.type,lv,slv); return b.rot ? rotType(t) : t; };
 const sizeOf = (type,rot) => footprint(BUILDING_TYPES[type].size, rot);
 function drawB(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>drawB(v,T(v))); }
   if(!b.rot){ (DRAW[t.style]||DRAW.house)(b,t); return; }
@@ -1047,7 +1062,7 @@ function bspMake(b,t,sc,base){ const bx=bspBounds(b,t); if(!bx) return null; con
   SPR_REC=null; return e; }
 function drawBCached(b,t){
   if(!bCacheable(t)){ BSPR.live++; drawB(b,t); return; }
-  const base=`${b.id}|${b.type}|${b.rot||0}|${b.x},${b.y}|${VIEW}|${LAMPS>0?1:0}|${DARK>0.3?1:0}`, sc=bspBucket(), key=base+'|'+sc;
+  const base=`${b.id}|${b.type}|${b.rot||0}|${b.lv||1}|${b.upAt?1:0}|${b.x},${b.y}|${VIEW}|${LAMPS>0?1:0}|${DARK>0.3?1:0}`, sc=bspBucket(), key=base+'|'+sc;
   let e=BSPR.map.get(key);
   if(e){ BSPR.map.delete(key); BSPR.map.set(key,e); BSPR.hits++; }
   else { const old=BSPR.last.get(b.id), zooming=performance.now()-Ground.zoomAt<220;
@@ -1068,7 +1083,8 @@ function changed(light){
   if(light){ feedDirty = true; return; } // a person's plan is keyed by their home, job and hangout, so it renews itself
   D.roads = S.roads; D.water = S.water; D.buildings = S.buildings; D.vehicles = S.vehicles; tileListGen++;
   if(draftOn) draftView(); // in draft mode the screen works on copies, so nothing drafted leaks into the live maps
-  D.occ = new Map();
+  D.occ = new Map(); D.plots = S.plots; D.plotOcc = new Map();
+  for(const p of D.plots.values()) for(let i=0;i<p.w;i++) for(let j=0;j<p.d;j++) D.plotOcc.set((p.x+i)+','+(p.y+j), p.id);
   for(const b of D.buildings.values()){ if(b.draftDel) continue; const [w,d]=T(b).size; for(let i=0;i<w;i++) for(let j=0;j<d;j++) D.occ.set((b.x+i)+','+(b.y+j), b.id); }
   if(draftOn) for(const [k,v] of Object.entries(draft.roads)) if(v){ const id=D.occ.get(k), b=id&&D.buildings.get(id); if(b&&roadClears(b.type)){ D.buildings.set(id,{...b,draftDel:true}); D.occ.delete(k); } }
   refreshDraftBar();
@@ -2395,6 +2411,32 @@ function drawConstruction(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView
   if(w*d>=4){ const p=cs[0], top=up(p,full+24); line(p,top,'#E2B13C',3); line(p,top,INK,0.8); const arm={x:top.x+46,y:top.y+10}; line(top,arm,'#E2B13C',2.6); line({x:top.x-12,y:top.y-3},top,'#E2B13C',2.6);
     const sway=Math.sin(T_NOW/900)*3; line({x:arm.x-8,y:arm.y-2},{x:arm.x-8+sway,y:arm.y+18+h*0.3},INK,0.8); ctx.fillStyle='#7C8288'; ctx.fillRect(arm.x-12+sway,arm.y+18+h*0.3,8,5); }
 }
+// An upgrade under way: the building stands as it is, wrapped in scaffolding over its new footprint.
+function drawUpgrading(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>drawUpgrading(v,T(v))); }
+  const [w,d]=t.size, x=b.x, y=b.y, full=Math.min(150,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24))+6;
+  poly([iso(x,y),iso(x+w,y),iso(x+w,y+d),iso(x,y+d)],'rgba(190,156,107,.55)','#8A6A44',1);
+  drawB(b,t); const k=-0.08, cs=[iso(x+k,y+k),iso(x+w-k,y+k),iso(x+w-k,y+d-k),iso(x+k,y+d-k)];
+  for(const p of cs) line(p,up(p,full),'#8A5A2B',1.6);
+  for(let z=12; z<=full; z+=12) for(const [i,j] of [[3,2],[2,1]]) line(up(cs[i],z),up(cs[j],z),'#9C6A36',1.1);
+  const p=cs[0], top=up(p,full+22); line(p,top,'#E2B13C',2.6); const arm={x:top.x+38,y:top.y+8}; line(top,arm,'#E2B13C',2.2);
+  const sway=Math.sin(T_NOW/900)*3; line({x:arm.x-6,y:arm.y-2},{x:arm.x-6+sway,y:arm.y+20},INK,0.8); ctx.fillStyle='#7C8288'; ctx.fillRect(arm.x-10+sway,arm.y+20,8,5); }
+// The touches an upgraded building gets: planters (level 2), a flag on the roof (3), a gold band round its base (4), a lit star (5).
+function drawLevelExtras(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>drawLevelExtras(v,T(v))); }
+  const lv=b.lv||1; if(lv<2) return; const [w,d]=t.size, x=b.x, y=b.y, full=Math.min(150,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24));
+  const pot=(px,py)=>{ const q=iso(px,py); poly([{x:q.x-5,y:q.y-1},{x:q.x+5,y:q.y-1},{x:q.x+4,y:q.y+4},{x:q.x-4,y:q.y+4}],'#B5643A',INK,0.8); for(const [dx,c] of [[-3,'#E4572E'],[0,'#F2C94C'],[3,'#E88BB0']]){ ctx.fillStyle='#4E8A3A'; ctx.fillRect(q.x+dx-0.6,q.y-5,1.2,4); ctx.fillStyle=c; ctx.beginPath(); ctx.arc(q.x+dx,q.y-6,1.9,0,7); ctx.fill(); } };
+  pot(x+w+0.15,y+0.35); pot(x+0.35,y+d+0.15);
+  if(lv>=4){ ctx.save(); ctx.globalAlpha=0.9; poly([iso(x,y+d),iso(x+w,y+d),iso(x+w,y)],false,'#E2B13C',2.2); ctx.restore(); }
+  const roof=up(iso(x+w/2,y+d/2),full);
+  if(lv>=3){ const base={x:roof.x-4,y:roof.y+2}, tp=up(base,20); line(base,tp,INK,1.2); const wv=Math.sin(T_NOW/400)*1.5; poly([tp,{x:tp.x+11,y:tp.y+3+wv},{x:tp.x,y:tp.y+7}],'#E4572E',INK,0.8); }
+  if(lv>=5){ const c={x:roof.x+8,y:roof.y-16}, glow=LAMPS>0?1:0.75; ctx.save(); ctx.globalAlpha=glow; ctx.fillStyle='#F2C94C'; ctx.strokeStyle=INK; ctx.lineWidth=0.9; ctx.beginPath();
+    for(let i=0;i<10;i++){ const r=i%2?2.6:6.2, a=-Math.PI/2+i*Math.PI/5; ctx.lineTo(c.x+r*Math.cos(a),c.y+r*Math.sin(a)); } ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); } }
+// Land colonists own: a tinted patch with a dashed edge and a post at each corner (yours in orange), and the owner's name close up.
+function drawPlots(x0,x1,y0,y1){ if(!D.plots.size) return; const me=Me&&Me.handle?Me.handle.toLowerCase():null;
+  for(const p of D.plots.values()){ if(p.x+p.w<x0-1||p.x>x1+1||p.y+p.d<y0-1||p.y>y1+1) continue; const mine=me&&p.owner&&p.owner.toLowerCase()===me, on=sel&&sel.kind==='p'&&sel.id===p.id;
+    const q=[iso(p.x,p.y),iso(p.x+p.w,p.y),iso(p.x+p.w,p.y+p.d),iso(p.x,p.y+p.d)]; poly(q, mine?'rgba(228,87,46,.13)':'rgba(255,248,230,.16)', false);
+    ctx.save(); ctx.setLineDash(on?[]:[7,5]); poly(q,false,mine?'#E4572E':'#F4EDE0',on?3:1.6); ctx.restore();
+    for(const c of q){ line(c,up(c,9),'#7A5634',2); }
+    if(cam.z>=0.9){ const s=iso(p.x+0.5,p.y+0.5), tx=(p.name||'@'+p.owner); ctx.font='700 10px system-ui,sans-serif'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.strokeText(tx,s.x,s.y-4); ctx.fillStyle=mine?'#B23A14':'#3B332B'; ctx.fillText(tx,s.x,s.y-4); } } }
 // Road and water tiles as parsed lists, rebuilt only when the map changes (not every frame).
 const tileLists=new WeakMap(); let tileListGen=0;
 function tileList(m){ let e=tileLists.get(m); if(e&&e.gen===tileListGen&&e.n===m.size) return e.list;
@@ -2486,6 +2528,7 @@ function drawFrame(ts){
   else { ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,cw,ch); worldT(); ctx.drawImage(Ground.cv, Ground.wx0, Ground.wy0, Ground.ww, Ground.wh); }
   const items=[];
   { const wl=[]; for(const w of tileList(D.water)){ const x=w.x, y=w.y; if(x<tminX||x>tmaxX||y<tminY||y>tmaxY||D.roads.has(w.k)) continue; wl.push([x,y,w.v]); } drawWaterTiles(wl,'ripples'); }
+  drawPlots(tminX,tmaxX,tminY,tmaxY);
   for(const d of Ground.deco) if(d.x>=tminX-1&&d.x<=tmaxX+1&&d.y>=tminY-1&&d.y<=tmaxY+1) items.push(d);
   if(Store.canWrite && draftOn) drawDraftGround(); // blue over drafted roads and water, red over what's being removed
   const selB = sel&&sel.kind==='b' ? D.buildings.get(sel.id) : null;
@@ -2513,13 +2556,14 @@ function drawFrame(ts){
   { let wk=0, dr=0; for(const i of items){ if(i.c) wk++; else if(i.veh&&!i.veh.id) dr++; } frameStats={ crowd:crowd.length, walking:wk, driving:dr, citizens:S.citizens.size, quality:Quality.level, dpr }; }
   items.sort((a,b)=>a.k-b.k); BSPR.budgetEnd=performance.now()+(Quality.level>=2?5:8); // time for new building pictures starts when drawing does
   for(const it of items){ if(it.fn){ if(it.raw) inView(it.fn); else it.fn(); } else if(it.veh){ const v=it.veh; const hd=(v.st.dx||v.st.dy)?[v.st.dx||0,v.st.dy||0]:[1,0]; if(v.st.alpha!=null&&v.st.alpha<1) ctx.globalAlpha=Math.max(0,v.st.alpha); drawVehicle(v.st.x,v.st.y,hd[0],hd[1],v.V,v.col,v.siren,1,v.col2); ctx.globalAlpha=1; if(sel&&sel.kind==='v'&&sel.id===v.id){ const p=iso(v.st.x,v.st.y); ctx.strokeStyle='#F2B33D'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,16,8,0,0,7); ctx.stroke(); } }
-    else if(it.b){ const t=T(it.b); if(it.b.draft||it.b.draftDel){ draftMark(it.b); ctx.globalAlpha=it.b.draftDel?0.4:0.78; drawB(it.b,t); ctx.globalAlpha=1; } else if(it.b.ruin) drawRuin(it.b,t); else if(it.b.done===false) drawConstruction(it.b,t); else { drawBCached(it.b,t); if(it.b.type==='racetrack'&&!it.b.ruin) drawRunners(it.b); } } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
+    else if(it.b){ const t=T(it.b); if(it.b.draft||it.b.draftDel){ draftMark(it.b); ctx.globalAlpha=it.b.draftDel?0.4:0.78; drawB(it.b,t); ctx.globalAlpha=1; } else if(it.b.ruin) drawRuin(it.b,t); else if(it.b.done===false) drawConstruction(it.b,t); else if(it.b.upAt) drawUpgrading(it.b,t); else { drawBCached(it.b,t); if((it.b.lv||1)>1) drawLevelExtras(it.b,t); if(it.b.type==='racetrack'&&!it.b.ruin) drawRunners(it.b); } } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
   drawDisasters();
   if(Watch.id){ const c=S.citizens.get(Watch.id), st=c&&(states.get(Watch.id)||citizenAt(c,gm)); if(st){ const p=iso(st.x,st.y), y=p.y-(st.car?30:46)-Math.abs(Math.sin(T_NOW/260))*4; // "you" marker over your colonist (or their car)
     poly([{x:p.x-7,y:y-12},{x:p.x+7,y:y-12},{x:p.x,y}],'#E4572E',INK,1.4); ctx.font='800 11px system-ui,sans-serif'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.strokeText('You',p.x,y-16); ctx.fillStyle='#2B2621'; ctx.fillText('You',p.x,y-16); } }
   if(Quality.ghosts){ ctx.globalAlpha=0.38; for(const it of hiddenPeople(items)) drawCitizen(it.c,it.st,false,true); ctx.globalAlpha=1; }
   if(areaSel){ const ax=Math.min(areaSel.a[0],areaSel.b[0]), bx=Math.max(areaSel.a[0],areaSel.b[0])+1, ay=Math.min(areaSel.a[1],areaSel.b[1]), by=Math.max(areaSel.a[1],areaSel.b[1])+1; poly([iso(ax,ay),iso(bx,ay),iso(bx,by),iso(ax,by)],'rgba(184,67,58,.28)','#B8433A',2.5); }
   if(ghostTool()) drawFootprint();
+  if(landSel) drawLandSel();
   else if(tool.kind==='road'&&roadMode==='line') drawRoadPreview();
   else if(hoverTile && tool.kind!=='pan'){ const [hx,hy]=hoverTile; poly([iso(hx,hy),iso(hx+1,hy),iso(hx+1,hy+1),iso(hx,hy+1)], tool.kind==='erase'?'rgba(184,67,58,.35)':'rgba(255,255,255,.35)', tool.kind==='erase'?'#B8433A':'#fff', 2); }
   if(S.meta){ const w0=weatherAt(S.meta,gm); if(w0==='storm') DARK=Math.max(DARK,0.45); else if(w0==='rain') DARK=Math.max(DARK,0.22); else if(w0==='fog') DARK=Math.max(DARK,0.15); }
@@ -2571,19 +2615,20 @@ const pointers=new Map(); let gesture=null, paintBuf=null, paintPrev=new Map();
 function canPlace(type,x,y,ignore,rot=0){ const [w,d]=sizeOf(type,rot); for(let i=0;i<w;i++) for(let j=0;j<d;j++){ const k=(x+i)+','+(y+j); if(D.water.has(k)) return false; const o=D.occ.get(k); if((o&&o!==ignore)||D.roads.has(k)) return false; } return true; }
 // What's under each tile of a footprint: null when free, otherwise what's in the way.
 function blockers(type,x,y,ignore,rot=0){ const [w,d]=sizeOf(type,rot), out=[]; for(let i=0;i<w;i++) for(let j=0;j<d;j++){ const k=(x+i)+','+(y+j); const o=D.occ.get(k);
-    out.push({ x:x+i, y:y+j, why: D.water.has(k)?'water' : (o&&o!==ignore)?'a building' : D.roads.has(k)?'road' : null }); } return out; }
+    const pl=D.plotOcc.get(k), own=tool.kind==='pbuild'?tool.plot:(tool.kind==='move'?(D.buildings.get(tool.id)||{}).plot:null);
+    out.push({ x:x+i, y:y+j, why: D.water.has(k)?'water' : (o&&o!==ignore)?'a building' : D.roads.has(k)?'road' : (tool.kind==='pbuild'&&pl!==tool.plot)?'outside your plot' : (pl&&pl!==own)?"someone's land" : null }); } return out; }
 // A building being placed is centred under the pointer; one being moved stays held where it was grabbed.
 function ghostOrigin(type,tx,ty){ const [w,d]=sizeOf(type,tool.rot||0); const off=ghost&&ghost.off; return off?[tx-off[0],ty-off[1]]:[tx-Math.floor((w-1)/2), ty-Math.floor((d-1)/2)]; }
 let ghost=null, lastPtr=null, holdTimer=null;
-const ghostTool = () => tool.kind==='place' || tool.kind==='move' || tool.kind==='vehicle';
-function ghostType(){ return tool.kind==='place'?tool.type : tool.kind==='move'?(D.buildings.get(tool.id)||{}).type : null; }
+const ghostTool = () => tool.kind==='place' || tool.kind==='move' || tool.kind==='vehicle' || tool.kind==='pbuild';
+function ghostType(){ return tool.kind==='place'||tool.kind==='pbuild'?tool.type : tool.kind==='move'?(D.buildings.get(tool.id)||{}).type : null; }
 function updateGhost(sx,sy){ const t=tileAt(sx,sy); ghost={ ...(ghost||{}), tile:t }; hoverTile=t; }
 function blockedText(list){ const bad=list.filter(b=>b.why), w=[...new Set(bad.map(b=>b.why))]; return w.length?`Blocked by ${w.join(' and ')}: ${bad.length} tile${bad.length===1?'':'s'}`:''; }
 function dropGhost(){ if(!ghost||!ghost.tile) return; const [tx,ty]=ghost.tile;
   if(tool.kind==='vehicle'){ if(!carOK(tx+','+ty)){ toast('Vehicles go on roads. Drop it on a street.'); return; } const vt=tool.vtype; if(draftOn){ draftEdit(`adding a ${VEHICLE_TYPES[vt].name.toLowerCase()}`,d=>d.vehicles.push({ tid:'d:'+Math.random().toString(36).slice(2,10), type:vt, x:tx, y:ty })); return; } api('/api/admin/vehicles',{method:'POST',body:{type:vt,x:tx,y:ty}}).then(r=>{ remember(`adding a ${VEHICLE_TYPES[vt].name.toLowerCase()}`,()=>api('/api/admin/vehicles/'+encodeURIComponent(r.vehicle.id),{method:'DELETE'})); toast(`${VEHICLE_TYPES[vt].name} is on the road`); }).catch(e=>toast(e.message)); return; }
   const type=ghostType(); if(!type) return; const [x,y]=ghostOrigin(type,tx,ty); const bl=blockers(type,x,y,tool.id,tool.rot||0);
   if(bl.some(b=>b.why)){ toast(blockedText(bl)+'. Move it onto clear ground.'); return; }
-  if(tool.kind==='place') placeBuilding(type,x,y); else moveBuilding(tool.id,x,y); }
+  if(tool.kind==='pbuild') Plots.place(x,y); else if(tool.kind==='place') placeBuilding(type,x,y); else moveBuilding(tool.id,x,y); }
 // Carrying something to the screen edge scrolls the map, so it can be taken anywhere.
 function edgePan(){ if(!(gesture&&gesture.type==='ghost')||!lastPtr) return; const m=48, v=7/cam.z; let dx=0, dy=0;
   if(lastPtr.x<m) dx=-v; else if(lastPtr.x>cw-m) dx=v; if(lastPtr.y<m+50) dy=-v; else if(lastPtr.y>ch-m-80) dy=v;
@@ -2600,6 +2645,21 @@ function drawFootprint(){ const gt=(ghost&&ghost.tile)||hoverTile; if(!gt) retur
   const top=iso(x+w/2,y+d/2), hgt=Math.min(140,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24));
   if(bad){ noSign(top.x, top.y-hgt-20); label(blockedText(bl), top.x, top.y-hgt-36, false); }
   else if(gesture&&gesture.type==='ghost') label(`${w}×${d} tiles · let go to ${tool.kind==='move'?'move it':'build'}`, top.x, top.y-hgt-12, true); }
+// ---- Marking out land to buy: drag a box over empty grass beside a road ----
+let landSel=null;
+function landRect(a,b){ let x0=Math.min(a[0],b[0]), x1=Math.max(a[0],b[0]), y0=Math.min(a[1],b[1]), y1=Math.max(a[1],b[1]);
+  if(x1-x0+1>PLOT_MAX){ if(b[0]>=a[0]) x1=x0+PLOT_MAX-1; else x0=x1-PLOT_MAX+1; } if(y1-y0+1>PLOT_MAX){ if(b[1]>=a[1]) y1=y0+PLOT_MAX-1; else y0=y1-PLOT_MAX+1; }
+  return { x:x0, y:y0, w:x1-x0+1, d:y1-y0+1 }; }
+// What's wrong with a patch, judged from what this screen knows (the server checks again).
+function landProblem(r){ if(r.w<PLOT_MIN||r.d<PLOT_MIN) return `At least ${PLOT_MIN}×${PLOT_MIN} tiles`;
+  let road=false; for(let i=0;i<r.w;i++) for(let j=0;j<r.d;j++){ const k=(r.x+i)+','+(r.y+j); if(D.water.has(k)) return 'Water in the way'; if(D.roads.has(k)) return 'A road crosses it'; if(D.plotOcc.has(k)) return "Someone's land";
+    const id=D.occ.get(k), b=id&&D.buildings.get(id); if(b&&!roadClears(b.type)) return 'Buildings in the way'; }
+  for(let i=0;i<r.w&&!road;i++) road=D.roads.has((r.x+i)+','+(r.y-1))||D.roads.has((r.x+i)+','+(r.y+r.d));
+  for(let j=0;j<r.d&&!road;j++) road=D.roads.has((r.x-1)+','+(r.y+j))||D.roads.has((r.x+r.w)+','+(r.y+j));
+  return road?null:'Needs a road along one side'; }
+function drawLandSel(){ const r=landRect(landSel.a,landSel.b), bad=landProblem(r), q=[iso(r.x,r.y),iso(r.x+r.w,r.y),iso(r.x+r.w,r.y+r.d),iso(r.x,r.y+r.d)];
+  poly(q, bad?'rgba(210,56,46,.35)':'rgba(63,138,78,.38)', bad?'#9E2A22':'#2F6E3B', 2.5);
+  const c=iso(r.x+r.w/2,r.y+r.d/2); label(bad?`${r.w}×${r.d} · ${bad}`:`${r.w}×${r.d} tiles · let go to see the price`, c.x, c.y-14, !bad); }
 // ---- Undo: every developer action records how to reverse it. ----
 const history=[];
 function remember(label, undo){ history.push({label,undo}); if(history.length>40) history.shift(); refreshUndo(); }
@@ -2690,8 +2750,9 @@ cv.addEventListener('pointerdown', e=>{ cv.setPointerCapture(e.pointerId); point
     if(gesture.type!=='one'){}
     else if(paints()){ paintBuf=new Map(); paintPrev=new Map(); paintAt(e.clientX,e.clientY); }
     else if(tool.kind==='road'&&roadMode==='line'){ gesture.type='roadline'; const t=tileAt(e.clientX,e.clientY); hoverTile=t; if(!roadStart){ roadStart=t; gesture.fresh=true; } }
-    else if(tool.kind==='erase'&&tool.mode==='area'){ const t=tileAt(e.clientX,e.clientY); areaSel={a:t,b:t}; } }
-  else if(pointers.size===2){ clearTimeout(holdTimer); const [a,b]=[...pointers.values()]; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture={ type:'pinch', d0:Math.hypot(a.x-b.x,a.y-b.y), z0:cam.z, wx:w.x, wy:w.y, a0:Math.atan2(b.y-a.y,b.x-a.x) }; if(paintBuf){ paintBuf=null; changed(); } areaSel=null; }
+    else if(tool.kind==='erase'&&tool.mode==='area'){ const t=tileAt(e.clientX,e.clientY); areaSel={a:t,b:t}; }
+    else if(tool.kind==='land'){ const t=tileAt(e.clientX,e.clientY); landSel={a:t,b:t}; } }
+  else if(pointers.size===2){ clearTimeout(holdTimer); const [a,b]=[...pointers.values()]; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture={ type:'pinch', d0:Math.hypot(a.x-b.x,a.y-b.y), z0:cam.z, wx:w.x, wy:w.y, a0:Math.atan2(b.y-a.y,b.x-a.x) }; if(paintBuf){ paintBuf=null; changed(); } areaSel=null; landSel=null; }
 });
 cv.addEventListener('pointermove', e=>{
   if(e.pointerType==='mouse') hoverTile=tileAt(e.clientX,e.clientY);
@@ -2702,6 +2763,7 @@ cv.addEventListener('pointermove', e=>{
   else if(gesture&&gesture.type==='one'){ if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)>6) gesture.moved=true;
     if(paintBuf){ paintAt(e.clientX,e.clientY); hoverTile=tileAt(e.clientX,e.clientY); }
     else if(areaSel){ areaSel.b=tileAt(e.clientX,e.clientY); }
+    else if(landSel){ landSel.b=tileAt(e.clientX,e.clientY); }
     else if(gesture.moved){ cam.x-=(e.clientX-gesture.lx)/cam.z; cam.y-=(e.clientY-gesture.ly)/cam.z; follow=null; }
     gesture.lx=e.clientX; gesture.ly=e.clientY; }
   else if(gesture&&gesture.type==='pinch'&&pointers.size>=2){ const [a,b]=[...pointers.values()];
@@ -2718,7 +2780,7 @@ function endPointer(e){ if(!pointers.has(e.pointerId)) return; pointers.delete(e
     const a=roadStart; roadStart=t; commitLine(a,t); return; }
   if(gesture&&gesture.type==='ghost'&&pointers.size===0){ const g=gesture; gesture=null; if(e.type==='pointercancel') return;
     if(g.pickup && !g.moved){ toast('Picked up. Drag it to a new spot and let go.'); return; } dropGhost(); return; }
-  if(gesture&&gesture.type==='one'&&pointers.size===0){ if(paintBuf){ commitPaint(); } else if(areaSel){ finishArea(); } else if(!gesture.moved && performance.now()-gesture.t<600) tap(e.clientX,e.clientY); gesture=null; }
+  if(gesture&&gesture.type==='one'&&pointers.size===0){ if(paintBuf){ commitPaint(); } else if(areaSel){ finishArea(); } else if(landSel){ const r=landRect(landSel.a,landSel.b); landSel=null; Plots.quote(r); } else if(!gesture.moved && performance.now()-gesture.t<600) tap(e.clientX,e.clientY); gesture=null; }
   if(pointers.size===0) gesture=null; }
 cv.addEventListener('pointerup', endPointer); cv.addEventListener('pointercancel', endPointer);
 cv.addEventListener('pointerleave', e=>{ if(e.pointerType==='mouse' && !pointers.size){ hoverTile=null; if(ghost) ghost.tile=null; } });
@@ -2751,6 +2813,7 @@ function tap(sx,sy){
   const [x,y]=tileAt(sx,sy);
   if(tool.kind==='place'){ placeBuilding(tool.type,x,y); return; }
   if(tool.kind==='move'){ moveBuilding(tool.id,x,y); return; }
+  if(tool.kind==='pbuild'||tool.kind==='land') return;
   if(tool.kind==='vehicle'){ api('/api/admin/vehicles',{method:'POST',body:{type:tool.vtype,x,y}}).then(()=>toast(`${VEHICLE_TYPES[tool.vtype].name} is on the road`)).catch(e=>toast(e.message)); return; }
   if(tool.kind==='disaster'){ api('/api/admin/disasters',{method:'POST',body:{kind:tool.dtype,x,y}}).then(r=>toast(r.ruined?`${DISASTER_TYPES[tool.dtype].name}: ${r.ruined} building${r.ruined===1?'':'s'} in ruins`:`${DISASTER_TYPES[tool.dtype].name}: nothing was destroyed`)).catch(e=>toast(e.message)); setTool({kind:'pan'}); return; }
   if(tool.kind==='erase'){ if(tool.mode!=='roads'){ const id=D.occ.get(x+','+y); if(id) removeBuilding(id); } return; }
@@ -2759,6 +2822,7 @@ function tap(sx,sy){
   if(best){ selectCitizen(best.id); return; }
   for(const h of vehicleHits){ const p=iso(h.st.x,h.st.y); const sp={ x:(p.x-cam.x)*cam.z+cw/2, y:(p.y-6-cam.y)*cam.z+ch/2 }; if(Math.hypot(sp.x-sx,sp.y-sy)<16*Math.max(1,cam.z*0.8)){ sel={kind:'v',id:h.id}; follow=null; renderCard(); return; } }
   const id=D.occ.get(x+','+y); if(id){ selectBuilding(id); return; }
+  const pid=D.plotOcc.get(x+','+y); if(pid){ sel={kind:'p',id:pid}; follow=null; renderCard(); return; }
   closeCard();
 }
 async function placeBuilding(type,x,y){ const t=BUILDING_TYPES[type];
@@ -2808,8 +2872,8 @@ const ICONS={
 /* ---------------- UI ---------------- */
 let toastTimer=null;
 function toast(msg, btn, fn){ $('toastMsg').textContent=msg; const b=$('toastBtn'); b.hidden=!btn; if(btn){ b.textContent=btn; b.onclick=()=>{ fn(); $('toast').hidden=true; }; } $('toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('toast').hidden=true, btn?5000:2800); }
-function turnTool(){ if(tool.kind!=='place'&&tool.kind!=='move') return; tool.rot=tool.rot?0:1; if(ghost) ghost.off=null; refreshTurn(); }
-function refreshTurn(){ const b=$('toolTurn'); if(b) b.hidden=!(tool.kind==='place'||tool.kind==='move'); }
+function turnTool(){ if(tool.kind!=='place'&&tool.kind!=='move'&&tool.kind!=='pbuild') return; tool.rot=tool.rot?0:1; if(ghost) ghost.off=null; refreshTurn(); }
+function refreshTurn(){ const b=$('toolTurn'); if(b) b.hidden=!(tool.kind==='place'||tool.kind==='move'||tool.kind==='pbuild'); }
 async function rotateBuilding(id){ const b=D.buildings.get(id); if(!b) return; const nr=b.rot?0:1, nm=b.name||T(b).name;
   const bl=blockers(b.type,b.x,b.y,id,nr); if(bl.some(q=>q.why)){ toast(`No room to turn ${nm}: ${blockedText(bl).toLowerCase()}.`); return; }
   if(draftOn){ draftEdit(`turning ${nm}`,d=>{ const n=d.builds.find(q=>q.tid===id); if(n) n.rot=nr; else { const live=S.buildings.get(id), p=d.moves[id]||{x:b.x,y:b.y}; if(live&&live.x===p.x&&live.y===p.y&&(live.rot||0)===nr) delete d.moves[id]; else d.moves[id]={x:p.x,y:p.y,rot:nr}; d.labels[id]=nm; } }); return; }
@@ -2817,7 +2881,7 @@ async function rotateBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
   catch(e){ toast(e.message); } }
 function setTool(t){ tool=t; ghost=null; roadStart=null; setTimeout(refreshTurn); const chip=$('toolchip');
   if(t.kind==='pan'){ chip.hidden=true; setMini(false); }
-  else { chip.hidden=false; $('toolLabel').textContent = t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} onto a road` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
+  else { chip.hidden=false; $('toolLabel').textContent = t.kind==='land'?'Drag a box over empty grass beside a road' : t.kind==='pbuild'?`Drag ${BUILDING_TYPES[t.type].name} onto your plot, let go to build` : t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} onto a road` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
   if(activeTab && !PLAYER_TABS.has(activeTab) && activeTab!=='reports' && activeTab!=='stats' && activeTab!=='stream') renderPane(); }
 $('toolDone').onclick=()=>setTool({kind:'pan'});
 // Minimise: tuck the menus away while keeping the chosen tool, so the whole map is free to build on.
@@ -3492,7 +3556,7 @@ const FLOW_NAMES={ 'earn:shifts':['source','Extra shifts'], 'earn:gigs':['source
   'crime:scam':['source','Scams'], 'crime:atm':['source','ATM hacks'], 'heist:loot':['source','Heist loot'], 'heist:fine':['sink','Heist fines'], 'rent:income':['move','Moving-in fees to owners'] };
 // Labels and icons for a player's own cash-flow history (Wallet), from the player's side.
 const LEDGER_NAMES={ wages:['💼','Wages (after rent)'], 'gift:in':['🎁','Gift received'], gift:['🎁','Gift sent'], 'crime:victim':['👛','Pocket picked'], 'bank:deposit':['🏦','Paid into the bank'], 'bank:withdraw':['🏦','Taken out of the bank'],
-  'bank:interest':['🏦','Savings interest (in the bank)'], travel:['🚕','Cab fare or fuel'], 'rent:fee':['🏠','Moving-in fee'], 'rent:movers':['🚚','Movers'], 'rent:income':['🏠','Moving-in fee from a new tenant'], 'car:buy':['🚗','Bought a car'], 'car:sell':['🚗','Sold a car'],
+  'bank:interest':['🏦','Savings interest (in the bank)'], travel:['🚕','Cab fare or fuel'], 'rent:fee':['🏠','Moving-in fee'], 'rent:movers':['🚚','Movers'], 'rent:income':['🏠','Moving-in fee from a new tenant'], 'car:buy':['🚗','Bought a car'], 'land:buy':['🗺️','Bought land'], 'land:charges':['🏛️','Land charges (survey, registration, stamp duty)'], 'land:sell':['🗺️','Sold land to the colony'], 'build:own':['🏗️','Builders on your land'], 'build:charges':['🏛️','Building permit and inspection'], 'build:rush':['⚡','Rushed the builders'], 'build:upgrade':['⬆️','Upgraded a building'], 'property:offer':['🤝','Bought property from a colonist'], 'property:sale':['🤝','Sold property to a colonist'], 'car:sell':['🚗','Sold a car'],
   'property:buy':['🏢','Bought a building'], 'property:sell':['🏢','Sold a building'], 'property:income':['🏢','Rent and profits'], 'bills:car':['🧾','Car upkeep'], 'bills:property':['🧾','Property upkeep'], daily:['🔥','Daily reward'], guide:['🧭','Guide reward'],
   'casino:bet':['🎰','Casino bet'], 'casino:win':['🎰','Casino win'], 'race:bet':['🏁','Race bet'], 'race:win':['🏁','Race win'], 'lottery:ticket':['🎟️','Lottery tickets'], 'lottery:win':['🎟️','Lottery win'], pet:['🐾','Pet'],
   'crime:rob':['🚨','Robbery loot'], 'crime:pickpocket':['👛','Pickpocket loot'], 'crime:scam':['🎭','Scam takings'], 'crime:atm':['🏧','ATM hack'], 'crime:fine':['🚓','Crime fine'], 'heist:loot':['🕶️','Heist loot'], 'heist:fine':['🚓','Heist fine'],
@@ -4596,7 +4660,7 @@ const BUYABLE=new Set(['housing','shops','offices','industry']); // what players
 function actionTabs(c){ const wrap=el('div',null); const gb=GuideUI.box(); if(gb) wrap.append(gb); const dr=Daily.row(); if(dr) wrap.append(dr);
   if(!PushUI.st&&!PushUI.busy) PushUI.load().then(()=>{ if(sel&&sel.kind==='c') renderCard(true); });
   wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}), el('button',{class:'btn sm',text:'⚙️ Settings',onclick:()=>PushUI.sheet()}))); const row=el('div',{class:'acttabs',role:'tablist'});
-  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home','Home'],['wallet','👛 Wallet'],['cars','Cars'],['crime','Crime'],['badges','⭐ Stars']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=actTab===id?null:id; renderCard(true); }}));
+  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home',MyHome.data&&MyHome.data.props?`🏠 Home · ${MyHome.data.props} 🏢`:'🏠 Home'],['wallet','👛 Wallet'],['cars','Cars'],['crime','Crime'],['badges','⭐ Stars']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=actTab===id?null:id; renderCard(true); }}));
   if(actTab==='bank') actTab='wallet'; if(actTab==='pet'||actTab==='casino'||actTab==='out') actTab='earn'; if(!actTab){ wrap.append(row); return wrap; } const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>Stars.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
 // ---- Home (rent or move, and the buildings you own), Bank, Cars ----
@@ -4614,6 +4678,7 @@ function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🏠
   if(!H){ box.append(el('p',{class:'hint',text:'Checking where you live…'})); return box; }
   if(H.home){ const b=D.buildings.get(H.home.id);
     box.append(el('p',{class:'jobnow'}, 'You live at ', el('b',{text:H.home.name}), H.home.mine?' (you own it)':'', '.'),
+      H.home.where?el('p',{class:'hint',text:`📍 ${H.home.where[0].toUpperCase()+H.home.where.slice(1)}.`}):'',
       el('p',{class:'hint',text:`Rent is ${fmt(H.home.rent)} a day, taken from your wages.`}),
       el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Go see it',onclick:()=>goToBuilding(b||{id:H.home.id,x:H.home.x,y:H.home.y})}),
         el('button',{class:'btn danger',text:'Leave this home',onclick:()=>toast(`Move out of ${H.home.name}?${H.hasJob?' You’ll leave your job too, until you rent somewhere new.':''}`,'Move out',async()=>{ const r=await meAction('/api/me/home/leave',{},'You moved out. Find a home and tap 🔑 Rent here to move in somewhere.'); if(r){ MyHome.load(true); } })})),
@@ -4621,7 +4686,102 @@ function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🏠
   else { box.append(el('p',{class:'jobnow',text:H.leftHome?"You don't have a home right now.":"You're still in cryosleep, waiting for a home."}),
       el('p',{class:'hint',text:'Find a home to rent: tap a housing building on the map and choose 🔑 Rent here. You pay a moving-in fee and the movers, and you’ll be given a job nearby.'}),
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🔎 Find a home to rent',onclick:()=>findHomeToRent()}))); }
+  const ob=ownedBox(c); if(ob) box.append(ob);
+  const of=Plots.offersBox(); if(of) box.append(of);
   return box; }
+// ---- Land: buying plots, building on them, upgrades and offers between colonists ----
+function sheetBox(label, cls){ document.querySelector('.rsheet-bg')?.remove(); const wrap=el('div',{class:'rsheet-bg'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
+  const box=el('div',{class:'rsheet inked '+(cls||''),role:'dialog','aria-label':label}); wrap.append(box); document.body.append(wrap);
+  box.append(el('div',{class:'shhead'}, el('h3',{text:label}), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>wrap.remove()}))); return { box, close:()=>wrap.remove() }; }
+const bill=(rows,total)=>{ const t=el('table',{class:'bill'}); for(const [k,v] of rows) t.append(el('tr',null, el('td',{text:k}), el('td',{text:fmt(v)}))); t.append(el('tr',{class:'tot'}, el('td',{text:'Total'}), el('td',{text:`${fmt(total)} coins`}))); return t; };
+const isMe = h => !!(Me&&Me.handle&&h&&h.toLowerCase()===Me.handle.toLowerCase());
+const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
+  drop(id){ this.info.delete(id); },
+  get(id){ const e=this.info.get(id); if((!e||Date.now()-e.at>15000)&&!this.busy.has(id)){ this.busy.add(id); api('/api/plots/'+encodeURIComponent(id)).then(d=>this.info.set(id,{d,at:Date.now()})).catch(()=>{}).finally(()=>{ this.busy.delete(id); if(sel&&(sel.id===id||sel.kind==='b')) renderCard(true); }); } return e?e.d:null; },
+  start(){ if(!(Me&&Me.token)){ toast('Sign in to your colonist first.'); return; } closeCard(); setTool({kind:'land'}); toast(`Drag a box over empty grass beside a road: ${PLOT_MIN}×${PLOT_MIN} up to ${PLOT_MAX}×${PLOT_MAX} tiles.`); },
+  async quote(r){ const bad=landProblem(r); if(bad){ toast(bad+'. Try another spot.'); return; }
+    let q; try{ q=await api(`/api/land/quote?x=${r.x}&y=${r.y}&w=${r.w}&d=${r.d}`); }catch(e){ toast(e.message); return; }
+    const {box,close}=sheetBox(`🗺️ Buy this land`); const nm=el('input',{type:'text',maxlength:'30',placeholder:'Name it (optional)','aria-label':'Plot name'});
+    box.append(el('p',{class:'hint',text:`${q.w}×${q.d} tiles (${q.tiles}) ${q.where||''}.`}),
+      bill([[`Land: ${q.tiles} tiles × ${fmt(q.perTile)}`,q.land], ...q.charges.map(c=>[c.name,c.amount])], q.total),
+      el('p',{class:'hint',text:`Charges go to the colony treasury. Land near the landing station and among many buildings costs more. You'll pay ${fmt(Math.round(q.land*0.001))} a week in land tax. You own ${q.props} of ${q.max} properties.`}));
+    if(q.problem) box.append(el('p',{class:'warnline',text:q.problem}));
+    else if(q.props>=q.max) box.append(el('p',{class:'warnline',text:`You're at your limit of ${q.max} properties. Sell one, or earn more stars.`}));
+    else box.append(nm, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(q.total)}`,onclick:async()=>{ const res=await meAction('/api/me/land',{x:q.x,y:q.y,w:q.w,d:q.d,name:nm.value},r=>`The land is yours! Paid ${fmt(r.paid)} coins. Tap it to build.`); if(res){ close(); setTool({kind:'pan'}); Money.at=0; MyHome.at=0;
+      setTimeout(()=>{ sel={kind:'p',id:res.plot.id}; renderCard(true); },400); } }}), el('button',{class:'linkb',text:'Pick another spot',onclick:close}))); },
+  // the build menu for your own plot: every kind of building, decoration and park, with what it costs you
+  picker(p){ const {box,close}=sheetBox(`🏗️ Build on ${p.name||'your plot'}`,'wide'); let cat=Plots.cat||'housing';
+    const cats=CATS.filter(c=>c.id!=='roads'&&c.id!=='terrain'&&Object.values(BUILDING_TYPES).some(t=>t.cat===c.id)), tabs=el('div',{class:'ctabs'}), list=el('div',{class:'cards pcards'}), free=p.w*p.d-(p.used||0);
+    const fill=()=>{ tabs.innerHTML=''; list.innerHTML='';
+      for(const c of cats) tabs.append(el('button',{class:'pill'+(cat===c.id?' on':''),text:c.name,onclick:()=>{ cat=Plots.cat=c.id; fill(); }}));
+      const ids=Object.keys(BUILDING_TYPES).filter(id=>BUILDING_TYPES[id].cat===cat&&id!=='landing'&&!BUILDING_TYPES[id].hidden).sort((a,b)=>constructionCost(a)-constructionCost(b));
+      for(const id of ids){ const t=BUILDING_TYPES[id], q=buildQuote(id), [w,d]=t.size, fits=(w<=p.w&&d<=p.d)||(d<=p.w&&w<=p.d);
+        list.append(card(thumbFor(id), t.name, `${fmt(q.total)} coins`, `${w}×${d} · ${q.minutes?realTime(q.minutes*GAME_MIN_MS):'instant'}${upgradable(id)?' · upgradable':''}`, false, ()=>{ if(!fits){ toast(`${t.name} is ${w}×${d}: too big for this ${p.w}×${p.d} plot.`); return; } close(); closeCard(); Plots.cat=cat; setTool({kind:'pbuild',plot:p.id,type:id,rot:w>p.w||d>p.d?1:0});
+          const c=iso(p.x+p.w/2,p.y+p.d/2); cam.x=c.x; cam.y=c.y; cam.z=Math.max(cam.z,1.3); toast(`Drag ${t.name} onto your plot and let go. ${fmt(q.total)} coins with the charges.`); }, !fits)); } };
+    box.append(el('p',{class:'hint',text:`${p.w}×${p.d} plot, ${free} tile${free===1?'':'s'} free. Prices include the building permit and inspection (and the water & power hook-up for homes and businesses).`}), tabs, list); fill(); },
+  async place(x,y){ const type=tool.type, plot=tool.plot, rot=tool.rot||0, q=buildQuote(type), t=BUILDING_TYPES[type];
+    const {box,close}=sheetBox(`🏗️ Build ${t.name}`), nm=el('input',{type:'text',maxlength:'40',placeholder:'Name it (optional)','aria-label':'Name'});
+    box.append(bill([['Builders',q.cost], ...q.charges.map(c=>[c.name,c.amount])], q.total), el('p',{class:'hint',text:q.minutes?`Ready in ${realTime(q.minutes*GAME_MIN_MS)} (you can pay to rush it). The fees go to the colony treasury.`:'Goes up straight away.'}), nm,
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Build for ${fmt(q.total)}`,onclick:async()=>{ const r=await meAction(`/api/me/plots/${encodeURIComponent(plot)}/build`,{type,x,y,rot,name:nm.value},r=>r.building.done?`${t.name} is built!`:`The builders have started on your ${t.name}.`); if(r){ close(); setTool({kind:'pan'}); Plots.drop(plot); setTimeout(()=>{ sel={kind:'b',id:r.building.id}; renderCard(true); },400); } }}),
+        el('button',{class:'linkb',text:'Move it',onclick:close}))); },
+  offerSheet(kind,targetId,label,owner){ const {box,close}=sheetBox(`🤝 Make an offer`), amt=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric',placeholder:'Coins','aria-label':'Coins'}), msg=el('textarea',{maxlength:'200',rows:'3',placeholder:`A message for @${owner} (optional)`,'aria-label':'Message'});
+    box.append(el('p',{class:'hint',text:`For ${label}, owned by @${owner}. They have 24 hours to accept, turn it down, or name their price. Your coins (cash, then savings) are only taken if the deal is agreed. ${Math.round(TRANSFER_TAX*100)}% of the price goes to the treasury as transfer tax.`}), amt, msg,
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Send offer',onclick:async()=>{ const n=Math.floor(Number(amt.value)); if(!(n>=1)){ toast('Enter how many coins you offer.'); return; } const r=await meAction('/api/me/offers',{kind,targetId,amount:n,message:msg.value},`Offer sent to @${owner}. You'll hear back within 24 hours.`); if(r){ close(); Plots.offersAt=0; } }}), el('button',{class:'linkb',text:'Cancel',onclick:close}))); },
+  loadOffers(force){ if(!(Me&&Me.token)) return null; if((force||Date.now()-this.offersAt>20000)&&!this.offersBusy){ this.offersBusy=true; api('/api/me/offers').then(d=>{ this.offers=d; this.offersAt=Date.now(); }).catch(()=>{}).finally(()=>{ this.offersBusy=false; if(sel) renderCard(true); }); } return this.offers; },
+  async answer(o,action,extra){ const r=await meAction(`/api/me/offers/${encodeURIComponent(o.id)}`,{action,...(extra||{})},r=>r.status==='accepted'?`🔑 Deal done for ${fmt(r.price)} coins.`:r.status==='failed'?`The deal fell through: ${r.why}`:r.status==='countered'?'Counter-offer sent.':r.status==='declined'?'Turned down.':'Offer withdrawn.'); if(r){ this.offersAt=0; this.loadOffers(true); Money.at=0; MyHome.at=0; this.info.clear(); } },
+  counterSheet(o){ const {box,close}=sheetBox('Name your price'), amt=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric',value:String(Math.round(o.amount*1.2)),'aria-label':'Coins'}), msg=el('input',{type:'text',maxlength:'200',placeholder:'A message (optional)','aria-label':'Message'});
+    box.append(el('p',{class:'hint',text:`@${o.from} offered ${fmt(o.amount)} coins for ${o.label}. What would you sell it for? They'll have 24 hours to accept.`}), amt, msg, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Send counter-offer',onclick:async()=>{ const n=Math.floor(Number(amt.value)); if(!(n>=1)) return; close(); this.answer(o,'counter',{amount:n,reply:msg.value}); }})));
+  },
+  offerRow(o){ const left=o.expires-(Date.now()+skew), open=o.status==='open'||o.status==='countered', li=el('li',{class:'offer'});
+    const who=o.mine?`You offered @${o.to}`:`@${o.from} offers`, st={accepted:'✅ Sold',declined:'Turned down',withdrawn:'Withdrawn',expired:'Ran out of time',failed:'Fell through',sold:'Sold to someone else'}[o.status];
+    li.append(el('div',{class:'jt'}, el('b',{text:`${who} ${fmt(o.amount)} for ${o.label}`}), o.message?el('span',{text:`“${o.message}”`}):'', o.counter!=null?el('span',{text:`Counter: ${fmt(o.counter)} coins${o.reply?` · “${o.reply}”`:''}`}):'', el('span',{class:'hint',text:open?`${realTime(Math.max(60000,left))} left`:(st||o.status)+(o.status==='failed'&&o.reply?`: ${o.reply}`:'')})));
+    if(open){ const acts=el('div',{class:'row-actions'});
+      if(!o.mine&&o.status==='open') acts.append(el('button',{class:'btn primary sm',text:'Accept',onclick:()=>toast(`Sell ${o.label} to @${o.from} for ${fmt(o.amount)}? You get ${fmt(o.amount-Math.round(o.amount*TRANSFER_TAX))} after the transfer tax.`,'Sell',()=>this.answer(o,'accept'))}), el('button',{class:'btn sm',text:'Counter',onclick:()=>this.counterSheet(o)}), el('button',{class:'linkb',text:'Decline',onclick:()=>this.answer(o,'decline')}));
+      else if(!o.mine) acts.append(el('span',{class:'hint',text:'Waiting for their answer to your counter.'}));
+      else if(o.status==='countered') acts.append(el('button',{class:'btn primary sm',text:`Pay ${fmt(o.counter)}`,onclick:()=>toast(`Buy ${o.label} for ${fmt(o.counter)} coins?`,'Buy',()=>this.answer(o,'accept'))}), el('button',{class:'linkb',text:'Decline',onclick:()=>this.answer(o,'decline')}));
+      else acts.append(el('button',{class:'linkb',text:'Withdraw',onclick:()=>this.answer(o,'withdraw')}));
+      li.append(acts); }
+    return li; },
+  offersBox(){ const O=this.loadOffers(); if(!O) return null; const all=[...O.incoming,...O.outgoing]; if(!all.length) return null;
+    const box=el('div',{class:'owned'}, el('h3',{text:`🤝 Offers${O.incoming.some(o=>o.status==='open')?' · answer needed':''}`})), ul=el('ul',{class:'joblist offers'});
+    for(const o of all.sort((a,b)=>((b.status==='open'||b.status==='countered')-(a.status==='open'||a.status==='countered'))||b.at-a.at)) ul.append(this.offerRow(o)); box.append(ul); return box; },
+  // the card of a plot of land
+  card(card, close){ const P=D.plots.get(sel.id), info=this.get(sel.id); if(!P&&!info){ closeCard(); return; } const p=info||P, mine=info?info.mine:isMe(P.owner);
+    const head=el('div',{class:'chead'}, el('div',{class:'cthumb plotthumb',text:'🗺️'}), el('div',null, el('h2',{text:p.name||`Plot of land, ${p.w}×${p.d}`}), el('div',{class:'chips2'}, el('span',{class:'pill',text:`${p.w}×${p.d} tiles`}), el('span',{class:'pill',text:mine?'Yours':`@${p.owner}'s land`}))));
+    const dl=el('dl',null), add=(k,v)=>dl.append(el('dt',{text:k}),el('dd',{text:v}));
+    card.append(close, head, dl); add('Owner',`@${p.owner}`); if(!info){ add('Where','…'); return; }
+    add('Where', info.where||'—'); add('Space', `${info.used} of ${info.w*info.d} tiles built on`);
+    if(mine){ add('Paid for land', `${fmt(info.price)} coins`); add('Worth', `${fmt(info.worth)} coins with what's on it`); }
+    if(info.buildings.length){ const ul=el('ul',{class:'joblist'}); for(const b of info.buildings){ const t=BUILDING_TYPES[b.type]||{};
+        ul.append(el('li',null, el('img',{alt:'',src:thumbFor(b.type),width:'34',height:'34'}), el('div',{class:'jt'}, el('b',{text:b.name||t.name}), el('span',{text:b.done===false?'Being built':b.upAt?`Upgrading to level ${(b.lv||1)+1}`:`Level ${b.lv||1}${b.income?` · about ${fmt(b.income)} a day`:''}`})), el('button',{class:'btn sm',text:'Open',onclick:()=>{ sel={kind:'b',id:b.id}; renderCard(true); }}))); }
+      card.append(ul); }
+    else card.append(el('p',{class:'hint',text:mine?'Nothing built yet. Tap 🏗️ Build here to choose a home, business, park or decorations.':'Nothing built on it yet.'}));
+    if(mine){ card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🏗️ Build here',onclick:()=>this.picker(info)}),
+        el('button',{class:'btn',text:'Rename',onclick:()=>{ const {box,close}=sheetBox('Name your plot'), n=el('input',{type:'text',maxlength:'30',value:info.name||'','aria-label':'Name'}); box.append(n, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Save',onclick:async()=>{ const r=await meAction(`/api/me/plots/${encodeURIComponent(info.id)}/name`,{name:n.value},'Renamed.'); if(r){ close(); this.drop(info.id); } }}))); }}),
+        el('button',{class:'linkb',text:`Sell to the colony (${fmt(info.sell)})`,onclick:()=>toast(`Sell this plot and everything on it to the colony for ${fmt(info.sell)} coins (70% of what it cost)?`,'Sell',async()=>{ const r=await meAction(`/api/me/plots/${encodeURIComponent(info.id)}/sell`,{},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ closeCard(); Money.at=0; } })})));
+      if(info.offers&&info.offers.length){ const ul=el('ul',{class:'joblist offers'}); for(const o of info.offers) ul.append(this.offerRow(o)); card.append(el('h3',{text:'🤝 Offers for it'}), ul); } }
+    else if(Me&&Me.token) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🤝 Make an offer',onclick:()=>this.offerSheet('plot',info.id,info.name||`the ${info.w}×${info.d} plot${info.buildings.length?' and what stands on it':''}`,info.owner)})));
+  },
+  // extra parts of a building's card: who owns it, its level, rushing the builders, upgrading, knocking it down, making an offer
+  buildingBits(card,b,t){ if(!(Me&&Me.token&&Me.handle)||Store.canWrite) return; const mine=isMe(b.owner), lv=b.lv||1, now=Date.now()+skew;
+    if(b.plot&&!mine) card.append(el('p',{class:'hint',text:`It stands on @${b.owner}'s land.`}));
+    if(mine&&b.done===false&&b.plot){ const cost=rushCost(constructionCost(b.type),(b.readyAt||0)-now); card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:`⚡ Rush it (${fmt(cost)})`,onclick:()=>toast(`Pay the builders ${fmt(cost)} coins to finish it now?`,'Rush',()=>meAction(`/api/me/buildings/${encodeURIComponent(b.id)}/rush`,{},'Finished!'))}))); }
+    if(mine&&b.upAt){ const left=b.upAt-now, cost=rushCost(upgradeQuote(b.type,lv+1).cost, left);
+      card.append(el('p',{class:'jobnow',text:`⬆️ Upgrading to level ${lv+1}: ${left>0?`ready in ${realTime(left)}`:'finishing…'}`}), el('div',{class:'row-actions'}, el('button',{class:'btn',text:`⚡ Rush it (${fmt(cost)})`,onclick:()=>toast(`Pay the builders ${fmt(cost)} coins to finish the upgrade now?`,'Rush',()=>meAction(`/api/me/buildings/${encodeURIComponent(b.id)}/rush`,{},`Level ${lv+1}!`))})));
+    }
+    else if(mine&&b.done!==false&&!b.ruin&&upgradable(b.type)){ const box=el('div',{class:'authbox'}, el('h3',{text:`⬆️ Upgrade · level ${lv} of ${MAX_LEVEL}`}));
+      if(lv>=MAX_LEVEL) box.append(el('p',{class:'hint',text:'It’s at the top level. Nothing grander can be built here.'}));
+      else { if(!this.up||this.up.id!==b.id||Date.now()-this.up.at>20000){ if(!this.upBusy){ this.upBusy=true; const id=b.id; api(`/api/me/buildings/${encodeURIComponent(id)}/upgrade`).then(q=>{ this.up={id,q,at:Date.now()}; }).catch(e=>{ this.up={id,q:{error:e.message},at:Date.now()}; }).finally(()=>{ this.upBusy=false; if(sel&&sel.id===id) renderCard(true); }); } box.append(el('p',{class:'hint',text:'Asking the builders…'})); }
+        else { const q=this.up.q; if(q.error) box.append(el('p',{class:'hint',text:q.error}));
+          else { const room=q.to.homeCap?`${q.from.homeCap} → ${q.to.homeCap} residents`:q.to.jobCap?`${q.from.jobCap} → ${q.to.jobCap} workers`:`${q.from.hangCap} → ${q.to.hangCap} visitors`;
+            box.append(el('p',{class:'hint',text:`Level ${q.level}: ${room}, +${Math.round(((1+0.1*(q.level-1))/(1+0.1*(q.level-2))-1)*100)}% on each, and a grander look.${q.grows?` It grows to ${q.w}×${q.d} tiles${q.land?` (${fmt(q.land)} for the extra ground)`:''}.`:''} Takes ${realTime(q.minutes*GAME_MIN_MS)}.`}),
+              bill([['Builders',q.cost], ...(q.land?[['Extra ground',q.land]]:[]), ...q.charges.map(c=>[c.name,c.amount])], q.total));
+            if(q.problem) box.append(el('p',{class:'warnline',text:q.problem}));
+            else box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Upgrade for ${fmt(q.total)}`,onclick:()=>toast(`Upgrade ${b.name||t.name} to level ${q.level} for ${fmt(q.total)} coins?`,'Upgrade',async()=>{ const r=await meAction(`/api/me/buildings/${encodeURIComponent(b.id)}/upgrade`,{},r=>`The builders are on it. Level ${r.level} in ${realTime(r.minutes*GAME_MIN_MS)}.`); if(r) this.up=null; })}))); } } }
+      card.append(box); }
+    if(mine&&b.plot&&b.done!==false&&!b.upAt) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn sm',text:'🗺️ Your plot',onclick:()=>{ sel={kind:'p',id:b.plot}; renderCard(true); }}), el('button',{class:'linkb',text:'Knock it down',onclick:()=>toast(`Knock down ${b.name||t.name}? The builders give back 30% of what it cost.`,'Knock down',()=>meAction(`/api/me/buildings/${encodeURIComponent(b.id)}/knock`,{},r=>r.back?`Knocked down. ${fmt(r.back)} coins back.`:'Knocked down.'))})));
+    if(b.owner&&!mine&&b.done!==false&&!b.ruin) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'🤝 Make an offer',onclick:()=>b.plot?this.offerSheet('plot',b.plot,`@${b.owner}'s plot with ${b.name||t.name}`,b.owner):this.offerSheet('building',b.id,b.name||t.name,b.owner)})));
+  } };
 // The 🔑 Rent here section on a home's card.
 function rentBox(b, t){ const box=el('div',{class:'authbox rentbox'}, el('h3',{text:'🔑 Rent here'})); MyHome.load(); const H=MyHome.data;
   if(!H){ box.append(el('p',{class:'hint',text:'…'})); return box; }
@@ -4634,13 +4794,20 @@ function rentBox(b, t){ const box=el('div',{class:'authbox rentbox'}, el('h3',{t
   if(!H.canMoveToday){ box.append(el('p',{class:'hint',text:"You've moved today already. You can move again tomorrow (game time)."})); return box; }
   box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`🔑 Rent here for ${fmt(total)}`,onclick:()=>toast(`Move into ${b.name||t.name} for ${fmt(total)} coins?${H.home?` You’ll leave ${H.home.name}.`:''}`,'Rent',async()=>{ const r=await meAction('/api/me/home',{buildingId:b.id},r=>`Welcome home to ${r.home}! You paid ${fmt(r.paid)} coins.`); if(r) MyHome.load(true); })})));
   return box; }
-// Buildings you own (on the Wallet tab).
-function ownedBox(c){ const M=moneyFor(c), Pp=M&&M.props; if(!Pp) return null; const box=el('div',{class:'owned'}, el('h3',{text:`🏢 Buildings you own (${Pp.list.length} of ${Pp.max})`}));
-  if(!Pp.list.length) box.append(el('p',{class:'hint',text:`Buy a home or business from its card on the map. Each game day you collect ${100-Math.round(Pp.cut*100)}% of its rent or profit; the treasury keeps ${Math.round(Pp.cut*100)}%.`}));
-  else { const ul=el('ul',{class:'joblist'}); for(const p of Pp.list) ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:p.name}), el('span',{text:p.ruin?'In ruins: no income until rebuilt':`About ${fmt(p.income)} coins a day`})),
-      el('button',{class:'btn',text:'Go see',onclick:()=>{ const b=D.buildings.get(p.id); if(b){ const [w,d]=T(b).size, q=iso(b.x+w/2,b.y+d/2); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.2); } sel={kind:'b',id:p.id}; renderCard(true); }}),
-      el('button',{class:'linkb',text:`Sell (${fmt(p.sell)})`,onclick:()=>toast(`Sell ${p.name} back to the colony for ${fmt(p.sell)} coins?`,'Sell',()=>moneyAction(c,'/api/me/properties/sell',{buildingId:p.id},r=>`Sold for ${fmt(r.back)} coins.`))}))); box.append(ul); }
-  return box; }
+// What you own (on the Home tab): plots of land with what stands on them, and buildings bought on their own.
+function ownedBox(c){ const M=moneyFor(c), Pp=M&&M.props; if(!Pp) return null; const plots=Pp.plots||[];
+  const box=el('div',{class:'owned'}, el('h3',{text:`🏢 Your properties: ${Pp.count??Pp.list.length} of ${Pp.max}`}),
+    el('p',{class:'hint',text:`With ${Pp.stars||0} star${Pp.stars===1?'':'s'} you can own up to ${Pp.max} (a plot counts as one, whatever you build on it).${Pp.next>Pp.max?` Your next star lets you own ${Pp.next}.`:''}`}),
+    el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🗺️ Buy land',onclick:()=>Plots.start()}), el('span',{class:'hint',text:'or buy a ready-built home or business from its card'})));
+  const go=(x,y,w,d,s2)=>{ const q=iso(x+w/2,y+d/2); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.2); follow=null; sel=s2; renderCard(true); };
+  if(!Pp.list.length&&!plots.length){ box.append(el('p',{class:'hint',text:`Each game day you collect ${100-Math.round(Pp.cut*100)}% of your buildings' rent or profit; the treasury keeps ${Math.round(Pp.cut*100)}%.`})); return box; }
+  const ul=el('ul',{class:'joblist'});
+  for(const p of plots) ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:`🗺️ ${p.name}`}), el('span',{text:`${p.w}×${p.d} plot · ${p.buildings.length?p.buildings.map(b=>`${b.name}${b.level>1?` (L${b.level})`:''}`).join(', '):'nothing built yet'}${p.income?` · about ${fmt(p.income)} a day`:''}`})),
+    el('button',{class:'btn',text:'Go see',onclick:()=>go(p.x,p.y,p.w,p.d,{kind:'p',id:p.id})})));
+  for(const p of Pp.list) ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:`${p.name}${p.level>1?` · level ${p.level}`:''}`}), el('span',{text:p.ruin?'In ruins: no income until rebuilt':`About ${fmt(p.income)} coins a day`})),
+      el('button',{class:'btn',text:'Go see',onclick:()=>{ const b=D.buildings.get(p.id); if(b){ const [w,d]=T(b).size; go(b.x,b.y,w,d,{kind:'b',id:p.id}); } else goToBuilding({id:p.id,x:p.x,y:p.y}); }}),
+      el('button',{class:'linkb',text:`Sell (${fmt(p.sell)})`,onclick:()=>toast(`Sell ${p.name} back to the colony for ${fmt(p.sell)} coins?`,'Sell',()=>moneyAction(c,'/api/me/properties/sell',{buildingId:p.id},r=>`Sold for ${fmt(r.back)} coins.`))})));
+  box.append(ul); return box; }
 // Your money at a glance. Pay (wages, rent, winnings) arrives as cash, which can be pickpocketed until you take it to a
 // Bank: deposits and withdrawals happen on a Bank's own card, so you have to go to one (tap it on the map).
 function nearestBank(c){ let best=null, bd=1e9; const at=(c&&(c.home||c.job))||null; const ox=at?at[2]:0, oy=at?at[3]:0;
@@ -4657,7 +4824,6 @@ function walletPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'�
   box.append(el('div',{class:'row-actions'}, nb?el('button',{class:'btn primary',text:'🏦 Go to the nearest Bank',onclick:()=>goToBuilding(nb)}):el('span',{class:'hint',text:B.hasBank?'Find a Bank on the map to deposit.':"The colony doesn't have a Bank yet."})));
   const gto=el('input',{type:'text',placeholder:'@friend',autocomplete:'off','aria-label':'Gift to'}), gam=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Coins to gift',placeholder:'Coins'});
   box.append(el('h3',{text:'🎁 Gift coins'}), el('p',{class:'hint',text:'Send cash to a verified colonist, up to 10,000 a day. Gifts come out of the cash on you.'}), el('div',{class:'cbet'}, gto, gam, el('button',{class:'btn',text:'Send',onclick:()=>sendGift(gto.value, gam.value)})));
-  const ob=ownedBox(c); if(ob) box.append(ob);
   box.append(Ledger.box()); return box; }
 // The account section on a Bank's card: the only place to deposit and withdraw.
 const BankAcct={ at:0, data:null, busy:false,
@@ -4873,7 +5039,8 @@ function renderCard(force){ if(!force && cardBusy()) return;
     const strip=d&&d.claimed?Stars.strip(d.stars||0, mineCard(c)):null;
     card.append(close, cardMax(), shr, head); if(strip) card.append(strip); card.append(el('dl',null,
       el('dt',{text:'Gender'}), el('dd',{text:c.gender==='f'?'Woman':'Man'}),
-      el('dt',{text:'Home'}), el('dd',{text:h?nm(h):d&&d.leftHome?'None: looking for a place to rent':d&&d.queue?`None yet. Moves in when ${fmt(d.queue)} more ${d.queue===1?'home is':'homes are'} built`:'None yet'}),
+      el('dt',{text:'Home'}), el('dd',{text:h?nm(h)+(d&&d.where?`, ${d.where}`:''):d&&d.leftHome?'None: looking for a place to rent':d&&d.queue?`None yet. Moves in when ${fmt(d.queue)} more ${d.queue===1?'home is':'homes are'} built`:'None yet'}),
+      ...(d&&d.props!=null?[el('dt',{text:'Property'}), el('dd',{text:d.props?`Owns ${d.props} propert${d.props===1?'y':'ies'}${mineCard(c)?` (up to ${d.propMax})`:''}`:'Owns none yet'})]:[]),
       el('dt',{text:'Job'}), el('dd',{text:j?`${T(j).work.title} at ${nm(j)}`:h?'Looking for work':'Gets one after moving in'}),
       ...(j?(()=>{ const sh=SHIFTS[shiftOf(c.id, j.id, j.type)]; return [el('dt',{text:'Hours'}), el('dd',{text:`${sh.name}, ${sh.hours}`})]; })():[]),
       ...((Store.canWrite||(Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase()))?[el('dt',{text:'Coins'}), el('dd',{text:d&&typeof d.coins==='number'?(d.net?`${fmt(d.coins)}, ${d.net>0?'+':''}${d.net} per day`:`${fmt(d.coins)}, no job yet`):(coinsReload(c),'…')})]:[]),
@@ -4910,6 +5077,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
           Blocks.has(c.handle)?el('button',{class:'btn',text:'Unblock',onclick:()=>Blocks.unblock(c.handle)}):el('button',{class:'btn',text:'🚫 Block',onclick:()=>Blocks.ask(c.handle)})));
         if(c.claimed) card.append(giftBox(c.handle)); else card.append(el('p',{class:'hint',text:`@${c.handle} hasn't verified their avatar yet, so they can't receive gifts.`})); }
       else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}))); }
+  } else if(sel.kind==='p'){ Plots.card(card, close);
   } else if(sel.kind==='v'){ const v=D.vehicles.get(sel.id); if(!v){ closeCard(); return; } const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car;
     const head=el('div',{class:'chead'}); head.append(el('img',{class:'cthumb',alt:'',src:vehicleThumb(v.type)}), el('div',null, el('h2',{text:V.name}), el('p',{class:'now',text:'Driving around the neighbourhood'})));
     card.append(close, head); if(Store.canWrite) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:'Remove vehicle',onclick:async()=>{ if(draftOn){ draftEdit(`removing a ${V.name.toLowerCase()}`,d=>{ if(isDraftId(v.id)) d.vehicles=d.vehicles.filter(q=>q.tid!==v.id); else d.removeVehicles.push(v.id); }); closeCard(); return; } try{ await api('/api/admin/vehicles/'+encodeURIComponent(v.id),{method:'DELETE'}); closeCard(); toast(`Removed the ${V.name.toLowerCase()}`); }catch(e){ toast(e.message); } }})));
@@ -4919,8 +5087,8 @@ function renderCard(force){ if(!force && cardBusy()) return;
   } else { const b=D.buildings.get(sel.id); if(!b){ closeCard(); return; } const t=T(b); const gm=gmNow();
     const inside=withBudget(15,()=>[...S.citizens.values()].filter(c=>{ const st=citizenAt(c,gm); return st&&st.bid===b.id; }).map(c=>'@'+c.handle));
     const list=(slot,n)=>{ const names=[...S.citizens.values()].filter(c=>c[slot]&&c[slot][0]===b.id).slice(0,8).map(c=>'@'+c.handle); return names.length?': '+names.join(', ')+(n>names.length?` and ${fmt(n-names.length)} more`:''):''; };
-    const lv=levelOf(b);
-    const head=el('div',{class:'chead'}); const im=el('img',{class:'cthumb',alt:'',src:thumbFor(b.type)}); head.append(im, el('div',null, el('h2',{text:b.name||t.name}), el('div',{class:'chips2'}, el('span',{class:'pill',text:CAT_NAME(t.cat)}), el('span',{class:'pill',text:`${t.size[0]}×${t.size[1]}`}), el('span',{class:'pill',text:`Level ${lv} ${'★'.repeat(lv)}${'☆'.repeat(3-lv)}`}))));
+    const lv=b.lv||1;
+    const head=el('div',{class:'chead'}); const im=el('img',{class:'cthumb',alt:'',src:thumbFor(b.type)}); head.append(im, el('div',null, el('h2',{text:b.name||t.name}), el('div',{class:'chips2'}, el('span',{class:'pill',text:CAT_NAME(t.cat)}), el('span',{class:'pill',text:`${t.size[0]}×${t.size[1]}`}), upgradable(b.type)?el('span',{class:'pill',text:`Level ${lv} ${'★'.repeat(lv)}${'☆'.repeat(MAX_LEVEL-lv)}`}):'')));
     const dl=el('dl',null); const add=(k,v)=>dl.append(el('dt',{text:k}),el('dd',{text:v}));
     if(b.done===false){ const left=(b.readyAt||0)-(Date.now()+skew); add('Status', left>0?`Under construction, ready in ${realTime(left)}`:'Finishing…'); }
     add('Built',`Day ${(b.builtDay??0)+1}`+(b.requestedBy?`, requested by @${b.requestedBy}`:''));
@@ -4928,13 +5096,15 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(t.work) add('Workers',`${fmt(b.jobUsed||0)} of ${fmt(t.work.slots)}${list('job',b.jobUsed||0)}`);
     if(t.work) add('Pay',`${t.work.salary} coins a day`);
     add('Here now', inside.length?inside.join(', '):'Nobody');
-    const forSale=BUYABLE.has(t.cat)&&(t.home||t.work), price=propertyPrice(b.type);
-    if(b.owner) add('Owner', `@${b.owner}`); else if(forSale&&b.done!==false&&!b.ruin) add('For sale', `${fmt(price)} coins`);
-    if(forSale&&b.done!==false){ const gross=(t.home?(b.homeUsed||0)*(t.home.rent||0):0)+(t.work?(b.jobUsed||0)*(t.work.salary||0)*0.25:0); add('Earns', `About ${fmt(Math.floor(gross*0.8))} a day for its owner`); }
+    const forSale=BUYABLE.has(t.cat)&&(t.home||t.work), price=Math.round(propertyPrice(b.type)*(lv>1?1+0.3*(lv-1):1));
+    if(b.owner) add('Owner', `@${b.owner}${b.plot?' (on their own land)':''}`); else if(forSale&&b.done!==false&&!b.ruin) add('For sale', `${fmt(price)} coins`);
+    if(b.owner&&b.plot) { const P=D.plots.get(b.plot); if(P&&P.name) add('Plot', P.name); }
+    if((forSale||(b.owner&&(t.home||t.work)))&&b.done!==false){ const gross=((t.home?(b.homeUsed||0)*(t.home.rent||0):0)+(t.work?(b.jobUsed||0)*(t.work.salary||0)*0.25:0))*(1+0.1*(lv-1)); add('Earns', `About ${fmt(Math.floor(gross*0.8))} a day for its owner`); }
     card.append(close, el('button',{class:'x shr','aria-label':'Share','title':'Share',text:'↗',onclick:()=>Share.building(b)}), head, dl);
     if(forSale && !Store.canWrite && b.done!==false && !b.ruin && Me&&Me.token&&Me.handle){
       if(!b.owner) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(price)}`,onclick:()=>toast(`Buy ${b.name||t.name} for ${fmt(price)} coins? You'll collect 80% of its rent or profit every game day.`,'Buy',async()=>{ const r=await meAction('/api/me/properties/buy',{buildingId:b.id},r=>`It's yours! About ${fmt(r.income)} coins a day.`); if(r){ b.owner=Me.handle; Money.at=0; renderCard(true); } })})));
-      else if(b.owner.toLowerCase()===Me.handle.toLowerCase()) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
+      else if(b.owner.toLowerCase()===Me.handle.toLowerCase()&&!b.plot) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
+    Plots.buildingBits(card,b,t);
     if(t.home && !Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin) card.append(rentBox(b,t));
     if(!Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin && canGoTo(b.type)) card.append(goHereRow(b));
     if(isBank(b.type) && b.done!==false && !b.ruin && !Store.canWrite) card.append(BankAcct.section(b));
@@ -5672,7 +5842,8 @@ let cardTimer=null; const cardSoon=()=>{ clearTimeout(cardTimer); cardTimer=setT
 // Every few seconds: refresh the line saying what the selected colonist is doing (and a building's construction progress).
 function refreshCardLive(){ if(!sel) return;
   if(sel.kind==='c'){ const c=S.citizens.get(sel.id), p=document.querySelector('#card .chead .now'); if(c&&p){ p.textContent=cardNow(c, detail.get(c.id)); return; } }
-  else if(sel.kind==='b'){ const b=S.buildings.get(sel.id); if(b&&b.done!==false&&!b.ruin) return; }
+  else if(sel.kind==='b'){ const b=S.buildings.get(sel.id); if(b&&b.done!==false&&!b.ruin&&!b.upAt) return; }
+  else if(sel.kind==='p') return;
   renderCard(); }
 setInterval(()=>{ if(document.hidden) return; feedDirty=true; renderFeed(); refreshCardLive(); if(activeTab==='people'&&document.activeElement!==$('search')) renderPeople(); refreshHUD(); },4000);
 // The second line at the top is a news flash: when something new happens in the colony (a race winner, an event, an arrest…)
@@ -5799,7 +5970,7 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
 let frameStats={}, lastVeh=[];
-window.__dbg={ wsState:()=>({ready:ws&&ws.readyState, quiet:Date.now()-lastMsgAt}), myTab:t=>openMyTab(t), tables:()=>Tables, snk:()=>SnookerUI, chats:()=>Chats, tab:t=>openTab(t), openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+window.__dbg={ look:(x,y,z)=>{ const q=iso(x,y); cam.x=q.x; cam.y=q.y; if(z) cam.z=z; follow=null; }, scr:(x,y)=>{ const q=iso(x,y); return {x:(q.x-cam.x)*cam.z+cw/2, y:(q.y-cam.y)*cam.z+ch/2}; }, wsState:()=>({ready:ws&&ws.readyState, quiet:Date.now()-lastMsgAt}), myTab:t=>openMyTab(t), tables:()=>Tables, snk:()=>SnookerUI, chats:()=>Chats, tab:t=>openTab(t), openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

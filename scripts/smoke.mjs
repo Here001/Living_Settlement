@@ -1391,6 +1391,123 @@ ok(r.status === 200 && r.json.removed > 0 && (await meta()).population === 1, 'r
   ok(st.status === 200 && st.json.series.length === 7 && st.json.players.today >= 1 && typeof st.json.players.signedUp === 'number', 'stats: players who used the game today', JSON.stringify(st.json.players));
   ok(F['earn:shifts']?.today.players >= 1 && F['car:buy']?.today.coins >= 25000 && F['travel']?.today.n >= 1 && F['daily']?.today.coins >= 200 && F['gift']?.today.coins >= 9500, 'stats: coins earned and spent are recorded by kind, with how many players', Object.keys(F).join(','));
   ok(typeof st.json.money.playerCash === 'number' && st.json.money.treasury >= 0 && st.json.funnel.length === 11 && st.json.funnel.every(f => typeof f[2] === 'number'), 'stats: coins in circulation and the sign-up funnel', JSON.stringify(st.json.money)); }
+// ---- Land, building on it, upgrades and offers between colonists (server/housing.js) ----
+{
+async function player(handle, coins) {
+  await call('POST', '/api/admin/citizens', { handle });
+  const id = (await pool.query('select id from citizens where handle = $1', [handle])).rows[0].id;
+  const link = (await call('POST', `/api/admin/citizens/${id}/setup-link`)).json.claimId;
+  const tok = (await call('POST', `/api/claim/${link}/password`, { password: 'secret88' }, { auth: false })).json.token;
+  if (coins) await pool.query('update citizens set coins_base = $2, net = 0 where id = $1', [id, coins]);
+  return { id, handle, P: { auth: false, headers: { 'x-player': tok } } };
+}
+// find a free w×d patch next to a road
+async function spot(w, d, avoid = []) {
+  const roads = (await pool.query('select x, y from roads')).rows, R = new Set(roads.map(r => r.x + ',' + r.y));
+  const bs = (await pool.query('select x, y, w, d, type from buildings')).rows, occ = new Set();
+  for (const b of bs) if (!['tree', 'pine', 'birch', 'bush', 'rocks', 'cherry', 'maple', 'poplar', 'palm'].includes(b.type)) for (let i = 0; i < b.w; i++) for (let j = 0; j < b.d; j++) occ.add((b.x + i) + ',' + (b.y + j));
+  for (const p of (await pool.query('select * from plots')).rows.concat(avoid)) for (let i = -1; i <= p.w; i++) for (let j = -1; j <= p.d; j++) occ.add((p.x + i) + ',' + (p.y + j));
+  const water = new Set((await pool.query('select x, y from water')).rows.map(r => r.x + ',' + r.y));
+  for (const r of roads) for (const [x, y] of [[r.x + 1, r.y], [r.x, r.y + 1], [r.x - w, r.y], [r.x, r.y - d]]) {
+    let good = true; for (let i = 0; i < w && good; i++) for (let j = 0; j < d && good; j++) { const k = (x + i) + ',' + (y + j); if (R.has(k) || occ.has(k) || water.has(k)) good = false; }
+    if (good) return { x, y, w, d };
+  }
+  return null;
+}
+const A = await player('landlady', 3_000_000), B = await player('buyer_bob', 2_000_000);
+// limits
+let pr = (await call('GET', '/api/me/properties', undefined, A.P)).json;
+ok(pr.max === 5 && pr.count === 0, 'a 0-star player can own 5 properties', JSON.stringify(pr).slice(0, 200));
+await pool.query('update citizens set stars = 12 where id = $1', [A.id]);
+pr = (await call('GET', '/api/me/properties', undefined, A.P)).json; ok(pr.max === 30, '12 stars: 30 properties');
+await pool.query('update citizens set stars = 6 where id = $1', [A.id]);
+pr = (await call('GET', '/api/me/properties', undefined, A.P)).json; ok(pr.max === 12, '6 stars: 12 properties', pr.max);
+// land
+const s1 = await spot(5, 4); ok(!!s1, 'housing: found free grass beside a road', JSON.stringify(s1));
+let q = (await call('GET', `/api/land/quote?x=${s1.x}&y=${s1.y}&w=5&d=4`, undefined, A.P)).json;
+ok(q.total > q.land && q.charges.length === 3 && !q.problem, 'land quote with three government charges', JSON.stringify(q));
+ok((await call('GET', `/api/land/quote?x=${s1.x}&y=${s1.y}&w=9&d=4`, undefined, A.P)).status === 400, 'plots are at most 8×8');
+const far = (await call('GET', `/api/land/quote?x=900&y=900&w=3&d=3`, undefined, A.P)).json; ok(/road/.test(far.problem || ''), 'land must touch a road', far.problem);
+const tr0 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta;
+let r = await call('POST', '/api/me/land', { ...s1, name: 'Sunny Acre' }, A.P); ok(r.status === 200 && r.json.paid === q.total, 'buy the land', JSON.stringify(r.json));
+const plotId = r.json.plot?.id;
+ok((await call('POST', '/api/me/land', s1, B.P)).status === 409, "can't buy land someone owns");
+const ch = await call('GET', `/api/chunks?keys=${Math.floor(s1.x / 32)}_${Math.floor(s1.y / 32)}`, undefined, { auth: false });
+ok(JSON.stringify(ch.json).includes(plotId), 'the plot is in the chunk data');
+// admin can't build on it
+ok((await call('POST', '/api/admin/buildings', { type: 'house', x: s1.x, y: s1.y })).status === 409, "the developer can't build on a player's land either");
+// build
+let info = (await call('GET', `/api/plots/${plotId}`, undefined, A.P)).json; ok(info.mine && info.w === 5 && info.where, 'plot card info', JSON.stringify(info).slice(0, 200));
+ok((await call('POST', `/api/me/plots/${plotId}/build`, { type: 'house', x: s1.x, y: s1.y }, B.P)).status === 403, "can't build on someone else's plot");
+ok((await call('POST', `/api/me/plots/${plotId}/build`, { type: 'apartment', x: s1.x + 3, y: s1.y }, A.P)).status === 409, "a building has to fit inside the plot");
+r = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'house', x: s1.x, y: s1.y, name: 'Casa' }, A.P);
+ok(r.status === 200 && r.json.building.done === false && r.json.building.owner === 'landlady', 'start building a house on it', JSON.stringify(r.json).slice(0, 300));
+const houseId = r.json.building.id;
+r = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x + 4, y: s1.y + 3 }, A.P); ok(r.status === 200 && r.json.building.done, 'a bench is instant', JSON.stringify(r.json).slice(0, 200));
+pr = (await call('GET', '/api/me/properties', undefined, A.P)).json; ok(pr.count === 1 && pr.plots[0].buildings.length === 2, 'a plot counts as one property with its buildings', JSON.stringify(pr).slice(0, 300));
+r = await call('POST', `/api/me/buildings/${houseId}/rush`, {}, A.P); ok(r.status === 200 && r.json.paid > 0, 'rush the builders', JSON.stringify(r.json));
+let hb = (await pool.query('select * from buildings where id = $1', [houseId])).rows[0]; ok(hb.done && hb.home_cap === 4, 'the house is finished', JSON.stringify({ done: hb.done, cap: hb.home_cap }));
+// upgrades
+let uq = (await call('GET', `/api/me/buildings/${houseId}/upgrade`, undefined, A.P)).json; ok(uq.level === 2 && uq.to.homeCap === 5 && !uq.problem, 'upgrade quote to level 2', JSON.stringify(uq).slice(0, 300));
+r = await call('POST', `/api/me/buildings/${houseId}/upgrade`, {}, A.P); ok(r.status === 200, 'start the upgrade', JSON.stringify(r.json));
+ok((await call('POST', `/api/me/buildings/${houseId}/upgrade`, {}, A.P)).status === 409, 'one upgrade at a time');
+await call('POST', `/api/me/buildings/${houseId}/rush`, {}, A.P);
+hb = (await pool.query('select * from buildings where id = $1', [houseId])).rows[0]; ok(hb.level === 2 && hb.home_cap === 5 && Number(hb.up_at) === 0, 'level 2: more room', JSON.stringify({ l: hb.level, c: hb.home_cap }));
+uq = (await call('GET', `/api/me/buildings/${houseId}/upgrade`, undefined, A.P)).json; ok(uq.level === 3 && uq.grows && uq.w === 3, 'level 3 grows a tile wider', JSON.stringify(uq).slice(0, 300));
+r = await call('POST', `/api/me/buildings/${houseId}/upgrade`, {}, A.P); ok(r.status === 200, 'upgrade to 3', JSON.stringify(r.json));
+hb = (await pool.query('select * from buildings where id = $1', [houseId])).rows[0]; ok(hb.w === 3 && Number(hb.up_at) > 0, 'the scaffolding takes the new ground right away', JSON.stringify({ w: hb.w }));
+// a time jump finishes it on the clock
+await pool.query('update buildings set up_at = $2 where id = $1', [houseId, Date.now() - 1000]);
+await call('GET', '/api/cron/tick?key=' + (process.env.CRON_KEY || ''), undefined, { auth: false });
+await new Promise(r => setTimeout(r, 1500));
+hb = (await pool.query('select * from buildings where id = $1', [houseId])).rows[0]; ok(hb.level === 3 && hb.home_cap === 6, 'the clock finishes due upgrades', JSON.stringify({ l: hb.level, c: hb.home_cap }));
+// level 5 needs depth: the plot is 4 deep; house is 2 → 3 at L5 fits. Try a tighter case: a 2×2 plot with a 2×2 house can't grow
+const s2 = await spot(2, 2); r = await call('POST', '/api/me/land', s2, A.P); const p2 = r.json.plot?.id; ok(r.status === 200, 'buy a small 2×2 plot', JSON.stringify(r.json));
+r = await call('POST', `/api/me/plots/${p2}/build`, { type: 'cabin', x: s2.x, y: s2.y }, A.P); const cab = r.json.building?.id; await call('POST', `/api/me/buildings/${cab}/rush`, {}, A.P);
+await call('POST', `/api/me/buildings/${cab}/upgrade`, {}, A.P); await call('POST', `/api/me/buildings/${cab}/rush`, {}, A.P);
+uq = (await call('GET', `/api/me/buildings/${cab}/upgrade`, undefined, A.P)).json; ok(/room on your plot/.test(uq.problem || ''), "level 3 needs more land than a 2×2 plot has", JSON.stringify(uq).slice(0, 200));
+ok((await call('POST', `/api/me/buildings/${cab}/upgrade`, {}, A.P)).status === 409, '…so the upgrade is refused');
+// offers
+r = await call('POST', '/api/me/offers', { kind: 'building', targetId: houseId, amount: 50000, message: 'Lovely house!' }, B.P); ok(r.status === 200, 'offer for a building on a plot (becomes an offer for the plot)', JSON.stringify(r.json));
+let offs = (await call('GET', '/api/me/offers', undefined, A.P)).json; const o1 = offs.incoming[0];
+ok(o1 && o1.kind === 'plot' && o1.amount === 50000 && o1.message === 'Lovely house!', 'the owner sees the offer with its message', JSON.stringify(offs).slice(0, 300));
+const notes = (await pool.query("select text from notices where citizen_id = $1 and kind = 'offer'", [A.id])).rows; ok(notes.some(n => /buyer_bob offers 50,000/.test(n.text)), 'and gets a notification');
+ok((await call('POST', '/api/me/offers', { kind: 'plot', targetId: plotId, amount: 60000 }, B.P)).status === 409, 'one waiting offer per thing');
+r = await call('POST', `/api/me/offers/${o1.id}`, { action: 'counter', amount: 9_000_000, reply: 'More please' }, A.P); ok(r.json.status === 'countered', 'the owner counters');
+ok((await call('POST', `/api/me/offers/${o1.id}`, { action: 'accept' }, A.P)).status === 409, "the owner can't accept their own counter");
+r = await call('POST', `/api/me/offers/${o1.id}`, { action: 'accept' }, B.P); ok(r.json.status === 'failed' && /doesn't have/.test(r.json.why), "the buyer can't afford the counter: the deal falls through", JSON.stringify(r.json));
+r = await call('POST', '/api/me/offers', { kind: 'plot', targetId: plotId, amount: 800000, message: 'Final offer' }, B.P); const o2 = r.json.id;
+const a0 = (await call('GET', `/api/citizens/landlady`)).json.coins, b0 = (await call('GET', `/api/citizens/buyer_bob`)).json.coins;
+const tr1 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.treasuryBase;
+r = await call('POST', `/api/me/offers/${o2}`, { action: 'accept' }, A.P); ok(r.json.status === 'accepted' && r.json.tax === 40000, 'the owner accepts; 5% transfer tax', JSON.stringify(r.json));
+const a1 = (await call('GET', `/api/citizens/landlady`)).json.coins, b1 = (await call('GET', `/api/citizens/buyer_bob`)).json.coins;
+ok(a1 - a0 === 760000 && b0 - b1 === 800000, 'the seller gets 95%, the buyer pays the price', `${a1 - a0} ${b0 - b1}`);
+const tr2 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta.treasuryBase; ok(Math.round(tr2 - tr1) === 40000, 'the tax goes to the treasury', tr2 - tr1);
+const pl = (await pool.query('select owner_handle from plots where id = $1', [plotId])).rows[0], bl = (await pool.query('select distinct owner_handle from buildings where plot_id = $1', [plotId])).rows;
+ok(pl.owner_handle === 'buyer_bob' && bl.length === 1 && bl[0].owner_handle === 'buyer_bob', 'the plot and everything on it changed hands');
+// standalone building offer + decline + withdraw
+r = await call('POST', '/api/me/offers', { kind: 'plot', targetId: p2, amount: 10 }, B.P); const o3 = r.json.id;
+r = await call('POST', `/api/me/offers/${o3}`, { action: 'decline', reply: 'No way' }, A.P); ok(r.json.status === 'declined', 'the owner declines');
+r = await call('POST', '/api/me/offers', { kind: 'plot', targetId: p2, amount: 20 }, B.P); const o4 = r.json.id;
+r = await call('POST', `/api/me/offers/${o4}`, { action: 'withdraw' }, B.P); ok(r.json.status === 'withdrawn', 'the buyer withdraws');
+// expiry
+r = await call('POST', '/api/me/offers', { kind: 'plot', targetId: p2, amount: 30 }, B.P); const o5 = r.json.id;
+await pool.query('update offers set expires_at = $2 where id = $1', [o5, Date.now() - 1]);
+ok((await call('POST', `/api/me/offers/${o5}`, { action: 'accept' }, A.P)).status === 409, 'an offer past 24 hours can no longer be accepted');
+// knock down & sell plot
+r = await call('POST', `/api/me/buildings/${cab}/knock`, {}, A.P); ok(r.status === 200 && r.json.back > 0, 'knock down a building on your land: 30% back', JSON.stringify(r.json));
+info = (await call('GET', `/api/plots/${p2}`, undefined, A.P)).json; ok(info.buildings.length === 0 && info.sell > 0, 'the plot is empty again');
+r = await call('POST', `/api/me/plots/${p2}/sell`, {}, A.P); ok(r.status === 200 && r.json.back === info.sell, 'sell the plot to the colony', JSON.stringify(r.json));
+ok(!(await pool.query('select 1 from plots where id = $1', [p2])).rowCount, 'the land is free again');
+// limit
+await pool.query('update citizens set stars = 0 where id = $1', [B.id]);
+for (let i = 0; i < 5; i++) { const s = (await spot(2, 2)) || { x: 900 + i * 5, y: 900, w: 2, d: 2 }; const rr = await call('POST', '/api/me/land', s, B.P); if (i < 4) ok(rr.status === 200, `bob buys plot ${i + 2}`, JSON.stringify(rr.json)); else ok(rr.status === 409 && /up to 5/.test(rr.json.error || rr.json.message || JSON.stringify(rr.json)), 'the 6th property is refused at 0 stars', JSON.stringify(rr.json)); }
+// public card
+const card = (await call('GET', '/api/citizens/buyer_bob', undefined, { auth: false })).json; ok(card.props === 5 && card.propMax === 5, 'the card shows how many properties they own', `${card.props} ${card.propMax}`);
+const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props === 5 && hm.max === 5, 'the Home tab knows the count and the limit', JSON.stringify(hm).slice(0, 300));
+// bills include land
+const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 'weekly bills run with plots', JSON.stringify(bl2.json));
+}
 ok((await call('POST', '/api/admin/reset', { confirm: 'nope' })).status === 400, 'reset needs the word RESET');
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' }, { auth: false })).status === 401, 'only the developer can reset');
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' })).status === 200 && !(await call('GET', '/api/meta', undefined, { auth: false })).json.meta, 'reset wipes the colony');

@@ -264,6 +264,21 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/me/properties', limit, send(async req => world.economy.properties((await me(req)).id)));
   r.post('/me/properties/buy', limit, send(async req => world.economy.buy((await me(req)).id, (req.body || {}).buildingId)));
   r.post('/me/properties/sell', limit, send(async req => world.economy.sell((await me(req)).id, (req.body || {}).buildingId)));
+  // land, building on it, upgrades and offers (server/housing.js)
+  const H = () => world.housing, bd = req => req.body || {};
+  r.get('/land/quote', limit, send(async req => H().landQuote((await playerFrom(req))?.id || null, req.query)));
+  r.post('/me/land', limit, send(async req => H().buyLand((await me(req)).id, bd(req))));
+  r.get('/plots/:id', limit, send(async req => H().plot((await playerFrom(req))?.id || null, req.params.id)));
+  r.post('/me/plots/:id/build', limit, send(async req => H().buildOn((await me(req)).id, req.params.id, bd(req))));
+  r.post('/me/plots/:id/sell', limit, send(async req => H().sellPlot((await me(req)).id, req.params.id)));
+  r.post('/me/plots/:id/name', limit, send(async req => H().renamePlot((await me(req)).id, req.params.id, bd(req).name)));
+  r.get('/me/buildings/:id/upgrade', limit, send(async req => H().upgradeQuote((await me(req)).id, req.params.id)));
+  r.post('/me/buildings/:id/upgrade', limit, send(async req => H().upgrade((await me(req)).id, req.params.id)));
+  r.post('/me/buildings/:id/rush', limit, send(async req => H().rush((await me(req)).id, req.params.id)));
+  r.post('/me/buildings/:id/knock', limit, send(async req => H().knockDown((await me(req)).id, req.params.id)));
+  r.get('/me/offers', limit, send(async req => H().offers((await me(req)).id)));
+  r.post('/me/offers', limit, send(async req => H().makeOffer((await me(req)).id, bd(req))));
+  r.post('/me/offers/:id', limit, send(async req => H().answer((await me(req)).id, req.params.id, bd(req))));
   r.post('/me/lottery', limit, send(async req => world.lottery.buy((await me(req)).id, (req.body || {}).count, world.blockedReason?.bind(world))));
   // Creature races: one bet per race, before the gates close.
   r.post('/me/race/bet', limit, send(async req => {

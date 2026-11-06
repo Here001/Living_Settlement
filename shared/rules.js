@@ -69,10 +69,11 @@ export const chunkKey = (cx, cy) => `${cx}_${cy}`;
 export const chunkKeyOfTile = (x, y) => chunkKey(...chunkOf(x, y));
 
 // A building is filed under the chunk of its north corner.
-export function capacities(type) {
-  const t = BUILDING_TYPES[type] || {};
-  return { homeCap: t.home ? t.home.capacity : 0, jobCap: t.work ? t.work.slots : 0, leisure: !!t.leisure,
-    hangCap: t.leisure ? (t.visitors || 10 * t.size[0] * t.size[1]) : 0,
+// `level` (1–5) is how far its owner has upgraded it: each level adds 30% more homes, jobs and visitors.
+export function capacities(type, level = 1) {
+  const t = BUILDING_TYPES[type] || {}, m = levelMul(level), up = n => Math.round(n * m);
+  return { homeCap: t.home ? up(t.home.capacity) : 0, jobCap: t.work ? up(t.work.slots) : 0, leisure: !!t.leisure,
+    hangCap: t.leisure ? up(t.visitors || 10 * t.size[0] * t.size[1]) : 0,
     rent: t.home ? t.home.rent : 0, salary: t.work ? t.work.salary : 0 };
 }
 
@@ -220,3 +221,69 @@ export function rentCost(type, fromXY, toXY) {
 export const STAR_STEPS = [10, 30, 70, 130, 220, 350, 520, 750, 1050, 1450, 2000, 2800];
 export const starsFor = score => STAR_STEPS.filter(s => score >= s).length;
 export const STAR_DAY_POINTS = 20;
+
+// ---- Owning land and building on it ----
+// How many properties a colonist may own grows with their stars: 5 up to 3 stars, then more with each star, 30 at 12.
+// A plot of land counts as one property however much is built on it; a building bought on its own counts as one too.
+const PROPERTY_LIMITS = [5, 5, 5, 5, 8, 10, 12, 15, 18, 21, 24, 27, 30];
+export const propertyLimit = stars => PROPERTY_LIMITS[Math.max(0, Math.min(12, Math.floor(Number(stars) || 0)))];
+export const PLOT_MIN = 2, PLOT_MAX = 8;
+
+// Upgrades: every home, business or place to go out can be raised from level 1 to 5. Each level holds 30% more people,
+// earns its owner 10% more on each of them, and looks grander; level 3 makes it a tile wider and level 5 a tile deeper,
+// so those need the room (on its plot, or free ground beside a building that has no plot).
+export const MAX_LEVEL = 5;
+export const levelMul = lv => 1 + 0.3 * (clampLevel(lv) - 1);
+export const levelPay = lv => 1 + 0.1 * (clampLevel(lv) - 1);
+export const clampLevel = lv => Math.max(1, Math.min(MAX_LEVEL, Math.floor(Number(lv) || 1)));
+export const upgradable = type => { const t = BUILDING_TYPES[type]; return !!t && !!(t.home || t.work || t.leisure) && type !== 'landing' && t.cat !== 'decor' && t.cat !== 'nature'; };
+export function levelSize(type, lv = 1) {
+  const t = BUILDING_TYPES[type]; if (!t) return [1, 1]; let [w, d] = t.size; lv = clampLevel(lv);
+  if (upgradable(type)) { if (lv >= 3) w += 1; if (lv >= 5) d += 1; }
+  return [w, d];
+}
+
+// Government charges, all paid into the colony treasury. Land: a survey, registering the title and stamp duty.
+// Building: the planning permit and the inspection, plus connecting water and power for anything people live or work in.
+export const LAND_CHARGES = [['survey', 'Land survey', 0.02, 150], ['registry', 'Title registration', 0.05, 100], ['stamp', 'Stamp duty', 0.03, 0]];
+export const BUILD_CHARGES = [['permit', 'Building permit', 0.05, 50], ['inspect', 'Safety inspection', 0.01, 50], ['utility', 'Water & power hook-up', 0.03, 0]];
+export const TRANSFER_TAX = 0.05; // a sale between colonists: 5% of the price goes to the treasury
+function charges(list, base, skip) {
+  const lines = list.filter(([k]) => !skip || !skip.has(k)).map(([k, name, rate, min]) => ({ k, name, amount: Math.round(Math.max(Math.min(min, base * 0.25), base * rate)) }));
+  return { lines, total: lines.reduce((s, l) => s + l.amount, 0) };
+}
+
+// The price of land: every tile of grass costs more nearer the middle of the colony and among more buildings.
+// `near` is how many buildings stand within 12 tiles; `dist` is how far the plot's middle is from the landing station.
+export const LAND_BASE = 120;
+export function landTilePrice(dist, near) {
+  const centre = 1 + 2.5 * Math.exp(-Math.max(0, dist) / 45), busy = 1 + Math.min(1.5, Math.max(0, near) / 25);
+  return Math.round(LAND_BASE * centre * busy / 5) * 5;
+}
+export function landQuote(w, d, dist, near) {
+  const perTile = landTilePrice(dist, near), land = perTile * w * d, ch = charges(LAND_CHARGES, land);
+  return { w, d, tiles: w * d, perTile, land, charges: ch.lines, chargesTotal: ch.total, total: land + ch.total };
+}
+
+// What a colonist pays to have something built on their own land. Homes and businesses cost 60% of what the same
+// building costs to buy ready-made (you've paid for the land, and you wait for it); parks, trees and decorations cost
+// three times what the colony pays, so a garden is cheap and a tower is not.
+export const earns = type => fullIncome(type) > 0;
+export function constructionCost(type) {
+  const t = BUILDING_TYPES[type] || {};
+  return earns(type) ? nicePrice(propertyPrice(type) * 0.6) : Math.max(20, Math.round((t.cost || 10) * 3 / 10) * 10);
+}
+// Building takes four times as long as when the colony builds it (at least 30 game minutes for anything bigger than a bench).
+export function playerBuildMinutes(type) { const m = buildMinutes(type) * 4; return (BUILDING_TYPES[type]?.cost || 0) < 100 ? 0 : Math.max(30, m); }
+export function buildQuote(type) {
+  const cost = constructionCost(type), t = BUILDING_TYPES[type] || {}, ch = charges(BUILD_CHARGES, cost, (t.home || t.work) ? null : new Set(['utility']));
+  return { type, cost, charges: ch.lines, chargesTotal: ch.total, total: cost + ch.total, minutes: playerBuildMinutes(type) };
+}
+// Raising a building to the next level: half its construction cost per level it will have gained, longer each time.
+export function upgradeQuote(type, toLv) {
+  toLv = clampLevel(toLv); const cost = nicePrice(constructionCost(type) * 0.5 * (toLv - 1)), ch = charges(BUILD_CHARGES.slice(0, 2), cost);
+  const minutes = Math.max(60, Math.round(playerBuildMinutes(type) * (0.5 + 0.5 * toLv)));
+  return { type, level: toLv, cost, charges: ch.lines, chargesTotal: ch.total, total: cost + ch.total, minutes, size: levelSize(type, toLv), grows: levelSize(type, toLv).join() !== levelSize(type, toLv - 1).join() };
+}
+// Paying the builders to work through the night: 3% of the job's cost for every game hour still to go (at least 20 coins an hour).
+export function rushCost(cost, msLeft) { const hours = Math.max(1, Math.ceil(Math.max(0, msLeft) / (60 * GAME_MIN_MS))); return Math.round(hours * Math.max(20, cost * 0.03) / 10) * 10; }

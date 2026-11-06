@@ -16,7 +16,9 @@ export class HttpError extends Error { constructor(status, msg) { super(msg); th
 // ---------- row shapes ----------
 export const bRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, name: r.name, requestedBy: r.requested_by,
   builtAt: r.built_at, builtDay: r.built_day, rot: r.rot || 0, homeUsed: r.home_used, jobUsed: r.job_used, hangUsed: r.hang_used,
-  done: r.done !== false, readyAt: r.ready_at || 0, ruin: !!r.ruin, ruinedAt: r.ruined_at || 0, owner: r.owner_handle || null });
+  done: r.done !== false, readyAt: r.ready_at || 0, ruin: !!r.ruin, ruinedAt: r.ruined_at || 0, owner: r.owner_handle || null,
+  w: r.w, d: r.d, lv: r.level || 1, plot: r.plot_id || null, upAt: Number(r.up_at || 0) });
+export const pRow = r => ({ id: r.id, x: r.x, y: r.y, w: r.w, d: r.d, cx: r.cx, cy: r.cy, owner: r.owner_handle, name: r.name || '' });
 const vRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, placedAt: r.placed_at });
 const tileKeys = keys => keys.filter(k => /^-?\d{1,7},-?\d{1,7}$/.test(k));
 const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_cy], [c.hang_cx, c.hang_cy], [c.visit_cx, c.visit_cy]]
@@ -48,6 +50,7 @@ class Change {
     this.citizens = new Map();   // id → chunks the citizen was in before this change (null = new citizen)
     this.gone = new Map();       // id → chunks, for removed citizens
     this.buildings = new Set(); this.removedBuildings = new Map(); this.roadOps = []; this.events = [];
+    this.plots = new Set(); this.removedPlots = new Map(); // land plots that changed, and ones that are gone (id → chunk)
     this.moved = new Map();      // building id → handles that moved in during this change
     this.extraOps = [];          // water, vehicle and disaster changes
   }
@@ -209,6 +212,7 @@ export class World {
     this.water = new Map(); this.vehicles = new Map();
     for (const r of (await pool.query('select x, y, kind from water')).rows) this.putW(`${r.x},${r.y}`, r.kind);
     for (const r of (await pool.query('select * from vehicles')).rows) this.putV(vRow(r));
+    this.plots = new Map(); for (const r of (await pool.query('select * from plots')).rows) this.putP(pRow(r));
     this.founderHandle = (await pool.query('select handle from citizens where founder order by seq limit 1')).rows[0]?.handle || null;
   }
   // Colonies founded before the landing station existed started around a campfire. Swap it for the station,
@@ -233,7 +237,9 @@ export class World {
       return null;
     });
   }
-  slot(key) { let c = this.chunks.get(key); if (!c) this.chunks.set(key, c = { buildings: new Map(), roads: {}, water: {}, vehicles: new Map() }); return c; }
+  slot(key) { let c = this.chunks.get(key); if (!c) this.chunks.set(key, c = { buildings: new Map(), roads: {}, water: {}, vehicles: new Map(), plots: new Map() }); return c; }
+  putP(p) { const old = this.plots.get(p.id); if (old) this.slot(R.chunkKey(old.cx, old.cy)).plots.delete(p.id); this.plots.set(p.id, p); this.slot(R.chunkKey(p.cx, p.cy)).plots.set(p.id, p); }
+  delP(id) { const old = this.plots.get(id); if (!old) return; this.slot(R.chunkKey(old.cx, old.cy)).plots.delete(id); this.plots.delete(id); }
   putW(k, t) { const [x, y] = k.split(',').map(Number); this.water.set(k, t); this.slot(R.chunkKeyOfTile(x, y)).water[k] = t; }
   delW(k) { const [x, y] = k.split(',').map(Number); this.water.delete(k); delete this.slot(R.chunkKeyOfTile(x, y)).water[k]; }
   putV(v) { const old = this.vehicles.get(v.id); if (old) this.slot(R.chunkKey(old.cx, old.cy)).vehicles.delete(v.id); this.vehicles.set(v.id, v); this.slot(R.chunkKey(v.cx, v.cy)).vehicles.set(v.id, v); }
@@ -254,6 +260,8 @@ export class World {
       else if (o.op === 'water') { for (const k in o.set) this.putW(k, o.set[k]); for (const k of o.remove) this.delW(k); }
       else if (o.op === 'vehicle') this.putV(o.data);
       else if (o.op === 'removeVehicle') this.delV(o.id);
+      else if (o.op === 'plot') this.putP(o.data);
+      else if (o.op === 'removePlot') this.delP(o.id);
     }
   }
   requireFounded() { if (!this.meta) throw new HttpError(409, 'Found the colony first.'); }
@@ -290,6 +298,8 @@ export class World {
       for (const r of rows) { const b = bRow(r); ops.push({ op: 'building', data: b, chunks: [R.chunkKey(b.cx, b.cy)] }); }
     }
     for (const [id, chunk] of ch.removedBuildings) ops.push({ op: 'removeBuilding', id, chunks: [chunk] });
+    if (ch.plots.size) for (const r of (await db.query('select * from plots where id = any($1)', [[...ch.plots]])).rows) { const p = pRow(r); ops.push({ op: 'plot', data: p, chunks: [R.chunkKey(p.cx, p.cy)] }); }
+    for (const [id, chunk] of ch.removedPlots) ops.push({ op: 'removePlot', id, chunks: [chunk] });
     ops.push(...ch.roadOps, ...ch.extraOps);
     if (ch.citizens.size > 400) {
       const rows = (await db.query('select home_cx, home_cy, job_cx, job_cy, hang_cx, hang_cy, visit_cx, visit_cy from citizens where id = any($1)', [[...ch.citizens.keys()]])).rows;
@@ -308,7 +318,7 @@ export class World {
   // ---------- reads ----------
   chunk(cx, cy) {
     const c = this.chunks.get(R.chunkKey(cx, cy));
-    return { buildings: c ? [...c.buildings.values()] : [], roads: c ? { ...c.roads } : {}, water: c ? { ...c.water } : {}, vehicles: c ? [...c.vehicles.values()] : [] };
+    return { buildings: c ? [...c.buildings.values()] : [], roads: c ? { ...c.roads } : {}, water: c ? { ...c.water } : {}, vehicles: c ? [...c.vehicles.values()] : [], plots: c ? [...c.plots.values()] : [] };
   }
   async citizensIn(keys, limit = 6000) {
     const vals = keys.map(k => k.split('_').map(Number));
@@ -338,6 +348,8 @@ export class World {
     const lh = (await pool.query('select left_home, acts, stars from citizens where id = $1', [r.id])).rows[0]; out.stars = Number(lh?.stars || 0);
     if (!r.hid && lh?.left_home) out.leftHome = true;
     else if (!r.hid) out.queue = Number((await pool.query('select count(*) n from citizens where home_id is null and seq < $1', [r.seq])).rows[0].n) + 1;
+    out.props = Number((await pool.query('select (select count(*) from plots where owner_id = $1) + (select count(*) from buildings where owner_id = $1 and plot_id is null) n', [r.id])).rows[0].n);
+    out.propMax = R.propertyLimit(out.stars); if (r.hid && this.housing) out.where = this.housing.placeName(r.hx, r.hy);
     return out;
   }
 
@@ -359,20 +371,21 @@ export class World {
   }
 
   // A building under construction exists on the map but has no homes, jobs or visitors until it's finished.
-  async insertBuilding(ch, { id = uid(), type, x, y, name = '', requestedBy = '', builtAt = Date.now(), builtDay, instant = true, rot = 0 }) {
-    const t = BUILDING_TYPES[type]; rot = R.cleanRot(rot); const [w, d] = R.footprint(t.size, rot); const [cx, cy] = R.chunkOf(x, y); const cap = R.capacities(type);
-    const minutes = instant ? 0 : R.buildMinutes(type); const done = minutes === 0;
-    const r = await ch.q(`insert into buildings (id, type, x, y, w, d, cx, cy, name, requested_by, built_at, built_day, home_cap, job_cap, leisure, hang_cap, done, ready_at, rot)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) returning *`,
+  // A colonist's own building also carries its plot, owner, what they paid and how long the builders take (`minutes`).
+  async insertBuilding(ch, { id = uid(), type, x, y, name = '', requestedBy = '', builtAt = Date.now(), builtDay, instant = true, rot = 0, level = 1, plotId = null, owner = null, price = null, minutes: mins = null }) {
+    rot = R.cleanRot(rot); level = R.clampLevel(level); const [w, d] = R.footprint(R.levelSize(type, level), rot); const [cx, cy] = R.chunkOf(x, y); const cap = R.capacities(type, level);
+    const minutes = mins != null ? mins : instant ? 0 : R.buildMinutes(type); const done = minutes === 0;
+    const r = await ch.q(`insert into buildings (id, type, x, y, w, d, cx, cy, name, requested_by, built_at, built_day, home_cap, job_cap, leisure, hang_cap, done, ready_at, rot, level, plot_id, owner_id, owner_handle, bought_at, price)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) returning *`,
       [id, type, x, y, w, d, cx, cy, name, requestedBy, builtAt, builtDay ?? ch.today, done ? cap.homeCap : 0, done ? cap.jobCap : 0, cap.leisure, done ? cap.hangCap : 0,
-        done, done ? builtAt : builtAt + minutes * R.GAME_MIN_MS, rot]);
+        done, done ? builtAt : builtAt + minutes * R.GAME_MIN_MS, rot, level, plotId, owner?.id || null, owner?.handle || null, owner ? builtAt : null, price]);
     ch.buildings.add(id);
     if (done) await this.attractVisitors(ch, r.rows[0]);
     return r.rows[0];
   }
 
   async attractVisitors(ch, b) {
-    const { id, x, y, cx, cy } = b; const cap = R.capacities(b.type);
+    const { id, x, y, cx, cy } = b; const cap = R.capacities(b.type, b.level);
     if (cap.leisure) {
       // The closest nearby residents whose hangout is farther away (or missing) start coming here, up to its capacity.
       const rows = (await ch.q(`select c.* from citizens c join buildings h on h.id = c.home_id
@@ -385,14 +398,15 @@ export class World {
     }
   }
 
-  async finishIn(ch, b) {
-    const cap = R.capacities(b.type);
+  async finishIn(ch, b, { quiet = false } = {}) {
+    const cap = R.capacities(b.type, b.level);
     const r = (await ch.q('update buildings set done = true, ready_at = $2, home_cap = $3, job_cap = $4, hang_cap = $5 where id = $1 and not done returning *',
       [b.id, Date.now(), cap.homeCap, cap.jobCap, cap.hangCap])).rows[0];
     if (!r) return false;
     ch.buildings.add(b.id);
     await this.attractVisitors(ch, r);
-    if (R.majorBuilding(r.type)) await ch.event(`${r.name || BUILDING_TYPES[r.type]?.name || 'A building'} is finished${r.requested_by ? `. Thanks for the idea, @${r.requested_by}` : ''}`, 'build');
+    if (r.owner_id && r.plot_id) { if (!quiet) await this.actions?.notify(ch, r.owner_id, 'build', `🏗️ Your ${r.name || BUILDING_TYPES[r.type]?.name || 'building'} is finished.`); }
+    else if (R.majorBuilding(r.type)) await ch.event(`${r.name || BUILDING_TYPES[r.type]?.name || 'A building'} is finished${r.requested_by ? `. Thanks for the idea, @${r.requested_by}` : ''}`, 'build');
     return true;
   }
   // The developer's fast-forward: finish one building, or every building under construction.
@@ -465,8 +479,11 @@ export class World {
   }
 
   // Placement is checked against the database inside the lock, so two servers can't build on the same spot.
-  async assertFree(ch, type, x, y, ignoreId = null, rot = 0) {
-    const [w, d] = R.footprint(BUILDING_TYPES[type].size, R.cleanRot(rot));
+  // `level` sets the footprint of an upgraded building; `plot` is the plot it may stand on (anyone else's land is off limits).
+  async assertFree(ch, type, x, y, ignoreId = null, rot = 0, { level = 1, plot = null } = {}) {
+    const [w, d] = R.footprint(R.levelSize(type, level), R.cleanRot(rot));
+    const land = (await ch.q('select owner_handle from plots where id is distinct from $5::text and x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int limit 1', [x, y, w, d, plot])).rows[0];
+    if (land) throw new HttpError(409, `That's @${land.owner_handle}'s land. Pick a spot off their plot.`);
     const hit = await ch.q(`select 1 from buildings where id is distinct from $5::text and x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int limit 1`, [x, y, w, d, ignoreId]);
     const road = await ch.q('select 1 from roads where x >= $1::int and x < $1::int + $3::int and y >= $2::int and y < $2::int + $4::int limit 1', [x, y, w, d]);
     if (hit.rowCount || road.rowCount) throw new HttpError(409, 'That spot is taken. Pick an empty patch of grass.');
@@ -562,8 +579,9 @@ export class World {
     return this.change(async ch => {
       const b = (await ch.q('select * from buildings where id = $1 for update', [id])).rows[0];
       if (!b) throw new HttpError(404, 'No such building.');
-      const r2 = rot === undefined || rot === null ? b.rot : R.cleanRot(rot), [w, d] = R.footprint(BUILDING_TYPES[b.type].size, r2);
-      await this.assertFree(ch, b.type, x, y, id, r2);
+      const r2 = rot === undefined || rot === null ? b.rot : R.cleanRot(rot), [w, d] = R.footprint(R.levelSize(b.type, b.level), r2);
+      await this.assertFree(ch, b.type, x, y, id, r2, { level: b.level, plot: b.plot_id });
+      if (b.plot_id) { const p = (await ch.q('select * from plots where id = $1', [b.plot_id])).rows[0]; if (p && (x < p.x || y < p.y || x + w > p.x + p.w || y + d > p.y + p.d)) throw new HttpError(409, 'It has to stay on its plot.'); }
       const [cx, cy] = R.chunkOf(x, y);
       if (cx !== b.cx || cy !== b.cy) ch.removedBuildings.set(id, R.chunkKey(b.cx, b.cy));
       await ch.q('update buildings set x = $2, y = $3, cx = $4, cy = $5, rot = $6, w = $7, d = $8 where id = $1', [id, x, y, cx, cy, r2, w, d]);
@@ -586,7 +604,8 @@ export class World {
         // Small things in the way (trees, rocks, benches, lamps) are cleared; tiles under anything bigger are skipped.
         const under = (await ch.q(`select t.x || ',' || t.y k, b.* from unnest($1::int[], $2::int[]) t(x, y)
           join buildings b on t.x >= b.x and t.x < b.x + b.w and t.y >= b.y and t.y < b.y + b.d`, [xs, ys])).rows;
-        const solid = new Set(under.filter(r => !roadClears(r.type)).map(r => r.k));
+        const solid = new Set(under.filter(r => !roadClears(r.type) || r.plot_id).map(r => r.k));
+        for (const r of (await ch.q(`select t.x || ',' || t.y k from unnest($1::int[], $2::int[]) t(x, y) join plots p on t.x >= p.x and t.x < p.x + p.w and t.y >= p.y and t.y < p.y + p.d`, [xs, ys])).rows) solid.add(r.k); // colonists' land stays theirs
         const existing = new Map((await ch.q('select x || \',\' || y k, type from roads where (x, y) in (select * from unnest($1::int[], $2::int[]))', [xs, ys])).rows.map(r => [r.k, r.type]));
         for (const k of keys) { if (solid.has(k) || existing.get(k) === set[k]) continue; toSet[k] = set[k]; cost += R.roadCost(set[k]); }
         for (const r of under) if (toSet[r.k] && roadClears(r.type) && !cleared.some(c => c.id === r.id)) { const b = { ...r }; delete b.k; cleared.push(bRow(b)); await this.demolishIn(ch, b); }
@@ -993,7 +1012,7 @@ export class World {
     return this.change(async ch => {
       const b = (await ch.q('select * from buildings where id = $1 and ruin for update', [id])).rows[0];
       if (!b) throw new HttpError(404, 'That building is not in ruins.');
-      const cap = R.capacities(b.type);
+      const cap = R.capacities(b.type, b.level);
       const r = (await ch.q('update buildings set ruin = false, ruined_at = 0, home_cap = $2, job_cap = $3, hang_cap = $4 where id = $1 returning *', [id, cap.homeCap, cap.jobCap, cap.hangCap])).rows[0];
       ch.buildings.add(id); await this.attractVisitors(ch, r);
       if (R.majorBuilding(r.type)) await ch.event(`${r.name || BUILDING_TYPES[r.type]?.name || 'A building'} was rebuilt after the disaster`, 'build');
@@ -1055,6 +1074,8 @@ export class World {
     const today = R.gameDay(Date.now(), this.meta.epoch);
     const due = (await pool.query('select 1 from buildings where not done and ready_at <= $1 limit 1', [Date.now()])).rowCount;
     if (due) await this.finishAll({ dueOnly: true });
+    if (this.housing && (await pool.query('select 1 from buildings where up_at > 0 and up_at <= $1 limit 1', [Date.now()])).rowCount) await this.housing.finishUpgrades();
+    if (this.housing) await this.housing.expireOffers();
     const pending = this.meta.population > this.meta.residents && (await pool.query('select 1 from buildings where home_used < home_cap limit 1')).rowCount;
     if (today <= (this.meta.newsDay ?? 0) && !pending) return { days: 0, finished: due };
     return this.change(async ch => {

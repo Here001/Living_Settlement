@@ -28,12 +28,16 @@ const nameOf = b => b.name || BUILDING_TYPES[b.type]?.name || 'a building';
 // What players may buy: homes and businesses. Public services, parks, landmarks, utilities and nature stay the colony's.
 const BUYABLE_CATS = new Set(['housing', 'shops', 'offices', 'industry']);
 export const buyable = type => { const t = BUILDING_TYPES[type]; return !!t && BUYABLE_CATS.has(t.cat) && !!(t.home || t.work); };
-export const priceOf = type => R.propertyPrice(type); // see shared/rules.js: about a real month to pay for itself
+export const priceOf = (type, level = 1) => R.propertyPrice(type) * (level > 1 ? R.levelMul(level) : 1);
+// How many properties a colonist holds: each plot of land (whatever stands on it) and each building bought on its own.
+export async function ownedCount(q, id) { return Number((await q('select (select count(*) from plots where owner_id = $1) + (select count(*) from buildings where owner_id = $1 and plot_id is null) n', [id])).rows[0].n); }
+export async function limitOf(q, id) { return R.propertyLimit((await q('select stars from citizens where id = $1', [id])).rows[0]?.stars || 0); } // see shared/rules.js: about a real month to pay for itself
 // A building's daily income for its owner, after the treasury's cut.
 export function dailyIncome(b) {
   const t = BUILDING_TYPES[b.type] || {}; let gross = 0;
   if (t.home) gross += (b.home_used || 0) * (t.home.rent || 0);
   if (t.work) gross += (b.job_used || 0) * (t.work.salary || 0) * BUSINESS_SHARE;
+  gross *= R.levelPay(b.level); // upgraded buildings earn more on each tenant or worker
   return { gross: Math.floor(gross), net: Math.floor(gross * (1 - TREASURY_CUT)) };
 }
 
@@ -252,14 +256,22 @@ export class Economy {
     const c = (await pool.query('select c.home_id, c.left_home, c.home_changed_day, c.job_id, h.type, h.name, h.x, h.y, h.owner_id from citizens c left join buildings h on h.id = c.home_id where c.id = $1', [id])).rows[0];
     if (!c) throw new HttpError(404, 'No such citizen.');
     const today = this.world.meta ? R.gameDay(Date.now(), this.world.meta.epoch) : 0;
-    return { home: c.home_id ? { id: c.home_id, name: c.name || BUILDING_TYPES[c.type]?.name, type: c.type, rent: BUILDING_TYPES[c.type]?.home?.rent || 0, x: c.x, y: c.y, mine: c.owner_id === id } : null,
-      leftHome: !!c.left_home, canMoveToday: c.home_changed_day !== today, hasJob: !!c.job_id };
+    const q = (a, v) => pool.query(a, v), props = await ownedCount(q, id), max = await limitOf(q, id);
+    return { home: c.home_id ? { id: c.home_id, name: c.name || BUILDING_TYPES[c.type]?.name, type: c.type, rent: BUILDING_TYPES[c.type]?.home?.rent || 0, x: c.x, y: c.y, mine: c.owner_id === id, where: this.world.housing?.placeName(c.x, c.y) || '' } : null,
+      leftHome: !!c.left_home, canMoveToday: c.home_changed_day !== today, hasJob: !!c.job_id, props, max };
   }
 
   // ---------- owning buildings ----------
   async properties(id) {
+    const q = (a, b) => pool.query(a, b);
     const rows = (await pool.query('select * from buildings where owner_id = $1 order by bought_at', [id])).rows;
-    return { max: MAX_PROPERTIES, cut: TREASURY_CUT, list: rows.map(b => ({ id: b.id, name: nameOf(b), type: b.type, price: b.price, income: dailyIncome(b).net, sell: Math.floor((b.price || priceOf(b.type)) * PROPERTY_RESALE), ruin: b.ruin })) };
+    const plots = (await pool.query('select * from plots where owner_id = $1 order by bought_at', [id])).rows;
+    const max = await limitOf(q, id), stars = (await pool.query('select stars from citizens where id = $1', [id])).rows[0]?.stars || 0;
+    const one = b => ({ id: b.id, name: nameOf(b), type: b.type, price: b.price, income: dailyIncome(b).net, sell: Math.floor((b.price || priceOf(b.type, b.level)) * PROPERTY_RESALE), ruin: b.ruin, level: b.level || 1, plot: b.plot_id || null, done: b.done, x: b.x, y: b.y });
+    const list = rows.filter(b => !b.plot_id).map(one);
+    const land = plots.map(p => { const on = rows.filter(b => b.plot_id === p.id), worth = Number(p.price) + on.reduce((s, b) => s + Number(b.price || 0), 0);
+      return { id: p.id, name: p.name || `Plot ${p.w}×${p.d}`, x: p.x, y: p.y, w: p.w, d: p.d, price: Number(p.price), income: on.reduce((s, b) => s + dailyIncome(b).net, 0), sell: Math.floor(worth * PROPERTY_RESALE), buildings: on.map(one) }; });
+    return { max, stars, count: list.length + land.length, next: R.propertyLimit(Math.min(12, stars + 1)), cut: TREASURY_CUT, list, plots: land };
   }
   async buy(id, buildingId) {
     return this.world.change(async ch => {
@@ -269,9 +281,9 @@ export class Economy {
       if (!buyable(b.type)) throw new HttpError(400, "That building belongs to the colony and isn't for sale.");
       if (!b.done || b.ruin) throw new HttpError(409, b.ruin ? "It's in ruins." : "It's still being built.");
       if (b.owner_id) throw new HttpError(409, b.owner_id === c.id ? 'You already own it.' : `@${b.owner_handle} already owns it.`);
-      const n = Number((await ch.q('select count(*) n from buildings where owner_id = $1', [c.id])).rows[0].n);
-      if (n >= MAX_PROPERTIES) throw new HttpError(409, `You can own up to ${MAX_PROPERTIES} buildings. Sell one first.`);
-      const price = priceOf(b.type); ch.coins(c);
+      const q = (a, v) => ch.q(a, v), n = await ownedCount(q, c.id), max = R.propertyLimit(c.stars);
+      if (n >= max) throw new HttpError(409, `With ${c.stars || 0} star${c.stars === 1 ? '' : 's'} you can own up to ${max} properties. Sell one first, or earn more stars.`);
+      const price = priceOf(b.type, b.level); ch.coins(c);
       if (c.coins_base < price) throw new HttpError(400, `It costs ${fmt(price)} coins. You have ${fmt(c.coins_base)} on you${c.bank ? ' (withdraw some at a Bank first)' : ''}.`);
       c.coins_base -= price; treasuryAdd(ch, price); track(ch, 'property:buy', price, c.id); ch.touch(c); await ch.saveCitizen(c);
       await ch.q('update buildings set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [b.id, c.id, c.handle, Date.now(), price]); ch.buildings.add(b.id); await bump(ch, c.id, { bought: 1 });
@@ -283,7 +295,8 @@ export class Economy {
       const c = await this.lockMe(ch, id);
       const b = (await ch.q('select * from buildings where id = $1 and owner_id = $2 for update', [String(buildingId), c.id])).rows[0];
       if (!b) throw new HttpError(404, "You don't own that building.");
-      const back = Math.floor((b.price || priceOf(b.type)) * PROPERTY_RESALE); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'property:sell', back, c.id); ch.touch(c); await ch.saveCitizen(c);
+      if (b.plot_id) throw new HttpError(409, "It stands on your land: sell the whole plot from its card, or knock it down.");
+      const back = Math.floor((b.price || priceOf(b.type, b.level)) * PROPERTY_RESALE); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'property:sell', back, c.id); ch.touch(c); await ch.saveCitizen(c);
       await ch.q('update buildings set owner_id = null, owner_handle = null, bought_at = null, price = null where id = $1', [b.id]); ch.buildings.add(b.id);
       return { ok: true, back, coins: c.coins_base };
     });
@@ -304,6 +317,7 @@ export class Economy {
     ch.meta.billsWeek = week;
     const props = (await ch.q('select owner_id, type, price from buildings where owner_id is not null')).rows, byOwner = new Map();
     for (const b of props) byOwner.set(b.owner_id, (byOwner.get(b.owner_id) || 0) + Math.round((b.price || priceOf(b.type)) * R.UPKEEP_RATE));
+    for (const p of (await ch.q('select owner_id, price from plots')).rows) byOwner.set(p.owner_id, (byOwner.get(p.owner_id) || 0) + Math.round(Number(p.price) * R.UPKEEP_RATE)); // land too
     const ids = [...new Set([...byOwner.keys(), ...(await ch.q("select id from citizens where cars is not null and jsonb_array_length(cars) > 0")).rows.map(r => r.id)])];
     let total = 0, billed = 0;
     for (const id of ids) {

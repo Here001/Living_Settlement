@@ -86,9 +86,12 @@ export class Radio {
   // ---- uploaded songs ----
   // The list (without the audio) is cached; a change clears it and tells every radio to refresh its running order.
   async tracks(fresh) { if (!fresh && this.trk && Date.now() - this.trkAt < 60000) return this.trk;
-    const rows = (await pool.query('select id, station, title, artist, dur, size, lite_size, mime, enabled, t, url, lite_url, data is not null in_db from radio_tracks order by t')).rows; this.trkAt = Date.now();
+    const rows = (await pool.query('select id, station, title, artist, dur, size, lite_size, mime, enabled, t, url, lite_url, r2key, data is not null in_db from radio_tracks order by t')).rows; this.trkAt = Date.now();
     // where a player gets each song: Cloudflare (normal and data-saver copies) or, for songs still in the database, this server
-    const src = r => { const own = `/api/radio/track/${r.id}`; return { url: r.url || own, lite: r.lite_url || r.url || own }; };
+    // (songs in R2 are addressed from the current R2_PUBLIC_URL, so moving the bucket to another domain is one setting)
+    const src = r => { const own = `/api/radio/track/${r.id}`;
+      if (r.r2key && store.r2On()) { const url = store.publicUrl(`${r.r2key}.${r.mime === 'audio/mpeg' ? 'mp3' : (r.mime.split('/')[1] || 'audio')}`); return { url, lite: r.lite_url ? store.publicUrl(`${r.r2key}-lite.mp3`) : url }; }
+      return { url: r.url || own, lite: r.lite_url || r.url || own }; };
     this.trk = { all: rows, by: Object.fromEntries(STATION_IDS.map(k => [k, rows.filter(r => r.station === k && r.enabled).map(r => ({ id: r.id, dur: r.dur, title: r.title, artist: r.artist || undefined, ...src(r) }))])) }; return this.trk; }
   // Make a song ready: smaller, evenly loud copies (when ffmpeg is there), put in Cloudflare R2 (when it's set up),
   // otherwise kept in the database. Returns the columns to save.
@@ -104,7 +107,8 @@ export class Radio {
     pool.query("delete from radio_talk where kind = 'talk' and slot > 0 and at > $1" + (station ? ' and station = $2' : ''), station ? [Date.now() + 10000, station] : [Date.now() + 10000]).catch(() => {}); }
   // The audio itself: kept in memory for the songs played lately (up to ~80 MB), so many listeners don't each hit the database.
   async audio(id) { this.cache ||= new Map(); const hit = this.cache.get(id); if (hit) { this.cache.delete(id); this.cache.set(id, hit); return hit; }
-    const r = (await pool.query('select data, mime, url from radio_tracks where id = $1', [id])).rows[0]; if (!r) return null; if (!r.data) return { url: r.url };
+    const r = (await pool.query('select data, mime, url, r2key from radio_tracks where id = $1', [id])).rows[0]; if (!r) return null;
+    if (!r.data) return { url: r.r2key && store.r2On() ? store.publicUrl(`${r.r2key}.${r.mime === 'audio/mpeg' ? 'mp3' : (r.mime.split('/')[1] || 'audio')}`) : r.url };
     this.cache.set(id, r); let total = 0; for (const v of this.cache.values()) total += v.data.length;
     for (const [k, v] of this.cache) { if (total <= 80e6) break; this.cache.delete(k); total -= v.data.length; } return r; }
   // what a station is playing at time t (and its title)

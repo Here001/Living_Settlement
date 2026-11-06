@@ -866,6 +866,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok((await call('POST', `/api/me/heists/${pl.json.id}/go`, {}, P)).status === 409, "it can't go ahead until enough of the crew have joined");
       await call('POST', `/api/chat/groups/${pl.json.group}/join`, {}, PB);
       ok((await call('POST', `/api/me/heists/${pl.json.id}/go`, {}, PB)).status === 403, 'only the planner says go');
+      for (let i = 0; i < 40 && (await pool.query('select 1 from treasury_pending limit 1')).rowCount; i++) await sleep(100); // earlier trips' fares are in the treasury
       const t0 = Number((await pool.query("select data->>'treasuryBase' t from meta")).rows[0].t), m0 = Number((await pool.query("select sum(coins_base) s from citizens where handle in ('zara_ng','jobfill_a')")).rows[0].s);
       const go = await call('POST', `/api/me/heists/${pl.json.id}/go`, {}, P);
       ok(go.status === 200 && typeof go.json.win === 'boolean' && go.json.got.length + go.json.caught.length === 2, 'the job happens: it comes off or not, and each member gets away or is caught', JSON.stringify(go.json));
@@ -1507,6 +1508,10 @@ const card = (await call('GET', '/api/citizens/buyer_bob', undefined, { auth: fa
 const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props === 5 && hm.max === 5, 'the Home tab knows the count and the limit', JSON.stringify(hm).slice(0, 300));
 // bills include land
 const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 'weekly bills run with plots', JSON.stringify(bl2.json));
+}
+{ // one player's own actions don't wait for the colony-wide lock; their coins still reach the treasury within a second
+  for (let i = 0; i < 40 && (await pool.query('select 1 from treasury_pending limit 1')).rowCount; i++) await sleep(100);
+  ok(!(await pool.query('select 1 from treasury_pending limit 1')).rowCount, "players' coins are added to the treasury within seconds (nothing left waiting)");
 }
 ok((await call('POST', '/api/admin/reset', { confirm: 'nope' })).status === 400, 'reset needs the word RESET');
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' }, { auth: false })).status === 401, 'only the developer can reset');

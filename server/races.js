@@ -20,7 +20,8 @@ const SLOTS = 6; // tracks are staggered by RACE_EVERY / SLOTS
 const raceOut = (r, label) => r && ({ n: r.n, track: r.track_id, no: label(r.track_id, r.n), start: Number(r.start_at), weather: r.weather, odds: r.odds, field: Object.keys(r.odds), cup: r.cup || null,
   result: Date.now() >= Number(r.start_at) ? r.result : null, settled: r.settled });
 const secureRand = () => crypto.randomInt(0, 2 ** 32) / 2 ** 32;
-export const treasuryAdd = (ch, delta) => { ch.meta.treasuryBase = Math.max(0, R.treasuryOn(ch.meta, ch.today) + delta); ch.meta.treasuryDay = ch.today; };
+// In a personal change (no colony-wide lock) the coins are noted and added to the treasury by the next colony-wide change.
+export const treasuryAdd = (ch, delta) => { if (ch.personal) { ch.pendingTreasury = (ch.pendingTreasury || 0) + delta; return; } ch.meta.treasuryBase = Math.max(0, R.treasuryOn(ch.meta, ch.today) + delta); ch.meta.treasuryDay = ch.today; };
 
 export class Races {
   constructor(world) { this.world = world; this.tracksAt = 0; this.tracks = []; this.busy = false; this.made = new Set(); }

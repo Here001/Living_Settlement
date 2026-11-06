@@ -319,18 +319,24 @@ export class Economy {
     for (const b of props) byOwner.set(b.owner_id, (byOwner.get(b.owner_id) || 0) + Math.round((b.price || priceOf(b.type)) * R.UPKEEP_RATE));
     for (const p of (await ch.q('select owner_id, price from plots')).rows) byOwner.set(p.owner_id, (byOwner.get(p.owner_id) || 0) + Math.round(Number(p.price) * R.UPKEEP_RATE)); // land too
     const ids = [...new Set([...byOwner.keys(), ...(await ch.q("select id from citizens where cars is not null and jsonb_array_length(cars) > 0")).rows.map(r => r.id)])];
-    let total = 0, billed = 0;
-    for (const id of ids) {
-      const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) continue;
-      const cars = Array.isArray(c.cars) ? c.cars : [], carFee = cars.reduce((s, x) => s + (CAR_MODELS[x.m]?.upkeep || 0), 0), propFee = byOwner.get(id) || 0, due = carFee + propFee;
-      if (!due) continue;
-      ch.coins(c); const fromCash = Math.min(Math.max(0, c.coins_base), due), fromBank = Math.min(Number(c.bank || 0), due - fromCash), paid = fromCash + fromBank;
-      c.coins_base -= fromCash; await ch.saveCitizen(c); /* not touched: coins don't show on the map */ if (fromBank) await ch.q('update citizens set bank = bank - $2 where id = $1', [id, fromBank]);
-      treasuryAdd(ch, paid); total += paid; billed++; if (carFee) track(ch, 'bills:car', Math.min(paid, carFee), id); if (paid > carFee) track(ch, 'bills:property', paid - carFee, id);
-      const parts = [carFee ? `🚗 car upkeep ${fmt(carFee)}` : '', propFee ? `🏠 property upkeep ${fmt(propFee)}` : ''].filter(Boolean).join(' + ');
-      const how = fromBank ? (fromCash ? `${fmt(fromCash)} from your cash and ${fmt(fromBank)} from the bank` : 'from the bank') : 'from your cash';
-      await this.world.actions?.notify(ch, id, 'bills', paid < due ? `🧾 Weekly bills: ${parts} = ${fmt(due)} coins. You could only pay ${fmt(paid)} (${how}).` : `🧾 Weekly bills: ${parts} = ${fmt(due)} coins, paid ${how}.`);
+    let total = 0, billed = 0; const notes = [];
+    // In batches of 500: one read, one write and one set of notices each, instead of a few queries per person.
+    for (let i = 0; i < ids.length; i += 500) {
+      const up = { id: [], base: [], bank: [] };
+      for (const c of (await ch.q('select id, coins_base, coins_day, net, bank, cars from citizens where id = any($1) for update', [ids.slice(i, i + 500)])).rows) {
+        const id = c.id, cars = Array.isArray(c.cars) ? c.cars : [], carFee = cars.reduce((s, x) => s + (CAR_MODELS[x.m]?.upkeep || 0), 0), propFee = byOwner.get(id) || 0, due = carFee + propFee;
+        if (!due) continue;
+        ch.coins(c); const fromCash = Math.min(Math.max(0, c.coins_base), due), fromBank = Math.min(Number(c.bank || 0), due - fromCash), paid = fromCash + fromBank;
+        up.id.push(id); up.base.push(c.coins_base - fromCash); up.bank.push(fromBank); // (not touched: coins don't show on the map)
+        treasuryAdd(ch, paid); total += paid; billed++; if (carFee) track(ch, 'bills:car', Math.min(paid, carFee), id); if (paid > carFee) track(ch, 'bills:property', paid - carFee, id);
+        const parts = [carFee ? `🚗 car upkeep ${fmt(carFee)}` : '', propFee ? `🏠 property upkeep ${fmt(propFee)}` : ''].filter(Boolean).join(' + ');
+        const how = fromBank ? (fromCash ? `${fmt(fromCash)} from your cash and ${fmt(fromBank)} from the bank` : 'from the bank') : 'from your cash';
+        notes.push([id, 'bills', paid < due ? `🧾 Weekly bills: ${parts} = ${fmt(due)} coins. You could only pay ${fmt(paid)} (${how}).` : `🧾 Weekly bills: ${parts} = ${fmt(due)} coins, paid ${how}.`]);
+      }
+      if (up.id.length) await ch.q(`update citizens c set coins_base = u.base, coins_day = $4, bank = c.bank - u.bank
+        from unnest($1::text[], $2::numeric[], $3::numeric[]) u(id, base, bank) where c.id = u.id`, [up.id, up.base, up.bank, ch.today]);
     }
+    if (this.world.actions) await this.world.actions.notifyMany(ch, notes);
     return { billed, total };
   }
 

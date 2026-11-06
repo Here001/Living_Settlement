@@ -11,7 +11,7 @@ const dbUrl = (process.env.DATABASE_URL || '').replace(/([?&]sslmode=)(require|p
 export const pool = new pg.Pool({
   connectionString: dbUrl || undefined,
   ssl: process.env.PGSSL === '1' ? { rejectUnauthorized: false } : undefined,
-  max: Number(process.env.PG_POOL_SIZE || 8),
+  max: Number(process.env.PG_POOL_SIZE || 16), // enough for hundreds of players acting at once; Neon allows far more
   idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 15000,          // a cold or unreachable database fails a request instead of hanging it
   keepAlive: true,
@@ -267,7 +267,10 @@ const MIGRATIONS = [
    create index if not exists offers_from on offers (from_id, status);`,
   // v50: the clock looks for finished upgrades every few seconds; only the few buildings being upgraded are indexed
   `create index if not exists buildings_upgrading on buildings (up_at) where up_at > 0;
-   create index if not exists offers_open on offers (expires_at) where status in ('open', 'countered');`
+   create index if not exists offers_open on offers (expires_at) where status in ('open', 'countered');`,
+  // v51: coins paid into or out of the treasury by one player's own actions (trips, shifts, gigs…), which don't wait for
+  // the colony-wide lock; the next colony-wide change (or the clock, within seconds) adds them to the treasury
+  `create table if not exists treasury_pending (id bigserial primary key, delta numeric not null, t bigint not null);`
 ];
 
 export async function migrate() {
@@ -303,6 +306,19 @@ export async function migrate() {
 
 // Run a world change atomically. The advisory lock makes changes from every server instance happen one at a time,
 // so two servers can never hand the same home to two people.
+// One player's own action: an ordinary transaction without the colony-wide lock. Rows it changes are still locked
+// (select … for update), so two actions on the same colonist still happen one after the other.
+export async function personalTx(fn) {
+  const client = await pool.connect(); let broken = false;
+  try {
+    await client.query('begin');
+    await client.query("set local idle_in_transaction_session_timeout = '30s'");
+    const r = await fn(client);
+    await client.query('commit');
+    return r;
+  } catch (e) { await client.query('rollback').catch(() => { broken = true; }); throw e; }
+  finally { client.release(broken); }
+}
 export async function worldTx(fn) {
   const client = await pool.connect(); let broken = false;
   try {

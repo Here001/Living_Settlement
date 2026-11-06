@@ -63,7 +63,7 @@ export class GameHouse {
 
   // ---------- Lucky wheel: one free spin a real day (coins), or paid spins (a multiple of the bet) ----------
   async wheel(id, bid, { free, bet }) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c, name } = await this.seat(ch, id, bid, CASINO_OK);
       if (free) {
         if (c.wheel_day === realDay()) throw new HttpError(409, 'You’ve had your free spin today. Come back tomorrow, or spin for coins.');
@@ -81,7 +81,7 @@ export class GameHouse {
   // ---------- Scratch cards: the card is decided when it's bought; the browser lets you scratch it ----------
   async scratch(id, bid, price) {
     price = Math.floor(Number(price)); if (!SCRATCH_TIERS.includes(price)) throw new HttpError(400, `Cards cost ${SCRATCH_TIERS.map(fmt).join(', ')} coins.`);
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c, name } = await this.seat(ch, id, bid, CASINO_OK); this.stake(ch, c, 'scratch', price);
       const card = scratchCard(rand), paid = price * card.x;
       await this.pay(ch, c, 'scratch', paid, price, name);
@@ -91,7 +91,7 @@ export class GameHouse {
 
   // ---------- Penalty shootout: start (bet) → five kicks ----------
   async penalty(id, bid, { action, bet, spot }) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c, name } = await this.seat(ch, id, bid); let g = c.play_game;
       if (g && g.game !== 'penalty') { if (action === 'start') throw new HttpError(409, `Finish your ${GH_GAMES[g.game].name.toLowerCase()} first.`); g = null; }
       if (action === 'start') {
@@ -113,7 +113,7 @@ export class GameHouse {
 
   // ---------- Darts: start (bet) → three throws at where you aim (the server adds a wobble) ----------
   async darts(id, bid, { action, bet, x, y }) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c, name } = await this.seat(ch, id, bid); let g = c.play_game;
       if (g && g.game !== 'darts') { if (action === 'start') throw new HttpError(409, `Finish your ${GH_GAMES[g.game].name.toLowerCase()} first.`); g = null; }
       if (action === 'start') {
@@ -136,7 +136,7 @@ export class GameHouse {
 
   // ---------- Snooker practice: free; pot 3 reds in 6 shots. The first win each real day pays a prize ----------
   async snooker(id, bid, { action, angle, power, spin }) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c, name } = await this.seat(ch, id, bid); let g = c.play_game;
       if (g && g.game !== 'snooker') { if (action === 'start') throw new HttpError(409, `Finish your ${GH_GAMES[g.game].name.toLowerCase()} first.`); g = null; }
       if (action === 'start') {

@@ -90,6 +90,14 @@ export class Actions {
     const b = (visiting && await at(v.visit_id)) || (where === 'work' && await at(v.job_id)) || (where === 'out' && await at(v.hang_id)) || await at(v.home_id);
     return b ? { x: b.x, y: b.y, name: b.name || BUILDING_TYPES[b.type]?.name || 'town' } : { x: v.hx, y: v.hy, name: 'town' };
   }
+  // Many notices at once (weekly bills): one insert for all of them. rows: [[citizenId, kind, text], …]
+  async notifyMany(ch, rows) {
+    if (!rows.length) return; const t = Date.now();
+    const ids = (await ch.q('insert into notices (citizen_id, t, kind, text) select i, $1, k, x from unnest($2::text[], $3::text[], $4::text[]) with ordinality u(i, k, x, n) order by n returning id',
+      [t, rows.map(r => r[0]), rows.map(r => r[1]), rows.map(r => r[2])])).rows.map(r => r.id);
+    rows.forEach(([cid, kind, text], i) => { ch.extraOps.push({ op: 'notice', private: true, to: [cid], data: { id: String(ids[i]), t, kind, text } });
+      ch.pushes.push([[cid], { kind, title: kind === 'bills' ? '🧾 Weekly bills' : 'Resurgence', body: text.replace(/^\S+\s/, ''), tag: 'notice-' + ids[i] }]); });
+  }
   // A personal notice: shown straight away if they're online, and kept until they've seen it.
   async notify(ch, citizenId, kind, text) {
     const t = Date.now(), id = (await ch.q('insert into notices (citizen_id, t, kind, text) values ($1, $2, $3, $4) returning id', [citizenId, t, kind, text])).rows[0].id;
@@ -197,7 +205,7 @@ export class Actions {
   // Send the colonist to a place, or to a friend's home (by username). null ends the visit.
   // `spot` {x, y}: any tile on the map (a patch of grass, a street corner); they go there, stay a while, and come back.
   async visit(id, { buildingId, friend, spot }) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c } = await this.load(ch, id);
       if (!buildingId && !friend && !spot) { await this.setVisit(ch, c, null); return { ok: true, home: true }; }
       let b, label;
@@ -230,7 +238,7 @@ export class Actions {
     if (n && !/^[\p{L}][\p{L} '-]{0,19}$/u.test(n)) throw new HttpError(400, 'Use letters only for your pet’s name (up to 20).');
     if (!buildingId) throw new HttpError(400, 'Pets are adopted at a Pet store: tap one on the map.');
     const price = petPrice(kind);
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const store = (await ch.q("select id from buildings where id = $1 and type = 'petstore' and done and not ruin", [buildingId])).rows[0];
       if (!store) throw new HttpError(409, "That isn't an open Pet store.");
       const { c } = await this.load(ch, id);
@@ -245,13 +253,13 @@ export class Actions {
   async renamePet(id, name) {
     const n = String(name || '').trim().replace(/\s+/g, ' ');
     if (!/^[\p{L}][\p{L} '-]{0,19}$/u.test(n)) throw new HttpError(400, 'Use letters only for your pet’s name (up to 20).');
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c?.pet) throw new HttpError(400, "You don't have a pet.");
       const pet = { ...c.pet, n }; await ch.q('update citizens set pet = $2 where id = $1', [id, JSON.stringify(pet)]); ch.touch(c); return { ok: true, pet };
     });
   }
   async release(id) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c?.pet) throw new HttpError(400, "You don't have a pet.");
       await ch.q('update citizens set pet = null where id = $1', [id]); ch.touch(c); return { ok: true };
     });

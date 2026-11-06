@@ -349,4 +349,4 @@ if (isLeader) await world.upgradeCampfire().catch(e => console.error('landing st
 if (isLeader) await world.tick().catch(e => console.error('tick failed:', e.message)); // catch up on anything missed while off
 server.keepAliveTimeout = 65000; server.headersTimeout = 66000; // longer than the host's proxy, so it never reuses a closed connection
 server.listen(PORT, () => { started = true; console.log(`City running on :${PORT} with ${world.meta?.population || 0} citizens (bus: ${bus.kind})`); });
-for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { server.close(); process.exit(0); });
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => { server.close(); try { const { drainFlows } = await import('./stats.js'); await Promise.race([drainFlows(), new Promise(r => setTimeout(r, 3000))]); } catch {} process.exit(0); }); // the last few seconds of stats are saved first

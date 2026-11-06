@@ -1045,9 +1045,12 @@ function drawB(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>drawB(
 // copied each frame. Night lights and chimney smoke from the drawing are remembered and replayed on top, so they still
 // glow and drift. Buildings that animate (clocks, windmills, neon, ferris wheels…) are always drawn live.
 const ANIM_STYLES=new Set(['stall','tower','fountain','pine','windmill','dome','bush','tanks','cooling','ponds','atom','lighthouse','ferris','winery']);
-const BSPR={ map:new Map(), last:new Map(), px:0, budgetEnd:0, hits:0, made:0, live:0 };
+const BSPR={ map:new Map(), last:new Map(), px:0, budgetEnd:0, hits:0, made:0, live:0, frame:0 };
 let SPR_REC=null, SPR_MIRROR=false; // while a building picture is being drawn: animated bits to replay each frame
 const bspCap = () => Quality.level>=2 ? 6e6 : 9e6; // pixels kept (about 4 bytes each)
+// Pictures of buildings on screen right now are never thrown away to make room (that made dense districts redraw every
+// building every frame); only ones off screen are, oldest first, unless the total passes this hard limit.
+const bspHard = () => bspCap()*1.75;
 function bCacheable(t){ const t0=t.base||t; return !ANIM_STYLES.has(t0.style) && !(t0.style==='block'&&t0.neon); }
 function bspBucket(){ return Math.min(4, Math.pow(2, Math.ceil(Math.log2(Math.max(0.2, cam.z*dpr))*2)/2)); }
 function bspFree(e){ if(!e) return; BSPR.px-=e.px; e.cv.width=e.cv.height=0; } // frees the memory straight away (iOS counts it)
@@ -1075,14 +1078,15 @@ function drawBCached(b,t){
   if(!bCacheable(t)){ BSPR.live++; drawB(b,t); return; }
   const base=`${b.id}|${b.type}|${b.rot||0}|${b.lv||1}|${b.upAt?1:0}|${b.x},${b.y}|${VIEW}|${LAMPS>0?1:0}|${DARK>0.3?1:0}`, sc=bspBucket(), key=base+'|'+sc;
   let e=BSPR.map.get(key);
-  if(e){ BSPR.map.delete(key); BSPR.map.set(key,e); BSPR.hits++; }
+  if(e){ BSPR.map.delete(key); BSPR.map.set(key,e); BSPR.hits++; e.used=BSPR.frame; }
   else { const old=BSPR.last.get(b.id), zooming=performance.now()-Ground.zoomAt<220;
     if(old&&old.base===base&&(zooming||performance.now()>BSPR.budgetEnd)) e=old; // mid-pinch or out of time: the last picture, scaled
     else { const can=performance.now()<=BSPR.budgetEnd||BSPR.made<(zooming?2:10); e=can?bspMake(b,t,sc,base):null; // a picture costs about one ordinary drawing, so a few a frame are always worth it
-      if(e){ BSPR.made++; BSPR.map.set(key,e); BSPR.px+=e.px; if(old&&old!==e&&old.base!==base){} BSPR.last.set(b.id,e);
-        const cap=bspCap(); for(const [k,v] of BSPR.map){ if(BSPR.px<=cap) break; BSPR.map.delete(k); if(BSPR.last.get(v.base.split('|')[0])===v) BSPR.last.delete(v.base.split('|')[0]); bspFree(v); } } } }
+      if(e){ BSPR.made++; e.used=BSPR.frame; BSPR.map.set(key,e); BSPR.px+=e.px; BSPR.last.set(b.id,e);
+        const cap=bspCap(), hard=bspHard(), drop=(k,v)=>{ BSPR.map.delete(k); const id=v.base.split('|')[0]; if(BSPR.last.get(id)===v) BSPR.last.delete(id); bspFree(v); };
+        if(BSPR.px>cap) for(const [k,v] of BSPR.map){ if(BSPR.px<=cap) break; if(v.used>=BSPR.frame-2&&BSPR.px<=hard) continue; drop(k,v); } } } }
   if(!e){ BSPR.live++; drawB(b,t); return; }
-  ctx.drawImage(e.cv, e.x0, e.y0, e.w, e.h);
+  e.used=BSPR.frame; ctx.drawImage(e.cv, e.x0, e.y0, e.w, e.h);
   for(const q of e.quads) windowQuads.push(q); for(const l of e.lts) lights.push(l);
   for(const [x,y,seed] of e.rec) smoke(x,y,seed); }
 const blocks = b => !T(b).outdoor;
@@ -1497,11 +1501,24 @@ const DRAW = {
 function blob(x,y,r,col,seed){ const n=8, rot=(seed%13)/13; const pts=[]; for(let i=0;i<n;i++){ const a=rot+i/n*Math.PI*2; const rr=r*(0.9+((seed>>i)&1)*0.1); pts.push({x:x+Math.cos(a)*rr,y:y+Math.sin(a)*rr*0.94}); }
   poly(pts,col,INK,1); poly(pts.map(p=>({x:x-r*0.2+(p.x-x)*0.6,y:y-r*0.24+(p.y-y)*0.6})), shade(col,1.16), false);
   poly([pts[1],pts[2],pts[3],{x:x+r*0.25,y:y+r*0.2}], shade(col,0.84), false); }
-function drawTreeAt(p,leaf,s,seed){ seed=seed||7;
+// Street trees (on boulevards, in squares…) don't move, so each kind is drawn once per zoom level into a small picture
+// that's copied each frame; there can be hundreds of them on screen and each is a dozen shapes by hand.
+const treeSpr=new Map(); let treeSprStep=0;
+function drawTreeAt(p,leaf,s,seed){ seed=seed||7; const st=SPR.step||1;
+  if(st>5) return drawTree0(p,leaf,s,seed); // very close up: by hand, crisp
+  if(st!==treeSprStep){ for(const v of treeSpr.values()) v.cv.width=v.cv.height=0; treeSpr.clear(); treeSprStep=st; }
+  const v4=seed&3, key=leaf+'|'+s+'|'+v4; let e=treeSpr.get(key);
+  if(!e){ const W=Math.ceil(44*s*st)+2, H=Math.ceil(52*s*st)+2; const cv=document.createElement('canvas'); cv.width=W; cv.height=H; const g=cv.getContext('2d');
+    if(!g) return drawTree0(p,leaf,s,seed); g.setTransform(st,0,0,st,22*s*st+1,49*s*st+1); g.strokeStyle=INK; g.lineJoin='round';
+    const keep=ctx; ctx=g; try{ drawTree0({x:0,y:0},leaf,s,v4+7); } finally{ ctx=keep; }
+    e={cv,W,H}; if(treeSpr.size>200){ for(const v of treeSpr.values()) v.cv.width=v.cv.height=0; treeSpr.clear(); } treeSpr.set(key,e); }
+  ctx.drawImage(e.cv, p.x-(22*s*st+1)/st, p.y-(49*s*st+1)/st, e.W/st, e.H/st); }
+function drawTree0(p,leaf,s,seed){
   poly([{x:p.x-2*s,y:p.y},{x:p.x+2*s,y:p.y},{x:p.x+1.6*s,y:p.y-18*s},{x:p.x-1.6*s,y:p.y-18*s}],'#7A5636');
   const parts=[[0,-36,11,1],[-8,-27,10,0.94],[8,-28,10,0.9],[0,-22,9,1.04]];
   parts.forEach(([dx,dy,r,f],i)=>blob(p.x+dx*s,p.y+dy*s,r*s,shade2(leaf,f),seed+i*31)); }
-function shade2(hex,f){ const n=parseInt(hex.slice(1),16); const c=v=>Math.max(0,Math.min(255,Math.round(v*f))).toString(16).padStart(2,'0'); return '#'+c((n>>16)&255)+c((n>>8)&255)+c(n&255); }
+const shade2Cache=new Map(); function shade2(hex,f){ const k=hex+f; let v=shade2Cache.get(k); if(v===undefined){ v=shade2_(hex,f); if(shade2Cache.size>4000) shade2Cache.clear(); shade2Cache.set(k,v); } return v; }
+function shade2_(hex,f){ const n=parseInt(hex.slice(1),16); const c=v=>Math.max(0,Math.min(255,Math.round(v*f))).toString(16).padStart(2,'0'); return '#'+c((n>>16)&255)+c((n>>8)&255)+c(n&255); }
 const SHADOW_H = { racetrack:()=>12, starport:()=>110, house:t=>(t.height||24)+(t.roofH||18)*0.5, block:t=>t.height||40, tower:t=>t.height+20, watertower:t=>t.height, tent:()=>20, stall:()=>24, well:()=>22, statue:()=>30, fountain:()=>10, tree:()=>38, pine:()=>40, lamp:()=>34, bench:()=>4 };
 function hull(pts){ pts=pts.slice().sort((a,b)=>a.x-b.x||a.y-b.y); const cr=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x); const lo=[],hi=[]; for(const p of pts){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); } for(const p of pts.slice().reverse()){ while(hi.length>=2&&cr(hi[hi.length-2],hi[hi.length-1],p)<=0) hi.pop(); hi.push(p); } return lo.slice(0,-1).concat(hi.slice(0,-1)); }
 function addShadow(P,b){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>addShadow(P,v)); } const t=T(b), fn=SHADOW_H[t.style]; if(!fn) return; const h=fn(t); const ox=-0.62*h, oy=0.3*h;
@@ -2071,7 +2088,14 @@ function drawBridge(x,y,R,has){ const N=iso(x,y),E=iso(x+1,y),S2=iso(x+1,y+1),Wp
   ctx.fillStyle='rgba(30,50,80,.25)'; ctx.beginPath(); ctx.moveTo(Wp.x,Wp.y); ctx.lineTo(S2.x,S2.y); ctx.lineTo(S2.x,S2.y+5); ctx.lineTo(Wp.x,Wp.y+5); ctx.fill(); }
 
 /* ---------------- road details: lanes, highway, street lamps ---------------- */
-function drawStreetLamp(p){ line(p,up(p,26),INK,2.4); line(p,up(p,26),'#3E5148',1.2); const q=up(p,26); poly([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}],lampGlass()); poly([{x:q.x-3.5,y:q.y-6},{x:q.x+3.5,y:q.y-6},{x:q.x,y:q.y-9}],'#3E5148');
+// Street lamps: hundreds on screen when zoomed out, so each look (lit or not) is drawn once per zoom into a tiny picture.
+const lampSpr={ step:0, map:new Map() };
+function drawStreetLamp(p){ const st=SPR.step||1; if(st>5) return drawLamp0(p);
+  if(lampSpr.step!==st){ lampSpr.map.clear(); lampSpr.step=st; } const key=lampGlass(); let e=lampSpr.map.get(key);
+  if(!e){ const W=Math.ceil(12*st)+2, H=Math.ceil(40*st)+2, cv=document.createElement('canvas'); cv.width=W; cv.height=H; const g=cv.getContext('2d'); if(!g) return drawLamp0(p);
+    g.setTransform(st,0,0,st,6*st+1,37*st+1); const keep=ctx; ctx=g; try{ drawLamp0({x:0,y:0}); } finally{ ctx=keep; } e={cv,W,H}; lampSpr.map.set(key,e); }
+  ctx.drawImage(e.cv, p.x-(6*st+1)/st, p.y-(37*st+1)/st, e.W/st, e.H/st); }
+function drawLamp0(p){ line(p,up(p,26),INK,2.4); line(p,up(p,26),'#3E5148',1.2); const q=up(p,26); poly([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}],lampGlass()); poly([{x:q.x-3.5,y:q.y-6},{x:q.x+3.5,y:q.y-6},{x:q.x,y:q.y-9}],'#3E5148');
   if(LAMPS>0){ windowQuads.push([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}]); lights.push({x:q.x,y:q.y-2,r:19,col:'255,218,150',a:1.15},{x:p.x,y:p.y,r:34,col:'255,214,140',a:0.55}); } }
 function drawAnyRoad(x,y,R,has,hasR,pushDeco,bridge,thumb){
   if(R.kind==='rail'){ drawRailTile(x,y,R,hasR,pushDeco); if(bridge) drawBridge(x,y,R,hasR); return; }
@@ -2414,7 +2438,8 @@ function drawRoadTile(x,y,R,has,pushDeco){ const k=TILEKEY||x+','+y;
 
 /* ---------------- frame ---------------- */
 // Fewer people are simulated on a phone that's struggling (the quality level goes up when frames run slow).
-const crowdMax = () => [1500,1100,700,450][Quality.level]||450; let crowd=[], crowdAt=-1e9, areaSel=null;
+// Zoomed far out people are only a few pixels tall, so fewer are drawn (and they're picked nearest the middle first).
+const crowdMax = () => Math.round(([1500,1100,700,350][Quality.level]||350)*(cam.z<0.6?0.45:cam.z<0.8?0.7:1)); let crowd=[], crowdAt=-1e9, areaSel=null;
 const progressOf = b => { const span=Math.max(1,(b.readyAt||0)-(b.builtAt||0)); return Math.max(0.03,Math.min(1,(Date.now()+skew-(b.builtAt||0))/span)); };
 // A building site: dug-out ground, a faint outline of what's coming, and scaffolding that rises as work goes on.
 function drawConstruction(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>drawConstruction(v,T(v))); }
@@ -2529,7 +2554,7 @@ function frame(ts){ requestAnimationFrame(frame);
   finally { planBudgetEnd=Infinity; }
   Quality.sample(performance.now()-t0, ts); }
 function drawFrame(ts){
-  T_NOW=ts; windowQuads=[]; lights=[]; edgePan(); sprBegin(); sprDropOld(); BSPR.budgetEnd=performance.now()+(Quality.level>=2?4:7); BSPR.hits=BSPR.made=BSPR.live=0;
+  T_NOW=ts; windowQuads=[]; lights=[]; edgePan(); sprBegin(); sprDropOld(); BSPR.budgetEnd=performance.now()+(Quality.level>=2?4:7); BSPR.hits=BSPR.made=BSPR.live=0; BSPR.frame++;
   const gm=gmNow(); DARK=darkness(gm); LAMPS=Math.min(1,Math.max(0,(DARK-0.2)/0.25)); // on from about 7pm, off by about 5:30am
   if(S.meta){ const wNow=weatherAt(S.meta,gm); if(wNow==='storm'||wNow==='fog') LAMPS=1; } // and whenever the weather turns dark
   if(follow){ const c=S.citizens.get(follow); const st=c&&citizenAt(c,gm); if(st){ const p=iso(st.x,st.y); cam.x+=(p.x-cam.x)*0.08; cam.y+=(p.y-14-cam.y)*0.08; } }
@@ -2565,7 +2590,7 @@ function drawFrame(ts){
   // Traffic: ambient cars, buses and vans on busy roads, the developer's own vehicles, and crews answering disasters.
   vehicleHits=[]; trafficBudgetEnd=performance.now()+(Quality.level>=2?3:5);
   if(cam.z>=0.45){
-    for(const r of tileList(D.roads)){ const k=r.k, x=r.x, y=r.y; if(r.h%9!==0||x<tminX-9||x>tmaxX+9||y<tminY-9||y>tmaxY+9||!carOK(k)) continue; // a roamer can be up to 7 tiles from its street
+    for(const r of tileList(D.roads)){ const k=r.k, x=r.x, y=r.y; if(r.h%(cam.z<0.6?27:cam.z<0.8?14:9)!==0||x<tminX-9||x>tmaxX+9||y<tminY-9||y>tmaxY+9||!carOK(k)) continue; // a roamer can be up to 7 tiles from its street
       const vt=ambientType(k), V=VEHICLE_TYPES[vt], st=roam('amb:'+k,x,y,gm,V,true); if(st) items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(k)%V.colors.length],st,key:'a:'+k} }); }
     for(const v of D.vehicles.values()){ if(v.x<tminX-14||v.x>tmaxX+14||v.y<tminY-14||v.y>tmaxY+14) continue; const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car, st=roam(v.id,v.x,v.y,gm,V,false); if(!st) continue;
       items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(v.id)%V.colors.length],st,siren:v.type==='police'&&Math.floor(gm/LEG)%5===0,id:v.id,key:'v:'+v.id} }); vehicleHits.push({id:v.id,st}); }

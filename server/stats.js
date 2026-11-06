@@ -35,11 +35,22 @@ export async function flushFlows(db, flows) {
   if (!flows?.length) return;
   const day = realDay(), agg = new Map(), who = new Map();
   for (const [k, c, id] of flows) { const a = agg.get(k) || { n: 0, coins: 0 }; a.n++; a.coins += c; agg.set(k, a); if (id) who.set(k + '\u0000' + id, [k, id]); }
-  for (const [k, a] of agg) await db.query(`insert into flows (day, key, n, coins) values ($1, $2, $3, $4)
-    on conflict (day, key) do update set n = flows.n + $3, coins = flows.coins + $4`, [day, k, a.n, a.coins]);
+  if (agg.size) { const ks = [...agg.keys()];
+    await db.query(`insert into flows (day, key, n, coins) select $1, k, n, c from unnest($2::text[], $3::bigint[], $4::bigint[]) t(k, n, c)
+      on conflict (day, key) do update set n = flows.n + excluded.n, coins = flows.coins + excluded.coins`, [day, ks, ks.map(k => agg.get(k).n), ks.map(k => agg.get(k).coins)]); }
   if (who.size) { const v = [...who.values()];
     await db.query(`insert into flow_players (day, key, citizen_id) select $1, k, i from unnest($2::text[], $3::text[]) t(k, i) on conflict do nothing`, [day, v.map(x => x[0]), v.map(x => x[1])]); }
 }
+// Every action adds to the same few "coins by kind, today" rows, so writing them inside each action made all actions
+// queue behind each other on those rows. Instead they're collected here (only once the action is saved) and written
+// together every few seconds.
+let flowBuf = [], flowTimer = null;
+export function queueFlows(flows) {
+  if (!flows?.length) return; flowBuf.push(...flows);
+  if (!flowTimer) flowTimer = setTimeout(async () => { flowTimer = null; const f = flowBuf; flowBuf = [];
+    try { await flushFlows(pool, f); } catch (e) { console.error('stats:', e.message); } }, 5000);
+}
+export async function drainFlows() { if (flowTimer) { clearTimeout(flowTimer); flowTimer = null; } const f = flowBuf; flowBuf = []; if (f.length) await flushFlows(pool, f); }
 
 // A signed-in player used the game today (written once per player per day).
 const seen = new Set(); let seenDay = -1;
@@ -67,6 +78,7 @@ export async function snapshot(db, meta) {
 
 // Everything the developer's Stats tab shows.
 export async function dashboard(world, days = 30) {
+  await drainFlows(); // include the last few seconds
   days = Math.max(7, Math.min(90, Math.floor(Number(days) || 30)));
   const today = realDay(), from = today - days + 1, meta = world.meta, q = (s, a) => pool.query(s, a).then(r => r.rows);
   const DAY = 86400000;

@@ -5,6 +5,7 @@
 import crypto from 'node:crypto';
 import { pool } from './db.js';
 import { track } from './stats.js';
+import { treasuryAdd } from './races.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES } from '../shared/catalog.js';
@@ -31,7 +32,7 @@ export class CasinoTables {
     bet = Math.floor(Number(bet)); if (!Number.isFinite(bet) || bet < 1) throw new HttpError(400, 'Bet at least 1 coin.');
     if (bet > MAX_BET) throw new HttpError(400, `The most you can bet at once is ${fmt(MAX_BET)} coins.`);
     if (c.coins_base < bet) throw new HttpError(400, c.coins_base ? `You only have ${fmt(c.coins_base)} coins.` : "You don't have any coins yet. Get a job first.");
-    c.coins_base -= bet; ch.meta.treasuryBase = R.treasuryOn(ch.meta, ch.today) + bet; ch.meta.treasuryDay = ch.today; track(ch, 'casino:bet', bet, c.id);
+    c.coins_base -= bet; treasuryAdd(ch, bet); track(ch, 'casino:bet', bet, c.id);
     const until = Date.now() + 10 * 60 * 1000;
     await ch.q('update citizens set visit_from = case when visit_id = $2 and visit_until > $6 then visit_from else $6 end, visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5 where id = $1', [c.id, cas.id, until, cas.cx, cas.cy, Date.now()]);
     ch.citizens.set(c.id, [...new Set([...(ch.citizens.get(c.id) || []), R.chunkKey(cas.cx, cas.cy)])]);
@@ -39,7 +40,7 @@ export class CasinoTables {
   }
   // Pay out (from the treasury), record it for badges and the weekly board, and announce big wins.
   async payout(ch, c, game, staked, paid, casName, gameName) {
-    if (paid > 0) { track(ch, 'casino:win', paid, c.id); c.coins_base += paid; ch.meta.treasuryBase = Math.max(0, R.treasuryOn(ch.meta, ch.today) - paid); ch.meta.treasuryDay = ch.today; }
+    if (paid > 0) { track(ch, 'casino:win', paid, c.id); c.coins_base += paid; treasuryAdd(ch, -paid); }
     ch.touch(c); await ch.saveCitizen(c);
     const won = paid - staked; await score(ch, c.id, 'casino_net', won);
     await bump(ch, c.id, won > 0 ? { casino_plays: 1, casino_wins: 1 } : { casino_plays: 1 }, won > 0 ? { casino_best: paid } : {});
@@ -54,7 +55,7 @@ export class CasinoTables {
       done, outcome: g.outcome || null, payout: g.paid || 0, canDouble: !done && g.player.length === 2 && !g.doubled, doubled: !!g.doubled, coins, ...extra };
   }
   async blackjack(id, action, bet) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c, cas } = await this.seat(ch, id), name = cas.name || BUILDING_TYPES.casino.name; let g = c.casino_game;
       if (g && g.game !== 'blackjack') { if (action === 'deal') throw new HttpError(409, `Finish your ${GAMES[g.game]?.name || 'other'} game first.`); g = null; }
       const draw = () => g.deck.pop();
@@ -101,7 +102,7 @@ export class CasinoTables {
     const v = { game: 'mines', bet: g.bet, mines: g.mines, picked: g.picked, mult: minesMultiple(g.mines, g.picked.length), next: minesMultiple(g.mines, g.picked.length + 1), done: !!g.done, outcome: g.outcome || null, paid: g.paid || 0, ...extra };
     if (g.done) v.layout = g.layout; if (coins !== undefined) v.coins = coins; return v; }
   async mines(id, action, bet, mines, cell) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c, cas } = await this.seat(ch, id), name = cas.name || BUILDING_TYPES.casino.name; let g = c.casino_game;
       if (g && g.game !== 'mines') { if (action === 'start') throw new HttpError(409, `Finish your ${GAMES[g.game]?.name || 'other'} game first.`); g = null; }
       const end = async (outcome, paid) => { g.done = true; g.outcome = outcome; g.paid = paid; await this.payout(ch, c, 'mines', g.bet, paid, name, 'Mines'); await this.save(ch, c, null); };
@@ -137,7 +138,7 @@ export class CasinoTables {
     const v = { game: 'hilo', bet: g.bet, cards: g.cards, mult: g.mult, steps: g.cards.length - 1, up: hiloStep(r, 'higher'), down: hiloStep(r, 'lower'), done: !!g.done, outcome: g.outcome || null, paid: g.paid || 0, ...extra };
     if (coins !== undefined) v.coins = coins; return v; }
   async hilo(id, action, bet) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c, cas } = await this.seat(ch, id), name = cas.name || BUILDING_TYPES.casino.name; let g = c.casino_game;
       if (g && g.game !== 'hilo') { if (action === 'start') throw new HttpError(409, `Finish your ${GAMES[g.game]?.name || 'other'} game first.`); g = null; }
       const card = () => RANKS[crypto.randomInt(13)] + SUITS[crypto.randomInt(4)];
@@ -183,7 +184,7 @@ export class CasinoTables {
       const t = (now - g.start) / 1000, due = t >= rocketTime(g.crash) || (g.auto && g.auto <= g.crash && t >= rocketTime(g.auto)) || now - g.at > ABANDON;
       if (!due) return this.rocketView(g, undefined, now);
     }
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c, cas } = await this.seat(ch, id), now = Date.now(); let g = c.casino_game;
       if (g && g.game !== 'rocket') { if (action === 'launch') throw new HttpError(409, `Finish your ${GAMES[g.game]?.name || 'other'} game first.`); g = null; }
       if (g && !g.done && await this.rocketResolve(ch, c, g, now)) { if (action !== 'launch') return this.rocketView(g, c.coins_base, now); g = null; }

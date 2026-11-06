@@ -77,7 +77,7 @@ export class Chat {
   }
   async charge(me, fee) {
     if (!fee || !this.world) return;
-    await this.world.change(async ch => {
+    await this.world.personal(async ch => {
       const c = (await ch.q('select * from citizens where id = $1 for update', [me])).rows[0]; ch.coins(c);
       if (c.coins_base < fee) throw new HttpError(400, `Messages to colonists who live far away cost ${fee} coins each, and you have ${c.coins_base} on you.`);
       c.coins_base -= fee; treasuryAdd(ch, fee); track(ch, 'chat:fee', fee, c.id); ch.touch(c); await ch.saveCitizen(c);

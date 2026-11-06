@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { pool, worldTx } from './db.js';
-import { flushFlows, flushLedger, track } from './stats.js';
+import { pool, worldTx, personalTx } from './db.js';
+import { treasuryAdd } from './races.js';
+import { queueFlows, flushLedger, track } from './stats.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 import { playRound, GAMES, MAX_BET, validRoulette } from '../shared/casino.js';
@@ -41,6 +42,7 @@ export const cOut = r => ({ id: r.id, s: r.seq, h: r.handle, t: r.joined_at, f: 
   // claimed colonists drive only the car they bought (car: [model, colour]); everyone else follows the old 50/50 rule
   k: r.claimed ? 1 : 0, w: r.source === 'web' || r.source === 'google' ? 1 : 0, car: (() => { const a = Array.isArray(r.cars) && (r.cars.find(x => x.id === r.car_active) || r.cars[0]); return a ? [a.m, a.col] : null; })() });
 export const VISIT_TAIL = 20 * 60 * 1000;
+const QLOG = process.env.QLOG === '1' ? [] : null; // developer aid: QLOG=1 prints the queries each change makes
 
 // One world change. Holds the database connection inside the global world lock and records everything that changed,
 // so the right viewers can be told afterwards.
@@ -55,7 +57,7 @@ class Change {
     this.moved = new Map();      // building id → handles that moved in during this change
     this.extraOps = [];          // water, vehicle and disaster changes
   }
-  q(sql, args) { return this.db.query(sql, args); }
+  q(sql, args) { if (QLOG) QLOG.push(sql.replace(/\s+/g, ' ').slice(0, 90)); return this.db.query(sql, args); }
 
   // Money: checkpoint the stored formula before changing what flows in or out per day.
   income(delta) {
@@ -273,25 +275,57 @@ export class World {
   }
 
   // Runs fn inside the world lock with a fresh copy of the meta row, then tells every server what changed.
-  async change(fn, { allowUnfounded = false } = {}) {
+  //
+  // `personal: true` is for one player's own action that only changes their own colonist (a trip, a shift, a gig, a
+  // crime, their pet): it doesn't wait for the colony-wide lock, so thousands of players don't queue behind each other.
+  // It must not change the map or the colony's details; coins into or out of the treasury are noted (treasuryAdd) and
+  // added by the next colony-wide change, a few seconds later at most.
+  async change(fn, { allowUnfounded = false, personal = false } = {}) {
     // Inside another change (publishing a draft), join its transaction so the whole batch succeeds or fails together.
     const outer = changeScope.getStore(); if (outer) return fn(outer);
-    const result = await worldTx(async db => {
-      const row = (await db.query('select data from meta where id = 1 for update')).rows[0];
+    const result = await (personal ? personalTx : worldTx)(async db => {
+      const row = (await db.query(personal ? 'select data from meta where id = 1' : 'select data from meta where id = 1 for update')).rows[0];
       if (!row && !allowUnfounded) throw new HttpError(409, 'Found the colony first.');
-      const ch = new Change(db, row ? row.data : null);
+      const ch = new Change(db, row ? row.data : null), before = row && !personal ? JSON.stringify(row.data) : null; ch.personal = personal;
+      if (personal && ch.meta) { const p = Number((await db.query('select coalesce(sum(delta), 0) s from treasury_pending')).rows[0].s); // what the treasury really holds right now
+        if (p) ch.meta.treasuryBase = Math.max(0, R.treasuryOn(ch.meta, ch.today) + p), ch.meta.treasuryDay = ch.today; }
+      if (!personal && ch.meta) { // coins from personal changes since the last colony-wide one
+        const p = (await db.query('delete from treasury_pending returning delta')).rows;
+        if (p.length) ch.meta.treasuryBase = Math.max(0, R.treasuryOn(ch.meta, ch.today) + p.reduce((a, x) => a + Number(x.delta), 0)), ch.meta.treasuryDay = ch.today;
+      }
       const r = await changeScope.run(ch, () => fn(ch));
-      if (ch.flows) await flushFlows(db, ch.flows); // developer stats: coins earned and spent
       if (ch.ledger) await flushLedger(db, ch.ledger); // each player's cash-flow history
-      if (ch.meta) await db.query('insert into meta (id, data) values (1, $1) on conflict (id) do update set data = $1', [ch.meta]);
+      if (personal) { if (ch.pendingTreasury) await db.query('insert into treasury_pending (delta, t) values ($1, $2)', [ch.pendingTreasury, Date.now()]); ch.meta = null; }
+      else if (ch.meta && JSON.stringify(ch.meta) !== before) await db.query('insert into meta (id, data) values (1, $1) on conflict (id) do update set data = $1', [ch.meta]);
+      else if (ch.meta) ch.metaSame = true;
       const ops = await this.collectOps(db, ch);
-      return { r, ops, pushes: ch.pushes };
+      if (QLOG) { console.log(`change (${personal ? 'personal' : 'colony'}): ${QLOG.length} queries\n  ` + QLOG.join('\n  ')); QLOG.length = 0; }
+      return { r, ops, pushes: ch.pushes, flows: ch.flows, pending: personal ? ch.pendingTreasury || 0 : 0 };
     });
-    this.bus.publish(result.ops);
+    if (result.pending) this.notePending(result.pending);
+    queueFlows(result.flows); // developer stats: coins earned and spent, written every few seconds
+    this.publish(result.ops);
     if (this.push) for (const [ids, msg] of result.pushes) this.push.send(ids, msg).catch(e => console.error('push:', e.message)); // only after it's saved
     return result.r;
   }
 
+  // The colony's details (treasury, population…) change with almost every action. Viewers get them at most every 2 s
+  // (the latest copy), not after every single change; everything else goes out straight away.
+  personal(fn) { return this.change(fn, { personal: true }); }
+  // Coins a personal change paid into (or out of) the treasury: shown at once, and added to the saved treasury within half
+  // a second by one colony-wide change for everything that came in meanwhile.
+  notePending(delta) {
+    if (this.meta) { this.meta = { ...this.meta, treasuryBase: Math.max(0, R.treasuryOn(this.meta, R.gameDay(Date.now(), this.meta.epoch)) + delta), treasuryDay: R.gameDay(Date.now(), this.meta.epoch) }; }
+    if (!this.foldTimer) this.foldTimer = setTimeout(() => { this.foldTimer = null; this.change(async () => {}).catch(e => console.error('treasury:', e.message)); }, 500);
+  }
+  publish(ops) {
+    const meta = ops.filter(o => o.op === 'meta'), rest = meta.length ? ops.filter(o => o.op !== 'meta') : ops;
+    if (rest.length) this.bus.publish(rest);
+    if (!meta.length) return;
+    this.metaOut = meta[meta.length - 1]; this.meta = this.metaOut.data; const now = Date.now(); // this server knows at once
+    if (!this.metaTimer) { const wait = Math.max(0, (this.metaAt || 0) + 2000 - now);
+      this.metaTimer = setTimeout(() => { this.metaTimer = null; this.metaAt = Date.now(); const m = this.metaOut; this.metaOut = null; if (m) this.bus.publish([m]); }, wait); }
+  }
   async collectOps(db, ch) {
     const ops = [];
     if (ch.buildings.size) {
@@ -312,7 +346,7 @@ export class World {
     }
     for (const [id, chunks] of ch.gone) ops.push({ op: 'citizenGone', id, chunks });
     for (const e of ch.events) ops.push({ op: 'event', data: e });
-    if (ch.meta) ops.push({ op: 'meta', data: { ...ch.meta, outskirts: (ch.meta.population || 0) - (ch.meta.residents || 0) } });
+    if (ch.meta && !ch.metaSame) ops.push({ op: 'meta', data: { ...ch.meta, outskirts: (ch.meta.population || 0) - (ch.meta.residents || 0) } });
     return ops;
   }
 
@@ -720,7 +754,7 @@ export class World {
     if (GAMES[game].picks && !GAMES[game].picks.includes(String(pick))) throw new HttpError(400, game === 'coin' ? 'Pick heads or tails.' : game === 'plinko' ? 'Pick low, medium or high risk.' : game === 'baccarat' ? 'Bet on the player, the banker or a tie.' : 'Pick a number from 1 to 6.');
     bet = Math.floor(Number(bet)); if (!Number.isFinite(bet) || bet < 1) throw new HttpError(400, 'Bet at least 1 coin.');
     if (bet > MAX_BET) throw new HttpError(400, `The most you can bet at once is ${fmt(MAX_BET)} coins.`);
-    return this.change(async ch => {
+    return this.personal(async ch => {
       const c = (await ch.q('select c.*, h.x hx, h.y hy from citizens c left join buildings h on h.id = c.home_id where c.id = $1 for update of c', [id])).rows[0];
       if (!c) throw new HttpError(404, 'No such citizen.');
       if (!c.home_id) throw new HttpError(400, "You're still in cryosleep. The casino is for colonists who have woken up.");
@@ -731,7 +765,7 @@ export class World {
       const round = playRound(game, String(pick), bet, n => crypto.randomInt(n));
       c.coins_base = c.coins_base - bet + round.payout;
       // The house keeps losses and pays wins: the treasury moves by the opposite amount.
-      ch.meta.treasuryBase = Math.max(0, R.treasuryOn(ch.meta, ch.today) + bet - round.payout); ch.meta.treasuryDay = ch.today;
+      treasuryAdd(ch, bet - round.payout);
       ch.touch(c); await ch.saveCitizen(c);
       const until = Date.now() + 10 * 60 * 1000;
       await ch.q('update citizens set visit_from = case when visit_id = $2 and visit_until > $6 then visit_from else $6 end, visit_id = $2, visit_until = $3, visit_cx = $4, visit_cy = $5 where id = $1', [c.id, cas.id, until, cas.cx, cas.cy, Date.now()]);
@@ -1077,6 +1111,7 @@ export class World {
     if (due) await this.finishAll({ dueOnly: true });
     if (this.housing && (await pool.query('select 1 from buildings where up_at > 0 and up_at <= $1 limit 1', [Date.now()])).rowCount) await this.housing.finishUpgrades();
     if (this.housing) await this.housing.expireOffers();
+    if (Date.now() - (this.foldAt || 0) > 5000) { this.foldAt = Date.now(); if ((await pool.query('select 1 from treasury_pending limit 1')).rowCount) await this.change(async () => {}); } // add players' coins to the treasury
     const pending = this.meta.population > this.meta.residents && (await pool.query('select 1 from buildings where home_used < home_cap limit 1')).rowCount;
     if (today <= (this.meta.newsDay ?? 0) && !pending) return { days: 0, finished: due };
     return this.change(async ch => {

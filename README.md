@@ -664,6 +664,8 @@ Without Docker: install Node 20+ and Postgres, copy `.env.example` to `.env`, fi
 | `npm test` | About 285 end-to-end checks against a running server. **Throwaway database only:** it founds a test town. Start that server with `ALLOW_TEST_ROUTES=1 RATE_PER_MIN=5000` so the payday check runs and the test isn't rate-limited. |
 | `npm run check` | Recounts every total from scratch and compares it with the running totals. Read-only, safe on the live database. |
 | `npm run loadtest` | Floods a running server with 200,000 followers, webhooks, towers and viewers. **Throwaway database only.** |
+| `node scripts/actionload.mjs 120 20` | Players' everyday actions (trips, Home tab, Earn, shifts) at 120 a second for 20 s, with response times. **Local test server only.** |
+| `QLOG=1 npm start` | Prints every database query each change makes (for finding slow changes). |
 
 ## Put it online for free (Render + Neon)
 
@@ -703,7 +705,7 @@ In Development mode, Meta only sends comments from accounts with a role on the a
 | `CONTACT_EMAIL` | no | Shown on the privacy and data deletion pages |
 | `SPAWN_KEYWORD` | no | The comment word that moves people in (default `spawn`) |
 | `REDIS_URL` | when running 2+ servers | Shares live updates between servers |
-| `PG_POOL_SIZE` | no | Database connections per server (default 8) |
+| `PG_POOL_SIZE` | no | Database connections per server (default 16) |
 | `RATE_PER_MIN` | no | Requests per minute per visitor (default 240) |
 
 ## API

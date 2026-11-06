@@ -83,7 +83,7 @@ export class Earn {
 
   // ---------- extra shifts ----------
   async shift(id) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c } = await this.lock(ch, id), e = this.stateOf(c), now = Date.now();
       if (!c.job_id) throw new HttpError(400, 'You need a job to work an extra shift. Pick one in the Work tab.');
       if (e.shifts >= EARN.shift.perDay) throw new HttpError(429, `You've worked ${EARN.shift.perDay} extra shifts today. Rest up and come back tomorrow.`);
@@ -114,7 +114,7 @@ export class Earn {
     return out;
   }
   async takeGig(id, gigId) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c } = await this.lock(ch, id), e = this.stateOf(c), now = Date.now();
       if (e.gig) throw new HttpError(409, `You're already delivering to ${e.gig.to.name}.`);
       if (e.gigsDone >= EARN.gig.perDay) throw new HttpError(429, `You've done ${EARN.gig.perDay} deliveries today. More tomorrow!`);
@@ -126,7 +126,7 @@ export class Earn {
     });
   }
   async deliver(id) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c } = await this.lock(ch, id), e = this.stateOf(c), now = Date.now();
       if (!e.gig) throw new HttpError(409, "You aren't delivering anything.");
       if (now < e.gig.until - 1000) throw new HttpError(409, `Still on the way: ${Math.ceil((e.gig.until - now) / 1000)} s to go.`);
@@ -137,13 +137,13 @@ export class Earn {
     });
   }
   async dropGig(id) {
-    return this.world.change(async ch => { const { c } = await this.lock(ch, id, false), e = this.stateOf(c); e.gig = null; await this.save(ch, c, e); return { ok: true }; });
+    return this.world.personal(async ch => { const { c } = await this.lock(ch, id, false), e = this.stateOf(c); e.gig = null; await this.save(ch, c, e); return { ok: true }; });
   }
 
   // ---------- fishing and foraging: cast, wait for a bite, tap in time ----------
   async cast(id, kind) {
     if (!['fish', 'forage'].includes(kind)) throw new HttpError(400, 'Go fishing or foraging.');
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c, hx, hy } = await this.lock(ch, id), e = this.stateOf(c), now = Date.now();
       if (e.catches >= EARN.catch.perDay) throw new HttpError(429, `You've brought in ${EARN.catch.perDay} catches today. The market's full until tomorrow.`);
       if (now - (e.castAt || 0) < EARN.catch.gap) throw new HttpError(429, 'Catch your breath for a moment.');
@@ -159,7 +159,7 @@ export class Earn {
     });
   }
   async reel(id) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c } = await this.lock(ch, id), e = this.stateOf(c), now = Date.now();
       if (!e.cast) throw new HttpError(409, 'Cast your line (or start looking) first.');
       const { kind, bite } = e.cast; e.cast = null;
@@ -174,7 +174,7 @@ export class Earn {
 
   // ---------- scavenging: two minutes searching the old drop pods by the landing station ----------
   async scavenge(id, action) {
-    return this.world.change(async ch => {
+    return this.world.personal(async ch => {
       const { c } = await this.lock(ch, id), e = this.stateOf(c), now = Date.now();
       if (action === 'start') {
         if (e.scav) throw new HttpError(409, "You're already searching.");

@@ -360,7 +360,8 @@ body.pane-max .composer textarea{height:70px}
 .rsheet-bg.recording{background:transparent;pointer-events:none}.rsheet-bg.recording .rsheet{opacity:.35}
 .rsheet-bg{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;background:rgba(10,20,15,.28);padding:16px}
 .rsheet{width:min(380px,100%);padding:14px 16px;max-height:86vh;overflow:auto}.rsheet h3{margin:0 0 8px;font-size:16px}
-.rsheet.wide{width:min(560px,100%)}.rsheet input[type=text],.rsheet input[type=number],.rsheet textarea{width:100%;box-sizing:border-box;margin:6px 0;padding:8px 10px;border-radius:10px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:var(--glass-2,#fff);font:inherit;color:inherit}
+.rsheet.wide{width:min(560px,100%)}
+.rsheet-bg.dock{background:transparent;pointer-events:none;align-items:flex-end;padding:0 10px calc(10px + env(safe-area-inset-bottom))}.rsheet-bg.dock .rsheet{pointer-events:auto;max-height:52vh;width:min(460px,100%);padding:10px 14px}.rsheet-bg.dock .bill{font-size:12.5px;margin:4px 0}.rsheet-bg.dock .bill td{padding:2px}.rsheet-bg.dock .hint{margin:4px 0;font-size:12px}.rsheet-bg.dock input[type=text]{margin:4px 0;padding:6px 10px}.rsheet input[type=text],.rsheet input[type=number],.rsheet textarea{width:100%;box-sizing:border-box;margin:6px 0;padding:8px 10px;border-radius:10px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:var(--glass-2,#fff);font:inherit;color:inherit}
 .bill{width:100%;border-collapse:collapse;margin:8px 0;font-size:13.5px}.bill td{padding:4px 2px;border-bottom:1px dashed rgba(0,0,0,.12)}.bill td:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.bill tr.tot td{font-weight:800;border-bottom:none;border-top:1.5px solid currentColor}
 .warnline{margin:8px 0;padding:7px 10px;border-radius:10px;background:rgba(210,56,46,.12);color:#9E2A22;font-size:13px}
 .plotthumb{display:flex;align-items:center;justify-content:center;font-size:30px;background:rgba(143,196,99,.35);border-radius:12px}
@@ -2618,7 +2619,7 @@ function blockers(type,x,y,ignore,rot=0){ const [w,d]=sizeOf(type,rot), out=[]; 
     const pl=D.plotOcc.get(k), own=tool.kind==='pbuild'?tool.plot:(tool.kind==='move'?(D.buildings.get(tool.id)||{}).plot:null);
     out.push({ x:x+i, y:y+j, why: D.water.has(k)?'water' : (o&&o!==ignore)?'a building' : D.roads.has(k)?'road' : (tool.kind==='pbuild'&&pl!==tool.plot)?'outside your plot' : (pl&&pl!==own)?"someone's land" : null }); } return out; }
 // A building being placed is centred under the pointer; one being moved stays held where it was grabbed.
-function ghostOrigin(type,tx,ty){ const [w,d]=sizeOf(type,tool.rot||0); const off=ghost&&ghost.off; return off?[tx-off[0],ty-off[1]]:[tx-Math.floor((w-1)/2), ty-Math.floor((d-1)/2)]; }
+function ghostOrigin(type,tx,ty){ if(tool.kind==='pbuild'&&tool.pending) return tool.pending; const [w,d]=sizeOf(type,tool.rot||0); const off=ghost&&ghost.off; return off?[tx-off[0],ty-off[1]]:[tx-Math.floor((w-1)/2), ty-Math.floor((d-1)/2)]; }
 let ghost=null, lastPtr=null, holdTimer=null;
 const ghostTool = () => tool.kind==='place' || tool.kind==='move' || tool.kind==='vehicle' || tool.kind==='pbuild';
 function ghostType(){ return tool.kind==='place'||tool.kind==='pbuild'?tool.type : tool.kind==='move'?(D.buildings.get(tool.id)||{}).type : null; }
@@ -2659,7 +2660,7 @@ function landProblem(r){ if(r.w<PLOT_MIN||r.d<PLOT_MIN) return `At least ${PLOT_
   return road?null:'Needs a road along one side'; }
 function drawLandSel(){ const r=landRect(landSel.a,landSel.b), bad=landProblem(r), q=[iso(r.x,r.y),iso(r.x+r.w,r.y),iso(r.x+r.w,r.y+r.d),iso(r.x,r.y+r.d)];
   poly(q, bad?'rgba(210,56,46,.35)':'rgba(63,138,78,.38)', bad?'#9E2A22':'#2F6E3B', 2.5);
-  const c=iso(r.x+r.w/2,r.y+r.d/2); label(bad?`${r.w}×${r.d} · ${bad}`:`${r.w}×${r.d} tiles · let go to see the price`, c.x, c.y-14, !bad); }
+  const c=iso(r.x+r.w/2,r.y+r.d/2); label(bad?`${r.w}×${r.d} · ${bad}`:landSel.held?`${r.w}×${r.d} tiles`:`${r.w}×${r.d} tiles · let go to see the price`, c.x, c.y-14, !bad); }
 // ---- Undo: every developer action records how to reverse it. ----
 const history=[];
 function remember(label, undo){ history.push({label,undo}); if(history.length>40) history.shift(); refreshUndo(); }
@@ -2742,7 +2743,7 @@ document.addEventListener('contextmenu', e=>{ if(!typing(e)) e.preventDefault();
 cv.addEventListener('pointerdown', e=>{ cv.setPointerCapture(e.pointerId); pointers.set(e.pointerId,{x:e.clientX,y:e.clientY}); lastPtr={x:e.clientX,y:e.clientY};
   if(pointers.size===1){ gesture={ type:'one', sx:e.clientX, sy:e.clientY, lx:e.clientX, ly:e.clientY, t:performance.now(), moved:false };
     if(e.pointerType==='mouse' && e.button!==0){ /* right or middle mouse button always moves the map */ }
-    else if(ghostTool()){ gesture.type='ghost'; updateGhost(e.clientX,e.clientY); }
+    else if(ghostTool()){ gesture.type='ghost'; if(tool.pending){ delete tool.pending; document.querySelector('.rsheet-bg.dock')?.remove(); } updateGhost(e.clientX,e.clientY); }
     else if(tool.kind==='pan' && Store.canWrite){ const t=tileAt(e.clientX,e.clientY), id=D.occ.get(t[0]+','+t[1]); clearTimeout(holdTimer);
       // Press and hold a building to pick it up, then drag it somewhere else.
       if(id) holdTimer=setTimeout(()=>{ const b=D.buildings.get(id); if(!b||!gesture||gesture.type!=='one'||gesture.moved||pointers.size!==1) return;
@@ -2751,7 +2752,7 @@ cv.addEventListener('pointerdown', e=>{ cv.setPointerCapture(e.pointerId); point
     else if(paints()){ paintBuf=new Map(); paintPrev=new Map(); paintAt(e.clientX,e.clientY); }
     else if(tool.kind==='road'&&roadMode==='line'){ gesture.type='roadline'; const t=tileAt(e.clientX,e.clientY); hoverTile=t; if(!roadStart){ roadStart=t; gesture.fresh=true; } }
     else if(tool.kind==='erase'&&tool.mode==='area'){ const t=tileAt(e.clientX,e.clientY); areaSel={a:t,b:t}; }
-    else if(tool.kind==='land'){ const t=tileAt(e.clientX,e.clientY); landSel={a:t,b:t}; } }
+    else if(tool.kind==='land'){ document.querySelector('.rsheet-bg.dock')?.remove(); const t=tileAt(e.clientX,e.clientY); landSel={a:t,b:t}; } }
   else if(pointers.size===2){ clearTimeout(holdTimer); const [a,b]=[...pointers.values()]; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture={ type:'pinch', d0:Math.hypot(a.x-b.x,a.y-b.y), z0:cam.z, wx:w.x, wy:w.y, a0:Math.atan2(b.y-a.y,b.x-a.x) }; if(paintBuf){ paintBuf=null; changed(); } areaSel=null; landSel=null; }
 });
 cv.addEventListener('pointermove', e=>{
@@ -2763,7 +2764,7 @@ cv.addEventListener('pointermove', e=>{
   else if(gesture&&gesture.type==='one'){ if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)>6) gesture.moved=true;
     if(paintBuf){ paintAt(e.clientX,e.clientY); hoverTile=tileAt(e.clientX,e.clientY); }
     else if(areaSel){ areaSel.b=tileAt(e.clientX,e.clientY); }
-    else if(landSel){ landSel.b=tileAt(e.clientX,e.clientY); }
+    else if(landSel&&!landSel.held){ landSel.b=tileAt(e.clientX,e.clientY); }
     else if(gesture.moved){ cam.x-=(e.clientX-gesture.lx)/cam.z; cam.y-=(e.clientY-gesture.ly)/cam.z; follow=null; }
     gesture.lx=e.clientX; gesture.ly=e.clientY; }
   else if(gesture&&gesture.type==='pinch'&&pointers.size>=2){ const [a,b]=[...pointers.values()];
@@ -2780,7 +2781,7 @@ function endPointer(e){ if(!pointers.has(e.pointerId)) return; pointers.delete(e
     const a=roadStart; roadStart=t; commitLine(a,t); return; }
   if(gesture&&gesture.type==='ghost'&&pointers.size===0){ const g=gesture; gesture=null; if(e.type==='pointercancel') return;
     if(g.pickup && !g.moved){ toast('Picked up. Drag it to a new spot and let go.'); return; } dropGhost(); return; }
-  if(gesture&&gesture.type==='one'&&pointers.size===0){ if(paintBuf){ commitPaint(); } else if(areaSel){ finishArea(); } else if(landSel){ const r=landRect(landSel.a,landSel.b); landSel=null; Plots.quote(r); } else if(!gesture.moved && performance.now()-gesture.t<600) tap(e.clientX,e.clientY); gesture=null; }
+  if(gesture&&gesture.type==='one'&&pointers.size===0){ if(paintBuf){ commitPaint(); } else if(areaSel){ finishArea(); } else if(landSel&&!landSel.held){ const r=landRect(landSel.a,landSel.b); landSel=null; Plots.quote(r); } else if(!gesture.moved && performance.now()-gesture.t<600) tap(e.clientX,e.clientY); gesture=null; }
   if(pointers.size===0) gesture=null; }
 cv.addEventListener('pointerup', endPointer); cv.addEventListener('pointercancel', endPointer);
 cv.addEventListener('pointerleave', e=>{ if(e.pointerType==='mouse' && !pointers.size){ hoverTile=null; if(ghost) ghost.tile=null; } });
@@ -4690,9 +4691,12 @@ function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🏠
   const of=Plots.offersBox(); if(of) box.append(of);
   return box; }
 // ---- Land: buying plots, building on them, upgrades and offers between colonists ----
-function sheetBox(label, cls){ document.querySelector('.rsheet-bg')?.remove(); const wrap=el('div',{class:'rsheet-bg'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
+// While choosing where to build, the camera moves the spot into the top part of the screen so the docked panel below doesn't cover it.
+function showAbove(x,y,w,d,h){ const q=iso(x+w/2,y+d/2); cam.x=q.x; cam.y=q.y-(h||0)/2+ch*0.24/cam.z; follow=null; }
+function sheetBox(label, cls){ document.querySelector('.rsheet-bg')?.remove(); const dock=/\bdock\b/.test(cls||''); const wrap=el('div',{class:'rsheet-bg'+(dock?' dock':'')}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
   const box=el('div',{class:'rsheet inked '+(cls||''),role:'dialog','aria-label':label}); wrap.append(box); document.body.append(wrap);
-  box.append(el('div',{class:'shhead'}, el('h3',{text:label}), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>wrap.remove()}))); return { box, close:()=>wrap.remove() }; }
+  const close=()=>{ wrap.remove(); if(dock&&wrap.onClose) wrap.onClose(); };
+  box.append(el('div',{class:'shhead'}, el('h3',{text:label}), el('button',{class:'x','aria-label':'Close',text:'×',onclick:close}))); return { box, close, wrap }; }
 const bill=(rows,total)=>{ const t=el('table',{class:'bill'}); for(const [k,v] of rows) t.append(el('tr',null, el('td',{text:k}), el('td',{text:fmt(v)}))); t.append(el('tr',{class:'tot'}, el('td',{text:'Total'}), el('td',{text:`${fmt(total)} coins`}))); return t; };
 const isMe = h => !!(Me&&Me.handle&&h&&h.toLowerCase()===Me.handle.toLowerCase());
 const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
@@ -4701,13 +4705,13 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
   start(){ if(!(Me&&Me.token)){ toast('Sign in to your colonist first.'); return; } closeCard(); setTool({kind:'land'}); toast(`Drag a box over empty grass beside a road: ${PLOT_MIN}×${PLOT_MIN} up to ${PLOT_MAX}×${PLOT_MAX} tiles.`); },
   async quote(r){ const bad=landProblem(r); if(bad){ toast(bad+'. Try another spot.'); return; }
     let q; try{ q=await api(`/api/land/quote?x=${r.x}&y=${r.y}&w=${r.w}&d=${r.d}`); }catch(e){ toast(e.message); return; }
-    const {box,close}=sheetBox(`🗺️ Buy this land`); const nm=el('input',{type:'text',maxlength:'30',placeholder:'Name it (optional)','aria-label':'Plot name'});
+    showAbove(r.x,r.y,r.w,r.d,0); landSel={a:[r.x,r.y],b:[r.x+r.w-1,r.y+r.d-1],held:true}; const {box,close,wrap}=sheetBox(`🗺️ Buy this land`,'dock'); wrap.onClose=()=>{ if(landSel&&landSel.held) landSel=null; }; const nm=el('input',{type:'text',maxlength:'30',placeholder:'Name it (optional)','aria-label':'Plot name'});
     box.append(el('p',{class:'hint',text:`${q.w}×${q.d} tiles (${q.tiles}) ${q.where||''}.`}),
       bill([[`Land: ${q.tiles} tiles × ${fmt(q.perTile)}`,q.land], ...q.charges.map(c=>[c.name,c.amount])], q.total),
       el('p',{class:'hint',text:`Charges go to the colony treasury. Land near the landing station and among many buildings costs more. You'll pay ${fmt(Math.round(q.land*0.001))} a week in land tax. You own ${q.props} of ${q.max} properties.`}));
     if(q.problem) box.append(el('p',{class:'warnline',text:q.problem}));
     else if(q.props>=q.max) box.append(el('p',{class:'warnline',text:`You're at your limit of ${q.max} properties. Sell one, or earn more stars.`}));
-    else box.append(nm, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(q.total)}`,onclick:async()=>{ const res=await meAction('/api/me/land',{x:q.x,y:q.y,w:q.w,d:q.d,name:nm.value},r=>`The land is yours! Paid ${fmt(r.paid)} coins. Tap it to build.`); if(res){ close(); setTool({kind:'pan'}); Money.at=0; MyHome.at=0;
+    else box.append(nm, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(q.total)}`,onclick:async()=>{ const res=await meAction('/api/me/land',{x:q.x,y:q.y,w:q.w,d:q.d,name:nm.value},r=>`The land is yours! Paid ${fmt(r.paid)} coins. Tap it to build.`); if(res){ close(); landSel=null; setTool({kind:'pan'}); Money.at=0; MyHome.at=0;
       setTimeout(()=>{ sel={kind:'p',id:res.plot.id}; renderCard(true); },400); } }}), el('button',{class:'linkb',text:'Pick another spot',onclick:close}))); },
   // the build menu for your own plot: every kind of building, decoration and park, with what it costs you
   picker(p){ const {box,close}=sheetBox(`🏗️ Build on ${p.name||'your plot'}`,'wide'); let cat=Plots.cat||'housing';
@@ -4720,10 +4724,11 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
           const c=iso(p.x+p.w/2,p.y+p.d/2); cam.x=c.x; cam.y=c.y; cam.z=Math.max(cam.z,1.3); toast(`Drag ${t.name} onto your plot and let go. ${fmt(q.total)} coins with the charges.`); }, !fits)); } };
     box.append(el('p',{class:'hint',text:`${p.w}×${p.d} plot, ${free} tile${free===1?'':'s'} free. Prices include the building permit and inspection (and the water & power hook-up for homes and businesses).`}), tabs, list); fill(); },
   async place(x,y){ const type=tool.type, plot=tool.plot, rot=tool.rot||0, q=buildQuote(type), t=BUILDING_TYPES[type];
-    const {box,close}=sheetBox(`🏗️ Build ${t.name}`), nm=el('input',{type:'text',maxlength:'40',placeholder:'Name it (optional)','aria-label':'Name'});
+    tool.pending=[x,y]; const [w,d]=sizeOf(type,rot); showAbove(x,y,w,d,Math.min(140,SHADOW_H[t.style]?SHADOW_H[t.style](t):24));
+    const {box,close,wrap}=sheetBox(`🏗️ Build ${t.name}`,'dock'); wrap.onClose=()=>{ delete tool.pending; }; const nm=el('input',{type:'text',maxlength:'40',placeholder:'Name it (optional)','aria-label':'Name'});
     box.append(bill([['Builders',q.cost], ...q.charges.map(c=>[c.name,c.amount])], q.total), el('p',{class:'hint',text:q.minutes?`Ready in ${realTime(q.minutes*GAME_MIN_MS)} (you can pay to rush it). The fees go to the colony treasury.`:'Goes up straight away.'}), nm,
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Build for ${fmt(q.total)}`,onclick:async()=>{ const r=await meAction(`/api/me/plots/${encodeURIComponent(plot)}/build`,{type,x,y,rot,name:nm.value},r=>r.building.done?`${t.name} is built!`:`The builders have started on your ${t.name}.`); if(r){ close(); setTool({kind:'pan'}); Plots.drop(plot); setTimeout(()=>{ sel={kind:'b',id:r.building.id}; renderCard(true); },400); } }}),
-        el('button',{class:'linkb',text:'Move it',onclick:close}))); },
+        el('button',{class:'linkb',text:'Move it',onclick:()=>{ close(); toast('Drag it to another spot on your plot and let go.'); }}))); },
   offerSheet(kind,targetId,label,owner){ const {box,close}=sheetBox(`🤝 Make an offer`), amt=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric',placeholder:'Coins','aria-label':'Coins'}), msg=el('textarea',{maxlength:'200',rows:'3',placeholder:`A message for @${owner} (optional)`,'aria-label':'Message'});
     box.append(el('p',{class:'hint',text:`For ${label}, owned by @${owner}. They have 24 hours to accept, turn it down, or name their price. Your coins (cash, then savings) are only taken if the deal is agreed. ${Math.round(TRANSFER_TAX*100)}% of the price goes to the treasury as transfer tax.`}), amt, msg,
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Send offer',onclick:async()=>{ const n=Math.floor(Number(amt.value)); if(!(n>=1)){ toast('Enter how many coins you offer.'); return; } const r=await meAction('/api/me/offers',{kind,targetId,amount:n,message:msg.value},`Offer sent to @${owner}. You'll hear back within 24 hours.`); if(r){ close(); Plots.offersAt=0; } }}), el('button',{class:'linkb',text:'Cancel',onclick:close}))); },

@@ -5,8 +5,10 @@
 //   - With ANTHROPIC_API_KEY set, Claude writes each break in the DJ's own voice. It is shown the DJ's last breaks and
 //     told not to reuse their jokes or lines; a break that still comes out too close to a recent one is rewritten.
 //   - Without it, breaks are built from each DJ's phrase bank, never reusing a recent phrase.
-//   - With AZURE_SPEECH_KEY and AZURE_SPEECH_REGION set, Azure AI Speech reads it aloud (Nigerian-English voices).
-//     Without them the break still shows as on-air text.
+//   - With ELEVENLABS_API_KEY set, ElevenLabs reads it aloud, in the voice picked for each DJ in the Stream tab (or one
+//     chosen from your ElevenLabs voices). Before the account's monthly characters run out, breaks switch to text only,
+//     so the radio never stops. (AZURE_SPEECH_KEY + AZURE_SPEECH_REGION also work, for Azure AI Speech.)
+//     Without a voice the break still shows as on-air text.
 // An event is only talked about once per station. Breaks are only made for stations someone is listening to (a player
 // or the 24/7 stream), so nothing is spent when nobody is tuned in. The leader instance makes them; any instance serves them.
 import crypto from 'node:crypto';
@@ -69,7 +71,8 @@ export class Radio {
     for (const [k, v] of this.cache) { if (total <= 80e6) break; this.cache.delete(k); total -= v.data.length; } return r; }
   // what a station is playing at time t (and its title)
   async playing(st, t) { return timeline(st, (await this.tracks()).by[st], t); }
-  status() { return { writer: process.env.ANTHROPIC_API_KEY ? 'claude' : 'phrases', voice: process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION ? 'azure' : 'text', model: this.model() }; }
+  voiceKind() { return process.env.ELEVENLABS_API_KEY ? 'elevenlabs' : process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION ? 'azure' : 'text'; }
+  status() { return { writer: process.env.ANTHROPIC_API_KEY ? 'claude' : 'phrases', voice: this.voiceKind(), model: this.model() }; }
   model() { return process.env.RADIO_MODEL || 'claude-haiku-5-5'; }
   // Someone is tuned in (a player's radio or the 24/7 stream). Shared with the leader through the settings table.
   async listen(st) { if (!STATIONS[st]) return; const now = Date.now(); if (now - (this.wrote[st] || 0) < 60000) return; this.wrote[st] = now;
@@ -78,11 +81,15 @@ export class Radio {
   // anyone's dial and gets no DJ breaks (so nothing is spent on it).
   async config(fresh) { if (!fresh && this.cfg && Date.now() - this.cfgAt < 30000) return this.cfg;
     const r = (await pool.query("select value from settings where key = 'radio:config'")).rows[0]?.value || {};
-    this.cfg = { on: r.on !== false, stations: Object.fromEntries(STATION_IDS.map(k => [k, r.stations?.[k] !== false])) }; this.cfgAt = Date.now(); return this.cfg; }
+    this.cfg = { on: r.on !== false, stations: Object.fromEntries(STATION_IDS.map(k => [k, r.stations?.[k] !== false])),
+      talkEvery: Math.max(1, Math.min(6, Number(r.talkEvery) || 2)), voices: { ...(r.voices || {}) } }; this.cfgAt = Date.now(); return this.cfg; }
   async onAir() { const c = await this.config(); return c.on ? STATION_IDS.filter(k => c.stations[k]) : []; }
   async setConfig(b) { const c = { ...(await this.config(true)) }; c.stations = { ...c.stations };
     if (typeof b.on === 'boolean') c.on = b.on;
     if (b.stations && typeof b.stations === 'object') for (const k of STATION_IDS) if (typeof b.stations[k] === 'boolean') c.stations[k] = b.stations[k];
+    if (b.talkEvery != null) c.talkEvery = Math.max(1, Math.min(6, Math.round(Number(b.talkEvery)) || 2)); // a DJ break every N songs
+    if (b.voices && typeof b.voices === 'object') { c.voices = { ...c.voices }; for (const k of STATION_IDS) if (k in b.voices) { const v = String(b.voices[k] || '').trim();
+      if (v && !/^[A-Za-z0-9]{8,40}$/.test(v)) throw new HttpError(400, 'That isn’t an ElevenLabs voice ID.'); if (v) c.voices[k] = v; else delete c.voices[k]; } }
     await pool.query("insert into settings (key, value) values ('radio:config', $1) on conflict (key) do update set value = $1", [c]); this.cfg = c; this.cfgAt = Date.now();
     const onAir = await this.onAir(); this.bus?.publish([{ op: 'radioConfig', onAir }]); return { ...c, onAir }; }
   async listening() { const r = (await pool.query("select key, value from settings where key like 'radio:listen:%'")).rows, now = Date.now(), on = await this.onAir();
@@ -93,7 +100,7 @@ export class Radio {
     if (this.busy || !this.world.meta) return; this.busy = true;
     try { const now = Date.now();
       for (const st of await this.listening()) {
-        for (let n = slotOf(st, now) + 1; slotStart(st, n) < now + LEAD_MS; n++) { if (!talkSlot(st, n)) continue;
+        const every = (await this.config()).talkEvery; for (let n = slotOf(st, now) + 1; slotStart(st, n) < now + LEAD_MS; n++) { if (n % every !== 0) continue;
           const has = (await pool.query('select 1 from radio_talk where station = $1 and slot = $2', [st, n])).rowCount; if (has) continue;
           await this.make(st, n, slotStart(st, n) + 1500).catch(e => console.error('radio:', st, e.message)); }
       }
@@ -131,7 +138,7 @@ export class Radio {
     const ev = f.events.find(e => text.includes(e.text.slice(0, 18))) || f.events[0], handle = /@([\w.]+)/.exec(text)?.[1] || (ev && /@([\w.]+)/.exec(ev.text)?.[1]);
     const focus = handle ? { handle } : (f.race && /race|track/i.test(text) && f.race.inMinutes < 5) ? { x: f.race.x, y: f.race.y, race: true } : null;
     let audio = null, dur = Math.max(6, words(text).length / 2.6);
-    if (process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION) { try { audio = await this.voice(st, text); dur = audio.length * 8 / 48000; } catch (e) { console.error('radio voice:', e.message); } }
+    if (this.voiceKind() !== 'text') { try { const v = await this.voice(st, text); if (v) { audio = v.audio; dur = audio.length * 8 / v.bps; } } catch (e) { console.error('radio voice:', e.message); } }
     const row = { id: uid(), station: st, slot, t: Date.now(), at, kind: opts.kind || 'talk', text, events: f.events.filter((e, i) => text.includes(e.text.slice(0, 18)) || (/@[\w.]+/.exec(e.text) && text.includes(/@[\w.]+/.exec(e.text)[0])) || (source === 'claude' && i === 0)).flatMap(e => e.ids), focus, dur, source };
     const saved = await pool.query(`insert into radio_talk (id, station, slot, t, at, kind, text, events, focus, audio, dur, source) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) on conflict (station, slot) do nothing`,
       [row.id, st, slot, row.t, at, row.kind, text, row.events, focus, audio, dur, source]);
@@ -179,7 +186,32 @@ Do not reuse any joke, catchphrase, opening or sentence from your recent breaks.
   }
 
   // Azure AI Speech reads the break (a Nigerian-English voice, paced to the DJ).
+  // ---- ElevenLabs ----
+  async eleven(path, opts = {}) { const r = await fetch('https://api.elevenlabs.io' + path, { ...opts, headers: { 'xi-api-key': process.env.ELEVENLABS_API_KEY, ...(opts.headers || {}) }, signal: AbortSignal.timeout(30000) });
+    if (!r.ok) throw new Error(`ElevenLabs ${r.status}: ${(await r.text()).slice(0, 200)}`); return r; }
+  // the voices on the account (your own and ones added from the Voice Library), cached for 10 minutes
+  async voices(fresh) { if (!fresh && this.vcs && Date.now() - this.vcsAt < 600000) return this.vcs;
+    const j = await (await this.eleven('/v1/voices')).json(); this.vcsAt = Date.now();
+    return (this.vcs = (j.voices || []).map(v => ({ id: v.voice_id, name: v.name, accent: v.labels?.accent || '', gender: v.labels?.gender || '', category: v.category || '' }))); }
+  // how much of the month's characters are used (checked at most every 5 minutes)
+  async quota(fresh) { if (!fresh && this.qta && Date.now() - this.qtaAt < 300000) return this.qta;
+    const j = await (await this.eleven('/v1/user/subscription')).json(); this.qtaAt = Date.now();
+    return (this.qta = { used: j.character_count || 0, limit: j.character_limit || 0, resets: (j.next_character_count_reset_unix || 0) * 1000, tier: j.tier || '' }); }
+  // the DJ's voice: the one picked in the Stream tab, or else the best match from the account (a Nigerian voice of
+  // the DJ's gender if there is one)
+  async voiceFor(st) { const c = await this.config(); if (c.voices[st]) return c.voices[st];
+    const all = await this.voices().catch(() => []), female = ['yoruba', 'english'].includes(st), want = v => (v.gender || '').toLowerCase() === (female ? 'female' : 'male');
+    const ng = all.filter(v => /nigeria|african|yoruba|igbo|hausa/i.test(v.accent + ' ' + v.name));
+    return (ng.find(want) || ng[0] || all.find(want) || all[0])?.id || (female ? 'EXAVITQu4vr4xnSDxMaL' : 'JBFqnCBsd6RMkjVDRZzb'); }
   async voice(st, text) {
+    if (process.env.ELEVENLABS_API_KEY) {
+      const words = speakable(text), q = await this.quota().catch(() => null);
+      if (q && q.limit && q.used + words.length > q.limit - 300) { console.log('radio voice: ElevenLabs characters used up for this month; text only'); return null; }
+      const speed = { pidgin: 1.06, yoruba: 1.02, igbo: 1, hausa: 0.94, english: 0.98 }[st] || 1;
+      const r = await this.eleven(`/v1/text-to-speech/${await this.voiceFor(st)}?output_format=mp3_44100_64`, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'audio/mpeg' },
+        body: JSON.stringify({ text: words, model_id: process.env.ELEVENLABS_MODEL || 'eleven_flash_v2_5', voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.35, use_speaker_boost: true, speed } }) });
+      if (this.qta) this.qta.used += words.length; return { audio: Buffer.from(await r.arrayBuffer()), bps: 64000 };
+    }
     const S = STATIONS[st], esc = s => s.replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
     const rate = { pidgin: '+8%', yoruba: '+3%', igbo: '0%', hausa: '-6%', english: '-2%' }[st] || '0%';
     const ssml = `<speak version="1.0" xml:lang="en-NG"><voice name="${process.env['AZURE_VOICE_' + st.toUpperCase()] || S.dj.voice}"><prosody rate="${rate}">${esc(speakable(text))}</prosody></voice></speak>`;
@@ -187,7 +219,7 @@ Do not reuse any joke, catchphrase, opening or sentence from your recent breaks.
       headers: { 'Ocp-Apim-Subscription-Key': process.env.AZURE_SPEECH_KEY, 'Content-Type': 'application/ssml+xml', 'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3', 'User-Agent': 'resurgence-radio' },
       body: ssml, signal: AbortSignal.timeout(25000) });
     if (!r.ok) throw new Error(`Azure speech ${r.status}: ${(await r.text()).slice(0, 160)}`);
-    return Buffer.from(await r.arrayBuffer());
+    return { audio: Buffer.from(await r.arrayBuffer()), bps: 48000 };
   }
 
   // What a radio needs: each station's song now, and the talk breaks around now for the station being listened to.
@@ -219,7 +251,9 @@ export function radioRoutes(app, { radio, admin, send, limit }) {
     try { const r = (await pool.query('select audio from radio_talk where id = $1', [String(req.params.id)])).rows[0]; if (!r?.audio) return res.status(404).end();
       res.set({ 'content-type': 'audio/mpeg', 'cache-control': 'public, max-age=86400' }).send(r.audio); } catch (e) { res.status(500).end(); }
   });
-  app.get('/api/admin/radio', admin, send(async () => ({ ...radio.status(), ...(await radio.config(true)), onAir: await radio.onAir(), listening: await radio.listening(),
+  // the ElevenLabs voices to choose from
+  app.get('/api/admin/radio/voices', admin, send(async () => { if (!process.env.ELEVENLABS_API_KEY) throw new HttpError(400, 'Set ELEVENLABS_API_KEY on the server first.'); return { voices: await radio.voices(true) }; }));
+  app.get('/api/admin/radio', admin, send(async () => ({ ...radio.status(), quota: process.env.ELEVENLABS_API_KEY ? await radio.quota(true).catch(e => ({ error: e.message })) : null, ...(await radio.config(true)), onAir: await radio.onAir(), listening: await radio.listening(),
     recent: (await pool.query('select id, station, at, text, source, dur, audio is not null has_audio from radio_talk order by t desc limit 30')).rows.map(r => ({ ...r, at: Number(r.at) })) })));
   // the developer's songs: upload (the file itself as the body; ?station, ?title, ?dur in seconds), list, edit, delete
   const AUDIO = { 'audio/mpeg': 1, 'audio/mp3': 1, 'audio/mp4': 1, 'audio/x-m4a': 1, 'audio/aac': 1, 'audio/ogg': 1, 'audio/webm': 1, 'audio/wav': 1, 'audio/x-wav': 1 };

@@ -377,6 +377,7 @@ body.pane-max .composer textarea{height:70px}
 .petgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.petb{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px;border-radius:12px;border:1.6px solid transparent;background:rgba(0,0,0,.04);font:inherit;font-size:12px;cursor:pointer;color:inherit}
 .petb.on{border-color:var(--accent,#D9714A);background:rgba(217,113,74,.12)}.petb img,.petimg{border-radius:10px;background:#9CCD6F}
 .rlist{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.annbox{margin:10px 0;padding:10px 12px;border-radius:12px;background:rgba(179,38,30,.06);border:1px solid rgba(179,38,30,.25)}.annbox textarea{width:100%;box-sizing:border-box;resize:vertical}
 .rrow{display:flex;align-items:center;gap:10px;text-align:left;padding:6px 10px 6px 6px;border-radius:12px;border:1.6px solid transparent;background:rgba(0,0,0,.04);font:inherit;color:inherit;cursor:pointer}
 .rrow.on{border-color:var(--accent,#D9714A);background:rgba(217,113,74,.12)}
 .rrow .rthumb{width:44px;height:44px;border-radius:10px;background:#9CCD6F;flex:none}
@@ -507,6 +508,8 @@ body.streaming .watchbar,body.streaming #showUi,body.streaming #intro,body.strea
 .rst.on{border-color:var(--st);background:color-mix(in srgb,var(--st) 14%,var(--glass-2,#fff))}
 .rfreq{min-width:46px;font-weight:800;font-size:13px;color:var(--st)}.rmid{flex:1;display:flex;flex-direction:column}.rmid small{opacity:.7;font-size:12px}.rgo{font-size:13px;opacity:.7}
 .rvol{display:flex;align-items:center;gap:8px;margin:12px 0 4px}.rvol input{flex:1}
+#annBar{position:fixed;z-index:60;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 10px);width:min(560px,calc(100vw - 24px));display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:#b3261e;color:#fff;box-shadow:0 8px 30px rgba(0,0,0,.3);font-size:14.5px;line-height:1.4;animation:djIn .35s ease-out}
+#annBar b{white-space:nowrap}#annBar span{flex:1}#annBar .x{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:50%;width:26px;height:26px;flex:none}
 #djBubble{position:fixed;z-index:40;left:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 110px);max-width:min(360px,calc(100vw - 90px));display:flex;flex-direction:column;gap:2px;padding:8px 12px;border-radius:14px;text-align:left;font:inherit;font-size:13px;line-height:1.35;color:var(--ink);cursor:pointer;animation:djIn .4s ease-out}
 #djBubble b{font-size:12px;opacity:.8}#djBubble span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 @keyframes djIn{from{opacity:0;transform:translateY(8px)}}
@@ -887,6 +890,7 @@ function applyOp(o){
   case 'chat': if(!S.chat.some(m=>m.id===o.data.id)){ S.chat.unshift(o.data); if(S.chat.length>200) S.chat.length=200; feedDirty=true; renderFeed(); } break;
   case 'chatPin': { const m=S.chat.find(x=>x.id===o.id); if(m){ m.p=o.pinned?1:0; feedDirty=true; renderFeed(); } break; }
   case 'director': if(STREAM) Stream.setDirector(o.data); break;
+  case 'announce': Announce.show(o.text); break;
   case 'radioTracks': if(Radio.st) Radio.poll(); break;
   case 'radioConfig': Radio.adm=null; Radio.setLive(o.onAir); if(STREAM) Stream.tuneRadio(); break;
   case 'radio': if(o.talk&&Radio.st===o.talk.station) Radio.queue(o.talk); break;
@@ -3316,6 +3320,21 @@ const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
       box.append(el('div',{class:'quota'}, el('div',{class:'qbar'},el('i',{style:`width:${pct}%;background:${pct>90?'#d93025':pct>70?'#f4a300':'#34c759'}`})),
         el('p',{class:'hint',text:`${Q.used.toLocaleString()} of ${Q.limit.toLocaleString()} characters used this month${Q.resets?` · resets ${new Date(Q.resets).toLocaleDateString([], {day:'numeric',month:'short'})}`:''}. Each station someone is listening to uses about ${perHour.toLocaleString()} an hour. Near the limit the DJs switch to text only.`}))); }
     box.append(el('div',{class:'cpicks'}, el('span',{text:'DJ talks every:'}), ...[1,2,3,4,6].map(n=>el('button',{class:'pill'+(R0.talkEvery===n?' on':''),text:n===1?'song':`${n} songs`,onclick:()=>setR({talkEvery:n})}))));
+    box.append(el('div',{class:'cpicks'}, el('span',{text:'Each break:'}), ...[['short','Short (10–15 s)'],['normal','Normal (20–30 s)'],['long','Long (40–60 s)']].map(([k,n])=>el('button',{class:'pill'+((R0.talkLength||'normal')===k?' on':''),text:n,onclick:()=>setR({talkLength:k})}))));
+    box.append(el('p',{class:'hint',text:'The DJ comes in at the start of a song and talks over its first seconds, then the music comes back up.'}));
+    // an announcement: read out now on the chosen stations, and shown on everyone's screen
+    const ann=el('div',{class:'annbox'}), msg=el('textarea',{class:'gin',rows:'3',maxlength:'400',placeholder:'e.g. The server restarts in 10 minutes. Save your games!','aria-label':'Announcement'}); msg.value=this.annText||''; msg.oninput=()=>{ this.annText=msg.value; };
+    this.annSt ||= 'all'; this.annOpts ||= { rewrite:false, screen:true };
+    ann.append(el('h4',{class:'bgroup',text:'📢 Announcement (emergency or news)'}), msg,
+      el('div',{class:'cpicks'}, el('span',{text:'On:'}), el('button',{class:'pill'+(this.annSt==='all'?' on':''),text:'Every station on air',onclick:()=>{ this.annSt='all'; this.renderNow(); }}),
+        ...STATION_IDS.filter(k=>R0.on&&R0.stations[k]).map(k=>el('button',{class:'pill'+(this.annSt===k?' on':''),text:STATIONS[k].name,onclick:()=>{ this.annSt=k; this.renderNow(); }}))),
+      el('div',{class:'rpower sm'}, el('span',{text:'Show it on everyone’s screen too'}), uiSwitch(this.annOpts.screen,v=>{ this.annOpts.screen=v; },'Show on screen')),
+      el('div',{class:'rpower sm'}, el('span',{text:R0.writer==='claude'?'Let the DJ say it in their own words':'Let the DJ say it in their own words (needs ANTHROPIC_API_KEY)'}), uiSwitch(this.annOpts.rewrite,v=>{ this.annOpts.rewrite=v; },'In the DJ’s words')),
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary sm',text:'📢 Go on air now',onclick:async e=>{ const t=msg.value.trim(); if(t.length<3) return toast('Type the announcement first.'); e.target.disabled=true;
+        try{ const r=await api('/api/admin/radio/announce',{method:'POST',body:{text:t,stations:this.annSt==='all'?'all':[this.annSt],rewrite:this.annOpts.rewrite,screen:this.annOpts.screen}}); toast(`📢 On air now on ${r.stations.map(k=>STATIONS[k].name).join(', ')}.`); this.annText=''; this.radio=null; this.renderNow(); }
+        catch(err){ toast(err.message); e.target.disabled=false; } }})),
+      el('p',{class:'hint',text:'Read word for word (said twice if it’s short), it cuts in over the music and any DJ talk. Players with the radio off still see it on screen.'}));
+    box.append(ann);
     if(R0.voice==='elevenlabs'||R0.voice==='fish'){
       if(!this.vcs&&!this.vcsBusy){ this.vcsBusy=true; api('/api/admin/radio/voices').then(r=>{ this.vcs=r.voices; this.vcsBusy=false; this.renderNow(); }).catch(e=>{ this.vcsBusy=false; this.vcs=[]; toast(e.message); }); }
       const vl=el('div',{class:'rswlist'}); vl.append(el('p',{class:'hint',text:R0.voice==='fish'?'Voices: your own Fish Audio voices come first, then the most used Nigerian voices from the Fish Audio library. Pick one for each DJ (try it with the DJ’s “On air now” button).':'Voices: add Nigerian voices to “My Voices” from the ElevenLabs Voice Library, then pick one for each DJ here.'}));
@@ -3352,7 +3371,7 @@ const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
     box.append(el('div',{class:'row-actions sline'}, where, el('button',{class:'btn sm',text:'Show',onclick:()=>{ if(where.value) this.pick({type:'building',id:where.value,label:`📍 ${where.selectedOptions[0].textContent}`}); }})));
     box.append(el('p',{class:'hint',text:'Tip: move your own map to any spot, then press “What I’m looking at”. When the hold ends, the camera goes back to choosing by itself.'}));
     // keep the picture and the on-air line fresh while this tab is open
-    clearTimeout(this.camT); this.camT=setTimeout(()=>{ if(activeTab==='stream'&&!this.dirty){ this.radio=null; this.load(); } },20000);
+    clearTimeout(this.camT); const tick=()=>{ if(activeTab!=='stream') return; const f=document.activeElement; if(this.dirty||(f&&(f.tagName==='TEXTAREA'||f.tagName==='INPUT'||f.tagName==='SELECT')&&f.closest('#streamBody,.authbox'))){ this.camT=setTimeout(tick,5000); return; } this.radio=null; this.load(); }; this.camT=setTimeout(tick,20000); // not while you're typing
     return box; },
   async load(){ if(!Store.canWrite||this.busy) return; this.busy=true; try{ this.data=await api('/api/admin/stream'); this.dirty=false; }catch(e){ toast(e.message); } this.busy=false; this.renderNow(); },
   renderNow(){ if(activeTab!=='stream') return; const p=$('pane'); if(p){ const keep=$('streamBody')?.scrollTop||0; p.innerHTML=''; this.render(p); const b=$('streamBody'); if(b) b.scrollTop=keep; } },
@@ -5289,6 +5308,13 @@ $('musicBtn').onclick=()=>Radio.sheet();
 // An on/off switch. onChange gets the new value.
 function uiSwitch(on, onChange, label){ const b=el('button',{class:'uiswitch'+(on?' on':''),role:'switch','aria-checked':String(on),'aria-label':label||'On or off'});
   b.onclick=e=>{ e.stopPropagation(); const v=b.getAttribute('aria-checked')!=='true'; b.setAttribute('aria-checked',String(v)); b.classList.toggle('on',v); onChange(v); }; b.append(el('i')); return b; }
+/* ---------------- Announcements ---------------- */
+// The developer's announcement: a banner on everyone's screen (and the DJs read it out on the radio).
+const Announce={ show(text){ if(!text) return;
+    if(STREAM){ Stream.caption('📢 Announcement',text.length>160?text.slice(0,160)+'…':text); Stream.talking=Date.now()+Math.max(15000,text.length*90); return; }
+    document.getElementById('annBar')?.remove(); const close=el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>bar.remove()});
+    const bar=el('div',{id:'annBar',role:'alert'}, el('b',{text:'📢 Announcement'}), el('span',{text}), close); document.body.append(bar);
+    setTimeout(()=>bar.remove(),Math.max(20000,text.length*120)); } };
 /* ---------------- Colony radio ---------------- */
 // Five stations whose music is composed live in the browser (music.js), each with a DJ whose talk breaks the server writes
 // from what's happening in the colony. Everyone on a station hears the same song and the same DJ at the same moment.
@@ -5312,7 +5338,11 @@ const Radio={ player:null, st:null, info:null, played:new Set(), timer:null, onA
   async poll(){ if(!this.st) return; try{ const r=await api('/api/radio?on='+this.st); this.info=r; this.setLive(r.onAir); if(this.player&&r.tracks) this.player.setTracks(r.tracks); for(const t of r.talk||[]) this.queue(t); }catch(e){} this.paint(); },
   // a talk break goes on air at its time; tuning in halfway through one joins it where it is
   queue(t){ if(this.played.has(t.id)||t.station!==this.st) return; const now=Date.now()+skew; if(t.at+t.dur*1000<now) return; this.played.add(t.id); setTimeout(()=>this.say(t),Math.max(0,t.at-now)); },
-  async say(t){ if(this.st!==t.station) return; const off=Math.max(0,(Date.now()+skew-t.at)/1000); this.onAir=t; this.bubble(t); this.paint(); this.onTalk&&this.onTalk(t);
+  // an announcement cuts in at once; a normal break waits for the DJ to finish the one before (never two at once)
+  async say(t, waited=0){ if(this.st!==t.station) return;
+    if(t.kind==='alert'){ if(this.onAir) this.player.hush(); }
+    else if(this.onAir&&this.onAir!==t){ if(waited<60) setTimeout(()=>this.say(t,waited+1),1000); return; }
+    const off=waited?0:Math.max(0,(Date.now()+skew-t.at)/1000); this.onAir=t; this.bubble(t); this.paint(); this.onTalk&&this.onTalk(t);
     let ok=false; if(t.audio){ try{ await this.player.speak(t.audio,off); ok=true; }catch(e){} }
     if(!ok) await new Promise(res=>{ this.player.setDuck(true); setTimeout(()=>{ this.player.setDuck(false); res(); },Math.max(1,t.dur-off)*1000); }); // no voice yet: the words show on screen
     if(this.onAir===t){ this.onAir=null; this.bubble(null); this.paint(); } },

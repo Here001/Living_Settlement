@@ -1327,6 +1327,25 @@ console.log('24/7 stream and the colony radio');
   ok(r.json.on === false && r.json.onAir.length === 0 && (await call('GET', '/api/radio?on=pidgin', undefined, { auth: false })).json.talk.length === 0, 'switch the whole radio off: nothing is on air');
   r = await call('PUT', '/api/admin/radio', { on: true, stations: { hausa: true } });
   ok(r.json.onAir.length === 5, 'and back on');
+  // how often and how long the DJ talks
+  r = await call('PUT', '/api/admin/radio', { talkEvery: 3, talkLength: 'short' });
+  ok(r.json.talkEvery === 3 && r.json.talkLength === 'short', 'set how often and how long the DJ talks');
+  ok((await call('PUT', '/api/admin/radio', { talkLength: 'forever' })).json.talkLength === 'short', 'only known lengths');
+  const sh = (await call('POST', '/api/admin/radio/talk', { station: 'english' })).json;
+  ok(sh.text && !/^Good |locked in|keeping you company|colonists strong/.test(sh.text), 'a short break skips the opener', sh.text);
+  await call('PUT', '/api/admin/radio', { talkEvery: 2, talkLength: 'normal' });
+  // an announcement: every chosen station reads it now, and it shows on everyone's screen
+  ok((await call('POST', '/api/admin/radio/announce', { text: 'hi' }, { auth: false })).status === 401, 'only the developer can make an announcement');
+  ok((await call('POST', '/api/admin/radio/announce', { text: '' })).status === 400, 'an announcement needs words');
+  const an = await call('POST', '/api/admin/radio/announce', { text: 'The server restarts in 10 minutes. Save your games!', stations: 'all' });
+  ok(an.status === 200 && an.json.stations.length === 5 && an.json.talks.every(t => t.kind === 'alert' && t.text.includes('The server restarts in 10 minutes. Save your games! I repeat.')), 'every station on air reads it out, word for word and twice', JSON.stringify(an.json.talks[0]));
+  ok(an.json.talks.find(t => t.station === 'pidgin').text.startsWith('Una listen well well'), 'each DJ introduces it their own way');
+  ok(await v.saw(o => o.op === 'announce' && o.text.startsWith('The server restarts')), 'everyone’s screen gets it, radio on or off');
+  ok(await v.saw(o => o.op === 'radio' && o.talk.kind === 'alert' && o.talk.station === 'hausa'), 'radios get it at once');
+  const one = await call('POST', '/api/admin/radio/announce', { text: 'Race night at the Speedway!', stations: ['english'], screen: false });
+  ok(one.json.stations.length === 1 && one.json.stations[0] === 'english', 'or just one station, without the banner');
+  const ev = (await pool.query("select text from events where kind = 'announce' order by t desc limit 1")).rows[0];
+  ok(ev && ev.text.includes('The server restarts'), 'the announcement goes in the Colony Log');
   // songs the developer uploads: they join the station's running order and stream with byte ranges
   const mp3 = Buffer.alloc(40000, 7), up = (q, body, type = 'audio/mpeg', auth = true) => fetch(`${BASE}/api/admin/radio/tracks?${q}`, { method: 'POST', headers: { 'content-type': type, ...(auth ? { authorization: 'Bearer ' + TOKEN } : {}) }, body }).then(async x => ({ status: x.status, json: await x.json() }));
   ok((await up('station=pidgin&dur=60&title=a.mp3', mp3, 'audio/mpeg', false)).status === 401, 'only the developer can upload songs');

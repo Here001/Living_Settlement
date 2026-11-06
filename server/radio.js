@@ -22,9 +22,11 @@ import express from 'express';
 import { STATIONS, STATION_IDS, slotOf, slotStart, talkSlot, songTitle, timeline } from '../shared/radio.js';
 
 const uid = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+// how long a break is: the words Claude aims for, and how much the phrase banks say
+const LENGTHS = { short: { words: '15 to 35', news: 1, open: false, tokens: 160 }, normal: { words: '35 to 75', news: 2, open: true, tokens: 300 }, long: { words: '80 to 140', news: 3, open: true, tokens: 500 } };
 const LISTEN_MS = 10 * 60000; // a station counts as listened to for 10 minutes after someone last tuned in
 const LEAD_MS = 4 * 60000;    // breaks are written up to 4 minutes before they go on air
-const PRIORITY = { race: 9, election: 9, disaster: 9, crime: 8, lottery: 8, champions: 8, cevent: 8, spawn: 7, casino: 7, gift: 6, find: 5, badge: 5, career: 5, property: 5,
+const PRIORITY = { announce: 0, race: 9, election: 9, disaster: 9, crime: 8, lottery: 8, champions: 8, cevent: 8, spawn: 7, casino: 7, gift: 6, find: 5, badge: 5, career: 5, property: 5,
   leave: 4, pet: 4, streak: 4, build: 4, demolish: 4, gig: 3, rename: 3, found: 3, day: 3, movein: 1 };
 const clean = s => String(s ?? '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '').replace(/\s+/g, ' ').trim();
 // what the voice reads: "@tunde_web" → "Tunde web"
@@ -66,7 +68,9 @@ export class Radio {
   async tracks(fresh) { if (!fresh && this.trk && Date.now() - this.trkAt < 60000) return this.trk;
     const rows = (await pool.query('select id, station, title, dur, size, mime, enabled, t from radio_tracks order by t')).rows; this.trkAt = Date.now();
     this.trk = { all: rows, by: Object.fromEntries(STATION_IDS.map(k => [k, rows.filter(r => r.station === k && r.enabled).map(r => ({ id: r.id, dur: r.dur, title: r.title }))])) }; return this.trk; }
-  changed() { this.trk = null; this.bus?.publish([{ op: 'radioTracks' }]); }
+  // the songs changed: upcoming breaks were timed for the old running order, so they're written again for the new one
+  changed(station) { this.trk = null; this.bus?.publish([{ op: 'radioTracks' }]);
+    pool.query("delete from radio_talk where kind = 'talk' and slot > 0 and at > $1" + (station ? ' and station = $2' : ''), station ? [Date.now() + 10000, station] : [Date.now() + 10000]).catch(() => {}); }
   // The audio itself: kept in memory for the songs played lately (up to ~80 MB), so many listeners don't each hit the database.
   async audio(id) { this.cache ||= new Map(); const hit = this.cache.get(id); if (hit) { this.cache.delete(id); this.cache.set(id, hit); return hit; }
     const r = (await pool.query('select data, mime from radio_tracks where id = $1', [id])).rows[0]; if (!r) return null;
@@ -85,11 +89,12 @@ export class Radio {
   async config(fresh) { if (!fresh && this.cfg && Date.now() - this.cfgAt < 30000) return this.cfg;
     const r = (await pool.query("select value from settings where key = 'radio:config'")).rows[0]?.value || {};
     this.cfg = { on: r.on !== false, stations: Object.fromEntries(STATION_IDS.map(k => [k, r.stations?.[k] !== false])),
-      talkEvery: Math.max(1, Math.min(6, Number(r.talkEvery) || 2)), voices: { ...(r.voices || {}) } }; this.cfgAt = Date.now(); return this.cfg; }
+      talkEvery: Math.max(1, Math.min(6, Number(r.talkEvery) || 2)), talkLength: LENGTHS[r.talkLength] ? r.talkLength : 'normal', voices: { ...(r.voices || {}) } }; this.cfgAt = Date.now(); return this.cfg; }
   async onAir() { const c = await this.config(); return c.on ? STATION_IDS.filter(k => c.stations[k]) : []; }
   async setConfig(b) { const c = { ...(await this.config(true)) }; c.stations = { ...c.stations };
     if (typeof b.on === 'boolean') c.on = b.on;
     if (b.stations && typeof b.stations === 'object') for (const k of STATION_IDS) if (typeof b.stations[k] === 'boolean') c.stations[k] = b.stations[k];
+    if (LENGTHS[b.talkLength]) c.talkLength = b.talkLength; // how long each break is
     if (b.talkEvery != null) c.talkEvery = Math.max(1, Math.min(6, Math.round(Number(b.talkEvery)) || 2)); // a DJ break every N songs
     if (b.voices && typeof b.voices === 'object') { c.voices = { ...c.voices }; for (const k of STATION_IDS) if (k in b.voices) { const v = String(b.voices[k] || '').trim();
       if (v && !/^[A-Za-z0-9]{8,40}$/.test(v)) throw new HttpError(400, 'That isn’t an ElevenLabs voice ID.'); if (v) c.voices[k] = v; else delete c.voices[k]; } }
@@ -103,9 +108,12 @@ export class Radio {
     if (this.busy || !this.world.meta) return; this.busy = true;
     try { const now = Date.now();
       for (const st of await this.listening()) {
-        const every = (await this.config()).talkEvery; for (let n = slotOf(st, now) + 1; slotStart(st, n) < now + LEAD_MS; n++) { if (n % every !== 0) continue;
-          const has = (await pool.query('select 1 from radio_talk where station = $1 and slot = $2', [st, n])).rowCount; if (has) continue;
-          await this.make(st, n, slotStart(st, n) + 1500).catch(e => console.error('radio:', st, e.message)); }
+        // the DJ comes in at the start of every Nth song (uploaded or generated), over its first seconds
+        const every = (await this.config()).talkEvery, tr = (await this.tracks()).by[st];
+        for (let it = timeline(st, tr, now), g = 0; it.start < now + LEAD_MS && g < 40; it = timeline(st, tr, it.end + 1), g++) {
+          if (it.start < now + 5000 || it.seq % every !== 0) continue;
+          const has = (await pool.query('select 1 from radio_talk where station = $1 and slot = $2', [st, it.seq])).rowCount; if (has) continue;
+          await this.make(st, it.seq, it.start + 1200).catch(e => console.error('radio:', st, e.message)); }
       }
       if (Math.random() < 0.02) await pool.query('delete from radio_talk where t < $1', [now - 2 * 86400e3]);
     } finally { this.busy = false; }
@@ -151,19 +159,45 @@ export class Radio {
     return { ...out, slot, events: row.events, source };
   }
 
+  // An announcement from the developer (an emergency, an event, server news): every chosen station's DJ breaks in and
+  // reads it now, word for word (said twice when it's short) or in their own words, and it shows on everyone's screen.
+  async announce({ text, stations, rewrite, screen }) {
+    text = clean(text).slice(0, 400); if (text.length < 3) throw new HttpError(400, 'Type the announcement.');
+    const on = await this.onAir(), want = stations === 'all' || !Array.isArray(stations) ? on : stations.filter(k => on.includes(k));
+    if (!want.length) throw new HttpError(400, 'No station is on air to read it. Switch one on first.');
+    const LEAD = { english: 'This is an important announcement for everyone in {colony}.', pidgin: 'Una listen well well, important announcement for {colony}.',
+      yoruba: 'Ẹ jọ̀wọ́, ẹ tẹ́tí sílẹ̀. An important announcement for {colony}.', igbo: 'Biko, nụrụ m. An important announcement for {colony}.', hausa: 'Don Allah, ku saurara. An important announcement for {colony}.' };
+    const at = Date.now() + 2500, out = [];
+    await Promise.all(want.map(async st => { const S = STATIONS[st]; let say = null;
+      if (rewrite && process.env.ANTHROPIC_API_KEY) { try { say = await this.rewriteAlert(st, text); } catch (e) { console.error('radio announce:', e.message); } }
+      if (!say) say = `${LEAD[st].replace('{colony}', this.world.meta?.name || 'the colony')} ${text}${text.length < 220 ? ` I repeat. ${text}` : ''}`;
+      let audio = null, dur = Math.max(5, words(say).length / 2.6);
+      if (this.voiceKind() !== 'text') { try { const v = await this.voice(st, say); if (v) { audio = v.audio; dur = audio.length * 8 / v.bps; } } catch (e) { console.error('radio voice:', e.message); } }
+      const id = uid(); await pool.query(`insert into radio_talk (id, station, slot, t, at, kind, text, audio, dur, source) values ($1,$2,$3,$4,$5,'alert',$6,$7,$8,'announce')`, [id, st, -1 - Math.floor(Math.random() * 2e9), Date.now(), at, say, audio, dur]);
+      const talk = { id, station: st, at, kind: 'alert', text: say, focus: null, dur, audio: audio ? `/api/radio/voice/${id}` : null, dj: S.dj.name };
+      this.bus?.publish([{ op: 'radio', talk }]); out.push(talk); }));
+    if (screen !== false) { this.bus?.publish([{ op: 'announce', text, at }]); await this.world.change?.(async ch => { await ch.event(`📢 ${text}`, 'announce'); }).catch(e => console.error('radio announce log:', e.message)); }
+    return { ok: true, stations: out.map(t => t.station), talks: out };
+  }
+  async rewriteAlert(st, text) { const S = STATIONS[st];
+    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: this.model(), max_tokens: 300, temperature: 0.5, system: `You are ${S.dj.name}, DJ of ${S.name} in the game Resurgence. Personality: ${S.dj.vibe}. Interrupt the music to read an important announcement in your own voice. Keep every fact, name, number, time and instruction exactly right; add nothing new; no jokes if it is about danger or loss. Calm and clear, 20 to 70 words, plain spoken words only.`,
+        messages: [{ role: 'user', content: 'The announcement:\n' + text }] }), signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error(`Claude API ${r.status}`); const t = clean((await r.json()).content?.map(c => c.text || '').join(' ')); if (!t) throw new Error('empty'); return t.slice(0, 700); }
+
   // Claude writes the break in the DJ's voice, from the facts, without reusing their recent lines.
   async write(st, f, recent, title, retry = 0) {
-    const S = STATIONS[st];
+    const S = STATIONS[st], len = LENGTHS[(await this.config()).talkLength];
     const system = `You are ${S.dj.name}, the DJ of ${S.name} (${S.freq}), a ${S.lang}-flavoured music station in ${f.colony}, a colony on the planet ${f.planet} in the game Resurgence, where every colonist is a real player.
 Personality: ${S.dj.vibe}. Chill and funny, never mean.
-Write ONE short radio talk break, spoken aloud, 35 to 75 words. Plain spoken words only: no emojis, hashtags, stage directions, quotation marks or lists.
+Write ONE radio talk break, spoken aloud, ${len.words} words. Plain spoken words only: no emojis, hashtags, stage directions, quotation marks or lists.
 Use one or two of the facts you are given, the most interesting first, and say them accurately. Refer to players by their @handle exactly as written.
 Tease lightly, never insult anyone, never joke about ethnicity, religion, gender, money troubles or real-world politics. Nothing sexual.
 End by introducing the next song by its title.
 Do not reuse any joke, catchphrase, opening or sentence from your recent breaks. Every break must feel new.`;
     const user = `Facts right now:\n${JSON.stringify({ ...f, events: f.events.map(({ id, ids, ...e }) => e) }, null, 1)}\n\nNext song: "${title}"\n\nYour recent breaks (do not repeat them):\n${recent.map(t => '- ' + t).join('\n') || '(none yet)'}\n\nWrite the break.`;
     const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: this.model(), max_tokens: 300, temperature: 1, system, messages: [{ role: 'user', content: user }] }), signal: AbortSignal.timeout(25000) });
+      body: JSON.stringify({ model: this.model(), max_tokens: len.tokens, temperature: 1, system, messages: [{ role: 'user', content: user }] }), signal: AbortSignal.timeout(25000) });
     if (!r.ok) throw new Error(`Claude API ${r.status}: ${(await r.text()).slice(0, 160)}`);
     const text = clean((await r.json()).content?.map(c => c.text || '').join(' ')).replace(/^["']|["']$/g, '').slice(0, 700);
     if (!text) throw new Error('empty break');
@@ -173,16 +207,19 @@ Do not reuse any joke, catchphrase, opening or sentence from your recent breaks.
 
   // The phrase bank: an opener, one or two pieces of news and a song intro, avoiding anything said recently.
   phrases(st, f, recent, title) {
+    const len = LENGTHS[this.cfg?.talkLength] || LENGTHS.normal;
     const B = BANK[st], S = STATIONS[st], said = recent.join(' \n ');
     const fresh = list => { const unused = list.filter(p => !said.includes(p.split('{')[0].trim().slice(0, 24) || '~')); return pick(unused.length ? unused : list); };
     const fill = p => p.replace(/\{dj\}/g, S.dj.name).replace(/\{station\}/g, S.name).replace(/\{colony\}/g, f.colony).replace(/\{title\}/g, title).replace(/\{time\}/g, f.time)
       .replace(/\{weather\}/g, { sunny: 'sunny outside', cloudy: 'a bit cloudy', rain: 'raining', fog: 'foggy out there', storm: 'stormy, so stay indoors' }[f.weather] || f.weather).replace(/\{pop\}/g, f.population.toLocaleString('en-US'))
       .replace(/\{pod\}/g, (st === 'yoruba' ? YORUBA_POD : GREET)[f.partOfDay]).replace(/\{podh\}/g, HAUSA_POD[f.partOfDay]);
-    const parts = [fill(fresh(B.open))];
-    const news = f.events.slice(0, 2).map(e => e.text.replace(/\.$/, ''));
+    const parts = len.open ? [fill(fresh(B.open))] : [];
+    const news = f.events.slice(0, len.news).map(e => e.text.replace(/\.$/, ''));
     if (!news.length && f.race && f.race.inMinutes <= 10) news.push(`the next race at ${f.race.track} starts in ${f.race.inMinutes} minutes, so place your bets`);
     if (!news.length && f.election?.candidates.length) news.push(`the mayor's race is on with ${f.election.candidates.length} candidates, and voting closes in ${f.election.closesInHours} hours`);
     if (!news.length && f.townSquare.length) news.push(`over in the Town Square, ${f.townSquare[0]}`);
+    if (len.news > 2 && f.townSquare.length && news.length < 3) news.push(`over in the Town Square, ${f.townSquare[0]}`);
+    if (len.news > 2 && f.election?.candidates.length && news.length < 3) news.push(`the mayor's race has ${f.election.candidates.length} candidates, and voting closes in ${f.election.closesInHours} hours`);
     for (const e of news) parts.push(fill(fresh(B.news)).replace('{e}', e));
     parts.push(fill(fresh(B.close)));
     return parts.join(' ');
@@ -289,7 +326,7 @@ export function radioRoutes(app, { radio, admin, send, limit }) {
     if (!(dur >= 20 && dur <= 1200)) throw new HttpError(400, 'A song has to be between 20 seconds and 20 minutes long.');
     const title = clean(req.query.title).replace(/\.(mp3|m4a|aac|ogg|wav|webm)$/i, '').replace(/[_]+/g, ' ').slice(0, 80) || 'Untitled', id = uid();
     await pool.query('insert into radio_tracks (id, station, title, dur, mime, size, data, t) values ($1,$2,$3,$4,$5,$6,$7,$8)', [id, st, title, dur, mime === 'audio/mp3' ? 'audio/mpeg' : mime, req.body.length, req.body, Date.now()]);
-    radio.changed(); return { id, station: st, title, dur, size: req.body.length };
+    radio.changed(st); return { id, station: st, title, dur, size: req.body.length };
   }));
   app.patch('/api/admin/radio/tracks/:id', admin, send(async req => { const b = req.body || {}, sets = [], vals = [String(req.params.id)];
     if (typeof b.enabled === 'boolean') { vals.push(b.enabled); sets.push(`enabled = $${vals.length}`); }
@@ -300,6 +337,8 @@ export function radioRoutes(app, { radio, admin, send, limit }) {
     radio.changed(); return { ok: true }; }));
   app.delete('/api/admin/radio/tracks/:id', admin, send(async req => { const r = await pool.query('delete from radio_tracks where id = $1', [String(req.params.id)]);
     if (!r.rowCount) throw new HttpError(404, 'No such song.'); radio.cache?.delete(String(req.params.id)); radio.changed(); return { ok: true }; }));
+  // the developer: an announcement every chosen station reads out now ({ text, stations: 'all' | [...], rewrite, screen })
+  app.post('/api/admin/radio/announce', admin, send(async req => radio.announce(req.body || {})));
   // the developer's switches: { on: false } takes the whole radio off air; { stations: { hausa: false } } one station
   app.put('/api/admin/radio', admin, send(async req => radio.setConfig(req.body || {})));
   // the developer: put a break on air now (to try a DJ out)

@@ -5,7 +5,7 @@ import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
-import { BUILDING_TYPES, BANK_TYPES } from '../shared/catalog.js';
+import { BUILDING_TYPES, BANK_TYPES, kindOf, pgList } from '../shared/catalog.js';
 import { CREATURES, petPrice } from '../shared/creatures.js';
 import { treasuryAdd } from './races.js';
 import { track, ledger } from './stats.js';
@@ -48,7 +48,7 @@ export class Actions {
     if (!b) { await ch.q('update citizens set visit_until = least(visit_until, $2) where id = $1 and visit_until > $2', [c.id, Date.now()]); ch.touch(c); return; } // ending early: head back from here
     const now = Date.now(), same = c.visit_id === b.id && Number(c.visit_until || 0) > now; // tapping the same place again changes nothing
     let origin = same ? c.visit_origin : this.takeOrigin(c.id), fare = 0, mode = 'walk';
-    if (!same && b.type !== 'jail') { // travel costs: fuel for a car, a fare for a cab, there and back (walk if the cab is too dear)
+    if (!same && kindOf(b.type) !== 'jail') { // travel costs: fuel for a car, a fare for a cab, there and back (walk if the cab is too dear)
       const home = c.home_id ? (await ch.q('select x, y from buildings where id = $1', [c.home_id])).rows[0] : null;
       const ox = origin ? origin.x : home ? home.x : b.x, oy = origin ? origin.y : home ? home.y : b.y, own = Array.isArray(c.cars) && c.cars.length > 0;
       const out = R.tripFare(Math.abs(ox - b.x) + Math.abs(oy - b.y), own), back = home ? R.tripFare(Math.abs(b.x - home.x) + Math.abs(b.y - home.y), own) : { fare: 0, mode: 'walk' };
@@ -69,7 +69,7 @@ export class Actions {
     if (Number(c.jailed_until || 0) > now) return 'jail';
     if (c.visit_id && Number(c.visit_until || 0) > now && Number(c.visit_from || 0) <= now) { // on a trip they chose
       const b = (await (ch.q ? ch.q('select type from buildings where id = $1', [c.visit_id]) : ch.query('select type from buildings where id = $1', [c.visit_id]))).rows[0];
-      if (!b) return 'out'; if (b.type === 'jail') return 'jail'; if (BUILDING_TYPES[b.type]?.home) return 'home';
+      if (!b) return 'out'; if (kindOf(b.type) === 'jail') return 'jail'; if (BUILDING_TYPES[b.type]?.home) return 'home';
       return c.job_id && c.visit_id === c.job_id ? 'work' : 'out';
     }
     const meta = this.world.meta; if (!meta) return 'out';
@@ -181,7 +181,7 @@ export class Actions {
       }
       // Caught: a fine (twice what they tried to take, at least 250, never more than they have), and jail if the colony has one.
       const fine = Math.min(c.coins_base, Math.max(250, loot * 2)); c.coins_base -= fine; treasuryAdd(ch, fine); track(ch, 'crime:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
-      const jail = (await ch.q(`select * from buildings where type = 'jail' and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [px, py])).rows[0];
+      const jail = (await ch.q(`select * from buildings where type = any('${pgList('jail')}') and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [px, py])).rows[0];
       const what = victim ? `pickpocketing @${victim.handle}` : kind === 'scam' ? 'conning a tourist' : kind === 'atm' ? `hacking the ATM at ${nameOf(shop)}` : `robbing ${nameOf(shop)}`;
       if (victim) await this.notify(ch, victim.id, 'pickpocket', `🚓 @${c.handle} picked your pocket but got caught by the police. Your ${fmt(loot)} coins have been refunded.`);
       if (jail) {

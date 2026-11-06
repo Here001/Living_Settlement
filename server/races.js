@@ -10,6 +10,7 @@ import { pool } from './db.js';
 import { track } from './stats.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
+import { pgList } from '../shared/catalog.js';
 import { CREATURES, CREATURE_IDS, oddsFor, runRace, fieldFor, hashStr } from '../shared/creatures.js';
 
 // RACE_EVERY_MS can shorten the cycle for testing on a local server; the live colony uses 30 minutes.
@@ -30,7 +31,7 @@ export class Races {
   async allTracks() {
     if (Date.now() - this.tracksAt > (this.tracks.length ? 5000 : 3000)) {
       this.tracksAt = Date.now();
-      const rows = (await pool.query("select id, name, x, y, rot from buildings where type = 'racetrack' and done and not ruin order by built_at, id")).rows, used = new Set();
+      const rows = (await pool.query(`select id, name, x, y, rot from buildings where type = any('${pgList('racetrack')}') and done and not ruin order by built_at, id`)).rows, used = new Set();
       this.tracks = rows.map((r, i) => { let slot = i === 0 ? 0 : hashStr(r.id) % SLOTS; for (let k = 0; k < SLOTS && used.has(slot); k++) slot = (slot + 1) % SLOTS; used.add(slot);
         return { id: r.id, name: r.name || (rows.length > 1 ? `Racetrack ${i + 1}` : 'Racetrack'), x: r.x, y: r.y, rot: r.rot || 0, offset: slot * Math.floor(RACE_EVERY / SLOTS) }; });
     }

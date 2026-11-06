@@ -24,6 +24,9 @@ export const isBank = type => BANK_TYPES.includes(type);
 
 export const ROAD_TYPES = {
   street:     { name:'Street', note:'two-way', sub:'streets', kind:'street', top:'#7E8185', walk:'#DCD8CE', cost:30, speed:2.0 },
+  curvestreet:{ name:'Curved street', note:'rounds its corners', sub:'streets', kind:'street', curve:true, top:'#7E8185', walk:'#DCD8CE', cost:35, speed:2.0 },
+  roundabout: { name:'Roundabout', note:'lay 3×3 for a big one', sub:'streets', kind:'street', round:true, top:'#7E8185', walk:'#DCD8CE', cost:45, speed:1.8 },
+  culdesac:   { name:'Cul-de-sac', note:'turning circle at the end', sub:'streets', kind:'street', bulb:true, top:'#7E8185', walk:'#DCD8CE', cost:35, speed:1.8 },
   oneway1:    { name:'One-way street', note:'1 lane', sub:'streets', kind:'street', lanes:'one1', top:'#7E8185', walk:'#DCD8CE', cost:25, speed:2.1 },
   oneway2:    { name:'One-way, 2 lanes', note:'2 lanes', sub:'streets', kind:'street', lanes:'one2', top:'#7E8185', walk:'#DCD8CE', cost:35, speed:2.3 },
   boulevard:  { name:'Boulevard', note:'tree-lined median', sub:'streets', kind:'street', lanes:'median', top:'#7E8185', walk:'#DCD8CE', cost:70, speed:2.3 },
@@ -291,12 +294,137 @@ export const BUILDING_TYPES = {
   pasture:    { name:'Pasture', cat:'nature', size:[3,3], style:'farm', pattern:'pasture', colors:{soil:'#8FC463', crop:'#F4F1E8'}, work:{title:'Shepherd', slots:1, salary:14}, outdoor:true, cost:300 },
 };
 
+// ---------- November 2026: fences that join up, skyscrapers, big venues, more industry, shops, services and decorations ----------
+// `as` marks a bigger version of a building that works exactly like the original (a grand casino plays the casino's games,
+// a grand racetrack hosts the races, a prison holds those the police lock up).
+Object.assign(BUILDING_TYPES, {
+  // Fences join up with any fence on the tiles beside them, so they turn corners, make T-junctions and cross in every direction.
+  fence:       { name:'Picket fence', cat:'decor', sub:'fences', size:[1,1], style:'fence', kind:'picket', colors:{wall:'#F4F1E8'}, outdoor:true, cost:10 },
+  woodfence:   { name:'Wooden rail fence', cat:'decor', size:[1,1], style:'fence', kind:'rail', colors:{wall:'#A9794C'}, outdoor:true, cost:12 },
+  ironfence:   { name:'Iron railings', cat:'decor', size:[1,1], style:'fence', kind:'iron', colors:{wall:'#2B2F33'}, outdoor:true, cost:30 },
+  stonewall:   { name:'Dry-stone wall', cat:'decor', size:[1,1], style:'fence', kind:'stone', colors:{wall:'#A8A296'}, outdoor:true, cost:25 },
+  brickwall:   { name:'Brick garden wall', cat:'decor', size:[1,1], style:'fence', kind:'brick', colors:{wall:'#B5543E', trim:'#D8D2C4'}, outdoor:true, cost:28 },
+  chainlink:   { name:'Chain-link fence', cat:'decor', size:[1,1], style:'fence', kind:'mesh', colors:{wall:'#9EA3A6'}, outdoor:true, cost:15 },
+  bamboofence: { name:'Bamboo fence', cat:'decor', size:[1,1], style:'fence', kind:'bamboo', colors:{wall:'#C9B26A'}, outdoor:true, cost:18 },
+  glassfence:  { name:'Glass balustrade', cat:'decor', size:[1,1], style:'fence', kind:'glass', colors:{wall:'#A9D3E0', trim:'#7C8288'}, outdoor:true, cost:40 },
+  hedgerow:    { name:'Box hedge row', cat:'decor', size:[1,1], style:'fence', kind:'hedge', colors:{wall:'#4E8A3A'}, outdoor:true, cost:20 },
+  whitewall:   { name:'Rendered wall with lamps', cat:'decor', size:[1,1], style:'fence', kind:'render', colors:{wall:'#EDE6D6', trim:'#B9AE98'}, outdoor:true, cost:35 },
+
+  // ---- street furniture ----
+  bin:         { name:'Litter bin', cat:'decor', size:[1,1], style:'prop', prop:'bin', outdoor:true, cost:15 },
+  recycle:     { name:'Recycling bins', cat:'decor', size:[1,1], style:'prop', prop:'recycle', outdoor:true, cost:30 },
+  bikerack:    { name:'Bike rack', cat:'decor', size:[1,1], style:'prop', prop:'bikerack', outdoor:true, cost:25 },
+  bollards:    { name:'Bollards', cat:'decor', size:[1,1], style:'prop', prop:'bollards', outdoor:true, cost:12 },
+  traffic:     { anim:true, name:'Traffic light', cat:'decor', size:[1,1], style:'prop', prop:'traffic', outdoor:true, cost:60 },
+  streetsign:  { name:'Street sign', cat:'decor', size:[1,1], style:'prop', prop:'sign', outdoor:true, cost:20 },
+  atm:         { name:'Cash machine', cat:'decor', size:[1,1], style:'prop', prop:'atm', outdoor:true, cost:90 },
+  vending:     { name:'Vending machine', cat:'decor', size:[1,1], style:'prop', prop:'vending', outdoor:true, cost:70 },
+  flagpole:    { anim:true, name:'Flag pole', cat:'decor', size:[1,1], style:'prop', prop:'flag', outdoor:true, cost:45 },
+  stringlights:{ anim:true, name:'Festoon lights', cat:'decor', size:[1,1], style:'prop', prop:'festoon', outdoor:true, cost:40 },
+  picnic:      { name:'Picnic table', cat:'decor', size:[1,1], style:'prop', prop:'picnic', outdoor:true, leisure:true, visitors:6, cost:35 },
+  parasol:     { name:'Café parasol', cat:'decor', size:[1,1], style:'prop', prop:'parasol', outdoor:true, leisure:true, visitors:4, cost:45 },
+  drinking:    { name:'Drinking fountain', cat:'decor', size:[1,1], style:'prop', prop:'drink', outdoor:true, cost:40 },
+  noticeboard: { name:'Notice board', cat:'decor', size:[1,1], style:'prop', prop:'notice', outdoor:true, cost:25 },
+  mapboard:    { name:'Town map board', cat:'decor', size:[1,1], style:'prop', prop:'mapboard', outdoor:true, cost:30 },
+  meter:       { name:'Parking meter', cat:'decor', size:[1,1], style:'prop', prop:'meter', outdoor:true, cost:20 },
+  potplants:   { name:'Flower pots', cat:'decor', size:[1,1], style:'prop', prop:'pots', outdoor:true, cost:20 },
+  treepot:     { name:'Tree in a planter', cat:'decor', size:[1,1], style:'prop', prop:'treepot', outdoor:true, cost:40 },
+  palmpot:     { name:'Potted palm', cat:'decor', size:[1,1], style:'prop', prop:'palmpot', outdoor:true, cost:40 },
+  flowerarch:  { name:'Rose arch', cat:'decor', size:[1,1], style:'prop', prop:'arch', outdoor:true, cost:50 },
+  sculpture:   { name:'Street sculpture', cat:'decor', size:[1,1], style:'prop', prop:'sculpt', outdoor:true, cost:120 },
+  lamp2:       { name:'Double lantern', cat:'decor', size:[1,1], style:'prop', prop:'lantern', outdoor:true, cost:70 },
+  benchmod:    { name:'Modern bench', cat:'decor', size:[1,1], style:'prop', prop:'benchmod', outdoor:true, leisure:true, visitors:4, cost:50 },
+  snowman:     { name:'Snowman', cat:'decor', size:[1,1], style:'prop', prop:'snowman', outdoor:true, cost:15 },
+  giftpile:    { name:'Gift boxes', cat:'decor', size:[1,1], style:'prop', prop:'gifts', outdoor:true, cost:25 },
+
+  // ---- nature ----
+  xmastree:    { name:'Christmas tree', cat:'nature', size:[1,1], style:'xmastree', colors:{leaf:'#2F6E3B'}, outdoor:true, cost:80 },
+  bigxmastree: { name:'Giant Christmas tree', cat:'nature', size:[2,2], style:'xmastree', big:true, colors:{leaf:'#2F6E3B'}, outdoor:true, leisure:true, visitors:60, cost:1200 },
+  snowpine:    { name:'Snowy pine', cat:'nature', size:[1,1], style:'xmastree', snow:true, plain:true, colors:{leaf:'#3E7A4B'}, outdoor:true, cost:15 },
+  cactus:      { name:'Cactus', cat:'nature', sub:'rocks', size:[1,1], style:'prop', prop:'cactus', outdoor:true, cost:10 },
+  willow:      { name:'Weeping willow', cat:'nature', size:[1,1], style:'prop', prop:'willow', outdoor:true, cost:15 },
+  flowerbush:  { name:'Flowering bush', cat:'nature', sub:'rocks', size:[1,1], style:'prop', prop:'flowerbush', outdoor:true, cost:8 },
+
+  // ---- landmarks ----
+  arch:        { name:'Triumphal arch', cat:'landmarks', size:[3,1], style:'arch', colors:{wall:'#E4DCC8'}, leisure:true, visitors:60, outdoor:true, cost:15000 },
+  column:      { name:'Victory column', cat:'landmarks', size:[1,1], style:'column', colors:{wall:'#D9D2C0', trim:'#E2B13C'}, leisure:true, visitors:30, outdoor:true, cost:6000 },
+  globe:       { name:'Globe monument', cat:'landmarks', size:[2,2], style:'globe', colors:{wall:'#9FB6BE'}, leisure:true, visitors:60, outdoor:true, cost:9000 },
+  giantflag:   { anim:true, name:'Giant flag', cat:'landmarks', size:[1,1], style:'prop', prop:'giantflag', outdoor:true, leisure:true, visitors:10, cost:3000 },
+  bandstand:   { name:'Bandstand', cat:'landmarks', size:[2,2], style:'bandstand', colors:{wall:'#F4F1E8', roof:'#2F6E5A'}, leisure:true, visitors:80, outdoor:true, cost:4000 },
+  horsestatue: { name:'Equestrian statue', cat:'landmarks', size:[2,2], style:'horse', colors:{wall:'#5E7A6A'}, leisure:true, visitors:30, outdoor:true, cost:7000 },
+  tvtower:     { name:'TV tower', cat:'landmarks', size:[2,2], style:'needle', height:300, colors:{wall:'#D8D8D4', roof:'#C8382E'}, work:{title:'Broadcaster', slots:20, salary:40}, leisure:true, visitors:200, cost:60000 },
+  glasspyramid:{ name:'Glass pyramid', cat:'landmarks', size:[3,3], style:'pyramid', colors:{wall:'#A9C6D8', trim:'#5E6E78'}, work:{title:'Curator', slots:24, salary:34}, leisure:true, visitors:300, cost:45000 },
+
+  // ---- skyscrapers: offices and homes in the sky ----
+  spiretower:  { name:'Spire skyscraper', cat:'offices', sub:'towers', size:[3,3], style:'sky', height:290, glass:true, tiers:[[0,0.5],[0.45,0.32],[0.9,0.18]], crown:'spire', colors:{wall:'#8FB0C2', roof:'#3E4C55', trim:'#C9D6DC'}, work:{title:'Executive', slots:320, salary:56}, cost:180000 },
+  glasstower:  { name:'Glass skyscraper', cat:'offices', sub:'towers', size:[2,2], style:'sky', height:240, glass:true, tiers:[[0,1]], crown:'antenna', colors:{wall:'#6FA3BF', roof:'#2F3D46', trim:'#B9D4E0'}, work:{title:'Analyst', slots:220, salary:50}, cost:120000 },
+  crowntower:  { name:'Crown tower', cat:'offices', sub:'towers', size:[2,2], style:'sky', height:220, glass:true, tiers:[[0,0.8],[0.3,0.2]], crown:'crown', colors:{wall:'#B9A77A', roof:'#4E4A44', trim:'#E2B13C'}, work:{title:'Banker', slots:200, salary:54}, cost:130000 },
+  decotower:   { name:'Art deco skyscraper', cat:'offices', sub:'towers', size:[2,2], style:'sky', height:250, tiers:[[0,0.45],[0.25,0.3],[0.5,0.15],[0.75,0.1]], crown:'deco', bands:true, colors:{wall:'#D9CDB4', roof:'#5E5A57', trim:'#8A7A5A'}, work:{title:'Lawyer', slots:210, salary:52}, cost:140000 },
+  helitower:   { name:'Helipad tower', cat:'offices', sub:'towers', size:[2,2], style:'sky', height:200, glass:true, tiers:[[0,1]], crown:'heli', colors:{wall:'#5D6F78', roof:'#2B363C', trim:'#9FB6BE'}, work:{title:'Consultant', slots:180, salary:50}, cost:110000 },
+  twintowers:  { name:'Twin towers', cat:'offices', sub:'towers', size:[4,2], style:'sky', height:260, glass:true, twins:true, tiers:[[0,1]], crown:'antenna', colors:{wall:'#9BB7C2', roof:'#4E5D66', trim:'#E8EEF2'}, work:{title:'Trader', slots:420, salary:54}, cost:240000 },
+  pyramidtower:{ name:'Pyramid skyscraper', cat:'offices', sub:'towers', size:[3,3], style:'sky', height:230, tiers:[[0,0.3],[0.3,0.25],[0.6,0.2],[0.85,0.15],[1.1,0.1]], crown:'spire', colors:{wall:'#E8E6E0', roof:'#9EA3A6', trim:'#7C8288'}, work:{title:'Engineer', slots:300, salary:50}, cost:170000 },
+  skyresidence:{ name:'Sky residences', cat:'housing', sub:'highrise', size:[2,2], style:'sky', height:210, tiers:[[0,0.85],[0.3,0.15]], crown:'garden', balconies:true, colors:{wall:'#E4DED2', roof:'#5E8F4E', trim:'#9C8A70'}, home:{capacity:140, rent:40}, cost:90000 },
+  luxurytower: { name:'Luxury glass residences', cat:'housing', sub:'highrise', size:[2,2], style:'sky', height:250, glass:true, tiers:[[0,1]], crown:'crown', colors:{wall:'#7FA6B8', roof:'#2F3D46', trim:'#E2B13C'}, home:{capacity:160, rent:55}, cost:140000 },
+
+  // ---- industry: the bigger the investment, the more people it employs ----
+  datacentre:  { name:'Data centre', cat:'industry', sub:'tech', size:[4,3], style:'block', height:34, rooftop:true, colors:{wall:'#E8E8E4', roof:'#9EA3A6', trim:'#4A7BD9'}, work:{title:'Systems engineer', slots:220, salary:46}, cost:45000 },
+  chipfab:     { name:'Chip foundry', cat:'industry', sub:'tech', size:[5,4], style:'block', height:42, glass:true, rooftop:true, colors:{wall:'#C9D6DC', roof:'#E8E8E4', trim:'#2F4A7A'}, work:{title:'Process engineer', slots:480, salary:52}, cost:75000 },
+  pharmalab:   { name:'Pharmaceutical lab', cat:'industry', sub:'tech', size:[4,3], style:'block', height:46, glass:true, ribbon:true, colors:{wall:'#E4EEF0', roof:'#8BB3D1', trim:'#3E8F72'}, work:{title:'Scientist', slots:260, salary:48}, cost:40000 },
+  brewery:     { name:'Brewery', cat:'industry', sub:'factories', size:[3,3], style:'tanks', copper:true, work:{title:'Brewer', slots:70, salary:28}, cost:12000 },
+  textilemill: { name:'Textile mill', cat:'industry', sub:'factories', size:[4,3], style:'factory', height:36, saw:true, chimneys:2, colors:{wall:'#C47A52', roof:'#5E5A57'}, work:{title:'Weaver', slots:160, salary:28}, cost:16000 },
+  foodplant:   { name:'Food processing plant', cat:'industry', sub:'factories', size:[4,3], style:'factory', height:30, chimneys:1, colors:{wall:'#E8E2D2', roof:'#5E8F4E'}, work:{title:'Food technician', slots:180, salary:28}, cost:18000 },
+  steelmill:   { name:'Steel mill', cat:'industry', sub:'heavy', size:[5,4], style:'mill', work:{title:'Steelworker', slots:340, salary:40}, cost:42000 },
+  refinery:    { name:'Oil refinery', cat:'industry', sub:'heavy', size:[5,5], style:'refinery', work:{title:'Refinery operator', slots:380, salary:44}, cost:55000 },
+  aerospace:   { name:'Aerospace hangar', cat:'industry', sub:'heavy', size:[6,5], style:'hangar', colors:{wall:'#D8DCDE', roof:'#9EA3A6', trim:'#2F4A7A'}, work:{title:'Aircraft engineer', slots:620, salary:56}, cost:95000 },
+  shipyard:    { name:'Container yard', cat:'industry', sub:'heavy', size:[5,4], style:'containers', work:{title:'Crane operator', slots:300, salary:38}, cost:38000 },
+
+  // ---- shops ----
+  boutique:    { name:'Fashion boutique', cat:'shops', size:[1,1], style:'block', height:30, sign:'#2B2621', label:'MODE', awning:'#2B2621', colors:{wall:'#F4F1E8', roof:'#5E5A57', trim:'#2B2621'}, work:{title:'Stylist', slots:3, salary:24}, cost:1600 },
+  electronics: { name:'Electronics store', cat:'shops', size:[2,1], style:'block', height:28, glass:true, sign:'#2F4A7A', label:'TECH', colors:{wall:'#C9D6DC', roof:'#4E5D66', trim:'#2F4A7A'}, work:{title:'Sales assistant', slots:5, salary:24}, cost:2400 },
+  jeweller:    { name:'Jeweller', cat:'shops', size:[1,1], style:'block', height:30, sign:'#1F3A2B', label:'GOLD', colors:{wall:'#E8DDC0', roof:'#4E4A44', trim:'#E2B13C'}, work:{title:'Jeweller', slots:2, salary:30}, cost:2200 },
+  shoeshop:    { name:'Shoe shop', cat:'shops', size:[1,1], style:'block', height:26, sign:'#8A4A6A', label:'SHOES', awning:'#C86A8A', colors:{wall:'#F2E4E8', roof:'#5E5A57', trim:'#8A4A6A'}, work:{title:'Shop assistant', slots:2, salary:20}, cost:1300 },
+  furniture:   { name:'Furniture store', cat:'shops', size:[3,2], style:'block', height:30, sign:'#5E4128', label:'HOME', colors:{wall:'#D8C8A8', roof:'#5E5A57', trim:'#5E4128'}, work:{title:'Sales assistant', slots:8, salary:22}, cost:4200 },
+  toyshop:     { name:'Toy shop', cat:'shops', size:[1,1], style:'block', height:26, sign:'#D9544A', label:'TOYS', awning:'#F2C94C', colors:{wall:'#FCE7B0', roof:'#D9544A', trim:'#2F7D63'}, work:{title:'Shop assistant', slots:2, salary:20}, cost:1200 },
+  icecream:    { name:'Ice cream parlour', cat:'shops', size:[1,1], style:'block', height:24, sign:'#E88BB0', label:'GELATO', awning:'#9FD8E0', colors:{wall:'#FFF2F6', roof:'#E88BB0', trim:'#8A4A6A'}, work:{title:'Server', slots:2, salary:18}, leisure:true, visitors:20, cost:1100 },
+  burgers:     { name:'Burger bar', cat:'shops', sub:'going', size:[2,1], style:'block', height:24, sign:'#D9544A', label:'BURGERS', awning:'#F2C94C', colors:{wall:'#F4E6C8', roof:'#D9544A', trim:'#5E4128'}, work:{title:'Cook', slots:6, salary:18}, leisure:true, visitors:40, cost:2000 },
+  pizzeria:    { name:'Pizzeria', cat:'shops', sub:'going', size:[2,1], style:'block', height:26, sign:'#2F7D63', label:'PIZZA', awning:'#D9544A', colors:{wall:'#F4F1E8', roof:'#B5543E', trim:'#2F7D63'}, work:{title:'Pizzaiolo', slots:5, salary:20}, leisure:true, visitors:40, cost:2200 },
+  sportshop:   { name:'Sports store', cat:'shops', size:[2,2], style:'block', height:28, glass:true, sign:'#2F7D63', label:'SPORT', colors:{wall:'#D8E6DE', roof:'#4E5D66', trim:'#2F7D63'}, work:{title:'Sales assistant', slots:7, salary:22}, cost:3600 },
+  megamall:    { name:'Mega mall', cat:'shops', sub:'large', size:[5,4], style:'block', height:52, glass:true, sign:'#6B2A4A', label:'MEGA MALL', neon:true, colors:{wall:'#C9D6DC', roof:'#4E5D66', trim:'#6B2A4A'}, work:{title:'Shop worker', slots:260, salary:24}, leisure:true, visitors:900, cost:65000 },
+  grandcasino: { name:'Grand casino resort', as:'casino', cat:'shops', sub:'going', size:[5,5], style:'resort', colors:{wall:'#6B2A4A', roof:'#2E1A28', trim:'#F2B33D'}, work:{title:'Dealer', slots:60, salary:40}, leisure:true, visitors:1200, cost:120000 },
+  gamearena:   { name:'Game arena', as:'gamehouse', cat:'shops', sub:'going', size:[4,4], style:'block', height:56, sign:'#1F3A6B', label:'GAME ARENA', neon:true, glass:true, colors:{wall:'#2F4F7F', roof:'#1C2C47', trim:'#F2C94C'}, work:{title:'Game host', slots:40, salary:30}, leisure:true, visitors:600, cost:60000 },
+
+  // ---- services ----
+  prison:      { name:'Prison', as:'jail', cat:'services', sub:'safety', size:[4,4], style:'prison', colors:{wall:'#B9B5AB', roof:'#5D6266', trim:'#2F3438'}, work:{title:'Guard', slots:30, salary:32}, cost:22000 },
+  firehq:      { name:'Fire headquarters', cat:'services', sub:'safety', size:[4,2], style:'block', height:36, garage:'#C8382E', sign:'#C8382E', label:'FIRE', colors:{wall:'#C8644A', roof:'#5E5A57', trim:'#C8382E'}, work:{title:'Firefighter', slots:24, salary:32}, cost:12000 },
+  policeplaza: { name:'Police plaza', cat:'services', sub:'safety', size:[3,3], style:'block', height:70, glass:true, sign:'#2F4A7A', label:'POLICE', colors:{wall:'#9BB0C8', roof:'#2F4A7A', trim:'#2F4A7A'}, work:{title:'Detective', slots:40, salary:36}, cost:18000 },
+  ambulance:   { name:'Ambulance station', cat:'services', sub:'health', size:[3,2], style:'block', height:28, garage:'#F4F4F0', cross:true, colors:{wall:'#F4F4F0', roof:'#7C8288', trim:'#D9544A'}, work:{title:'Paramedic', slots:14, salary:32}, cost:7000 },
+  cityhall:    { name:'Grand city hall', cat:'services', sub:'civic', size:[5,3], style:'block', height:48, columns:true, clock:true, colors:{wall:'#E4DCC8', roof:'#5E6E78', trim:'#8A7A5A'}, work:{title:'Clerk', slots:60, salary:30}, cost:40000 },
+  parliament:  { name:'Parliament', cat:'services', sub:'civic', size:[5,4], style:'block', height:44, columns:true, cupola:true, colors:{wall:'#E8E2D2', roof:'#4E7A6A', trim:'#8A7A5A'}, work:{title:'Official', slots:80, salary:40}, cost:60000 },
+  embassy:     { name:'Embassy', cat:'services', sub:'civic', size:[2,2], style:'block', height:34, columns:true, colors:{wall:'#F0EBDF', roof:'#5E5A57', trim:'#8A7A5A'}, work:{title:'Diplomat', slots:12, salary:44}, cost:9000 },
+  dispatch:    { name:'Emergency dispatch centre', cat:'services', sub:'safety', size:[2,2], style:'block', height:38, glass:true, rooftop:true, colors:{wall:'#D8DCDE', roof:'#4E5D66', trim:'#D9544A'}, work:{title:'Dispatcher', slots:18, salary:34}, cost:8000 },
+  coastguard:  { name:'Coast guard station', cat:'services', sub:'safety', size:[2,2], style:'house', height:26, roofH:16, colors:{wall:'#F4F4F0', roof:'#D9544A', trim:'#2F4A7A'}, work:{title:'Rescuer', slots:10, salary:30}, cost:6000 },
+
+  // ---- big venues ----
+  grandracetrack:{ name:'Grand racecourse', as:'racetrack', cat:'parks', sub:'sports', size:[9,5], style:'racetrack', grand:true, colors:{grass:'#7DB656', dirt:'#C9A06A', stand:'#2F4A7A'}, work:{title:'Creature keeper', slots:20, salary:28}, leisure:true, visitors:600, outdoor:true, cost:40000 },
+  bigstadium:  { name:'Stadium', cat:'parks', sub:'sports', size:[12,10], style:'arena', colors:{wall:'#E8E6E0', roof:'#F4F4F0', trim:'#2F4A7A', seat:'#C8382E', seat2:'#2F4A7A'}, work:{title:'Groundskeeper', slots:160, salary:28}, leisure:true, visitors:9000, cost:110000 },
+});
+for (const t of Object.values(BUILDING_TYPES)) if (t.style === 'fence') t.sub = 'fences';
+for (const k of ['flowers', 'hedge', 'planter', 'potplants', 'treepot', 'palmpot', 'flowerarch', 'snowman', 'giftpile']) BUILDING_TYPES[k].sub = 'plants';
+BUILDING_TYPES.stadium.name = 'Sports ground'; // the old stadium is a quarter the size of the new one
+BUILDING_TYPES.racetrack.name = 'Racetrack';
+// Which kind a building works as (a grand casino is a casino, a prison a jail…).
+export const kindOf = type => BUILDING_TYPES[type]?.as || type;
+export const typesOf = kind => Object.keys(BUILDING_TYPES).filter(k => kindOf(k) === kind);
+export const pgList = kind => '{' + typesOf(kind).join(',') + '}'; // for SQL: type = any('{casino,grandcasino}')
+
 // Tabs inside each build menu. Anything without a sub shows under its menu's first tab.
 export const SUBS = {
   roads:     [['streets','Streets'],['curbside','Curbside'],['wide','Wide'],['highway','Highway'],['rail','Rail'],['surface','Surfaces']],
   housing:   [['houses','Houses'],['lowrise','Low-rise'],['highrise','High-rise']],
   shops:     [['small','Small'],['large','Large'],['going','Going out']],
-  industry:  [['workshops','Workshops'],['factories','Factories'],['farms','Farms']],
+  industry:  [['workshops','Workshops'],['factories','Factories'],['heavy','Heavy'],['tech','High-tech'],['farms','Farms']],
+  offices:   [['offices','Offices'],['towers','Skyscrapers']],
+  decor:     [['furniture','Street furniture'],['fences','Fences & walls'],['plants','Plants & festive']],
   services:  [['safety','Safety'],['health','Health'],['education','Education'],['civic','Civic']],
   utilities: [['power','Power'],['water','Water'],['sewage','Sewage'],['garbage','Garbage']],
   parks:     [['squares','Parks & squares'],['sports','Sports']],
@@ -327,6 +455,7 @@ const SUB_OF = {
   rocks:['bush','rocks'],
 };
 for (const [sub, ids] of Object.entries(SUB_OF)) for (const id of ids) if (BUILDING_TYPES[id]) BUILDING_TYPES[id].sub = sub;
+for (const t of Object.values(BUILDING_TYPES)) if (!t.sub && SUBS[t.cat]) t.sub = SUBS[t.cat][0][0]; // anything else: its menu's first tab
 
 
 // ---------- water, vehicles, disasters, weather ----------
@@ -345,6 +474,16 @@ export const VEHICLE_TYPES = {
   police:    { name:'Police car', note:'patrols the city', len:0.66, wid:0.3, h:6, colors:['#F4F4F0'], stripe:'#2F4A7A', siren:'#4A7BD9' },
   firetruck: { name:'Fire engine', note:'answers fires', len:1.05, wid:0.34, h:10, colors:['#C8382E'], ladder:true, siren:'#FF5544' },
   ambulance: { name:'Ambulance', note:'answers emergencies', len:0.8, wid:0.32, h:9, colors:['#F4F4F0'], stripe:'#D9544A', siren:'#FF5544' },
+  // Two wheels on the road; boats on water (mode 'water'); aircraft in the sky above where they're placed (mode 'air').
+  bike:      { name:'Bicycle', note:'pedals round the streets', shape:'bike', len:0.36, wid:0.1, h:9, colors:['#D9544A','#4A7BD9','#2F7D63','#F2C94C'], speed:0.55 },
+  motorbike: { name:'Motorbike', note:'nips through traffic', shape:'moto', len:0.42, wid:0.14, h:9, colors:['#2B2621','#C8382E','#2F4A7A'], speed:1.25 },
+  boat:      { name:'Motor boat', note:'cruises the water', mode:'water', shape:'boat', len:0.7, wid:0.3, h:5, colors:['#F4F4F0','#D9544A','#2F4A7A'], speed:1.1 },
+  sailboat:  { name:'Sailing boat', note:'drifts on the breeze', mode:'water', shape:'sail', len:0.75, wid:0.28, h:5, colors:['#F4F4F0','#E8DDC0'], speed:0.6 },
+  ferry:     { name:'Ferry', note:'carries passengers', mode:'water', shape:'ferry', len:1.7, wid:0.55, h:8, colors:['#F4F4F0'], speed:0.7 },
+  cargoship: { name:'Cargo ship', note:'big and slow', mode:'water', shape:'cargo', len:2.6, wid:0.7, h:8, colors:['#2F4A7A','#8C2F2A'], speed:0.45 },
+  plane:     { name:'Plane', note:'flies big loops over the colony', mode:'air', shape:'plane', len:1.4, wid:1.4, h:6, alt:150, colors:['#F4F4F0'], speed:3 },
+  helicopter:{ name:'Helicopter', note:'hovers and circles', mode:'air', shape:'heli', len:0.8, wid:0.4, h:8, alt:80, colors:['#C8382E','#2F4A7A','#F2C94C'], speed:1.2 },
+  balloon:   { name:'Hot-air balloon', note:'floats slowly', mode:'air', shape:'balloon', len:0.5, wid:0.5, h:30, alt:110, colors:['#D9544A','#F2C94C','#4A7BD9'], speed:0.25 },
 };
 
 // Cars a colonist can buy from the dealer. They draw like the car above, in the size and colour of the model.

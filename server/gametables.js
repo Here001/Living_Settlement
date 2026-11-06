@@ -10,6 +10,7 @@ import { track } from './stats.js';
 import { treasuryAdd } from './races.js';
 import { bump } from './achievements.js';
 import * as R from '../shared/rules.js';
+import { kindOf } from '../shared/catalog.js';
 import { TABLE_GAMES, ENGINES, RAKE, TURN_MS, MAX_STAKE, tableView, potOf } from '../shared/boardgames.js';
 
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -54,7 +55,7 @@ export class GameTables {
   }
   async place(ch, bid, game) {
     const b = (await ch.q('select * from buildings where id = $1', [String(bid || '')])).rows[0], where = TABLE_GAMES[game].where;
-    if (!b || b.type !== where || !b.done || b.ruin) throw new HttpError(409, `${TABLE_GAMES[game].name} is played at ${where === 'casino' ? 'a Casino' : 'a Game House'}.`);
+    if (!b || kindOf(b.type) !== where || !b.done || b.ruin) throw new HttpError(409, `${TABLE_GAMES[game].name} is played at ${where === 'casino' ? 'a Casino' : 'a Game House'}.`);
     return b;
   }
   pay(ch, c, stake, game) {

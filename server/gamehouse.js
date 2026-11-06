@@ -9,7 +9,7 @@ import { track, realDay } from './stats.js';
 import { treasuryAdd } from './races.js';
 import { bump } from './achievements.js';
 import * as R from '../shared/rules.js';
-import { BUILDING_TYPES } from '../shared/catalog.js';
+import { BUILDING_TYPES, kindOf } from '../shared/catalog.js';
 import { startTable, shoot, respot, PRACTICE, AIM_WOBBLE, POWER_WOBBLE } from '../shared/snooker.js';
 import { GH_GAMES, GH_MAX_BET, WHEEL_PAID, WHEEL_FREE, SCRATCH_TIERS, scratchCard, PEN_SPOTS, PEN_PAYS, kick, dartScore, dartsPays, wobble } from '../shared/games.js';
 
@@ -23,7 +23,7 @@ export class GameHouse {
   // The Lucky wheel and scratch cards are at the Casino; the rest of the games are at a Game House.
   async building(db, bid, types = ['gamehouse']) {
     const b = bid && (await db.query('select * from buildings where id = $1', [String(bid)])).rows[0];
-    if (!b || !types.includes(b.type) || !b.done || b.ruin) throw new HttpError(409, types.includes('casino') && !types.includes('gamehouse') ? "That isn't an open Casino." : types.length > 1 ? "That isn't an open Casino or Game House." : "That isn't an open Game House.");
+    if (!b || !types.includes(kindOf(b.type)) || !b.done || b.ruin) throw new HttpError(409, types.includes('casino') && !types.includes('gamehouse') ? "That isn't an open Casino." : types.length > 1 ? "That isn't an open Casino or Game House." : "That isn't an open Game House.");
     return b;
   }
   // Lock the colonist, check they can play, and walk their avatar to the Game House for a while.

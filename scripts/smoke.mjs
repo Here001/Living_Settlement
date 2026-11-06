@@ -1513,6 +1513,15 @@ const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 
   for (let i = 0; i < 40 && (await pool.query('select 1 from treasury_pending limit 1')).rowCount; i++) await sleep(100);
   ok(!(await pool.query('select 1 from treasury_pending limit 1')).rowCount, "players' coins are added to the treasury within seconds (nothing left waiting)");
 }
+{ // new vehicles: boats need water, aircraft go anywhere; bigger venues work as the original kind
+  const cat = await import('../shared/catalog.js');
+  ok(cat.typesOf('casino').includes('grandcasino') && cat.typesOf('racetrack').includes('grandracetrack') && cat.kindOf('prison') === 'jail', 'the grand casino, grand racecourse and prison work as a casino, racetrack and jail');
+  ok((await call('POST', '/api/admin/vehicles', { type: 'boat', x: 4000, y: 4000 })).status === 409, 'a boat has to go on water');
+  const pl = await call('POST', '/api/admin/vehicles', { type: 'plane', x: 4000, y: 4000 }); ok(pl.status === 200, 'a plane can be put anywhere (it flies above that spot)', JSON.stringify(pl.json).slice(0, 120));
+  if (pl.json.vehicle) await call('DELETE', '/api/admin/vehicles/' + pl.json.vehicle.id);
+  const rd = await call('POST', '/api/admin/roads', { set: { '4100,4100': 'curvestreet', '4101,4100': 'roundabout', '4102,4100': 'culdesac' } }); ok(rd.json.changed === 3, 'curved streets, roundabouts and cul-de-sacs can be laid', JSON.stringify(rd.json));
+  const fx = []; for (let i = 0; i < 3; i++) fx.push(await call('POST', '/api/admin/buildings', { type: i === 1 ? 'ironfence' : 'stonewall', x: 4100 + i, y: 4105 })); ok(fx.every(r => r.status === 200), 'fences of different kinds go side by side');
+}
 ok((await call('POST', '/api/admin/reset', { confirm: 'nope' })).status === 400, 'reset needs the word RESET');
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' }, { auth: false })).status === 401, 'only the developer can reset');
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' })).status === 200 && !(await call('GET', '/api/meta', undefined, { auth: false })).json.meta, 'reset wipes the colony');

@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import { pool } from './db.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
-import { BUILDING_TYPES, BANK_TYPES } from '../shared/catalog.js';
+import { BUILDING_TYPES, BANK_TYPES, typesOf, pgList } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
 import { track, ledger } from './stats.js';
 import { bump } from './achievements.js';
@@ -32,7 +32,7 @@ export class Heists {
       const where = await this.acts.whereIs(pool, v), sc = await this.acts.sceneOf(pool, v, where); return { x: sc.x, y: sc.y, label: `Mayor @${v.handle}`, target: v.id, targetHandle: v.handle }; }
     if (kind === 'jailbreak') { const v = targetId && (await pool.query('select id, handle, jailed_until from citizens where id = $1 or lower(handle) = lower($1)', [String(targetId)])).rows[0];
       if (!v || Number(v.jailed_until || 0) <= Date.now()) throw new HttpError(409, 'Pick someone who is in jail right now.');
-      const j = (await near(['jail'], x, y)).rows[0]; return { x: j?.x ?? x, y: j?.y ?? y, label: `@${v.handle} (in jail)`, target: v.id, targetHandle: v.handle, building: j?.id }; }
+      const j = (await near(typesOf('jail'), x, y)).rows[0]; return { x: j?.x ?? x, y: j?.y ?? y, label: `@${v.handle} (in jail)`, target: v.id, targetHandle: v.handle, building: j?.id }; }
     throw new HttpError(400, 'Pick a group crime.');
   }
 
@@ -105,7 +105,7 @@ export class Heists {
         else loot = Math.max(0, Math.min(Math.floor(R.treasuryOn(ch.meta, ch.today)), Math.floor(H.loot[0] + rand() * (H.loot[1] - H.loot[0] + 1)))); }
       const share = crew.length ? Math.floor((win ? loot : (H.loot ? (H.loot[0] + H.loot[1]) / 2 : 5000)) / crew.length) : 0;
       const pCaught = Math.max(0.05, (win ? R.HEIST_CAUGHT.win : R.HEIST_CAUGHT.lose) - (odds.night ? 0.1 : 0));
-      const got = [], caught = [], jail = (await ch.q(`select * from buildings where type = 'jail' and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [sc.x, sc.y])).rows[0];
+      const got = [], caught = [], jail = (await ch.q(`select * from buildings where type = any('${pgList('jail')}') and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [sc.x, sc.y])).rows[0];
       for (const c of crew) { ch.coins(c); await ch.q('update citizens set heist_at = $2 where id = $1', [c.id, t]);
         if (rand() < pCaught) { const fine = Math.min(c.coins_base, Math.max(1000, share * 2)); c.coins_base -= fine; treasuryAdd(ch, fine); track(ch, 'heist:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
           if (jail) { const until = t + H.jail * 60000; await ch.q('update citizens set jailed_until = $2 where id = $1', [c.id, until]); await this.acts.setVisit(ch, c, jail, until); await bump(ch, c.id, { jailed: 1 }); }

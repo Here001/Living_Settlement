@@ -173,7 +173,7 @@ export function crimeOdds(kind, dist, wave = 0, night = false) {
 
 // Distances players see are in game miles: 20 tiles to the mile.
 // "Go here": a colonist can head to any finished building except the jail and police stations, and not to trees or street furniture.
-export const NO_GO = new Set(['jail', 'police', 'commissariat']);
+export const NO_GO = new Set(['jail', 'prison', 'police', 'commissariat', 'policeplaza', 'dispatch']);
 export const canGoTo = type => { const t = BUILDING_TYPES[type]; return !!t && !NO_GO.has(type) && t.cat !== 'nature' && t.cat !== 'decor'; };
 export const TILE_MILES = 0.05;
 // Chatting: messaging a neighbour (someone whose home is within NEIGHBOUR_TILES of yours, about 2 miles: the same

@@ -6,7 +6,7 @@ import { queueFlows, flushLedger, track } from './stats.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 import { playRound, GAMES, MAX_BET, validRoulette } from '../shared/casino.js';
-import { BUILDING_TYPES, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, roadClears } from '../shared/catalog.js';
+import { BUILDING_TYPES, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, roadClears, pgList } from '../shared/catalog.js';
 import * as R from '../shared/rules.js';
 const changeScope = new AsyncLocalStorage();
 
@@ -735,7 +735,7 @@ export class World {
   // ---------- the casino ----------
   // The nearest finished casino to a colonist's home (null if the colony hasn't built one).
   async casinoFor(c) {
-    return (await pool.query(`select * from buildings where type = 'casino' and done and not ruin
+    return (await pool.query(`select * from buildings where type = any('${pgList('casino')}') and done and not ruin
       order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [c.hx ?? 0, c.hy ?? 0])).rows[0] || null;
   }
   async casinoInfo(id) {
@@ -984,7 +984,9 @@ export class World {
     if (!VEHICLE_TYPES[type]) throw new HttpError(400, 'Unknown vehicle.');
     x = Math.trunc(Number(x)); y = Math.trunc(Number(y));
     return this.change(async ch => {
-      if (!(await ch.q('select 1 from roads where x = $1 and y = $2', [x, y])).rowCount) throw new HttpError(409, 'Vehicles need a road. Tap a road tile.');
+      const mode = VEHICLE_TYPES[type].mode; // boats go on water, aircraft anywhere, everything else on a road
+      if (mode === 'water') { if (!(await ch.q('select 1 from water where x = $1 and y = $2', [x, y])).rowCount) throw new HttpError(409, 'Boats need water. Drop it on a river, lake or the sea.'); }
+      else if (mode !== 'air' && !(await ch.q('select 1 from roads where x = $1 and y = $2', [x, y])).rowCount) throw new HttpError(409, 'Vehicles need a road. Tap a road tile.');
       if (Number((await ch.q('select count(*) n from vehicles')).rows[0].n) >= 2000) throw new HttpError(409, 'That is the vehicle limit (2,000). Remove some first.');
       const [cx, cy] = R.chunkOf(x, y);
       const v = vRow((await ch.q('insert into vehicles (id, type, x, y, cx, cy, placed_at) values ($1,$2,$3,$4,$5,$6,$7) returning *', [uid(), type, x, y, cx, cy, Date.now()])).rows[0]);

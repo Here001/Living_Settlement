@@ -143,6 +143,13 @@ if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/payday', ad
 app.get('/api/lottery', limit, send(async req => lottery.info((await playerFrom(req))?.id)));
 app.post('/api/admin/lottery', admin, send(req => lottery.start(req.body || {})));
 app.post('/api/admin/race/cup', admin, send(req => races.setCup((req.body || {}).bonus, (req.body || {}).name, (req.body || {}).track)));
+// The game's version: a fingerprint of the page and the shared code, taken at start-up. An open game asks for it when the
+// phone comes back to the app (and every few minutes), and reloads itself when it changed, so nobody keeps playing an old
+// copy for hours after an update.
+const APP_VERSION = (() => { const h = crypto.createHash('sha1'); try { h.update(fs.readFileSync(path.join(root, 'public', 'index.html')));
+  for (const f of fs.readdirSync(path.join(root, 'shared')).sort()) h.update(fs.readFileSync(path.join(root, 'shared', f))); } catch (e) { h.update(String(Date.now())); }
+  return h.digest('hex').slice(0, 12); })();
+app.get('/api/version', (req, res) => { res.set('cache-control', 'no-store'); res.json({ v: APP_VERSION }); });
 app.get('/health', (req, res) => res.json({ ok: true, founded: !!world.meta, population: world.meta?.population || 0, viewers: wss?.clients.size || 0, bus: bus.kind, leader: isLeader }));
 
 // Point a free pinger (cron-job.org, UptimeRobot) here every few minutes.

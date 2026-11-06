@@ -495,6 +495,7 @@ body.streaming .watchbar,body.streaming #showUi,body.streaming #intro,body.strea
 .uiswitch.on{background:#34c759}.uiswitch.on i{transform:translateX(18px)}.uiswitch:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .rpower{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 2px 10px}.rpower.sm{padding:5px 2px;border-top:1px solid rgba(0,0,0,.06)}.rpower.sm b{color:var(--st)}.rpower small{opacity:.7}
 .rswlist.dim{opacity:.45}
+.rrow{display:flex;align-items:center;gap:10px}.rrow .rst{flex:1;min-width:0}.rst[disabled]{opacity:.45;cursor:default}.rbuild{border-top:1px solid rgba(0,0,0,.08);border-bottom:1px solid rgba(0,0,0,.08);margin-bottom:6px}.rbuild small{opacity:.6}
 .rswlist select{max-width:55%}.quota{margin:4px 0 8px}.qbar{height:8px;border-radius:4px;background:rgba(0,0,0,.1);overflow:hidden}.qbar i{display:block;height:100%}
 .rnow{display:flex;align-items:center;gap:12px;padding:10px 12px;margin:4px 0 8px;border-radius:14px;background:color-mix(in srgb,var(--st) 16%,transparent);border:1px solid color-mix(in srgb,var(--st) 40%,transparent)}
 .rnow b{display:block;font-size:15px}.rnow span{font-size:13px;opacity:.85}
@@ -887,7 +888,7 @@ function applyOp(o){
   case 'chatPin': { const m=S.chat.find(x=>x.id===o.id); if(m){ m.p=o.pinned?1:0; feedDirty=true; renderFeed(); } break; }
   case 'director': if(STREAM) Stream.setDirector(o.data); break;
   case 'radioTracks': if(Radio.st) Radio.poll(); break;
-  case 'radioConfig': Radio.setLive(o.onAir); if(STREAM) Stream.tuneRadio(); break;
+  case 'radioConfig': Radio.adm=null; Radio.setLive(o.onAir); if(STREAM) Stream.tuneRadio(); break;
   case 'radio': if(o.talk&&Radio.st===o.talk.station) Radio.queue(o.talk); break;
   case 'chatGone': S.chat=S.chat.filter(m=>m.id!==o.id); feedDirty=true; renderFeed(); break;
   case 'reports': Reports.soon(); break;
@@ -3324,7 +3325,7 @@ const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
         sel.onchange=()=>setR({voices:{[k]:sel.value}}).then(()=>toast(`${STATIONS[k].dj.name}’s voice saved.`));
         vl.append(el('div',{class:'rpower sm',style:`--st:${STATIONS[k].color}`}, el('span',{}, el('b',{text:STATIONS[k].dj.name}), el('small',{text:` · ${STATIONS[k].name}`})), sel)); }
       box.append(vl); }
-    const setR=async body=>{ try{ const r=await api('/api/admin/radio',{method:'PUT',body}); Object.assign(R0,r); Radio.setLive(r.onAir); this.renderNow(); }catch(e){ toast(e.message); } };
+    const setR=async body=>{ try{ const r=await api('/api/admin/radio',{method:'PUT',body}); Object.assign(R0,r); Radio.adm=null; Radio.setLive(r.onAir); this.renderNow(); }catch(e){ toast(e.message); } };
     box.append(el('div',{class:'rpower'}, el('b',{text:R0.on?'📻 Radio is on air':'📴 Radio is off air for everyone'}), uiSwitch(R0.on,v=>setR({on:v}),'The whole radio')));
     const sw=el('div',{class:'rswlist'+(R0.on?'':' dim')});
     for(const k of STATION_IDS) sw.append(el('div',{class:'rpower sm',style:`--st:${STATIONS[k].color}`}, el('span',{}, el('b',{text:`${STATIONS[k].name} ${STATIONS[k].freq}`}), el('small',{text:` · ${STATIONS[k].dj.name}`})), uiSwitch(R0.stations[k],v=>setR({stations:{[k]:v}}),STATIONS[k].name)));
@@ -5327,16 +5328,23 @@ const Radio={ player:null, st:null, info:null, played:new Set(), timer:null, onA
   fill(box){ box.innerHTML=''; const close=el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>box.parentElement.remove()});
     const anyLive=STATION_IDS.some(k=>this.isLive(k)), on=!!this.st;
     box.append(el('div',{class:'shhead'}, el('h3',{text:'📻 Colony radio'}), close));
-    if(anyLive) box.append(el('div',{class:'rpower'}, el('span',{text:on?'Radio on':'Radio off'}), uiSwitch(on,v=>this.power(v),'Radio on or off')));
+    if(anyLive) box.append(el('div',{class:'rpower'}, el('span',{text:Store.canWrite?(on?'🎧 Listening':'🎧 Not listening'):(on?'Radio on':'Radio off')}), uiSwitch(on,v=>this.power(v),'Radio on or off')));
     else box.append(el('p',{class:'ronair',text:'📴 The radio is off air right now. Check back soon.'}));
+    // builder mode: take the whole radio, or any station, on or off air for everyone, right here
+    const B=!!Store.canWrite, A=this.adm;
+    if(B&&!A&&!this.admBusy){ this.admBusy=true; api('/api/admin/radio').then(r=>{ this.adm=r; this.admBusy=false; this.paint(); }).catch(()=>{ this.admBusy=false; }); }
+    const setAir=async(body,msg)=>{ try{ const r=await api('/api/admin/radio',{method:'PUT',body}); this.adm={...(this.adm||{}),...r}; this.setLive(r.onAir); toast(msg); }catch(e){ toast(e.message); this.paint(); } };
+    if(B) box.append(el('div',{class:'rpower rbuild'}, el('span',{}, el('b',{text:'🔧 On air for everyone'}), el('small',{text:' · builder'})),
+      uiSwitch(A?A.on:anyLive,v=>setAir({on:v},v?'📻 The radio is on air.':'📴 The radio is off air for everyone.'),'The whole radio on air for everyone')));
     if(this.st){ const S0=STATIONS[this.st];
       box.append(el('div',{class:'rnow',style:`--st:${S0.color}`}, el('div',{class:'rbars','aria-hidden':'true'},el('i'),el('i'),el('i'),el('i')),
         el('div',{}, el('b',{text:this.stationName()}), el('span',{text:this.onAir?`🎙️ ${S0.dj.name} on the mic`:`Now playing: ${this.nowTitle()}`}))));
       if(this.onAir) box.append(el('p',{class:'ronair',text:this.onAir.text})); }
     const list=el('div',{class:'rlist'});
-    for(const id of STATION_IDS.filter(k=>this.isLive(k))){ const S0=STATIONS[id], on=this.st===id;
-      list.append(el('button',{class:'rst'+(on?' on':''),style:`--st:${S0.color}`,onclick:()=>on?this.off():this.tune(id)},
-        el('span',{class:'rfreq',text:S0.freq}), el('span',{class:'rmid'}, el('b',{text:S0.name}), el('small',{text:`${S0.style} · ${S0.dj.name}`})), el('span',{class:'rgo',text:on?'❚❚':'▶'}))); }
+    for(const id of STATION_IDS.filter(k=>B||this.isLive(k))){ const S0=STATIONS[id], on=this.st===id, live=this.isLive(id);
+      const btn=el('button',{class:'rst'+(on?' on':''),style:`--st:${S0.color}`,disabled:live?null:'',onclick:()=>on?this.off():this.tune(id)},
+        el('span',{class:'rfreq',text:S0.freq}), el('span',{class:'rmid'}, el('b',{text:S0.name}), el('small',{text:live?`${S0.style} · ${S0.dj.name}`:'Off air'})), el('span',{class:'rgo',text:live?(on?'❚❚':'▶'):'📴'}));
+      list.append(B?el('div',{class:'rrow'}, btn, uiSwitch(A?A.stations[id]:live,v=>setAir({stations:{[id]:v}},v?`📻 ${S0.name} is on air.`:`📴 ${S0.name} is off air for everyone.`),`${S0.name} on air for everyone`)):btn); }
     list.append(el('button',{class:'rst'+(Music.on?' on':''),style:'--st:#6b8f71',onclick:()=>{ if(Music.on) Music.stop(); else { this.off(); Music.start(); } this.paint(); }},
       el('span',{class:'rfreq',text:'∿'}), el('span',{class:'rmid'}, el('b',{text:'Ambient'}), el('small',{text:'Calm colony sounds, no DJ'})), el('span',{class:'rgo',text:Music.on?'❚❚':'▶'})));
     box.append(list);

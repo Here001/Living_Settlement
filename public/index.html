@@ -361,6 +361,12 @@ body.pane-max .composer textarea{height:70px}
 .rsheet-bg{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;background:rgba(10,20,15,.28);padding:16px}
 .rsheet{width:min(380px,100%);padding:14px 16px;max-height:86vh;overflow:auto}.rsheet h3{margin:0 0 8px;font-size:16px}
 .rsheet.wide{width:min(560px,100%)}
+.landtip{position:fixed;z-index:320;left:50%;top:22%;transform:translateX(-50%);width:min(320px,calc(100% - 32px));padding:14px 16px;text-align:left;animation:tipin .35s ease-out}
+.landtip h3{margin:0 0 6px;font-size:16px}.landtip ol{margin:0 0 8px;padding-left:20px;font-size:14px;line-height:1.45}.landtip li{margin:3px 0}
+.landtip .tiphand{font-size:30px;text-align:center;animation:tiphand 2.4s ease-in-out infinite}.landtip .btn{width:100%}
+@keyframes tipin{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes tiphand{0%{transform:translateX(-40px)}35%{transform:translateX(40px)}50%,60%{transform:translateX(0) scale(1)}55%,65%{transform:scale(.8)}100%{transform:translateX(0)}}
+@media (prefers-reduced-motion:reduce){.landtip,.landtip .tiphand{animation:none}}
 .rsheet-bg.dock{background:transparent;pointer-events:none;align-items:flex-end;padding:0 10px calc(10px + env(safe-area-inset-bottom))}.rsheet-bg.dock .rsheet{pointer-events:auto;max-height:52vh;width:min(460px,100%);padding:10px 14px}.rsheet-bg.dock .bill{font-size:12.5px;margin:4px 0}.rsheet-bg.dock .bill td{padding:2px}.rsheet-bg.dock .hint{margin:4px 0;font-size:12px}.rsheet-bg.dock input[type=text]{margin:4px 0;padding:6px 10px}.rsheet input[type=text],.rsheet input[type=number],.rsheet textarea{width:100%;box-sizing:border-box;margin:6px 0;padding:8px 10px;border-radius:10px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:var(--glass-2,#fff);font:inherit;color:inherit}
 .bill{width:100%;border-collapse:collapse;margin:8px 0;font-size:13.5px}.bill td{padding:4px 2px;border-bottom:1px dashed rgba(0,0,0,.12)}.bill td:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.bill tr.tot td{font-weight:800;border-bottom:none;border-top:1.5px solid currentColor}
 .warnline{margin:8px 0;padding:7px 10px;border-radius:10px;background:rgba(210,56,46,.12);color:#9E2A22;font-size:13px}
@@ -2658,9 +2664,9 @@ function landProblem(r){ if(r.w<PLOT_MIN||r.d<PLOT_MIN) return `At least ${PLOT_
   for(let i=0;i<r.w&&!road;i++) road=D.roads.has((r.x+i)+','+(r.y-1))||D.roads.has((r.x+i)+','+(r.y+r.d));
   for(let j=0;j<r.d&&!road;j++) road=D.roads.has((r.x-1)+','+(r.y+j))||D.roads.has((r.x+r.w)+','+(r.y+j));
   return road?null:'Needs a road along one side'; }
-function drawLandSel(){ const r=landRect(landSel.a,landSel.b), bad=landProblem(r), q=[iso(r.x,r.y),iso(r.x+r.w,r.y),iso(r.x+r.w,r.y+r.d),iso(r.x,r.y+r.d)];
+function drawLandSel(){ const r=landRect(landSel.a,landSel.b), bad=landSel.hint?null:landProblem(r), q=[iso(r.x,r.y),iso(r.x+r.w,r.y),iso(r.x+r.w,r.y+r.d),iso(r.x,r.y+r.d)];
   poly(q, bad?'rgba(210,56,46,.35)':'rgba(63,138,78,.38)', bad?'#9E2A22':'#2F6E3B', 2.5);
-  const c=iso(r.x+r.w/2,r.y+r.d/2); label(bad?`${r.w}×${r.d} · ${bad}`:landSel.held?`${r.w}×${r.d} tiles`:`${r.w}×${r.d} tiles · let go to see the price`, c.x, c.y-14, !bad); }
+  const c=iso(r.x+r.w/2,r.y+r.d/2); label(landSel.hint?'Drag to mark your plot':bad?`${r.w}×${r.d} · ${bad}`:landSel.held?`${r.w}×${r.d} tiles`:`${r.w}×${r.d} tiles · let go to see the price`, c.x, c.y-14, !bad); }
 // ---- Undo: every developer action records how to reverse it. ----
 const history=[];
 function remember(label, undo){ history.push({label,undo}); if(history.length>40) history.shift(); refreshUndo(); }
@@ -2752,7 +2758,7 @@ cv.addEventListener('pointerdown', e=>{ cv.setPointerCapture(e.pointerId); point
     else if(paints()){ paintBuf=new Map(); paintPrev=new Map(); paintAt(e.clientX,e.clientY); }
     else if(tool.kind==='road'&&roadMode==='line'){ gesture.type='roadline'; const t=tileAt(e.clientX,e.clientY); hoverTile=t; if(!roadStart){ roadStart=t; gesture.fresh=true; } }
     else if(tool.kind==='erase'&&tool.mode==='area'){ const t=tileAt(e.clientX,e.clientY); areaSel={a:t,b:t}; }
-    else if(tool.kind==='land'){ document.querySelector('.rsheet-bg.dock')?.remove(); const t=tileAt(e.clientX,e.clientY); landSel={a:t,b:t}; } }
+    else if(tool.kind==='land'&&tool.mark){ document.querySelector('.rsheet-bg.dock')?.remove(); const t=tileAt(e.clientX,e.clientY); landSel={a:t,b:t}; } }
   else if(pointers.size===2){ clearTimeout(holdTimer); const [a,b]=[...pointers.values()]; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture={ type:'pinch', d0:Math.hypot(a.x-b.x,a.y-b.y), z0:cam.z, wx:w.x, wy:w.y, a0:Math.atan2(b.y-a.y,b.x-a.x) }; if(paintBuf){ paintBuf=null; changed(); } areaSel=null; landSel=null; }
 });
 cv.addEventListener('pointermove', e=>{
@@ -2814,7 +2820,8 @@ function tap(sx,sy){
   const [x,y]=tileAt(sx,sy);
   if(tool.kind==='place'){ placeBuilding(tool.type,x,y); return; }
   if(tool.kind==='move'){ moveBuilding(tool.id,x,y); return; }
-  if(tool.kind==='pbuild'||tool.kind==='land') return;
+  if(tool.kind==='land'){ Plots.tapLand(sx,sy,x,y); return; }
+  if(tool.kind==='pbuild') return;
   if(tool.kind==='vehicle'){ api('/api/admin/vehicles',{method:'POST',body:{type:tool.vtype,x,y}}).then(()=>toast(`${VEHICLE_TYPES[tool.vtype].name} is on the road`)).catch(e=>toast(e.message)); return; }
   if(tool.kind==='disaster'){ api('/api/admin/disasters',{method:'POST',body:{kind:tool.dtype,x,y}}).then(r=>toast(r.ruined?`${DISASTER_TYPES[tool.dtype].name}: ${r.ruined} building${r.ruined===1?'':'s'} in ruins`:`${DISASTER_TYPES[tool.dtype].name}: nothing was destroyed`)).catch(e=>toast(e.message)); setTool({kind:'pan'}); return; }
   if(tool.kind==='erase'){ if(tool.mode!=='roads'){ const id=D.occ.get(x+','+y); if(id) removeBuilding(id); } return; }
@@ -2880,9 +2887,9 @@ async function rotateBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
   if(draftOn){ draftEdit(`turning ${nm}`,d=>{ const n=d.builds.find(q=>q.tid===id); if(n) n.rot=nr; else { const live=S.buildings.get(id), p=d.moves[id]||{x:b.x,y:b.y}; if(live&&live.x===p.x&&live.y===p.y&&(live.rot||0)===nr) delete d.moves[id]; else d.moves[id]={x:p.x,y:p.y,rot:nr}; d.labels[id]=nm; } }); return; }
   try{ await api('/api/admin/buildings/'+encodeURIComponent(id),{method:'PATCH',body:{x:b.x,y:b.y,rot:nr}}); remember(`turning ${nm}`,()=>api('/api/admin/buildings/'+encodeURIComponent(id),{method:'PATCH',body:{x:b.x,y:b.y,rot:b.rot||0}})); }
   catch(e){ toast(e.message); } }
-function setTool(t){ tool=t; ghost=null; roadStart=null; setTimeout(refreshTurn); const chip=$('toolchip');
+function setTool(t){ tool=t; ghost=null; roadStart=null; if(t.kind!=='land'){ landSel=null; document.querySelector('.landtip')?.remove(); } setTimeout(refreshTurn); const chip=$('toolchip');
   if(t.kind==='pan'){ chip.hidden=true; setMini(false); }
-  else { chip.hidden=false; $('toolLabel').textContent = t.kind==='land'?'Drag a box over empty grass beside a road' : t.kind==='pbuild'?`Drag ${BUILDING_TYPES[t.type].name} onto your plot, let go to build` : t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} onto a road` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
+  else { chip.hidden=false; $('toolLabel').textContent = t.kind==='land'?(t.mark?'Drag over empty grass beside a road':'Swipe to the spot, then double-tap it') : t.kind==='pbuild'?`Drag ${BUILDING_TYPES[t.type].name} onto your plot, let go to build` : t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} onto a road` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
   if(activeTab && !PLAYER_TABS.has(activeTab) && activeTab!=='reports' && activeTab!=='stats' && activeTab!=='stream') renderPane(); }
 $('toolDone').onclick=()=>setTool({kind:'pan'});
 // Minimise: tuck the menus away while keeping the chosen tool, so the whole map is free to build on.
@@ -4702,7 +4709,21 @@ const isMe = h => !!(Me&&Me.handle&&h&&h.toLowerCase()===Me.handle.toLowerCase()
 const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
   drop(id){ this.info.delete(id); },
   get(id){ const e=this.info.get(id); if((!e||Date.now()-e.at>15000)&&!this.busy.has(id)){ this.busy.add(id); api('/api/plots/'+encodeURIComponent(id)).then(d=>this.info.set(id,{d,at:Date.now()})).catch(()=>{}).finally(()=>{ this.busy.delete(id); if(sel&&(sel.id===id||sel.kind==='b')) renderCard(true); }); } return e?e.d:null; },
-  start(){ if(!(Me&&Me.token)){ toast('Sign in to your colonist first.'); return; } closeCard(); setTool({kind:'land'}); toast(`Drag a box over empty grass beside a road: ${PLOT_MIN}×${PLOT_MIN} up to ${PLOT_MAX}×${PLOT_MAX} tiles.`); },
+  // Buying land happens in two steps: swipe the map to the place you want and double-tap it, then drag over the grass to mark the plot.
+  start(){ if(!(Me&&Me.token)){ toast('Sign in to your colonist first.'); return; } closeCard(); landSel=null; setTool({kind:'land',mark:false});
+    let seen=false; try{ seen=!!localStorage.getItem('land-tip-seen'); }catch(e){} if(!seen) this.tip(); else toast('Swipe to where you want land, then double-tap it.'); },
+  tip(){ document.querySelector('.landtip')?.remove(); const box=el('div',{class:'landtip inked',role:'dialog','aria-label':'How to buy land'},
+      el('h3',{text:'🗺️ Buying land'}),
+      el('ol',null, el('li',null, el('b',{text:'Swipe'}), ' the map to where you want your land.'), el('li',null, el('b',{text:'Double-tap'}), ' that spot.'), el('li',null, el('b',{text:'Drag'}), ` over empty grass beside a road to mark your plot (${PLOT_MIN}×${PLOT_MIN} up to ${PLOT_MAX}×${PLOT_MAX} tiles). You'll see the price before you pay.`)),
+      el('div',{class:'tiphand',text:'👆'}),
+      el('button',{class:'btn primary',text:'Got it',onclick:()=>{ try{ localStorage.setItem('land-tip-seen','1'); }catch(e){} box.remove(); }}));
+    document.body.append(box); },
+  tapLand(sx,sy,x,y){ const now=performance.now(), L=this.lastTap; this.lastTap={t:now,sx,sy};
+    if(tool.mark){ return; }
+    if(!(L&&now-L.t<400&&Math.hypot(sx-L.sx,sy-L.sy)<36)) return; this.lastTap=null; document.querySelector('.landtip')?.remove(); try{ localStorage.setItem('land-tip-seen','1'); }catch(e){}
+    tool.mark=true; landSel={a:[x-1,y-1],b:[x+1,y+1],held:true,hint:true}; setTool(tool);
+    const q=iso(x+0.5,y+0.5); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.4); follow=null;
+    toast(`Now drag over the grass to mark your plot, ${PLOT_MIN}×${PLOT_MIN} up to ${PLOT_MAX}×${PLOT_MAX}.`); },
   async quote(r){ const bad=landProblem(r); if(bad){ toast(bad+'. Try another spot.'); return; }
     let q; try{ q=await api(`/api/land/quote?x=${r.x}&y=${r.y}&w=${r.w}&d=${r.d}`); }catch(e){ toast(e.message); return; }
     showAbove(r.x,r.y,r.w,r.d,0); landSel={a:[r.x,r.y],b:[r.x+r.w-1,r.y+r.d-1],held:true}; const {box,close,wrap}=sheetBox(`🗺️ Buy this land`,'dock'); wrap.onClose=()=>{ if(landSel&&landSel.held) landSel=null; }; const nm=el('input',{type:'text',maxlength:'30',placeholder:'Name it (optional)','aria-label':'Plot name'});
@@ -4712,7 +4733,7 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
     if(q.problem) box.append(el('p',{class:'warnline',text:q.problem}));
     else if(q.props>=q.max) box.append(el('p',{class:'warnline',text:`You're at your limit of ${q.max} properties. Sell one, or earn more stars.`}));
     else box.append(nm, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(q.total)}`,onclick:async()=>{ const res=await meAction('/api/me/land',{x:q.x,y:q.y,w:q.w,d:q.d,name:nm.value},r=>`The land is yours! Paid ${fmt(r.paid)} coins. Tap it to build.`); if(res){ close(); landSel=null; setTool({kind:'pan'}); Money.at=0; MyHome.at=0;
-      setTimeout(()=>{ sel={kind:'p',id:res.plot.id}; renderCard(true); },400); } }}), el('button',{class:'linkb',text:'Pick another spot',onclick:close}))); },
+      setTimeout(()=>{ sel={kind:'p',id:res.plot.id}; renderCard(true); },400); } }}), el('button',{class:'linkb',text:'Pick another spot',onclick:()=>{ close(); landSel=null; setTool({kind:'land',mark:false}); toast('Swipe to where you want land, then double-tap it.'); }}))); },
   // the build menu for your own plot: every kind of building, decoration and park, with what it costs you
   picker(p){ const {box,close}=sheetBox(`🏗️ Build on ${p.name||'your plot'}`,'wide'); let cat=Plots.cat||'housing';
     const cats=CATS.filter(c=>c.id!=='roads'&&c.id!=='terrain'&&Object.values(BUILDING_TYPES).some(t=>t.cat===c.id)), tabs=el('div',{class:'ctabs'}), list=el('div',{class:'cards pcards'}), free=p.w*p.d-(p.used||0);

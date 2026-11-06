@@ -253,12 +253,12 @@ export class Economy {
   }
   // Where you live, for the Home tab.
   async myHome(id) {
-    const c = (await pool.query('select c.home_id, c.left_home, c.home_changed_day, c.job_id, h.type, h.name, h.x, h.y, h.owner_id from citizens c left join buildings h on h.id = c.home_id where c.id = $1', [id])).rows[0];
+    const c = (await pool.query('select c.home_id, c.left_home, c.home_changed_day, c.job_id, c.job_changed_day, h.type, h.name, h.x, h.y, h.owner_id from citizens c left join buildings h on h.id = c.home_id where c.id = $1', [id])).rows[0];
     if (!c) throw new HttpError(404, 'No such citizen.');
     const today = this.world.meta ? R.gameDay(Date.now(), this.world.meta.epoch) : 0;
     const q = (a, v) => pool.query(a, v), props = await ownedCount(q, id), max = await limitOf(q, id);
     return { home: c.home_id ? { id: c.home_id, name: c.name || BUILDING_TYPES[c.type]?.name, type: c.type, rent: BUILDING_TYPES[c.type]?.home?.rent || 0, x: c.x, y: c.y, mine: c.owner_id === id, where: this.world.housing?.placeName(c.x, c.y) || '' } : null,
-      leftHome: !!c.left_home, canMoveToday: c.home_changed_day !== today, hasJob: !!c.job_id, props, max };
+      leftHome: !!c.left_home, canMoveToday: c.home_changed_day !== today, hasJob: !!c.job_id, jobId: c.job_id || null, canWorkToday: c.job_changed_day !== today, props, max };
   }
 
   // ---------- owning buildings ----------

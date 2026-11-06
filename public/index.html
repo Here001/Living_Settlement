@@ -5273,6 +5273,19 @@ function rentBox(b, t){ const box=el('div',{class:'authbox rentbox'}, el('h3',{t
   if(!H.canMoveToday){ box.append(el('p',{class:'hint',text:"You've moved today already. You can move again tomorrow (game time)."})); return box; }
   box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`🔑 Rent here for ${fmt(total)}`,onclick:()=>toast(`Move into ${b.name||t.name} for ${fmt(total)} coins?${H.home?` You’ll leave ${H.home.name}.`:''}`,'Rent',async()=>{ const r=await meAction('/api/me/home',{buildingId:b.id},r=>`Welcome home to ${r.home}! You paid ${fmt(r.paid)} coins.`); if(r) MyHome.load(true); })})));
   return box; }
+// The 💼 Work here section on a workplace's card: take a job right where you are looking (the job board's rules: you need a
+// home, and you can change jobs once a game day). A full workplace can still take you if a place is held by someone the game
+// put there automatically; the server decides.
+function workBox(b, t){ const box=el('div',{class:'authbox rentbox'}, el('h3',{text:'💼 Work here'})); MyHome.load(); const H=MyHome.data;
+  if(!H){ box.append(el('p',{class:'hint',text:'…'})); return box; }
+  const W=t.work, lv=b.lv||1, cap=capacities(b.type,lv).jobCap, free=Math.max(0,cap-(b.jobUsed||0)), rent=H.home?H.home.rent||0:0, mc=myCitizen(), sh=(mc&&SHIFTS[shiftOf(mc.id, b.id, b.type)])||SHIFTS.day;
+  if(H.jobId===b.id){ box.append(el('p',{class:'jobnow',text:`You work here as ${W.title.toLowerCase()}. 🕒 ${sh.name}, ${sh.hours}.`})); return box; }
+  box.append(el('p',{class:'hint',text:`${W.title} · ${fmt(W.salary)} a day${H.home&&rent?` (you take home ${perDay(W.salary-rent)} after ${fmt(rent)} rent)`:''} · ${free?`${free} place${free===1?'':'s'} free`:'full right now'}`}));
+  if(!H.home){ box.append(el('p',{class:'hint',text:'You need a home before you can work. Tap a home on the map and choose 🔑 Rent here.'})); return box; }
+  if(!H.canWorkToday){ box.append(el('p',{class:'hint',text:"You've changed jobs today already. You can take another one tomorrow (game time)."})); return box; }
+  box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'💼 Work here',onclick:()=>toast(`Work as ${W.title.toLowerCase()} at ${b.name||t.name} for ${perDay(W.salary-rent)}?${H.hasJob?' You’ll leave your current job, and you can only change jobs once a day.':''}`,'Take it',async()=>{
+    const r=await meAction('/api/me/job',{buildingId:b.id},()=>`You're now working as ${W.title.toLowerCase()} at ${b.name||t.name}.`); if(r){ MyHome.load(true); loadMyMoney(); const c=myCitizen(); if(c){ detail.delete(c.id); if(jobBoard&&jobBoard.id===c.id) jobBoard.at=0; } } })})));
+  return box; }
 // What you own (on the Home tab): plots of land with what stands on them, and buildings bought on their own.
 function ownedBox(c){ const M=moneyFor(c), Pp=M&&M.props; if(!Pp) return null; const plots=Pp.plots||[];
   const box=el('div',{class:'owned'}, el('h3',{text:`🏢 Your properties: ${Pp.count??Pp.list.length} of ${Pp.max}`}),
@@ -5587,6 +5600,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(!Store.canWrite&&Me&&Me.token) card.append(el('div',{class:'row-actions'}, Loc.btn(b.name||t.name, b.x, b.y)));
     Plots.buildingBits(card,b,t);
     if(t.home && !Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin) card.append(rentBox(b,t));
+    if(t.work && !Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin) card.append(workBox(b,t));
     if(!Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin && canGoTo(b.type)) card.append(goHereRow(b));
     if(isBank(b.type) && b.done!==false && !b.ruin && !Store.canWrite) card.append(BankAcct.section(b));
     if(b.type==='petstore' && b.done!==false && !b.ruin && !Store.canWrite) card.append(PetStore.section(b));

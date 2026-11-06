@@ -264,7 +264,10 @@ const MIGRATIONS = [
      from_id text not null, from_handle text not null, to_id text not null, to_handle text not null, amount numeric not null, counter numeric,
      message text not null default '', reply text not null default '', status text not null default 'open', created_at bigint not null, expires_at bigint not null, closed_at bigint);
    create index if not exists offers_to on offers (to_id, status);
-   create index if not exists offers_from on offers (from_id, status);`
+   create index if not exists offers_from on offers (from_id, status);`,
+  // v50: the clock looks for finished upgrades every few seconds; only the few buildings being upgraded are indexed
+  `create index if not exists buildings_upgrading on buildings (up_at) where up_at > 0;
+   create index if not exists offers_open on offers (expires_at) where status in ('open', 'countered');`
 ];
 
 export async function migrate() {

@@ -325,7 +325,7 @@ export class Economy {
       const cars = Array.isArray(c.cars) ? c.cars : [], carFee = cars.reduce((s, x) => s + (CAR_MODELS[x.m]?.upkeep || 0), 0), propFee = byOwner.get(id) || 0, due = carFee + propFee;
       if (!due) continue;
       ch.coins(c); const fromCash = Math.min(Math.max(0, c.coins_base), due), fromBank = Math.min(Number(c.bank || 0), due - fromCash), paid = fromCash + fromBank;
-      c.coins_base -= fromCash; ch.touch(c); await ch.saveCitizen(c); if (fromBank) await ch.q('update citizens set bank = bank - $2 where id = $1', [id, fromBank]);
+      c.coins_base -= fromCash; await ch.saveCitizen(c); /* not touched: coins don't show on the map */ if (fromBank) await ch.q('update citizens set bank = bank - $2 where id = $1', [id, fromBank]);
       treasuryAdd(ch, paid); total += paid; billed++; if (carFee) track(ch, 'bills:car', Math.min(paid, carFee), id); if (paid > carFee) track(ch, 'bills:property', paid - carFee, id);
       const parts = [carFee ? `🚗 car upkeep ${fmt(carFee)}` : '', propFee ? `🏠 property upkeep ${fmt(propFee)}` : ''].filter(Boolean).join(' + ');
       const how = fromBank ? (fromCash ? `${fmt(fromCash)} from your cash and ${fmt(fromBank)} from the bank` : 'from the bank') : 'from your cash';
@@ -348,14 +348,18 @@ export class Economy {
     const share = want > 0 ? Math.min(1, kitty / want) : 0;
     const savers = share > 0 ? (await ch.q('select id from citizens where bank > 0')).rows.map(r => r.id) : [];
     const ids = [...new Set([...byOwner.keys(), ...savers])];
+    // Saved in one statement per 500 people, and nobody is "touched": coins don't show on the map, so viewers aren't sent
+    // anything (touching hundreds of colonists made every phone re-download its whole map once a game day).
     for (let i = 0; i < ids.length; i += 500) {
-      for (const c of (await ch.q('select * from citizens where id = any($1) for update', [ids.slice(i, i + 500)])).rows) {
+      const up = { id: [], base: [], add: [] };
+      for (const c of (await ch.q('select id, coins_base, coins_day, net, bank from citizens where id = any($1) for update', [ids.slice(i, i + 500)])).rows) {
         const inc = byOwner.get(c.id) || 0, intr = Math.floor(Math.min(BANK_CAP, Math.floor(Number(c.bank || 0) * BANK_RATE)) * days * share * im);
         if (!inc && !intr) continue;
-        ch.coins(c); c.coins_base += inc; ch.touch(c); await ch.saveCitizen(c);
-        if (intr) await ch.q('update citizens set bank = bank + $2 where id = $1', [c.id, intr]);
+        ch.coins(c); c.coins_base += inc; up.id.push(c.id); up.base.push(c.coins_base); up.add.push(intr);
         rent += inc; interest += intr; if (inc) { owners++; track(ch, 'property:income', inc, c.id); } if (intr) track(ch, 'bank:interest', intr, c.id);
       }
+      if (up.id.length) await ch.q(`update citizens c set coins_base = u.base, coins_day = $4, bank = c.bank + u.add
+        from unnest($1::text[], $2::numeric[], $3::numeric[]) u(id, base, add) where c.id = u.id`, [up.id, up.base, up.add, ch.today]);
     }
     if (rent || interest) treasuryAdd(ch, -(rent + interest));
     // Wages (after rent) build up in each player's pocket through the day; the ledger notes them once a day.

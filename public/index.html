@@ -1053,7 +1053,7 @@ function bspBucket(){ return Math.min(4, Math.pow(2, Math.ceil(Math.log2(Math.ma
 function bspFree(e){ if(!e) return; BSPR.px-=e.px; e.cv.width=e.cv.height=0; } // frees the memory straight away (iOS counts it)
 // How far a type's drawing reaches around its spot, measured once by drawing it small and looking for painted pixels.
 const bspBox=new Map(); let bspScratch=null;
-function bspBounds(b,t){ const key=b.type+'|'+(b.rot||0)+'|'+VIEW; let bx=bspBox.get(key); if(bx) return bx;
+function bspBounds(b,t){ const key=b.type+'|'+(b.rot||0)+'|'+VIEW+'|'+(b.lv||1)+'|'+(b.upAt?1:0); let bx=bspBox.get(key); if(bx) return bx;
   const S0=0.25, N=512, keep=ctx, wq=windowQuads.length, lq=lights.length;
   if(!bspScratch){ bspScratch=document.createElement('canvas'); bspScratch.width=bspScratch.height=N; }
   const g=bspScratch.getContext('2d', {willReadFrequently:true}); g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,N,N); g.setTransform(S0,0,0,S0,N/2,N*0.75);
@@ -1549,6 +1549,7 @@ function sprPage(){ if(SPR.pages.length>=SPR_PAGES) return false; let cv=SPR.poo
   g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,SPR_PAGE,SPR_PAGE); SPR.pages.push(cv); SPR.cv=cv; SPR.g=g; SPR.cx=SPR.cy=0; return true; }
 function sprStep(){ const s=cam.z*dpr; return Math.pow(2,Math.round(Math.log2(Math.max(0.2,s))*4)/4); }
 function part(name,a,b){ const key=name+'|'+a+'|'+b; let c=SPR.map.get(key); if(c) return c;
+  if(SPR.old&&performance.now()>SPR.budgetEnd){ const o=SPR.old.get(key); if(o) return o; } // out of time: last zoom's picture, scaled
   const s=SPR.step, w=Math.ceil(23*s)+2, h=Math.ceil(46*s)+2; if(w>SPR_PAGE||h>SPR_PAGE) return null;
   if(!SPR.cv&&!sprPage()) return null;
   if(SPR.cx+w>SPR_PAGE){ SPR.cx=0; SPR.cy+=h; } if(SPR.cy+h>SPR_PAGE&&!sprPage()) return null; // all pages full: draw by hand this time
@@ -1556,8 +1557,12 @@ function part(name,a,b){ const key=name+'|'+a+'|'+b; let c=SPR.map.get(key); if(
   const keep=ctx; ctx=g; try{ g.setTransform(s,0,0,s,ox+12*s+1,oy+40*s+1); g.strokeStyle=INK; g.lineWidth=0.9; g.lineJoin='round'; PART_DRAW[name](a,b); } finally { ctx=keep; }
   c={cv,ox,oy,w,h,s}; SPR.map.set(key,c); return c; }
 function stamp(c,x,y){ const s=c.s; ctx.drawImage(c.cv, c.ox, c.oy, c.w, c.h, x-(12*s+1)/s, y-(40*s+1)/s, c.w/s, c.h/s); }
-function sprBegin(){ const st=sprStep(); if(st===SPR.step&&SPR.step) return;
-  SPR.step=st; SPR.map=new Map(); SPR.pool.push(...SPR.pages); SPR.pages=[]; SPR.cv=null; SPR.g=null; SPR.cx=SPR.cy=0; }
+// After a zoom, the last zoom's pictures stay in use (scaled) while the new ones are made, up to ~4 ms of them a frame,
+// instead of redrawing every part of every colonist in one frame (a long freeze on phones).
+function sprBegin(){ SPR.budgetEnd=performance.now()+4; const st=sprStep(); if(st===SPR.step&&SPR.step) return;
+  if(SPR.oldPages) SPR.pool.push(...SPR.oldPages); SPR.old=SPR.step?SPR.map:null; SPR.oldPages=SPR.pages; SPR.oldAt=performance.now();
+  SPR.step=st; SPR.map=new Map(); SPR.pages=[]; SPR.cv=null; SPR.g=null; SPR.cx=SPR.cy=0; }
+function sprDropOld(){ if(SPR.oldPages&&performance.now()-SPR.oldAt>3000){ SPR.pool.push(...SPR.oldPages); SPR.oldPages=null; SPR.old=null; } }
 const SW_STEPS=[-1.4,-0.7,0,0.7,1.4];
 function drawCitizen(c, st, selected, ghost){
   const p=iso(st.x,st.y), L=c._look||(c._look=look(c)), hc=c._h??(c._h=hash(c.id)); const bob=st.moving?Math.abs(Math.sin(T_NOW/140+hc))*2:0;
@@ -2288,7 +2293,8 @@ function roamCands(ax,ay,r=7){ if(reachGen!==tileListGen){ reachCache.clear(); r
     for(let i=0;i<q.length;i++){ const [x,y]=q[i]; c.push(q[i]); for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+dx, ny=y+dy, k=nx+','+ny; if(seen.has(k)||Math.abs(nx-ax)>r||Math.abs(ny-ay)>r||!carOK(k)) continue; seen.add(k); q.push([nx,ny]); } } }
   if(reachCache.size>4000) reachCache.clear(); reachCache.set(key,c); return c; }
 const legPlans=new Map();
-function legPlan(id,n,cands,V){ const key=id+'|'+n+'|'+tileListGen; let P=legPlans.get(key); if(P) return P;
+let trafficBudgetEnd=Infinity; // new traffic routes get a few ms each frame; the rest wait for the next one
+function legPlan(id,n,cands,V){ const key=id+'|'+n+'|'+tileListGen; let P=legPlans.get(key); if(P) return P; if(performance.now()>trafficBudgetEnd) return null;
   const pick=(m,j)=>cands[hash(id+':'+m+':'+j)%cands.length], start=pick(n-1,'e'), end=pick(n,'e'), sp=V.speed||1, room=LEG*0.94;
   const route=(a,b)=>a[0]===b[0]&&a[1]===b[1]?null:findRoadPath(a[0],a[1],b[0],b[1]);
   const segs=[]; let t=0, pos=start;
@@ -2303,7 +2309,7 @@ function roam(id,ax,ay,gm,V,ambient){ const cands=roamCands(ax,ay); if(cands.len
   const parkAt=(t,a)=>({x:t[0]+0.5,y:t[1]+0.5,dx:1,dy:0,moving:false,alpha:a});
   if(!on(n)){ const pick=(m)=>cands[hash(id+':'+m+':e')%cands.length], FADE=4;
     if(u<FADE&&on(n-1)) return parkAt(pick(n-1),1-u/FADE); if(u>LEG-FADE&&on(n+1)) return parkAt(pick(n),(u-(LEG-FADE))/FADE); return null; }
-  const P=legPlan(id,n,cands,V); let at=P.start;
+  const P=legPlan(id,n,cands,V); if(!P) return null; let at=P.start;
   for(const sgm of P.segs){ if(u<sgm.t0) return parkAt(at,1); if(u<=sgm.t0+sgm.dur) return alongRoad(sgm.p,u-sgm.t0,sgm.mul); at=sgm.p[sgm.p.length-1]; }
   return parkAt(P.end,1); }
 // Vehicles in the same lane heading the same way queue instead of driving through each other: the one behind is drawn
@@ -2473,7 +2479,8 @@ function renderGround(wx0,wy0,wx1,wy1,rz){
   Ground.renders=(Ground.renders||0)+1; Object.assign(Ground,{ wx0, wy0, ww:W/rz, wh:H/rz, rz:Ground.half?rz*2:rz, drawRz:rz, dpr, gen:tileListGen, deco:[] });
   paintGround(Ground.g, W, H, wx0, wy0, rz);
   // Did it really paint? (The ground is opaque, so a blank pixel means the browser refused the canvas.)
-  let ok=true; try{ ok=Ground.g.getImageData(W>>1,H>>1,1,1).data[3]>0; }catch(e){}
+  // checked once: reading a pixel back makes the phone finish all its drawing first, a stall on every repaint
+  let ok=true; if(!Ground.checked){ try{ ok=Ground.g.getImageData(W>>1,H>>1,1,1).data[3]>0; }catch(e){} if(ok) Ground.checked=true; }
   if(!ok){ if(!Ground.half){ Ground.half=true; Ground.cv.width=Ground.cv.height=0; Ground.cv=null; Ground.g=null; return renderGround(wx0,wy0,wx1,wy1,rz*2); } Ground.direct=true; } }
 function paintGround(g, W, H, wx0, wy0, rz){
   const {tminX,tmaxX,tminY,tmaxY}=tileBounds(wx0,wy0,wx0+W/rz,wy0+H/rz), keep=ctx; ctx=g;
@@ -2522,7 +2529,7 @@ function frame(ts){ requestAnimationFrame(frame);
   finally { planBudgetEnd=Infinity; }
   Quality.sample(performance.now()-t0, ts); }
 function drawFrame(ts){
-  T_NOW=ts; windowQuads=[]; lights=[]; edgePan(); sprBegin(); BSPR.budgetEnd=performance.now()+(Quality.level>=2?4:7); BSPR.hits=BSPR.made=BSPR.live=0;
+  T_NOW=ts; windowQuads=[]; lights=[]; edgePan(); sprBegin(); sprDropOld(); BSPR.budgetEnd=performance.now()+(Quality.level>=2?4:7); BSPR.hits=BSPR.made=BSPR.live=0;
   const gm=gmNow(); DARK=darkness(gm); LAMPS=Math.min(1,Math.max(0,(DARK-0.2)/0.25)); // on from about 7pm, off by about 5:30am
   if(S.meta){ const wNow=weatherAt(S.meta,gm); if(wNow==='storm'||wNow==='fog') LAMPS=1; } // and whenever the weather turns dark
   if(follow){ const c=S.citizens.get(follow); const st=c&&citizenAt(c,gm); if(st){ const p=iso(st.x,st.y); cam.x+=(p.x-cam.x)*0.08; cam.y+=(p.y-14-cam.y)*0.08; } }
@@ -2556,7 +2563,7 @@ function drawFrame(ts){
   planBudgetEnd=performance.now()+6; // up to 6 ms a frame for working out new plans
   if(cam.z>=0.45) for(const c of crowd){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible) items.push(st.car?{ k:vdepth(st.x,st.y), veh:{V:st.V,col:st.col,st,siren:!!st.siren,key:'c:'+c.id} }:{ k:vdepth(st.x,st.y), c, st }); }
   // Traffic: ambient cars, buses and vans on busy roads, the developer's own vehicles, and crews answering disasters.
-  vehicleHits=[];
+  vehicleHits=[]; trafficBudgetEnd=performance.now()+(Quality.level>=2?3:5);
   if(cam.z>=0.45){
     for(const r of tileList(D.roads)){ const k=r.k, x=r.x, y=r.y; if(r.h%9!==0||x<tminX-9||x>tmaxX+9||y<tminY-9||y>tmaxY+9||!carOK(k)) continue; // a roamer can be up to 7 tiles from its street
       const vt=ambientType(k), V=VEHICLE_TYPES[vt], st=roam('amb:'+k,x,y,gm,V,true); if(st) items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(k)%V.colors.length],st,key:'a:'+k} }); }

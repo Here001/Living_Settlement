@@ -69,7 +69,7 @@ export class Heists {
     const c = (await pool.query('select * from citizens where id = $1', [meP.id])).rows[0];
     if (!c.home_id) throw new HttpError(400, 'Move into a home first.');
     const why = await this.acts.blockedReason(c); if (why) throw new HttpError(409, why);
-    const wait = Number(c.heist_at || 0) + R.HEIST_COOLDOWN - Date.now(); if (wait > 0) throw new HttpError(429, `Lie low for ${Math.ceil(wait / 60000)} more minutes before planning another job.`);
+    const wait = Number(c.heist_at || 0) + R.HEIST_COOLDOWN - Date.now(); if (wait > 0) throw new HttpError(429, `Lie low for ${Math.ceil(wait / 1000)} more seconds before planning another job.`);
     if ((await pool.query(`select 1 from heists h join group_members m on m.group_id = h.group_id where h.status in ('planning', 'live') and m.citizen_id = $1 and m.status = 'member'`, [c.id])).rowCount) throw new HttpError(409, "You're already in a crew that's planning a job.");
     const mins = R.HEIST_WAIT.includes(Number(inMinutes)) ? Number(inMinutes) : 10;
     const list = [...new Set((Array.isArray(members) ? members : String(members || '').split(/[\s,]+/)).map(R.cleanHandle).filter(Boolean))].filter(h => h.toLowerCase() !== c.handle.toLowerCase());
@@ -89,7 +89,7 @@ export class Heists {
   async mineOr404(id, heistId) { const h = (await pool.query('select * from heists where id = $1', [String(heistId || '')])).rows[0]; if (!h) throw new HttpError(404, 'No such job.');
     if (h.planner_id !== id) throw new HttpError(403, 'Only the planner can do that.'); if (h.status !== 'planning') throw new HttpError(409, 'That job is over.'); return h; }
   async cancel(id, heistId) { const h = await this.mineOr404(id, heistId); await pool.query("update heists set status = 'cancelled' where id = $1", [h.id]);
-    await this.chat.system({ id: h.group_id }, '❌ The planner called the job off.'); return { ok: true }; }
+    await this.chat.system({ id: h.group_id }, '❌ The planner called the job off.'); await this.chat.close(h.group_id, '🔒 This crew chat closes in 2 minutes.'); return { ok: true }; }
   async goNow(id, heistId) { const h = await this.mineOr404(id, heistId); return this.goLive(h.id, true); }
 
   // Pick your part for a job you're in (the crew sees who does what before it goes down).
@@ -120,13 +120,14 @@ export class Heists {
       const odds = await this.acts.odds(h.kind, await this.acts.policeDist(ch.db, sc.x, sc.y), await this.acts.waveNow()), chance = Math.min(0.92, odds.chance + R.HEIST_CREW_BONUS * (crew.length - H.min));
       const wants = h.roles || {}, parts = MG.assignRoles(h.kind, crew.map(c => wants[c.id] || null));
       const live = { chance, band: odds.band, night: !!odds.night, sc: { x: sc.x, y: sc.y, label: sc.label }, started: t, until: t + LIVE_MS, absent: out,
-        crew: crew.map((c, i) => ({ id: c.id, h: c.handle, role: parts[i], seed: crypto.randomInt(1, 2 ** 31), diff: Math.min(5, MG.difficultyOf(parts[i], odds.band) + Math.min(4, Number(c.crime_streak || 0))) })) };
+        crew: crew.map((c, i) => ({ id: c.id, h: c.handle, role: parts[i], hard: Number(c.crime_streak || 0) > 0, seed: crypto.randomInt(1, 2 ** 31), diff: Math.min(5, MG.difficultyOf(parts[i], odds.band) + Math.min(4, Number(c.crime_streak || 0))) })) };
       await ch.q("update heists set status = 'live', live = $2 where id = $1", [h.id, JSON.stringify(live)]);
       for (const c of crew) await ch.q('update citizens set heist_at = $2 where id = $1', [c.id, t]); // the crew lies low from now
       for (const m of live.crew) await this.acts.notify(ch, m.id, 'crime', `🚨 Go time! ${H.icon} ${H.name}: the job is on. Open the Crime tab and play your part (${MG.ROLES[m.role].icon} ${MG.ROLES[m.role].name}) in the next ${LIVE_TXT}.`);
       return { h, live, msg: `🚨 GO TIME! ${H.icon} ${H.name} is on. Everyone, open the Crime tab and play your part now (you have ${LIVE_TXT}): ${live.crew.map(m => `@${m.h} ${MG.ROLES[m.role].icon} ${MG.ROLES[m.role].name}`).join(', ')}.${out.length ? ` (${out.map(x => '@' + x).join(', ')} can't take part.)` : ''}` };
     });
     if (res) await this.chat.system({ id: res.h.group_id }, res.msg).catch(() => {});
+    if (res && !res.live) await this.chat.close(res.h.group_id, '🔒 This crew chat closes in 2 minutes.').catch(() => {}); // the job is off
     return res ? { ok: !!res.live, live: !!res.live, until: res.live?.until, message: res.msg } : { ok: false };
   }
   // What a crew member sees while the job is live: who plays what, who's done, and the clock.
@@ -150,8 +151,8 @@ export class Heists {
     if (old?.finished_at) throw new HttpError(409, "You've played your part. Waiting for the crew.");
     const rid = old?.id || crypto.randomUUID();
     if (!old) await pool.query('insert into crime_runs (id, citizen_id, kind, seed, diff, practice, started_at, chance, band, night, loot, scene, heist_id) values ($1,$2,$3,$4,$5,false,$6,$7,$8,$9,0,$10,$11) on conflict do nothing',
-      [rid, id, m.role, m.seed, m.diff, Date.now(), h.live.chance, h.live.band, !!h.live.night, JSON.stringify({ heist: h.id }), h.id]);
-    return { id: rid, kind: m.role, seed: m.seed, diff: m.diff, practice: false, chance: h.live.chance, band: h.live.band, night: h.live.night, at: h.live.sc?.label, heist: h.id, until: Number(h.live.until) };
+      [rid, id, m.role, m.seed, m.diff, Date.now(), h.live.chance, h.live.band, !!h.live.night, JSON.stringify({ heist: h.id, hard: !!m.hard }), h.id]);
+    return { id: rid, kind: m.role, seed: m.seed, diff: m.diff, hard: !!m.hard, practice: false, chance: h.live.chance, band: h.live.band, night: h.live.night, at: h.live.sc?.label, heist: h.id, until: Number(h.live.until) };
   }
   // Settle the job once everyone has played (or the time is up): the crew's average play plus the setting.
   async settle(heistId, force = false) {
@@ -207,7 +208,7 @@ export class Heists {
         + (win ? ` ${names(got)} got ${fmt(each)} coins each.` : '') + (caught.length ? ` Caught: ${caught.map(x => `@${x.c.handle} (fined ${fmt(x.fine)}${x.jailed ? `, jailed ${H.jail} min` : ''})`).join(', ')}.` : '');
       return { h, msg, result };
     });
-    if (res) await this.chat.system({ id: res.h.group_id }, res.msg).catch(() => {});
+    if (res) { await this.chat.system({ id: res.h.group_id }, res.msg).catch(() => {}); await this.chat.close(res.h.group_id, '🔒 The job is done. This crew chat closes in 2 minutes.').catch(() => {}); }
     return res ? { ok: true, ...res.result, message: res.msg } : null;
   }
   async sweep() {

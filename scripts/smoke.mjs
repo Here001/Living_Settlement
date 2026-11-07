@@ -970,6 +970,11 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok(Math.abs((m1 - m0) + (t1 - t0)) < 1, 'coins only move between the crew and the treasury (nothing is made up)', JSON.stringify({ crew: m1 - m0, treasury: t1 - t0 }));
       if (pb.jailed) ok((await whoDev('jobfill_a')).jailedUntil > Date.now(), 'the worst are jailed');
       ok((await call('GET', `/api/chat/groups/${pl.json.group}`, undefined, PB)).json.messages.some(m => m.system && /GO TIME/.test(m.text)) && (await call('GET', `/api/chat/groups/${pl.json.group}`, undefined, PB)).json.messages.some(m => m.system && /Crew score \d+/.test(m.text)), 'go time and the result are posted in the crew chat');
+      { const gl = (await call('GET', '/api/chat/groups', undefined, PB)).json, hg = gl.groups.find(g => g.id === pl.json.group);
+        ok(hg && hg.heist && hg.heist.kind === 'armored' && hg.closing > Date.now(), 'the crew chat is listed as a heist chat, and it closes once the job is done', JSON.stringify(hg));
+        ok((await call('POST', `/api/chat/groups/${pl.json.group}`, { text: 'one more thing' }, PB)).status === 410, 'no more messages in a closed crew chat');
+        await pool.query('update chat_groups set closed_at = $2 where id = $1', [pl.json.group, Date.now() - 1000]);
+        ok(!(await call('GET', '/api/chat/groups', undefined, PB)).json.groups.some(g => g.id === pl.json.group), 'and a little later it leaves the list'); }
       ok((await call('POST', '/api/me/heists', { kind: 'armored', inMinutes: 10, members: ['jobfill_a'] }, PB)).status === 429 || (await whoDev('jobfill_a')).jailedUntil > Date.now(), 'and the crew lies low for a while afterwards');
       { const hv = (await call('GET', '/api/me/heists', undefined, P)).json.mine.find(h => h.id === pl.json.id); ok(hv.status === 'done' && hv.result.parts, 'the result stays on the job card'); }
       // every part can be played well: bots for the driver, safecracker, lookout and muscle
@@ -991,6 +996,9 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
         const Lw = MG.genHorde(9, 3), w1 = Lw.spawns.filter(z => z.wave === 0), w4 = Lw.spawns.filter(z => z.wave === 4);
         ok(w4.length > w1.length && Math.max(...w4.map(z => z.sp)) > Math.max(...w1.map(z => z.sp)) - 0.3 && w4[0].dmg > w1[0].dmg && Lw.picks.some(p => p.k === 'medkit') && Lw.picks.some(p => p.k === 'shotgun'), 'each wave is bigger, faster and hungrier, and weapons and first aid turn up', JSON.stringify({ n: [w1.length, w4.length], dmg: [w1[0].dmg, w4[0].dmg] }));
         ok(MG.GAMES.muscle === 'horde' && MG.levelOf('muscle', 5, 2).spawns.length > 0, 'the muscle part is the horde now'); }
+      // the ATM after a job that came off: sockets swap places and a fuse burns between moves
+      { const Lh = MG.genAtm(5, 3, true), Le = MG.genAtm(5, 3); ok(Lh.shift > 0 && Lh.fuse > 0 && !Le.shift && JSON.stringify(MG.socketsAt(Lh, Lh.shift + 0.01)) !== JSON.stringify(MG.socketsAt(Lh, 0)) || Lh.sockets.length < 3, 'the hard ATM: the sockets swap round every few seconds');
+        ok(MG.atmReplay(Lh, [['w', 0, 0, Lh.fuse + 0.5]], Lh.fuse + 0.6).state.burnt, 'and if the fuse burns down between moves, the alarm goes'); }
       // the robbery: wandering staff, laser tripwires and optional extras
       { const Ls = MG.genStealth(77, 3), g0 = Ls.guards[0]; ok(g0.legs.some(l => l.k === 'look') && g0.legs.filter(l => l.k === 'walk').length >= 3 && Ls.lasers.length >= 1 && Ls.items.length >= 2, 'the shop: staff wander and stop to look around, lasers blink across the aisles, and there are extras to take', JSON.stringify({ legs: g0.legs.length, lasers: Ls.lasers.length, items: Ls.items.length }));
         const z = Ls.lasers[0], mid = { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 }; let tOn = 0; while (!MG.laserOn(z, tOn)) tOn += 0.1; ok(MG.laserOn(z, tOn) && !MG.laserOn(z, tOn + z.period * z.on + 0.05) || z.on >= 0.99, 'a laser blinks on and off'); }

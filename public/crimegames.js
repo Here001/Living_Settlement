@@ -54,7 +54,7 @@ async function begin(root, kind, info, practice) {
   root.innerHTML = ''; root.append($c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'Setting up…' })));
   let run; try { run = info.heist && !practice ? await X.api(`/api/me/heists/${encodeURIComponent(info.heist)}/play`, { method: 'POST', body: {} }) : await X.api('/api/me/crime/start', { method: 'POST', body: { kind, practice } }); }
   catch (e) { X.toast(e.message); if (info.heist && !practice) close(); else intro(root, kind, info); return; }
-  const L = MG.levelOf(kind, run.seed, run.diff);
+  const L = MG.levelOf(kind, run.seed, run.diff, !!run.hard);
   root.innerHTML = ''; const cd = $c('div', { class: 'mgcount', text: '3' }); root.append(cd);
   let n = 3; const tick = () => { n--; if (n > 0) { cd.textContent = String(n); setTimeout(tick, 650); } else { cd.remove(); play(root, kind, L, run, info); } }; setTimeout(tick, 650);
 }
@@ -100,7 +100,7 @@ function result(root, kind, info, run, r) {
     r.game && r.game.invalid ? $c('p', { class: 'mghint', text: 'That game didn\'t add up, so it counts as a botched job.' }) : null,
     bar('Your play', r.score.play, 60, 'p'), bar('The setting', r.score.setting, 40, 's'), $c('div', { class: 'mgtotal' }, $c('span', { text: 'Score' }), $c('b', { text: `${r.score.total}` })),
     $c('p', { class: 'mgmoney', text: money }),
-    $c('div', { class: 'mgbtns' }, $c('button', { class: 'mgb', text: '▶ Practise again', onclick: () => begin(root, kind, info, true) }), $c('button', { class: 'mgb hot', text: 'Back to the map', onclick: close }))));
+    $c('div', { class: 'mgbtns' }, $c('button', { class: 'mgb hot', text: 'Done', onclick: close }))));
   buzz(good ? [30, 40, 30] : bad ? 300 : 60);
 }
 
@@ -279,28 +279,33 @@ function atm(root, L, finish) {
   root.append(hud(alarm, clock), wrap);
   const card = $c('div', { class: 'mgcardsheet' }, $c('b', { text: '📋 Service card' })); [...L.card].sort((a, b) => a.sym - b.sym).forEach(c => card.append($c('span', { class: 'mgchip' }, $c('i', { style: `background:${MG.WIRE_COLS[c.col]}` }), `${MG.WIRE_NAMES[c.col]} → ${MG.SYMBOLS[c.sym]}`)));
   const board = $c('div', { class: 'mgboard' }), left = $c('div', { class: 'mgcol' }), right = $c('div', { class: 'mgcol r' }), svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'mgwires');
-  board.append(left, svg, right); const linked = new Map(); // wire → socket
+  board.append(left, svg, right); const linked = new Map(); // wire → the symbol it's plugged into (the plug moves with its socket)
+  let lit = 0, ep = 0; const fuseM = L.fuse ? meter('fuse', '🧨') : null; if (fuseM) root.querySelector('.mghud').insertBefore(fuseM, clock);
+  const symAt = (k, t) => MG.socketsAt(L, t)[k], sockOf = sym => MG.socketsAt(L, now()).indexOf(sym);
   const wires = L.wires.map((c, i) => { const b = $c('button', { class: 'mgwire', style: `--c:${MG.WIRE_COLS[c]}`, 'aria-label': MG.WIRE_NAMES[c] + ' wire', onclick: () => { if (stage !== 'wires' || linked.has(i)) return; sel = i; wires.forEach((w, k) => w.classList.toggle('on', k === i)); } }); left.append(b); return b; });
-  const socks = L.sockets.map((sym, k) => { const b = $c('button', { class: 'mgsock', text: MG.SYMBOLS[sym], onclick: () => { if (stage !== 'wires' || sel == null) return; const w = sel; sel = null; wires.forEach(x => x.classList.remove('on')); events.push(['w', w, k, now()]);
-      if (L.card[w].sym === sym) { linked.set(w, k); wires[w].classList.add('done'); b.classList.add('done'); draw(); buzz(15); if (linked.size === L.wires.length) setTimeout(startPin, 400); }
+  const socks = L.sockets.map((sym0, k) => { const b = $c('button', { class: 'mgsock', text: MG.SYMBOLS[sym0], onclick: () => { if (stage !== 'wires' || sel == null) return; const w = sel, t = now(), sym = symAt(k, t); sel = null; wires.forEach(x => x.classList.remove('on')); events.push(['w', w, k, t]);
+      if (L.card[w].sym === sym) { linked.set(w, sym); lit = t; wires[w].classList.add('done'); b.classList.add('done'); draw(); buzz(15); if (linked.size === L.wires.length) setTimeout(startPin, 400); }
       else { pen += L.wrongWire; b.classList.add('spark'); setTimeout(() => b.classList.remove('spark'), 400); buzz(120); } } }); right.append(b); return b; });
-  const draw = () => { const r0 = board.getBoundingClientRect(); svg.innerHTML = ''; for (const [w, k] of linked) { const a = wires[w].getBoundingClientRect(), b = socks[k].getBoundingClientRect(), x1 = a.right - r0.left, y1 = a.top + a.height / 2 - r0.top, x2 = b.left - r0.left, y2 = b.top + b.height / 2 - r0.top;
+  const draw = () => { const r0 = board.getBoundingClientRect(); svg.innerHTML = ''; for (const [w, sym] of linked) { const k = sockOf(sym); if (k < 0) continue; const a = wires[w].getBoundingClientRect(), b = socks[k].getBoundingClientRect(), x1 = a.right - r0.left, y1 = a.top + a.height / 2 - r0.top, x2 = b.left - r0.left, y2 = b.top + b.height / 2 - r0.top;
       const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}`); p.setAttribute('stroke', MG.WIRE_COLS[L.wires[w]]); p.setAttribute('stroke-width', '5'); p.setAttribute('fill', 'none'); p.setAttribute('stroke-linecap', 'round'); svg.append(p); } };
-  const status = $c('p', { class: 'mghint', text: 'Tap a wire, then the socket with its symbol.' });
+  const status = $c('p', { class: 'mghint', text: L.hard ? 'Hard: the sockets swap places every few seconds, and the fuse 🧨 burns between moves. Each right move relights it.' : 'Tap a wire, then the socket with its symbol.' });
   wrap.append(card, board, status);
   // the keypad: watch the code flash, then tap it back
   let at = 0, showing = false; const pad = $c('div', { class: 'mgpad' }), keys = [];
   for (let d = 1; d <= 9; d++) { const b = $c('button', { class: 'mgkey', text: String(d), onclick: () => press(d) }); keys.push(b); pad.append(b); }
   const flash = (d, ms) => { const b = keys[d - 1]; b.classList.add('lit'); setTimeout(() => b.classList.remove('lit'), ms); };
   const playCode = () => { showing = true; status.textContent = '👀 Watch the code…'; const gap = Math.max(260, 520 - L.diff * 45); L.pin.forEach((d, i) => setTimeout(() => flash(d, gap * 0.7), 400 + i * gap)); setTimeout(() => { showing = false; status.textContent = 'Now tap it back.'; }, 400 + L.pin.length * gap); };
-  const startPin = () => { stage = 'pin'; wrap.innerHTML = ''; wrap.append($c('div', { class: 'mgscreen', text: 'ENTER SERVICE CODE' }), pad, status); playCode(); };
+  const startPin = () => { lit = lit + 0.4 + MG.atmCodeTime(L); stage = 'pin'; // the fuse waits while the code flashes (same as the server's count) wrap.innerHTML = ''; wrap.append($c('div', { class: 'mgscreen', text: 'ENTER SERVICE CODE' }), pad, status); playCode(); };
   const press = d => { if (stage !== 'pin' || showing || done) return; events.push(['k', d, now()]); flash(d, 150);
-    if (d === L.pin[at]) { at++; buzz(10); if (at === L.pin.length) { stage = 'open'; status.textContent = '💸 Cash coming out!'; end(); } }
-    else { at = 0; pen += L.wrongKey; buzz(150); pad.classList.add('shake'); setTimeout(() => pad.classList.remove('shake'), 350); setTimeout(playCode, 500); } };
+    if (d === L.pin[at]) { at++; lit = now(); buzz(10); if (at === L.pin.length) { stage = 'open'; status.textContent = '💸 Cash coming out!'; end(); } }
+    else { at = 0; pen += L.wrongKey; lit = Math.max(lit, now() + 0.5 + MG.atmCodeTime(L)); buzz(150); pad.classList.add('shake'); setTimeout(() => pad.classList.remove('shake'), 350); setTimeout(playCode, 500); } };
   const end = () => { if (done) return; done = true; setTimeout(() => finish({ events, time: now() }), 700); };
   addEventListener('resize', draw);
   loop(root, () => { const t = (performance.now() - t0) / 1000, a = pen + t / L.limit; alarm.set(a); alarm.classList.toggle('hot', a > 0.7); clock.textContent = `${Math.max(0, Math.ceil(L.limit - t))}s`;
-    if (!done && a >= 1) { stage = 'alarm'; status.textContent = '🚨 The alarm went off!'; root.classList.add('siren'); buzz(500); end(); } });
+    // hard mode: the sockets swap round, and the fuse burns down between right moves
+    if (L.shift && stage === 'wires') { const e2 = Math.floor(t / L.shift); if (e2 !== ep) { ep = e2; const sk = MG.socketsAt(L, t); socks.forEach((b, k) => { b.textContent = MG.SYMBOLS[sk[k]]; b.classList.toggle('done', [...linked.values()].includes(sk[k])); b.classList.add('spark'); setTimeout(() => b.classList.remove('spark'), 250); }); draw(); buzz(30); } }
+    let burnt = false; if (fuseM && stage !== 'open') { const left = 1 - (t - lit) / L.fuse; fuseM.set(left); fuseM.classList.toggle('hot', left < 0.35); burnt = left <= 0; }
+    if (!done && (a >= 1 || burnt)) { stage = 'alarm'; status.textContent = burnt ? '🧨 The fuse burnt down: alarm!' : '🚨 The alarm went off!'; root.classList.add('siren'); buzz(500); end(); } });
   const stop = root._stop; root._stop = () => { stop && stop(); removeEventListener('resize', draw); };
 }
 

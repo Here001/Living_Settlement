@@ -163,7 +163,7 @@ export const HEISTS = {
   jailbreak: { name: 'Break someone out of jail', icon: '🔓', min: 2, max: 6, loot: [6000, 12000], jail: 30, blurb: 'Free an inmate. The underworld pays a bounty to the crew; fail, and the inmate gets 10 more minutes.' },
   bank: { name: 'Bank heist', icon: '🏦', min: 3, max: 6, loot: [60000, 150000], jail: 30, blurb: 'The big one: the vault of the nearest Bank. Needs a crew of three or more.', needs: 'bank' },
 };
-export const HEIST_CREW_BONUS = 0.04, HEIST_CAUGHT = { win: 0.15, lose: 0.7 }, HEIST_COOLDOWN = 30 * 60 * 1000, HEIST_WAIT = [5, 10, 20, 30, 60];
+export const HEIST_CREW_BONUS = 0.04, HEIST_CAUGHT = { win: 0.15, lose: 0.7 }, HEIST_COOLDOWN = 20 * 1000, HEIST_WAIT = [5, 10, 20, 30, 60];
 // Night (20:00 game time, through midnight, until 06:00): dark streets add 15 points.
 export const NIGHT_FROM = 20 * 60, NIGHT_TO = 6 * 60, NIGHT_BONUS = 0.15;
 export const isNight = gm => { const m = ((gm % 1440) + 1440) % 1440; return m >= NIGHT_FROM || m < NIGHT_TO; };

@@ -241,28 +241,41 @@ export function conReplay(L, picks) {
 export const WIRE_COLS = ['#E4572E', '#F2C94C', '#3CC46A', '#4A7BD9', '#B05FD6', '#F28CB1', '#F4F4F0'];
 export const WIRE_NAMES = ['Red', 'Yellow', 'Green', 'Blue', 'Purple', 'Pink', 'White'];
 export const SYMBOLS = ['▲', '●', '■', '◆', '★', '✚', '⬟'];
-export function genAtm(seed, diff) {
+// Hard mode (after a job that came off): the sockets swap places every few seconds, and a fuse burns between moves:
+// make the next right move before it burns down (every right move relights it), or the alarm goes.
+export function genAtm(seed, diff, hard = false) {
   const r = rng(seed), n = Math.min(6, 3 + Math.ceil(diff / 1.5)), shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const cols = shuffle([...Array(WIRE_COLS.length).keys()]).slice(0, n), syms = shuffle([...Array(SYMBOLS.length).keys()]).slice(0, n);
   const card = cols.map((c, i) => ({ col: c, sym: syms[i] })); // the service card: this colour goes to this symbol
   const sockets = shuffle([...syms]); // the sockets on the right, in the order they're fitted
   const pin = [...Array(3 + diff)].map(() => Math.floor(r() * 9) + 1);
-  return { seed, diff, wires: cols, card, sockets, pin, limit: 58 - diff * 4, wrongWire: 0.1, wrongKey: 0.12 };
+  const L = { seed, diff, wires: cols, card, sockets, pin, limit: 58 - diff * 4, wrongWire: 0.1, wrongKey: 0.12 };
+  if (hard) { L.hard = true; L.shift = +Math.max(3.5, 7 - diff * 0.6).toFixed(2); L.fuse = +Math.max(4.5, 9 - diff * 0.7).toFixed(2); }
+  return L;
+}
+// How long the keypad takes to flash the code (the fuse waits for it).
+export const atmCodeTime = L => 0.4 + L.pin.length * Math.max(260, 520 - L.diff * 45) / 1000;
+// The sockets' order at time t (in hard mode they swap places every few seconds).
+export function socketsAt(L, t) {
+  if (!L.shift) return L.sockets; const ep = Math.floor(Math.max(0, t) / L.shift); if (!ep) return L.sockets;
+  const r = rng(L.seed * 7919 + ep), a = [...L.sockets]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a;
 }
 // events: ['w', wireIndex, socketIndex] and ['k', digit], with the time each happened (seconds from the start).
 export function atmReplay(L, events, time) {
   if (!Array.isArray(events) || events.length > 200) return { ok: false, why: 'bad events' };
-  const T = clamp(Number(time) || 0, 0, L.limit + 2); let alarm = 0, linked = new Set(), stage = 'wires', at = 0, wrongs = 0, lastT = 0;
+  const T = clamp(Number(time) || 0, 0, L.limit + 2); let alarm = 0, linked = new Set(), stage = 'wires', at = 0, wrongs = 0, lastT = 0, lit = 0, burnt = false;
   for (const e of events) { const t = Number(e[3] ?? e[2]); if (!(t >= lastT - 0.001) || t > T + 0.5) return { ok: false, why: 'bad timing' }; lastT = t;
-    if (stage === 'wires' && e[0] === 'w') { const w = Number(e[1]), s = Number(e[2]); if (!(w >= 0 && w < L.wires.length) || !(s >= 0 && s < L.sockets.length) || linked.has(w)) continue;
-      if (L.card[w].sym === L.sockets[s]) { linked.add(w); if (linked.size === L.wires.length) stage = 'pin'; } else { alarm += L.wrongWire; wrongs++; } }
-    else if (stage === 'pin' && e[0] === 'k') { const d = Number(e[1]); if (d === L.pin[at]) { at++; if (at === L.pin.length) { stage = 'open'; break; } } else { at = 0; alarm += L.wrongKey; wrongs++; } }
+    if (L.fuse && t - lit > L.fuse) { stage = 'alarm'; burnt = true; break; } // the fuse burnt down before this move
+    if (stage === 'wires' && e[0] === 'w') { const w = Number(e[1]), s = Number(e[2]), sk = socketsAt(L, t); if (!(w >= 0 && w < L.wires.length) || !(s >= 0 && s < sk.length) || linked.has(w)) continue;
+      if (L.card[w].sym === sk[s]) { linked.add(w); lit = t; if (linked.size === L.wires.length) { stage = 'pin'; lit = t + 0.4 + atmCodeTime(L); } } else { alarm += L.wrongWire; wrongs++; } }
+    else if (stage === 'pin' && e[0] === 'k') { const d = Number(e[1]); if (d === L.pin[at]) { at++; lit = t; if (at === L.pin.length) { stage = 'open'; break; } } else { at = 0; alarm += L.wrongKey; wrongs++; lit = Math.max(lit, t + 0.5 + atmCodeTime(L)); } }
     if (alarm + t / L.limit >= 1) { stage = 'alarm'; break; } }
+  if (L.fuse && stage !== 'open' && stage !== 'alarm' && T - lit > L.fuse) { stage = 'alarm'; burnt = true; }
   const total = alarm + Math.min(T, lastT || T) / L.limit;
   if (stage !== 'open' && stage !== 'alarm') stage = T >= L.limit - 0.5 || total >= 1 ? 'alarm' : 'gaveup';
   const progress = (linked.size / L.wires.length) * 0.5 + (stage === 'open' ? 0.5 : at / L.pin.length * 0.5);
   const perf = stage === 'open' ? clamp(0.55 + 0.45 * (1 - clamp(total, 0, 1)), 0, 1) : clamp(progress * 0.3, 0, 0.3);
-  return { ok: true, state: { stage, alarm: +clamp(total, 0, 1).toFixed(3), wrongs, progress }, perf, money: stage === 'open' };
+  return { ok: true, state: { stage, alarm: +clamp(total, 0, 1).toFixed(3), wrongs, progress, burnt, lit }, perf, money: stage === 'open' };
 }
 
 // ======================= Heist roles =======================
@@ -509,9 +522,9 @@ export function minTime(kind, L, st) {
   if (kind === 'safecracker') return (st?.got || 0) * 0.4;
   return 0;
 }
-export function levelOf(kind, seed, diff) {
+export function levelOf(kind, seed, diff, hard = false) {
   const g = GAMES[kind];
-  return g === 'stealth' ? genStealth(seed, diff) : g === 'con' ? genCon(seed, diff) : g === 'atm' ? genAtm(seed, diff) : g === 'drive' ? genDrive(seed, diff) : g === 'safe' ? genSafe(seed, diff) : g === 'lookout' ? genLook(seed, diff) : g === 'horde' ? genHorde(seed, diff) : genMuscle(seed, diff);
+  return g === 'stealth' ? genStealth(seed, diff) : g === 'con' ? genCon(seed, diff) : g === 'atm' ? genAtm(seed, diff, hard) : g === 'drive' ? genDrive(seed, diff) : g === 'safe' ? genSafe(seed, diff) : g === 'lookout' ? genLook(seed, diff) : g === 'horde' ? genHorde(seed, diff) : genMuscle(seed, diff);
 }
 export function replay(kind, L, log) {
   const g = GAMES[kind], x = log || {};

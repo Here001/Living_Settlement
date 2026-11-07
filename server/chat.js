@@ -235,16 +235,19 @@ export class Chat {
     return { ok: true, id: g.id, name: g.name, invited };
   }
   async groups(me) {
-    const rows = (await pool.query(`select g.*, m.status, m.invited_by, m.t joined_at from group_members m join chat_groups g on g.id = m.group_id where m.citizen_id = $1 and m.status in ('member', 'invited')`, [me])).rows;
+    const rows = (await pool.query(`select g.*, m.status, m.invited_by, m.t joined_at from group_members m join chat_groups g on g.id = m.group_id where m.citizen_id = $1 and m.status in ('member', 'invited') and (g.closed_at is null or g.closed_at > $2)`, [me, Date.now()])).rows;
     const st = await this.states(me), colony = await this.colonyName(), out = [], invites = [];
+    // which groups are a heist crew's chat (they get their own list)
+    const hz = new Map(rows.length ? (await pool.query('select id, group_id, kind, status from heists where group_id = any($1)', [rows.map(g => g.id)])).rows.map(h => [h.group_id, h]) : []);
+    const heistOf = g => { const h = hz.get(g.id); return h ? { id: h.id, kind: h.kind, status: h.status, name: R.HEISTS[h.kind]?.name, icon: R.HEISTS[h.kind]?.icon } : null; };
     for (const g of rows) {
       if (g.status === 'invited') { const by = g.invited_by && (await pool.query('select handle from citizens where id = $1', [g.invited_by])).rows[0]?.handle;
-        invites.push({ id: g.id, name: g.name, by: by || '?', from: colony, t: Number(g.joined_at), text: `@${by || '?'} invited you to join the group chat “${g.name}”. Do you want to join?` }); continue; }
+        invites.push({ id: g.id, name: g.name, heist: heistOf(g), by: by || '?', from: colony, t: Number(g.joined_at), text: `@${by || '?'} invited you to join the group chat “${g.name}”. Do you want to join?` }); continue; }
       const s = st.get('g:' + g.id) || {}, since = Math.max(Number(s.cleared_at || 0), 0);
       const last = (await pool.query(`select m.text, m.t, m.sender_id, c.handle from group_msgs m join citizens c on c.id = m.sender_id where m.group_id = $1 and m.t > $2 order by m.t desc limit 1`, [g.id, since])).rows[0];
       const unread = Number((await pool.query('select count(*) n from group_msgs where group_id = $1 and t > $2 and sender_id <> $3', [g.id, Math.max(since, Number(s.read_at || 0)), me])).rows[0].n);
       const n = Number((await pool.query("select count(*) n from group_members where group_id = $1 and status = 'member'", [g.id])).rows[0].n);
-      out.push({ id: g.id, name: g.name, members: n, pinned: !!s.pinned, unread, last: last ? { text: last.text, t: Number(last.t), mine: last.sender_id === me, from: last.handle } : { text: 'Group created', t: Number(g.created_at), mine: false } });
+      out.push({ id: g.id, name: g.name, heist: heistOf(g), closing: g.closed_at ? Number(g.closed_at) : null, members: n, pinned: !!s.pinned, unread, last: last ? { text: last.text, t: Number(last.t), mine: last.sender_id === me, from: last.handle } : { text: 'Group created', t: Number(g.created_at), mine: false } });
     }
     out.sort((a, b) => (b.pinned - a.pinned) || (b.last.t - a.last.t)); invites.sort((a, b) => b.t - a.t);
     return { groups: out, invites };
@@ -269,13 +272,14 @@ export class Chat {
     const msgs = (await pool.query(`select m.*, c.handle, c.display_name, c.gender from group_msgs m left join citizens c on c.id = m.sender_id where m.group_id = $1 and m.t > $2 order by m.t desc limit 150`, [g.id, Number(s.cleared_at || 0)])).rows.reverse();
     await this.setState(me, 'g:' + g.id, { read_at: Date.now() });
     const others = ms.filter(m => m.status === 'member' && m.citizen_id !== me).map(m => m.citizen_id);
-    return { group: { id: g.id, name: g.name, owner: g.owner_id === me }, pinned: !!s.pinned, cost: others.length ? await this.feeFor(me, others) : { fee: 0, near: true },
+    return { group: { id: g.id, name: g.name, owner: g.owner_id === me, closed: !!g.closed_at, closesAt: g.closed_at ? Number(g.closed_at) : null }, pinned: !!s.pinned, cost: others.length ? await this.feeFor(me, others) : { fee: 0, near: true },
       members: ms.filter(m => m.status === 'member' || m.status === 'invited').map(m => ({ h: m.handle, n: m.display_name || '', g: m.gender || 'm', status: m.status, online: isOnline(m.last_seen), me: m.citizen_id === me })),
       messages: msgs.map(m => m.sender_id === 'system' ? { id: m.id, system: true, text: m.text, t: Number(m.t) } : { ...msgOut(m, me), from: { h: m.handle, n: m.display_name || '', g: m.gender || 'm' } }) };
   }
   async gsend(meP, gid, text, replyTo) {
     text = String(text || '').trim(); if (!text) throw new HttpError(400, 'Write something first.'); if (text.length > MAX_DM) throw new HttpError(400, `Messages can be up to ${MAX_DM} characters.`);
     const g = await this.group(gid), ms = await this.members(g.id); if (!ms.some(m => m.citizen_id === meP.id && m.status === 'member')) throw new HttpError(403, "You're not in this group.");
+    if (g.closed_at) throw new HttpError(410, 'This chat has closed.');
     await assertNotMuted(meP.id);
     const now = Date.now(); if (now - (this.lastSend.get(meP.id) || 0) < 700) throw new HttpError(429, 'Slow down a little.'); this.lastSend.set(meP.id, now);
     const others = ms.filter(m => m.status === 'member' && m.citizen_id !== meP.id).map(m => m.citizen_id), cost = others.length ? await this.feeFor(meP.id, others) : { fee: 0 };
@@ -288,6 +292,9 @@ export class Chat {
       if (away.length) this.push.send(away, { kind: 'chat', title: `💬 ${g.name}`, body: `@${meP.handle}: ${(t => t.length > 110 ? t.slice(0, 110) + '…' : t)(plain(text))}`, tag: 'g-' + g.id, url: '/?chats=1' }).catch(() => {}); }
     return { ok: true, id: m.id, t: now, fee: cost.fee };
   }
+  // Close a group chat: no more messages, and it leaves everyone's list after a short while (time to read the last word).
+  async close(gid, text, after = 2 * 60 * 1000) { const g = await this.group(gid).catch(() => null); if (!g || g.closed_at) return;
+    await pool.query('update chat_groups set closed_at = $2 where id = $1', [g.id, Date.now() + after]); if (text) await this.system(g, text); }
   async gclear(me, gid) { const g = await this.group(gid); await this.setState(me, 'g:' + g.id, { cleared_at: Date.now(), pinned: false }); return { ok: true }; }
 }
 const msgOut = (m, me) => ({ id: m.id, mine: m.sender_id === me, text: m.text, t: Number(m.t), reply: m.reply_to ? { id: m.reply_to, text: m.reply_text, from: m.reply_from } : null });

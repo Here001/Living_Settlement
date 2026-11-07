@@ -299,7 +299,9 @@ const MIGRATIONS = [
   `create table if not exists arena_results (id text primary key, mode text not null, started_at bigint not null, ended_at bigint, humans int not null default 0, result jsonb);
    create table if not exists arena_pay (citizen_id text not null, day text not null, n int not null default 0, primary key (citizen_id, day));`,
   // v57: a run of jobs that came off makes the next one harder (wiped when caught)
-  `alter table citizens add column if not exists crime_streak int not null default 0;`
+  `alter table citizens add column if not exists crime_streak int not null default 0;`,
+  // v58: group chats can close (a heist's crew chat closes a little after the result is in)
+  `alter table chat_groups add column if not exists closed_at bigint;`
 ];
 
 export async function migrate() {

@@ -399,6 +399,7 @@ body.pane-max .composer textarea{height:70px}
 .warnline{margin:8px 0;padding:7px 10px;border-radius:10px;background:rgba(210,56,46,.12);color:#9E2A22;font-size:13px}
 .plotthumb{display:flex;align-items:center;justify-content:center;font-size:30px;background:rgba(143,196,99,.35);border-radius:12px}
 .pcards{flex-wrap:wrap;overflow-x:visible;justify-content:flex-start;padding:4px 0 8px}.pcards .cardb{width:calc(50% - 5px)}@media(min-width:520px){.pcards .cardb{width:150px}}.pcards .cardb.cant{opacity:.45}
+.newgbox{display:flex;flex-direction:column;gap:6px;align-items:flex-start;margin:6px 0 10px;padding:10px;border:1.5px dashed var(--soft,#ccc);border-radius:12px}
 .rsheet .ctabs{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}.rsheet .ctabs .pill{cursor:pointer;border:1.4px solid var(--ink,#2B2621);background:transparent;padding:4px 10px;border-radius:999px;font:inherit;font-size:12.5px}.rsheet .ctabs .pill.on{background:var(--accent,#D9714A);color:#fff;border-color:var(--accent,#D9714A)}
 .joblist.offers li{flex-direction:column;align-items:stretch}.joblist.offers .jt{display:flex;flex-direction:column;gap:2px}.joblist.offers .row-actions{margin-top:4px}
 .rsheet blockquote,.rep blockquote{margin:6px 0;padding:6px 10px;border-left:3px solid #E8836B;background:rgba(0,0,0,.04);border-radius:6px;font-size:13px;white-space:pre-wrap;word-wrap:break-word}
@@ -824,7 +825,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .mgmeter{flex:1;display:flex;align-items:center;gap:6px;max-width:220px}.mgmeter span{font-size:18px}
 .mgtrack{flex:1;height:12px;border-radius:7px;background:rgba(255,255,255,.15);border:2px solid #2B2621;overflow:hidden}
 .mgtrack i{display:block;height:100%;width:0;background:#F2C94C;transition:width .15s linear}
-.mgmeter.eye i{background:#F2C94C}.mgmeter.eye.hot i,.mgmeter.alarm.hot i{background:#FF4B3A}.mgmeter.trust i{background:#3CC46A}.mgmeter.sus i{background:#E4572E}.mgmeter.alarm i{background:#F2994A}
+.mgmeter.fuse i{background:#F2994A}.mgmeter.fuse.hot i{background:#FF4B3A}.mgmeter.eye i{background:#F2C94C}.mgmeter.eye.hot i,.mgmeter.alarm.hot i{background:#FF4B3A}.mgmeter.trust i{background:#3CC46A}.mgmeter.sus i{background:#E4572E}.mgmeter.alarm i{background:#F2994A}
 .mggoal{position:absolute;top:calc(48px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:#2B2621;color:#fff;padding:6px 14px;border-radius:12px;font-weight:800;white-space:nowrap;z-index:2;pointer-events:none}
 .mgjoyhint{position:absolute;bottom:calc(16px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);color:#D8CDB8;font-size:13px;pointer-events:none}
 .mgcon,.mgatm{width:min(440px,calc(100% - 32px));display:flex;flex-direction:column;gap:10px;margin-top:40px;max-height:calc(100% - 60px);overflow:auto;touch-action:pan-y}
@@ -4382,7 +4383,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     g.last={text:m.text,t:m.t,mine,from:m.from&&m.from.h}; if(!mine&&!m.system){ g.unread++; this.count(); toast(`👥 ${g.name} · @${m.from.h}: ${plainMsg(m.text).length>50?plainMsg(m.text).slice(0,50)+'…':plainMsg(m.text)}`,'Open',()=>this.openGroup(g.id)); }
     this.groups.sort((a,b)=>(b.pinned-a.pinned)||(b.last.t-a.last.t)); if(activeTab==='chats'&&!this.with&&!this.gid) this.renderNow(); },
   // The colony asking whether you want to join someone's group.
-  invited(d){ if(Blocks.has(d.by)) return; toast(`🪐 ${d.from}: ${d.text}`,'View',()=>{ this.view='chats'; this.back(); openTab('chats'); }); this.load(); },
+  invited(d){ if(Blocks.has(d.by)) return; toast(`🪐 ${d.from}: ${d.text}`,'View',()=>{ const iv=this.invites.find(i=>d.group&&i.id===d.group.id); this.view=iv&&iv.heist?'heists':'groups'; this.back(); openTab('chats'); }); this.load(); },
   sortList(){ this.list.sort((a,b)=>((b.pinned?1:0)-(a.pinned?1:0))||((b.last?b.last.t:0)-(a.last?a.last.t:0))); },
   async send(){ const ta=$('dmText'); const text=(ta?ta.value:this.draft).trim(); if(!text||this.busy||!(this.with||this.gid)) return; this.busy=true;
     const url=this.gid?'/api/chat/groups/'+encodeURIComponent(this.gid):'/api/dm/'+encodeURIComponent(this.with);
@@ -4454,7 +4455,8 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       el('button',{class:'pill'+(this.view==='requests'?' on':''),role:'tab','aria-selected':String(this.view==='requests'),onclick:()=>{ this.view='requests'; this.renderNow(); }}, 'Requests', reqs.length?el('b',{class:'tbadge',text:String(reqs.length)}):null),
       (()=>{ const O=Plots.loadOffers(), n=O?O.incoming.filter(o=>o.status==='open').length+O.outgoing.filter(o=>o.status==='countered').length:0;
         return el('button',{class:'pill'+(this.view==='offers'?' on':''),role:'tab','aria-selected':String(this.view==='offers'),onclick:()=>{ this.view='offers'; Plots.loadOffers(true); this.renderNow(); }}, '🤝 Offers', n?el('b',{class:'tbadge',text:String(n)}):null); })(),
-      el('button',{class:'pill newg',text:'➕ New group',onclick:()=>{ this.making={name:'',pick:new Set(),extra:''}; this.renderNow(); }})));
+      (()=>{ const n=this.groups.filter(g=>!g.heist).reduce((a,g)=>a+g.unread,0)+this.invites.filter(i=>!i.heist).length; return el('button',{class:'pill'+(this.view==='groups'?' on':''),role:'tab','aria-selected':String(this.view==='groups'),onclick:()=>{ this.view='groups'; this.renderNow(); }}, '👥 Groups', n?el('b',{class:'tbadge',text:String(n)}):null); })(),
+      (()=>{ const n=this.groups.filter(g=>g.heist).reduce((a,g)=>a+g.unread,0)+this.invites.filter(i=>i.heist).length; return el('button',{class:'pill'+(this.view==='heists'?' on':''),role:'tab','aria-selected':String(this.view==='heists'),onclick:()=>{ this.view='heists'; this.renderNow(); }}, '🦹 Heists', n?el('b',{class:'tbadge',text:String(n)}):null); })()));
     const row=c=>{ const av=el('span',{class:'ava sm'+(c.with.online?' on':'')}); av.innerHTML=avatarSVG({handle:c.with.h,id:c.with.id||c.with.h,gender:c.with.g});
       return el('button',{class:'person dmrow'+(c.unread?' unread':''),onclick:()=>this.open(c.with.h)}, av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:(c.pinned?'📌 ':'')+(c.with.n?`${c.with.n} · @${c.with.h}`:'@'+c.with.h)}), el('div',{class:'what',text:c.last?(c.last.mine?'You: ':'')+plainMsg(c.last.text):''})),
         c.unread?el('b',{class:'tbadge',text:String(c.unread)}):el('time',{class:'hint',text:c.last?ago(c.last.t):''})); };
@@ -4469,8 +4471,26 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       if(!reqs.length) body.append(el('p',{class:'hint',text:'No friend requests.'}));
       for(const c of reqs) body.append(row(c));
       p.append(body); if(Date.now()-this.loadedAt>8000) this.load(); return; }
+    const grow=g=>el('button',{class:'person dmrow'+(g.unread?' unread':''),onclick:()=>this.openGroup(g.id)}, el('span',{class:'ava sm gava',text:g.heist?(g.heist.icon||'🦹'):'👥'}),
+        el('span',{class:'dmtxt'}, el('div',{class:'who',text:(g.pinned?'📌 ':'')+g.name+` · ${g.members}`+(g.heist?` · ${g.closing?'closing':g.heist.status==='live'?'🚨 on now':g.heist.status==='planning'?'planning':g.heist.status}`:'')}), el('div',{class:'what',text:g.last?(g.last.mine?'You: ':g.last.from?'@'+g.last.from+': ':'')+plainMsg(g.last.text):''})),
+        g.unread?el('b',{class:'tbadge',text:String(g.unread)}):el('time',{class:'hint',text:g.last?ago(g.last.t):''}));
+    const invRow=iv=>el('div',{class:'ginv'}, el('div',{class:'ginvfrom',text:`🪐 ${iv.from}`}), el('p',{text:iv.text}),
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Join',onclick:()=>this.act(`/api/chat/groups/${encodeURIComponent(iv.id)}/join`,{},()=>{ this.invites=this.invites.filter(x=>x.id!==iv.id); this.openGroup(iv.id); })}),
+        el('button',{class:'btn',text:'Decline',onclick:()=>this.act(`/api/chat/groups/${encodeURIComponent(iv.id)}/decline`,{},()=>{ this.invites=this.invites.filter(x=>x.id!==iv.id); this.count(); this.renderNow(); })})));
+    // Group chats: your own groups, and a way to start one
+    if(this.view==='groups'){ const gs=this.groups.filter(g=>!g.heist), iv=this.invites.filter(i=>!i.heist);
+      body.append(el('div',{class:'newgbox'}, el('button',{class:'btn primary',text:'➕ Create a group chat',onclick:()=>{ this.making={name:'',pick:new Set(),extra:''}; this.renderNow(); }}), el('span',{class:'hint',text:'Name it and invite friends. Messages are free when everyone lives near you.'})));
+      for(const x of iv) body.append(invRow(x));
+      body.append(el('h3',{text:`Your groups (${gs.length})`})); if(!gs.length) body.append(el('p',{class:'hint',text:'No group chats yet.'})); for(const g of gs) body.append(grow(g));
+      p.append(body); return; }
+    // Heist crews: the invitations to join a job, and the crews you're in (each chat closes once its job is done)
+    if(this.view==='heists'){ const gs=this.groups.filter(g=>g.heist), iv=this.invites.filter(i=>i.heist);
+      body.append(el('p',{class:'hint',text:'Crew chats for heists. Join one to be in on the job. Each chat closes a couple of minutes after its job is done or called off. Plan a heist from your card’s Crime tab.'}));
+      if(iv.length){ body.append(el('h3',{text:`Invitations (${iv.length})`})); for(const x of iv) body.append(invRow(x)); }
+      body.append(el('h3',{text:`Your crews (${gs.length})`})); if(!gs.length) body.append(el('p',{class:'hint',text:'You’re not in a crew right now.'})); for(const g of gs) body.append(grow(g));
+      p.append(body); return; }
     // Invitations to join a group, sent by the colony.
-    for(const iv of this.invites){ body.append(el('div',{class:'ginv'}, el('div',{class:'ginvfrom',text:`🪐 ${iv.from}`}), el('p',{text:iv.text}),
+    for(const iv of []){ body.append(el('div',{class:'ginv'}, el('div',{class:'ginvfrom',text:`🪐 ${iv.from}`}), el('p',{text:iv.text}),
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Join',onclick:()=>this.act(`/api/chat/groups/${encodeURIComponent(iv.id)}/join`,{},()=>{ this.invites=this.invites.filter(x=>x.id!==iv.id); this.openGroup(iv.id); })}),
         el('button',{class:'btn',text:'Decline',onclick:()=>this.act(`/api/chat/groups/${encodeURIComponent(iv.id)}/decline`,{},()=>{ this.invites=this.invites.filter(x=>x.id!==iv.id); this.count(); this.renderNow(); })})))); }
     // Friends (anyone whose message request you accepted, or who accepted yours) who are online now; the Town Square
@@ -4481,12 +4501,9 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       body.append(orow); }
     body.append(el('h3',{text:'Your chats'}));
     // Private chats and groups together: pinned first, then the newest.
-    const items=[...this.list.filter(c=>!c.request).map(c=>({c,t:c.last?c.last.t:0,pin:c.pinned})),...this.groups.map(g=>({g,t:g.last?g.last.t:0,pin:g.pinned}))].sort((a,b)=>((b.pin?1:0)-(a.pin?1:0))||(b.t-a.t));
-    if(!items.length) body.append(el('p',{class:'hint',text:'No chats yet. Open a verified colonist’s card and tap 💬 Message, tap someone who’s online above, or start a group.'}));
-    for(const it of items){ if(it.c){ body.append(row(it.c)); continue; } const g=it.g;
-      body.append(el('button',{class:'person dmrow'+(g.unread?' unread':''),onclick:()=>this.openGroup(g.id)}, el('span',{class:'ava sm gava',text:'👥'}),
-        el('span',{class:'dmtxt'}, el('div',{class:'who',text:(g.pinned?'📌 ':'')+g.name+` · ${g.members}`}), el('div',{class:'what',text:g.last?(g.last.mine?'You: ':g.last.from?'@'+g.last.from+': ':'')+plainMsg(g.last.text):''})),
-        g.unread?el('b',{class:'tbadge',text:String(g.unread)}):el('time',{class:'hint',text:g.last?ago(g.last.t):''}))); }
+    const items=this.list.filter(c=>!c.request).map(c=>({c,t:c.last?c.last.t:0,pin:c.pinned})).sort((a,b)=>((b.pin?1:0)-(a.pin?1:0))||(b.t-a.t));
+    if(!items.length) body.append(el('p',{class:'hint',text:'No chats yet. Open a verified colonist’s card and tap 💬 Message, or tap someone who’s online above. Group chats are under 👥 Groups.'}));
+    for(const it of items) body.append(row(it.c));
     if(Blocks.list.length){ body.append(el('h3',{text:`Blocked (${Blocks.list.length})`}), el('p',{class:'hint',text:'They can’t message you, and you don’t see their Town Square posts.'}));
       for(const b of Blocks.list) body.append(el('div',{class:'blkrow'}, el('span',{text:b.n?`${b.n} · @${b.h}`:'@'+b.h}), el('button',{class:'linkb',text:'Unblock',onclick:()=>Blocks.unblock(b.h)}))); }
     p.append(body); if(Date.now()-this.loadedAt>8000) this.load(); },
@@ -4536,6 +4553,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     if(!T) body.append(el('p',{class:'hint',text:'Opening the group…'}));
     else if(!T.messages.length) body.append(el('p',{class:'hint dmempty',text:'Say hello to the group.'}));
     else for(const m of T.messages) body.append(this.bubble(m));
+    if(T&&G&&G.closed){ p.append(body, el('div',{class:'dmbar dmshut'}, el('span',{class:'hint',text:`🔒 This chat has closed${G.closesAt&&G.closesAt>Date.now()?`; it leaves your list in ${Math.max(1,Math.ceil((G.closesAt-Date.now())/60000))} min`:''}.`}))); requestAnimationFrame(()=>{ body.scrollTop=body.scrollHeight; }); return; }
     p.append(body); if(T){ const f=this.feeNote(T); if(f) p.append(f); if(this.reply) p.append(this.replyBar()); } p.append(this.composer(T)); requestAnimationFrame(()=>{ body.scrollTop=body.scrollHeight; }); } };
 setInterval(()=>{ if(!document.hidden && Me&&Me.token && Date.now()-Chats.loadedAt>45000) Chats.load(); },15000);
 
@@ -5819,8 +5837,9 @@ function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cri
       el('li',{text:`🟡 ${miles(K.near)} to ${miles(K.far)}: pickpocket ${pct(Rt.pickpocket.mid)}, robbery ${pct(Rt.rob.mid)}`}),
       el('li',{text:`🔴 Within ${miles(K.near)}: pickpocket ${pct(Rt.pickpocket.low)}, robbery ${pct(Rt.rob.low)}`})),
     el('p',{class:'hint',text:`${K.wave?'🦹 A crime wave is on: +15% right now. ':''}Caught: a fine of twice what you tried to take (at least 250), and jail if the colony has one.`}));
-  const waiting=K.waitFor>0, blocked=waiting?`Lie low ${mins(K.waitFor)} min`:null;
-  if(waiting) box.append(el('p',{class:'jobnow',text:`Lie low for ${mins(K.waitFor)} more minute${K.waitFor>60000?'s':''} before the next solo job. You can still practise the mini games for free.`}));
+  const secs=ms=>ms<60000?`${Math.ceil(ms/1000)}s`:`${mins(ms)} min`, waiting=K.waitFor>0, blocked=waiting?`Lie low ${secs(K.waitFor)}`:null;
+  if(waiting){ box.append(el('p',{class:'jobnow',text:`Lie low for ${secs(K.waitFor)} before the next solo job.${K.streak?` 🔥 ${K.streak} in a row: the next one will be harder.`:''}`})); clearTimeout(Acts.wt); Acts.wt=setTimeout(()=>{ if(sel&&Acts.crime){ Acts.at=0; renderCard(true); } },Math.min(K.waitFor+300,20500)); }
+  else if(K.streak) box.append(el('p',{class:'hint',text:`🔥 ${K.streak} job${K.streak>1?'s':''} in a row came off: the next one is harder. Get caught and it starts over.`}));
   else { const ti=el('input',{type:'text',placeholder:'@username',autocomplete:'off','aria-label':'Whose pocket'});
     box.append(el('div',{class:'cbet'}, el('span',{text:'Pickpocket:'}), ti, el('button',{class:'btn',text:'Try',onclick:()=>tryPickpocket(ti.value)})),
       el('p',{class:'hint',text:'You’ll see their odds before you commit: it depends on where they are right now.'})); }
@@ -5866,7 +5885,7 @@ const Heist={ data:null, at:0, busy:false, form:null, prompted:new Set(),
       card.append(row); box.append(card); }
     box.append(el('div',{class:'hrole'}, el('span',{class:'hint',text:'🎮 Practise a part (free):'}), ...Object.entries(MG_ROLES).map(([k,R1])=>el('button',{class:'pill',text:`${R1.icon} ${R1.name}`,onclick:()=>openCrimeGame(k,{practiceOnly:true,band:'mid',chance:0.3},crimeCtx())}))));
     if(D0.jailedFor>0) return box;
-    if(D0.waitFor>0){ box.append(el('p',{class:'jobnow',text:`Lie low for ${mins(D0.waitFor)} more minutes before the next job.`})); return box; }
+    if(D0.waitFor>0){ box.append(el('p',{class:'jobnow',text:`Lie low for ${Math.ceil(D0.waitFor/1000)} more seconds before the next job.`})); return box; }
     if(D0.mine.some(h=>h.status==='planning'&&h.me==='member')){ box.append(el('p',{class:'hint',text:'One job at a time: you can plan another once this one is done.'})); return box; }
     // plan a new one
     if(!this.form){ for(const [k,H] of Object.entries(D0.types)){ box.append(el('div',{class:'crow'}, el('div',{class:'jt'}, el('b',{text:`${H.icon} ${H.name}`}),

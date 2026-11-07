@@ -4192,8 +4192,10 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
   renderNow(){ if(activeTab!=='chats') return; const p=$('pane'); if(p) { p.innerHTML=''; this.render(p); } },
   async act(url, body, then){ try{ const r=await api(url,{method:'POST',body:body||{}}); if(then) await then(r); }catch(e){ toast(e.message); } },
   feeNote(T){ const c=T&&T.cost; if(!c) return null;
-    if(!c.fee) return el('div',{class:'feenote free',text:this.gid?'✓ Free: everyone here lives near you':'✓ Free: you live near each other'});
-    return el('div',{class:'feenote',title:'Messages to colonists who live in your area are free.',text:this.gid?`🪙 ${c.fee} coins a message · some members live far away`:`🪙 ${c.fee} coins a message · @${this.with} lives ${c.miles?c.miles+' away':'far away'}`}); },
+    if(this.gid){ if(!c.fee) return el('div',{class:'feenote free',text:'✓ Free: everyone here lives near you'});
+      return el('div',{class:'feenote',title:'Group messages are free when every member lives in your area.',text:`🪙 ${c.fee} coins a message · some members live far away`}); }
+    if(!c.fee) return el('div',{class:'feenote free',text:`✓ Free: you and @${this.with} are friends`});
+    return el('div',{class:'feenote',title:'Once a message request is accepted you are friends, and messages are free both ways.',text:T.request?`🪙 ${c.fee} coins a message · accept @${this.with}'s request and you're friends: free messages`:`🪙 ${c.fee} coins a message until @${this.with} accepts your message request`}); },
   composer(T){ const ta=el('textarea',{id:'dmText',rows:'1',maxlength:'500',placeholder:'Message…','aria-label':'Message'}); ta.value=this.draft; ta.oninput=()=>{ this.draft=ta.value; };
     ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); this.send(); } });
     return el('div',{class:'dmbar',id:'dmBar'}, el('button',{class:'btn dmloc','aria-label':'Send a location',title:'Send a location',text:'📍',onclick:()=>Loc.fromChat()}), ta, el('button',{class:'btn primary',text:'Send',onclick:()=>this.send()})); },
@@ -4219,8 +4221,8 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       if(!this.thread) body.append(el('p',{class:'hint',text:'Opening the chat…'}));
       else if(!this.thread.messages.length) body.append(el('p',{class:'hint dmempty',text:`Say hello to @${this.with}. Only the two of you can see this chat.`}));
       else for(const m of this.thread.messages) body.append(this.bubble(m));
-      const req=T&&T.request?el('div',{class:'dmreq',id:'dmReq'}, el('p',null,el('b',{text:'📩 Message request. '}),'You can reply without accepting; accept to move it to your chats.'),
-        el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Accept',onclick:()=>this.act(`/api/dm/${H}/accept`,{},()=>{ T.request=false; this.view='chats'; const c=this.list.find(x=>x.with.h.toLowerCase()===this.with.toLowerCase()); if(c) c.request=false; this.renderNow(); })}),
+      const req=T&&T.request?el('div',{class:'dmreq',id:'dmReq'}, el('p',null,el('b',{text:'📩 Message request. '}),'Accept and you become friends: messages between you are free both ways. You can reply without accepting, but each message costs coins.'),
+        el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Accept',onclick:()=>this.act(`/api/dm/${H}/accept`,{},()=>{ T.request=false; if(T.cost) T.cost={fee:0,friends:true}; toast(`You and @${this.with} are friends now: messages are free.`); this.view='chats'; const c=this.list.find(x=>x.with.h.toLowerCase()===this.with.toLowerCase()); if(c) c.request=false; this.renderNow(); })}),
           el('button',{class:'btn danger',text:'Delete',onclick:()=>this.act(`/api/dm/${H}/delete`,{},()=>{ toast('Request deleted.'); this.back(); })}),
           el('button',{class:'btn',text:'🚫 Block',onclick:()=>Blocks.ask(this.with)}))):null;
       const bar=(!T||T.canSend)?this.composer(T)

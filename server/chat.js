@@ -75,11 +75,20 @@ export class Chat {
     for (const o of others) { const h = H.get(o), d = mine && h ? Math.hypot(mine[0] - h[0], mine[1] - h[1]) : Infinity; if (!(d <= R.NEIGHBOUR_TILES)) far++; if (Number.isFinite(d)) maxD = Math.max(maxD, d); }
     return { fee: far ? R.MESSAGE_FEE : 0, near: !far, miles: maxD ? R.miles(maxD) : null, far };
   }
+  // Private messages: once someone accepts your message request you're friends, and messages between friends are free
+  // both ways, wherever you live. Until a request is accepted, every message costs MESSAGE_FEE coins.
+  async friends(me, o) {
+    const pair = pairOf(me, o), first = (await pool.query('select sender_id from dms where pair = $1 order by t asc limit 1', [pair])).rows[0];
+    const st = (await pool.query('select citizen_id from chat_state where accepted and ((citizen_id = $1 and key = $2) or (citizen_id = $3 and key = $4))', [me, 'dm:' + o, o, 'dm:' + me])).rows;
+    if (!st.length) return false; if (!first) return true; // they accepted you, or you them: either way you're friends
+    const accepter = first.sender_id === me ? o : me; return st.some(r => r.citizen_id === accepter);
+  }
+  async dmFee(me, o) { const f = await this.friends(me, o); return { fee: f ? 0 : R.MESSAGE_FEE, friends: f }; }
   async charge(me, fee) {
     if (!fee || !this.world) return;
     await this.world.personal(async ch => {
       const c = (await ch.q('select * from citizens where id = $1 for update', [me])).rows[0]; ch.coins(c);
-      if (c.coins_base < fee) throw new HttpError(400, `Messages to colonists who live far away cost ${fee} coins each, and you have ${c.coins_base} on you.`);
+      if (c.coins_base < fee) throw new HttpError(400, `This message costs ${fee} coins, and you have ${c.coins_base} on you.`);
       c.coins_base -= fee; treasuryAdd(ch, fee); track(ch, 'chat:fee', fee, c.id); ch.touch(c); await ch.saveCitizen(c);
     });
   }
@@ -94,7 +103,7 @@ export class Chat {
     await pool.query('update dms set read = true where pair = $1 and recipient_id = $2 and not read', [pair, me]);
     const b = await this.blockState(me, o.id), first = (await pool.query('select sender_id from dms where pair = $1 order by t asc limit 1', [pair])).rows[0];
     return { with: { ...person(o), verified: o.verified }, iBlocked: b.iBlocked, canSend: !b.iBlocked && !b.blockedMe && o.verified && o.id !== me,
-      request: !!first && first.sender_id !== me && !s.accepted, pinned: !!s.pinned, cost: await this.feeFor(me, [o.id]), messages: msgs.map(m => msgOut(m, me)) };
+      request: !!first && first.sender_id !== me && !s.accepted, pinned: !!s.pinned, cost: await this.dmFee(me, o.id), messages: msgs.map(m => msgOut(m, me)) };
   }
   // People you chat with (chats you started, or requests you accepted), most messages first: for @ suggestions.
   async contacts(me) {
@@ -124,7 +133,7 @@ export class Chat {
     await assertNotMuted(meP.id);
     const now = Date.now(); if (now - (this.lastSend.get(meP.id) || 0) < 700) throw new HttpError(429, 'Slow down a little.');
     this.lastSend.set(meP.id, now); if (this.lastSend.size > 5000) this.lastSend.clear();
-    const pair = pairOf(meP.id, o.id), rq = await this.quote('dms', 'm.pair = $2', [pair], replyTo), cost = await this.feeFor(meP.id, [o.id]);
+    const pair = pairOf(meP.id, o.id), rq = await this.quote('dms', 'm.pair = $2', [pair], replyTo), cost = await this.dmFee(meP.id, o.id);
     await this.charge(meP.id, cost.fee);
     const first = !Number((await pool.query('select count(*) n from dms where pair = $1', [pair])).rows[0].n);
     const m = { id: crypto.randomUUID(), pair, sender_id: meP.id, recipient_id: o.id, text, t: now };

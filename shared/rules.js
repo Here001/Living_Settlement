@@ -176,8 +176,9 @@ export function crimeOdds(kind, dist, wave = 0, night = false) {
 export const NO_GO = new Set(['jail', 'prison', 'police', 'commissariat', 'policeplaza', 'dispatch']);
 export const canGoTo = type => { const t = BUILDING_TYPES[type]; return !!t && !NO_GO.has(type) && t.cat !== 'nature' && t.cat !== 'decor'; };
 export const TILE_MILES = 0.05;
-// Chatting: messaging a neighbour (someone whose home is within NEIGHBOUR_TILES of yours, about 2 miles: the same
-// district) is free. Anyone further away costs MESSAGE_FEE coins a message, paid from your cash to the treasury.
+// Chatting: private messages are free between friends (once someone accepts your message request, you're friends, both
+// ways, wherever you live); until then each message costs MESSAGE_FEE coins, paid from your cash to the treasury.
+// Group messages are free when every member lives within NEIGHBOUR_TILES of you (about 2 miles: the same district).
 export const NEIGHBOUR_TILES = 40, MESSAGE_FEE = 2, GROUP_MAX = 30;
 // Renting a home: a moving-in fee (a tenth of what one flat in the building is worth) plus the movers.
 export const RENT_FEE_SHARE = 0.1, MOVERS_BASE = 500, MOVERS_PER_TILE = 15;

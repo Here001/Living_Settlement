@@ -794,6 +794,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     await sleep(800); const sent = await call('POST', '/api/dm/jobfill_a', { text: 'Hello from Zara 👋' }, P);
     await sleep(500);
     ok(sent.status === 200 && wb.msgs.some(m => m.type === 'dm' && m.data.text === 'Hello from Zara 👋' && m.data.from.h === 'zara_ng'), 'the message arrives live for the recipient');
+    ok(sent.json.fee === 2, 'a message request costs 2 coins (you are not friends yet), even to a neighbour', JSON.stringify(sent.json));
     ok(wa.msgs.some(m => m.type === 'dm' && m.data.id === sent.json.id), "and on the sender's other screens");
     ok(!stranger.msgs.some(m => m.type === 'dm' || JSON.stringify(m).includes('Hello from Zara')), 'nobody else receives it');
     const convB = (await call('GET', '/api/dm', undefined, PB)).json;
@@ -802,7 +803,8 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     const th = (await call('GET', '/api/dm/zara_ng', undefined, PB)).json;
     ok(th.messages.length === 1 && !th.messages[0].mine && th.with.online, 'opening the chat shows the message');
     ok((await call('GET', '/api/dm', undefined, PB)).json[0].unread === 0, 'and marks it read');
-    await sleep(800); await call('POST', '/api/dm/zara_ng', { text: 'Hi Zara!' }, PB); await sleep(400);
+    await sleep(800); const rb = await call('POST', '/api/dm/zara_ng', { text: 'Hi Zara!' }, PB); await sleep(400);
+    ok(rb.json.fee === 2, 'replying without accepting costs 2 coins too', JSON.stringify(rb.json));
     ok(wa.msgs.some(m => m.type === 'dm' && m.data.text === 'Hi Zara!'), 'replies arrive live too');
     ok((await call('GET', '/api/dm', undefined, PB)).json[0].request === true && (await call('GET', '/api/dm/zara_ng', undefined, PB)).json.request === true, 'replying to a request doesn’t accept it');
     ok(!(await call('GET', '/api/dm-contacts', undefined, PB)).json.some(x => x.h === 'zara_ng') && (await call('GET', '/api/dm-contacts', undefined, P)).json[0]?.h === 'jobfill_a', '@ suggestions list people you chat with (not unaccepted requests)');
@@ -813,17 +815,17 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       const old = (await pool.query('select home_id from citizens where id = $1', [bid])).rows[0].home_id;
       await pool.query('update citizens set home_id = null where id = $1', [bid]);
       const far = (await call('GET', '/api/dm/jobfill_a', undefined, P)).json;
-      ok(far.cost.fee === 2 && far.cost.near === false, 'messaging someone who doesn’t live nearby costs 2 coins', JSON.stringify(far.cost));
+      ok(far.cost.fee === 0 && far.cost.friends === true, 'once the request is accepted they are friends: free messages, even living far apart', JSON.stringify(far.cost));
       const c0 = await cash('zara_ng'); await sleep(800);
       const rp1 = await call('POST', '/api/dm/jobfill_a', { text: 'replying to you', replyTo: far.messages.find(m => !m.mine).id }, P); await sleep(300);
-      ok(rp1.status === 200 && rp1.json.fee === 2 && await cash('zara_ng') === c0 - 2, 'and the 2 coins come out of their cash', JSON.stringify(rp1.json));
+      ok(rp1.status === 200 && rp1.json.fee === 0 && await cash('zara_ng') === c0, 'and no coins come out of their cash', JSON.stringify(rp1.json));
       const rpm = (await call('GET', '/api/dm/zara_ng', undefined, PB)).json.messages.at(-1);
       ok(rpm.reply && rpm.reply.text === 'Hi Zara!' && rpm.reply.from === 'jobfill_a', 'a reply carries the message it answers', JSON.stringify(rpm));
       ok(wb.msgs.some(m => m.type === 'dm' && m.data.reply?.text === 'Hi Zara!'), 'and the quote arrives live too');
       if (zh) { await pool.query('update citizens set home_id = $2 where id = $1', [bid, zh]);
-        const nr = (await call('GET', '/api/dm/jobfill_a', undefined, P)).json; ok(nr.cost.fee === 0 && nr.cost.near, 'neighbours message for free', JSON.stringify(nr.cost)); }
+        const nr = (await call('GET', '/api/dm/zara_ng', undefined, PB)).json; ok(nr.cost.fee === 0 && nr.cost.friends, 'free both ways: the one who accepted messages for free too', JSON.stringify(nr.cost)); }
       await set('zara_ng', 'coins_base = 1'); await pool.query('update citizens set home_id = null where id = $1', [bid]); await sleep(800);
-      ok((await call('POST', '/api/dm/jobfill_a', { text: 'broke' }, P)).status === 400, "without 2 coins you can't message far-away colonists");
+      ok((await call('POST', '/api/dm/jobfill_a', { text: 'broke' }, P)).status === 200, 'friends can message with no coins at all');
       await pool.query('update citizens set home_id = $2 where id = $1', [bid, old]); await set('zara_ng', 'coins_base = 5000');
       ok((await call('POST', '/api/dm/zara_ng/pin', { on: true }, PB)).json.pinned === true && (await call('GET', '/api/dm', undefined, PB)).json[0].pinned, 'a chat can be pinned');
       ok((await call('POST', '/api/dm/zara_ng/delete', {}, PB)).status === 200 && !(await call('GET', '/api/dm', undefined, PB)).json.some(c => c.with.h === 'zara_ng'), 'deleting a chat takes it off your list');

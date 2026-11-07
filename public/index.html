@@ -1350,9 +1350,11 @@ function hatch(a,b,c,d,n,col,lw){ ctx.strokeStyle=col; ctx.lineWidth=lw||0.8; ct
 const QSAVED=(()=>{ try{ const v=localStorage.getItem('resurgence-quality'); return v==null?null:Math.max(0,Math.min(3,Number(v)||0)); }catch(e){ return null; } })();
 const QGUESS=(()=>{ const mem=navigator.deviceMemory||8, cores=navigator.hardwareConcurrency||8, mobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent); return mobile&&(mem<=3||cores<=4)?2:mobile&&mem<=4?1:0; })();
 const Quality={ level:QSAVED??QGUESS, slow:0, fast:0, last:0, avg:16,
-  dpr(){ const full=Math.min(window.devicePixelRatio||1,2); return Math.max(1,Math.min(full,[2,1.5,1.25,1][this.level])); },
+  // phones draw at up to 1.75× (sharp enough on a small screen, and about a quarter fewer pixels than 2×); battery saver 1.25×
+  dpr(){ const full=Math.min(window.devicePixelRatio||1,typeof MOBILE!=='undefined'&&MOBILE?1.75:2), cap=typeof Power!=='undefined'&&Power.saver?1.25:9; return Math.max(1,Math.min(full,cap,[2,1.5,1.25,1][this.level])); },
   get grain(){ return this.level<2; }, get ghosts(){ return this.level<3; },
-  sample(work,ts){ const dt=this.last?ts-this.last:16; this.last=ts; if(dt>400||document.hidden) return; // ignore pauses (tab hidden, alerts)
+  sample(work,ts){ const raw=this.last?ts-this.last:16; this.last=ts; if(raw>400||document.hidden) return; // ignore pauses (tab hidden, alerts)
+    const dt=Math.max(16,raw-Math.max(0,Power.gap(ts)-16)); // the frame pacing's own deliberate pause isn't slowness
     this.avg+=(dt-this.avg)*Math.min(0.3,dt/320); // a smoothed frame time that reacts within about a third of a second
     // slow = milliseconds spent below about 25 frames a second; fast = milliseconds spent at nearly 50+
     if(this.avg>40){ this.fast=0; if((this.slow+=dt)>2500&&this.level<3){ this.set(this.level+1); } }
@@ -1362,11 +1364,27 @@ const Quality={ level:QSAVED??QGUESS, slow:0, fast:0, last:0, avg:16,
   set(l){ const now=performance.now();
     if(l<this.level) this.upAt=now; else if(now-this.upAt<20000) this.floor=l; // went up and had to come straight back down: stay here
     this.level=l; this.slow=this.fast=0; this.avg=24; resize(); clearTimeout(this.saveT); this.saveT=setTimeout(()=>{ try{ localStorage.setItem('resurgence-quality',String(this.level)); }catch(e){} },4000); } };
+// Power: phones get hot when the map redraws flat out. The map redraws at full speed only while you touch it, 30 times
+// a second for a few seconds after, and then, when you're just watching, 15 times a second on a phone (30 on a
+// computer); when a card or menu covers most of the map, about 6. Battery saver (Settings, or by itself on a phone below 20% and not charging)
+// halves those, draws at a lower resolution and thins out the crowds and traffic.
+const MOBILE=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&innerWidth<900);
+const Power={ pref:(()=>{ try{ return localStorage.getItem('resurgence-saver')||'auto'; }catch(e){ return 'auto'; } })(), low:false,
+  get saver(){ return this.pref==='on'||(this.pref==='auto'&&this.low); },
+  set(v){ this.pref=v; try{ localStorage.setItem('resurgence-saver',v); }catch(e){} resize(); },
+  covered(){ return document.body.classList.contains('card-max')||document.body.classList.contains('pane-max')||!!document.querySelector('.rsheet-bg:not(.dock)'); },
+  // the gap (ms) between redraws right now
+  gap(ts){ if(this.covered()) return this.saver?250:160;
+    if(ts-lastInput<1500) return this.saver?33:0; // touching the map: full speed
+    if(Watch.id||follow) return this.saver?50:32; // the camera following someone: smooth enough at 30
+    const idle=ts-lastInput; if(idle<4000) return this.saver?50:(MOBILE?33:16); // just let go: 30 a second while a fling or zoom settles
+    return this.saver?(MOBILE?100:50):(MOBILE?66:32); } }; // then on a phone, 15 a second (10 on battery saver): people stroll, cars cruise
+if(navigator.getBattery) navigator.getBattery().then(b=>{ const f=()=>{ const was=Power.saver; Power.low=!b.charging&&b.level<=0.2; if(was!==Power.saver) resize(); }; f(); b.addEventListener('levelchange',f); b.addEventListener('chargingchange',f); }).catch(()=>{});
 function resize(){ dpr=Quality.dpr(); cw=cv.clientWidth||innerWidth; ch=cv.clientHeight||innerHeight; cv.width=Math.round(cw*dpr); cv.height=Math.round(ch*dpr); }
 // Every couple of seconds, take the map's colour along its top and bottom edges and paint the page's edges (and the
 // browser's theme colour) to match, so the phone's own bars blend into the colony instead of showing a flat band.
 const edgeMeta=document.querySelector('meta[name="theme-color"]'); let edgeLast='';
-function edgeColours(){ if(document.hidden||!cv.width) return;
+let edgeCam=''; function edgeColours(){ if(document.hidden||!cv.width) return; const ck2=Math.round(cam.x/40)+','+Math.round(cam.y/40)+','+cam.z.toFixed(2)+','+Math.round(gmNow()/60); if(ck2===edgeCam) return; edgeCam=ck2; /* reading the screen back is costly: only when the view or the hour changed */
   try{ const g=cv.getContext('2d'), w=cv.width, h=cv.height, row=y=>{ const d=g.getImageData(0,y,w,1).data; let r=0,gg=0,b=0,n=0; for(let i=0;i<d.length;i+=4*Math.max(1,Math.floor(w/24))){ r+=d[i]; gg+=d[i+1]; b+=d[i+2]; n++; } return `rgb(${Math.round(r/n)},${Math.round(gg/n)},${Math.round(b/n)})`; };
     const top=row(Math.min(h-1,2)), bot=row(Math.max(0,h-3)), key=top+bot; if(key===edgeLast) return; edgeLast=key;
     const st=document.documentElement.style; st.setProperty('--edge-top',top); st.setProperty('--edge-bot',bot); if(edgeMeta) edgeMeta.setAttribute('content',top); }catch(e){} }
@@ -2656,7 +2674,7 @@ function drawRoadTile(x,y,R,has,pushDeco){ const k=TILEKEY||x+','+y;
 /* ---------------- frame ---------------- */
 // Fewer people are simulated on a phone that's struggling (the quality level goes up when frames run slow).
 // Zoomed far out people are only a few pixels tall, so fewer are drawn (and they're picked nearest the middle first).
-const crowdMax = () => Math.round(([1500,1100,700,350][Quality.level]||350)*(cam.z<0.6?0.45:cam.z<0.8?0.7:1)); let crowd=[], crowdAt=-1e9, areaSel=null;
+const crowdMax = () => Math.round(([1500,1100,700,350][Quality.level]||350)*(cam.z<0.6?0.45:cam.z<0.8?0.7:1)*(Power.saver?0.5:1)); let crowd=[], crowdAt=-1e9, areaSel=null;
 const progressOf = b => { const span=Math.max(1,(b.readyAt||0)-(b.builtAt||0)); return Math.max(0.03,Math.min(1,(Date.now()+skew-(b.builtAt||0))/span)); };
 // A building site: dug-out ground, a faint outline of what's coming, and scaffolding that rises as work goes on.
 function drawConstruction(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>drawConstruction(v,T(v))); }
@@ -3049,7 +3067,7 @@ let frameErrors=0, lastDraw=0, lastInput=0;
 // (and the battery). Any touch, drag, pinch, scroll or key goes straight back to full speed for a few seconds.
 for(const ev of ['pointerdown','pointermove','wheel','keydown','touchstart']) addEventListener(ev, ()=>{ lastInput=performance.now(); }, {passive:true, capture:true});
 function frame(ts){ requestAnimationFrame(frame);
-  if(ts-lastDraw<30 && ts-lastInput>2500) return;
+  const gap=Power.gap(ts); if(gap&&ts-lastDraw<gap-4) return;
   lastDraw=ts;
   const t0=performance.now();
   try{ drawFrame(ts); }
@@ -6084,6 +6102,9 @@ const PushUI={ st:null, at:0, busy:false, sw:null,
       if(on){ box.append(el('h4',{class:'bgroup',text:'Tell me about'})); for(const [k,nm] of Object.entries(S0.kinds||{})){ const cb=el('input',{type:'checkbox'}); cb.checked=S0.prefs?.[k]!==false; cb.onchange=()=>this.setPref(k,cb.checked);
           box.append(el('label',{class:'pushk'}, cb, el('span',{text:nm}))); }
         if(S0.devices>1) box.append(el('p',{class:'hint',text:`On ${S0.devices} devices.`})); }
+      { box.append(el('h4',{class:'bgroup',text:'🔋 Battery saver'}), el('p',{class:'hint',text:'Keeps your phone cooler and the battery going longer: the map redraws less often, a little less sharp, with fewer people and cars about.'}));
+        const seg=el('div',{class:'seg'}); for(const [k,nm] of [['auto','Auto'],['on','On'],['off','Off']]) seg.append(el('button',{'aria-pressed':String(Power.pref===k),text:nm,onclick:()=>{ Power.set(k); fill(); }}));
+        box.append(seg, el('p',{class:'hint',text:Power.pref==='auto'?(Power.low?'On now: your battery is low.':'Turns on by itself when your battery is low (below 20%) and not charging.'):Power.pref==='on'?'On.':'Off.'})); }
       const G=GuideUI.data; if(G&&!G.finished){ box.append(el('h4',{class:'bgroup',text:'🧭 Getting started guide'}), el('div',{class:'row-actions'}, G.hidden?el('button',{class:'btn',text:'Show it on my card',onclick:async()=>{ await GuideUI.unhide(); wrap.remove(); }}):el('button',{class:'btn',text:'Hide it',onclick:async()=>{ await GuideUI.hide(); wrap.remove(); }}))); }
       box.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Done',onclick:()=>{ wrap.remove(); if(sel) renderCard(true); }}))); };
     fill(); } };

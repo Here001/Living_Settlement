@@ -139,7 +139,10 @@ export function createView(canvas) {
       if (dt > 0.026) { slow++; fast = 0; } else { fast++; slow = Math.max(0, slow - 1); }
       if (slow > 40 && pr > 0.75) { pr = Math.max(0.75, pr - 0.25); renderer.setPixelRatio(pr); view.resize(); slow = 0; }
       if (fast > 600 && pr < maxPR) { pr = Math.min(maxPR, pr + 0.25); renderer.setPixelRatio(pr); view.resize(); fast = 0; }
-      const t0 = performance.now(); view.onFrame && view.onFrame(dt, now); renderer.render(scene, camera); view.ms = (view.ms || 0) * 0.9 + (performance.now() - t0) * 0.1; view.frames = (view.frames || 0) + 1; }); };
+      const t0 = performance.now(); view.onFrame && view.onFrame(dt, now);
+      // a hit shakes the camera just for this frame: "trauma" fades by itself, and the nudge is trauma² (see juice.js)
+      let sx = 0, sy = 0, sz = 0; if (view.trauma > 0) { view.trauma = Math.max(0, view.trauma - 1.5 * dt); const k = view.trauma * view.trauma * (view.shakeAmp || 0.6), t = now / 1000 * 30; sx = k * Math.sin(t * 1.7); sy = k * Math.sin(t * 2.3) * 0.7; sz = k * Math.sin(t * 1.3); camera.position.x += sx; camera.position.y += sy; camera.position.z += sz; }
+      renderer.render(scene, camera); if (sx || sy || sz) { camera.position.x -= sx; camera.position.y -= sy; camera.position.z -= sz; } view.ms = (view.ms || 0) * 0.9 + (performance.now() - t0) * 0.1; view.frames = (view.frames || 0) + 1; }); };
   view.stop = () => { view.running = false; renderer.setAnimationLoop(null); };
   view.dispose = () => { view.stop(); scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); for (const m of view.mats) m.dispose(); renderer.dispose(); };
   view.resize(); return view;

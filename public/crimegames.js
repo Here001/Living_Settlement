@@ -2,6 +2,7 @@
 // The rules (levels, moves, scoring) are in /shared/minigames.js, the same ones the server uses to check the result.
 // While a game is open the map behind it is paused (see Power in index.html), so the phone only works on the game.
 import * as MG from '/shared/minigames.js';
+import { sfx, feedback, shake, flash, pop, screenOf, bump, unlock, sound } from '/juice.js';
 
 let X = null; // what the page lends us: { api, toast, fmt, avatarSVG, done(result) }
 const $c = (tag, props, ...kids) => { const e = document.createElement(tag); if (props) for (const k in props) { const v = props[k]; if (v == null) continue;
@@ -51,12 +52,12 @@ function intro(root, kind, info) {
   if (heist && info.until) { const lab = root.querySelector('.mgleft'); const tick = () => { if (!lab.isConnected) return; const left = Math.max(0, info.until - Date.now()); lab.textContent = `⏱️ ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')} left for the crew to play`; setTimeout(tick, 500); }; tick(); }
 }
 async function begin(root, kind, info, practice) {
-  root.innerHTML = ''; root.append($c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'Setting up…' })));
+  unlock(); root.innerHTML = ''; root.append($c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'Setting up…' })));
   let run; try { run = info.heist && !practice ? await X.api(`/api/me/heists/${encodeURIComponent(info.heist)}/play`, { method: 'POST', body: {} }) : await X.api('/api/me/crime/start', { method: 'POST', body: { kind, practice } }); }
   catch (e) { X.toast(e.message); if (info.heist && !practice) close(); else intro(root, kind, info); return; }
   const L = MG.levelOf(kind, run.seed, run.diff, !!run.hard);
   root.innerHTML = ''; const cd = $c('div', { class: 'mgcount', text: '3' }); root.append(cd);
-  let n = 3; const tick = () => { n--; if (n > 0) { cd.textContent = String(n); setTimeout(tick, 650); } else { cd.remove(); play(root, kind, L, run, info); } }; setTimeout(tick, 650);
+  let n = 3; sfx('tick'); const tick = () => { n--; if (n > 0) { cd.textContent = String(n); bump(cd); sfx('tick'); setTimeout(tick, 650); } else { cd.remove(); sfx('whoosh'); play(root, kind, L, run, info); } }; setTimeout(tick, 650);
 }
 function play(root, kind, L, run, info) {
   const finish = async log => { root._stop && root._stop(); root.innerHTML = ''; root.append($c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'Counting up…' })));
@@ -84,7 +85,7 @@ function heistWait(root, kind, info, r) {
     body.innerHTML = ''; body.append($c('h2', { text: (good ? '💰 ' : bad ? '🚓 ' : '🫥 ') + R0.title }), bar('Crew play', R0.score.play, 60, 'p'), bar('The setting', R0.score.setting, 40, 's'), $c('div', { class: 'mgtotal' }, $c('span', { text: 'Crew score' }), $c('b', { text: `${R0.score.total}` })),
       $c('p', { class: 'mgmoney', text: mine.status === 'got' ? (mine.each ? `+${X.fmt(mine.each)} coins` : 'You got away, with nothing.') : mine.status === 'caught' ? `🚓 You were caught: fined ${X.fmt(mine.fine)} coins${mine.jailed ? ' and jailed' : ''}.` : 'You sat this one out.' }),
       $c('div', { class: 'mgbtns' }, $c('button', { class: 'mgb hot', text: 'Back to the map', onclick: close })));
-    card.classList.add(good ? 'good' : bad ? 'bad' : 'meh'); buzz(good ? [30, 40, 30] : 200); X.done && X.done(R0); return true; };
+    card.classList.add(good ? 'good' : bad ? 'bad' : 'meh'); buzz(good ? [30, 40, 30] : 200); sfx(good ? 'win' : bad ? 'lose' : 'wrong'); X.done && X.done(R0); return true; };
   const poll = async () => { if (stop || !card.isConnected) return; let st = null; try { st = await X.api(`/api/me/heists/${encodeURIComponent(r.heistId)}/live`); } catch (e) {}
     if (st && show(st)) return; setTimeout(poll, 2500); };
   if (r.heist && show(r.heist)) return; setTimeout(poll, 1500);
@@ -101,12 +102,16 @@ function result(root, kind, info, run, r) {
     bar('Your play', r.score.play, 60, 'p'), bar('The setting', r.score.setting, 40, 's'), $c('div', { class: 'mgtotal' }, $c('span', { text: 'Score' }), $c('b', { text: `${r.score.total}` })),
     $c('p', { class: 'mgmoney', text: money }),
     $c('div', { class: 'mgbtns' }, $c('button', { class: 'mgb hot', text: 'Done', onclick: close }))));
-  buzz(good ? [30, 40, 30] : bad ? 300 : 60);
+  buzz(good ? [30, 40, 30] : bad ? 300 : 60); sfx(good ? 'win' : bad ? 'lose' : 'wrong');
+  // the takings count up, coin by coin
+  const mEl = root.querySelector('.mgmoney'); if (r.money && !r.practice && mEl) { const full = mEl.textContent, t0 = performance.now(), dur = Math.min(1400, 500 + r.money / 50);
+    const up = now => { if (!mEl.isConnected) return; const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3); mEl.textContent = `+${X.fmt(Math.round(r.money * e))} coins`; if (k < 1) { sfx('tick'); requestAnimationFrame(up); } else { mEl.textContent = full; bump(mEl); sfx('coin'); } }; requestAnimationFrame(up); }
 }
 
 // A game loop that only runs while the game is on screen, and stops cleanly.
 function loop(root, fn) { let on = true, last = performance.now(); const f = now => { if (!on) return; const dt = Math.min(0.1, (now - last) / 1000); last = now; fn(dt, now); requestAnimationFrame(f); }; requestAnimationFrame(f); root._stop = () => { on = false; }; }
-const hud = (...kids) => $c('div', { class: 'mghud' }, ...kids);
+const hud = (...kids) => { const b = $c('button', { class: 'mgsnd', 'aria-label': 'Sound', 'aria-pressed': String(sound.on), text: sound.on ? '🔊' : '🔇', onclick: e => { e.stopPropagation(); sound.set(!sound.on); b.textContent = sound.on ? '🔊' : '🔇'; b.setAttribute('aria-pressed', String(sound.on)); } });
+  return $c('div', { class: 'mghud' }, ...kids, b); };
 const meter = (cls, label) => { const i = $c('i'); const m = $c('div', { class: 'mgmeter ' + cls }, $c('span', { text: label }), $c('div', { class: 'mgtrack' }, i)); m.set = v => { i.style.width = Math.round(Math.max(0, Math.min(1, v)) * 100) + '%'; }; return m; };
 
 // ---------------- Cut-away stealth ----------------
@@ -158,7 +163,8 @@ async function stealth(root, L, finish) {
   const up = () => { joy = null; stick.style.display = 'none'; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
   const kd = e => { keys.add(e.key); if (e.key.startsWith('Arrow')) e.preventDefault(); }, ku = e => keys.delete(e.key); addEventListener('keydown', kd); addEventListener('keyup', ku);
   view.start((dt, now) => {
-    if (!ended) { acc += dt; while (acc >= MG.STEP && !s.done) { acc -= MG.STEP; prev = s; const [vx, vy] = input(); s = MG.stealthStep(L, s, vx, vy); path.push([+s.x.toFixed(4), +s.y.toFixed(4)]); if (s.who && !prev.who) buzz(40); } }
+    if (!ended) { acc += dt; while (acc >= MG.STEP && !s.done) { acc -= MG.STEP; prev = s; const [vx, vy] = input(); s = MG.stealthStep(L, s, vx, vy); path.push([+s.x.toFixed(4), +s.y.toFixed(4)]); if (s.who && !prev.who) { buzz(40); feedback('small', { view, sound: 'wrong' }); }
+        if (MG.itemCount(s) > MG.itemCount(prev)) { const q = screenOf(view, s.x * U, 1.8, s.y * U), it = L.items[Math.log2((s.items || 0) & ~(prev.items || 0)) | 0]; feedback('small', { view, root, sound: 'pickup', text: `+ ${it ? MG.ITEMS[it.k].icon + ' ' + MG.ITEMS[it.k].name : '✨'}`, at: q, kind: 'gold' }); } } }
     const u = s.done ? 1 : Math.min(1, acc / MG.STEP), px = prev.x + (s.x - prev.x) * u, py = prev.y + (s.y - prev.y) * u, tt = prev.t + (s.t - prev.t) * u;
     const vx = (s.x - prev.x) / MG.STEP * U, vy = (s.y - prev.y) / MG.STEP * U; me.setPos(px * U, py * U); me.animate(dt, vx, vy); bag.visible = s.grabbed;
     const alarm = s.who > 0;
@@ -171,11 +177,11 @@ async function stealth(root, L, finish) {
     items.forEach((g, k) => { const got = (s.items || 0) & (1 << k); g.userData.gem.visible = !got; g.userData.halo.visible = !got; g.userData.gem.rotation.y = now / 500; g.userData.gem.position.y = 1.05 + Math.sin(now / 300 + k) * 0.05;
       if (!got && s.ii === k) g.userData.halo.scale.setScalar(1 + s.ig / MG.STEALTH.itemGrab); else g.userData.halo.scale.setScalar(1); });
     if (items.length) { const n = MG.itemCount(s), it2 = `✨ ${n}/${items.length} extras`; if (itemsB.textContent !== it2) itemsB.textContent = it2; }
-    if (s.zap > (stealth.zap || 0)) { buzz(250); root.classList.add('siren'); setTimeout(() => root.classList.remove('siren'), 600); } stealth.zap = s.zap;
-    if (s.grabbed && !lastGrab) { lastGrab = true; buzz([20, 30, 20]); }
+    if (s.zap > (stealth.zap || 0)) { buzz(250); root.classList.add('siren'); setTimeout(() => root.classList.remove('siren'), 600); feedback('large', { view, root, sound: 'zap', color: '255,40,40' }); } stealth.zap = s.zap;
+    if (s.grabbed && !lastGrab) { lastGrab = true; buzz([20, 30, 20]); feedback('medium', { view, root, sound: 'coin', text: '💰 Till emptied!', at: screenOf(view, px * U, 2, py * U), kind: 'gold', color: '255,214,90', flash: 0.12 }); bump(goal); }
     seen.set(s.seen); seen.classList.toggle('hot', alarm); clock.textContent = `${Math.max(0, Math.ceil(L.limit - s.t))}s`;
     const gtxt = s.grabbed ? '🚪 Out the back door!' : s.grab > 0 ? '💰 Emptying the till… stay close' : '💰 Get to the till'; if (goal.textContent !== gtxt) goal.textContent = gtxt;
-    if (s.done && !ended) { ended = true; if (s.done === 'spotted') buzz(400); setTimeout(() => finish({ path }), s.done === 'spotted' ? 900 : 400); }
+    if (s.done && !ended) { ended = true; if (s.done === 'spotted') { buzz(400); feedback('large', { view, root, sound: 'alarm', color: '255,40,40' }); } setTimeout(() => finish({ path }), s.done === 'spotted' ? 900 : 400); }
   });
   const stop = root._stop; root._stop = () => { stop && stop(); view.dispose(); ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); };
 }
@@ -243,8 +249,8 @@ function stealth2d(root, L, finish) {
     for (const c of L.cams) { const q = P(c.x, c.y, 1.3); g.fillStyle = '#3A3A44'; g.fillRect(q.x - 6, q.y - 4, 12, 8); g.fillStyle = (performance.now() / 400 | 0) % 2 ? '#FF4B3A' : '#7A1E18'; g.beginPath(); g.arc(q.x + 4, q.y - 1, 2, 0, 7); g.fill(); }
     seen.set(s.seen); seen.classList.toggle('hot', s.who > 0); clock.textContent = `${Math.max(0, Math.ceil(L.limit - s.t))}s`;
     const gtxt = s.grabbed ? '🚪 Out the back door!' : s.grab > 0 ? '💰 Emptying the till… stay close' : '💰 Get to the till'; if (goal.textContent !== gtxt) goal.textContent = gtxt;
-    if (s.grabbed && !lastSeen) { lastSeen = 1; buzz([20, 30, 20]); }
-    if (s.done && !ended) { ended = true; ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); if (s.done === 'spotted') buzz(400); setTimeout(() => finish({ path }), s.done === 'spotted' ? 900 : 400); }
+    if (s.grabbed && !lastSeen) { lastSeen = 1; buzz([20, 30, 20]); sfx('coin'); bump(goal); }
+    if (s.done && !ended) { ended = true; ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); if (s.done === 'spotted') { buzz(400); feedback('large', { root, sound: 'alarm', color: '255,40,40' }); } setTimeout(() => finish({ path }), s.done === 'spotted' ? 900 : 400); }
   });
   const stop = root._stop; root._stop = () => { stop && stop(); ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); };
 }
@@ -258,14 +264,14 @@ function con(root, L, finish) {
   wrap.append($c('div', { class: 'mgtop' }, av, face), bubble, turnLab, opts);
   const state = () => MG.conReplay(L, picks), show = () => {
     const st = state(), S0 = st.state || { trust: 0, sus: 0, turns: 0 }; trust.set(S0.trust / L.need); sus.set(S0.sus / 100);
-    if (st.ok) { done = true; setTimeout(() => finish({ picks }), 700); bubble.textContent = st.money ? 'Deal! I\'ll take it. 🤑' : 'Hmm… no thanks. I\'m off.'; face.textContent = st.money ? '🤩' : '😠'; opts.innerHTML = ''; return; }
+    if (st.ok) { done = true; setTimeout(() => finish({ picks }), 700); bubble.textContent = st.money ? 'Deal! I\'ll take it. 🤑' : 'Hmm… no thanks. I\'m off.'; face.textContent = st.money ? '🤩' : '😠'; bump(face); sfx(st.money ? 'coin' : 'wrong'); opts.innerHTML = ''; return; }
     const R0 = L.rounds[picks.length], M = MG.MOODS[R0.mood]; face.textContent = M.face; bubble.textContent = M.say[R0.say]; turnLab.textContent = `Turn ${picks.length + 1} of ${L.rounds.length} · they seem ${M.name.toLowerCase()}`;
     opts.innerHTML = ''; R0.options.forEach((o, i) => opts.append($c('button', { class: 'mgopt', onclick: () => aim(i) }, $c('b', { text: MG.TAGS[o.tag].name }), $c('span', { text: MG.TAGS[o.tag].lines[o.line] })))); };
   // the timing bar for the chosen line: tap "Say it" with the marker in the green
   const aim = i => { opts.innerHTML = ''; const zoneW = L.zone, bar = $c('div', { class: 'mgtime' }), zone = $c('i', { class: 'z', style: `left:${(0.5 - zoneW / 2) * 100}%;width:${zoneW * 100}%` }), mk = $c('i', { class: 'm' }); bar.append(zone, mk);
     let pos = 0, dir = 1, on = true; const sp = 0.9 + L.diff * 0.18; let last = performance.now();
     const step = now => { if (!on) return; const dt = (now - last) / 1000; last = now; pos += dir * sp * dt; if (pos > 1) { pos = 1; dir = -1; } if (pos < 0) { pos = 0; dir = 1; } mk.style.left = (pos * 100) + '%'; requestAnimationFrame(step); }; requestAnimationFrame(step);
-    const say = () => { if (!on) return; on = false; const off = Math.abs(pos - 0.5), tm = Math.max(0, 1 - Math.max(0, off - zoneW / 2) / 0.35) * (off <= zoneW / 2 ? 1 : 0.7); picks.push({ o: i, t: +tm.toFixed(3) }); buzz(tm > 0.9 ? 25 : 10); show(); };
+    const say = () => { if (!on) return; on = false; const off = Math.abs(pos - 0.5), tm = Math.max(0, 1 - Math.max(0, off - zoneW / 2) / 0.35) * (off <= zoneW / 2 ? 1 : 0.7); picks.push({ o: i, t: +tm.toFixed(3) }); buzz(tm > 0.9 ? 25 : 10); sfx(tm > 0.9 ? 'ok' : tm > 0.5 ? 'tick' : 'wrong'); if (tm <= 0.5) shake(root, 0.25); show(); bump(face); };
     opts.append($c('p', { class: 'mghint', text: MG.TAGS[L.rounds[picks.length].options[i].tag].lines[L.rounds[picks.length].options[i].line] }), bar, $c('button', { class: 'mgb hot', text: '🗣️ Say it', onclick: say })); };
   show();
   loop(root, () => { const el = (performance.now() - t0) / 1000; clock.textContent = `${Math.max(0, Math.ceil(L.limit - el))}s`;
@@ -284,8 +290,8 @@ function atm(root, L, finish) {
   const symAt = (k, t) => MG.socketsAt(L, t)[k], sockOf = sym => MG.socketsAt(L, now()).indexOf(sym);
   const wires = L.wires.map((c, i) => { const b = $c('button', { class: 'mgwire', style: `--c:${MG.WIRE_COLS[c]}`, 'aria-label': MG.WIRE_NAMES[c] + ' wire', onclick: () => { if (stage !== 'wires' || linked.has(i)) return; sel = i; wires.forEach((w, k) => w.classList.toggle('on', k === i)); } }); left.append(b); return b; });
   const socks = L.sockets.map((sym0, k) => { const b = $c('button', { class: 'mgsock', text: MG.SYMBOLS[sym0], onclick: () => { if (stage !== 'wires' || sel == null) return; const w = sel, t = now(), sym = symAt(k, t); sel = null; wires.forEach(x => x.classList.remove('on')); events.push(['w', w, k, t]);
-      if (L.card[w].sym === sym) { linked.set(w, sym); lit = t; wires[w].classList.add('done'); b.classList.add('done'); draw(); buzz(15); if (linked.size === L.wires.length) setTimeout(startPin, 400); }
-      else { pen += L.wrongWire; b.classList.add('spark'); setTimeout(() => b.classList.remove('spark'), 400); buzz(120); } } }); right.append(b); return b; });
+      if (L.card[w].sym === sym) { linked.set(w, sym); lit = t; wires[w].classList.add('done'); b.classList.add('done'); draw(); buzz(15); sfx('ok'); bump(b); if (linked.size === L.wires.length) setTimeout(startPin, 400); }
+      else { pen += L.wrongWire; b.classList.add('spark'); setTimeout(() => b.classList.remove('spark'), 400); buzz(120); feedback('medium', { root, sound: 'zap', color: '255,60,40' }); } } }); right.append(b); return b; });
   const draw = () => { const r0 = board.getBoundingClientRect(); svg.innerHTML = ''; for (const [w, sym] of linked) { const k = sockOf(sym); if (k < 0) continue; const a = wires[w].getBoundingClientRect(), b = socks[k].getBoundingClientRect(), x1 = a.right - r0.left, y1 = a.top + a.height / 2 - r0.top, x2 = b.left - r0.left, y2 = b.top + b.height / 2 - r0.top;
       const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}`); p.setAttribute('stroke', MG.WIRE_COLS[L.wires[w]]); p.setAttribute('stroke-width', '5'); p.setAttribute('fill', 'none'); p.setAttribute('stroke-linecap', 'round'); svg.append(p); } };
   const status = $c('p', { class: 'mghint', text: L.hard ? 'Hard: the sockets swap places every few seconds, and the fuse 🧨 burns between moves. Each right move relights it.' : 'Tap a wire, then the socket with its symbol.' });
@@ -293,19 +299,19 @@ function atm(root, L, finish) {
   // the keypad: watch the code flash, then tap it back
   let at = 0, showing = false; const pad = $c('div', { class: 'mgpad' }), keys = [];
   for (let d = 1; d <= 9; d++) { const b = $c('button', { class: 'mgkey', text: String(d), onclick: () => press(d) }); keys.push(b); pad.append(b); }
-  const flash = (d, ms) => { const b = keys[d - 1]; b.classList.add('lit'); setTimeout(() => b.classList.remove('lit'), ms); };
+  const flash = (d, ms) => { const b = keys[d - 1]; b.classList.add('lit'); setTimeout(() => b.classList.remove('lit'), ms); if (ms > 150) sfx('tick'); };
   const playCode = () => { showing = true; status.textContent = '👀 Watch the code…'; const gap = Math.max(260, 520 - L.diff * 45); L.pin.forEach((d, i) => setTimeout(() => flash(d, gap * 0.7), 400 + i * gap)); setTimeout(() => { showing = false; status.textContent = 'Now tap it back.'; }, 400 + L.pin.length * gap); };
   const startPin = () => { lit = lit + 0.4 + MG.atmCodeTime(L); stage = 'pin'; /* the fuse waits while the code flashes (same as the server's count) */ wrap.innerHTML = ''; wrap.append($c('div', { class: 'mgscreen', text: 'ENTER SERVICE CODE' }), pad, status); playCode(); };
   const press = d => { if (stage !== 'pin' || showing || done) return; events.push(['k', d, now()]); flash(d, 150);
-    if (d === L.pin[at]) { at++; lit = now(); buzz(10); if (at === L.pin.length) { stage = 'open'; status.textContent = '💸 Cash coming out!'; end(); } }
-    else { at = 0; pen += L.wrongKey; lit = Math.max(lit, now() + 0.5 + MG.atmCodeTime(L)); buzz(150); pad.classList.add('shake'); setTimeout(() => pad.classList.remove('shake'), 350); setTimeout(playCode, 500); } };
+    if (d === L.pin[at]) { at++; lit = now(); buzz(10); sfx('click'); if (at === L.pin.length) { stage = 'open'; status.textContent = '💸 Cash coming out!'; sfx('coin'); bump(status); end(); } }
+    else { at = 0; pen += L.wrongKey; feedback('medium', { root, sound: 'wrong', color: '255,60,40' }); lit = Math.max(lit, now() + 0.5 + MG.atmCodeTime(L)); buzz(150); pad.classList.add('shake'); setTimeout(() => pad.classList.remove('shake'), 350); setTimeout(playCode, 500); } };
   const end = () => { if (done) return; done = true; setTimeout(() => finish({ events, time: now() }), 700); };
   addEventListener('resize', draw);
   loop(root, () => { const t = (performance.now() - t0) / 1000, a = pen + t / L.limit; alarm.set(a); alarm.classList.toggle('hot', a > 0.7); clock.textContent = `${Math.max(0, Math.ceil(L.limit - t))}s`;
     // hard mode: the sockets swap round, and the fuse burns down between right moves
-    if (L.shift && stage === 'wires') { const e2 = Math.floor(t / L.shift); if (e2 !== ep) { ep = e2; const sk = MG.socketsAt(L, t); socks.forEach((b, k) => { b.textContent = MG.SYMBOLS[sk[k]]; b.classList.toggle('done', [...linked.values()].includes(sk[k])); b.classList.add('spark'); setTimeout(() => b.classList.remove('spark'), 250); }); draw(); buzz(30); } }
+    if (L.shift && stage === 'wires') { const e2 = Math.floor(t / L.shift); if (e2 !== ep) { ep = e2; const sk = MG.socketsAt(L, t); socks.forEach((b, k) => { b.textContent = MG.SYMBOLS[sk[k]]; b.classList.toggle('done', [...linked.values()].includes(sk[k])); b.classList.add('spark'); setTimeout(() => b.classList.remove('spark'), 250); }); draw(); buzz(30); sfx('whoosh'); } }
     let burnt = false; if (fuseM && stage !== 'open') { const left = 1 - (t - lit) / L.fuse; fuseM.set(left); fuseM.classList.toggle('hot', left < 0.35); burnt = left <= 0; }
-    if (!done && (a >= 1 || burnt)) { stage = 'alarm'; status.textContent = burnt ? '🧨 The fuse burnt down: alarm!' : '🚨 The alarm went off!'; root.classList.add('siren'); buzz(500); end(); } });
+    if (!done && (a >= 1 || burnt)) { stage = 'alarm'; status.textContent = burnt ? '🧨 The fuse burnt down: alarm!' : '🚨 The alarm went off!'; root.classList.add('siren'); buzz(500); feedback('large', { root, sound: 'alarm', color: '255,40,40' }); end(); } });
   const stop = root._stop; root._stop = () => { stop && stop(); removeEventListener('resize', draw); };
 }
 
@@ -337,13 +343,13 @@ async function drive(root, L, finish) {
   const obs = L.obs.map((o, j) => { const m = o.k === 'cones' ? W.makeCones() : W.makeCar(o.k === 'police' ? 'police' : o.k === 'bus' ? 'bus' : o.k === 'van' ? 'van' : 'car', COLS[j % COLS.length]); m.position.set(laneX(o.lane), 0, -o.d * S2); m.visible = false; view.scene.add(m); return m; });
   let head = null; if (view.night > 0.3) { head = new THREE.SpotLight('#fff3d6', 120, 70, 0.45, 0.4, 1.2); view.scene.add(head, head.target); }
   const s = MG.driveStart(), moves = []; let prevD = 0, acc = 0, want = 1, carX = laneX(1), ended = false, shake = 0, lastCr = 0, tilt = 0, flash = 0;
-  const steer = dir => { if (ended) return; want = Math.max(0, Math.min(2, want + dir)); };
+  const steer = dir => { if (ended) return; const w0 = want; want = Math.max(0, Math.min(2, want + dir)); if (want !== w0) sfx('whoosh'); };
   let sx = null; cv.addEventListener('pointerdown', e => { sx = e.clientX; }); cv.addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; steer(Math.abs(dx) > 30 ? Math.sign(dx) : e.clientX < root.clientWidth / 2 ? -1 : 1); sx = null; });
   keyHook(root, e => { if (e.key === 'ArrowLeft' || e.key === 'a') steer(-1); else if (e.key === 'ArrowRight' || e.key === 'd') steer(1); else return false; });
   const cam = new THREE.Vector3(carX, 4.5, 9);
   view.start((dt, now) => {
     if (!ended) { acc += dt; while (acc >= MG.STEP && !s.done) { acc -= MG.STEP; prevD = s.d; let lane = s.lane; if (want !== s.lane) { lane = s.lane + Math.sign(want - s.lane); moves.push([s.n, lane]); } MG.driveStep(L, s, lane); } }
-    if (s.crashes > lastCr) { lastCr = s.crashes; shake = 0.5; flash = 0.35; buzz(200); }
+    if (s.crashes > lastCr) { lastCr = s.crashes; flash = 0.35; buzz(200); feedback('large', { view, sound: 'crash' }); }
     const u = s.done ? 1 : Math.min(1, acc / MG.STEP), d = prevD + (s.d - prevD) * u, z = -d * S2;
     const tx = laneX(s.lane), dx = tx - carX; carX += dx * Math.min(1, dt * 9); tilt += ((-dx * 0.08) - tilt) * Math.min(1, dt * 10);
     car.position.set(carX, 0, z); car.rotation.y = -dx * 0.06; car.rotation.z = tilt;
@@ -353,15 +359,14 @@ async function drive(root, L, finish) {
     const on = (now / 160 | 0) % 2; cop.userData.bar[0].material.color.set(on ? '#ff2a2a' : '#4a0000'); cop.userData.bar[1].material.color.set(on ? '#001040' : '#2a5bff');
     for (let j = 0; j < obs.length; j++) { const oz = -L.obs[j].d * S2; obs[j].visible = !s.gone.includes(j) && oz < z + 20 && oz > z - 260; if (L.obs[j].k === 'police' && obs[j].visible) { obs[j].userData.bar[0].material.color.set(on ? '#ff2a2a' : '#4a0000'); } }
     // the chase camera: low behind the car, pulling back and widening as you speed up, shaking when you hit something
-    shake = Math.max(0, shake - dt); const sh = shake ? (Math.random() - 0.5) * shake : 0;
-    cam.lerp(new THREE.Vector3(carX * 0.85 + sh, 4.2 + sh, z + 9.5 + speed * 0.05), Math.min(1, dt * 6)); view.camera.position.copy(cam); view.camera.lookAt(carX * 0.9, 1.2, z - 18);
+    cam.lerp(new THREE.Vector3(carX * 0.85, 4.2, z + 9.5 + speed * 0.05), Math.min(1, dt * 6)); view.camera.position.copy(cam); view.camera.lookAt(carX * 0.9, 1.2, z - 18);
     const fov = 58 + speed * 0.25; if (Math.abs(view.camera.fov - fov) > 0.2) { view.camera.fov += (fov - view.camera.fov) * Math.min(1, dt * 3); view.camera.updateProjectionMatrix(); }
     view.cut.R.value = 0; view.center.set(0, 0, z - 40); if ((now / 500 | 0) !== (view._sh || 0)) { view._sh = now / 500 | 0; view.setTime(X.minute ? X.minute() : 720); }
     if (head) { head.position.set(carX, 1.2, z - 2); head.target.position.set(carX, 0, z - 30); }
     if (flash > 0) { flash -= dt; root.style.boxShadow = `inset 0 0 0 ${Math.round(flash * 60)}px rgba(255,60,40,.5)`; } else if (root.style.boxShadow) root.style.boxShadow = '';
     prog.set(d / L.D); dmg.set(s.crashes / MG.DRIVE.wreck); dmg.classList.toggle('hot', s.crashes >= MG.DRIVE.wreck - 1); clock.textContent = `${Math.max(0, Math.ceil(L.limit - s.t))}s`;
     speedo.textContent = `${Math.round(speed * 3.6)} km/h`;
-    if (s.done && !ended) { ended = true; setTimeout(() => finish({ moves }), s.done === 'escaped' ? 600 : 1000); }
+    if (s.done && !ended) { ended = true; if (s.done !== 'escaped') feedback('large', { view, sound: 'alarm' }); setTimeout(() => finish({ moves }), s.done === 'escaped' ? 600 : 1000); }
   });
   const stop = root._stop; root._stop = () => { stop && stop(); view.dispose(); ro.disconnect(); };
 }
@@ -370,7 +375,7 @@ function drive2d(root, L, finish) {
   const C = canvasFor(root), dmg = meter('alarm', '💥'), prog = meter('trust', '🏁'), clock = $c('b', { class: 'mgclock' });
   root.append(hud(prog, dmg, clock), $c('div', { class: 'mgjoyhint', text: 'Tap left or right to change lane' }));
   const s = MG.driveStart(), moves = []; let prevD = 0, acc = 0, want = 1, carX = 1, ended = false, shake = 0, lastCr = 0;
-  const steer = dir => { if (ended) return; want = Math.max(0, Math.min(2, want + dir)); };
+  const steer = dir => { if (ended) return; const w0 = want; want = Math.max(0, Math.min(2, want + dir)); if (want !== w0) sfx('whoosh'); };
   let sx = null; C.cv.addEventListener('pointerdown', e => { sx = e.clientX; }); C.cv.addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; steer(Math.abs(dx) > 30 ? Math.sign(dx) : e.clientX < C.W / 2 ? -1 : 1); sx = null; });
   keyHook(root, e => { if (e.key === 'ArrowLeft' || e.key === 'a') steer(-1); else if (e.key === 'ArrowRight' || e.key === 'd') steer(1); else return false; });
   const COL = { car: ['#4A7BD9', '#3CC46A', '#F2C94C', '#B05FD6', '#F4F4F0'], van: ['#F4F4F0'], bus: ['#F2C94C'], police: ['#1E2A44'], cones: ['#F2994A'] };
@@ -384,7 +389,7 @@ function drive2d(root, L, finish) {
   };
   loop(root, dt => {
     if (!ended) { acc += dt; while (acc >= MG.STEP && !s.done) { acc -= MG.STEP; prevD = s.d; let lane = s.lane; if (want !== s.lane) { lane = s.lane + Math.sign(want - s.lane); moves.push([s.n, lane]); } MG.driveStep(L, s, lane); } }
-    if (s.crashes > lastCr) { lastCr = s.crashes; shake = 0.35; buzz(200); }
+    if (s.crashes > lastCr) { lastCr = s.crashes; shake = 0.35; buzz(200); sfx('crash'); }
     const { g, W, H, dpr } = C, u = s.done ? 1 : Math.min(1, acc / MG.STEP), d = prevD + (s.d - prevD) * u;
     carX += (s.lane - carX) * Math.min(1, dt * 14); shake = Math.max(0, shake - dt);
     const roadW = Math.min(W * 0.86, 380), laneW = roadW / 3, rx = (W - roadW) / 2, k = H / 75, carY = H * 0.8, ox = shake ? (Math.random() - 0.5) * 10 : 0;
@@ -409,10 +414,10 @@ function drive2d(root, L, finish) {
 function safe(root, L, finish) {
   const C = canvasFor(root), noise = meter('alarm', '🔊'), clock = $c('b', { class: 'mgclock' }), info = $c('div', { class: 'mggoal' });
   const btn = $c('button', { class: 'mgb hot mgbig', text: '🔓 Click' }); root.append(hud(noise, clock), info, btn);
-  const taps = [], t0 = performance.now(); let st = { stage: 'dial', got: 0, noise: 0 }, from = 0, flash = 0, flashCol = '', ended = false;
+  const taps = [], t0 = performance.now(); let st = { stage: 'dial', got: 0, noise: 0 }, from = 0, flash = 0, flashCol = '', ended = false, lastNum = -1;
   const now = () => +((performance.now() - t0) / 1000).toFixed(2);
   const tap = () => { if (ended) return; const t = now(); taps.push(t); const r = MG.safeReplay(L, taps, t); if (!r.ok) return; const was = st.got; st = { ...r.state, stage: r.state.stage === 'gaveup' ? 'dial' : r.state.stage }; // mid-game the dial is still turning (the check calls an unfinished game 'given up')
-    if (st.got > was) { from = t; flash = 0.4; flashCol = '60,196,106'; buzz(30); } else { flash = 0.4; flashCol = '255,75,58'; buzz(120); root.classList.add('shakeit'); setTimeout(() => root.classList.remove('shakeit'), 300); } };
+    if (st.got > was) { from = t; flash = 0.4; flashCol = '60,196,106'; buzz(30); sfx(st.stage === 'open' ? 'coin' : 'ok'); bump(info); } else { flash = 0.4; flashCol = '255,75,58'; buzz(120); feedback('medium', { root, sound: 'wrong' }); } };
   btn.addEventListener('pointerdown', e => { e.preventDefault(); tap(); }); C.cv.addEventListener('pointerdown', tap); keyHook(root, e => { if (e.key === ' ' || e.key === 'Enter') { tap(); e.preventDefault(); } else return false; });
   const num = a => ((Math.round((((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * 100) % 100) + 100) % 100;
   loop(root, dt => {
@@ -426,7 +431,7 @@ function safe(root, L, finish) {
     g.strokeStyle = '#2B2621'; g.fillStyle = '#2B2621'; g.font = `700 ${Math.max(10, R0 * 0.11)}px system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle';
     for (let i = 0; i < 100; i++) { const a = i / 100 * Math.PI * 2 - Math.PI / 2, l = i % 10 ? 0.06 : 0.12; g.lineWidth = i % 10 ? 1 : 2; g.beginPath(); g.moveTo(cx + Math.cos(a) * R0, cy + Math.sin(a) * R0); g.lineTo(cx + Math.cos(a) * R0 * (1 - l), cy + Math.sin(a) * R0 * (1 - l)); g.stroke();
       if (!(i % 10)) g.fillText(String(i), cx + Math.cos(a) * R0 * 0.78, cy + Math.sin(a) * R0 * 0.78); }
-    const pa = st.stage === 'dial' ? MG.safeAngle(N, t - from) - Math.PI / 2 : -Math.PI / 2;
+    const pa = st.stage === 'dial' ? MG.safeAngle(N, t - from) - Math.PI / 2 : -Math.PI / 2, nn = num(pa + Math.PI / 2); if (st.stage === 'dial' && nn !== lastNum) { lastNum = nn; if (nn % 5 === 0) sfx('click'); } // the dial clicks past each number
     g.strokeStyle = '#C8473D'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(pa) * R0 * 0.92, cy + Math.sin(pa) * R0 * 0.92); g.stroke(); g.lineCap = 'butt';
     g.fillStyle = '#2B2621'; g.beginPath(); g.arc(cx, cy, R0 * 0.16, 0, 7); g.fill();
     // the locked numbers
@@ -435,7 +440,7 @@ function safe(root, L, finish) {
     if (flash > 0) { flash -= dt; g.fillStyle = `rgba(${flashCol},${Math.max(0, flash) * 0.6})`; g.fillRect(0, 0, W, H); }
     const msg = st.stage === 'open' ? '🔓 It\'s open!' : `Stop on ${num(N.a)} · number ${st.got + 1} of ${n}`; if (info.textContent !== msg) info.textContent = msg;
     noise.set(st.noise); noise.classList.toggle('hot', st.noise > 0.55); clock.textContent = `${Math.max(0, Math.ceil(L.limit - t))}s`;
-    if (!ended && (st.stage === 'open' || st.stage === 'alarm' || t >= L.limit)) { ended = true; C.off(); if (st.stage !== 'open') { root.classList.add('siren'); buzz(500); } setTimeout(() => finish({ taps, time: Math.min(+t.toFixed(2), L.limit) }), 700); }
+    if (!ended && (st.stage === 'open' || st.stage === 'alarm' || t >= L.limit)) { ended = true; C.off(); if (st.stage !== 'open') { root.classList.add('siren'); buzz(500); sfx('alarm'); } setTimeout(() => finish({ taps, time: Math.min(+t.toFixed(2), L.limit) }), 700); }
   });
   const stop = root._stop; root._stop = () => { stop && stop(); C.off(); };
 }
@@ -471,7 +476,7 @@ function muscle(root, L, finish) {
   const SK = ['#8D5524', '#C68642', '#E0AC69', '#5C3A21'];
   loop(root, () => {
     const t = (performance.now() - t0) / 1000, { g, W, H, dpr } = C; ev = MG.muscleEval(L, taps, t) || ev;
-    if (ev.through > lastThrough) { lastThrough = ev.through; buzz(250); root.classList.add('shakeit'); setTimeout(() => root.classList.remove('shakeit'), 300); }
+    if (ev.through > lastThrough) { lastThrough = ev.through; buzz(250); feedback('medium', { root, sound: 'hurt', color: '255,40,40' }); }
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const fy = H * 0.62, cx = W / 2, half = W / 2 - 20, dw = Math.min(90, W * 0.2), s = Math.min(1.4, W / 400);
     g.fillStyle = '#3B342C'; g.fillRect(0, 0, W, H); g.fillStyle = '#7A6A5A'; g.fillRect(0, fy, W, H - fy); // wall and floor
@@ -536,7 +541,10 @@ async function horde(root, L, finish) {
   view.start((dt, now) => {
     if (!ended) { acc += dt; while (acc >= MG.STEP && !s.done) { acc -= MG.STEP; prev = s; const [vx, vy] = input(), q = MG.hordeMove(L, s, vx, vy); s = MG.hordeStep(L, s, q.x, q.y, act); path.push([q.x, q.y]); acts += act ? '1' : '0';
         for (const sh of s.shots) { const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(q.x, 1.3, q.y), new THREE.Vector3(sh[0], 1.1, sh[1])]); const ln = new THREE.Line(g, tracerMat); view.scene.add(ln); tracers.push({ ln, t: now }); }
-        if (s.shots.length) { flash.intensity = s.w === 'bat' && prev.w === 'bat' ? 0 : 30; buzz(s.w === 'bat' ? 15 : 8); me.body.rotation.y = 0; } } }
+        if (s.shots.length) { flash.intensity = s.w === 'bat' && prev.w === 'bat' ? 0 : 30; buzz(s.w === 'bat' ? 15 : 8); me.body.rotation.y = 0; sfx(s.w === 'bat' ? 'swing' : s.w === 'shotgun' ? 'blast' : 'shot'); if (s.w === 'shotgun') shake(view, 0.14); }
+        if (s.kills > prev.kills) { sfx('splat'); shake(view, 0.06 * (s.kills - prev.kills)); }
+        if (s.hp > prev.hp + 0.5) feedback('medium', { view, root, sound: 'heal', text: '+❤️ Patched up', at: screenOf(view, q.x, 2.2, q.y), kind: 'good', color: '80,220,120', flash: 0.1, shake: false });
+        if (s.w !== prev.w && s.w !== 'bat') feedback('small', { view, root, sound: 'pickup', text: `${MG.WEAPONS[s.w].icon} ${MG.WEAPONS[s.w].name}!`, at: screenOf(view, q.x, 2.2, q.y), kind: 'gold' }); } }
     const u = s.done ? 1 : Math.min(1, acc / MG.STEP), px = prev.x + (s.x - prev.x) * u, py = prev.y + (s.y - prev.y) * u;
     me.setPos(px, py); me.animate(dt, (s.x - prev.x) / MG.STEP, (s.y - prev.y) / MG.STEP); if (Math.hypot(s.x - prev.x, s.y - prev.y) < 0.01) me.group.rotation.y = Math.atan2(s.fx, s.fy);
     flash.intensity *= 0.6;
@@ -553,15 +561,15 @@ async function horde(root, L, finish) {
     for (let i = tracers.length - 1; i >= 0; i--) if (now - tracers[i].t > 70) { view.scene.remove(tracers[i].ln); tracers[i].ln.geometry.dispose(); tracers.splice(i, 1); }
     view.animateYard && view.animateYard(now);
     // the camera follows from above and behind, and shakes when you get bitten
-    look.lerp(new THREE.Vector3(px, 0, py), Math.min(1, dt * 7)); const shake = s.hit ? (Math.random() - 0.5) * 0.25 : 0;
-    view.camera.position.set(look.x + Math.sin(yaw) * camDist + shake, camH, look.z + Math.cos(yaw) * camDist); view.camera.lookAt(look.x, 1, look.z); view.cut.A.value.set(px, 1, py); view.cut.B.value.copy(view.camera.position); view.cut.R.value = 7;
+    look.lerp(new THREE.Vector3(px, 0, py), Math.min(1, dt * 7)); 
+    view.camera.position.set(look.x + Math.sin(yaw) * camDist, camH, look.z + Math.cos(yaw) * camDist); view.camera.lookAt(look.x, 1, look.z); view.cut.A.value.set(px, 1, py); view.cut.B.value.copy(view.camera.position); view.cut.R.value = 7;
     // the HUD
-    hp.set(s.hp / MG.HORDE.hp); hp.classList.toggle('hot', s.hp < 35); if (s.hp < lastHp - 0.5) { root.classList.add('hurt'); setTimeout(() => root.classList.remove('hurt'), 120); } lastHp = s.hp;
+    hp.set(s.hp / MG.HORDE.hp); hp.classList.toggle('hot', s.hp < 35); if (s.hp < lastHp - 0.5) { root.classList.add('hurt'); setTimeout(() => root.classList.remove('hurt'), 120); feedback('medium', { view, sound: 'hurt', shakeBy: Math.min(0.4, 0.12 + (lastHp - s.hp) * 0.02) }); } lastHp = s.hp;
     const W0 = MG.WEAPONS[s.w], wt = `${W0.icon} ${W0.name}${s.ammo !== Infinity ? ` · ${s.ammo}` : ''} · 🧟 ${s.kills}`; if (wpn.textContent !== wt) wpn.textContent = wt;
     if (s.w !== lastW) { fire.firstChild.textContent = W0.icon; weapon.scale.set(s.w === 'bat' ? 1 : 1.2, s.w === 'bat' ? 1 : 1.6, s.w === 'pistol' ? 0.45 : s.w === 'bat' ? 1 : 1.1); weapon.material.color.set(s.w === 'bat' ? '#8a5a33' : '#2b2f33'); if (s.w !== 'bat') say2(feed, `Picked up a ${W0.name.toLowerCase()}!`); lastW = s.w; }
     clock.textContent = `${Math.max(0, Math.ceil(L.limit - s.t))}s`;
-    const wave = Math.floor(s.t / 9); if (wave !== lastWave) { lastWave = wave; waveB.textContent = wave ? `Wave ${wave + 1}` : 'Hold them off!'; waveB.hidden = false; setTimeout(() => { waveB.hidden = true; }, 1600); if (wave) buzz([40, 40, 40]); }
-    if (s.done && !ended) { ended = true; off(); if (s.done === 'down') { root.classList.add('siren'); buzz(500); waveB.textContent = 'You went down!'; waveB.hidden = false; } else { waveB.textContent = 'You held them off!'; waveB.hidden = false; }
+    const wave = Math.floor(s.t / 9); if (wave !== lastWave) { lastWave = wave; waveB.textContent = wave ? `Wave ${wave + 1}` : 'Hold them off!'; waveB.hidden = false; setTimeout(() => { waveB.hidden = true; }, 1600); bump(waveB); if (wave) { buzz([40, 40, 40]); feedback('medium', { view, sound: 'wave' }); } }
+    if (s.done && !ended) { ended = true; off(); if (s.done === 'down') { root.classList.add('siren'); buzz(500); feedback('large', { view, root, sound: 'lose', color: '255,30,30' }); waveB.textContent = 'You went down!'; waveB.hidden = false; } else { waveB.textContent = 'You held them off!'; waveB.hidden = false; }
       setTimeout(() => finish({ path, acts }), 1200); }
   });
   const stop = root._stop; root._stop = () => { stop && stop(); view.dispose(); ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); };
@@ -599,8 +607,9 @@ async function lookout(root, L, finish) {
   cv.addEventListener('pointerdown', e => { if (ended) return; const t = +((performance.now() - t0) / 1000).toFixed(2), rect = cv.getBoundingClientRect(); let best = -1, bd = 70;
     for (const [j, P] of people) { v.set(P.x, 1.2, P.z).project(view.camera); const sx = (v.x + 1) / 2 * rect.width + rect.left, sy = (1 - v.y) / 2 * rect.height + rect.top, d = Math.hypot(sx - e.clientX, sy - e.clientY); if (d < bd) { bd = d; best = j; } }
     if (best < 0) return; const p = L.pops[best]; taps.push([p.s, t]); mark.set(best, p.cop ? 'hit' : 'wrong'); buzz(p.cop ? 25 : 150);
+    if (p.cop) feedback('small', { root, sound: 'ok', text: '👮 Spotted!', at: { x: e.clientX, y: e.clientY - 20 }, kind: 'good', shake: false }); else feedback('medium', { view, root, sound: 'wrong', text: '✗ Not police', at: { x: e.clientX, y: e.clientY - 20 }, kind: 'bad' });
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.9, 28), new THREE.MeshBasicMaterial({ color: p.cop ? '#3cc46a' : '#ff4b3a', side: THREE.DoubleSide, transparent: true })); ring.rotation.x = -Math.PI / 2; ring.position.set(people.get(best).x, 0.05, people.get(best).z); view.scene.add(ring); setTimeout(() => view.scene.remove(ring), 600);
-    if (!p.cop) { root.classList.add('shakeit'); setTimeout(() => root.classList.remove('shakeit'), 300); } });
+    });
   let lastEval = -1;
   view.start((dt, now) => { const t = (performance.now() - t0) / 1000;
     L.pops.forEach((p, j) => { const on = p.t0 <= t && t <= p.t0 + p.dur && mark.get(j) !== 'hit', sp = spots[p.s];
@@ -611,6 +620,6 @@ async function lookout(root, L, finish) {
     view.animateYard && view.animateYard(now);
     if (t - lastEval > 0.1) { lastEval = t; ev = MG.lookEval(L, taps, t) || ev; heat.set(ev.heat); heat.classList.toggle('hot', ev.heat > 0.6); const sc = `👮 ${ev.hits} spotted`; if (score.textContent !== sc) score.textContent = sc; }
     clock.textContent = `${Math.max(0, Math.ceil(L.limit - t))}s`;
-    if (!ended && (ev.blown != null || t >= L.limit)) { ended = true; if (ev.blown != null) { root.classList.add('siren'); buzz(500); } setTimeout(() => finish({ taps, time: Math.min(+t.toFixed(2), L.limit) }), 700); } });
+    if (!ended && (ev.blown != null || t >= L.limit)) { ended = true; if (ev.blown != null) { root.classList.add('siren'); buzz(500); feedback('large', { view, root, sound: 'alarm', color: '255,40,40' }); } setTimeout(() => finish({ taps, time: Math.min(+t.toFixed(2), L.limit) }), 700); } });
   const stop = root._stop; root._stop = () => { stop && stop(); view.dispose(); ro.disconnect(); };
 }

@@ -1206,7 +1206,7 @@ function bspMake(b,t,sc,base){ const bx=bspBounds(b,t); if(!bx) return null; con
 // At night a building's outline: its picture minus a slightly shrunk copy of itself, painted moonlight blue, so
 // neighbouring towers keep their edges instead of melting into one dark mass.
 function rimOf(cv){ const W=cv.width, H=cv.height, r=document.createElement('canvas'); r.width=W; r.height=H; const g=r.getContext('2d'); if(!g) return null;
-  const k=document.createElement('canvas'); k.width=W; k.height=H; const h=k.getContext('2d'), d=1.6;
+  const k=document.createElement('canvas'); k.width=W; k.height=H; const h=k.getContext("2d"), d=1.1;
   h.drawImage(cv,0,0); h.globalCompositeOperation='destination-in'; for(const [dx,dy] of [[d,0],[-d,0],[0,d],[0,-d]]) h.drawImage(cv,dx,dy);
   g.drawImage(cv,0,0); g.globalCompositeOperation='destination-out'; g.drawImage(k,0,0); g.globalCompositeOperation='source-in'; g.fillStyle='#BFD6FF'; g.fillRect(0,0,W,H);
   k.width=k.height=0; return r; }
@@ -3503,7 +3503,7 @@ function drawLitWindows(){ const W=Math.round(cw*dpr), H=Math.round(ch*dpr);
   for(const q of windowQuads){
     if(q.occ){ const e=q.occ; if(e.x0>cam.x+hw||e.x0+e.w<cam.x-hw||e.y0>cam.y+hh||e.y0+e.h<cam.y-hh) continue;
       paint(lit,warm); paint(low,dim); g.globalCompositeOperation='destination-out'; g.drawImage(e.cv,e.x0,e.y0,e.w,e.h); g.globalCompositeOperation='source-over';
-      if(e.rim){ g.globalAlpha=0.55*DARK; g.drawImage(e.rim,e.x0,e.y0,e.w,e.h); g.globalAlpha=1; } continue; }
+      if(e.rim){ g.globalAlpha=0.2*DARK; g.drawImage(e.rim,e.x0,e.y0,e.w,e.h); g.globalAlpha=1; } continue; }
     const p=q[0]; if(q.cut){ paint(lit,warm); paint(low,dim); g.globalCompositeOperation='destination-out'; g.fillStyle='#000'; g.beginPath(); g.moveTo(p.x,p.y); for(let i=1;i<q.length;i++) g.lineTo(q[i].x,q[i].y); g.fill(); g.globalCompositeOperation='source-over'; continue; }
     if(Math.abs(p.x-cam.x)>hw||Math.abs(p.y-cam.y)>hh) continue;
     const h=((Math.round(p.x*7)*73856093)^(Math.round(p.y*7)*19349663))>>>0, r=h%100; if(r<18) continue; (r<34?low:lit).push(q); }

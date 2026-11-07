@@ -488,3 +488,82 @@ export function viewCone(color = '#ffd54a') {
   m.userData.set = (pts, y = 0.05) => { for (let i = 0; i < pts.length && i < n + 2; i++) { pos[i * 3] = pts[i][0]; pos[i * 3 + 1] = y; pos[i * 3 + 2] = pts[i][1]; } geo.attributes.position.needsUpdate = true; };
   m.userData.n = n; return m;
 }
+
+// ---------------- the yard behind the job (the horde) ----------------
+// A walled-in back lot at dusk: the backs of the town's own kinds of buildings all round, alleys the dead stagger in
+// from, wrecked cars, concrete barriers, crates, dumpsters and burning barrels throwing flickering light.
+function flameTex() { return canvasTex('flame', 128, (g, S) => { const gr = g.createRadialGradient(64, 80, 4, 64, 70, 60); gr.addColorStop(0, 'rgba(255,240,180,1)'); gr.addColorStop(0.35, 'rgba(255,150,40,.9)'); gr.addColorStop(0.7, 'rgba(200,50,10,.4)'); gr.addColorStop(1, 'rgba(120,20,0,0)'); g.fillStyle = gr; g.beginPath(); g.ellipse(64, 74, 40, 56, 0, 0, 7); g.fill(); }, { repeat: false }); }
+function smokeTex() { return canvasTex('smoke', 128, (g) => { const gr = g.createRadialGradient(64, 64, 4, 64, 64, 62); gr.addColorStop(0, 'rgba(70,70,70,.55)'); gr.addColorStop(1, 'rgba(40,40,40,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); }, { repeat: false }); }
+export function buildYard(view, L, { types = [], minute = 1065, skip = [], fogFar = 85 } = {}) {
+  const M = materials(view), B = {}; for (const k of Object.keys(M)) B[k] = new Bucket(); const r = rnd(L.seed || 1), W = L.W, H = L.H, w = col('#ffffff');
+  view.center.set(W / 2, 0, H / 2); view.span = 70;
+  // the ground: old asphalt with faded parking bays, and pavement round the edge
+  B.asphalt.quad([-60, 0, H + 60], [W + 60, 0, H + 60], [W + 60, 0, -60], [-60, 0, -60], [0, 1, 0], [-7, 11, 12, 11, 12, -7, -7, -7], col('#b9b6ae'));
+  for (let x = 4; x < W - 4; x += 3.2) { B.paint.quad([x, 0.02, 5.5], [x + 0.12, 0.02, 5.5], [x + 0.12, 0.02, 1.2], [x, 0.02, 1.2], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], col('#bdb8a8')); B.paint.quad([x, 0.02, H - 1.2], [x + 0.12, 0.02, H - 1.2], [x + 0.12, 0.02, H - 5.5], [x, 0.02, H - 5.5], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], col('#bdb8a8')); }
+  // the buildings around it (their backs), with gaps for alleys
+  const pool = types.filter(t => BUILDING_TYPES[t] && !BUILDING_TYPES[t].outdoor && BUILDING_TYPES[t].style !== 'tent'); if (!pool.length) pool.push('brickflats', 'warehouse', 'office', 'apartment', 'workshop', 'tavern', 'grocer', 'brickoffice');
+  const ring = (x0, z0, x1, z1, face) => { const alongX = Math.abs(x1 - x0) > Math.abs(z1 - z0); let u = 0; const len = alongX ? x1 - x0 : z1 - z0;
+    while (u < len - 4) { const t = pool[Math.floor(r() * pool.length)], T = BUILDING_TYPES[t], wide = Math.min(len - u, Math.max(8, Math.min(3, T.size[0]) * 8 - 2)), deep = 10 + r() * 6;
+      if (r() < 0.22) { u += 5; continue; } // an alley
+      if (alongX) building(B, view, { type: t, x: x0 + u, y: face === 'S' ? z0 - deep : z0, w: wide, h: deep, level: 1 + Math.floor(r() * 2) }, face, r); else building(B, view, { type: t, x: face === 'E' ? x0 - deep : x0, y: z0 + u, w: deep, h: wide, level: 1 + Math.floor(r() * 2) }, face, r);
+      u += wide + 0.6; } };
+  if (!skip.includes('S')) ring(-14, -2, W + 14, -2, 'S'); if (!skip.includes('N')) ring(-14, H + 2, W + 14, H + 2, 'N'); if (!skip.includes('E')) ring(-2, -2, -2, H + 2, 'E'); if (!skip.includes('W')) ring(W + 2, -2, W + 2, H + 2, 'W');
+  // chain-link fences along the edge (broken in places)
+  for (let x = 0; x < W; x += 2.5) if (r() > 0.3) { B.shiny.box(x, -0.05, x + 0.06, 0.05, 0, 2.2, col('#7b7f84')); B.solid.box(x, -0.02, x + 2.5, 0.02, 0.2, 2.1, col('#9aa0a6')); }
+  for (let x = 0; x < W; x += 2.5) if (r() > 0.3) { B.shiny.box(x, H - 0.05, x + 0.06, H + 0.05, 0, 2.2, col('#7b7f84')); B.solid.box(x, H - 0.02, x + 2.5, H + 0.02, 0.2, 2.1, col('#9aa0a6')); }
+  // what's in the yard
+  const fires = [];
+  for (const o of L.obs) { const cx = o.x + o.w / 2, cz = o.y + o.h / 2;
+    if (o.k === 'car') { const ang = o.w > o.h ? Math.PI / 2 : 0; car(B, cx, cz, ang, ['#6b4a3a', '#4a4f55', '#7a3a2a', '#3a4a3a'][Math.floor(r() * 4)]); if (r() < 0.5) fires.push([cx + (r() - 0.5), 1.6, cz + (r() - 0.5)]); }
+    else if (o.k === 'barrier') { const n = Math.round(Math.max(o.w, o.h) / 2); for (let i = 0; i < n; i++) { const along = o.w > o.h; const x0 = along ? o.x + i * 2 : o.x, z0 = along ? o.y : o.y + i * 2; B.paving.box(x0 + 0.05, z0 + 0.05, x0 + (along ? 1.95 : o.w - 0.05), z0 + (along ? o.h - 0.05 : 1.95), 0, 1.0, col('#c8c3b8'), { su: 2, sv: 2 }); B.solid.box(x0 + 0.05, z0 + 0.05, x0 + (along ? 1.95 : o.w - 0.05), z0 + (along ? o.h - 0.05 : 1.95), 0.55, 0.62, col(i % 2 ? '#c8382e' : '#f4f1e8')); } }
+    else if (o.k === 'crates') { B.solid.box(o.x, o.y, o.x + 1.1, o.y + 1.1, 0, 1.1, col('#a9743f')); B.solid.box(o.x + 1.1, o.y, o.x + 2.2, o.y + 1.1, 0, 1.1, col('#9a6a38')); B.solid.box(o.x, o.y + 1.1, o.x + 2.2, o.y + 2.2, 0, 1.0, col('#b07d48')); B.solid.box(o.x + 0.4, o.y + 0.4, o.x + 1.5, o.y + 1.5, 1.1, 2.1, col('#a9743f')); }
+    else if (o.k === 'dumpster') { B.shiny.box(o.x, o.y, o.x + o.w, o.y + o.h, 0, 1.4, col('#2f6b4a')); B.shiny.box(o.x - 0.05, o.y - 0.05, o.x + o.w + 0.05, o.y + o.h * 0.6, 1.4, 1.5, col('#244f38')); }
+    else if (o.k === 'barrel') { bake(B.shiny, GEO.cyl, { x: cx, y: 0.5, z: cz, sx: 0.45, sy: 1, sz: 0.45, color: col('#5a4a3a') }); fires.push([cx, 1.15, cz]); } }
+  // street lamps in the corners (one flickers)
+  for (const [x, z] of [[1, 1], [W - 1, 1], [1, H - 1], [W - 1, H - 1]]) lamp(B, view, x, z);
+  const group = new THREE.Group();
+  for (const [k, b] of Object.entries(B)) { const g = b.geometry(); if (!g) continue; const m = new THREE.Mesh(g, M[k]); m.castShadow = !['asphalt', 'paint', 'pool', 'ao'].includes(k); m.receiveShadow = !['pool', 'ao'].includes(k); if (k === 'pool' || k === 'ao') m.renderOrder = 2; m.matrixAutoUpdate = false; group.add(m); }
+  view.scene.add(group);
+  // fire: flickering flames, a little smoke, and their light (a few lights only)
+  const fm = new THREE.SpriteMaterial({ map: flameTex(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }), sm = new THREE.SpriteMaterial({ map: smokeTex(), transparent: true, depthWrite: false, opacity: 0.6 });
+  const flames = []; fires.slice(0, 6).forEach((p, i) => { for (let k = 0; k < 3; k++) { const f = new THREE.Sprite(fm); f.position.set(p[0] + (k - 1) * 0.25, p[1], p[2]); f.scale.set(1, 1.5, 1); view.scene.add(f); flames.push({ f, base: p[1], k: k + i * 3 }); }
+    const smk = new THREE.Sprite(sm); smk.position.set(p[0], p[1] + 2, p[2]); smk.scale.set(3, 3, 1); view.scene.add(smk); flames.push({ f: smk, base: p[1] + 2, smoke: true, k: i });
+    if (i < 3) { const l = new THREE.PointLight('#ff8a3a', 18, 14, 1.6); l.position.set(p[0], p[1] + 0.6, p[2]); view.scene.add(l); flames.push({ light: l, k: i }); } });
+  view.setTime(minute); view.scene.fog = new THREE.Fog(view.night > 0.5 ? '#2a2f2a' : '#8a7a6a', 22, fogFar); view.renderer.toneMappingExposure = 1.2; view.hemi.intensity = Math.max(view.hemi.intensity, 0.55);
+  view.animateYard = (now) => { for (const q of flames) { const t = now / 1000 + q.k * 1.7;
+    if (q.light) q.light.intensity = 14 + Math.sin(t * 17) * 3 + Math.sin(t * 7.3) * 3;
+    else if (q.smoke) { const u = (t * 0.3) % 1; q.f.position.y = q.base + u * 3; q.f.material.opacity = 0.5 * (1 - u); q.f.scale.setScalar(2 + u * 3); }
+    else { q.f.scale.set(0.9 + Math.sin(t * 13) * 0.15, 1.3 + Math.sin(t * 9) * 0.3, 1); q.f.position.y = q.base + Math.sin(t * 11) * 0.06; } } };
+  return group;
+}
+
+// The horde: every zombie drawn in six batched calls (one per body part), animated by moving the parts.
+export function makeHorde(max = 90) {
+  const g = new THREE.Group(), parts = {}, dummy = new THREE.Object3D(), m4 = new THREE.Matrix4(), base = new THREE.Matrix4(), tmp = new THREE.Matrix4(), cl = new THREE.Color();
+  const mk = (geo, name) => { const m = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 0.85 }), max); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.count = 0; m.frustumCulled = false; g.add(m); parts[name] = m; };
+  const box = new THREE.BoxGeometry(1, 1, 1); mk(box, 'legL'); mk(box, 'legR'); mk(box, 'torso'); mk(box, 'armL'); mk(box, 'armR'); mk(new THREE.IcosahedronGeometry(1, 1), 'head');
+  const SKIN = ['#7d9a6a', '#8fa77b', '#6e8c62', '#9aa58a'], RAGS = ['#4a3a2e', '#3b4a5a', '#5a2e2e', '#4a4a3a', '#6b5a4a', '#2e3b2e'];
+  const put = (name, i, sx, sy, sz, px, py, pz, rx, pivotY) => { // a part: size, where its pivot is, how far it's swung
+    dummy.position.set(0, 0, 0); dummy.rotation.set(0, 0, 0); dummy.scale.set(sx, sy, sz); dummy.updateMatrix();
+    tmp.makeTranslation(0, -pivotY, 0); m4.copy(dummy.matrix).premultiply(tmp); tmp.makeRotationX(rx); m4.premultiply(tmp); tmp.makeTranslation(px, py, pz); m4.premultiply(tmp); m4.premultiply(base); parts[name].setMatrixAt(i, m4); };
+  const H = { group: g, phase: new Map(),
+    // list: [{ id, x, z, heading, speed, hurt, dead, t }]
+    update(list, dt, now) {
+      let i = 0;
+      for (const z of list) { if (i >= max) break; const ph = (this.phase.get(z.id) || 0) + dt * (2.2 + z.speed * 1.3); this.phase.set(z.id, ph);
+        const fall = z.dead ? Math.min(1, z.dead) : 0; base.makeTranslation(z.x, -fall * 0.3, z.z); tmp.makeRotationY(z.heading); base.multiply(tmp); if (fall) { tmp.makeRotationX(-fall * 1.4); base.multiply(tmp); }
+        const sw = Math.sin(ph) * 0.5, lurch = Math.sin(ph * 0.5) * 0.12;
+        put('legL', i, 0.17, 0.85, 0.17, -0.13, 0.85, 0, sw, 0.425); put('legR', i, 0.17, 0.85, 0.17, 0.13, 0.85, 0, -sw, 0.425);
+        put('torso', i, 0.48, 0.6, 0.26, 0, 1.15 + lurch * 0.2, 0.05, 0.25 + lurch, 0);
+        put('armL', i, 0.12, 0.62, 0.12, -0.31, 1.42, 0.08, -1.35 + sw * 0.3, 0.31); put('armR', i, 0.12, 0.62, 0.12, 0.31, 1.42, 0.08, -1.45 - sw * 0.3, 0.31);
+        put('head', i, 0.16, 0.19, 0.17, Math.sin(ph * 0.7) * 0.05, 1.66, 0.12, 0.3, 0);
+        const h = hashS(z.id), skin = z.hurt > 0 ? '#ffffff' : SKIN[h % SKIN.length], rag = z.hurt > 0 ? '#ff6b6b' : RAGS[(h >>> 4) % RAGS.length];
+        for (const p of ['legL', 'legR']) parts[p].setColorAt(i, cl.set(RAGS[(h >>> 8) % RAGS.length])); parts.torso.setColorAt(i, cl.set(rag)); for (const p of ['armL', 'armR', 'head']) parts[p].setColorAt(i, cl.set(skin));
+        i++; }
+      for (const p of Object.values(parts)) { p.count = i; p.instanceMatrix.needsUpdate = true; if (p.instanceColor) p.instanceColor.needsUpdate = true; }
+    } };
+  return H;
+}
+// Simple markers on the ground (splats where the dead fall), drawn in one batch.
+export function makeSplats(max = 120) { const m = new THREE.InstancedMesh(new THREE.CircleGeometry(0.7, 12), new THREE.MeshBasicMaterial({ color: '#3a1a12', transparent: true, opacity: 0.75, depthWrite: false }), max); m.count = 0; m.renderOrder = 2; const d = new THREE.Object3D(); let n = 0;
+  return { mesh: m, add(x, z, s = 1) { d.position.set(x, 0.035, z); d.rotation.set(-Math.PI / 2, 0, Math.random() * 6); d.scale.setScalar(s * (0.7 + Math.random() * 0.6)); d.updateMatrix(); m.setMatrixAt(n % max, d.matrix); n++; m.count = Math.min(max, n); m.instanceMatrix.needsUpdate = true; } }; }

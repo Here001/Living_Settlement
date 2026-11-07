@@ -881,6 +881,8 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .aline{background:rgba(43,38,33,.85);color:#fff;border-radius:10px;padding:4px 10px;font-size:13.5px;font-weight:700;animation:mgpop .3s ease-out 1}
 .abig{position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);font-size:clamp(26px,8vw,44px);font-weight:900;color:#F2C94C;text-shadow:0 4px 0 #2B2621;text-align:center;pointer-events:none;z-index:2;white-space:nowrap}
 .speedo{position:absolute;right:14px;bottom:calc(70px + env(safe-area-inset-bottom));background:rgba(20,18,16,.7);color:#fff;font:800 22px/1 system-ui;padding:8px 12px;border-radius:12px;font-variant-numeric:tabular-nums;z-index:2;pointer-events:none}
+.zfire{position:absolute;right:22px;bottom:calc(36px + env(safe-area-inset-bottom));width:96px;height:96px;border-radius:50%;border:3px solid #2B2621;background:radial-gradient(circle at 35% 30%,#ff7a5c,#c8382e);box-shadow:0 5px 0 #2B2621,0 0 0 6px rgba(255,255,255,.12);z-index:3;font-size:40px;touch-action:none;-webkit-user-select:none;user-select:none}.zfire.on{transform:translateY(3px) scale(.95);box-shadow:0 2px 0 #2B2621,0 0 24px rgba(255,120,80,.8)}
+.mg.hurt{box-shadow:inset 0 0 80px rgba(220,0,0,.65)}
 .astick{display:none;position:fixed;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.4);pointer-events:none;z-index:3}.astick i{position:absolute;left:50%;top:50%;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 2px 8px rgba(0,0,0,.4)}
 .mg.arena .mgx.aquit{position:absolute;top:auto;bottom:calc(14px + env(safe-area-inset-bottom));right:14px;z-index:3;background:rgba(246,241,230,.9)}
 @media (prefers-reduced-motion:reduce){.mgcount,.mg.siren,.mgpad.shake,.mgsock.spark{animation:none}}
@@ -5830,13 +5832,8 @@ function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cri
   for(const [k,S0] of Object.entries(SOLO_CRIMES)){ const o=K.solo&&K.solo[k]; if(!o) continue;
     box.append(el('div',{class:'crow'}, el('div',{class:'jt'}, el('b',{text:`${S0.icon} ${S0.name}`}), el('span',{text:`${S0.blurb} ${fmt(S0.loot[0])}–${fmt(S0.loot[1])} coins.${o.at?` At ${o.at}.`:''}`}), el('span',{class:'hint',text:oddsText(o)})),
       el('button',{class:'btn danger',text:'🎮 Play',onclick:()=>play(k,o)}))); }
-  box.append(Heist.box(c), streetGames());
+  box.append(Heist.box(c));
   return box; }
-// Street games: live chase games with other colonists (and the town's own colonists filling the gaps).
-function streetGames(){ const b=el('div',{class:'heists'}, el('h3',{text:'🎮 Street games'}), el('p',{class:'hint',text:'Play live with up to 3 other people. The computer fills the rest of the 8 places with colonists from the town. Win with at least one other player for 400 coins (3 paid wins a day).'}));
-  for(const [k,M0] of Object.entries({tag:{icon:'🏃',name:'Hunters & Civilians',blurb:'Hunters chase the civilians; anyone caught becomes a hunter. Grab cash bags and last until the end.'},hide:{icon:'🙈',name:'Hide and seek',blurb:'25 seconds to hide in a bin, bush, crate or doorway. Then the seekers come looking.'}}))
-    b.append(el('div',{class:'crow'}, el('div',{class:'jt'}, el('b',{text:`${M0.icon} ${M0.name}`}), el('span',{text:M0.blurb})), el('button',{class:'btn primary',text:'▶ Play',onclick:()=>{ if(!(ws&&ws.readyState===1)){ toast('Connecting… try again in a moment.'); return; } openArena(k,arenaCtx()); }})));
-  return b; }
 // ---- Group crimes: plan a job, invite a crew (they get a group chat), and it goes down at the set time ----
 const Heist={ data:null, at:0, busy:false, form:null, prompted:new Set(),
   playPart(h){ const L0=h.live; openCrimeGame(L0.myRole,{heist:h.id,until:L0.until,band:L0.band,chance:L0.chance,night:L0.night,at:L0.at},crimeCtx()); },

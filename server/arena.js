@@ -21,7 +21,7 @@ export class Arena {
   // A message from a player (passed on from whichever server they're connected to).
   async handle(o) {
     const pid = o.pid, m = o.m || {}; if (!pid) return;
-    if (m.a === 'join') return this.join(pid, o.handle, m.mode);
+    if (m.a === 'join') return this.send([[pid, { k: 'error', text: 'Street games are closed for now.' }]]); // switched off (the zombie horde lives on as a heist part)
     if (m.a === 'leave') return this.leave(pid);
     if (m.a === 'gone') { for (const [k, q] of Object.entries(this.queues)) if (q.delete(pid)) { if (!q.size) this.startAt[k] = 0; this.lobbyNews(k); } return; }
     if (m.a === 'go') { const q = this.queueOf(pid); if (q) { this.startAt[q] = Math.min(this.startAt[q], Date.now() + 3000); this.lobbyNews(q); } return; }

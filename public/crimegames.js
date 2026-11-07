@@ -10,14 +10,14 @@ const $c = (tag, props, ...kids) => { const e = document.createElement(tag); if 
 const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
 
 const INFO = {
-  rob: { icon: '🛒', name: 'Rob the shop', how: ['Sneak in the back door, get to the till and stay next to it while you empty it. Then get out the way you came in.', 'Stay out of the shopkeeper\'s view (the yellow cone) and away from cameras. If the eye meter fills, you\'re spotted.', 'Move: drag anywhere on the screen (or use the arrow keys).'] },
+  rob: { icon: '🛒', name: 'Rob the shop', how: ['Sneak in the back door, get to the till and stay next to it while you empty it. Then get out the way you came in.', 'Stay out of the staff\'s view (the yellow cones) and away from cameras. They wander and stop to look around, so watch them. If the eye meter fills, you\'re spotted.', 'Red laser tripwires blink on and off: cross while they\'re off. Optional extras (jewels, a cash box, phones, watches) each add 15% to the takings, if you dare.', 'Move: drag anywhere on the screen (or use the arrow keys).'] },
   scam: { icon: '🎭', name: 'Con a tourist', how: ['Sell a tourist a "genuine" Gliese moon rock before they smell a rat.', 'Each turn, pick a line that suits their mood (watch what they say), then tap "Say it" while the marker is in the green.', 'Trust full: sold. Suspicion full: they walk off.'] },
   atm: { icon: '🏧', name: 'Hack the ATM', how: ['Rewire the cash machine: tap a wire, then the socket with that colour\'s symbol on the service card.', 'Then watch the keypad flash a code and tap it back.', 'Wrong moves make the alarm jump. If the alarm fills, the bank\'s siren goes off.'] },
   driver: { icon: '🚗', name: 'Driver: the getaway', how: ['Get the crew\'s car to the end of the road.', 'Tap the left or right side of the screen (or swipe, or use the arrow keys) to change lane and dodge the traffic and roadblocks.', 'Each crash slows you right down. Four crashes and the car\'s wrecked.'] },
   hacker: { icon: '💻', name: 'Hacker: the security panel', how: ['Rewire the panel: tap a wire, then the socket with that colour\'s symbol on the service card.', 'Then watch the keypad flash a code and tap it back.', 'Wrong moves make the alarm jump. If the alarm fills, the sirens go off.'] },
   safecracker: { icon: '🔐', name: 'Safecracker: the dial', how: ['The dial spins by itself. Tap when the pointer is on the green number to lock it in.', 'Then the next number, spinning the other way, until the safe opens.', 'A tap off the number makes a noise. Five noises and the alarm goes.'] },
-  lookout: { icon: '👀', name: 'Lookout: spot the police', how: ['Watch the windows and doorways. Tap the police (👮 🕵️) before they duck away.', 'Don\'t tap ordinary people: a false alarm adds heat. So does every officer you miss.', 'Keep watch until the time is up. Full heat and the job is blown.'] },
-  muscle: { icon: '💪', name: 'Muscle: hold the doors', how: ['Guards run at the doors from both sides.', 'Tap the left or right side to shove back the nearest guard on that side, once they\'re in the red zone.', 'Shoving at nobody wastes your strength. Three guards through and the doors are lost.'] },
+  lookout: { icon: '👀', name: 'Lookout: spot the police', how: ['Watch the doorways and alleys round the yard. People keep stepping out: tap the police (in uniform, or plain clothes with dark glasses) before they slip away.', 'Don\'t tap ordinary people: a false alarm adds heat. So does every officer you miss.', 'Keep watch until the time is up. Full heat and the job is blown.'] },
+  muscle: { icon: '💪', name: 'Muscle: hold off the horde', how: ['The dead are pouring into the yard while the crew works. Stay alive until the clock runs out.', 'Move with your left thumb (drag anywhere). Hold the red button on the right to fight: a bat to start with, and guns aim themselves at the nearest zombie.', 'Pistols, shotguns, rifles and first-aid kits turn up on the ground: walk over them to pick them up. Every wave is bigger, faster and hungrier.'] },
 };
 const ROLE = k => !!MG.ROLES[k];
 
@@ -65,7 +65,7 @@ function play(root, kind, L, run, info) {
     result(root, kind, info, run, r); if (!run.practice) X.done && X.done(r); };
   const g = MG.GAMES[kind];
   if (g === 'stealth') stealth(root, L, finish); else if (g === 'con') con(root, L, finish); else if (g === 'atm') atm(root, L, finish);
-  else if (g === 'drive') drive(root, L, finish); else if (g === 'safe') safe(root, L, finish); else if (g === 'lookout') lookout(root, L, finish); else muscle(root, L, finish);
+  else if (g === 'drive') drive(root, L, finish); else if (g === 'safe') safe(root, L, finish); else if (g === 'lookout') lookout(root, L, finish); else if (g === 'horde') horde(root, L, finish); else muscle(root, L, finish);
 }
 // After your part in a heist: your score, then the crew as they finish, then how the job went.
 function heistWait(root, kind, info, r) {
@@ -135,9 +135,21 @@ async function stealth(root, L, finish) {
     const led = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff4b3a' })); led.position.set(0.1, 3.08, 0.25); g.add(led); g.position.set(c.x * U, 0, c.y * U); view.scene.add(g); const cone = W.viewCone('#ffd54a'); view.scene.add(cone); return { g, cone, led }; });
   const ringGeo = new THREE.RingGeometry(0.42, 0.55, 32, 1, 0, Math.PI * 2), ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#7cffb2', side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; ring.position.set(L.till.x * U, 1.6, (L.till.y - 1) * U); view.scene.add(ring);
   const exitGlow = new THREE.Mesh(new THREE.RingGeometry(0.6, 0.8, 32), new THREE.MeshBasicMaterial({ color: '#3cc46a', transparent: true, opacity: 0.8, side: THREE.DoubleSide })); exitGlow.rotation.x = -Math.PI / 2; exitGlow.position.set(L.entry.x * U, 0.05, L.entry.y * U); exitGlow.visible = false; view.scene.add(exitGlow);
+  // laser tripwires (two red beams at shin and waist height) and the extra loot on little stands
+  const beamMat = new THREE.MeshBasicMaterial({ color: '#ff2a2a', transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+  const lasers = (L.lasers || []).map(z => { const g = new THREE.Group(), len = Math.hypot(z.x1 - z.x0, z.y1 - z.y0) * U, mx = (z.x0 + z.x1) / 2 * U, mz = (z.y0 + z.y1) / 2 * U, horiz = z.y0 === z.y1;
+    for (const y of [0.35, 0.9]) { const b = new THREE.Mesh(new THREE.BoxGeometry(horiz ? len : 0.035, 0.035, horiz ? 0.035 : len), beamMat); b.position.set(mx, y, mz); g.add(b); }
+    for (const [ex, ez] of [[z.x0, z.y0], [z.x1, z.y1]]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 0.12), new THREE.MeshStandardMaterial({ color: '#2b2f33', metalness: 0.7, roughness: 0.3 })); post.position.set(ex * U, 0.55, ez * U); view.scene.add(post); }
+    view.scene.add(g); return g; });
+  const ITEMC = { jewels: '#7fe3ff', cashbox: '#3cc46a', phones: '#9fb4ff', watches: '#f2c94c' };
+  const items = (L.items || []).map(it => { const g = new THREE.Group(); const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.9, 12), new THREE.MeshStandardMaterial({ color: '#f4f1e8', roughness: 0.5 })); stand.position.y = 0.45; g.add(stand);
+    const gem = new THREE.Mesh(it.k === 'jewels' ? new THREE.OctahedronGeometry(0.17) : new THREE.BoxGeometry(0.34, 0.14, 0.24), new THREE.MeshStandardMaterial({ color: ITEMC[it.k], emissive: ITEMC[it.k], emissiveIntensity: 0.6, metalness: 0.6, roughness: 0.2 })); gem.position.y = 1.05; g.add(gem);
+    const halo = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.6, 28), new THREE.MeshBasicMaterial({ color: ITEMC[it.k], transparent: true, opacity: 0.6, side: THREE.DoubleSide })); halo.rotation.x = -Math.PI / 2; halo.position.y = 0.04; g.add(halo);
+    g.position.set(it.x * U, 0, it.y * U); view.scene.add(g); g.userData = { gem, halo }; return g; });
+  const itemsB = $c('b', { class: 'acount' }); if (items.length) root.querySelector('.mghud').insertBefore(itemsB, clock);
   const conePts = (from, dir, fov, range) => { const pts = [[from.x * U, from.y * U]]; for (let i = 0; i <= 16; i++) { const a = dir - fov + (2 * fov) * i / 16; let d = 0; while (d < range && !MG.isWall(L, from.x + Math.cos(a) * d, from.y + Math.sin(a) * d)) d += 0.15; pts.push([(from.x + Math.cos(a) * d) * U, (from.y + Math.sin(a) * d) * U]); } return pts; };
   // the game state moves in fixed steps; the picture is drawn in between
-  let s = MG.stealthStart(L), prev = s, acc = 0; const path = [[s.x, s.y]], keys = new Set(); let joy = null, ended = false, lastGrab = false;
+  let s = MG.stealthStart(L), prev = s, acc = 0; const path = [[s.x, s.y]], keys = new Set(); let joy = null, ended = false, lastGrab = false; stealth.zap = 0;
   const input = () => { let sx = 0, sy = 0; if (joy && Math.hypot(joy.dx, joy.dy) > 6) { sx = joy.dx / 55; sy = joy.dy / 55; }
     if (keys.has('ArrowUp') || keys.has('w')) sy -= 1; if (keys.has('ArrowDown') || keys.has('s')) sy += 1; if (keys.has('ArrowLeft') || keys.has('a')) sx -= 1; if (keys.has('ArrowRight') || keys.has('d')) sx += 1;
     const c = Math.cos(yaw), sn = Math.sin(yaw); let vx = sx * c + sy * sn, vy = -sx * sn + sy * c; const n = Math.hypot(vx, vy); return n > 1 ? [vx / n, vy / n] : [vx, vy]; };
@@ -155,6 +167,11 @@ async function stealth(root, L, finish) {
     L.cams.forEach((c, i) => { const a = MG.camAt(c, tt); cams[i].g.rotation.y = -a + Math.PI / 2; cams[i].cone.userData.set(conePts(c, a, MG.STEALTH.camFov, MG.STEALTH.camRange)); cams[i].cone.material.color.set(s.who === 2 ? '#ff4b3a' : '#ffd54a'); cams[i].led.visible = (now / 400 | 0) % 2 === 0; });
     ring.visible = !s.grabbed && s.grab > 0; if (ring.visible) { ring.geometry.dispose(); ring.geometry = new THREE.RingGeometry(0.42, 0.55, 32, 1, Math.PI / 2, -Math.PI * 2 * s.grab / MG.STEALTH.grab); }
     exitGlow.visible = s.grabbed; if (s.grabbed) exitGlow.scale.setScalar(1 + Math.sin(now / 200) * 0.1);
+    (L.lasers || []).forEach((z, k) => { const on = MG.laserOn(z, tt); lasers[k].visible = on; if (on) beamMat.opacity = 0.75 + Math.random() * 0.25; });
+    items.forEach((g, k) => { const got = (s.items || 0) & (1 << k); g.userData.gem.visible = !got; g.userData.halo.visible = !got; g.userData.gem.rotation.y = now / 500; g.userData.gem.position.y = 1.05 + Math.sin(now / 300 + k) * 0.05;
+      if (!got && s.ii === k) g.userData.halo.scale.setScalar(1 + s.ig / MG.STEALTH.itemGrab); else g.userData.halo.scale.setScalar(1); });
+    if (items.length) { const n = MG.itemCount(s), it2 = `✨ ${n}/${items.length} extras`; if (itemsB.textContent !== it2) itemsB.textContent = it2; }
+    if (s.zap > (stealth.zap || 0)) { buzz(250); root.classList.add('siren'); setTimeout(() => root.classList.remove('siren'), 600); } stealth.zap = s.zap;
     if (s.grabbed && !lastGrab) { lastGrab = true; buzz([20, 30, 20]); }
     seen.set(s.seen); seen.classList.toggle('hot', alarm); clock.textContent = `${Math.max(0, Math.ceil(L.limit - s.t))}s`;
     const gtxt = s.grabbed ? '🚪 Out the back door!' : s.grab > 0 ? '💰 Emptying the till… stay close' : '💰 Get to the till'; if (goal.textContent !== gtxt) goal.textContent = gtxt;
@@ -216,6 +233,8 @@ function stealth2d(root, L, finish) {
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#1B1612'; g.fillRect(0, 0, W, H); if (bg) g.drawImage(bg, 0, 0, W, H);
     for (const c of L.cams) cone(c, MG.camAt(c, tt), MG.STEALTH.camFov, MG.STEALTH.camRange, s.who === 2 ? 'rgba(255,70,60,.28)' : 'rgba(255,215,80,.3)');
     for (const gd of L.guards) { const q = MG.guardAt(gd, tt); cone(q, q.dir, MG.STEALTH.guardFov, MG.STEALTH.guardRange + L.diff * 0.2, s.who === 1 ? 'rgba(255,70,60,.3)' : 'rgba(255,215,80,.36)'); }
+    for (const z of L.lasers || []) if (MG.laserOn(z, tt)) { const a2 = P(z.x0, z.y0, 0.3), b2 = P(z.x1, z.y1, 0.3); g.strokeStyle = '#ff2a2a'; g.lineWidth = 3; g.beginPath(); g.moveTo(a2.x, a2.y); g.lineTo(b2.x, b2.y); g.stroke(); }
+    (L.items || []).forEach((it, k) => { if ((s.items || 0) & (1 << k)) return; const q = P(it.x, it.y, 0.6); g.font = `${tw * 0.4}px system-ui`; g.textAlign = 'center'; g.fillText(MG.ITEMS[it.k].icon, q.x, q.y); });
     // the till's progress ring
     if (!s.grabbed && s.grab > 0) { const q = P(L.till.x, L.till.y, 1.2); g.strokeStyle = '#7CFFB2'; g.lineWidth = 4; g.beginPath(); g.arc(q.x, q.y, tw * 0.3, -Math.PI / 2, -Math.PI / 2 + s.grab / MG.STEALTH.grab * Math.PI * 2); g.stroke(); }
     const who = [...L.guards.map(gd => { const q = MG.guardAt(gd, tt); return { x: q.x, y: q.y, k: gd.kind }; }), { x: px, y: py, k: 'me' }].sort((a, b) => a.x + a.y - b.x - b.y);
@@ -387,7 +406,7 @@ function safe(root, L, finish) {
   const btn = $c('button', { class: 'mgb hot mgbig', text: '🔓 Click' }); root.append(hud(noise, clock), info, btn);
   const taps = [], t0 = performance.now(); let st = { stage: 'dial', got: 0, noise: 0 }, from = 0, flash = 0, flashCol = '', ended = false;
   const now = () => +((performance.now() - t0) / 1000).toFixed(2);
-  const tap = () => { if (ended) return; const t = now(); taps.push(t); const r = MG.safeReplay(L, taps, t); if (!r.ok) return; const was = st.got; st = r.state;
+  const tap = () => { if (ended) return; const t = now(); taps.push(t); const r = MG.safeReplay(L, taps, t); if (!r.ok) return; const was = st.got; st = { ...r.state, stage: r.state.stage === 'gaveup' ? 'dial' : r.state.stage }; // mid-game the dial is still turning (the check calls an unfinished game 'given up')
     if (st.got > was) { from = t; flash = 0.4; flashCol = '60,196,106'; buzz(30); } else { flash = 0.4; flashCol = '255,75,58'; buzz(120); root.classList.add('shakeit'); setTimeout(() => root.classList.remove('shakeit'), 300); } };
   btn.addEventListener('pointerdown', e => { e.preventDefault(); tap(); }); C.cv.addEventListener('pointerdown', tap); keyHook(root, e => { if (e.key === ' ' || e.key === 'Enter') { tap(); e.preventDefault(); } else return false; });
   const num = a => ((Math.round((((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * 100) % 100) + 100) % 100;
@@ -418,7 +437,7 @@ function safe(root, L, finish) {
 
 // ---------------- Spot the police ----------------
 const COPS = ['👮', '👮‍♀️', '🕵️', '🕵️‍♀️'], FOLK = ['🧑', '👩', '👨‍🦳', '🧔', '👵', '👷', '🧑‍🍳', '💁', '🧕', '👨‍🦱', '👩‍🦰', '🧑‍🎤'];
-function lookout(root, L, finish) {
+function lookout2d(root, L, finish) {
   const heat = meter('alarm', '🔥'), clock = $c('b', { class: 'mgclock' }), score = $c('div', { class: 'mggoal', text: '👮 0 spotted' }), street = $c('div', { class: 'mgstreet' });
   root.append(hud(heat, clock), score, street);
   const taps = [], t0 = performance.now(), slots = [], shown = Array(MG.LOOK.spots).fill(-2), mark = new Map(); let ended = false, ev = { heat: 0, hits: 0 };
@@ -471,4 +490,122 @@ function muscle(root, L, finish) {
     if (!ended && (ev.lost != null || t >= L.limit)) { ended = true; C.off(); if (ev.lost != null) { root.classList.add('siren'); buzz(500); } setTimeout(() => finish({ taps, time: Math.min(+t.toFixed(2), L.limit) }), 700); }
   });
   const stop = root._stop; root._stop = () => { stop && stop(); C.off(); };
+}
+
+// ---------------- Hold off the horde (muscle) ----------------
+async function horde(root, L, finish) {
+  const loading = $c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'They\'re coming…' })); root.append(loading);
+  let W; try { W = await load3d(); } catch (e) { loading.remove(); X.toast('Your phone could not load the 3D view.'); return finish({ path: [[L.start.x, L.start.y], [L.start.x, L.start.y]], acts: '00' }); }
+  loading.remove(); if (!root.isConnected) return;
+  const cv = $c('canvas', { class: 'mgcanvas' }), hp = meter('trust', '❤️'), clock = $c('b', { class: 'mgclock' }), wpn = $c('b', { class: 'acount' }), waveB = $c('div', { class: 'abig' }), stick = $c('div', { class: 'astick' }, $c('i'));
+  const fire = $c('button', { class: 'zfire', 'aria-label': 'Fight' }, $c('span', { text: '🏏' })), feed = $c('div', { class: 'afeed' });
+  root.append(cv, hud(hp, wpn, clock), feed, waveB, stick, fire);
+  const view = W.createView(cv), THREE = W.THREE; view.resize(); W.buildYard(view, L, { types: X.townTypes ? X.townTypes() : [] });
+  const ro = new ResizeObserver(() => view.resize()); ro.observe(root);
+  const me = W.makePerson('muscle' + L.seed, 'civilian'); view.scene.add(me.group);
+  const weapon = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.9), new THREE.MeshStandardMaterial({ color: '#8a5a33', roughness: 0.6 })); weapon.position.set(0.32, 0.85, 0.35); me.group.add(weapon);
+  const flash = new THREE.PointLight('#ffd27a', 0, 9, 2); flash.position.set(0, 1.3, 0.6); me.group.add(flash);
+  const horde = W.makeHorde(90); view.scene.add(horde.group); const splats = W.makeSplats(140); view.scene.add(splats.mesh);
+  const tracerMat = new THREE.LineBasicMaterial({ color: '#ffe9a8', transparent: true, opacity: 0.9 }); const tracers = [];
+  const PCOL = { pistol: '#2b2f33', shotgun: '#5a3a2a', rifle: '#3a4a3a', medkit: '#f4f4f0' };
+  const pickMeshes = new Map(); const pickMesh = p => { const g = new THREE.Group(); const b = new THREE.Mesh(p.k === 'medkit' ? new THREE.BoxGeometry(0.6, 0.35, 0.45) : new THREE.BoxGeometry(p.k === 'pistol' ? 0.5 : 1.1, 0.16, 0.22), new THREE.MeshStandardMaterial({ color: PCOL[p.k], metalness: p.k === 'medkit' ? 0 : 0.6, roughness: 0.4 })); b.position.y = 0.9; g.add(b);
+    if (p.k === 'medkit') { const c1 = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.37, 0.1), new THREE.MeshBasicMaterial({ color: '#d62828' })), c2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.37, 0.34), new THREE.MeshBasicMaterial({ color: '#d62828' })); c1.position.y = c2.position.y = 0.9; g.add(c1, c2); }
+    const halo = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.85, 28), new THREE.MeshBasicMaterial({ color: p.k === 'medkit' ? '#7cffb2' : '#ffd54a', side: THREE.DoubleSide, transparent: true, opacity: 0.8 })); halo.rotation.x = -Math.PI / 2; halo.position.y = 0.05; g.add(halo);
+    const tag = W.nameTag(`${MG.WEAPONS[p.k].icon} ${MG.WEAPONS[p.k].name}`, '#ffe9a8'); tag.position.y = 1.7; tag.scale.set(2, 0.5, 1); g.add(tag); g.position.set(p.x, 0, p.y); view.scene.add(g); return g; };
+  // controls: the left thumb moves (a stick appears under it), the red button fights (hold it)
+  let joy = null, act = false; const keys = new Set();
+  cv.addEventListener('pointerdown', e => { joy = { x: e.clientX, y: e.clientY, dx: 0, dy: 0, id: e.pointerId }; try { cv.setPointerCapture(e.pointerId); } catch (er) {} stick.style.cssText = `display:block;left:${e.clientX}px;top:${e.clientY}px`; stick.firstChild.style.transform = 'translate(-50%,-50%)'; });
+  cv.addEventListener('pointermove', e => { if (!joy || e.pointerId !== joy.id) return; let dx = e.clientX - joy.x, dy = e.clientY - joy.y; const d = Math.hypot(dx, dy); if (d > 55) { dx *= 55 / d; dy *= 55 / d; } joy.dx = dx; joy.dy = dy; stick.firstChild.style.transform = `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`; });
+  const up = e => { if (joy && e.pointerId === joy.id) { joy = null; stick.style.display = 'none'; } }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  fire.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); act = true; fire.classList.add('on'); try { fire.setPointerCapture(e.pointerId); } catch (er) {} });
+  const off = () => { act = false; fire.classList.remove('on'); }; fire.addEventListener('pointerup', off); fire.addEventListener('pointercancel', off); fire.addEventListener('lostpointercapture', off);
+  const kd = e => { keys.add(e.key); if (e.key === ' ') { act = true; e.preventDefault(); } if (e.key.startsWith('Arrow')) e.preventDefault(); }, ku = e => { keys.delete(e.key); if (e.key === ' ') act = false; }; addEventListener('keydown', kd); addEventListener('keyup', ku);
+  const yaw = Math.PI / 4;
+  const input = () => { let sx = 0, sy = 0; if (joy && Math.hypot(joy.dx, joy.dy) > 6) { sx = joy.dx / 55; sy = joy.dy / 55; }
+    if (keys.has('ArrowUp') || keys.has('w')) sy -= 1; if (keys.has('ArrowDown') || keys.has('s')) sy += 1; if (keys.has('ArrowLeft') || keys.has('a')) sx -= 1; if (keys.has('ArrowRight') || keys.has('d')) sx += 1;
+    const c = Math.cos(yaw), sn = Math.sin(yaw); let vx = sx * c + sy * sn, vy = -sx * sn + sy * c; const n = Math.hypot(vx, vy); return n > 1 ? [vx / n, vy / n] : [vx, vy]; };
+  // the world moves in fixed steps (the server replays the same steps); the picture is drawn in between
+  let s = MG.hordeStart(L), prev = s, acc = 0, ended = false, lastWave = -1, deadAt = new Map(), lastHp = s.hp, lastW = 'bat';
+  const path = [[s.x, s.y]]; let acts = '0';
+  const look = new THREE.Vector3(s.x, 0, s.y); const camDist = 15, camH = 19;
+  view.start((dt, now) => {
+    if (!ended) { acc += dt; while (acc >= MG.STEP && !s.done) { acc -= MG.STEP; prev = s; const [vx, vy] = input(), q = MG.hordeMove(L, s, vx, vy); s = MG.hordeStep(L, s, q.x, q.y, act); path.push([q.x, q.y]); acts += act ? '1' : '0';
+        for (const sh of s.shots) { const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(q.x, 1.3, q.y), new THREE.Vector3(sh[0], 1.1, sh[1])]); const ln = new THREE.Line(g, tracerMat); view.scene.add(ln); tracers.push({ ln, t: now }); }
+        if (s.shots.length) { flash.intensity = s.w === 'bat' && prev.w === 'bat' ? 0 : 30; buzz(s.w === 'bat' ? 15 : 8); me.body.rotation.y = 0; } } }
+    const u = s.done ? 1 : Math.min(1, acc / MG.STEP), px = prev.x + (s.x - prev.x) * u, py = prev.y + (s.y - prev.y) * u;
+    me.setPos(px, py); me.animate(dt, (s.x - prev.x) / MG.STEP, (s.y - prev.y) / MG.STEP); if (Math.hypot(s.x - prev.x, s.y - prev.y) < 0.01) me.group.rotation.y = Math.atan2(s.fx, s.fy);
+    flash.intensity *= 0.6;
+    // the zombies, in between their steps
+    const pz = new Map(prev.z.map(z => [z.id, z])), list = [];
+    for (const z of s.z) { const a = pz.get(z.id) || z, x = a.x + (z.x - a.x) * u, y = a.y + (z.y - a.y) * u;
+      if (z.dead && !deadAt.has(z.id)) { deadAt.set(z.id, now); splats.add(x, y, 1.2); }
+      list.push({ id: z.id, x, z: y, heading: Math.atan2(s.x - x, s.y - y), speed: z.dead ? 0 : z.sp, hurt: z.hurt, dead: z.dead ? Math.min(1, (now - (deadAt.get(z.id) || now)) / 300) : 0 }); }
+    for (const [id, t0] of deadAt) if (now - t0 < 900 && !s.z.some(z => z.id === id)) { /* fallen, already gone */ }
+    horde.update(list, dt, now);
+    // things on the ground
+    const seenP = new Set(); for (const p of s.picks) { const key = p.t + ':' + p.k; seenP.add(key); if (!pickMeshes.has(key)) pickMeshes.set(key, pickMesh(p)); const g = pickMeshes.get(key); g.children[0].rotation.y = now / 400; g.children[0].position.y = 0.9 + Math.sin(now / 250) * 0.1; }
+    for (const [k, g] of pickMeshes) if (!seenP.has(k)) { view.scene.remove(g); pickMeshes.delete(k); }
+    for (let i = tracers.length - 1; i >= 0; i--) if (now - tracers[i].t > 70) { view.scene.remove(tracers[i].ln); tracers[i].ln.geometry.dispose(); tracers.splice(i, 1); }
+    view.animateYard && view.animateYard(now);
+    // the camera follows from above and behind, and shakes when you get bitten
+    look.lerp(new THREE.Vector3(px, 0, py), Math.min(1, dt * 7)); const shake = s.hit ? (Math.random() - 0.5) * 0.25 : 0;
+    view.camera.position.set(look.x + Math.sin(yaw) * camDist + shake, camH, look.z + Math.cos(yaw) * camDist); view.camera.lookAt(look.x, 1, look.z); view.cut.A.value.set(px, 1, py); view.cut.B.value.copy(view.camera.position); view.cut.R.value = 7;
+    // the HUD
+    hp.set(s.hp / MG.HORDE.hp); hp.classList.toggle('hot', s.hp < 35); if (s.hp < lastHp - 0.5) { root.classList.add('hurt'); setTimeout(() => root.classList.remove('hurt'), 120); } lastHp = s.hp;
+    const W0 = MG.WEAPONS[s.w], wt = `${W0.icon} ${W0.name}${s.ammo !== Infinity ? ` · ${s.ammo}` : ''} · 🧟 ${s.kills}`; if (wpn.textContent !== wt) wpn.textContent = wt;
+    if (s.w !== lastW) { fire.firstChild.textContent = W0.icon; weapon.scale.set(s.w === 'bat' ? 1 : 1.2, s.w === 'bat' ? 1 : 1.6, s.w === 'pistol' ? 0.45 : s.w === 'bat' ? 1 : 1.1); weapon.material.color.set(s.w === 'bat' ? '#8a5a33' : '#2b2f33'); if (s.w !== 'bat') say2(feed, `Picked up a ${W0.name.toLowerCase()}!`); lastW = s.w; }
+    clock.textContent = `${Math.max(0, Math.ceil(L.limit - s.t))}s`;
+    const wave = Math.floor(s.t / 9); if (wave !== lastWave) { lastWave = wave; waveB.textContent = wave ? `Wave ${wave + 1}` : 'Hold them off!'; waveB.hidden = false; setTimeout(() => { waveB.hidden = true; }, 1600); if (wave) buzz([40, 40, 40]); }
+    if (s.done && !ended) { ended = true; off(); if (s.done === 'down') { root.classList.add('siren'); buzz(500); waveB.textContent = 'You went down!'; waveB.hidden = false; } else { waveB.textContent = 'You held them off!'; waveB.hidden = false; }
+      setTimeout(() => finish({ path, acts }), 1200); }
+  });
+  const stop = root._stop; root._stop = () => { stop && stop(); view.dispose(); ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); };
+}
+function say2(feed, text) { const line = $c('div', { class: 'aline', text }); feed.prepend(line); setTimeout(() => line.remove(), 2500); while (feed.children.length > 3) feed.lastChild.remove(); }
+
+// ---------------- Spot the police (lookout), in 3D ----------------
+// The yard behind the job, at dusk: people keep stepping out of six doorways and alleys and looking about. Tap the
+// police (uniforms, or plain clothes and dark glasses) before they slip away. The same rules as ever decide the score.
+async function lookout(root, L, finish) {
+  const loading = $c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'Taking up position…' })); root.append(loading);
+  let W; try { W = await load3d(); } catch (e) { loading.remove(); return lookout2d(root, L, finish); }
+  loading.remove(); if (!root.isConnected) return;
+  const cv = $c('canvas', { class: 'mgcanvas' }), heat = meter('alarm', '🔥'), clock = $c('b', { class: 'mgclock' }), score = $c('div', { class: 'mggoal', text: '👮 0 spotted' });
+  root.append(cv, hud(heat, clock), score, $c('div', { class: 'mgjoyhint', text: 'Tap the police' }));
+  const view = W.createView(cv), THREE = W.THREE, yard = MG.genHorde(L.seed, 1); view.resize(); W.buildYard(view, yard, { types: X.townTypes ? X.townTypes() : [], skip: ['W'], fogFar: 160 });
+  const ro = new ResizeObserver(() => { view.resize(); frame(); }); ro.observe(root);
+  // six doorways: three on the far side of the yard, three on the near side
+  const spots = [[7, 0.6], [17, 0.6], [27, 0.6], [7, yard.H - 0.6], [17, yard.H - 0.6], [27, yard.H - 0.6]].map(([x, z], i) => ({ x, z, out: i < 3 ? 1 : -1 }));
+  for (const sp of spots) { const d = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.8, 0.3), new THREE.MeshStandardMaterial({ color: '#2a2420', roughness: 0.9 })); d.position.set(sp.x, 1.4, sp.z - sp.out * 0.4); view.scene.add(d);
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.2), new THREE.MeshBasicMaterial({ color: '#ffd38a' })); lamp.position.set(sp.x, 3.1, sp.z); view.scene.add(lamp); }
+  // the camera looks across the yard from the open side, so all six doorways are in view (the long way up a tall screen)
+  const frame = () => { const asp = view.camera.aspect, tall = asp < 1, span = (tall ? yard.H : yard.W) + 6, hf = Math.atan(Math.tan(view.camera.fov * Math.PI / 360) * asp), dist = Math.max((span / 2) / Math.tan(hf) * 0.9, 18);
+    if (tall) view.camera.position.set(yard.W / 2 + dist * 0.5, dist * 0.85, yard.H / 2); else view.camera.position.set(yard.W / 2, dist * 0.85, yard.H / 2 + dist * 0.5); view.camera.lookAt(yard.W / 2, 0, yard.H / 2); };
+  view.camera.fov = 50; view.camera.updateProjectionMatrix(); frame();
+  // the people: built as they step out
+  const people = new Map(), mark = new Map(), taps = [], t0 = performance.now(); let ended = false, ev = { heat: 0, hits: 0 };
+  const COPS = ['hunter', 'detective'];
+  const personFor = (p, j) => { const role = p.cop ? (p.look % 2 ? 'hunter' : 'civilian') : 'civilian', P = W.makePerson((p.cop ? 'cop' : 'folk') + j + L.seed, role);
+    if (p.cop && role === 'civilian') { for (const c of P.body.children) if (c.material && c.position.y > 1.0 && c.position.y < 1.5 && c.scale.x > 0.4) c.material = new THREE.MeshStandardMaterial({ color: '#22262c' }); const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.05), new THREE.MeshBasicMaterial({ color: '#000' })); glasses.position.set(0, 1.76, 0.17); P.body.add(glasses); }
+    const halo = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.7, 24), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, side: THREE.DoubleSide })); halo.rotation.x = -Math.PI / 2; halo.position.y = 0.05; P.group.add(halo);
+    view.scene.add(P.group); return P; };
+  // tapping: the person nearest your finger (on screen) is the one you mean
+  const v = new THREE.Vector3();
+  cv.addEventListener('pointerdown', e => { if (ended) return; const t = +((performance.now() - t0) / 1000).toFixed(2), rect = cv.getBoundingClientRect(); let best = -1, bd = 70;
+    for (const [j, P] of people) { v.set(P.x, 1.2, P.z).project(view.camera); const sx = (v.x + 1) / 2 * rect.width + rect.left, sy = (1 - v.y) / 2 * rect.height + rect.top, d = Math.hypot(sx - e.clientX, sy - e.clientY); if (d < bd) { bd = d; best = j; } }
+    if (best < 0) return; const p = L.pops[best]; taps.push([p.s, t]); mark.set(best, p.cop ? 'hit' : 'wrong'); buzz(p.cop ? 25 : 150);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.9, 28), new THREE.MeshBasicMaterial({ color: p.cop ? '#3cc46a' : '#ff4b3a', side: THREE.DoubleSide, transparent: true })); ring.rotation.x = -Math.PI / 2; ring.position.set(people.get(best).x, 0.05, people.get(best).z); view.scene.add(ring); setTimeout(() => view.scene.remove(ring), 600);
+    if (!p.cop) { root.classList.add('shakeit'); setTimeout(() => root.classList.remove('shakeit'), 300); } });
+  let lastEval = -1;
+  view.start((dt, now) => { const t = (performance.now() - t0) / 1000;
+    L.pops.forEach((p, j) => { const on = p.t0 <= t && t <= p.t0 + p.dur && mark.get(j) !== 'hit', sp = spots[p.s];
+      if (on && !people.has(j)) people.set(j, personFor(p, j));
+      if (!on && people.has(j)) { view.scene.remove(people.get(j).group); people.delete(j); return; }
+      if (!on) return; const P = people.get(j), k = (t - p.t0) / p.dur, out = Math.min(1, k * 4, (1 - k) * 4) * 3.2, side = Math.sin(t * 0.8 + j) * 0.6;
+      const px = sp.x + side, pz = sp.z + sp.out * out, vx = (px - P.x) / Math.max(dt, 1e-3), vz = (pz - P.z) / Math.max(dt, 1e-3); P.setPos(px, pz); P.animate(dt, vx, vz); if (Math.hypot(vx, vz) < 0.3) P.group.rotation.y = sp.out > 0 ? Math.sin(t * 2 + j) * 0.9 : Math.PI + Math.sin(t * 2 + j) * 0.9; });
+    view.animateYard && view.animateYard(now);
+    if (t - lastEval > 0.1) { lastEval = t; ev = MG.lookEval(L, taps, t) || ev; heat.set(ev.heat); heat.classList.toggle('hot', ev.heat > 0.6); const sc = `👮 ${ev.hits} spotted`; if (score.textContent !== sc) score.textContent = sc; }
+    clock.textContent = `${Math.max(0, Math.ceil(L.limit - t))}s`;
+    if (!ended && (ev.blown != null || t >= L.limit)) { ended = true; if (ev.blown != null) { root.classList.add('siren'); buzz(500); } setTimeout(() => finish({ taps, time: Math.min(+t.toFixed(2), L.limit) }), 700); } });
+  const stop = root._stop; root._stop = () => { stop && stop(); view.dispose(); ro.disconnect(); };
 }

@@ -12,7 +12,7 @@
 //
 // Score out of 100: your play is worth up to 60 points, the setting (how far the police are, night, a crime wave) up to 40.
 
-export const GAMES = { rob: 'stealth', scam: 'con', atm: 'atm', driver: 'drive', hacker: 'atm', safecracker: 'safe', lookout: 'lookout', muscle: 'muscle' };
+export const GAMES = { rob: 'stealth', scam: 'con', atm: 'atm', driver: 'drive', hacker: 'atm', safecracker: 'safe', lookout: 'lookout', muscle: 'horde' };
 export const SOLO = ['rob', 'scam', 'atm']; // the crimes you do alone; the rest are heist roles (practice is open to all)
 export const STEP = 0.1; // the stealth game moves in steps of a tenth of a second, on the phone and on the server alike
 
@@ -40,8 +40,12 @@ export function outcomeOf(total, gotMoney = true) {
 // A shop seen from above with the walls cut away. Shelves block the way and the view; the shopkeeper (and, in harder
 // shops, a guard) walk a round; cameras sweep. Being in someone's view fills the "seen" meter; full means you're spotted.
 // Get to the till, stay by it while you empty it, then leave by the back door you came in.
+// The staff don't walk a fixed loop: they wander from aisle to aisle, stop, and look around. Laser tripwires blink on
+// and off across the aisles (walk through one while it's on and the alarm is half-way there). Smaller loot (a jewellery
+// case, a cash box, phones on display) is there for the taking too, if you dare: each one adds to the takings.
 export const STEALTH = { speed: 3.2, grab: 1.5, grabR: 0.95, exitR: 0.8, fill: 1.25, fillD: 0.22, drain: 0.5,
-  guardFov: 0.62, guardRange: 3.4, camFov: 0.4, camRange: 4.6 };
+  guardFov: 0.62, guardRange: 3.4, camFov: 0.4, camRange: 4.6, laser: 0.55, itemR: 0.8, itemGrab: 0.8, itemBonus: 0.15 };
+export const ITEMS = { jewels: { name: 'Jewellery case', icon: '💎' }, cashbox: { name: 'Cash box', icon: '🗃️' }, phones: { name: 'Phones on display', icon: '📱' }, watches: { name: 'Watches', icon: '⌚' } };
 
 export function genStealth(seed, diff) {
   for (let k = 0; k < 40; k++) { const L = tryStealth(seed + k * 7919, diff); if (L) return L; }
@@ -58,18 +62,41 @@ function tryStealth(seed, diff, plain) {
         if (Math.hypot(x + 0.5 - entry.x, y + 0.5 - entry.y) < 2.2 || Math.hypot(x + 0.5 - till.x, y + 0.5 - till.y) < 1.8) continue; wall[y * W + x] = 1; } } }
   // the counter the till sits on
   wall[0 * W + (W - 3)] = 2; wall[0 * W + (W - 2)] = 2;
-  const L = { seed, diff, W, H, wall: Array.from(wall), entry, till, guards: [], cams: [], limit: 52 - diff * 4 };
+  const L = { seed, diff, W, H, wall: Array.from(wall), entry, till, guards: [], cams: [], lasers: [], items: [], limit: 54 - diff * 3 };
   if (!pathCells(L, cell(entry), cell(till))) return null;
   // the round: random floor spots joined up along the aisles
   const floors = []; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!at(x, y)) floors.push([x, y]);
-  const nG = diff >= 4 ? 2 : 1;
+  const nG = diff >= 4 ? 2 : 1, far = f => Math.hypot(f[0] + 0.5 - entry.x, f[1] + 0.5 - entry.y) >= 3;
   for (let g = 0; g < nG; g++) {
-    const pts = []; for (let i = 0; i < 4; i++) { const f = floors[Math.floor(r() * floors.length)]; if (Math.hypot(f[0] + 0.5 - entry.x, f[1] + 0.5 - entry.y) < 3) { i--; continue; } pts.push(f); }
-    const route = []; for (let i = 0; i < pts.length; i++) { const p = pathCells(L, pts[i], pts[(i + 1) % pts.length]); if (!p) return null; route.push(...p.slice(i ? 1 : 0)); }
-    const pts2 = route.map(([x, y]) => ({ x: x + 0.5, y: y + 0.5 })); let len = 0; const cum = [0]; for (let i = 1; i < pts2.length; i++) { len += Math.hypot(pts2[i].x - pts2[i - 1].x, pts2[i].y - pts2[i - 1].y); cum.push(len); }
-    if (len < 4) return null;
-    L.guards.push({ pts: pts2, cum, len, speed: 1.05 + diff * 0.15, off: r() * len, kind: g ? 'guard' : 'keeper' });
+    // a wander: walk to a random spot, stop, look around (two or three glances), then on to another; never the same twice
+    const speed = 1.05 + diff * 0.15, legs = []; let at0 = floors.filter(far)[Math.floor(r() * floors.filter(far).length)], t = -3;
+    while (t < L.limit + 4) {
+      let to = null; for (let k = 0; k < 20 && !to; k++) { const f = floors[Math.floor(r() * floors.length)]; if (far(f) && Math.abs(f[0] - at0[0]) + Math.abs(f[1] - at0[1]) >= 3) to = f; }
+      if (!to) return null; const p = pathCells(L, at0, to); if (!p) return null;
+      const pts = p.map(([x, y]) => ({ x: x + 0.5, y: y + 0.5 })); let len = 0; const cum = [0]; for (let i = 1; i < pts.length; i++) { len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); cum.push(len); }
+      const sp = speed * (0.8 + r() * 0.5); legs.push({ k: 'walk', t0: +t.toFixed(3), t1: +(t + len / sp).toFixed(3), pts, cum, len }); t += len / sp;
+      const last = pts[pts.length - 1], prev = pts[pts.length - 2] || last, d0 = Math.atan2(last.y - prev.y, last.x - prev.x), pause = 0.4 + r() * (2.4 - diff * 0.25), looks = [];
+      for (let k = 0, n = 1 + Math.floor(r() * 3); k < n; k++) looks.push({ t: +(t + pause * k / n).toFixed(3), dir: +(d0 + (r() - 0.5) * 3.6).toFixed(3) });
+      legs.push({ k: 'look', t0: +t.toFixed(3), t1: +(t + pause).toFixed(3), x: last.x, y: last.y, looks }); t += pause; at0 = to;
+    }
+    L.guards.push({ legs, kind: g ? 'guard' : 'keeper' });
   }
+  // laser tripwires across open runs of floor: on for a while, off for a while (each at its own beat)
+  const nL = 1 + Math.floor(diff / 2), used = new Set();
+  for (let k = 0, tries = 0; k < nL && tries < 200; tries++) {
+    const horiz = r() < 0.5, x = 1 + Math.floor(r() * (W - 2)), y = 1 + Math.floor(r() * (H - 2)); if (at(x, y)) continue;
+    let a = horiz ? x : y, b = a; const free = v => horiz ? !at(v, y) : !at(x, v); while (free(a - 1) && a - 1 >= 0) a--; while (free(b + 1) && b + 1 < (horiz ? W : H)) b++;
+    if (b - a < 2 || used.has((horiz ? 'h' : 'v') + (horiz ? y : x))) continue; used.add((horiz ? 'h' : 'v') + (horiz ? y : x));
+    const c = horiz ? y + 0.5 : x + 0.5; if (Math.hypot((horiz ? (a + b + 1) / 2 : c) - entry.x, (horiz ? c : (a + b + 1) / 2) - entry.y) < 2) continue;
+    L.lasers.push(horiz ? { x0: a, y0: c, x1: b + 1, y1: c } : { x0: c, y0: a, x1: c, y1: b + 1 }); const z = L.lasers[L.lasers.length - 1];
+    z.period = +(2.2 + r() * 1.6 - diff * 0.15).toFixed(2); z.on = +(0.45 + r() * 0.2 + diff * 0.04).toFixed(2); z.ph = +r().toFixed(3); k++;
+  }
+  // the extra loot: against shelves or walls, away from the door
+  const kinds = Object.keys(ITEMS), nI = 2 + (diff >= 3 ? 1 : 0), io = Math.floor(r() * kinds.length);
+  for (let k = 0, tries = 0; k < nI && tries < 300; tries++) { const f = floors[Math.floor(r() * floors.length)], x = f[0] + 0.5, y = f[1] + 0.5;
+    if (!far(f) || Math.hypot(x - till.x, y - till.y) < 2.5 || L.items.some(i => Math.hypot(i.x - x, i.y - y) < 3)) continue;
+    let wallNear = false; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (at(f[0] + dx, f[1] + dy)) wallNear = true; if (!wallNear) continue;
+    if (!pathCells(L, cell(entry), f)) continue; L.items.push({ x, y, k: kinds[(k + io) % kinds.length] }); k++; }
   const nC = Math.max(0, diff - 2);
   const spots = [[W - 0.5, H / 2, Math.PI], [W / 2, 0.15, Math.PI / 2], [0.15, H / 2 - 1, 0], [W / 2 + 2, H - 0.15, -Math.PI / 2]];
   for (let i = 0; i < nC; i++) { const [x, y, a] = spots[i % spots.length]; L.cams.push({ x, y, base: a, sweep: 0.75, period: 5 + r() * 3, ph: r() * 6.28 }); }
@@ -84,11 +111,18 @@ function pathCells(L, a, b) { // breadth-first route between two floor cells, th
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue; const n = ny * W + nx; if (prev[n] >= 0 || L.wall[n]) continue; prev[n] = c; q.push(n); } }
   if (prev[e] < 0) return null; const out = []; for (let c = e; ; c = prev[c]) { out.push([c % W, (c / W) | 0]); if (c === s) break; } return out.reverse();
 }
+// Where a member of staff is at time t, and which way they're looking (moving: walking; still: glancing about).
 export function guardAt(g, t) {
-  let d = ((g.off + t * g.speed) % g.len + g.len) % g.len, i = 1; while (i < g.cum.length - 1 && g.cum[i] < d) i++;
-  const a = g.pts[i - 1], b = g.pts[i] || a, seg = Math.max(1e-6, g.cum[i] - g.cum[i - 1]), u = clamp((d - g.cum[i - 1]) / seg, 0, 1);
-  return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u, dir: Math.atan2(b.y - a.y, b.x - a.x) };
+  const legs = g.legs; let lo = 0, hi = legs.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (legs[m].t0 <= t) lo = m; else hi = m - 1; }
+  const L0 = legs[lo];
+  if (L0.k === 'look') { let dir = L0.looks[0].dir; for (const k of L0.looks) if (k.t <= t) dir = k.dir; return { x: L0.x, y: L0.y, dir, still: true }; }
+  const d = clamp((t - L0.t0) / Math.max(1e-6, L0.t1 - L0.t0), 0, 1) * L0.len; let i = 1; while (i < L0.cum.length - 1 && L0.cum[i] < d) i++;
+  const a = L0.pts[i - 1], b = L0.pts[i] || a, seg = Math.max(1e-6, L0.cum[i] - L0.cum[i - 1]), u = clamp((d - L0.cum[i - 1]) / seg, 0, 1);
+  return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u, dir: b === a ? 0 : Math.atan2(b.y - a.y, b.x - a.x) };
 }
+// Is a laser on at time t? And does it touch the point p?
+export const laserOn = (z, t) => ((t / z.period + z.ph) % 1) < z.on;
+function onLaser(z, p) { const dx = z.x1 - z.x0, dy = z.y1 - z.y0, u = clamp(((p.x - z.x0) * dx + (p.y - z.y0) * dy) / (dx * dx + dy * dy), 0, 1), qx = z.x0 + dx * u - p.x, qy = z.y0 + dy * u - p.y; return qx * qx + qy * qy < 0.3 * 0.3; }
 export const camAt = (c, t) => c.base + Math.sin(t / c.period * Math.PI * 2 + c.ph) * c.sweep;
 function clear(L, a, b) { const d = Math.hypot(b.x - a.x, b.y - a.y), n = Math.ceil(d / 0.2); for (let i = 1; i < n; i++) { const u = i / n; if (isWall(L, a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u)) return false; } return true; }
 function inCone(from, dir, fov, range, p) { const dx = p.x - from.x, dy = p.y - from.y, d = Math.hypot(dx, dy); if (d > range) return false; if (d < 0.6) return true;
@@ -108,11 +142,16 @@ export function stealthStep(L, s, vx, vy) {
 }
 // Everything that follows from being at (x, y) after the step: the meter, the till, the door.
 function advance(L, s, x, y) {
-  const t = +(s.t + STEP).toFixed(3), p = { x, y }, who = seenBy(L, t, p);
+  const t = +(s.t + STEP).toFixed(3), p = { x, y }; let who = seenBy(L, t, p);
   let seen = who ? s.seen + STEP * (STEALTH.fill + STEALTH.fillD * L.diff) : Math.max(0, s.seen - STEP * STEALTH.drain);
+  // a laser: tripping one (stepping onto it while it's on) sets the alarm half off
+  let zap = s.zap || 0; const onAny = (L.lasers || []).some(z => laserOn(z, t) && onLaser(z, p)); if (onAny && !s.onLaser) { seen += STEALTH.laser; zap++; who = 3; }
+  // the extra loot: stand next to one long enough to bag it
+  let items = s.items || 0, ig = s.ig || 0, ii = -1; (L.items || []).forEach((it, k) => { if (!(items & (1 << k)) && Math.hypot(x - it.x, y - it.y) < STEALTH.itemR) ii = k; });
+  if (ii >= 0 && ii === s.ii) { ig += STEP; if (ig >= STEALTH.itemGrab) { items |= 1 << ii; ig = 0; ii = -1; } } else ig = ii >= 0 ? STEP : 0;
   const peak = Math.max(s.peak, seen), near = Math.hypot(x - L.till.x, y - L.till.y) < STEALTH.grabR;
   const grab = s.grabbed ? STEALTH.grab : near ? s.grab + STEP : s.grab, grabbed = grab >= STEALTH.grab;
-  const out = { t, x, y, seen: Math.min(1, seen), peak: Math.min(1, peak), who, grab, grabbed, done: null };
+  const out = { t, x, y, seen: Math.min(1, seen), peak: Math.min(1, peak), who, grab, grabbed, done: null, onLaser: onAny, zap, items, ig, ii };
   if (seen >= 1) out.done = 'spotted';
   else if (grabbed && Math.hypot(x - L.entry.x, y - L.entry.y) < STEALTH.exitR) out.done = 'escaped';
   else if (!grabbed && s.t > 3 && Math.hypot(x - L.entry.x, y - L.entry.y) < 0.45 && s.left) out.done = 'left';
@@ -121,8 +160,9 @@ function advance(L, s, x, y) {
   return out;
 }
 export const stealthStart = L => ({ t: 0, x: L.entry.x, y: L.entry.y, seen: 0, peak: 0, who: 0, grab: 0, grabbed: false, done: null, left: false });
+export const itemCount = s => { let n = 0, b = s.items || 0; while (b) { n += b & 1; b >>= 1; } return n; };
 export function stealthPerf(L, s) {
-  if (s.done === 'escaped') return { perf: clamp(0.55 + 0.3 * (1 - s.peak) + 0.15 * Math.max(0, (L.limit - s.t) / L.limit) * 1.5, 0, 1), money: true };
+  if (s.done === 'escaped') return { perf: clamp(0.5 + 0.3 * (1 - s.peak) + 0.12 * Math.max(0, (L.limit - s.t) / L.limit) * 1.5 + 0.04 * itemCount(s), 0, 1), money: true, extra: itemCount(s) };
   if (s.done === 'left') return { perf: 0.45, money: false }; // walked away before taking anything
   if (s.done === 'timeout') return { perf: s.grabbed ? 0.3 : 0.15, money: false };
   return { perf: s.grabbed ? 0.12 : 0.05, money: false }; // spotted
@@ -140,7 +180,7 @@ export function stealthReplay(L, path) {
     s = q;
   }
   if (!s.done) { s.done = 'timeout'; }
-  return { ok: true, state: s, ...stealthPerf(L, s) };
+  return { ok: true, state: { ...s, got: itemCount(s) }, ...stealthPerf(L, s) };
 }
 
 // ======================= Smooth talker (con a tourist) =======================
@@ -231,7 +271,7 @@ export const ROLES = {
   hacker: { name: 'Hacker', icon: '💻', blurb: 'Rewire the security panel and crack its code.' },
   safecracker: { name: 'Safecracker', icon: '🔐', blurb: 'Stop the dial on each number.' },
   lookout: { name: 'Lookout', icon: '👀', blurb: 'Spot the plain-clothes police before they spot the crew.' },
-  muscle: { name: 'Muscle', icon: '💪', blurb: 'Hold the doors against the guards.' },
+  muscle: { name: 'Muscle', icon: '💪', blurb: 'Hold off the zombie horde while the crew works.' },
 };
 // The parts each job needs, most important first: a crew of 3 fills the first three.
 export const HEIST_ROLES = {
@@ -250,7 +290,7 @@ export function assignRoles(kind, wants) {
 }
 
 // ======================= Getaway drive (driver) =======================
-// Three lanes, traffic and roadblocks coming at you; tap left or right to change lane. A crash slows you right down;
+// Three lanes, traffic and roadblocks coming at you, faster and faster; tap left or right to change lane. A crash slows you right down;
 // four crashes and the car's wrecked. Reach the end of the road to get away. Moves: [step, lane] when the lane changes.
 export const DRIVE = { hit: 3, wreck: 4 };
 export function genDrive(seed, diff) {
@@ -262,7 +302,7 @@ export function genDrive(seed, diff) {
     obs.push({ d: +d.toFixed(2), lane, k });
     if (diff >= 2 && r() < 0.1 + diff * 0.06) obs.push({ d: +d.toFixed(2), lane: (lane + 1 + Math.floor(r() * 2)) % 3, k: kinds[Math.floor(r() * kinds.length)] });
   }
-  const v0 = 15 + diff, v1 = 21 + diff * 1.5;
+  const v0 = 15 + diff, v1 = Math.round(v0 * 1.85); // it starts at cruising speed and keeps speeding up all the way to the end
   return { seed, diff, D, obs, v0, v1, limit: Math.ceil(D / v0) + 14 };
 }
 export const driveStart = () => ({ t: 0, n: 0, d: 0, lane: 1, slow: 1, crashes: 0, gone: [], i: 0, done: null });
@@ -369,9 +409,101 @@ export function muscleReplay(L, taps, time) {
   return { ok: true, state: { t: +t.toFixed(2), done, shoved: e.shoved, through: e.through, whiffs: e.whiffs }, perf, money: done === 'held' };
 }
 
+// ======================= Hold off the horde (muscle) =======================
+// Zombies pour into the yard behind the job from every side, in waves that get bigger, faster and hungrier. Move with
+// the stick, fight with the action button: a bat to start with, and guns (pistol, shotgun, rifle) and first-aid kits
+// turn up on the ground as it goes on. Survive until the crew is done. Everything here uses only + - * / and square
+// roots, so a phone and the server always get exactly the same result from the same moves.
+// The log: one point per step (where you were) and, per step, whether the action button was held.
+export const HORDE = { speed: 5.4, r: 0.45, hp: 100, reach: 2.0, pick: 1.3, W: 34, H: 26 };
+export const WEAPONS = {
+  bat: { name: 'Bat', icon: '🏏', dmg: 2, cd: 0.45, range: 2.0, ammo: Infinity },
+  pistol: { name: 'Pistol', icon: '🔫', dmg: 2, cd: 0.32, range: 13, ammo: 14 },
+  shotgun: { name: 'Shotgun', icon: '💥', dmg: 3, cd: 0.8, range: 8.5, ammo: 8, spread: 0.82 },
+  rifle: { name: 'Rifle', icon: '🎯', dmg: 1.5, cd: 0.11, range: 16, ammo: 45 },
+  medkit: { name: 'First aid', icon: '🩹', heal: 35 },
+};
+export function genHorde(seed, diff) {
+  const r = rng(seed), W = HORDE.W, H = HORDE.H, obs = [], limit = 48, kinds = ['car', 'car', 'barrier', 'crates', 'dumpster', 'barrel'];
+  const free = (x, y, w, h) => Math.abs(x + w / 2 - W / 2) + Math.abs(y + h / 2 - H / 2) > 7 && obs.every(o => x + w + 2.2 < o.x || o.x + o.w + 2.2 < x || y + h + 2.2 < o.y || o.y + o.h + 2.2 < y);
+  for (let i = 0, tries = 0; i < 9 && tries < 300; tries++) { const k = kinds[Math.floor(r() * kinds.length)], horiz = r() < 0.5;
+    const [w, h] = k === 'car' ? (horiz ? [4.4, 2] : [2, 4.4]) : k === 'barrier' ? (horiz ? [4, 0.8] : [0.8, 4]) : k === 'crates' ? [2.2, 2.2] : k === 'dumpster' ? [2.6, 1.6] : [1, 1];
+    const x = +(2.5 + r() * (W - 5 - w)).toFixed(2), y = +(2.5 + r() * (H - 5 - h)).toFixed(2); if (!free(x, y, w, h)) continue; obs.push({ x, y, w, h, k }); i++; }
+  // the waves: every 9 seconds a new one, bigger, faster, tougher and hungrier than the last
+  const spawns = []; let t = 1.5, wave = 0;
+  while (t < limit - 2) { wave = Math.floor(t / 9);
+    const n = 2 + wave + Math.floor(diff / 2), gap = Math.max(0.25, 1.6 - wave * 0.18 - diff * 0.08);
+    for (let k = 0; k < n && t < limit - 2; k++) { const side = Math.floor(r() * 4), u = r();
+      const x = side === 0 ? 0.6 : side === 1 ? W - 0.6 : u * (W - 2) + 1, y = side === 2 ? 0.6 : side === 3 ? H - 0.6 : u * (H - 2) + 1;
+      spawns.push({ t: +t.toFixed(2), x: +x.toFixed(2), y: +y.toFixed(2), hp: 2 + Math.floor(wave / 2) + (diff >= 4 ? 1 : 0) + (r() < 0.15 ? 2 : 0), sp: +(1.7 + wave * 0.28 + diff * 0.18 + r() * 0.5).toFixed(2), dmg: +(9 + wave * 3 + diff * 2).toFixed(1), wave });
+      t += gap * (0.6 + r() * 0.8); }
+    t = Math.max(t, (wave + 1) * 9 + 0.5); }
+  // what turns up on the ground
+  const picks = [], pk = ['pistol', 'shotgun', 'medkit', 'rifle', 'pistol', 'medkit', 'shotgun', 'rifle'];
+  for (let k = 0, at = 3; at < limit - 4; k++, at += 6 + r() * 3) { let x, y, n = 0; do { x = 3 + r() * (W - 6); y = 3 + r() * (H - 6); n++; } while (n < 40 && !hordeFits({ obs, W, H }, x, y)); picks.push({ t: +at.toFixed(2), x: +x.toFixed(2), y: +y.toFixed(2), k: pk[k % pk.length] }); }
+  return { seed, diff, W, H, obs, spawns, picks, limit, start: { x: W / 2, y: H / 2 } };
+}
+export function hordeFits(L, x, y, R = HORDE.r) { if (x < R || y < R || x > L.W - R || y > L.H - R) return false; for (const o of L.obs) if (x + R > o.x && x - R < o.x + o.w && y + R > o.y && y - R < o.y + o.h) return false; return true; }
+const len2 = (x, y) => Math.sqrt(x * x + y * y);
+export const hordeStart = L => ({ t: 0, n: 0, x: L.start.x, y: L.start.y, fx: 0, fy: 1, hp: HORDE.hp, w: 'bat', ammo: Infinity, cd: 0, z: [], next: 0, kills: 0, picks: [], took: 0, shots: [], done: null, hit: 0 });
+// Your own move for one step (the same on the phone and the server): towards (vx, vy), sliding along anything in the way.
+export function hordeMove(L, s, vx, vy) { const n = len2(vx, vy); if (n > 1) { vx /= n; vy /= n; } const sp = HORDE.speed * STEP; let x = s.x, y = s.y; if (hordeFits(L, x + vx * sp, y)) x += vx * sp; if (hordeFits(L, x, y + vy * sp)) y += vy * sp; return { x, y }; }
+// One step of the world, with you now at (x, y), the action button held or not. Returns the new state.
+export function hordeStep(L, s0, x, y, act) {
+  const s = { ...s0, z: s0.z.map(z => ({ ...z })), picks: s0.picks.map(p => ({ ...p })), shots: [] }; if (s.done) return s0;
+  const mx = x - s.x, my = y - s.y, ml = len2(mx, my); if (ml > 0.01) { s.fx = mx / ml; s.fy = my / ml; } s.x = x; s.y = y;
+  s.n++; s.t = +(s.n * STEP).toFixed(3); s.cd = Math.max(0, +(s.cd - STEP).toFixed(3)); s.hit = 0;
+  // new arrivals
+  while (s.next < L.spawns.length && L.spawns[s.next].t <= s.t) { const z = L.spawns[s.next]; s.z.push({ id: s.next, x: z.x, y: z.y, hp: z.hp, sp: z.sp, dmg: z.dmg, hurt: 0 }); s.next++; }
+  for (const p of L.picks) if (p.t <= s.t && p.t > s.t - STEP - 1e-9) s.picks.push({ ...p, until: +(p.t + 12).toFixed(2) });
+  s.picks = s.picks.filter(p => p.until > s.t);
+  // picking things up
+  for (let i = s.picks.length - 1; i >= 0; i--) { const p = s.picks[i]; if (len2(p.x - s.x, p.y - s.y) > HORDE.pick) continue;
+    if (p.k === 'medkit') s.hp = Math.min(HORDE.hp, s.hp + WEAPONS.medkit.heal); else { s.w = p.k; s.ammo = WEAPONS[p.k].ammo; } s.took++; s.picks.splice(i, 1); }
+  // the zombies shamble towards you (around anything in the way), keep a little apart, and bite when they reach you
+  for (const z of s.z) { if (z.hp <= 0) continue; let dx = s.x - z.x, dy = s.y - z.y; const d = len2(dx, dy); if (d < 0.0001) continue; dx /= d; dy /= d;
+    if (d > 0.95) { const st = z.sp * STEP; let nx = z.x + dx * st, ny = z.y + dy * st;
+      if (!hordeFits(L, nx, ny, 0.4)) { if (hordeFits(L, z.x - dy * st, z.y + dx * st, 0.4)) { nx = z.x - dy * st; ny = z.y + dx * st; } else if (hordeFits(L, z.x + dy * st, z.y - dx * st, 0.4)) { nx = z.x + dy * st; ny = z.y - dx * st; } else { nx = z.x; ny = z.y; } }
+      z.x = nx; z.y = ny; }
+    else { s.hp -= z.dmg * STEP; s.hit = 1; }
+    z.hurt = Math.max(0, z.hurt - STEP); }
+  for (let i = 0; i < s.z.length; i++) for (let j = i + 1; j < s.z.length; j++) { const a = s.z[i], b = s.z[j]; if (a.hp <= 0 || b.hp <= 0) continue; const dx = b.x - a.x, dy = b.y - a.y, d = len2(dx, dy);
+    if (d < 0.8 && d > 0.0001) { const push = (0.8 - d) / 2, ux = dx / d, uy = dy / d; if (hordeFits(L, a.x - ux * push, a.y - uy * push, 0.4)) { a.x -= ux * push; a.y -= uy * push; } if (hordeFits(L, b.x + ux * push, b.y + uy * push, 0.4)) { b.x += ux * push; b.y += uy * push; } } }
+  // fighting back: the bat swings at whoever's close; guns aim themselves at the nearest zombie in range
+  if (act && s.cd <= 0) { const W0 = WEAPONS[s.w]; let best = null, bd = 1e9; for (const z of s.z) { if (z.hp <= 0) continue; const d = len2(z.x - s.x, z.y - s.y); if (d < bd) { bd = d; best = z; } }
+    s.cd = W0.cd;
+    if (best && bd <= W0.range) { const ax = (best.x - s.x) / bd, ay = (best.y - s.y) / bd; s.fx = ax; s.fy = ay;
+      const hits = s.w === 'shotgun' ? s.z.filter(z => { if (z.hp <= 0) return false; const d = len2(z.x - s.x, z.y - s.y); return d <= W0.range && (d < 0.01 || ((z.x - s.x) * ax + (z.y - s.y) * ay) / d >= W0.spread); })
+        : s.w === 'bat' ? s.z.filter(z => { if (z.hp <= 0) return false; const d = len2(z.x - s.x, z.y - s.y); return d <= W0.range && (z === best || ((z.x - s.x) * ax + (z.y - s.y) * ay) / Math.max(d, 0.01) >= 0.3); }) : [best];
+      for (const z of hits) { z.hp -= W0.dmg; z.hurt = 0.2; if (z.hp <= 0) s.kills++; const d = len2(z.x - s.x, z.y - s.y) || 1; z.x += (z.x - s.x) / d * (s.w === 'bat' ? 0.9 : 0.35); z.y += (z.y - s.y) / d * (s.w === 'bat' ? 0.9 : 0.35); if (!hordeFits(L, z.x, z.y, 0.4)) { z.x -= (z.x - s.x) / d * 0.5; z.y -= (z.y - s.y) / d * 0.5; } }
+      s.shots = hits.map(z => [+z.x.toFixed(2), +z.y.toFixed(2)]); }
+    else s.shots = [[+(s.x + s.fx * Math.min(W0.range, 6)).toFixed(2), +(s.y + s.fy * Math.min(W0.range, 6)).toFixed(2)]];
+    if (W0.ammo !== Infinity) { s.ammo--; if (s.ammo <= 0) { s.w = 'bat'; s.ammo = Infinity; } } }
+  s.z = s.z.filter(z => z.hp > 0 || z.hurt > 0.05); for (const z of s.z) if (z.hp <= 0) z.dead = 1;
+  if (s.hp <= 0) { s.hp = 0; s.done = 'down'; } else if (s.t >= L.limit) s.done = 'held';
+  return s;
+}
+export function hordePerf(L, s) {
+  const expect = Math.max(1, L.spawns.filter(z => z.t < s.t).length);
+  if (s.done === 'held') return { perf: clamp(0.5 + 0.3 * s.hp / HORDE.hp + 0.2 * Math.min(1, s.kills / (expect * 0.6)), 0, 1), money: true };
+  return { perf: clamp(0.3 * s.t / L.limit, 0, 0.3), money: false };
+}
+export function hordeReplay(L, log) {
+  const path = log && log.path, acts = String((log && log.acts) || ''); if (!Array.isArray(path) || path.length < 2 || path.length > Math.ceil(L.limit / STEP) + 2) return { ok: false, why: 'bad path' };
+  let s = hordeStart(L);
+  for (let i = 1; i < path.length && !s.done; i++) {
+    const [x, y] = (path[i] || []).map(Number); if (!Number.isFinite(x) || !Number.isFinite(y)) return { ok: false, why: 'bad point' };
+    const dx = x - s.x, dy = y - s.y, d = len2(dx, dy); if (d > HORDE.speed * STEP + 0.02) return { ok: false, why: 'too fast' };
+    const q = hordeMove(L, s, d ? dx / (HORDE.speed * STEP) : 0, d ? dy / (HORDE.speed * STEP) : 0); if (len2(q.x - x, q.y - y) > 0.03 || !hordeFits(L, x, y)) return { ok: false, why: 'walked through something' };
+    s = hordeStep(L, s, x, y, acts[i] === '1');
+  }
+  if (!s.done) s.done = s.t >= L.limit - 0.05 ? 'held' : 'gaveup';
+  return { ok: true, state: { t: s.t, done: s.done, hp: Math.round(s.hp), kills: s.kills, took: s.took }, ...hordePerf(L, s) };
+}
+
 // How long a game must at least take (a fast human), so a result can't come back quicker than it could be played.
 export function minTime(kind, L, st) {
-  if (kind === 'rob' || kind === 'driver' || kind === 'lookout' || kind === 'muscle') return st && st.t ? st.t : 0;
+  if (kind === 'rob' || kind === 'driver' || kind === 'lookout' || kind === 'muscle') return st && st.t ? st.t : 0; // the horde (muscle) has to be survived in real time too
   if (kind === 'scam') return (st?.turns || 1) * 0.8;
   if (kind === 'atm' || kind === 'hacker') return L.wires.length * 0.35 + L.pin.length * 0.2;
   if (kind === 'safecracker') return (st?.got || 0) * 0.4;
@@ -379,7 +511,7 @@ export function minTime(kind, L, st) {
 }
 export function levelOf(kind, seed, diff) {
   const g = GAMES[kind];
-  return g === 'stealth' ? genStealth(seed, diff) : g === 'con' ? genCon(seed, diff) : g === 'atm' ? genAtm(seed, diff) : g === 'drive' ? genDrive(seed, diff) : g === 'safe' ? genSafe(seed, diff) : g === 'lookout' ? genLook(seed, diff) : genMuscle(seed, diff);
+  return g === 'stealth' ? genStealth(seed, diff) : g === 'con' ? genCon(seed, diff) : g === 'atm' ? genAtm(seed, diff) : g === 'drive' ? genDrive(seed, diff) : g === 'safe' ? genSafe(seed, diff) : g === 'lookout' ? genLook(seed, diff) : g === 'horde' ? genHorde(seed, diff) : genMuscle(seed, diff);
 }
 export function replay(kind, L, log) {
   const g = GAMES[kind], x = log || {};
@@ -390,5 +522,6 @@ export function replay(kind, L, log) {
   if (g === 'safe') return safeReplay(L, x.taps, x.time);
   if (g === 'lookout') return lookReplay(L, x.taps, x.time);
   if (g === 'muscle') return muscleReplay(L, x.taps, x.time);
+  if (g === 'horde') return hordeReplay(L, x);
   return { ok: false, why: 'unknown game' };
 }

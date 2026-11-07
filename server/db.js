@@ -297,7 +297,9 @@ const MIGRATIONS = [
    alter table crime_runs add column if not exists heist_id text; create index if not exists crime_runs_heist on crime_runs (heist_id);`,
   // v56: street games (Hunters & Civilians, Hide and seek): each match's result, and the prizes paid out each day
   `create table if not exists arena_results (id text primary key, mode text not null, started_at bigint not null, ended_at bigint, humans int not null default 0, result jsonb);
-   create table if not exists arena_pay (citizen_id text not null, day text not null, n int not null default 0, primary key (citizen_id, day));`
+   create table if not exists arena_pay (citizen_id text not null, day text not null, n int not null default 0, primary key (citizen_id, day));`,
+  // v57: a run of jobs that came off makes the next one harder (wiped when caught)
+  `alter table citizens add column if not exists crime_streak int not null default 0;`
 ];
 
 export async function migrate() {

@@ -120,7 +120,7 @@ export class Heists {
       const odds = await this.acts.odds(h.kind, await this.acts.policeDist(ch.db, sc.x, sc.y), await this.acts.waveNow()), chance = Math.min(0.92, odds.chance + R.HEIST_CREW_BONUS * (crew.length - H.min));
       const wants = h.roles || {}, parts = MG.assignRoles(h.kind, crew.map(c => wants[c.id] || null));
       const live = { chance, band: odds.band, night: !!odds.night, sc: { x: sc.x, y: sc.y, label: sc.label }, started: t, until: t + LIVE_MS, absent: out,
-        crew: crew.map((c, i) => ({ id: c.id, h: c.handle, role: parts[i], seed: crypto.randomInt(1, 2 ** 31), diff: MG.difficultyOf(parts[i], odds.band) })) };
+        crew: crew.map((c, i) => ({ id: c.id, h: c.handle, role: parts[i], seed: crypto.randomInt(1, 2 ** 31), diff: Math.min(5, MG.difficultyOf(parts[i], odds.band) + Math.min(4, Number(c.crime_streak || 0))) })) };
       await ch.q("update heists set status = 'live', live = $2 where id = $1", [h.id, JSON.stringify(live)]);
       for (const c of crew) await ch.q('update citizens set heist_at = $2 where id = $1', [c.id, t]); // the crew lies low from now
       for (const m of live.crew) await this.acts.notify(ch, m.id, 'crime', `🚨 Go time! ${H.icon} ${H.name}: the job is on. Open the Crime tab and play your part (${MG.ROLES[m.role].icon} ${MG.ROLES[m.role].name}) in the next ${LIVE_TXT}.`);
@@ -182,7 +182,10 @@ export class Heists {
       // the money: the takings times the outcome (up to 1.5x), shared by everyone who got away
       let loot = 0; if (out.mult > 0 && got.length) { const cap = mayor ? mayor.coins_base : Math.floor(R.treasuryOn(ch.meta, ch.today)); loot = Math.max(0, Math.min(cap, Math.round(base * out.mult))); }
       const each = got.length ? Math.floor(loot / got.length) : 0, paid = each * got.length, win = paid > 0;
-      for (const c of got) { if (each) { c.coins_base += each; track(ch, 'heist:loot', each, c.id); } ch.touch(c); await ch.saveCitizen(c); await bump(ch, c.id, { crimes: 1, heists: win ? 1 : 0 }); }
+      for (const c of got) { if (each) { c.coins_base += each; track(ch, 'heist:loot', each, c.id); } ch.touch(c); await ch.saveCitizen(c); await bump(ch, c.id, { crimes: 1, heists: win ? 1 : 0 });
+        // it came off: lie low just a moment, but the next job will be harder
+        if (win) await ch.q('update citizens set heist_at = $2, crime_streak = crime_streak + 1 where id = $1', [c.id, t - R.HEIST_COOLDOWN + 20000]); }
+      for (const x of caught) await ch.q('update citizens set crime_streak = 0 where id = $1', [x.c.id]);
       for (const p of parts) if (p.status === 'got') p.each = each;
       if (win) { if (mayor) { mayor.coins_base -= paid; ledger(ch, mayor.id, -paid, 'crime:victim', 'Robbed by a crew'); ch.touch(mayor); await ch.saveCitizen(mayor);
           await this.acts.notify(ch, mayor.id, 'pickpocket', `👑 A crew robbed you of ${fmt(paid)} coins! ${caught.length ? `The police caught ${caught.map(x => '@' + x.c.handle).join(', ')}.` : 'They all got away.'}`); }

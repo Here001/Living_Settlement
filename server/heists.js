@@ -1,7 +1,7 @@
 // Group crimes (heists). A player plans one, picks a time (5 to 60 minutes away) and invites a crew; the crew get a
 // group chat (with an invite from the colony) to agree the details. At the set time, or when the planner says
 // "go now" with enough crew, it happens: one roll decides whether the job comes off, then each member is caught or not.
-// Everyone who gets away shares the loot equally; anyone caught is fined (twice their share, at least 1,000, never
+// Everyone who gets away shares the loot equally; anyone caught is fined (twice their share, at least 1,000, from cash then savings, and into the minus if that's not enough; formerly never
 // more than they have) and jailed. Rules and numbers are in shared/rules.js (HEISTS).
 import crypto from 'node:crypto';
 import { pool } from './db.js';
@@ -107,7 +107,7 @@ export class Heists {
       const pCaught = Math.max(0.05, (win ? R.HEIST_CAUGHT.win : R.HEIST_CAUGHT.lose) - (odds.night ? 0.1 : 0));
       const got = [], caught = [], jail = (await ch.q(`select * from buildings where type = any('${pgList('jail')}') and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [sc.x, sc.y])).rows[0];
       for (const c of crew) { ch.coins(c); await ch.q('update citizens set heist_at = $2 where id = $1', [c.id, t]);
-        if (rand() < pCaught) { const fine = Math.min(c.coins_base, Math.max(1000, share * 2)); c.coins_base -= fine; treasuryAdd(ch, fine); track(ch, 'heist:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
+        if (rand() < pCaught) { const fine = Math.max(1000, share * 2); await ch.takeFrom(c, fine); treasuryAdd(ch, fine); /* cash, then savings, then into the minus */ track(ch, 'heist:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
           if (jail) { const until = t + H.jail * 60000; await ch.q('update citizens set jailed_until = $2 where id = $1', [c.id, until]); await this.acts.setVisit(ch, c, jail, until); await bump(ch, c.id, { jailed: 1 }); }
           caught.push({ c, fine }); }
         else got.push(c); }

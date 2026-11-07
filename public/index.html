@@ -96,6 +96,22 @@ body.clean .hud,body.clean .chips,body.clean .news,body.clean .bar,body.clean .v
 .chip button{border:0;background:none;padding:0;display:flex;align-items:center;gap:6px;font-weight:600}
 .mi{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:10px;border:1.5px solid #2B2621}
 .update-note{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom));z-index:60;display:flex;gap:10px;align-items:center;background:#FBF6EC;border:2px solid #2B2621;border-radius:14px;padding:8px 10px 8px 14px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-weight:700;font-size:14px;max-width:calc(100% - 32px)}
+.fseg{display:flex;margin:0 0 10px}.fseg button{flex:1}.flive{color:#E2453C;font-weight:800}
+.fhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px;margin-bottom:8px}.fhead h3{margin:0;font-size:16px}
+.fbout{border:1.5px solid rgba(43,38,33,.18);border-radius:14px;padding:10px;margin:0 0 10px;background:rgba(255,255,255,.35)}.fbout.main{border-color:#C8382E;box-shadow:0 0 0 2px rgba(200,56,46,.12)}
+.fbtitle{display:flex;gap:4px;align-items:baseline;margin-bottom:6px;font-size:13.5px}.fbtitle .rcount{margin-left:auto}
+.fvs{display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:stretch}.vs{align-self:center;font-weight:900;color:#C8382E;font-size:14px}.vs.big{font-size:22px}
+.fbox{display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 4px;border-radius:12px;border:1.5px solid transparent;background:rgba(255,255,255,.5);font:inherit;color:inherit;text-align:center;min-width:0}
+button.fbox{cursor:pointer}.fbox.on{border-color:#C8382E;background:rgba(200,56,46,.08)}.fbox b{font-size:13px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fnick{font-size:11.5px;font-style:italic;color:var(--muted)}.fstyle,.fstats{font-size:11.5px}.fbox .rpays{margin-top:3px}
+.ava.fav{width:44px;height:44px;display:block}.ava.fav svg{width:100%;height:100%}
+.flast{margin:4px 0;padding-left:20px;font-size:13px}
+.fring{border-radius:16px;padding:10px 10px 8px;margin:0 0 12px;background:radial-gradient(ellipse at 50% 30%,#3A2A1E,#140E0A);color:#F7EFE2;box-shadow:inset 0 0 0 2px #C8382E}
+.fring-top{display:flex;justify-content:space-between;font-size:13px}.fring-mid{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin:8px 0}
+.fside{display:flex;flex-direction:column;align-items:center;gap:4px;transition:transform .12s}.fside.hit{transform:translateX(var(--kx,6px)) rotate(var(--kr,4deg))}.fside.s0.hit{--kx:-6px;--kr:-4deg}
+.fside .ava.fav{width:62px;height:62px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}.fside b{font-size:13px}
+.hpbar{width:100%;height:9px;border-radius:5px;background:rgba(255,255,255,.18);overflow:hidden}.hpbar i{display:block;height:100%;width:100%;background:#3CC46A;transition:width .3s,background .3s}
+.fdown{min-height:16px;font-size:12px}.fcall{margin:0;text-align:center;font-weight:700;font-size:14px;min-height:2.6em}
 /* the radio chip: wider, with a bigger icon and its name always showing (on phones too), so it's easy to spot */
 .chip.radio-chip{padding:4px 13px 4px 5px;min-width:96px}
 .chip.radio-chip .mi{width:26px;height:26px;font-size:14px}
@@ -853,7 +869,7 @@ import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULET
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
 import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
-import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX } from '/shared/rules.js';
+import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
@@ -924,6 +940,7 @@ function applyOp(o){
   switch(o.op){
   case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&!PLAYER_TABS.has(activeTab)&&activeTab!=='reports'&&activeTab!=='stats'&&activeTab!=='stream') renderPane(); break;
   case 'race': raceSoon(o.data); break;
+  case 'fight': fightSoon(o.data); break;
   case 'lottery': lotterySoon(o.data); break;
   case 'building': { const old=S.buildings.get(o.data.id), n=o.data; putBuilding(n);
     // Occupancy or owner changes don't move anything on the map, so they don't need every route worked out again.
@@ -1546,7 +1563,7 @@ function drawTree0(p,leaf,s,seed){
   parts.forEach(([dx,dy,r,f],i)=>blob(p.x+dx*s,p.y+dy*s,r*s,shade2(leaf,f),seed+i*31)); }
 const shade2Cache=new Map(); function shade2(hex,f){ const k=hex+f; let v=shade2Cache.get(k); if(v===undefined){ v=shade2_(hex,f); if(shade2Cache.size>4000) shade2Cache.clear(); shade2Cache.set(k,v); } return v; }
 function shade2_(hex,f){ const n=parseInt(hex.slice(1),16); const c=v=>Math.max(0,Math.min(255,Math.round(v*f))).toString(16).padStart(2,'0'); return '#'+c((n>>16)&255)+c((n>>8)&255)+c(n&255); }
-const SHADOW_H = { sky:t=>Math.min(170,t.height||200), needle:t=>Math.min(170,t.height||300), arena:()=>70, resort:()=>170, pyramid:t=>t.size[0]*28, arch:()=>62, column:()=>86, globe:()=>70, xmastree:t=>t.big?100:48, fence:()=>12, mill:()=>70, refinery:()=>96, hangar:()=>52, containers:()=>56, prison:()=>36, bandstand:()=>48, horse:()=>50, racetrack:()=>12, starport:()=>110, house:t=>(t.height||24)+(t.roofH||18)*0.5, block:t=>t.height||40, tower:t=>t.height+20, watertower:t=>t.height, tent:()=>20, stall:()=>24, well:()=>22, statue:()=>30, fountain:()=>10, tree:()=>38, pine:()=>40, lamp:()=>34, bench:()=>4 };
+const SHADOW_H = { sky:t=>Math.min(170,t.height||200), needle:t=>Math.min(170,t.height||300), arena:()=>70, colosseum:()=>78, resort:()=>170, pyramid:t=>t.size[0]*28, arch:()=>62, column:()=>86, globe:()=>70, xmastree:t=>t.big?100:48, fence:()=>12, mill:()=>70, refinery:()=>96, hangar:()=>52, containers:()=>56, prison:()=>36, bandstand:()=>48, horse:()=>50, racetrack:()=>12, starport:()=>110, house:t=>(t.height||24)+(t.roofH||18)*0.5, block:t=>t.height||40, tower:t=>t.height+20, watertower:t=>t.height, tent:()=>20, stall:()=>24, well:()=>22, statue:()=>30, fountain:()=>10, tree:()=>38, pine:()=>40, lamp:()=>34, bench:()=>4 };
 function hull(pts){ pts=pts.slice().sort((a,b)=>a.x-b.x||a.y-b.y); const cr=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x); const lo=[],hi=[]; for(const p of pts){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); } for(const p of pts.slice().reverse()){ while(hi.length>=2&&cr(hi[hi.length-2],hi[hi.length-1],p)<=0) hi.pop(); hi.push(p); } return lo.slice(0,-1).concat(hi.slice(0,-1)); }
 function addShadow(P,b){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>addShadow(P,v)); } const t=T(b), fn=SHADOW_H[t.style]; if(!fn) return; const h=fn(t); const ox=-0.62*h, oy=0.3*h;
   if(['tree','pine','lamp','statue','well','birch','bush','turbine','pylon','obelisk','windmill','rocks'].includes(t.style)){ const c=iso(b.x+0.5,b.y+0.5); const pts=[]; const rx=t.style==='lamp'?3:12, ry=t.style==='lamp'?2:6; for(let i=0;i<10;i++){ const a=i/10*Math.PI*2; pts.push({x:c.x+Math.cos(a)*rx,y:c.y+Math.sin(a)*ry},{x:c.x+ox+Math.cos(a)*rx*1.1,y:c.y+oy+Math.sin(a)*ry*1.1}); } const hp=hull(pts); P.moveTo(hp[0].x,hp[0].y); hp.slice(1).forEach(p=>P.lineTo(p.x,p.y)); P.closePath(); return; }
@@ -1667,7 +1684,8 @@ const NEON_KIND = [ // [test on the type, icon, colour]
   [/^(police|policeplaza|commissariat|dispatch)$/,'🚓','#4FA8FF'], [/^(jail|prison)$/,'⛓️','#FF9F43'], [/^(fire|firetower|firehq)$/,'🚒','#FF4B3A'],
   [/^(clinic|hospital|ambulance|pharmacy)$/,'🏥','#38E58C'], [/^(school|openschool|college|university|kindergarten)$/,'🎓','#FFD53D'], [/^library$/,'📚','#FFD53D'],
   [/^postoffice$/,'📮','#FF6B6B'], [/^(townhall|cityhall|parliament|courthouse)$/,'🏛️','#C69CFF'], [/^embassy$/,'🏳️','#C69CFF'], [/^busdepot$/,'🚌','#3FD8FF'],
-  [/^trainstation$/,'🚆','#3FD8FF'], [/^coastguard$/,'⚓','#3FD8FF'], [/^baths$/,'♨️','#7FE3FF'], [/casino/,'🎰','#FF3FB4'], [/^(gamehouse|gamearena|arcade)$/,'🎮','#A77BFF'],
+  [/^colosseum$/,'🥊','#FF4B3A'], [/^trainstation$/,'🚆','#3FD8FF'],
+   [/^coastguard$/,'⚓','#3FD8FF'], [/^baths$/,'♨️','#7FE3FF'], [/casino/,'🎰','#FF3FB4'], [/^(gamehouse|gamearena|arcade)$/,'🎮','#A77BFF'],
   [/mall|deptstore/,'🛍️','#FF7AD9'], [/^cinema$/,'🎬','#FF5577'], [/^hotel$/,'🏨','#FFB347'], [/^cardealer$/,'🚗','#4FE0D0'], [/^petstore$/,'🐾','#FFB347'],
   [/^(supermarket|markethall)$/,'🛒','#7CFF6B'], [/bank$/,'🏦','#FFD700'], [/stadium|^football$/,'🏟️','#7CFF6B'], [/racetrack/,'🏁','#FF5A5A'], [/^gym$/,'💪','#FF8A3D'],
   [/^(cathedral|chapel)$/,'⛪','#FFE08A'], [/^museum$/,'🖼️','#FFC46B'], [/^opera$/,'🎭','#FF7AD9'], [/^observatory$/,'🔭','#9FB8FF'], [/^castle$/,'🏰','#FFC46B'],
@@ -2022,18 +2040,47 @@ Object.assign(DRAW, {
       for(const u of [0,1]){ const a=P(u,0.38), c2=P(u,0.62); line(a,up(a,10),'#F4F4F0',2); line(c2,up(c2,10),'#F4F4F0',2); line(up(a,10),up(c2,10),'#F4F4F0',2); } }
     else if(kind==='tennis'){ line(P(0.5,0),P(0.5,1),'#F4F4F0',1.2); line(P(0,0.5),P(1,0.5),'#F4F4F0',1); line(up(P(0.5,0),6),up(P(0.5,1),6),INK,1.4); line(P(0.5,0),up(P(0.5,0),6),INK,1.2); line(P(0.5,1),up(P(0.5,1),6),INK,1.2); }
     else { const c=P(0.5,0.5); ctx.strokeStyle='#F4F4F0'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.ellipse(c.x,c.y,12,6,0,0,7); ctx.stroke(); line(P(0.5,0),P(0.5,1),'#F4F4F0',1.2); for(const u of [0.04,0.96]){ const p=P(u,0.5); line(p,up(p,22),INK,1.6); poly([up(p,22),{x:p.x+5,y:p.y-24},{x:p.x+5,y:p.y-30},up(p,28)],'#F4F4F0'); } } },
-  racetrack(b,t){ const [w,d]=t.size, x=b.x, y=b.y, c=t.colors;
-    poly([iso(x,y),iso(x+w,y),iso(x+w,y+d),iso(x,y+d)], c.grass, INK, 1.1);
-    ctx.save(); ctx.transform(HW,HH,-HW,HH,0,0); const cx=x+w/2, cy=y+d/2;
+  // A racecourse: a mown infield with a pond and flower beds, a dirt oval with lane marks between white running rails,
+  // the starting gate and a chequered finish on the home straight, a tiered grandstand with a cantilever roof, flags and
+  // a tote board, and lamps that light it up at night.
+  racetrack(b,t){ const [w,d]=t.size, x=b.x, y=b.y, c=t.colors, cx=x+w/2, cy=y+d/2, night=LAMPS>0.3;
+    const E=(k,a)=>iso(cx+Math.cos(a)*(w/2-k), cy+Math.sin(a)*(d/2-k)); // a point on the oval, `k` tiles in from the edge
+    poly([iso(x,y),iso(x+w,y),iso(x+w,y+d),iso(x,y+d)], shade(c.grass,0.92), INK, 1.1);
+    ctx.save(); ctx.transform(HW,HH,-HW,HH,0,0);
+    // the infield: mowing stripes
+    ctx.save(); ctx.beginPath(); ctx.ellipse(cx,cy,w/2-0.8,d/2-0.76,0,0,7); ctx.clip(); ctx.fillStyle=c.grass; ctx.fillRect(x,y,w,d);
+    for(let i=0;i<w*3;i++){ if(i%2) continue; ctx.fillStyle='rgba(255,255,255,.07)'; ctx.fillRect(x+i/3,y,1/3,d); } ctx.restore();
+    // the dirt oval, harrowed into lanes
     ctx.beginPath(); ctx.ellipse(cx,cy,w/2-0.12,d/2-0.12,0,0,7); ctx.ellipse(cx,cy,w/2-0.8,d/2-0.76,0,0,7); ctx.fillStyle=c.dirt; ctx.fill('evenodd');
-    ctx.strokeStyle='#F4F1E8'; ctx.lineWidth=0.05; ctx.beginPath(); ctx.ellipse(cx,cy,w/2-0.12,d/2-0.12,0,0,7); ctx.stroke(); ctx.beginPath(); ctx.ellipse(cx,cy,w/2-0.8,d/2-0.76,0,0,7); ctx.stroke();
-    ctx.strokeStyle='rgba(122,86,48,.35)'; ctx.lineWidth=0.02; for(let i=1;i<6;i++){ ctx.beginPath(); ctx.ellipse(cx,cy,w/2-0.12-i*0.113,d/2-0.12-i*0.107,0,0,7); ctx.stroke(); }
-    ctx.strokeStyle='#F4F1E8'; ctx.lineWidth=0.08; ctx.beginPath(); ctx.moveTo(cx,cy+d/2-0.12); ctx.lineTo(cx,cy+d/2-0.8); ctx.stroke(); ctx.restore();
-    // the grandstand along the back edge, with a striped roof and a crowd
-    const s0=iso(x+0.7,y+0.05), s1=iso(x+w-0.7,y+0.05), h=11; poly([s0,s1,up(s1,h),up(s0,h)], shade(c.stand,0.85));
-    for(let i=0;i<14;i++){ const p=lerp(s0,s1,(i+0.5)/14); ctx.fillStyle=SHIRTS[(i*7+b.x)%SHIRTS.length]; ctx.beginPath(); ctx.arc(p.x,p.y-h*0.45-(i%2)*2.5,1.6,0,7); ctx.fill(); }
-    const r0=up(s0,h), r1=up(s1,h); poly([r0,r1,{x:r1.x+6,y:r1.y-6},{x:r0.x+6,y:r0.y-6}], c.stand); for(let i=1;i<6;i++){ const a=lerp(r0,r1,i/6); line(a,{x:a.x+6,y:a.y-6},'#F4EDE0',1.2); }
-    const fl=iso(x+w/2,y+d-0.12); line(fl,up(fl,20),INK,1.4); poly([up(fl,20),{x:fl.x+9,y:fl.y-17},up(fl,14)],'#D9544A'); },
+    ctx.strokeStyle='rgba(122,86,48,.28)'; ctx.lineWidth=0.018; for(let i=1;i<6;i++){ ctx.beginPath(); ctx.ellipse(cx,cy,w/2-0.12-i*0.113,d/2-0.12-i*0.107,0,0,7); ctx.stroke(); }
+    ctx.strokeStyle='rgba(255,236,200,.35)'; ctx.lineWidth=0.05; ctx.beginPath(); ctx.ellipse(cx,cy,w/2-0.2,d/2-0.2,0,0,7); ctx.stroke();
+    // the chequered finish line across the home straight
+    const fx=cx, fy0=cy+d/2-0.8, fy1=cy+d/2-0.12, n=6; for(let i=0;i<n;i++) for(let j=0;j<2;j++){ ctx.fillStyle=(i+j)%2?'#2B2621':'#F4F1E8'; ctx.fillRect(fx-0.07+j*0.07,fy0+(fy1-fy0)*i/n,0.07,(fy1-fy0)/n); }
+    // a pond and flower beds in the middle
+    ctx.fillStyle='#6FB2D2'; ctx.beginPath(); ctx.ellipse(cx-w*0.12,cy,Math.min(0.9,w*0.12),Math.min(0.42,d*0.12),0,0,7); ctx.fill(); ctx.strokeStyle='#E8DCC0'; ctx.lineWidth=0.06; ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.35)'; ctx.beginPath(); ctx.ellipse(cx-w*0.12-0.15,cy-0.08,0.22,0.06,0,0,7); ctx.fill();
+    for(const [dx,col] of [[0.22,'#E4572E'],[0.34,'#F2C94C'],[0.46,'#E88BB0']]){ ctx.fillStyle=col; ctx.beginPath(); ctx.ellipse(cx+w*dx-w*0.12,cy,0.18,0.3,0,0,7); ctx.fill(); }
+    ctx.restore();
+    // white running rails, inside and out, on little posts
+    for(const k of [0.1,0.82]){ const pts=[]; for(let i=0;i<=48;i++) pts.push(E(k,i/48*Math.PI*2)); ctx.strokeStyle='#FBFAF5'; ctx.lineWidth=1.4; ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y-3):ctx.moveTo(p.x,p.y-3)); ctx.stroke();
+      for(let i=0;i<48;i+=2) line(pts[i],{x:pts[i].x,y:pts[i].y-3},'#D8D4C8',0.9); }
+    // the starting gate, just before the line
+    { const g0=E(0.14,Math.PI/2+0.32), g1=E(0.78,Math.PI/2+0.32), gh=9; poly([g0,g1,up(g1,gh),up(g0,gh)],'#2F6F4E',INK,0.9); for(let i=1;i<5;i++){ const p=lerp(g0,g1,i/5); line(p,up(p,gh),'#F4F1E8',0.9); } poly([up(g0,gh),up(g1,gh),{x:g1.x+3,y:g1.y-gh-3},{x:g0.x+3,y:g0.y-gh-3}],'#3E8A62',INK,0.8); }
+    // the winning post
+    { const wp=E(0.08,Math.PI/2+0.02); line(wp,up(wp,16),'#F4F1E8',1.6); ctx.fillStyle='#D9544A'; ctx.beginPath(); ctx.arc(wp.x,wp.y-17,2.6,0,7); ctx.fill(); ctx.strokeStyle=INK; ctx.lineWidth=0.8; ctx.stroke(); }
+    // the grandstand along the back: three tiers of seats, the crowd, a cantilever roof, flags
+    const s0=iso(x+0.55,y+0.02), s1=iso(x+w-0.55,y+0.02), h=14, tier=3;
+    ctx.fillStyle='rgba(0,0,0,.12)'; ctx.beginPath(); ctx.moveTo(s0.x,s0.y); ctx.lineTo(s1.x,s1.y); ctx.lineTo(s1.x-8,s1.y+5); ctx.lineTo(s0.x-8,s0.y+5); ctx.closePath(); ctx.fill();
+    poly([s0,s1,up(s1,h),up(s0,h)], shade(c.stand,0.7), INK, 1);
+    for(let r=0;r<tier;r++){ const z0=2+r*(h-3)/tier, z1=z0+(h-3)/tier*0.55; poly([up(s0,z0),up(s1,z0),up(s1,z1),up(s0,z1)], r%2?shade(c.stand,1.08):shade(c.stand,0.95));
+      const per=Math.round(14+w*2); for(let i=0;i<per;i++){ const p=lerp(s0,s1,(i+0.5)/per); if(hash(b.id+':'+r+':'+i)%5===0) continue; ctx.fillStyle=SHIRTS[(i*7+r*3+b.x)%SHIRTS.length]; ctx.beginPath(); ctx.arc(p.x,p.y-z1-1.2,1.4,0,7); ctx.fill(); ctx.fillStyle='#7A4E2D'; ctx.beginPath(); ctx.arc(p.x,p.y-z1-3.2,0.9,0,7); ctx.fill(); } }
+    const r0=up(s0,h+2), r1=up(s1,h+2); poly([r0,r1,{x:r1.x+9,y:r1.y-7},{x:r0.x+9,y:r0.y-7}], '#F4F1E8', INK, 1);
+    for(let i=1;i<8;i++){ const a=lerp(r0,r1,i/8); line(a,{x:a.x+9,y:a.y-7},i%2?c.stand:'#E0D9C8',1.6); } for(let i=0;i<=4;i++){ const a=lerp(s0,s1,i/4); line(up(a,h),up(a,h+2),INK,1); }
+    for(let i=0;i<4;i++){ const q=lerp(r0,r1,(i+0.5)/4), top={x:q.x+9,y:q.y-7}; line(top,{x:top.x,y:top.y-11},INK,0.9); const wv=Math.sin(T_NOW/300+i)*1.2; poly([{x:top.x,y:top.y-11},{x:top.x+7,y:top.y-10+wv},{x:top.x,y:top.y-7}],['#D9544A','#F2C94C','#2F4A7A','#3FB36B'][i]); }
+    // the tote board with the odds, and lamps
+    { const tb=iso(x+w-0.35,y+d*0.55); line(tb,up(tb,12),'#4A4F52',1.6); poly([{x:tb.x-11,y:tb.y-26},{x:tb.x+11,y:tb.y-26},{x:tb.x+11,y:tb.y-12},{x:tb.x-11,y:tb.y-12}],'#1E2A24',INK,1);
+      for(let i=0;i<3;i++){ ctx.fillStyle=night?'#FFD166':'#E9C46A'; ctx.fillRect(tb.x-9,tb.y-24+i*4,8,2.4); ctx.fillStyle=night?'#7CFFB2':'#5FBF8A'; ctx.fillRect(tb.x+2,tb.y-24+i*4,6,2.4); } }
+    for(const [lx,ly] of [[x+0.25,y+d-0.25],[x+w-0.25,y+d-0.25],[x+0.25,y+0.6],[x+w-0.25,y+0.6]]){ const p=iso(lx,ly); line(p,up(p,22),'#4A4F52',1.4); poly([{x:p.x-4,y:p.y-25},{x:p.x+4,y:p.y-25},{x:p.x+4,y:p.y-21},{x:p.x-4,y:p.y-21}],lampGlass(),INK,0.6); if(LAMPS>0) lights.push({x:p.x,y:p.y-23,r:70,col:'255,248,220'}); } },
   stadium(b,t){ const [w,d]=t.size, c=iso(b.x+w/2,b.y+d/2), rx=(w+d)*HW*0.48, ry=(w+d)*HH*0.48, h=34;
     ctx.fillStyle='#B9B5AB'; ctx.strokeStyle=INK; ctx.lineWidth=1.2; ctx.beginPath(); ctx.ellipse(c.x,c.y,rx,ry,0,0,Math.PI); ctx.lineTo(c.x-rx,c.y-h); ctx.ellipse(c.x,c.y-h,rx,ry,0,Math.PI,0,true); ctx.closePath(); ctx.fill(); ctx.stroke();
     for(let i=1;i<6;i++){ ctx.strokeStyle=i%2?'#C8382E':'#2F4A7A'; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(c.x,c.y-h+i*1.2,rx*(1-i*0.06),ry*(1-i*0.06),0,0,7); ctx.stroke(); }
@@ -2795,6 +2842,58 @@ DRAW.arena=function(b,t){ const [w,d]=t.size, c=iso(b.x+w/2,b.y+d/2), RX=(w+d)*H
   for(let i=0;i<16;i++){ const a=i/16*Math.PI*2; if(Math.sin(a)<-0.2) continue; const p={x:c.x+Math.cos(a)*RX,y:c.y-h+Math.sin(a)*RY}; line(p,{x:c.x+Math.cos(a)*RX*0.98,y:c.y-h-16+Math.sin(a)*RY*0.98},'#9EA3A6',1.4); }
   for(const a of [0.55,2.6,3.7,5.7]){ const p={x:c.x+Math.cos(a)*RX*1.02,y:c.y+Math.sin(a)*RY*1.02}; line(p,{x:p.x,y:p.y-h-70},'#4A4F52',2.2); poly([{x:p.x-10,y:p.y-h-76},{x:p.x+10,y:p.y-h-76},{x:p.x+10,y:p.y-h-66},{x:p.x-10,y:p.y-h-66}],lampGlass(),INK,0.8); if(LAMPS>0) lights.push({x:p.x,y:p.y-h-71,r:150,col:'255,250,225'}); }
   for(const s of [-1,1]){ const p={x:c.x+s*RX*0.62,y:c.y-h-30}; poly([{x:p.x-18,y:p.y-12},{x:p.x+18,y:p.y-12},{x:p.x+18,y:p.y+8},{x:p.x-18,y:p.y+8}],'#2B2621',INK,1); ctx.fillStyle=LAMPS>0?'#7FD3FF':'#4A7BD9'; ctx.fillRect(p.x-15,p.y-9,30,14); line({x:p.x,y:p.y+8},{x:p.x,y:p.y+26},'#4A4F52',2); } };
+// The Colosseum: a Roman amphitheatre in warm stone. Three tiers of arches round the outside (the far side rises a storey
+// higher and stops in a broken edge), stands full of people stepping down to a sand floor, and in the middle the
+// fight ring under spotlights, with a FIGHT NIGHT board over the main gate.
+DRAW.colosseum=function(b,t){ const [w,d]=t.size, c=iso(b.x+w/2,b.y+d/2), RX=(w+d)*HW*0.46, RY=(w+d)*HH*0.46, h=58, col=t.colors, night=LAMPS>0.3;
+  const P=(a,k,z)=>({x:c.x+Math.cos(a)*RX*k,y:c.y+Math.sin(a)*RY*k-z});
+  poly([iso(b.x,b.y),iso(b.x+w,b.y),iso(b.x+w,b.y+d),iso(b.x,b.y+d)],'#CDBF9F','#A99A7A',1); /* the travertine plaza */
+  for(let i=0;i<6;i++){ const a=i/6*Math.PI*2+0.3, p=P(a,1.12,0); ctx.fillStyle='rgba(120,100,70,.25)'; ctx.beginPath(); ctx.ellipse(p.x,p.y,10,5,0,0,7); ctx.fill(); }
+  const ring=(k,z,fill,stroke,lw)=>{ ctx.beginPath(); ctx.ellipse(c.x,c.y-z,RX*k,RY*k,0,0,7); if(fill){ ctx.fillStyle=fill; ctx.fill(); } if(stroke){ ctx.strokeStyle=stroke; ctx.lineWidth=lw||1; ctx.stroke(); } };
+  // the far side's extra storey (the attic), with its broken end
+  ctx.fillStyle='#CDB890'; ctx.strokeStyle=INK; ctx.lineWidth=1.2; ctx.beginPath();
+  const a0=Math.PI*1.04, a1=Math.PI*1.86; for(let i=0;i<=30;i++){ const a=a0+(a1-a0)*i/30, p=P(a,1,h+18-(i>24?(i-24)*3*((i%2)?1.6:0.6):0)); i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y); }
+  for(let i=30;i>=0;i--){ const a=a0+(a1-a0)*i/30, p=P(a,1,h); ctx.lineTo(p.x,p.y); } ctx.closePath(); ctx.fill(); ctx.stroke();
+  for(let i=1;i<24;i+=2){ const a=a0+(a1-a0)*i/30, p=P(a,1,h+9); ctx.fillStyle='#8C7652'; ctx.fillRect(p.x-1.6,p.y-3,3.2,6); }
+  // the top of the wall, then the stands stepping down inside it
+  ring(1,h,'#D7C59E',INK,1.2);
+  const seats=['#BFA77C','#B39A6E','#C6AF85','#A88F63'];
+  for(let i=0;i<11;i++){ const k=0.95-i*0.033; ring(k,h-2-i*3.4,seats[i%4],null); }
+  for(let i=0;i<90;i++){ const a=i/90*Math.PI*2+((hash(b.id+'c'+i)%10)/40), k=0.66+((hash(b.id+i)%100)/100)*0.27, z=h-2-(0.95-k)/0.033*3.4; const p=P(a,k,z); ctx.fillStyle=SHIRTS[i%SHIRTS.length]; ctx.beginPath(); ctx.arc(p.x,p.y-1.2,1.5,0,7); ctx.fill(); }
+  // the sand floor and the ring
+  const fz=14, FK=0.6; ring(FK,fz,col.sand||'#E3C88E','#9C8253',1.2);
+  ctx.save(); ctx.beginPath(); ctx.ellipse(c.x,c.y-fz,RX*FK,RY*FK,0,0,7); ctx.clip(); for(let i=0;i<14;i++){ const p=P(i*2.2,FK*((hash(b.id+'s'+i)%80)/100),fz); ctx.fillStyle='rgba(150,115,60,.18)'; ctx.beginPath(); ctx.ellipse(p.x,p.y,9,4,0,0,7); ctx.fill(); } ctx.restore();
+  const s=Math.min(RX,RY*2)*0.115, sq=(dx,dy,z)=>({x:c.x+(dx-dy)*s,y:c.y+(dx+dy)*s*0.5-z}), rz=fz+8;
+  poly([sq(-1,-1,fz),sq(1,-1,fz),sq(1,1,fz),sq(-1,1,fz)],'#2B2621',null); poly([sq(-1,1,fz),sq(1,1,fz),sq(1,1,rz),sq(-1,1,rz)],'#3A3A44',INK,0.8); poly([sq(1,-1,fz),sq(1,1,fz),sq(1,1,rz),sq(1,-1,rz)],'#2E2E36',INK,0.8);
+  poly([sq(-1,-1,rz),sq(1,-1,rz),sq(1,1,rz),sq(-1,1,rz)],'#EDE6D6',INK,1); poly([sq(-0.5,-0.5,rz),sq(0.5,-0.5,rz),sq(0.5,0.5,rz),sq(-0.5,0.5,rz)],null,'#C8382E',1);
+  const corners=[[-1,-1,'#2F6FD8'],[1,-1,'#F4F4F0'],[1,1,'#C8382E'],[-1,1,'#F4F4F0']];
+  for(const [dx,dy,pc] of corners){ const a=sq(dx,dy,rz), top={x:a.x,y:a.y-12}; line(a,top,pc,2.4); }
+  for(let r=1;r<=3;r++){ const z=rz+r*3.4; ctx.strokeStyle=r===2?'#F4F4F0':'#C8382E'; ctx.lineWidth=1; ctx.beginPath(); for(const [k,[dx,dy]] of corners.entries()){ const p=sq(dx,dy,z); k?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y); } ctx.closePath(); ctx.stroke(); }
+  // two fighters squaring up (only now and then, so the ring isn't always busy)
+  for(const [k,sh,sk] of [[-0.35,'#2F6FD8','#7A4E2D'],[0.35,'#C8382E','#C68B59']]){ const p=sq(k,-k*0.1,rz); /* two fighters squaring up, gloves raised */
+    ctx.fillStyle='#1E1E24'; ctx.fillRect(p.x-3,p.y-7,2.6,7); ctx.fillRect(p.x+0.4,p.y-7,2.6,7); ctx.fillStyle=sh; ctx.fillRect(p.x-3.4,p.y-9,6.8,3);
+    ctx.fillStyle=sk; ctx.fillRect(p.x-3,p.y-16,6,7.5); ctx.beginPath(); ctx.arc(p.x,p.y-19,3,0,7); ctx.fill(); ctx.fillStyle=sh; ctx.beginPath(); ctx.arc(p.x+(k<0?3.6:-3.6),p.y-15.5,2.2,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(p.x+(k<0?2:-2),p.y-17.5,2,0,7); ctx.fill(); }
+  // spotlights from the rim onto the ring
+  if(night){ ctx.save(); ctx.globalCompositeOperation='lighter'; for(const a of [3.6,5.8,0.9,2.3]){ const p=P(a,0.98,h+6), q=sq(0,0,rz); const g=ctx.createLinearGradient(p.x,p.y,q.x,q.y); g.addColorStop(0,'rgba(255,245,215,.30)'); g.addColorStop(1,'rgba(255,245,215,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x-s*1.1,q.y); ctx.lineTo(q.x+s*1.1,q.y); ctx.closePath(); ctx.fill(); } ctx.restore(); lights.push({x:c.x,y:c.y-rz,r:120,col:'255,240,210'}); }
+  // the outer wall's near half: three tiers of arches and a cornice
+  ctx.fillStyle=col.wall; ctx.strokeStyle=INK; ctx.lineWidth=1.3; ctx.beginPath(); ctx.ellipse(c.x,c.y,RX,RY,0,0,Math.PI); ctx.lineTo(c.x-RX,c.y-h); ctx.ellipse(c.x,c.y-h,RX,RY,0,Math.PI,0,true); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.beginPath(); ctx.ellipse(c.x,c.y,RX,RY,0,0,Math.PI); ctx.lineTo(c.x-RX,c.y-h); ctx.ellipse(c.x,c.y-h,RX,RY,0,Math.PI,0,true); ctx.closePath(); ctx.clip();
+  const tiers=3, th=h/tiers, N=26;
+  for(let k=0;k<tiers;k++){ const z0=k*th; for(let i=0;i<N;i++){ const a=(i+0.5)/N*Math.PI, ca=Math.cos(a), face=Math.sin(a); if(face<0.12) continue;
+      const p=P(a,1,z0+2), ww=Math.max(1.2,RX*Math.PI/N*face*0.42), hh=th*0.62, dark=k===0?'#5B4630':'#6E5638';
+      ctx.fillStyle=night&&k===0&&i%3===0?'#F2B33D':dark; ctx.beginPath(); ctx.moveTo(p.x-ww,p.y); ctx.lineTo(p.x-ww,p.y-hh*0.7); ctx.quadraticCurveTo(p.x-ww,p.y-hh,p.x,p.y-hh); ctx.quadraticCurveTo(p.x+ww,p.y-hh,p.x+ww,p.y-hh*0.7); ctx.lineTo(p.x+ww,p.y); ctx.closePath(); ctx.fill();
+      const q=P(a+Math.PI/N/2,1,z0); line(q,{x:q.x,y:q.y-th},'rgba(120,96,62,.55)',0.8); }
+    const band=[]; for(let i=0;i<=40;i++){ const a=i/40*Math.PI; band.push(P(a,1,z0+th)); } ctx.strokeStyle='#A48C64'; ctx.lineWidth=2; ctx.beginPath(); band.forEach((p,j)=>j?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.stroke(); }
+  ctx.restore();
+  ring(1,h,null,INK,1.2);
+  // banners and torches on the front, and the FIGHT NIGHT board over the main gate
+  for(const a of [0.55,1.1,2.05,2.6]){ const p=P(a,1.005,h-4); poly([{x:p.x-4,y:p.y},{x:p.x+4,y:p.y},{x:p.x+4,y:p.y+16},{x:p.x,y:p.y+12},{x:p.x-4,y:p.y+16}],col.trim||'#8A2A22','rgba(0,0,0,.35)',0.6); }
+  for(const a of [0.35,1.25,1.9,2.8]){ const p=P(a,1.02,6); line(p,{x:p.x,y:p.y-10},'#4A3A28',1.6); const f=Math.sin(T_NOW/120+a*7); ctx.fillStyle=night?'#FFB347':'#E08A3A'; ctx.beginPath(); ctx.ellipse(p.x,p.y-13,2.2,3.4+f*0.6,0,0,7); ctx.fill(); if(night) lights.push({x:p.x,y:p.y-13,r:46,col:'255,180,90'}); }
+  const g=P(Math.PI/2,1,0); poly([{x:g.x-11,y:g.y},{x:g.x-11,y:g.y-15},{x:g.x,y:g.y-22},{x:g.x+11,y:g.y-15},{x:g.x+11,y:g.y}],'#3B2C1E',INK,1);
+  const bw=56, bh=14, by=g.y-th*2-6; poly([{x:g.x-bw/2,y:by-bh},{x:g.x+bw/2,y:by-bh},{x:g.x+bw/2,y:by},{x:g.x-bw/2,y:by}],'#1A1410',INK,1);
+  ctx.save(); ctx.font='800 8.5px system-ui,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; if(night){ ctx.shadowColor='#FF3B30'; ctx.shadowBlur=8; } ctx.fillStyle=night?'#FF5A4E':'#D8463C'; ctx.fillText('FIGHT NIGHT',g.x,by-bh/2+0.5); ctx.restore();
+  if(night) lights.push({x:g.x,y:by-bh/2,r:60,col:'255,90,70'}); };
 // Street furniture, plants and festive things (each a single tile).
 const PROPS2={
   bin(b){ const p=iso(b.x+0.5,b.y+0.55); cylinder(p,4.5,10,'#3E5148'); ctx.fillStyle='#2B3A33'; ctx.beginPath(); ctx.ellipse(p.x,p.y-10,4.5,2,0,0,7); ctx.fill(); },
@@ -2852,8 +2951,9 @@ DRAW.tanks=function(b,t){ if(!t.copper) return tanksBase(b,t); const [w,d]=t.siz
 const raceBase=DRAW.racetrack;
 DRAW.racetrack=function(b,t){ raceBase(b,t); if(!t.grand) return; const [w,d]=t.size, x=b.x, y=b.y, c=t.colors;
   // a second, taller grandstand with a roof, the winning post and a big screen
-  const s0=iso(x+1.2,y+0.05), s1=iso(x+w-1.2,y+0.05), h=26; poly([s0,s1,up(s1,h),up(s0,h)],shade(c.stand,0.85),INK,1);
-  for(let r=0;r<3;r++) for(let i=0;i<26;i++){ const p=lerp(s0,s1,(i+0.5)/26); ctx.fillStyle=SHIRTS[(i*3+r*7)%SHIRTS.length]; ctx.beginPath(); ctx.arc(p.x,p.y-6-r*6,1.6,0,7); ctx.fill(); }
+  const s0=iso(x+1.2,y+0.05), s1=iso(x+w-1.2,y+0.05), h=26; poly([s0,s1,up(s1,h),up(s0,h)],shade(c.stand,0.7),INK,1);
+  for(let r=0;r<5;r++){ const z0=2+r*4.6, z1=z0+2.6; poly([up(s0,z0),up(s1,z0),up(s1,z1),up(s0,z1)], r%2?shade(c.stand,1.1):shade(c.stand,0.95)); /* five tiers of seats, packed */
+    for(let i=0;i<30;i++){ if(hash(b.id+'g'+r+':'+i)%6===0) continue; const p=lerp(s0,s1,(i+0.5)/30); ctx.fillStyle=SHIRTS[(i*3+r*7)%SHIRTS.length]; ctx.beginPath(); ctx.arc(p.x,p.y-z1-1.2,1.5,0,7); ctx.fill(); ctx.fillStyle='#7A4E2D'; ctx.beginPath(); ctx.arc(p.x,p.y-z1-3.3,1,0,7); ctx.fill(); } }
   const r0=up(s0,h), r1=up(s1,h); poly([r0,r1,{x:r1.x+10,y:r1.y-9},{x:r0.x+10,y:r0.y-9}],'#F4F4F0',INK,1); for(let i=1;i<10;i++){ const a=lerp(r0,r1,i/10); line(a,{x:a.x+10,y:a.y-9},'#C9CCCB',1); }
   for(let i=0;i<6;i++){ const q=lerp(r0,r1,(i+0.5)/6); line({x:q.x+10,y:q.y-9},{x:q.x+10,y:q.y-21},INK,1); poly([{x:q.x+10,y:q.y-21},{x:q.x+18,y:q.y-19},{x:q.x+10,y:q.y-16}],['#D9544A','#F2C94C','#2F4A7A'][i%3]); }
   const sc=up(iso(x+w-0.6,y+d/2),0); line(sc,up(sc,30),'#4A4F52',2); poly([{x:sc.x-16,y:sc.y-46},{x:sc.x+16,y:sc.y-46},{x:sc.x+16,y:sc.y-28},{x:sc.x-16,y:sc.y-28}],'#2B2621',INK,1); ctx.fillStyle=LAMPS>0?'#7FD3FF':'#4A7BD9'; ctx.fillRect(sc.x-13,sc.y-43,26,12); };
@@ -3007,7 +3107,7 @@ function drawFrame(ts){
     else if(it.b){ const t=T(it.b); if(it.b.draft||it.b.draftDel){ draftMark(it.b); ctx.globalAlpha=it.b.draftDel?0.4:0.78; drawB(it.b,t); ctx.globalAlpha=1; } else if(it.b.ruin) drawRuin(it.b,t); else if(it.b.done===false) drawConstruction(it.b,t); else if(it.b.upAt) drawUpgrading(it.b,t); else { drawBCached(it.b,t); if((it.b.lv||1)>1) drawLevelExtras(it.b,t); if(kindOf(it.b.type)==='racetrack'&&!it.b.ruin) drawRunners(it.b); } } else drawCitizen(it.c,it.st, sel&&sel.kind==='c'&&sel.id===it.c.id); }
   for(const a of airborne){ const hd=[a.st.dx||1,a.st.dy||0]; drawVehicle(a.st.x,a.st.y,hd[0],hd[1],a.V,a.col,false); if(sel&&sel.kind==='v'&&sel.id===a.id){ const p=iso(a.st.x,a.st.y); ctx.strokeStyle='#F2B33D'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y-(a.V.alt||0),26,12,0,0,7); ctx.stroke(); } }
   drawDisasters();
-  if(Watch.id){ const c=S.citizens.get(Watch.id), st=c&&(states.get(Watch.id)||citizenAt(c,gm)); if(st){ const p=iso(st.x,st.y), y=p.y-(st.car?30:46)-Math.abs(Math.sin(T_NOW/260))*4; // "you" marker over your colonist (or their car)
+  if(Watch.id&&!Watch.other){ const c=S.citizens.get(Watch.id), st=c&&(states.get(Watch.id)||citizenAt(c,gm)); if(st){ const p=iso(st.x,st.y), y=p.y-(st.car?30:46)-Math.abs(Math.sin(T_NOW/260))*4; // "you" marker over your colonist (or their car)
     poly([{x:p.x-7,y:y-12},{x:p.x+7,y:y-12},{x:p.x,y}],'#E4572E',INK,1.4); ctx.font='800 11px system-ui,sans-serif'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.strokeText('You',p.x,y-16); ctx.fillStyle='#2B2621'; ctx.fillText('You',p.x,y-16); } }
   if(Quality.ghosts){ ctx.globalAlpha=0.38; for(const it of hiddenPeople(items)) drawCitizen(it.c,it.st,false,true); ctx.globalAlpha=1; }
   if(areaSel){ const ax=Math.min(areaSel.a[0],areaSel.b[0]), bx=Math.max(areaSel.a[0],areaSel.b[0])+1, ay=Math.min(areaSel.a[1],areaSel.b[1]), by=Math.max(areaSel.a[1],areaSel.b[1])+1; poly([iso(ax,ay),iso(bx,ay),iso(bx,by),iso(ax,by)],'rgba(184,67,58,.28)','#B8433A',2.5); }
@@ -4134,8 +4234,8 @@ setInterval(()=>{ if(!document.hidden&&Store.canWrite) Reports.load(); },60000);
 var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:null, thread:null, draft:'', busy:false, loadedAt:0,
   menu:false, view:'chats', reply:null, making:null, sure:null,
   reset(){ this.list=[]; this.groups=[]; this.invites=[]; this.online=[]; this.unread=0; this.with=null; this.gid=null; this.thread=null; this.draft=''; this.menu=false; this.reply=null; this.making=null; Blocks.put([]); Daily.info=null; },
-  async load(){ if(!(Me&&Me.token)) return; try{ const [l,o,b,g]=await Promise.all([api('/api/dm'),api('/api/online'),api('/api/blocks'),api('/api/chat/groups').catch(()=>({groups:[],invites:[]}))]);
-      this.list=l; this.online=o; this.groups=g.groups||[]; this.invites=g.invites||[]; this.loadedAt=Date.now(); this.count(); Blocks.put(b); }catch(e){} if(activeTab==='chats'&&!this.with&&!this.gid) this.renderNow(); },
+  async load(){ if(!(Me&&Me.token)) return; try{ const [l,o,b,g,f]=await Promise.all([api('/api/dm'),api('/api/online'),api('/api/blocks'),api('/api/chat/groups').catch(()=>({groups:[],invites:[]})),api('/api/friends').catch(()=>[])]);
+      this.list=l; this.online=o; this.friends=f||[]; this.groups=g.groups||[]; this.invites=g.invites||[]; this.loadedAt=Date.now(); this.count(); Blocks.put(b); }catch(e){} if(activeTab==='chats'&&!this.with&&!this.gid) this.renderNow(); },
   // After blocking or unblocking someone: refresh the open chat with them (if any) and the list.
   async after(h){ if(this.with&&this.with.toLowerCase()===String(h).toLowerCase()){ try{ this.thread=await api('/api/dm/'+encodeURIComponent(this.with)); }catch(e){} this.menu=false; this.renderNow(); } this.load(); },
   gone(id){ if(this.thread){ this.thread.messages=this.thread.messages.filter(m=>m.id!==id); document.querySelector(`#dmBody [data-id="${CSS.escape(id)}"]`)?.remove(); } this.load(); },
@@ -4153,7 +4253,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     if(this.with&&this.with.toLowerCase()===other.toLowerCase()&&this.thread&&activeTab==='chats'){ if(!this.thread.messages.some(x=>x.id===m.id)){ this.thread.messages.push(msg); this.addBubble(msg); } if(!mine) api('/api/dm/'+encodeURIComponent(other)+'/read',{method:'POST'}).catch(()=>{}); return; }
     let c=this.list.find(x=>x.with.h.toLowerCase()===other.toLowerCase()); if(!c){ c={ with:{h:other,n:mine?'':m.from.n,g:mine?'m':m.from.g,online:true}, last:null, unread:0, request:!mine }; this.list.unshift(c); }
     c.last={text:m.text,t:m.t,mine}; if(!mine){ c.unread++; c.with.online=true; this.count();
-      if(c.request) toast(`📩 Message request from @${m.from.h}`,'View',()=>{ this.view='requests'; this.open(m.from.h); });
+      if(c.request) toast(`📩 Friend request from @${m.from.h}: accept and you can message free`,'View',()=>{ this.view='requests'; this.open(m.from.h); });
       else toast(`💬 @${m.from.h}: ${plainMsg(m.text).length>60?plainMsg(m.text).slice(0,60)+'…':plainMsg(m.text)}`,'Reply',()=>this.open(m.from.h)); }
     this.sortList(); if(activeTab==='chats'&&!this.with&&!this.gid) this.renderNow(); },
   // A message in one of your group chats.
@@ -4221,8 +4321,8 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       if(!this.thread) body.append(el('p',{class:'hint',text:'Opening the chat…'}));
       else if(!this.thread.messages.length) body.append(el('p',{class:'hint dmempty',text:`Say hello to @${this.with}. Only the two of you can see this chat.`}));
       else for(const m of this.thread.messages) body.append(this.bubble(m));
-      const req=T&&T.request?el('div',{class:'dmreq',id:'dmReq'}, el('p',null,el('b',{text:'📩 Message request. '}),'Accept and you become friends: messages between you are free both ways. You can reply without accepting, but each message costs coins.'),
-        el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Accept',onclick:()=>this.act(`/api/dm/${H}/accept`,{},()=>{ T.request=false; if(T.cost) T.cost={fee:0,friends:true}; toast(`You and @${this.with} are friends now: messages are free.`); this.view='chats'; const c=this.list.find(x=>x.with.h.toLowerCase()===this.with.toLowerCase()); if(c) c.request=false; this.renderNow(); })}),
+      const req=T&&T.request?el('div',{class:'dmreq',id:'dmReq'}, el('p',null,el('b',{text:'📩 Friend request. '}),'Accept and you become friends: messages between you are free both ways. You can reply without accepting, but each message costs coins.'),
+        el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Accept',onclick:()=>this.act(`/api/dm/${H}/accept`,{},()=>{ T.request=false; if(T.cost) T.cost={fee:0,friends:true}; this.load(); toast(`You and @${this.with} are friends now: messages are free.`); this.view='chats'; const c=this.list.find(x=>x.with.h.toLowerCase()===this.with.toLowerCase()); if(c) c.request=false; this.renderNow(); })}),
           el('button',{class:'btn danger',text:'Delete',onclick:()=>this.act(`/api/dm/${H}/delete`,{},()=>{ toast('Request deleted.'); this.back(); })}),
           el('button',{class:'btn',text:'🚫 Block',onclick:()=>Blocks.ask(this.with)}))):null;
       const bar=(!T||T.canSend)?this.composer(T)
@@ -4230,7 +4330,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       p.append(head); if(menu) p.append(menu); if(req) p.append(req); p.append(body); if(T&&T.canSend){ const f=this.feeNote(T); if(f) p.append(f); if(this.reply) p.append(this.replyBar()); } p.append(bar); requestAnimationFrame(()=>{ body.scrollTop=body.scrollHeight; }); return; }
     if(this.making) return this.renderMaker(p);
     const reqs=this.requests(), rq=reqs.reduce((a,c)=>a+(c.unread||1),0);
-    p.append(paneHead('Chats')); const body=el('div',{class:'pane-body'});
+    { const ph=paneHead('Chats'), nf=(this.friends||[]).filter(o=>o.online&&!this.isMe(o.h)).length; ph.querySelector('.pane-title').after(el('span',{class:'onl-chip',title:'Your friends online now (people whose message request you accepted, or who accepted yours)',text:`● ${fmt(nf)} friend${nf===1?'':'s'} online`})); p.append(ph); } const body=el('div',{class:'pane-body'});
     body.append(el('div',{class:'chatseg',role:'tablist'},
       el('button',{class:'pill'+(this.view==='chats'?' on':''),role:'tab','aria-selected':String(this.view==='chats'),text:'Chats',onclick:()=>{ this.view='chats'; this.renderNow(); }}),
       el('button',{class:'pill'+(this.view==='requests'?' on':''),role:'tab','aria-selected':String(this.view==='requests'),onclick:()=>{ this.view='requests'; this.renderNow(); }}, 'Requests', reqs.length?el('b',{class:'tbadge',text:String(reqs.length)}):null),
@@ -4240,15 +4340,17 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
         c.unread?el('b',{class:'tbadge',text:String(c.unread)}):el('time',{class:'hint',text:c.last?ago(c.last.t):''})); };
     if(this.view==='requests'){
       body.append(el('p',{class:'hint',text:'Chats other colonists started with you. You can reply to them here; accept one to move it to your chats.'}));
-      if(!reqs.length) body.append(el('p',{class:'hint',text:'No message requests.'}));
+      if(!reqs.length) body.append(el('p',{class:'hint',text:'No friend requests.'}));
       for(const c of reqs) body.append(row(c));
       p.append(body); if(Date.now()-this.loadedAt>8000) this.load(); return; }
     // Invitations to join a group, sent by the colony.
     for(const iv of this.invites){ body.append(el('div',{class:'ginv'}, el('div',{class:'ginvfrom',text:`🪐 ${iv.from}`}), el('p',{text:iv.text}),
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Join',onclick:()=>this.act(`/api/chat/groups/${encodeURIComponent(iv.id)}/join`,{},()=>{ this.invites=this.invites.filter(x=>x.id!==iv.id); this.openGroup(iv.id); })}),
         el('button',{class:'btn',text:'Decline',onclick:()=>this.act(`/api/chat/groups/${encodeURIComponent(iv.id)}/decline`,{},()=>{ this.invites=this.invites.filter(x=>x.id!==iv.id); this.count(); this.renderNow(); })})))); }
-    const others=this.online.filter(o=>!this.isMe(o.h));
-    if(others.length){ body.append(el('h3',{text:`Online now (${others.length})`})); const orow=el('div',{class:'onlinerow'});
+    // Friends (anyone whose message request you accepted, or who accepted yours) who are online now; the Town Square
+    // shows everyone online.
+    const others=(this.friends||[]).filter(o=>o.online&&!this.isMe(o.h));
+    if(others.length){ body.append(el('h3',{text:`Friends online (${others.length})`})); const orow=el('div',{class:'onlinerow'});
       for(const o of others.slice(0,30)){ const av=el('span',{class:'ava sm on'}); av.innerHTML=avatarSVG({handle:o.h,id:o.id,gender:o.g}); orow.append(el('button',{class:'onl',title:'@'+o.h,onclick:()=>this.open(o.h)}, av, el('span',{text:o.n||'@'+o.h}))); }
       body.append(orow); }
     body.append(el('h3',{text:'Your chats'}));
@@ -4311,6 +4413,84 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     p.append(body); if(T){ const f=this.feeNote(T); if(f) p.append(f); if(this.reply) p.append(this.replyBar()); } p.append(this.composer(T)); requestAnimationFrame(()=>{ body.scrollTop=body.scrollHeight; }); } };
 setInterval(()=>{ if(!document.hidden && Me&&Me.token && Date.now()-Chats.loadedAt>45000) Chats.load(); },15000);
 
+// ---- Fight Night at the Colosseum: sign up, bet on each bout, and watch it live (everyone sees the same fight) ----
+const Fight={ info:null, skew:0, loadAt:0, view:'races', pick:{}, amount:{}, busy:false, toasted:new Set(), ringKey:'',
+  now(){ return Date.now()+this.skew; },
+  liveBout(){ const I=this.info; if(!I) return null; const t=this.now(); return (I.bouts||[]).find(b=>b.result&&t>=b.start&&t<=b.start+b.len+6000)||null; },
+  live(){ return !!this.liveBout(); } };
+let fightTimer=null;
+function fightSoon(d){ clearTimeout(fightTimer); fightTimer=setTimeout(()=>loadFight(d),400); }
+async function loadFight(d){ try{ const r=await api('/api/fight'); Fight.info=r; Fight.skew=r.now-Date.now(); Fight.loadAt=Date.now(); }catch(e){ return; }
+  const I=Fight.info, nt=I.night;
+  if(d&&d.stage==='card'&&nt&&!Fight.toasted.has('c'+nt.n)){ Fight.toasted.add('c'+nt.n); const m=(I.bouts||[]).find(b=>b.i===2); toast(`🥊 Fight Night #${nt.no} is set!${m?` Main event: @${m.a.handle} vs @${m.b.handle}.`:''} Bets are open.`,'Fight Night',()=>{ Fight.view='fight'; openTab('races'); }); }
+  if(d&&d.stage==='bell'&&activeTab!=='races'){ const b=(I.bouts||[]).find(x=>x.i===d.i); if(b&&!Fight.toasted.has('b'+nt.n+':'+b.i)){ Fight.toasted.add('b'+nt.n+':'+b.i); toast(`🔔 ${b.name} is on: @${b.a.handle} vs @${b.b.handle}!`,'Watch',()=>{ Fight.view='fight'; openTab('races'); }); } }
+  if(d&&d.stage==='settled'&&Me&&Me.handle) loadMyMoney();
+  renderRaces(); }
+setInterval(()=>{ if(!document.hidden && Date.now()-Fight.loadAt>60000 && (Fight.view==='fight'||!Fight.loadAt)) loadFight(); },10000);
+const FSTYLE={ boxer:['🥊','Boxer'], kicker:['🦵','Kickboxer'], grappler:['🤼','Wrestler'], brawler:['💥','Brawler'] };
+function fighterBox(f, side, b, pickable){ const av=el('span',{class:'ava fav'}); av.innerHTML=avatarSVG({handle:f.handle,id:f.id,gender:f.gender});
+  const st=FSTYLE[f.style]||['🥊',''], on=Fight.pick[b.i]===side, odds=b.odds&&b.odds[side];
+  const box=el(pickable?'button':'div',{class:'fbox'+(on?' on':''),'aria-pressed':pickable?String(on):null,onclick:pickable?()=>{ Fight.pick[b.i]=side; renderRaces(true); }:null},
+    av, el('b',{text:'@'+f.handle}), el('span',{class:'fnick',text:`"${f.nick}"`}), el('span',{class:'fstyle',text:`${st[0]} ${st[1]} · ${f.wins}-${f.losses}${f.kos?` (${f.kos} KO)`:''}`}),
+    el('span',{class:'fstats',text:`💪${f.power} ⚡${f.speed} 🛡️${f.chin}`}), odds?el('span',{class:'rpays',text:`${odds.pays}×`}):'');
+  return box; }
+function renderFight(body){ const I=Fight.info;
+  if(!I){ body.append(el('p',{class:'hint',text:'Loading Fight Night…'})); if(!Fight.loadAt) loadFight(); return; }
+  if(!I.arena){ body.append(el('div',{class:'authbox'}, el('h3',{text:'🥊 Fight Night'}), el('p',{class:'hint',text:'Fight Night needs a Colosseum. Once one is built (Build → Parks → Sports), it hosts a Fight Night every few hours: three bouts, colonists and players in the ring, and bets on every fight.'}))); return; }
+  const nt=I.night, now=Fight.now(), mine=Me&&Me.token;
+  body.append(el('div',{class:'fhead'}, el('h3',{text:`🥊 Fight Night #${nt.no} · ${I.arena.name}`}),
+    el('span',{class:'rcount',id:'fightCount',text:now<nt.start?`first bell in ${fmtLeft(nt.start-now)}`:'● on now'}),
+    el('button',{class:'linkb',text:'📍 Show the Colosseum',onclick:()=>{ const t=D.buildings.get(I.arena.id)||{type:'colosseum',x:I.arena.x,y:I.arena.y}, [w,d]=T(t).size, p=iso(t.x+w/2,t.y+d/2); cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.1); follow=null; openTab(null); }})));
+  // the bout on now
+  const lb=Fight.liveBout(); if(lb) body.append(ringBox(lb));
+  if(!nt.made){
+    const box=el('div',{class:'authbox'}, el('h3',{text:'Sign up to fight'}), el('p',{class:'hint',text:`Sign-ups close ${fmtLeft(nt.closes-now)} from now, when the card is set. The best-rated sign-ups get the main event (purse ${fmt(5000)} coins); colonists from around town fill any empty corners. Win or lose, you're paid for stepping in the ring.`}));
+    if(I.signups.length) box.append(el('p',{class:'jobnow',text:'Signed up: '+I.signups.map(x=>`@${x.handle} (${x.wins}-${x.losses})`).join(', ')}));
+    if(mine){ if(I.me) box.append(el('p',{class:'hint',text:`Your fighter: ${(FSTYLE[I.me.style]||['🥊'])[0]} ${I.me.styleName} "${I.me.nick}" · 💪 power ${I.me.power} · ⚡ speed ${I.me.speed} · 🛡️ chin ${I.me.chin} · record ${I.me.wins}-${I.me.losses} · rating ${I.me.rating}`}));
+      box.append(el('div',{class:'row-actions'}, el('button',{class:'btn '+(I.mine?'':'primary'),text:I.mine?'Withdraw':'🥊 Sign me up',disabled:Fight.busy,onclick:async()=>{ Fight.busy=true; try{ const r=await api('/api/me/fight/signup',{method:'POST',body:{on:!I.mine}}); toast(r.signed?"You're signed up. We'll tell you when the card is set.":'You withdrew.'); }catch(e){ toast(e.message); } Fight.busy=false; loadFight(); }}))); }
+    else box.append(el('p',{class:'hint',text:'Sign in to your colonist to fight or bet.'}));
+    body.append(box); }
+  else {
+    for(const b of (I.bouts||[]).slice().sort((x,y)=>y.i-x.i)){ const started=now>=b.start, bet=(I.myBets||[]).find(x=>x.n===nt.n&&x.i===b.i), mineB=Me&&Me.handle&&[b.a.handle,b.b.handle].some(h=>h.toLowerCase()===Me.handle.toLowerCase());
+      const card=el('div',{class:'fbout'+(b.i===2?' main':'')}, el('div',{class:'fbtitle'}, el('b',{text:b.name}), el('span',{text:` · purse ${fmt(b.purse)}`}), el('span',{class:'rcount','data-fstart':b.start,text:b.settled?'':started?'● LIVE':fmtLeft(b.start-now)})));
+      const pickable=mine&&!started&&!bet&&!mineB;
+      card.append(el('div',{class:'fvs'}, fighterBox(b.a,'a',b,pickable), el('span',{class:'vs',text:'VS'}), fighterBox(b.b,'b',b,pickable)));
+      if(b.settled&&b.result){ const w=b.result.winner===0?b.a:b.b; card.append(el('p',{class:'jobnow',text:`🏆 @${w.handle} won by ${b.result.method}${/KO/.test(b.result.method)?` in round ${b.result.round}`:''}.`})); }
+      if(bet) card.append(el('p',{class:'rmine'+(bet.payout?' win':''),text:bet.payout!=null?(bet.payout?`You won ${fmt(bet.payout)} coins!`:`Your ${fmt(bet.amount)} on @${(bet.side==='a'?b.a:b.b).handle} is lost.`):`Your bet: ${fmt(bet.amount)} on @${(bet.side==='a'?b.a:b.b).handle} at ${bet.pays}×.`}));
+      else if(mineB&&!b.settled) card.append(el('p',{class:'hint',text:"You're fighting in this one. Good luck!"}));
+      else if(pickable){ const amt=Fight.amount[b.i]||50, inp=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Bet',value:String(amt)}); inp.oninput=()=>{ Fight.amount[b.i]=inp.value; };
+        const side=Fight.pick[b.i];
+        card.append(el('div',{class:'rbet'}, el('span',{text:side?`Bet on @${(side==='a'?b.a:b.b).handle}:`:'Tap a fighter, then bet:'}), inp,
+          el('button',{class:'btn primary',text:Fight.busy?'Placing…':'Place bet',disabled:!side||Fight.busy,onclick:async()=>{ Fight.busy=true; renderRaces(true);
+            try{ const r=await api('/api/me/fight/bet',{method:'POST',body:{bout:b.i,side,amount:Math.floor(Number(Fight.amount[b.i]||50))}}); toast(`Bet placed: ${fmt(r.amount)} on @${r.fighter} at ${r.pays}×.`); myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }catch(e){ toast(e.message); }
+            Fight.busy=false; loadFight(); }}))); }
+      body.append(card); } }
+  if(I.last&&I.last.length&&!(nt.made&&(I.bouts||[]).some(b=>b.settled))) body.append(el('div',{class:'rlast'}, el('h3',{text:'Last Fight Night'}), el('ul',{class:'flast'},...I.last.map(x=>el('li',{text:`${x.name}: @${x.winner} beat @${x.loser} by ${x.method}${/KO/.test(x.method)?` (round ${x.round})`:''}`})))));
+  if(I.top&&I.top.length) body.append(el('div',{class:'rlast'}, el('h3',{text:'🏆 Top fighters'}), el('ol',{class:'flast'},...I.top.map(x=>el('li',{text:`@${x.handle} · ${x.wins}-${x.losses}${x.kos?`, ${x.kos} KO`:''} · rating ${x.rating}`})))));
+  body.append(el('p',{class:'hint',text:`A Fight Night every ${Math.round(I.every/3600000)} hours: three bouts a few minutes apart, the main event last. Pays are what you get back for each coin if your fighter wins.`})); }
+// The ring: both fighters, their health, the round and the commentary, played from the bout's timeline.
+function ringBox(b){ const box=el('div',{class:'fring',id:'fRing','data-key':b.i+':'+b.start}), names=['@'+b.a.handle,'@'+b.b.handle];
+  const side=(f,k)=>{ const av=el('span',{class:'ava fav'}); av.innerHTML=avatarSVG({handle:f.handle,id:f.id,gender:f.gender}); return el('div',{class:'fside s'+k}, av, el('b',{text:names[k]}), el('div',{class:'hpbar'}, el('i',{id:'fhp'+k})), el('span',{class:'fdown',id:'fdn'+k})); };
+  box.append(el('div',{class:'fring-top'}, el('b',{text:`🔴 LIVE · ${b.name}`}), el('span',{id:'fRound',text:''})), el('div',{class:'fring-mid'}, side(b.a,0), el('span',{class:'vs big',text:'VS'}), side(b.b,1)),
+    el('p',{class:'fcall',id:'fCall',text:'The fighters make their way to the ring…'}));
+  requestAnimationFrame(()=>updateRing()); return box; }
+function updateRing(){ const R0=$('fRing'), b=Fight.liveBout(); if(!R0||!b||!b.result) return; const sp=b.len/((b.result.len||80)*1000), t=(Fight.now()-b.start)/1000/sp, ev=b.result.events;
+  let hp=[100,100], round=0, call='The fighters make their way to the ring…', downs=[0,0], hitBy=-1, hitAt=-9;
+  for(const e of ev){ if(e.t>t) break; if(e.hp) hp=e.hp; if(e.k==='bell') round=e.round; if(e.k==='down') downs[e.who]=e.n; if(e.k==='hit'||e.k==='big'){ hitBy=e.by; hitAt=e.t; } call=fightCall(e,['@'+b.a.handle,'@'+b.b.handle]); }
+  for(const k of [0,1]){ const h=$('fhp'+k); if(h){ h.style.width=hp[k]+'%'; h.style.background=hp[k]>50?'#3CC46A':hp[k]>25?'#F2B33D':'#E2453C'; } const d=$('fdn'+k); if(d) d.textContent=downs[k]?'⬇️'.repeat(downs[k]):'';
+    const sd=R0.querySelector('.s'+k); if(sd) sd.classList.toggle('hit', hitBy===1-k && t-hitAt<0.35); }
+  const rd=$('fRound'); if(rd) rd.textContent=round?`Round ${round} of 3`:'Walk-out'; const c=$('fCall'); if(c&&c.textContent!==call) c.textContent=call; }
+function fightCall(e,names){ const n=i=>names[i], o=i=>names[1-i], a=w=>(/^[aeiou]/i.test(w)?'an ':'a ')+w;
+  switch(e.k){ case 'bell': return `🔔 Round ${e.round}!`; case 'miss': return `${n(e.by)} throws ${a(e.move)}… and misses.`; case 'block': return `${o(e.by)} blocks ${n(e.by)}'s ${e.move}.`;
+    case 'hit': return `${n(e.by)} lands ${a(e.move)}!`; case 'big': return `💥 HUGE ${e.move} from ${n(e.by)}!`; case 'down': return `⬇️ ${n(e.who)} is DOWN! ${e.n>1?`Knockdown number ${e.n}!`:'The referee starts the count…'}`;
+    case 'up': return `${n(e.who)} beats the count and fights on!`; case 'rest': return `End of round ${e.round}. Back to the corners.`;
+    case 'end': return e.method==='KO'?`🏆 KNOCKOUT! ${n(e.winner)} wins in round ${e.round}!`:e.method==='TKO'?`🏆 The referee waves it off! ${n(e.winner)} wins by TKO!`:`🏆 ${n(e.winner)} wins by ${e.method.toLowerCase()}!`; default: return ''; } }
+setInterval(()=>{ if(document.hidden||activeTab!=='races'||Fight.view!=='fight'||!Fight.info) return; const now=Fight.now(), lb=Fight.liveBout(), R0=$('fRing');
+  if((lb&&(!R0||R0.dataset.key!==lb.i+':'+lb.start))||(!lb&&R0)) { renderRaces(true); return; } updateRing();
+  const fc=$('fightCount'), nt=Fight.info.night; if(fc&&nt) fc.textContent=now<nt.start?`first bell in ${fmtLeft(nt.start-now)}`:'● on now';
+  for(const sp of document.querySelectorAll('[data-fstart]')){ const st=Number(sp.dataset.fstart); if(sp.textContent&&sp.textContent!=='● LIVE') sp.textContent=st>now?fmtLeft(st-now):'● LIVE'; }
+  if(nt&&!nt.made&&now>=nt.closes+1500&&Date.now()-Fight.loadAt>4000) loadFight();
+  if(lb&&now>lb.start+lb.len+1500&&!lb.settled&&Date.now()-Fight.loadAt>4000) loadFight(); },250);
 // ---- Creature races: the Races tab, the live race on the track, and the 2½-minute call ----
 const Race={ info:null, skew:0, pick:null, amount:10, busy:false, loadAt:0, track:null, toasted:new Set() };
 const raceNow = () => Date.now()+Race.skew;
@@ -4367,6 +4547,9 @@ function renderRaces(force){ const body=$('raceBody'); if(!body||activeTab!=='ra
   if(!force && body.contains(document.activeElement) && document.activeElement.tagName==='INPUT') return; // don't wipe a bet being typed
   const I=Race.info, hadLanes=!!$('raceLanes'), keep=body.scrollTop; body.innerHTML='';
   requestAnimationFrame(()=>{ body.scrollTop = $('raceLanes')&&!hadLanes ? 0 : keep; }); // jump up to the race when it starts
+  { const seg=el('div',{class:'seg fseg',role:'tablist'}); for(const [k,nm] of [['races','🏁 Races'],['fight','🥊 Fight Night']]) seg.append(el('button',{'aria-pressed':String(Fight.view===k),text:nm,onclick:()=>{ Fight.view=k; if(k==='fight') loadFight(); renderRaces(true); }}));
+    if(Fight.live()) seg.lastChild.append(el('span',{class:'flive',text:' ● LIVE'})); body.append(seg); }
+  if(Fight.view==='fight'){ renderFight(body); return; }
   const lb=lotteryBox(); if(lb) body.append(lb);
   if(Store.canWrite && !(Lotto.info&&Lotto.info.lottery&&!Lotto.info.lottery.drawn)){ const mi=el('input',{type:'number',min:'5',max:'1440',value:'60','aria-label':'Minutes until the draw'}), pi=el('input',{type:'number',min:'1',max:'10000',value:'100','aria-label':'Ticket price'}), bi=el('input',{type:'number',min:'0',value:'0','aria-label':'Bonus coins'});
     body.append(el('details',{class:'authbox'}, el('summary',{text:'Start a lottery'}), el('div',{class:'cbet'}, el('span',{text:'Draw in (minutes)'}), mi), el('div',{class:'cbet'}, el('span',{text:'Ticket price'}), pi), el('div',{class:'cbet'}, el('span',{text:'Bonus from treasury'}), bi),
@@ -4740,7 +4923,7 @@ const SnookerUI={ aim:0, power:0, spin:{x:0,y:0}, M:0.13,
     return el('div',{class:'snkrow'}, pow, cv, side); } };
 // ---- Tables: colonists playing each other (Whot, Ludo, Ayo, Snooker at a Game House; Hold'em at a Casino) ----
 const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, seats:2, quick:true, timer:null, sig:'', aim:0, power:0.55, replay:null, lastShotSig:'',
-  async load(game,bid,quiet){ this.game=game; this.bid=bid; this.error=null; try{ const r=await api(`/api/me/tables?building=${encodeURIComponent(bid)}&game=${game}`); const ls=JSON.stringify(r.tables.map(t=>[t.id,t.status,t.players.length])); const changed=ls!==this.listSig||this.set(r.mine); this.listSig=ls; this.list=r.tables; if(!quiet||changed) renderCard(true); }catch(e){ if(!quiet){ this.list=[]; this.error=e.message; renderCard(true); } } this.poll(); },
+  async load(game,bid,quiet){ this.game=game; this.bid=bid; this.error=null; try{ const r=await api(`/api/me/tables?building=${encodeURIComponent(bid)}&game=${game}`); const ls=JSON.stringify(r.tables.map(t=>[t.id,t.status,t.players.length])); const changed=ls!==this.listSig||this.set(r.mine); this.listSig=ls; this.invites=r.invites||[]; this.list=r.tables; if(!quiet||changed) renderCard(true); }catch(e){ if(!quiet){ this.list=[]; this.error=e.message; renderCard(true); } } this.poll(); },
   set(t){ const was=this.mine&&this.mine.status; this.mine=t; const sig=t?JSON.stringify({...t, now:0}):''; const changed=sig!==this.sig; this.sig=sig;
     // Cue games: replay every shot taken since we last looked, one after another (the computer's too).
     if(t&&/^(snooker|pool8|pool9)$/.test(t.game)&&t.view){ const v=t.view; if(this.seenTable!==t.id){ this.seenTable=t.id; this.seen=v.seq||0; this.queue=[]; this.replay=null; }
@@ -4763,7 +4946,11 @@ const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, s
     const t=this.mine&&this.mine.game===game?this.mine:null;
     if(this.mine&&this.mine.game!==game&&this.mine.status!=='done'){ box.append(el('p',{class:'hint',text:`You're at a ${this.mine.name} table. Finish or leave that game first.`}), el('div',{class:'row-actions'}, el('button',{class:'btn',text:`Back to my ${this.mine.name} game`,onclick:()=>{ if(this.mine.game==='poker'){ toast('Your Hold’em game is at the Casino.'); return; } GH.game=this.mine.game; renderCard(true); }}))); return box; }
     if(t) return this.table(t, box);
-    // the lobby: open tables, open one, or play the computer
+    // invites from friends (to any game, at any Game House or Casino), then the lobby: open tables, open one, or play the computer
+    if((this.invites||[]).length){ box.append(el('h4',{class:'bgroup',text:'🎟️ Invites from friends'})); const L=el('div',{class:'tlist'});
+      for(const x of this.invites) L.append(el('div',{class:'trow inv'}, el('div',{class:'tl'}, el('b',{text:`@${x.from} · ${TABLE_GAMES[x.game]?TABLE_GAMES[x.game].icon+' '+TABLE_GAMES[x.game].name:x.game}`}), el('span',{class:'hint',text:`${x.stake?fmt(x.stake)+' coins':'Friendly'} · ${x.players.length} of ${x.seats} · at ${x.place}`})),
+        el('button',{class:'btn primary sm',text:x.stake?`Join (${fmt(x.stake)})`:'Join',disabled:this.busy,onclick:async()=>{ this.game=x.game; await this.act({action:'join',id:x.id}); }})));
+      box.append(L); }
     const open=(this.list||[]).filter(x=>x.status==='waiting'), live=(this.list||[]).filter(x=>x.status==='playing');
     box.append(el('h4',{class:'bgroup',text:`Play someone at ${G.name}`}));
     if(open.length){ const L=el('div',{class:'tlist'}); for(const x of open) L.append(el('div',{class:'trow'}, el('div',{class:'tl'}, el('b',{text:`${x.stake?fmt(x.stake)+' coins':'Friendly'} · ${x.players.length} of ${x.seats}${x.opts.quick?' · quick':''}${x.opts.street?' · street':''}`}), el('span',{class:'hint',text:x.players.map(p=>'@'+p.handle).join(', ')})),
@@ -4782,10 +4969,23 @@ const Tables={ list:null, mine:null, game:null, bid:null, busy:false, stake:0, s
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.busy?'…':'Open a table',disabled:this.busy,onclick:()=>this.act({action:'create',buildingId:bid,game,stake:Math.max(0,Math.floor(Number(this.stake)||0)),seats:Number(this.seats),quick:this.quick,street:!!this.street})}),
         el('button',{class:'btn',text:'🤖 Play the computer (free)',disabled:this.busy,onclick:()=>this.act({action:'create',buildingId:bid,game,stake:0,seats:Number(this.seats)||G.min,quick:this.quick,street:!!this.street,computer:true})})));
     return box; },
+  // Pick friends to invite to this table: they get a notice and a phone notification, and see it in their lobby.
+  async inviteSheet(t){ const {box,close}=sheetBox(`👥 Invite friends to ${TABLE_GAMES[t.game].name}`); box.append(el('p',{class:'hint',text:'Loading your friends…'}));
+    let fr=[]; try{ fr=await api('/api/friends'); }catch(e){ box.lastChild.textContent=e.message; return; } box.lastChild.remove();
+    const already=new Set(((t.opts&&t.opts.invited)||[]).map(h=>h.toLowerCase())), inGame=new Set(t.players.map(p=>p.handle.toLowerCase())), pick=new Set();
+    const list=fr.filter(f=>!inGame.has(f.h.toLowerCase()));
+    if(!list.length){ box.append(el('p',{class:'hint',text:'No friends to invite yet. Friends are people whose message request you accepted, or who accepted yours.'})); return; }
+    const wrap=el('div',{class:'gsel'}); for(const f of list){ const av=el('span',{class:'ava sm'+(f.online?' on':'')}); av.innerHTML=avatarSVG({handle:f.h,id:f.id,gender:f.g});
+      const b=el('button',{class:'gperson','aria-pressed':'false',onclick:()=>{ pick.has(f.h)?pick.delete(f.h):pick.add(f.h); b.classList.toggle('on',pick.has(f.h)); b.setAttribute('aria-pressed',String(pick.has(f.h))); b.lastChild.textContent=pick.has(f.h)?'✓':'+'; }},
+        av, el('span',{text:`${f.n?f.n+' · ':''}@${f.h}${f.online?' · online':''}${already.has(f.h.toLowerCase())?' · invited':''}`}), el('b',{text:'+'})); wrap.append(b); }
+    box.append(wrap, el('p',{class:'hint',text:t.stake?`Each player puts in the ${fmt(t.stake)}-coin stake when they join.`:'A friendly game: no stake.'}),
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Send invites',onclick:async()=>{ if(!pick.size){ toast('Pick at least one friend.'); return; }
+        try{ const r=await api('/api/me/tables',{method:'POST',body:{action:'invite',id:t.id,handles:[...pick]}}); close(); toast(`Invited ${r.invited.map(h=>'@'+h).join(', ')}.`); if(r.table) this.set(r.table); renderCard(true); }catch(e){ toast(e.message); } }}))); },
   table(t, box){ const G=TABLE_GAMES[t.game], v=t.view, mine=t.seat;
     box.append(el('div',{class:'tbar'}, el('b',{text:`${G.icon} ${t.opts&&t.opts.street?'Street ':''}${G.name}${t.stake?` · pot ${fmt(t.pot)}`:' · friendly'}`}), el('span',{class:'timer',text:this.left()})));
     const seats=el('div',{class:'seats'}); t.players.forEach((p,i)=>seats.append(el('span',{class:'seat'+(v&&v.turn===i?' on':'')+(i===mine?' me':'')+(p.left||(v&&v.out&&v.out[i])?' gone':''),text:`${p.missed&&!p.left?'⚠️ ':''}${p.bot?'🤖 ':''}${i===mine?'You':'@'+p.handle}${v&&v.counts?` · ${v.counts[i]}🂠`:''}${v&&v.store?` · ${v.store[i]}`:''}${v&&v.score?` · ${v.score[i]}`:''}`})));
     for(let i=t.players.length;i<t.seats;i++) seats.append(el('span',{class:'seat',text:'empty seat'})); box.append(seats);
+    if(t.status==='waiting'&&!(t.opts&&t.opts.computer)) box.append(el('div',{class:'row-actions',style:'justify-content:center'}, el('button',{class:'btn primary sm',text:`👥 Invite friends${t.opts&&t.opts.invited&&t.opts.invited.length?` (${t.opts.invited.length} invited)`:''}`,onclick:()=>this.inviteSheet(t)})));
     if(t.status==='waiting'){ box.append(el('p',{class:'hint',style:'text-align:center',text:`Waiting for ${t.seats-t.players.length} more player${t.seats-t.players.length>1?'s':''}…`}), el('div',{class:'row-actions'}, el('button',{class:'linkb',text:t.stake?`Leave and get ${fmt(t.stake)} back`:'Leave',onclick:()=>this.act({action:'leave'})}))); return box; }
     if(t.status==='playing'&&mine>=0&&t.players[mine].missed===1) box.append(el('p',{class:'hint',style:'text-align:center;color:var(--warm)',text:'⚠️ You missed a turn. Miss one more and you forfeit this game.'}));
     box.append(this.boards[t.game].call(this,t,v));
@@ -5448,7 +5648,7 @@ const mins = ms => Math.max(1,Math.ceil(ms/60000));
 function outPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Go out'})); const A=actsFor(c), P=A&&A.places;
   if(!P){ box.append(el('p',{class:'hint',text:'Looking around…'})); return box; }
   if(!P.housed){ box.append(el('p',{class:'hint',text:'You can go out once you have a home.'})); return box; }
-  if(P.jailed){ box.append(el('p',{class:'hint',text:"You're in jail. You can go out when you're released."})); return box; }
+  if(P.jailed){ box.append(el('p',{class:'hint',text:"You're in jail. You can go out when you're released, or pay bail to leave now."}), bailBtn(P.jailedFor||0)); return box; }
   if(P.visiting) box.append(el('div',{class:'row-actions'}, el('span',{text:`You're at ${P.visiting.name} for ${mins(P.visiting.until-Date.now())} more min.`}), el('button',{class:'linkb',text:'Go home',onclick:()=>meAction('/api/me/visit/end',{},'Heading home.')})));
   box.append(el('p',{class:'hint',text:'Send your colonist somewhere for a few hours (about 5 minutes). Everyone watching sees them there.'}));
   const ul=el('ul',{class:'joblist'}); for(const pl of P.places) ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:pl.name}), el('span',{text:`${miles(pl.dist)} from home`})), el('button',{class:'btn',text:'Go',onclick:()=>meAction('/api/me/visit',{buildingId:pl.id},r=>`You're off to ${r.place}.`)})));
@@ -5465,10 +5665,14 @@ async function tryPickpocket(target){ const h=(target||'').trim().replace(/^@+/,
   if(!P||P.error){ toast(P?P.error:'Couldn’t find them.'); return; }
   if(P.blocked){ toast(`@${P.handle} is ${P.blocked} right now, so you can't get close. Try when they're out and about.`); return; }
   toast(`@${P.handle} is at ${P.at}. ${oddsText(P)} of getting away. Try it?`,'Do it',()=>doCrime('pickpocket',h)); }
+// Pay bail and walk out of jail now (from your cash, then your savings).
+function bailBtn(left){ const cost=bailCost(left);
+  return el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`🔓 Pay bail (${fmt(cost)} coins)`,onclick:()=>toast(`Pay ${fmt(cost)} coins bail and leave jail now? It comes from your cash first, then your savings.`,'Pay bail',async()=>{
+    const r=await meAction('/api/me/bail',{},r=>`🔓 You're free. Bail: ${fmt(r.cost)} coins.`); if(r){ Acts.at=0; loadMyMoney(); const c=myCitizen(); if(c){ detail.delete(c.id); renderCard(true); } } })})); }
 function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Crime'})); const A=actsFor(c), K=A&&A.crime;
   if(!K){ box.append(el('p',{class:'hint',text:'Checking who’s watching…'})); return box; }
   if(!K.housed){ box.append(el('p',{class:'hint',text:'Wake up and move in first.'})); return box; }
-  if(K.jailedFor>0){ box.append(el('p',{class:'jobnow',text:`🔒 You're in jail for ${mins(K.jailedFor)} more minute${K.jailedFor>60000?'s':''}.`})); return box; }
+  if(K.jailedFor>0){ box.append(el('p',{class:'jobnow',text:`🔒 You're in jail for ${mins(K.jailedFor)} more minute${K.jailedFor>60000?'s':''}.`}), bailBtn(K.jailedFor)); return box; }
   const Rt=K.rates||{pickpocket:{},rob:{}}, pct=v=>Math.round((v||0)*100)+'%';
   box.append(el('p',{class:'hint',text:'Crime pays… sometimes. Your chance of getting away depends on how far the nearest Police station is from where it happens:'}),
     el('ul',{class:'bands'}, el('li',{text:`🟢 More than ${miles(K.far)} away (or no police): pickpocket ${pct(Rt.pickpocket.high)}, robbery ${pct(Rt.rob.high)}`}),
@@ -5628,12 +5832,12 @@ function renderCard(force){ if(!force && cardBusy()) return;
       else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
       // Already signed in as someone else: one person, one colonist, so no "This is me" on other cards.
       else if(Me&&Me.token&&Me.handle){ card.append(el('div',{class:'row-actions'}, el('span',{class:'hint',text:`You're signed in as @${Me.handle}.`}), el('button',{class:'linkb',text:'Go to my colonist',onclick:()=>findMe()})));
-        if(c.home) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Visit their home',onclick:()=>meAction('/api/me/visit',{friend:c.handle},r=>`You're on your way to ${r.place}.`)}),
+        if(c.home) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'👀 Watch',title:'Keep the camera on them and see what they do',onclick:()=>Watch.start(0,`Watching @${c.handle}`,null,c.handle)}), el('button',{class:'btn',text:'Visit their home',onclick:()=>meAction('/api/me/visit',{friend:c.handle},r=>`You're on your way to ${r.place}.`)}),
           pocketBtn(c)));
         if(c.claimed) card.append(el('div',{class:'row-actions'}, Blocks.has(c.handle)?'':el('button',{class:'btn primary',text:'💬 Message',onclick:()=>Chats.open(c.handle)}),
           Blocks.has(c.handle)?el('button',{class:'btn',text:'Unblock',onclick:()=>Blocks.unblock(c.handle)}):el('button',{class:'btn',text:'🚫 Block',onclick:()=>Blocks.ask(c.handle)})));
         if(c.claimed) card.append(giftBox(c.handle)); else card.append(el('p',{class:'hint',text:`@${c.handle} hasn't verified their avatar yet, so they can't receive gifts.`})); }
-      else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}))); }
+      else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}), c.home?el('button',{class:'btn',text:'👀 Watch',onclick:()=>Watch.start(0,`Watching @${c.handle}`,null,c.handle)}):'')); }
   } else if(sel.kind==='p'){ Plots.card(card, close);
   } else if(sel.kind==='g'){ Plots.grassCard(card, close);
   } else if(sel.kind==='v'){ const v=D.vehicles.get(sel.id); if(!v){ closeCard(); return; } const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car;
@@ -5664,6 +5868,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       else if(b.owner.toLowerCase()===Me.handle.toLowerCase()&&!b.plot) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
     if(!Store.canWrite&&Me&&Me.token) card.append(el('div',{class:'row-actions'}, Loc.btn(b.name||t.name, b.x, b.y)));
     Plots.buildingBits(card,b,t);
+    if(kindOf(b.type)==='colosseum' && b.done!==false && !b.ruin) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🥊 Fight Night',onclick:()=>{ Fight.view='fight'; openTab('races'); loadFight(); }})));
     if(t.home && !Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin) card.append(rentBox(b,t));
     if(t.work && !Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin) card.append(workBox(b,t));
     if(!Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin && canGoTo(b.type)) card.append(goHereRow(b));
@@ -5897,8 +6102,16 @@ const AppVersion={ v:null, hiddenAt:0, shown:false,
 AppVersion.check(false); setInterval(()=>{ if(!document.hidden) AppVersion.check(false); }, 10*60*1000);
 document.addEventListener('visibilitychange',()=>{ if(document.hidden){ AppVersion.hiddenAt=Date.now(); return; } if(Date.now()-AppVersion.hiddenAt>20000) AppVersion.check(true); });
 // A notification opens the game at the right place: ?chat=handle opens that chat.
-function openFromNotification(){ const h=new URLSearchParams(location.search).get('chat'); if(!h) return; const go=()=>{ if(Me&&Me.token) Chats.open(h); }; setTimeout(go,1500); try{ window.history.replaceState(null,'',location.pathname); }catch(e){} }
+function openFromNotification(){ const qs=new URLSearchParams(location.search), tid=qs.get('table');
+  if(tid){ try{ window.history.replaceState(null,'',location.pathname); }catch(e){} setTimeout(()=>openInvite(tid),1800); return; }
+  const h=qs.get('chat'); if(!h) return; const go=()=>{ if(Me&&Me.token) Chats.open(h); }; setTimeout(go,1500); try{ window.history.replaceState(null,'',location.pathname); }catch(e){} }
 
+// A game invite from a friend (tapped from the phone notification): join their table and open it at their Game House.
+async function openInvite(tid){ if(!(Me&&Me.token)) return; let inv=null; try{ inv=(await api(`/api/me/tables?building=&game=whot`)).invites.find(x=>x.id===tid); }catch(e){}
+  if(!inv){ toast('That game has already started or closed.'); return; }
+  toast(`Join @${inv.from}'s ${TABLE_GAMES[inv.game].name} game${inv.stake?` for ${fmt(inv.stake)} coins`:''}?`,'Join',async()=>{ try{ const r=await api('/api/me/tables',{method:'POST',body:{action:'join',id:tid}}); Tables.set(r);
+      GH.game=inv.game; GH.open=true; sel={kind:'b',id:r.building}; const b=D.buildings.get(r.building); if(b){ const [w,d]=T(b).size, p=iso(b.x+w/2,b.y+d/2); cam.x=p.x; cam.y=p.y; } else if(inv.x!=null){ const p=iso(inv.x+1,inv.y+1); cam.x=p.x; cam.y=p.y; }
+      Tables.game=inv.game; Tables.bid=r.building; renderCard(true); }catch(e){ toast(e.message); } }); }
 /* ---------------- first-day guide ---------------- */
 // "Getting started" on your own card: six first steps, each checked off from what you've actually done, with a small
 // reward to collect for each and a bonus for finishing. "Show me" takes you to the right place for each step.
@@ -5948,7 +6161,8 @@ function goHereRow(b){ const me=myCitizen(), [w,d]=T(b).size, bx=b.x+w/2, by=b.y
 // your colonist, walking or driving. A small bar at the top says so; Stop ends it, and dragging the map pauses it
 // ("Back to me" picks it up again). A delivery watch ends by itself when the delivery is done.
 const Watch={ id:null, until:0, label:'', bar:null, done:false,
-  async start(until, label, target){ this.target=target||null; this.started=Date.now(); const h=myHandle(); if(!h){ toast('Sign in to your colonist first (tap "Find me").'); return; }
+  // `who` (a handle) follows another colonist instead of you: 👀 Watch on their card.
+  async start(until, label, target, who){ this.target=target||null; this.started=Date.now(); this.other=!!who; const h=who||myHandle(); if(!h){ toast('Sign in to your colonist first (tap "Find me").'); return; }
     let c=[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===h.toLowerCase());
     if(!c){ const d=await loadDetail(h); if(!d) return; c=normC(d); pinned=c.id; S.citizens.set(c.id,c); }
     pinned=c.id; this.id=c.id; this.until=until||0; this.label=label||'Following you'; this.done=false;
@@ -5960,7 +6174,7 @@ const Watch={ id:null, until:0, label:'', bar:null, done:false,
   show(){ if(!this.bar){ this.bar=el('div',{class:'watchbar',role:'status'}); document.body.append(this.bar); } const b=this.bar; b.innerHTML='';
     const on=follow===this.id; b.append(el('span',{class:'wdot'+(on?' on':'')}), el('span',{class:'wtxt',text:on?`👀 ${this.label}`:'Camera moved'}),
       this.until?el('span',{class:'cdown','data-until':this.until,text:''}):'',
-      on?'':el('button',{class:'btn sm',text:'Back to me',onclick:()=>this.resume()}), el('button',{class:'btn sm',text:'Stop',onclick:()=>this.stop()})); },
+      on?'':el('button',{class:'btn sm',text:this.other?'Back to them':'Back to me',onclick:()=>this.resume()}), el('button',{class:'btn sm',text:'Stop',onclick:()=>this.stop()})); },
   tick(){ if(!this.id) return;
     if(this.target){ const c=S.citizens.get(this.id), st=c&&citizenAt(c,gmNow());
       if(st&&!st.moving&&st.bid===this.target&&Date.now()-this.started>1500){ const b=D.buildings.get(this.target); this.stop(); toast(`📍 You’ve arrived${b?` at ${b.name||T(b).name}`:''}.`); return; }

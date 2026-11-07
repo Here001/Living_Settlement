@@ -616,6 +616,16 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await call('POST', '/api/me/visit', { friend: 'jobfill_a' }, P)).status === 409, 'no going out from jail');
     const petShop = (await call('POST', '/api/admin/buildings', { type: 'petstore', x: 1230, y: 1230 })).json.building?.id; await call('POST', `/api/admin/buildings/${petShop}/finish`);
     ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', buildingId: petShop }, P)).status === 409, 'no adopting from jail');
+    { let c2 = null; for (let i = 0; i < 30 && !c2; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 100, bank = 100'); const r = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P); if (r.json.caught) c2 = r.json; }
+      const zz = (await pool.query("select coins_base, bank from citizens where handle = 'zara_ng'")).rows[0];
+      ok(c2 && c2.paid.fromCash === 100 && c2.paid.fromBank === 100 && Number(zz.bank) === 0 && Number(zz.coins_base) === 100 - (c2.fine - 100), 'a fine comes from cash, then savings, then puts the wallet in the minus', JSON.stringify({ c2: c2 && c2.paid, fine: c2 && c2.fine, zz }));
+      // bail: out of jail early, from cash then savings
+      await set('zara_ng', `jailed_until = ${Date.now() + 5 * 60000}, coins_base = 200, bank = 1000, net = 0`);
+      const bq = await call('POST', '/api/me/bail', {}, P), zb = (await pool.query("select coins_base, bank, jailed_until from citizens where handle = 'zara_ng'")).rows[0];
+      ok(bq.status === 200 && bq.json.cost === 750 && Number(zb.coins_base) === 0 && Number(zb.bank) === 1000 - 550 && !zb.jailed_until, 'pay bail (150 a minute left) to leave jail now: cash first, then savings', JSON.stringify({ r: bq.json, zb }));
+      ok((await call('POST', '/api/me/bail', {}, P)).status === 409, "no bail when you're not in jail");
+      await set('zara_ng', `jailed_until = ${Date.now() + 5 * 60000}, coins_base = 10, bank = 0`); ok((await call('POST', '/api/me/bail', {}, P)).status === 400, "bail can't be owed: you need the coins");
+      await set('zara_ng', 'jailed_until = null, coins_base = 1000'); }
     { await call('POST', '/api/admin/treasury', { amount: 100000 }); let got = null;
       for (let i = 0; i < 40 && !got; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 100000, visit_id = null, visit_until = null'); const r = await call('POST', '/api/me/crime', { kind: 'rob' }, P); if (r.json.ok && !r.json.caught) got = r.json; }
       ok(got && got.loot >= 5000 && got.loot <= 10000, 'a shop robbery takes 5,000 to 10,000 from the till', JSON.stringify(got));
@@ -658,6 +668,9 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok(bl.status === 200 && z1.coins === 0 && z1.bank === 1000 - (45 + 50 - 50), 'weekly bills: car upkeep (45) and property upkeep (0.1% of 50,000), cash first, then savings', JSON.stringify({ bl: bl.json, coins: z1.coins, bank: z1.bank }));
       const nt = (await pool.query("select text from notices where citizen_id = $1 and kind = 'bills' order by id desc limit 1", [zid])).rows[0]?.text || '';
       ok(/car upkeep 45 \+ 🏠 property upkeep 50 = 95 coins/.test(nt), 'and a notice says what it was for', nt);
+      await pool.query("update citizens set coins_base = 30, bank = 20, net = 0, coins_day = 0 where id = $1", [zid]);
+      const bl3 = await call('POST', '/api/admin/test/bills'), z3 = await whoDev('zara_ng');
+      ok(bl3.status === 200 && z3.bank === 0 && z3.coins === 30 + 20 - 95, 'bills bigger than cash and savings: both are emptied and the wallet goes into the minus', JSON.stringify({ coins: z3.coins, bank: z3.bank }));
       await pool.query('update buildings set owner_id = null, owner_handle = null where id = $1', [own.id]); await pool.query("update citizens set cars = null, car_active = null where id = $1", [zid]); }
     ok((await call('POST', '/api/me/visit/end', {}, P)).status === 200 && (await who('zara_ng')).visit?.[4] <= Date.now() + 1000, 'and heads home (the trip back stays visible)');
     // pets
@@ -810,6 +823,8 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(!(await call('GET', '/api/dm-contacts', undefined, PB)).json.some(x => x.h === 'zara_ng') && (await call('GET', '/api/dm-contacts', undefined, P)).json[0]?.h === 'jobfill_a', '@ suggestions list people you chat with (not unaccepted requests)');
     ok((await call('POST', '/api/dm/zara_ng/accept', {}, PB)).status === 200 && (await call('GET', '/api/dm', undefined, PB)).json[0].request === false, 'accepting moves it to your chats');
     ok((await call('GET', '/api/dm-contacts', undefined, PB)).json.some(x => x.h === 'zara_ng' && x.count >= 2), 'and then they show up in your @ suggestions');
+    { const fz = (await call('GET', '/api/friends', undefined, P)).json, fb = (await call('GET', '/api/friends', undefined, PB)).json;
+      ok(fz.some(x => x.h === 'jobfill_a' && x.online) && fb.some(x => x.h === 'zara_ng'), 'an accepted request makes them friends on both sides (and shows who is online)', JSON.stringify({ fz, fb })); }
     // replies, the far-away fee, pin and delete
     { const zid = (await whoDev('zara_ng')).id, zh = (await pool.query('select home_id from citizens where id = $1', [zid])).rows[0].home_id;
       const old = (await pool.query('select home_id from citizens where id = $1', [bid])).rows[0].home_id;
@@ -871,10 +886,10 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       await call('POST', `/api/chat/groups/${pl.json.group}/join`, {}, PB);
       ok((await call('POST', `/api/me/heists/${pl.json.id}/go`, {}, PB)).status === 403, 'only the planner says go');
       for (let i = 0; i < 40 && (await pool.query('select 1 from treasury_pending limit 1')).rowCount; i++) await sleep(100); // earlier trips' fares are in the treasury
-      const t0 = Number((await pool.query("select data->>'treasuryBase' t from meta")).rows[0].t), m0 = Number((await pool.query("select sum(coins_base) s from citizens where handle in ('zara_ng','jobfill_a')")).rows[0].s);
+      const t0 = Number((await pool.query("select data->>'treasuryBase' t from meta")).rows[0].t), m0 = Number((await pool.query("select sum(coins_base + coalesce(bank, 0)) s from citizens where handle in ('zara_ng','jobfill_a')")).rows[0].s);
       const go = await call('POST', `/api/me/heists/${pl.json.id}/go`, {}, P);
       ok(go.status === 200 && typeof go.json.win === 'boolean' && go.json.got.length + go.json.caught.length === 2, 'the job happens: it comes off or not, and each member gets away or is caught', JSON.stringify(go.json));
-      const t1 = Number((await pool.query("select data->>'treasuryBase' t from meta")).rows[0].t), m1 = Number((await pool.query("select sum(coins_base) s from citizens where handle in ('zara_ng','jobfill_a')")).rows[0].s);
+      const t1 = Number((await pool.query("select data->>'treasuryBase' t from meta")).rows[0].t), m1 = Number((await pool.query("select sum(coins_base + coalesce(bank, 0)) s from citizens where handle in ('zara_ng','jobfill_a')")).rows[0].s);
       ok(Math.abs((m1 - m0) + (t1 - t0)) < 1, 'coins only move between the crew and the treasury (nothing is made up)', JSON.stringify({ crew: m1 - m0, treasury: t1 - t0 }));
       const caughtMe = go.json.caught.find(x => x.h === 'zara_ng'); if (caughtMe) ok((await whoDev('zara_ng')).jailedUntil > Date.now(), 'anyone caught goes to jail');
       ok((await call('GET', `/api/chat/groups/${pl.json.group}`, undefined, PB)).json.messages.some(m => m.system && /(came off|went wrong)/.test(m.text)), 'the result is posted in the crew chat');
@@ -942,6 +957,10 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(t0.status === 200 && t0.json.status === 'waiting' && (await whoDev('zara_ng')).coins === 4000, 'open an Ayo table for 1,000: the stake is held by the table', JSON.stringify(t0.json).slice(0, 200));
     ok((await T(P, { action: 'create', buildingId: gh, game: 'whot', stake: 0 })).status === 409, 'one table at a time');
     const lst = (await call('GET', `/api/me/tables?building=${gh}&game=ayo`, undefined, PB)).json; ok(lst.tables.some(t => t.id === t0.json.id && t.status === 'waiting'), 'others see the open table');
+    { const iv = await T(P, { action: 'invite', id: t0.json.id, handles: ['jobfill_a'] }); ok(iv.status === 200 && iv.json.invited[0] === 'jobfill_a', 'invite a friend to your table', JSON.stringify(iv.json).slice(0, 200));
+      ok((await T(P, { action: 'invite', id: t0.json.id, handles: ['builder'] })).status === 403, 'only friends can be invited');
+      const li = (await call('GET', `/api/me/tables?building=&game=whot`, undefined, PB)).json; ok(li.invites.some(x => x.id === t0.json.id && x.from === 'zara_ng'), 'the invite shows in their lobby (at any Game House)', JSON.stringify(li.invites).slice(0, 200));
+      ok((await pool.query("select 1 from notices where citizen_id = $1 and kind = 'invite'", [bid])).rowCount === 1, 'and they get a notice'); }
     const j = await T(PB, { action: 'join', id: t0.json.id }); ok(j.status === 200 && j.json.status === 'playing' && j.json.seat === 1 && (await whoDev('jobfill_a')).coins === 4000, 'joining fills the table and the game starts', JSON.stringify(j.json).slice(0, 200));
     ok((await T(PB, { action: 'move', id: t0.json.id, move: { pit: 6 } })).status === 409, "you can't move out of turn");
     // play it out: each side makes the computer's choice for them
@@ -1536,6 +1555,47 @@ const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 
   if (pl.json.vehicle) await call('DELETE', '/api/admin/vehicles/' + pl.json.vehicle.id);
   const rd = await call('POST', '/api/admin/roads', { set: { '4100,4100': 'curvestreet', '4101,4100': 'roundabout', '4102,4100': 'culdesac' } }); ok(rd.json.changed === 3, 'curved streets, roundabouts and cul-de-sacs can be laid', JSON.stringify(rd.json));
   const fx = []; for (let i = 0; i < 3; i++) fx.push(await call('POST', '/api/admin/buildings', { type: i === 1 ? 'ironfence' : 'stonewall', x: 4100 + i, y: 4105 })); ok(fx.every(r => r.status === 200), 'fences of different kinds go side by side');
+}
+{ // Fight Night at the Colosseum
+  ok((await call('GET', '/api/fight', undefined, { auth: false })).json.arena === null, 'no Colosseum, no Fight Night');
+  const player = async (handle, coins) => { await call('POST', '/api/admin/citizens', { handle }); const id = (await pool.query('select id from citizens where handle = $1', [handle])).rows[0].id;
+    const link = (await call('POST', `/api/admin/citizens/${id}/setup-link`)).json.claimId, tok = (await call('POST', `/api/claim/${link}/password`, { password: 'secret88' }, { auth: false })).json.token;
+    await pool.query('update citizens set coins_base = $2, net = 0 where id = $1', [id, coins]); return { id, handle, P: { auth: false, headers: { 'x-player': tok } } }; };
+  const F1 = await player('fighter_one', 50000), F2 = await player('fighter_two', 50000), FAN = await player('fight_fan', 50000);
+  for (const p of [F1, F2, FAN]) { const h = (await pool.query('select home_id from citizens where id = $1', [p.id])).rows[0];
+    if (!h.home_id) { const sp = (await pool.query('select id from buildings where done and not ruin and home_used < home_cap limit 1')).rows[0]; await call('PATCH', '/api/admin/citizens/' + p.id, { homeId: sp.id }); } }
+  ok((await call('POST', '/api/me/fight/signup', {}, F1.P)).status === 409, "can't sign up without a Colosseum");
+  const col = await call('POST', '/api/admin/buildings', { type: 'colosseum', x: 4300, y: 4300 }); await call('POST', `/api/admin/buildings/${col.json.building?.id}/finish`);
+  ok(col.status === 200, 'build a Colosseum', JSON.stringify(col.json).slice(0, 200));
+  await sleep(5200); // the arena list refreshes every few seconds
+  let fi = (await call('GET', '/api/fight', undefined, F1.P)).json;
+  ok(fi.arena && fi.night && fi.night.open && !fi.bouts.length, 'the next Fight Night is open for sign-ups', JSON.stringify(fi.night));
+  ok(fi.me && fi.me.style && fi.me.rating === 1000, 'every player has a fighting style and a starting rating', JSON.stringify(fi.me));
+  for (const p of [F1, F2]) ok((await call('POST', '/api/me/fight/signup', {}, p.P)).json.signed === true, `@${p.handle} signs up to fight`);
+  fi = (await call('GET', '/api/fight', undefined, F1.P)).json; ok(fi.signups.length === 2 && fi.mine, 'the sign-ups show on the card', JSON.stringify(fi.signups));
+  ok((await call('POST', '/api/me/fight/bet', { bout: 2, side: 'a', amount: 100 }, FAN.P)).status === 409, "no betting before the card is set");
+  await call('POST', '/api/admin/test/fight-soon', { in: 5000, gap: 4000 }); await sleep(2500);
+  fi = (await call('GET', '/api/fight', undefined, FAN.P)).json;
+  const main = fi.bouts.find(b => b.i === 2);
+  ok(fi.bouts.length >= 1 && main && [main.a.handle, main.b.handle].sort().join() === 'fighter_one,fighter_two', 'the card is set: the two sign-ups get the main event (colonists fill any other bouts)', JSON.stringify(fi.bouts.map(b => [b.i, b.a.handle, b.b.handle])));
+  ok(main.odds.a.pays > 1 && main.odds.b.pays > 1 && !main.result, 'each bout has odds; nobody knows the result before the bell', JSON.stringify(main.odds));
+  ok((await call('POST', '/api/me/fight/bet', { bout: 2, side: 'a', amount: 100 }, F1.P)).status === 409, "fighters can't bet on their own fight");
+  const c0 = (await call('GET', '/api/citizens/fight_fan')).json.coins;
+  const bt = await call('POST', '/api/me/fight/bet', { bout: 2, side: 'a', amount: 1000 }, FAN.P); ok(bt.status === 200 && bt.json.pays === main.odds.a.pays, 'a fan bets on the main event', JSON.stringify(bt.json));
+  ok((await call('POST', '/api/me/fight/bet', { bout: 2, side: 'b', amount: 10 }, FAN.P)).status === 409, 'one bet per bout');
+  const fc0 = { one: (await call('GET', '/api/citizens/fighter_one')).json.coins, two: (await call('GET', '/api/citizens/fighter_two')).json.coins };
+  for (let i = 0; i < 60; i++) { await sleep(500); const st = (await pool.query('select count(*) filter (where settled) s from fight_bouts where n = $1', [fi.night.n])).rows[0]; if (Number(st.s) === fi.bouts.length) break; }
+  const bouts = (await pool.query('select * from fight_bouts where n = $1 order by i', [fi.night.n])).rows;
+  ok(bouts.length === fi.bouts.length && bouts.every(b => b.settled && b.result && b.result.events.length > 3), 'every bout is fought and settled', JSON.stringify(bouts.map(b => [b.i, b.settled, b.result?.method])));
+  const mb = bouts.find(b => b.i === 2), mr = mb.result, wonA = mr.winner === 0, c1 = (await call('GET', '/api/citizens/fight_fan')).json.coins;
+  ok(c1 - c0 === (wonA ? Math.floor(1000 * main.odds.a.pays) : 0) - 1000, 'the fan is paid at the odds if their fighter won, and loses the stake if not', JSON.stringify({ c0, c1, wonA, pays: main.odds.a.pays }));
+  const fc1 = { one: (await call('GET', '/api/citizens/fighter_one')).json.coins, two: (await call('GET', '/api/citizens/fighter_two')).json.coins };
+  const winner = (wonA ? mb.a : mb.b).handle, gain = h => fc1[h === 'fighter_one' ? 'one' : 'two'] - fc0[h === 'fighter_one' ? 'one' : 'two'];
+  ok(gain(winner) === 5000 && gain(winner === 'fighter_one' ? 'fighter_two' : 'fighter_one') === 1200, 'the winner gets the 5,000 purse, the loser 1,200 show money', JSON.stringify({ winner, fc0, fc1 }));
+  const rec = (await pool.query("select handle, wins, losses, rating from fighters where handle in ('fighter_one', 'fighter_two') order by handle")).rows;
+  ok(rec.length === 2 && rec.find(r => r.handle === winner).wins === 1 && rec.find(r => r.handle === winner).rating > 1000 && rec.find(r => r.handle !== winner).rating < 1000, 'records and ratings update', JSON.stringify(rec));
+  ok((await pool.query("select 1 from events where kind = 'fight' and text like '%Main event%' limit 1")).rowCount > 0, 'the Colony Log reports the results');
+  fi = (await call('GET', '/api/fight', undefined, FAN.P)).json; ok(fi.last.length >= 1 && fi.top.length >= 2, 'the Fight Night tab shows the last results and the top fighters', JSON.stringify(fi.last));
 }
 ok((await call('POST', '/api/admin/reset', { confirm: 'nope' })).status === 400, 'reset needs the word RESET');
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' }, { auth: false })).status === 401, 'only the developer can reset');

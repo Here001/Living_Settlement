@@ -24,6 +24,7 @@ import { GameTables } from './gametables.js';
 import { Earn } from './earn.js';
 import { ColonyEvents } from './colonyevents.js';
 import { Races } from './races.js';
+import { Fights } from './fights.js';
 import { Actions } from './actions.js';
 import { Guide } from './guide.js';
 import { Push } from './push.js';
@@ -49,7 +50,7 @@ process.on('uncaughtException', e => { console.error('uncaught exception:', e); 
 
 const bus = createBus();
 const world = new World(bus);
-const races = new Races(world); world.races = races;
+const races = new Races(world); world.races = races; const fights = new Fights(world); world.fights = fights;
 const lottery = new Lottery(world); world.lottery = lottery;
 const economy = new Economy(world); world.economy = economy;
 world.housing = new Housing(world);
@@ -133,6 +134,8 @@ app.get('/api/citizens/:handle', limit, send(async req => {
   return c;
 }));
 // ---------- creature races ----------
+app.get('/api/fight', limit, send(async req => fights.info((await playerFrom(req))?.id)));
+if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/fight-soon', admin, send(req => fights.testSoon((req.body || {}).in, (req.body || {}).gap)));
 app.get('/api/race', limit, send(async req => races.info((await playerFrom(req))?.id, typeof req.query.track === 'string' ? req.query.track : null)));
 // Test servers only (ALLOW_TEST_ROUTES=1, never set on the live colony): run the daily payday on demand.
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/election-end', admin, send(async () => { const { weekOf, weekStart } = await import('./leaderboards.js'); const win = await world.elections.tally(weekStart(weekOf() + 1) + 1000); world.elections.testShift = 1; world.elections.cache.t = 0; return { winner: win?.handle || null }; }));
@@ -343,7 +346,8 @@ setInterval(tryLead, 10000);
 setInterval(drainLoop, 1000);
 let ticking = false; // never start a clock tick while the last one is still running (a slow database would pile them up)
 setInterval(async () => { if (!isLeader || ticking) return; ticking = true; try { await world.tick(); } catch (e) { console.error('tick failed:', e.message); } finally { ticking = false; } }, GAME_MIN_MS);
-setInterval(() => { if (isLeader) races.tick().catch(e => console.error('races:', e.message)); }, 2000); // announce, start and settle races
+setInterval(() => { if (isLeader) races.tick().catch(e => console.error('races:', e.message)); }, 2000);
+setInterval(() => { if (isLeader) fights.tick().catch(e => console.error('fights:', e.message)); }, 2000); // set the card, ring the bells, settle the bouts // announce, start and settle races
 setInterval(() => { if (isLeader) lottery.tick().catch(e => console.error('lottery:', e.message)); }, 2000); // announce and draw the lottery
 
 await migrate();

@@ -201,6 +201,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/me/notices', limit, send(async req => world.actions.notices((await me(req)).id)));
   r.post('/me/notices/:id/seen', limit, send(async req => world.actions.seenNotice((await me(req)).id, req.params.id)));
   r.get('/me/crime', limit, send(async req => world.actions.crimeInfo((await me(req)).id, req.query.target)));
+  r.post('/me/bail', limit, send(async req => world.actions.bail((await me(req)).id)));
   r.post('/me/crime', limit, send(async req => { const b = req.body || {}; return world.actions.crime((await me(req)).id, { kind: b.kind, target: b.target }); }));
   r.get('/me/places', limit, send(async req => world.actions.places((await me(req)).id)));
   // Every trip starts from where the colonist really is: the phone sends it with the request.
@@ -213,6 +214,7 @@ export function playersRouter({ limit, send, admin, world }) {
   // The Bank, cars, moving home, and owning buildings.
   // Private chats between verified colonists, and who's online.
   r.get('/online', limit, send(async req => world.chat.online(60, (await playerFrom(req))?.id || null)));
+  r.get('/friends', limit, send(async req => world.chat.friendsOf((await me(req)).id)));
   r.get('/blocks', limit, send(async req => world.chat.blocks((await me(req)).id)));
   r.post('/blocks/:handle', limit, send(async req => world.chat.block((await me(req)).id, req.params.handle)));
   r.delete('/blocks/:handle', limit, send(async req => world.chat.unblock((await me(req)).id, req.params.handle)));
@@ -280,6 +282,9 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/offers', limit, send(async req => H().makeOffer((await me(req)).id, bd(req))));
   r.post('/me/offers/:id', limit, send(async req => H().answer((await me(req)).id, req.params.id, bd(req))));
   r.post('/me/lottery', limit, send(async req => world.lottery.buy((await me(req)).id, (req.body || {}).count, world.blockedReason?.bind(world))));
+  // Fight Night: sign up to fight (until the card is set), and one bet per bout before its bell.
+  r.post('/me/fight/signup', limit, send(async req => world.fights.signup((await me(req)).id, (req.body || {}).on !== false, world.blockedReason?.bind(world))));
+  r.post('/me/fight/bet', limit, send(async req => { const b = req.body || {}; return world.fights.bet((await me(req)).id, b.bout, String(b.side || ''), b.amount, world.blockedReason?.bind(world)); }));
   // Creature races: one bet per race, before the gates close.
   r.post('/me/race/bet', limit, send(async req => {
     const p = await me(req);
@@ -328,9 +333,10 @@ export function playersRouter({ limit, send, admin, world }) {
     switch (String(b.action || '')) {
       case 'create': return T.create(p.id, { buildingId: b.buildingId, game: String(b.game || ''), stake: b.stake, seats: b.seats, quick: !!b.quick, street: !!b.street, computer: !!b.computer });
       case 'join': return T.join(p.id, b.id);
+      case 'invite': return T.invite(p.id, b.id, b.handles);
       case 'leave': return T.leave(p.id);
       case 'move': return T.move(p.id, b.id, b.move && typeof b.move === 'object' ? b.move : {});
-      default: throw new HttpError(400, 'Create, join, leave or move.');
+      default: throw new HttpError(400, 'Create, join, invite, leave or move.');
     } })));
   r.post('/me/casino/hilo', limit, send(req => tableMove(req, (p, b) => world.tables.hilo(p.id, String(b.action || ''), b.bet))));
   r.post('/me/casino/mines', limit, send(req => tableMove(req, (p, b) => world.tables.mines(p.id, String(b.action || ''), b.bet, b.mines, b.cell))));

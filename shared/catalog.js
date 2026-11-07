@@ -406,6 +406,7 @@ Object.assign(BUILDING_TYPES, {
 
   // ---- big venues ----
   grandracetrack:{ name:'Grand racecourse', as:'racetrack', cat:'parks', sub:'sports', size:[9,5], style:'racetrack', grand:true, colors:{grass:'#7DB656', dirt:'#C9A06A', stand:'#2F4A7A'}, work:{title:'Creature keeper', slots:20, salary:28}, leisure:true, visitors:600, outdoor:true, cost:40000 },
+  colosseum:   { name:'Colosseum', note:'home of Fight Night', cat:'parks', sub:'sports', size:[10,9], style:'colosseum', colors:{wall:'#D9C7A3', roof:'#B9A27A', trim:'#8A2A22', sand:'#E3C88E'}, work:{title:'Fight promoter', slots:80, salary:30}, leisure:true, visitors:5000, cost:90000 },
   bigstadium:  { name:'Stadium', cat:'parks', sub:'sports', size:[12,10], style:'arena', colors:{wall:'#E8E6E0', roof:'#F4F4F0', trim:'#2F4A7A', seat:'#C8382E', seat2:'#2F4A7A'}, work:{title:'Groundskeeper', slots:160, salary:28}, leisure:true, visitors:9000, cost:110000 },
 });
 for (const t of Object.values(BUILDING_TYPES)) if (t.style === 'fence') t.sub = 'fences';

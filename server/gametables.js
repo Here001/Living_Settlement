@@ -10,7 +10,8 @@ import { track } from './stats.js';
 import { treasuryAdd } from './races.js';
 import { bump } from './achievements.js';
 import * as R from '../shared/rules.js';
-import { kindOf } from '../shared/catalog.js';
+import { kindOf, BUILDING_TYPES } from '../shared/catalog.js';
+const BUILDING_NAME = type => BUILDING_TYPES[type]?.name || 'Game House';
 import { TABLE_GAMES, ENGINES, RAKE, TURN_MS, MAX_STAKE, tableView, potOf } from '../shared/boardgames.js';
 
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -36,7 +37,7 @@ export class GameTables {
     await this.sweep(); // settle anything that's timed out first
     const rows = (await pool.query(`select * from game_tables where building_id = $1 and game = $2 and status in ('waiting', 'playing') order by status desc, created_at desc limit 20`, [String(bid || ''), game])).rows;
     const mine = c.table_id ? (await pool.query('select * from game_tables where id = $1', [c.table_id])).rows[0] : null;
-    return { tables: rows.map(t => this.out(t, id)), mine: mine ? this.out(mine, id) : null, maxStake: MAX_STAKE, rake: RAKE, turnMs: TURN_MS };
+    return { tables: rows.map(t => this.out(t, id)), mine: mine ? this.out(mine, id) : null, invites: await this.invites(id), maxStake: MAX_STAKE, rake: RAKE, turnMs: TURN_MS };
   }
   async mine(id) {
     const c = (await pool.query('select table_id from citizens where id = $1', [id])).rows[0]; if (!c?.table_id) return { table: null };
@@ -92,6 +93,35 @@ export class GameTables {
       if (t.players.length === t.seats) await this.start(ch, t);
       return this.out((await ch.q('select * from game_tables where id = $1', [t.id])).rows[0], id);
     });
+  }
+  // Invite friends to the table you've opened: they get a notice (and a phone notification), and the invite shows in
+  // their Game House (or Casino) lobby with a Join button until the table starts or closes.
+  async invite(id, tableId, handles) {
+    const friends = new Map(((await this.world.chat?.friendsOf(id)) || []).map(f => [f.h.toLowerCase(), f]));
+    const want = [...new Set((Array.isArray(handles) ? handles : []).map(h => R.cleanHandle(String(h || '')).toLowerCase()).filter(Boolean))].slice(0, 10);
+    if (!want.length) throw new HttpError(400, 'Pick at least one friend to invite.');
+    const ok = want.filter(h => friends.has(h)); if (!ok.length) throw new HttpError(403, 'You can only invite friends (people whose message request you accepted, or who accepted yours).');
+    return this.world.change(async ch => {
+      const t = (await ch.q('select * from game_tables where id = $1 for update', [String(tableId || '')])).rows[0];
+      if (!t || t.status !== 'waiting') throw new HttpError(409, 'That table has already started or closed.');
+      if (!t.players.some(p => p.id === id)) throw new HttpError(403, "You're not at that table.");
+      if (t.opts?.computer) throw new HttpError(409, 'That game is against the computer.');
+      const me = t.players.find(p => p.id === id), G = TABLE_GAMES[t.game], b = (await ch.q('select name, type from buildings where id = $1', [t.building_id])).rows[0];
+      const invited = [...new Set([...(t.opts?.invited || []), ...ok.map(h => friends.get(h).h)])].slice(0, 20);
+      await ch.q('update game_tables set opts = $2 where id = $1', [t.id, JSON.stringify({ ...(t.opts || {}), invited })]);
+      const where = b?.name || (G.where === 'casino' ? 'the Casino' : 'the Game House');
+      for (const h of ok) { const f = friends.get(h);
+        await this.world.actions?.notify(ch, f.id, 'invite', `${G.icon} @${me.handle} invited you to play ${G.name} at ${where}${t.stake ? ` for ${fmt(t.stake)} coins` : ' (a friendly game)'}. Open any ${G.where === 'casino' ? 'Casino' : 'Game House'} to join.`);
+        ch.pushes.push([[f.id], { kind: 'invite', title: `${G.icon} Game invite from @${me.handle}`, body: `${G.name}${t.stake ? ` for ${fmt(t.stake)} coins` : ', friendly'}. Tap to join.`, tag: 'table-' + t.id, url: '/?table=' + encodeURIComponent(t.id) }]); }
+      return { ok: true, invited: ok.map(h => friends.get(h).h), table: this.out({ ...t, opts: { ...(t.opts || {}), invited } }, id) };
+    });
+  }
+  // Open tables you've been invited to.
+  async invites(id) {
+    const c = (await pool.query('select handle from citizens where id = $1', [id])).rows[0]; if (!c) return [];
+    const rows = (await pool.query(`select t.*, b.name bname, b.type btype, b.x bx, b.y by from game_tables t left join buildings b on b.id = t.building_id
+      where t.status = 'waiting' and t.opts->'invited' ? $1 order by t.created_at desc limit 10`, [c.handle])).rows;
+    return rows.filter(t => !t.players.some(p => p.id === id)).map(t => ({ ...this.out(t, id), from: t.players[0]?.handle, place: t.bname || BUILDING_NAME(t.btype), x: t.bx, y: t.by }));
   }
   async leave(id) {
     return this.world.change(async ch => {

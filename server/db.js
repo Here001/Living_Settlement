@@ -270,7 +270,19 @@ const MIGRATIONS = [
    create index if not exists offers_open on offers (expires_at) where status in ('open', 'countered');`,
   // v51: coins paid into or out of the treasury by one player's own actions (trips, shifts, gigs…), which don't wait for
   // the colony-wide lock; the next colony-wide change (or the clock, within seconds) adds them to the treasury
-  `create table if not exists treasury_pending (id bigserial primary key, delta numeric not null, t bigint not null);`
+  `create table if not exists treasury_pending (id bigserial primary key, delta numeric not null, t bigint not null);`,
+  // v52: Fight Night at the Colosseum: the nights, their bouts, who signed up, the bets, and each fighter's record
+  `create table if not exists fight_nights (n int primary key, start_at bigint not null, arena_id text, made boolean not null default false,
+     done boolean not null default false, gap bigint, fast boolean not null default false);
+   create table if not exists fight_bouts (n int not null, i int not null, start_at bigint not null, a jsonb not null, b jsonb not null, odds jsonb not null,
+     result jsonb, settled boolean not null default false, primary key (n, i));
+   create table if not exists fight_signups (n int not null, citizen_id text not null, t bigint not null, primary key (n, citizen_id));
+   create table if not exists fight_bets (id text primary key, n int not null, i int not null, citizen_id text not null, handle text not null, side text not null,
+     amount int not null, pays numeric not null, payout int, t bigint not null);
+   create index if not exists fight_bets_bout on fight_bets (n, i);
+   create index if not exists fight_bets_who on fight_bets (citizen_id, n);
+   create table if not exists fighters (citizen_id text primary key, handle text not null, wins int not null default 0, losses int not null default 0,
+     kos int not null default 0, rating int not null default 1000, purses bigint not null default 0);`
 ];
 
 export async function migrate() {

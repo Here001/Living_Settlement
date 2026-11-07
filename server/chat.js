@@ -80,8 +80,16 @@ export class Chat {
   async friends(me, o) {
     const pair = pairOf(me, o), first = (await pool.query('select sender_id from dms where pair = $1 order by t asc limit 1', [pair])).rows[0];
     const st = (await pool.query('select citizen_id from chat_state where accepted and ((citizen_id = $1 and key = $2) or (citizen_id = $3 and key = $4))', [me, 'dm:' + o, o, 'dm:' + me])).rows;
-    if (!st.length) return false; if (!first) return true; // they accepted you, or you them: either way you're friends
-    const accepter = first.sender_id === me ? o : me; return st.some(r => r.citizen_id === accepter);
+    return st.length > 0 && !!first; // they accepted your request, or you theirs: either way you're friends
+  }
+  // Everyone you're friends with (a message request one of you accepted from the other), and who of them is online.
+  async friendsOf(me) {
+    const rows = (await pool.query(`select distinct fid from (
+        select substr(key, 4) fid from chat_state where citizen_id = $1 and accepted and key like 'dm:%'
+        union select citizen_id fid from chat_state where key = 'dm:' || $1 and accepted) f
+      where exists (select 1 from dms where (sender_id = $1 and recipient_id = f.fid) or (sender_id = f.fid and recipient_id = $1))`, [me])).rows.map(r => r.fid);
+    if (!rows.length) return [];
+    return (await pool.query(`select id, handle, display_name, gender, last_seen from citizens where id = any($1) and id not in (select blocked_id from blocks where blocker_id = $2) order by last_seen desc nulls last`, [rows, me])).rows.map(r => ({ ...person(r), online: isOnline(r.last_seen) }));
   }
   async dmFee(me, o) { const f = await this.friends(me, o); return { fee: f ? 0 : R.MESSAGE_FEE, friends: f }; }
   async charge(me, fee) {

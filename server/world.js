@@ -113,6 +113,15 @@ class Change {
   // ---- the moves a citizen can make ----
   // Rent comes out of wages. A resident without a job lives rent-free until they find one,
   // so nobody's balance goes negative and the treasury never books money that wasn't paid.
+  // A fine or a bill: from cash on hand first, then from savings in the bank, and anything still owed leaves the
+  // wallet below zero (wages pay it back day by day). Doesn't save the colonist: the caller does.
+  async takeFrom(c, amount) {
+    amount = Math.max(0, Math.round(Number(amount) || 0)); this.coins(c);
+    const bank = Number((await this.q('select bank from citizens where id = $1', [c.id])).rows[0]?.bank || 0);
+    const fromCash = Math.min(Math.max(0, c.coins_base), amount), fromBank = Math.min(bank, amount - fromCash), debt = amount - fromCash - fromBank;
+    c.coins_base -= fromCash + debt; if (fromBank) { await this.q('update citizens set bank = bank - $2 where id = $1', [c.id, fromBank]); c.bank = bank - fromBank; }
+    return { fromCash, fromBank, debt, how: [fromCash ? `${fromCash.toLocaleString('en-US')} from your cash` : '', fromBank ? `${fromBank.toLocaleString('en-US')} from your bank savings` : '', debt ? `${debt.toLocaleString('en-US')} you still owe (your wallet is in the minus)` : ''].filter(Boolean).join(', ') };
+  }
   // A colonist living in a home they own pays no rent (only claimed players can own homes, so only they need the check).
   async rentFor(c, homeType, home) {
     const rent = homeType ? R.capacities(homeType).rent || 0 : 0; if (!rent || !c.pass_hash) return rent;
@@ -946,7 +955,7 @@ export class World {
   // The Instagram connection and its settings are kept.
   async resetColony() {
     await this.change(async ch => {
-      await ch.q(`truncate buildings, roads, water, vehicles, disasters, citizens, events, comments, messages, claims, sessions, draft`);
+      await ch.q(`truncate buildings, roads, water, vehicles, disasters, citizens, events, comments, messages, claims, sessions, draft, fight_nights, fight_bouts, fight_signups, fight_bets, fighters`);
       await ch.q('delete from meta where id = 1');
       ch.meta = null; ch.extraOps.push({ op: 'reset' });
     }, { allowUnfounded: true });

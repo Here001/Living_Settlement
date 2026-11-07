@@ -313,7 +313,7 @@ export class Economy {
 
   // ---------- once a game week: bills ----------
   // Every 7 game days: each car's upkeep, and 2% of the price of every building a colonist owns. Paid from cash first,
-  // then savings; what can't be paid is let go (with a note). Everyone billed gets a notice and a phone notification.
+  // then savings; anything still owed puts the wallet in the minus (wages pay it back). Everyone billed gets a notice and a phone notification.
   async weeklyBills(ch, force = false) {
     const week = Math.floor(ch.today / 7);
     if (!force) { if (ch.meta.billsWeek == null) { ch.meta.billsWeek = week; return null; } if (ch.meta.billsWeek >= week) return null; }
@@ -329,12 +329,12 @@ export class Economy {
       for (const c of (await ch.q('select id, coins_base, coins_day, net, bank, cars from citizens where id = any($1) for update', [ids.slice(i, i + 500)])).rows) {
         const id = c.id, cars = Array.isArray(c.cars) ? c.cars : [], carFee = cars.reduce((s, x) => s + (CAR_MODELS[x.m]?.upkeep || 0), 0), propFee = byOwner.get(id) || 0, due = carFee + propFee;
         if (!due) continue;
-        ch.coins(c); const fromCash = Math.min(Math.max(0, c.coins_base), due), fromBank = Math.min(Number(c.bank || 0), due - fromCash), paid = fromCash + fromBank;
-        up.id.push(id); up.base.push(c.coins_base - fromCash); up.bank.push(fromBank); // (not touched: coins don't show on the map)
+        ch.coins(c); const fromCash = Math.min(Math.max(0, c.coins_base), due), fromBank = Math.min(Number(c.bank || 0), due - fromCash), debt = due - fromCash - fromBank, paid = due;
+        up.id.push(id); up.base.push(c.coins_base - fromCash - debt); up.bank.push(fromBank); // what cash and savings can't cover puts the wallet in the minus (not touched: coins don't show on the map)
         treasuryAdd(ch, paid); total += paid; billed++; if (carFee) track(ch, 'bills:car', Math.min(paid, carFee), id); if (paid > carFee) track(ch, 'bills:property', paid - carFee, id);
         const parts = [carFee ? `🚗 car upkeep ${fmt(carFee)}` : '', propFee ? `🏠 property upkeep ${fmt(propFee)}` : ''].filter(Boolean).join(' + ');
-        const how = fromBank ? (fromCash ? `${fmt(fromCash)} from your cash and ${fmt(fromBank)} from the bank` : 'from the bank') : 'from your cash';
-        notes.push([id, 'bills', paid < due ? `🧾 Weekly bills: ${parts} = ${fmt(due)} coins. You could only pay ${fmt(paid)} (${how}).` : `🧾 Weekly bills: ${parts} = ${fmt(due)} coins, paid ${how}.`]);
+        const how = [fromCash ? `${fmt(fromCash)} from your cash` : '', fromBank ? `${fmt(fromBank)} from the bank` : '', debt ? `${fmt(debt)} owed: your wallet is in the minus until your wages pay it back` : ''].filter(Boolean).join(', ');
+        notes.push([id, 'bills', `🧾 Weekly bills: ${parts} = ${fmt(due)} coins: ${how}.`]);
       }
       if (up.id.length) await ch.q(`update citizens c set coins_base = u.base, coins_day = $4, bank = c.bank - u.bank
         from unnest($1::text[], $2::numeric[], $3::numeric[]) u(id, base, bank) where c.id = u.id`, [up.id, up.base, up.bank, ch.today]);

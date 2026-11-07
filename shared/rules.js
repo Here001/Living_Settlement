@@ -91,7 +91,8 @@ export const netOf = (salary, rent) => salary - rent;
 
 // Balances aren't rewritten every day. Each one is stored as (amount, day, change per day)
 // and worked out on demand. That makes paydays free no matter how many citizens there are.
-export const balanceOn = (base, fromDay, perDay, today) => Math.max(0, Number(base) + Math.max(0, today - fromDay) * perDay);
+// A wallet in the minus (a fine or bill bigger than cash and savings) stays in the minus until wages pay it back.
+export const balanceOn = (base, fromDay, perDay, today) => { const v = Number(base) + Math.max(0, today - fromDay) * perDay; return Number(base) < 0 ? v : Math.max(0, v); };
 export const treasuryOn = (meta, today) => meta ? balanceOn(meta.treasuryBase ?? START_FUNDS, meta.treasuryDay ?? 0, meta.income ?? GRANT, today) : 0;
 
 export function canPlace(type, x, y, occ, roads, ignoreId) {
@@ -293,3 +294,6 @@ export function upgradeQuote(type, toLv) {
 }
 // Paying the builders to work through the night: 3% of the job's cost for every game hour still to go (at least 20 coins an hour).
 export function rushCost(cost, msLeft) { const hours = Math.max(1, Math.ceil(Math.max(0, msLeft) / (60 * GAME_MIN_MS))); return Math.round(hours * Math.max(20, cost * 0.03) / 10) * 10; }
+// Bail: pay to walk out of jail early. 150 coins for every minute left (at least 300), from cash and then savings.
+export const BAIL_PER_MIN = 150, BAIL_MIN = 300;
+export const bailCost = msLeft => Math.max(BAIL_MIN, Math.ceil(Math.max(0, msLeft) / 60000) * BAIL_PER_MIN);

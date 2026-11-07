@@ -31,6 +31,20 @@ export class Actions {
     if (until > Date.now()) { const m = Math.max(1, Math.ceil((until - Date.now()) / 60000)); return `You're in jail for ${m} more minute${m === 1 ? '' : 's'}.`; }
     return null;
   }
+  // Bail: out of jail now, for a price that falls as the time left runs down. Paid from cash, then savings; unlike a fine
+  // it can't be owed, so you need the coins.
+  async bail(id) {
+    return this.world.change(async ch => {
+      const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
+      const left = Number(c.jailed_until || 0) - Date.now(); if (left <= 0) throw new HttpError(409, "You're not in jail.");
+      const cost = R.bailCost(left); ch.coins(c); const bank = Number(c.bank || 0);
+      if (Math.max(0, c.coins_base) + bank < cost) throw new HttpError(400, `Bail is ${fmt(cost)} coins, and you have ${fmt(Math.max(0, c.coins_base))} on you${bank ? ` and ${fmt(bank)} in the bank` : ''}.`);
+      const paid = await ch.takeFrom(c, cost); treasuryAdd(ch, cost); track(ch, 'crime:bail', cost, c.id); ch.touch(c); await ch.saveCitizen(c);
+      await ch.q('update citizens set jailed_until = null where id = $1', [c.id]); c.jailed_until = null; await this.setVisit(ch, c, null);
+      await ch.event(`🔓 @${c.handle} paid ${fmt(cost)} coins bail and walked out of jail.`, 'crime');
+      return { ok: true, cost, paid, coins: c.coins_base };
+    });
+  }
   async load(ch, id) {
     const c = (await ch.q('select c.*, h.x hx, h.y hy from citizens c left join buildings h on h.id = c.home_id where c.id = $1 for update of c', [id])).rows[0];
     if (!c) throw new HttpError(404, 'No such citizen.');
@@ -179,8 +193,10 @@ export class Actions {
         else { treasuryAdd(ch, -loot); await ch.event(kind === 'scam' ? `🎭 A tourist was conned out of ${fmt(loot)} coins. The con artist vanished.` : kind === 'atm' ? `🏧 The ATM at ${nameOf(shop)} was hacked for ${fmt(loot)} coins!` : `🚨 ${nameOf(shop)} was robbed of ${fmt(loot)} coins! The thief got away.`, 'crime'); }
         return { ok: true, caught: false, loot, coins: c.coins_base, chance, band: odds.band, police: odds.dist };
       }
-      // Caught: a fine (twice what they tried to take, at least 250, never more than they have), and jail if the colony has one.
-      const fine = Math.min(c.coins_base, Math.max(250, loot * 2)); c.coins_base -= fine; treasuryAdd(ch, fine); track(ch, 'crime:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
+      // Caught: a fine (twice what they tried to take, at least 250), and jail if the colony has one. The fine comes from
+      // their cash, then their savings, and whatever's left puts their wallet in the minus.
+      const fine = Math.max(250, loot * 2), paid = await ch.takeFrom(c, fine); treasuryAdd(ch, fine); track(ch, 'crime:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
+      await this.notify(ch, c.id, 'crime', `🚓 You were caught and fined ${fmt(fine)} coins: ${paid.how}.`);
       const jail = (await ch.q(`select * from buildings where type = any('${pgList('jail')}') and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [px, py])).rows[0];
       const what = victim ? `pickpocketing @${victim.handle}` : kind === 'scam' ? 'conning a tourist' : kind === 'atm' ? `hacking the ATM at ${nameOf(shop)}` : `robbing ${nameOf(shop)}`;
       if (victim) await this.notify(ch, victim.id, 'pickpocket', `🚓 @${c.handle} picked your pocket but got caught by the police. Your ${fmt(loot)} coins have been refunded.`);
@@ -188,7 +204,7 @@ export class Actions {
         const until = now + JAIL_TIME; await ch.q('update citizens set jailed_until = $2 where id = $1', [c.id, until]); await bump(ch, c.id, { jailed: 1 }); await this.setVisit(ch, c, jail, until);
         await ch.event(`🚓 @${c.handle} was caught ${what}, fined ${fmt(fine)} coins and locked up for ${JAIL_TIME / 60000} minutes.`, 'crime');
       } else await ch.event(`🚓 @${c.handle} was caught ${what} and fined ${fmt(fine)} coins.`, 'crime');
-      return { ok: true, caught: true, fine, jailed: !!jail, jailFor: jail ? JAIL_TIME : 0, coins: c.coins_base, chance, band: odds.band, police: odds.dist };
+      return { ok: true, caught: true, fine, paid, jailed: !!jail, jailFor: jail ? JAIL_TIME : 0, coins: c.coins_base, chance, band: odds.band, police: odds.dist };
     });
   }
 
@@ -199,7 +215,7 @@ export class Actions {
     const rows = (await pool.query(`select id, type, name, x, y from buildings where type = any($3) and done and not ruin
       order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 15`, [c.hx, c.hy, VISITABLE])).rows;
     const v = c.visit_id && Number(c.visit_until) > Date.now() ? (/^spot:/.test(c.visit_id) ? { id: c.visit_id, type: 'spot', name: 'a spot you picked on the map' } : (await pool.query('select id, type, name from buildings where id = $1', [c.visit_id])).rows[0]) : null;
-    return { housed: true, jailed: Number(c.jailed_until || 0) > Date.now(), visiting: v ? { id: v.id, name: nameOf(v), until: Number(c.visit_until) } : null,
+    return { housed: true, jailed: Number(c.jailed_until || 0) > Date.now(), jailedFor: Math.max(0, Number(c.jailed_until || 0) - Date.now()), visiting: v ? { id: v.id, name: nameOf(v), until: Number(c.visit_until) } : null,
       places: rows.map(b => ({ id: b.id, name: nameOf(b), type: b.type, dist: Math.abs(b.x - c.hx) + Math.abs(b.y - c.hy) })) };
   }
   // Send the colonist to a place, or to a friend's home (by username). null ends the visit.

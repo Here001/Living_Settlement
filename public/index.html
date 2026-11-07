@@ -2563,10 +2563,10 @@ function responders(gm){ const out=[]; const now=Date.now()+skew;
 const WX_ICON={ sunny:'☀', cloudy:'☁', rain:'🌧', fog:'🌫', storm:'⛈' };
 let lastWx=null;
 function drawWeather(kind,gm){ const t=T_NOW/1000; ctx.setTransform(dpr,0,0,dpr,0,0);
-  if(kind==='cloudy'||kind==='rain'||kind==='storm'){ for(let i=0;i<7;i++){ const sx=((i*317+t*14)%(cw+600))-300, sy=((i*211)%(ch+200))-100; const g=ctx.createRadialGradient(sx,sy,0,sx,sy,220); g.addColorStop(0,'rgba(30,40,60,.13)'); g.addColorStop(1,'rgba(30,40,60,0)'); ctx.fillStyle=g; ctx.fillRect(sx-220,sy-220,440,440); } }
+  if(kind==='cloudy'||kind==='rain'||kind==='storm'){ for(let i=0,nc=Power.saver?2:MOBILE?4:7;i<nc;i++){ const sx=((i*317+t*14)%(cw+600))-300, sy=((i*211)%(ch+200))-100; const g=ctx.createRadialGradient(sx,sy,0,sx,sy,220); g.addColorStop(0,'rgba(30,40,60,.13)'); g.addColorStop(1,'rgba(30,40,60,0)'); ctx.fillStyle=g; ctx.fillRect(sx-220,sy-220,440,440); } }
   if(kind==='cloudy'){ ctx.fillStyle='rgba(120,130,140,.08)'; ctx.fillRect(0,0,cw,ch); }
   if(kind==='rain'||kind==='storm'){ ctx.fillStyle=kind==='storm'?'rgba(25,30,50,.30)':'rgba(50,60,80,.16)'; ctx.fillRect(0,0,cw,ch);
-    const n=kind==='storm'?320:170; ctx.strokeStyle=kind==='storm'?'rgba(210,225,240,.55)':'rgba(210,225,240,.45)'; ctx.lineWidth=1; ctx.beginPath();
+    const n=Math.round((kind==='storm'?320:170)*Math.min(1,cw*ch/(1280*800)+0.25)*(Power.saver?0.5:1)); // as many drops for the screen's size ctx.strokeStyle=kind==='storm'?'rgba(210,225,240,.55)':'rgba(210,225,240,.45)'; ctx.lineWidth=1; ctx.beginPath();
     for(let i=0;i<n;i++){ const sp=700+(i%7)*60, x=((i*97.3)%cw+t*120)%cw, y=((i*53.7)%ch+t*sp)%ch; ctx.moveTo(x,y); ctx.lineTo(x-3,y+12); } ctx.stroke();
     if(kind==='storm'){ const k=Math.floor(T_NOW/6000); if(hash('lt'+k)%3===0 && T_NOW%6000<140){ ctx.fillStyle='rgba(240,245,255,.55)'; ctx.fillRect(0,0,cw,ch); } } }
   if(kind==='fog'){ const g=ctx.createLinearGradient(0,0,0,ch); g.addColorStop(0,'rgba(236,236,232,.62)'); g.addColorStop(1,'rgba(236,236,232,.32)'); ctx.fillStyle=g; ctx.fillRect(0,0,cw,ch); }
@@ -3062,18 +3062,18 @@ function hiddenPeople(items){ const out=[], grid=new Map(), C=128;
       if(hit) out.push(it); } }
   return out; }
 // The loop always books the next frame first, so one bad drawing call can never freeze the city.
-let frameErrors=0, lastDraw=0, lastInput=0;
+let frameErrors=0, lastDraw=0, lastInput=0, drawnFrames=0, drawMs=0;
 // While nobody is touching the map, ~30 frames a second is plenty for people walking about, and halves the work
 // (and the battery). Any touch, drag, pinch, scroll or key goes straight back to full speed for a few seconds.
 for(const ev of ['pointerdown','pointermove','wheel','keydown','touchstart']) addEventListener(ev, ()=>{ lastInput=performance.now(); }, {passive:true, capture:true});
 function frame(ts){ requestAnimationFrame(frame);
   const gap=Power.gap(ts); if(gap&&ts-lastDraw<gap-4) return;
-  lastDraw=ts;
+  lastDraw=ts; drawnFrames++;
   const t0=performance.now();
   try{ drawFrame(ts); }
   catch(e){ if(frameErrors++<3) console.error('Drawing error (the city keeps running):', e); try{ ctx.restore(); ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over'; }catch(e2){} }
   finally { planBudgetEnd=Infinity; }
-  Quality.sample(performance.now()-t0, ts); }
+  drawMs+=performance.now()-t0; Quality.sample(performance.now()-t0, ts); }
 function drawFrame(ts){
   T_NOW=ts; windowQuads=[]; lights=[]; edgePan(); sprBegin(); sprDropOld(); BSPR.budgetEnd=performance.now()+(Quality.level>=2?4:7); BSPR.hits=BSPR.made=BSPR.live=0; BSPR.frame++;
   const gm=gmNow(); DARK=darkness(gm); LAMPS=Math.min(1,Math.max(0,(DARK-0.2)/0.25)); // on from about 7pm, off by about 5:30am
@@ -3107,12 +3107,14 @@ function drawFrame(ts){
     { const CM=crowdMax(); if(crowd.length>CM) crowd=crowd.map(c=>[dist(c),c]).sort((a,b)=>a[0]-b[0]).slice(0,CM).map(x=>x[1]); }
     if(follow&&!crowd.some(c=>c.id===follow)&&S.citizens.has(follow)) crowd.push(S.citizens.get(follow)); }
   planBudgetEnd=performance.now()+6; // up to 6 ms a frame for working out new plans
-  if(cam.z>=0.45) for(const c of crowd){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible) items.push(st.car?{ k:vdepth(st.x,st.y), veh:{V:st.V,col:st.col,st,siren:!!st.siren,key:'c:'+c.id} }:{ k:vdepth(st.x,st.y), c, st }); }
+  // only what's actually on screen (plus a little margin) is drawn; the rest are only worked out
+  const onScr=(x,y,lift)=>{ const q=iso(x,y), sx=(q.x-cam.x)*cam.z+cw/2, sy=(q.y-cam.y)*cam.z+ch/2; return sx>-60&&sx<cw+60&&sy>-30&&sy<ch+(lift||60)*cam.z+60; };
+  if(cam.z>=0.45) for(const c of crowd){ const st=citizenAt(c,gm); if(!st) continue; states.set(c.id,st); if(st.visible&&(c.id===follow||onScr(st.x,st.y))) items.push(st.car?{ k:vdepth(st.x,st.y), veh:{V:st.V,col:st.col,st,siren:!!st.siren,key:'c:'+c.id} }:{ k:vdepth(st.x,st.y), c, st }); }
   // Traffic: ambient cars, buses and vans on busy roads, the developer's own vehicles, and crews answering disasters.
   vehicleHits=[]; airborne=[]; trafficBudgetEnd=performance.now()+(Quality.level>=2?3:5);
   if(cam.z>=0.45){
     for(const r of tileList(D.roads)){ const k=r.k, x=r.x, y=r.y; if(r.h%(cam.z<0.6?27:cam.z<0.8?14:9)!==0||x<tminX-9||x>tmaxX+9||y<tminY-9||y>tmaxY+9||!carOK(k)) continue; // a roamer can be up to 7 tiles from its street
-      const vt=ambientType(k), V=VEHICLE_TYPES[vt], st=roam('amb:'+k,x,y,gm,V,true); if(st) items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(k)%V.colors.length],st,key:'a:'+k} }); }
+      const vt=ambientType(k), V=VEHICLE_TYPES[vt], st=roam('amb:'+k,x,y,gm,V,true); if(st&&onScr(st.x,st.y)) items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(k)%V.colors.length],st,key:'a:'+k} }); }
     for(const v of D.vehicles.values()){ if(v.x<tminX-14||v.x>tmaxX+14||v.y<tminY-14||v.y>tmaxY+14) continue; const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car, st=V.mode==='water'?sailRoam(v.id,v.x,v.y,gm,V):V.mode==='air'?skyRoam(v.id,v.x,v.y,gm,V):roam(v.id,v.x,v.y,gm,V,false); if(!st) continue; if(V.mode==='air'){ airborne.push({V,st,col:V.colors[hash(v.id)%V.colors.length],id:v.id}); vehicleHits.push({id:v.id,st,V,alt:V.alt}); continue; }
       items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[hash(v.id)%V.colors.length],st,siren:v.type==='police'&&Math.floor(gm/LEG)%5===0,id:v.id,key:'v:'+v.id} }); vehicleHits.push({id:v.id,st,V}); }
     for(const w of tileList(D.water)){ if(w.h%97!==0||w.x<tminX-6||w.x>tmaxX+6||w.y<tminY-6||w.y>tmaxY+6) continue; const ids=['boat','sailboat','boat','ferry'], vt=ids[w.h%4], V=VEHICLE_TYPES[vt], st=sailRoam('aw:'+w.k,w.x,w.y,gm,V); if(st&&waterCands(w.x,w.y).length>=40) items.push({ k:vdepth(st.x,st.y), veh:{V,col:V.colors[w.h%V.colors.length],st,key:'w:'+w.k} }); } // boats out on the water
@@ -3135,17 +3137,21 @@ function drawFrame(ts){
   else if(hoverTile && tool.kind!=='pan'){ const [hx,hy]=hoverTile; poly([iso(hx,hy),iso(hx+1,hy),iso(hx+1,hy+1),iso(hx,hy+1)], tool.kind==='erase'?'rgba(184,67,58,.35)':'rgba(255,255,255,.35)', tool.kind==='erase'?'#B8433A':'#fff', 2); }
   if(S.meta){ const w0=weatherAt(S.meta,gm); if(w0==='storm') DARK=Math.max(DARK,0.45); else if(w0==='rain') DARK=Math.max(DARK,0.22); else if(w0==='fog') DARK=Math.max(DARK,0.15); }
   if(DARK>0.01){
-    if(lights.length>400){ const ctr=iso(worldToTileF(cam.x,cam.y).x,worldToTileF(cam.x,cam.y).y); lights.sort((a,b)=>Math.hypot(a.x-cam.x,a.y-cam.y)-Math.hypot(b.x-cam.x,b.y-cam.y)); lights.length=400; }
+    { // only glows that reach the screen, and at most a few hundred (fewer on a phone): each is a big see-through picture
+      const hw=cw/2/cam.z, hh=ch/2/cam.z, cap=Power.saver?80:MOBILE?160:400; let n=0;
+      for(const L of lights){ if(Math.abs(L.x-cam.x)-L.r<hw&&Math.abs(L.y-cam.y)-L.r<hh) lights[n++]=L; } lights.length=n;
+      if(lights.length>cap){ lights.sort((a,b)=>Math.hypot(a.x-cam.x,a.y-cam.y)-Math.hypot(b.x-cam.x,b.y-cam.y)); lights.length=cap; } }
     ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=`rgba(10,14,42,${0.8*DARK})`; ctx.fillRect(0,0,cw,ch);
     worldT();
-    for(const q of windowQuads) poly(q, `rgba(255,206,120,${0.92*DARK})`, false);
+    if(windowQuads.length){ ctx.fillStyle=`rgba(255,206,120,${0.92*DARK})`; const hw=cw/2/cam.z+20, hh=ch/2/cam.z+20; let n=0; ctx.beginPath(); // lit windows on screen, filled 48 at a time
+      for(const q of windowQuads){ const p=q[0]; if(Math.abs(p.x-cam.x)>hw||Math.abs(p.y-cam.y)>hh) continue; ctx.moveTo(p.x,p.y); for(let i=1;i<q.length;i++) ctx.lineTo(q[i].x,q[i].y); if(++n%48===0){ ctx.fill(); ctx.beginPath(); } } if(n%48) ctx.fill(); }
     ctx.globalCompositeOperation='lighter';
     for(const L of lights){ const a=0.36*DARK*(L.a||1); if(a<0.004) continue; ctx.globalAlpha=Math.min(1,a); ctx.drawImage(glowSprite(L.col),L.x-L.r,L.y-L.r,L.r*2,L.r*2); }
     ctx.globalAlpha=1;
     ctx.globalCompositeOperation='source-over';
   } else { const h=(((gm%1440)+1440)%1440)/60; if(h>16.5&&h<18){ ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=`rgba(255,140,60,${0.12*Math.sin((h-16.5)/1.5*Math.PI)})`; ctx.fillRect(0,0,cw,ch); worldT(); } }
   const wx=S.meta?weatherAt(S.meta,gm):'sunny'; if(wx!=='sunny') drawWeather(wx,gm); if(wx!==lastWx){ lastWx=wx; refreshHUD(); }
-  if(GRAIN&&Quality.grain){ ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=GRAIN; ctx.fillRect(0,0,cw,ch); worldT(); }
+  if(GRAIN&&Quality.grain&&!MOBILE){ /* the paper grain covers the whole screen every frame: computers only */ ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=GRAIN; ctx.fillRect(0,0,cw,ch); worldT(); }
   if(tool.kind==='water'||tool.kind==='drain'){ if(hoverTile){ const [hx,hy]=hoverTile, r=Math.floor((tool.size||1)/2); poly([iso(hx-r,hy-r),iso(hx-r+(tool.size||1),hy-r),iso(hx-r+(tool.size||1),hy-r+(tool.size||1)),iso(hx-r,hy-r+(tool.size||1))],'rgba(255,255,255,.25)','#fff',2); } }
   neonList.length=0;
   for(const b of D.buildings.values()){ if(b.done===false && cam.z>=0.6){ const t=T(b); const [w,d]=t.size; const p=iso(b.x+w/2,b.y+d/2); label(`Building ${Math.round(progressOf(b)*100)}%`, p.x, p.y-Math.min(120,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24))*Math.max(.3,progressOf(b))-18, selB&&selB.id===b.id); continue; }
@@ -6806,7 +6812,7 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
 let frameStats={}, lastVeh=[];
-window.__dbg={ look:(x,y,z)=>{ const q=iso(x,y); cam.x=q.x; cam.y=q.y; if(z) cam.z=z; follow=null; }, scr:(x,y)=>{ const q=iso(x,y); return {x:(q.x-cam.x)*cam.z+cw/2, y:(q.y-cam.y)*cam.z+ch/2}; }, wsState:()=>({ready:ws&&ws.readyState, quiet:Date.now()-lastMsgAt}), myTab:t=>openMyTab(t), tables:()=>Tables, snk:()=>SnookerUI, chats:()=>Chats, tab:t=>openTab(t), openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+window.__dbg={ perf:()=>({frames:drawnFrames,ms:Math.round(drawMs)}), look:(x,y,z)=>{ const q=iso(x,y); cam.x=q.x; cam.y=q.y; if(z) cam.z=z; follow=null; }, scr:(x,y)=>{ const q=iso(x,y); return {x:(q.x-cam.x)*cam.z+cw/2, y:(q.y-cam.y)*cam.z+ch/2}; }, wsState:()=>({ready:ws&&ws.readyState, quiet:Date.now()-lastMsgAt}), myTab:t=>openMyTab(t), tables:()=>Tables, snk:()=>SnookerUI, chats:()=>Chats, tab:t=>openTab(t), openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

@@ -444,3 +444,47 @@ export function makeCar(kind = 'car', color = '#c8382e') {
   g.userData.wheels = wheels; g.userData.len = len; return g;
 }
 export function makeCones() { const g = new THREE.Group(); for (const x of [-1.1, 0, 1.1]) { const c = new THREE.Mesh(GEO.cone, pmat('#f2994a')); c.scale.set(0.32, 0.8, 0.32); c.position.set(x, 0.4, 0); g.add(c); const s = new THREE.Mesh(GEO.cyl, pmat('#f4f4f0')); s.scale.set(0.22, 0.12, 0.22); s.position.set(x, 0.45, 0); g.add(s); } return g; }
+
+// ---------------- inside a shop (the robbery) ----------------
+// L: the level from shared/minigames.js (genStealth): a grid of floor, shelves (1) and the counter (2), in units of
+// `s` metres. The back and left walls stand full height; the front and right ones are cut away so you see in.
+export function buildShop(view, L, s = 1.6) {
+  const M = materials(view), B = {}; for (const k of Object.keys(M)) B[k] = new Bucket(); const r = rnd(L.seed || 1), W = L.W * s, H = L.H * s, wh = 3.4, w = col('#ffffff');
+  view.center.set(W / 2, 0, H / 2); view.span = Math.max(W, H) * 1.2;
+  // the floor: big tiles, and the street outside
+  B.paving.quad([0, 0.01, H], [W, 0.01, H], [W, 0.01, 0], [0, 0.01, 0], [0, 1, 0], [0, H / 3, W / 3, H / 3, W / 3, 0, 0, 0], col('#d8cfbf'));
+  B.asphalt.quad([-40, 0, H + 40], [W + 40, 0, H + 40], [W + 40, 0, -40], [-40, 0, -40], [0, 1, 0], [0, 10, 10, 10, 10, 0, 0, 0], col('#9a9a9a'));
+  // walls: the back and left in the shop's colours, with windows, posters and the back door; low walls at the front and right
+  const wallC = col(['#c8473d', '#2f7d63', '#2f4a7a', '#e2b13c', '#8e44ad'][L.seed % 5]);
+  B.plaster.box(-0.25, -0.25, W, 0, 0, wh, wallC, { su: 14, sv: 12.8 }); B.plaster.box(-0.25, 0, 0, H, 0, wh, col('#e8dfc9'), { su: 14, sv: 12.8 });
+  B.solid.box(0, H, W + 0.25, H + 0.25, 0, 0.45, col('#b0a48c')); B.solid.box(W, -0.25, W + 0.25, H, 0, 0.45, col('#9c917b'));
+  for (let x = 1.5; x < W - 2; x += 4.6) { B.glass.box(x, -0.1, x + 2.4, 0.02, 1.2, 2.6, col('#9cc3d9'), { su: 4, sv: 4 }); }
+  for (let z = 1.5; z < H - 3; z += 4) { B.paint.quad([0.03, 1.1, z + 1.6], [0.03, 1.1, z], [0.03, 2.4, z], [0.03, 2.4, z + 1.6], [1, 0, 0], [0, 0, 1, 0, 1, 1, 0, 1], col(['#f2c94c', '#e4572e', '#4a7bd9', '#3cc46a'][Math.floor(r() * 4)])); }
+  const door = (L.H - 1) * s; B.solid.box(-0.1, door + 0.1, 0.06, door + s - 0.1, 0, 2.4, col('#6b4a2b'));
+  bake(B.glow, GEO.box, { x: 0.12, y: 2.7, z: door + s / 2, sx: 0.06, sy: 0.3, sz: 0.9, color: col('#3cc46a') }); // the green EXIT light
+  // shelves full of goods, and the counter with the till
+  const goods = ['#e4572e', '#f2c94c', '#3cc46a', '#4a7bd9', '#b05fd6', '#f28cb1', '#f4f4f0', '#2ec4b6'];
+  for (let y = 0; y < L.H; y++) for (let x = 0; x < L.W; x++) { const v = L.wall[y * L.W + x]; if (!v) continue; const x0 = x * s, z0 = y * s, x1 = x0 + s, z1 = z0 + s;
+    if (v === 2) { B.solid.box(x0 + 0.02, z0 + 0.1, x1 - 0.02, z1 - 0.1, 0, 1.0, col('#7c4f2c')); B.solid.box(x0 - 0.04, z0 + 0.05, x1 + 0.04, z1 - 0.05, 1.0, 1.08, col('#d9c7a8')); continue; }
+    B.shiny.box(x0 + 0.08, z0 + 0.2, x1 - 0.08, z1 - 0.2, 0, 0.12, col('#6c6f75')); B.shiny.box(x0 + 0.08, z0 + s / 2 - 0.04, x1 - 0.08, z0 + s / 2 + 0.04, 0.12, 1.75, col('#8a8d93'));
+    for (const hy of [0.12, 0.62, 1.12, 1.62]) B.shiny.box(x0 + 0.08, z0 + 0.2, x1 - 0.08, z1 - 0.2, hy, hy + 0.05, col('#b8bcc0'), { top: true });
+    for (const hy of [0.17, 0.67, 1.17]) for (const side of [-1, 1]) for (let i = 0; i < 4; i++) { const gx = x0 + 0.18 + i * (s - 0.36) / 4, gz = z0 + s / 2 + side * 0.32, gh = 0.2 + r() * 0.22;
+      B.solid.box(gx, gz - 0.16, gx + (s - 0.36) / 4 - 0.04, gz + 0.16, hy, hy + gh, col(goods[Math.floor(r() * goods.length)])); } }
+  const tx = L.till.x * s, tz = (L.till.y - 1) * s; B.shiny.box(tx - 0.3, tz - 0.25, tx + 0.3, tz + 0.25, 1.08, 1.32, col('#2b2621')); bake(B.glow, GEO.box, { x: tx, y: 1.46, z: tz + 0.05, sx: 0.4, sy: 0.22, sz: 0.04, color: col('#7cffb2') });
+  // lights: the ceiling is cut away, so warm strip lights hang over the aisles
+  const group = new THREE.Group();
+  for (const [k, b] of Object.entries(B)) { const g = b.geometry(); if (!g) continue; const m = new THREE.Mesh(g, M[k]); m.castShadow = !['asphalt', 'paint', 'pool', 'ao', 'paving'].includes(k); m.receiveShadow = true; m.matrixAutoUpdate = false; group.add(m); }
+  view.scene.add(group);
+  // inside: no sky, a warm fill light, and a soft light from above
+  view.sky.visible = false; view.scene.background = new THREE.Color('#1b1612'); view.scene.fog = null;
+  const fill = new THREE.PointLight('#ffe7c4', 40, 30, 1.5); fill.position.set(W / 2, 6, H / 2); view.scene.add(fill);
+  return group;
+}
+// A see-through cone: what a shopkeeper or a camera can see (rebuilt each frame from rays that stop at the shelves).
+export function viewCone(color = '#ffd54a') {
+  const n = 16, geo = new THREE.BufferGeometry(), pos = new Float32Array((n + 2) * 3), idx = []; for (let i = 1; i <= n; i++) idx.push(0, i, i + 1);
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setIndex(idx);
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide, blending: THREE.NormalBlending })); m.renderOrder = 3; m.frustumCulled = false;
+  m.userData.set = (pts, y = 0.05) => { for (let i = 0; i < pts.length && i < n + 2; i++) { pos[i * 3] = pts[i][0]; pos[i * 3 + 1] = y; pos[i * 3 + 2] = pts[i][1]; } geo.attributes.position.needsUpdate = true; };
+  m.userData.n = n; return m;
+}

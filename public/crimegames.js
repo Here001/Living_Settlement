@@ -110,7 +110,59 @@ const hud = (...kids) => $c('div', { class: 'mghud' }, ...kids);
 const meter = (cls, label) => { const i = $c('i'); const m = $c('div', { class: 'mgmeter ' + cls }, $c('span', { text: label }), $c('div', { class: 'mgtrack' }, i)); m.set = v => { i.style.width = Math.round(Math.max(0, Math.min(1, v)) * 100) + '%'; }; return m; };
 
 // ---------------- Cut-away stealth ----------------
-function stealth(root, L, finish) {
+// In 3D: the shop with its front walls cut away, the shopkeeper and guards walking their rounds, view cones that stop at
+// the shelves, and you sneaking in. Falls back to the flat version if the phone can't do 3D.
+async function stealth(root, L, finish) {
+  const loading = $c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'Casing the shop…' })); root.append(loading);
+  let W; try { W = await load3d(); } catch (e) { loading.remove(); return stealth2d(root, L, finish); }
+  loading.remove(); if (!root.isConnected) return;
+  const cv = $c('canvas', { class: 'mgcanvas' }), seen = meter('eye', '👁'), goal = $c('div', { class: 'mggoal', text: '💰 Get to the till' }), clock = $c('b', { class: 'mgclock' }), stick = $c('div', { class: 'astick' }, $c('i'));
+  root.append(cv, hud(seen, clock), goal, stick, $c('div', { class: 'mgjoyhint', text: 'Drag anywhere to move' }));
+  const view = W.createView(cv), THREE = W.THREE, U = 1.6; view.resize(); view.setTime(720); W.buildShop(view, L, U);
+  const ro = new ResizeObserver(() => { view.resize(); frame(); }); ro.observe(root);
+  // the camera: from the front corner, far enough back to see the whole shop
+  // (on a tall phone screen, from the front, so the whole width fits; on a wide one, from the front corner)
+  let yaw = Math.PI / 4; const cx = L.W * U / 2, cz = L.H * U / 2;
+  const frame = () => { const asp = view.camera.aspect; yaw = asp < 0.9 ? 0 : Math.PI / 4; view.camera.fov = asp < 0.9 ? 52 : 40; view.camera.updateProjectionMatrix();
+    const half = (yaw ? Math.hypot(L.W, L.H) * U * 0.72 : L.W * U) / 2 + 0.6, hf = Math.atan(Math.tan(view.camera.fov * Math.PI / 360) * asp), vf = view.camera.fov * Math.PI / 360;
+    const dist = Math.max(half / Math.tan(hf), (L.H * U * 0.62) / Math.tan(vf)), pitch = 0.98;
+    view.camera.position.set(cx + Math.sin(yaw) * dist * Math.cos(pitch), dist * Math.sin(pitch), cz + Math.cos(yaw) * dist * Math.cos(pitch)); view.camera.lookAt(cx, 0, cz - (yaw ? 0 : 1.2)); }; frame();
+  const me = W.makePerson('robber' + L.seed, 'civilian'); view.scene.add(me.group);
+  const mask = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.4), new THREE.MeshStandardMaterial({ color: '#111' })); mask.position.y = 1.74; me.body.add(mask);
+  const bag = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), new THREE.MeshStandardMaterial({ color: '#e2b13c', metalness: 0.5, roughness: 0.4 })); bag.position.set(0.38, 0.9, 0); bag.visible = false; me.group.add(bag);
+  const staff = L.guards.map((g, i) => { const p = W.makePerson('staff' + L.seed + i, g.kind === 'guard' ? 'hunter' : 'civilian'); view.scene.add(p.group); const cone = W.viewCone('#ffd54a'); view.scene.add(cone); return { p, cone, last: null }; });
+  const cams = L.cams.map(c => { const g = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.25, 0.5), new THREE.MeshStandardMaterial({ color: '#3a3a44', metalness: 0.6, roughness: 0.4 })); body.position.y = 3; g.add(body);
+    const led = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff4b3a' })); led.position.set(0.1, 3.08, 0.25); g.add(led); g.position.set(c.x * U, 0, c.y * U); view.scene.add(g); const cone = W.viewCone('#ffd54a'); view.scene.add(cone); return { g, cone, led }; });
+  const ringGeo = new THREE.RingGeometry(0.42, 0.55, 32, 1, 0, Math.PI * 2), ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#7cffb2', side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; ring.position.set(L.till.x * U, 1.6, (L.till.y - 1) * U); view.scene.add(ring);
+  const exitGlow = new THREE.Mesh(new THREE.RingGeometry(0.6, 0.8, 32), new THREE.MeshBasicMaterial({ color: '#3cc46a', transparent: true, opacity: 0.8, side: THREE.DoubleSide })); exitGlow.rotation.x = -Math.PI / 2; exitGlow.position.set(L.entry.x * U, 0.05, L.entry.y * U); exitGlow.visible = false; view.scene.add(exitGlow);
+  const conePts = (from, dir, fov, range) => { const pts = [[from.x * U, from.y * U]]; for (let i = 0; i <= 16; i++) { const a = dir - fov + (2 * fov) * i / 16; let d = 0; while (d < range && !MG.isWall(L, from.x + Math.cos(a) * d, from.y + Math.sin(a) * d)) d += 0.15; pts.push([(from.x + Math.cos(a) * d) * U, (from.y + Math.sin(a) * d) * U]); } return pts; };
+  // the game state moves in fixed steps; the picture is drawn in between
+  let s = MG.stealthStart(L), prev = s, acc = 0; const path = [[s.x, s.y]], keys = new Set(); let joy = null, ended = false, lastGrab = false;
+  const input = () => { let sx = 0, sy = 0; if (joy && Math.hypot(joy.dx, joy.dy) > 6) { sx = joy.dx / 55; sy = joy.dy / 55; }
+    if (keys.has('ArrowUp') || keys.has('w')) sy -= 1; if (keys.has('ArrowDown') || keys.has('s')) sy += 1; if (keys.has('ArrowLeft') || keys.has('a')) sx -= 1; if (keys.has('ArrowRight') || keys.has('d')) sx += 1;
+    const c = Math.cos(yaw), sn = Math.sin(yaw); let vx = sx * c + sy * sn, vy = -sx * sn + sy * c; const n = Math.hypot(vx, vy); return n > 1 ? [vx / n, vy / n] : [vx, vy]; };
+  cv.addEventListener('pointerdown', e => { joy = { x: e.clientX, y: e.clientY, dx: 0, dy: 0, id: e.pointerId }; try { cv.setPointerCapture(e.pointerId); } catch (er) {} stick.style.cssText = `display:block;left:${e.clientX}px;top:${e.clientY}px`; stick.firstChild.style.transform = 'translate(-50%,-50%)'; });
+  cv.addEventListener('pointermove', e => { if (!joy || e.pointerId !== joy.id) return; let dx = e.clientX - joy.x, dy = e.clientY - joy.y; const d = Math.hypot(dx, dy); if (d > 55) { dx *= 55 / d; dy *= 55 / d; } joy.dx = dx; joy.dy = dy; stick.firstChild.style.transform = `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`; });
+  const up = () => { joy = null; stick.style.display = 'none'; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  const kd = e => { keys.add(e.key); if (e.key.startsWith('Arrow')) e.preventDefault(); }, ku = e => keys.delete(e.key); addEventListener('keydown', kd); addEventListener('keyup', ku);
+  view.start((dt, now) => {
+    if (!ended) { acc += dt; while (acc >= MG.STEP && !s.done) { acc -= MG.STEP; prev = s; const [vx, vy] = input(); s = MG.stealthStep(L, s, vx, vy); path.push([+s.x.toFixed(4), +s.y.toFixed(4)]); if (s.who && !prev.who) buzz(40); } }
+    const u = s.done ? 1 : Math.min(1, acc / MG.STEP), px = prev.x + (s.x - prev.x) * u, py = prev.y + (s.y - prev.y) * u, tt = prev.t + (s.t - prev.t) * u;
+    const vx = (s.x - prev.x) / MG.STEP * U, vy = (s.y - prev.y) / MG.STEP * U; me.setPos(px * U, py * U); me.animate(dt, vx, vy); bag.visible = s.grabbed;
+    const alarm = s.who > 0;
+    L.guards.forEach((g, i) => { const q = MG.guardAt(g, tt), st = staff[i], ox = st.last ? q.x - st.last.x : 0, oy = st.last ? q.y - st.last.y : 0; st.last = q; st.p.setPos(q.x * U, q.y * U); st.p.animate(dt, ox / Math.max(dt, 1e-3) * U, oy / Math.max(dt, 1e-3) * U);
+      st.cone.userData.set(conePts(q, q.dir, MG.STEALTH.guardFov, MG.STEALTH.guardRange + L.diff * 0.2)); st.cone.material.color.set(s.who === 1 ? '#ff4b3a' : '#ffd54a'); });
+    L.cams.forEach((c, i) => { const a = MG.camAt(c, tt); cams[i].g.rotation.y = -a + Math.PI / 2; cams[i].cone.userData.set(conePts(c, a, MG.STEALTH.camFov, MG.STEALTH.camRange)); cams[i].cone.material.color.set(s.who === 2 ? '#ff4b3a' : '#ffd54a'); cams[i].led.visible = (now / 400 | 0) % 2 === 0; });
+    ring.visible = !s.grabbed && s.grab > 0; if (ring.visible) { ring.geometry.dispose(); ring.geometry = new THREE.RingGeometry(0.42, 0.55, 32, 1, Math.PI / 2, -Math.PI * 2 * s.grab / MG.STEALTH.grab); }
+    exitGlow.visible = s.grabbed; if (s.grabbed) exitGlow.scale.setScalar(1 + Math.sin(now / 200) * 0.1);
+    if (s.grabbed && !lastGrab) { lastGrab = true; buzz([20, 30, 20]); }
+    seen.set(s.seen); seen.classList.toggle('hot', alarm); clock.textContent = `${Math.max(0, Math.ceil(L.limit - s.t))}s`;
+    const gtxt = s.grabbed ? '🚪 Out the back door!' : s.grab > 0 ? '💰 Emptying the till… stay close' : '💰 Get to the till'; if (goal.textContent !== gtxt) goal.textContent = gtxt;
+    if (s.done && !ended) { ended = true; if (s.done === 'spotted') buzz(400); setTimeout(() => finish({ path }), s.done === 'spotted' ? 900 : 400); }
+  });
+  const stop = root._stop; root._stop = () => { stop && stop(); view.dispose(); ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); };
+}
+function stealth2d(root, L, finish) {
   const cv = $c('canvas', { class: 'mgcanvas' }), g = cv.getContext('2d'), seen = meter('eye', '👁'), goal = $c('div', { class: 'mggoal', text: '💰 Get to the till' }), clock = $c('b', { class: 'mgclock' });
   root.append(cv, hud(seen, clock), goal, $c('div', { class: 'mgjoyhint', text: 'Drag anywhere to move' }));
   const dpr = Math.min(window.devicePixelRatio || 1, 2); let W = 0, H = 0, tw = 40, ox = 0, oy = 0, bg = null;

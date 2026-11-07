@@ -1578,6 +1578,26 @@ r = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'house', x: s1.x
 ok(r.status === 200 && r.json.building.done === false && r.json.building.owner === 'landlady', 'start building a house on it', JSON.stringify(r.json).slice(0, 300));
 const houseId = r.json.building.id;
 r = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x + 4, y: s1.y + 3 }, A.P); ok(r.status === 200 && r.json.building.done, 'a bench is instant', JSON.stringify(r.json).slice(0, 200));
+// renaming and moving your own buildings (only within the plot they were built on)
+{ const benchId = r.json.building.id;
+  ok((await call('POST', `/api/me/buildings/${houseId}/name`, { name: 'Hijack' }, B.P)).status === 404, "you can't rename someone else's building");
+  r = await call('POST', `/api/me/buildings/${houseId}/name`, { name: '  Villa   Rosa ' }, A.P); ok(r.status === 200 && r.json.name === 'Villa Rosa', 'the owner renames her house', JSON.stringify(r.json));
+  ok((await pool.query('select name from buildings where id = $1', [houseId])).rows[0].name === 'Villa Rosa', 'the new name is saved');
+  ok((await call('POST', `/api/me/buildings/${benchId}/move`, { x: s1.x + 4, y: s1.y }, B.P)).status === 404, "you can't move someone else's building");
+  ok((await call('POST', `/api/me/buildings/${benchId}/move`, { x: s1.x + 5, y: s1.y }, A.P)).status === 409, "a building can't be moved off its plot");
+  ok((await call('POST', `/api/me/buildings/${benchId}/move`, { x: s1.x, y: s1.y }, A.P)).status === 409, "…or onto another building");
+  r = await call('POST', `/api/me/buildings/${benchId}/move`, { x: s1.x + 4, y: s1.y }, A.P); const bb = (await pool.query('select x, y, plot_id from buildings where id = $1', [benchId])).rows[0];
+  ok(r.status === 200 && bb.x === s1.x + 4 && bb.y === s1.y && bb.plot_id === plotId, 'the owner moves the bench elsewhere on her plot', JSON.stringify({ r: r.json, bb }));
+  const lone = (await pool.query("select id from buildings where plot_id is null and type <> 'landing' limit 1")).rows[0];
+  if (lone) { await pool.query('update buildings set owner_id = $2 where id = $1', [lone.id, A.id]);
+    ok((await call('POST', `/api/me/buildings/${lone.id}/move`, { x: 0, y: 0 }, A.P)).status === 409, "a bought building that isn't on your own land can't be moved");
+    await pool.query('update buildings set owner_id = null where id = $1', [lone.id]); } }
+// the builder's Accounts: balances and each player's money history
+{ const ac = (await call('GET', '/api/admin/accounts?q=landlady')).json, me = ac.players?.find(p => p.h === 'landlady');
+  ok(me && me.total === me.cash + me.bank && ac.count >= 1, 'the builder sees a player\'s cash and savings', JSON.stringify(ac).slice(0, 200));
+  const d = (await call('GET', '/api/admin/accounts/landlady')).json;
+  ok(d.who?.h === 'landlady' && d.list.some(x => x.key === 'build:own' && x.coins < 0) && d.totals.some(x => x.key === 'land:buy' || x.key.startsWith('land')), "…and everything they spent, by kind and line by line", JSON.stringify(d).slice(0, 300));
+  ok((await call('GET', '/api/admin/accounts', undefined, A.P)).status === 401, 'players can\'t see the accounts'); }
 pr = (await call('GET', '/api/me/properties', undefined, A.P)).json; ok(pr.count === 1 && pr.plots[0].buildings.length === 2, 'a plot counts as one property with its buildings', JSON.stringify(pr).slice(0, 300));
 r = await call('POST', `/api/me/buildings/${houseId}/rush`, {}, A.P); ok(r.status === 200 && r.json.paid > 0, 'rush the builders', JSON.stringify(r.json));
 let hb = (await pool.query('select * from buildings where id = $1', [houseId])).rows[0]; ok(hb.done && hb.home_cap === 4, 'the house is finished', JSON.stringify({ done: hb.done, cap: hb.home_cap }));

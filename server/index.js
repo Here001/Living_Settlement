@@ -170,6 +170,22 @@ app.get('/api/cron/tick', send(async req => {
 app.get('/api/admin/check', admin, (req, res) => res.json({ ok: true }));
 // Developer stats: daily players, coins in circulation, how players earn and spend, and where they drop off.
 app.get('/api/admin/stats', admin, send(async req => { const S = await import('./stats.js'); return S.dashboard(world, req.query.days); }));
+// The builder's view of players' money: cash on hand, savings at the bank, debt, and each player's history.
+app.get('/api/admin/accounts', admin, send(async req => {
+  const q = String(req.query.q || '').trim().replace(/^@/, '').toLowerCase(), today = world.meta ? R.gameDay(Date.now(), world.meta.epoch) : 0;
+  const rows = (await pool.query(`select id, handle, display_name, coins_base, coins_day, net, bank, last_seen, jailed_until from citizens where pass_hash is not null ${q ? 'and (lower(handle) like $1 or lower(display_name) like $1)' : ''} limit 2000`, q ? ['%' + q + '%'] : [])).rows;
+  const list = rows.map(r => { const cash = R.balanceOn(r.coins_base, r.coins_day, r.net, today), bank = Number(r.bank || 0); return { id: r.id, h: r.handle, n: r.display_name || '', cash, bank, total: cash + bank, net: Number(r.net || 0), seen: Number(r.last_seen || 0), jailed: Number(r.jailed_until || 0) > Date.now() }; });
+  list.sort((a, b) => b.total - a.total);
+  const sum = list.reduce((a, x) => ({ cash: a.cash + x.cash, bank: a.bank + x.bank }), { cash: 0, bank: 0 });
+  return { players: list.slice(0, 300), count: list.length, sum };
+}));
+app.get('/api/admin/accounts/:handle', admin, send(async req => {
+  const c = (await pool.query('select id, handle, display_name, coins_base, coins_day, net, bank, last_seen from citizens where lower(handle) = lower($1)', [String(req.params.handle || '').replace(/^@/, '')])).rows[0];
+  if (!c) throw new HttpError(404, 'No such colonist.'); const today = world.meta ? R.gameDay(Date.now(), world.meta.epoch) : 0, { history } = await import('./stats.js');
+  const h = await history(c.id, Math.min(200, Number(req.query.n) || 100), Number(req.query.before) || null);
+  const tot = (await pool.query("select key, sum(coins)::bigint s, count(*)::int n from ledger where citizen_id = $1 group by key order by sum(abs(coins)) desc limit 40", [c.id])).rows.map(r => ({ key: r.key, coins: Number(r.s), n: r.n }));
+  return { who: { h: c.handle, n: c.display_name || '', cash: R.balanceOn(c.coins_base, c.coins_day, c.net, today), bank: Number(c.bank || 0), net: Number(c.net || 0), seen: Number(c.last_seen || 0) }, ...h, totals: tot };
+}));
 app.post('/api/admin/found', admin, send(req => world.found(req.body || {})));
 app.post('/api/admin/buildings', admin, send(req => world.build(req.body || {})));
 app.post('/api/admin/buildings/restore', admin, send(req => world.restore((req.body || {}).building)));

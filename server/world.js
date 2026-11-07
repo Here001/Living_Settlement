@@ -641,20 +641,23 @@ export class World {
     return this.change(async ch => {
       const b = (await ch.q('select * from buildings where id = $1 for update', [id])).rows[0];
       if (!b) throw new HttpError(404, 'No such building.');
-      const r2 = rot === undefined || rot === null ? b.rot : R.cleanRot(rot), [w, d] = R.footprint(R.levelSize(b.type, b.level), r2);
-      await this.assertFree(ch, b.type, x, y, id, r2, { level: b.level, plot: b.plot_id });
-      if (b.plot_id) { const p = (await ch.q('select * from plots where id = $1', [b.plot_id])).rows[0]; if (p && (x < p.x || y < p.y || x + w > p.x + p.w || y + d > p.y + p.d)) throw new HttpError(409, 'It has to stay on its plot.'); }
-      const [cx, cy] = R.chunkOf(x, y);
-      if (cx !== b.cx || cy !== b.cy) ch.removedBuildings.set(id, R.chunkKey(b.cx, b.cy));
-      await ch.q('update buildings set x = $2, y = $3, cx = $4, cy = $5, rot = $6, w = $7, d = $8 where id = $1', [id, x, y, cx, cy, r2, w, d]);
-      ch.buildings.add(id);
-      for (const [col, cxc, cyc] of [['home_id', 'home_cx', 'home_cy'], ['job_id', 'job_cx', 'job_cy'], ['hang_id', 'hang_cx', 'hang_cy']]) {
-        const rows = (await ch.q(`select * from citizens where ${col} = $1`, [id])).rows;
-        for (const c of rows) ch.touch(c);
-        if (rows.length) await ch.q(`update citizens set ${cxc} = $2, ${cyc} = $3 where ${col} = $1`, [id, cx, cy]);
-      }
-      return { ok: true };
+      return this.moveIn(ch, b, x, y, rot);
     });
+  }
+  async moveIn(ch, b, x, y, rot) {
+    const id = b.id, r2 = rot === undefined || rot === null ? b.rot : R.cleanRot(rot), [w, d] = R.footprint(R.levelSize(b.type, b.level), r2);
+    await this.assertFree(ch, b.type, x, y, id, r2, { level: b.level, plot: b.plot_id });
+    if (b.plot_id) { const p = (await ch.q('select * from plots where id = $1', [b.plot_id])).rows[0]; if (p && (x < p.x || y < p.y || x + w > p.x + p.w || y + d > p.y + p.d)) throw new HttpError(409, 'It has to stay on its plot.'); }
+    const [cx, cy] = R.chunkOf(x, y);
+    if (cx !== b.cx || cy !== b.cy) ch.removedBuildings.set(id, R.chunkKey(b.cx, b.cy));
+    await ch.q('update buildings set x = $2, y = $3, cx = $4, cy = $5, rot = $6, w = $7, d = $8 where id = $1', [id, x, y, cx, cy, r2, w, d]);
+    ch.buildings.add(id);
+    for (const [col, cxc, cyc] of [['home_id', 'home_cx', 'home_cy'], ['job_id', 'job_cx', 'job_cy'], ['hang_id', 'hang_cx', 'hang_cy']]) {
+      const rows = (await ch.q(`select * from citizens where ${col} = $1`, [id])).rows;
+      for (const c of rows) ch.touch(c);
+      if (rows.length) await ch.q(`update citizens set ${cxc} = $2, ${cyc} = $3 where ${col} = $1`, [id, cx, cy]);
+    }
+    return { ok: true, x, y, rot: r2 };
   }
 
   async paintRoads({ set = {}, remove = [] }) {

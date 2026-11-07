@@ -172,6 +172,32 @@ export class Housing {
       return { ok: true, back };
     });
   }
+  // Renaming a building you own (on your land or bought): just the sign over the door.
+  async renameBuilding(id, buildingId, name) {
+    name = String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    return this.world.change(async ch => {
+      const b = (await ch.q('select id, type, name from buildings where id = $1 and owner_id = $2 for update', [String(buildingId), id])).rows[0];
+      if (!b) throw new HttpError(404, "You don't own that building.");
+      if (b.type === 'landing') throw new HttpError(409, "The landing site keeps its name.");
+      await ch.q('update buildings set name = $2 where id = $1', [b.id, name]); ch.buildings.add(b.id);
+      return { ok: true, name: name || BUILDING_TYPES[b.type]?.name || '' };
+    });
+  }
+  // Moving (and turning) a building you built on your own land: it can go anywhere free on that same plot, never off it.
+  async moveBuilding(id, buildingId, body) {
+    const x = int(body?.x), y = int(body?.y), rot = body?.rot == null ? null : R.cleanRot(body.rot);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) throw new HttpError(400, 'Bad position.');
+    return this.world.change(async ch => {
+      const c = await this.lockMe(ch, id);
+      const b = (await ch.q('select * from buildings where id = $1 for update', [String(buildingId)])).rows[0];
+      if (!b || b.owner_id !== c.id) throw new HttpError(404, "You don't own that building.");
+      if (!b.plot_id) throw new HttpError(409, 'Only buildings you built on your own land can be moved, and only within that plot.');
+      if (Number(b.up_at) > 0) throw new HttpError(409, 'Wait until the upgrade is finished.');
+      const p = await this.lockPlot(ch, c, b.plot_id), [w, d] = R.footprint(R.levelSize(b.type, b.level || 1), rot ?? b.rot);
+      if (!this.inside(p, x, y, w, d)) throw new HttpError(409, `It has to stay inside your ${p.w}×${p.d} plot.`);
+      return this.world.moveIn(ch, b, x, y, rot);
+    });
+  }
   // Paying to finish construction or an upgrade right away.
   async rush(id, buildingId) {
     return this.world.change(async ch => {

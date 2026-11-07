@@ -295,7 +295,7 @@ function atm(root, L, finish) {
   for (let d = 1; d <= 9; d++) { const b = $c('button', { class: 'mgkey', text: String(d), onclick: () => press(d) }); keys.push(b); pad.append(b); }
   const flash = (d, ms) => { const b = keys[d - 1]; b.classList.add('lit'); setTimeout(() => b.classList.remove('lit'), ms); };
   const playCode = () => { showing = true; status.textContent = '👀 Watch the code…'; const gap = Math.max(260, 520 - L.diff * 45); L.pin.forEach((d, i) => setTimeout(() => flash(d, gap * 0.7), 400 + i * gap)); setTimeout(() => { showing = false; status.textContent = 'Now tap it back.'; }, 400 + L.pin.length * gap); };
-  const startPin = () => { lit = lit + 0.4 + MG.atmCodeTime(L); stage = 'pin'; // the fuse waits while the code flashes (same as the server's count) wrap.innerHTML = ''; wrap.append($c('div', { class: 'mgscreen', text: 'ENTER SERVICE CODE' }), pad, status); playCode(); };
+  const startPin = () => { lit = lit + 0.4 + MG.atmCodeTime(L); stage = 'pin'; /* the fuse waits while the code flashes (same as the server's count) */ wrap.innerHTML = ''; wrap.append($c('div', { class: 'mgscreen', text: 'ENTER SERVICE CODE' }), pad, status); playCode(); };
   const press = d => { if (stage !== 'pin' || showing || done) return; events.push(['k', d, now()]); flash(d, 150);
     if (d === L.pin[at]) { at++; lit = now(); buzz(10); if (at === L.pin.length) { stage = 'open'; status.textContent = '💸 Cash coming out!'; end(); } }
     else { at = 0; pen += L.wrongKey; lit = Math.max(lit, now() + 0.5 + MG.atmCodeTime(L)); buzz(150); pad.classList.add('shake'); setTimeout(() => pad.classList.remove('shake'), 350); setTimeout(playCode, 500); } };

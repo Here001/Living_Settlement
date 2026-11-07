@@ -399,6 +399,7 @@ body.pane-max .composer textarea{height:70px}
 .warnline{margin:8px 0;padding:7px 10px;border-radius:10px;background:rgba(210,56,46,.12);color:#9E2A22;font-size:13px}
 .plotthumb{display:flex;align-items:center;justify-content:center;font-size:30px;background:rgba(143,196,99,.35);border-radius:12px}
 .pcards{flex-wrap:wrap;overflow-x:visible;justify-content:flex-start;padding:4px 0 8px}.pcards .cardb{width:calc(50% - 5px)}@media(min-width:520px){.pcards .cardb{width:150px}}.pcards .cardb.cant{opacity:.45}
+.atable{width:100%;border-collapse:collapse;font-size:13.5px;margin:6px 0}.atable th{text-align:left;font-size:12px;color:var(--muted);padding:4px}.atable td{padding:6px 4px;border-top:1px solid var(--soft,#ddd)}.atable td:not(:first-child),.atable th:not(:first-child){text-align:right}.atable .arow{cursor:pointer}.atable .arow:hover{background:rgba(0,0,0,.04)}.atable .lin{color:#2e9b57}.atable .lout{color:#c8473d}
 .newgbox{display:flex;flex-direction:column;gap:6px;align-items:flex-start;margin:6px 0 10px;padding:10px;border:1.5px dashed var(--soft,#ccc);border-radius:12px}
 .rsheet .ctabs{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}.rsheet .ctabs .pill{cursor:pointer;border:1.4px solid var(--ink,#2B2621);background:transparent;padding:4px 10px;border-radius:999px;font:inherit;font-size:12.5px}.rsheet .ctabs .pill.on{background:var(--accent,#D9714A);color:#fff;border-color:var(--accent,#D9714A)}
 .joblist.offers li{flex-direction:column;align-items:stretch}.joblist.offers .jt{display:flex;flex-direction:column;gap:2px}.joblist.offers .row-actions{margin-top:4px}
@@ -1031,7 +1032,7 @@ function applyOp(o){
     for(const k of o.chunks) if(loading.has(k)){ if(!buffered.has(k)) buffered.set(k,[]); buffered.get(k).push(o); return; }
     if(o.op!=='citizen'&&o.op!=='citizenGone') return; }
   switch(o.op){
-  case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&!PLAYER_TABS.has(activeTab)&&activeTab!=='reports'&&activeTab!=='stats'&&activeTab!=='stream') renderPane(); break;
+  case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&!PLAYER_TABS.has(activeTab)&&activeTab!=='reports'&&activeTab!=='stats'&&activeTab!=='money'&&activeTab!=='stream') renderPane(); break;
   case 'race': raceSoon(o.data); break;
   case 'fight': fightSoon(o.data); break;
   case 'lottery': lotterySoon(o.data); break;
@@ -3287,7 +3288,7 @@ function canPlace(type,x,y,ignore,rot=0){ const [w,d]=sizeOf(type,rot); for(let 
 // What's under each tile of a footprint: null when free, otherwise what's in the way.
 function blockers(type,x,y,ignore,rot=0){ const [w,d]=sizeOf(type,rot), out=[]; for(let i=0;i<w;i++) for(let j=0;j<d;j++){ const k=(x+i)+','+(y+j); const o=D.occ.get(k);
     const pl=D.plotOcc.get(k), own=tool.kind==='pbuild'?tool.plot:(tool.kind==='move'?(D.buildings.get(tool.id)||{}).plot:null);
-    out.push({ x:x+i, y:y+j, why: D.water.has(k)?'water' : (o&&o!==ignore)?'a building' : D.roads.has(k)?'road' : (tool.kind==='pbuild'&&pl!==tool.plot)?'outside your plot' : (pl&&pl!==own)?"someone's land" : null }); } return out; }
+    out.push({ x:x+i, y:y+j, why: D.water.has(k)?'water' : (o&&o!==ignore)?'a building' : D.roads.has(k)?'road' : (tool.kind==='pbuild'&&pl!==tool.plot)||(tool.kind==='move'&&tool.mine&&pl!==own)?'outside your plot' : (pl&&pl!==own)?"someone's land" : null }); } return out; }
 // A building being placed is centred under the pointer; one being moved stays held where it was grabbed.
 function ghostOrigin(type,tx,ty){ if(tool.kind==='pbuild'&&tool.pending) return tool.pending; const [w,d]=sizeOf(type,tool.rot||0); const off=ghost&&ghost.off; return off?[tx-off[0],ty-off[1]]:[tx-Math.floor((w-1)/2), ty-Math.floor((d-1)/2)]; }
 let ghost=null, lastPtr=null, holdTimer=null;
@@ -3512,6 +3513,7 @@ async function placeBuilding(type,x,y){ const t=BUILDING_TYPES[type];
     toast(r.building.done?`Built ${nm}`:`Construction started on ${nm}`); }
   catch(e){ toast(e.message); } }
 async function moveBuilding(id,x,y){ const b=D.buildings.get(id); if(!b){ setTool({kind:'pan'}); return; }
+  if(tool.mine){ const r=await meAction(`/api/me/buildings/${encodeURIComponent(id)}/move`,{x,y,rot:tool.rot??b.rot??0},`Moved ${b.name||T(b).name}.`); if(r){ setTool({kind:'pan'}); Plots.drop&&Plots.drop(b.plot); setTimeout(()=>selectBuilding(id),300); } return; }
   if(draftOn){ const nm=b.name||T(b).name; draftEdit(`moving ${nm}`,d=>{ const r=tool.rot??b.rot??0; const n=d.builds.find(q=>q.tid===id); if(n){ n.x=x; n.y=y; n.rot=r; } else { const live=S.buildings.get(id); if(live&&live.x===x&&live.y===y&&(live.rot||0)===r) delete d.moves[id]; else d.moves[id]={x,y,rot:r}; d.labels[id]=nm; } }); setTool({kind:'pan'}); selectBuilding(id); return; }
   const from={x:b.x,y:b.y,rot:b.rot||0}, rot=tool.rot??b.rot??0;
   try{ await api('/api/admin/buildings/'+encodeURIComponent(id),{method:'PATCH',body:{x,y,rot}}); setTool({kind:'pan'}); selectBuilding(id); remember(`moving ${b.name||T(b).name}`,()=>api('/api/admin/buildings/'+encodeURIComponent(id),{method:'PATCH',body:from})); toast(`Moved ${b.name||T(b).name}`); }
@@ -3524,6 +3526,7 @@ const ICONS={
   top: I('<path d="M10 6h12v6a6 6 0 0 1-12 0z" fill="#E2B13C"/><path d="M10 8H6a4 4 0 0 0 4 5M22 8h4a4 4 0 0 1-4 5M16 18v4M11 26h10M13 22h6v4h-6z" fill="none"/>'),
   reports: I('<path d="M8 27V5" fill="none"/><path d="M8 6h15l-3 5 3 5H8z" fill="#E8836B"/>'),
   stream: I('<rect x="4" y="8" width="18" height="16" rx="3" fill="#E8836B"/><path d="M22 13l6-4v14l-6-4z" fill="#9CC3DE"/><circle cx="9" cy="13" r="2" fill="#fff"/>'),
+  money: I('<rect x="4" y="9" width="24" height="16" rx="3" fill="#BFE3B0"/><circle cx="16" cy="17" r="4" fill="#F2C94C"/><path d="M8 13h2M22 21h2" fill="none"/>'),
   stats: I('<path d="M5 27h22" fill="none"/><rect x="7" y="16" width="4" height="11" fill="#9CC3DE"/><rect x="14" y="9" width="4" height="18" fill="#E8836B"/><rect x="21" y="13" width="4" height="14" fill="#F2C94C"/>'),
   chats: I('<path d="M5 8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3h-7l-5 4v-4a3 3 0 0 1-3-3z" fill="#A8D5BA"/><path d="M11 21h7l5 4v-4a3 3 0 0 0 3-3v-6" fill="none"/>'),
   races: I('<path d="M8 27V5"/><path d="M8 6h16l-3 5 3 5H8z" fill="#F4EDE0"/><path d="M8 6h4v5H8zM16 6h4v5h-4zM12 11h4v5h-4zM20 11h4v5h-4z" fill="#2B2621" stroke="none"/>'),
@@ -3560,7 +3563,7 @@ async function rotateBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
 function setTool(t){ tool=t; ghost=null; roadStart=null; if(t.kind!=='land'){ landSel=null; document.querySelector('.landtip')?.remove(); } setTimeout(refreshTurn); const chip=$('toolchip');
   if(t.kind==='pan'){ chip.hidden=true; setMini(false); }
   else { chip.hidden=false; $('toolLabel').textContent = t.kind==='land'?(t.mark?'Drag over empty grass beside a road':'Swipe to the spot, then double-tap it') : t.kind==='pbuild'?`${BUILDING_TYPES[t.type].cat==='decor'||BUILDING_TYPES[t.type].cat==='nature'?'Tap or drag to place':'Drag onto your plot:'} ${BUILDING_TYPES[t.type].name}` : t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} ${VEHICLE_TYPES[t.vtype].mode==='water'?'onto water':VEHICLE_TYPES[t.vtype].mode==='air'?'anywhere: it flies above that spot':'onto a road'}` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
-  if(activeTab && !PLAYER_TABS.has(activeTab) && activeTab!=='reports' && activeTab!=='stats' && activeTab!=='stream') renderPane(); }
+  if(activeTab && !PLAYER_TABS.has(activeTab) && activeTab!=='reports' && activeTab!=='stats' && activeTab!=='money' && activeTab!=='stream') renderPane(); }
 $('toolDone').onclick=()=>setTool({kind:'pan'});
 // Minimise: tuck the menus away while keeping the chosen tool, so the whole map is free to build on.
 let mini=false;
@@ -3586,7 +3589,7 @@ const PLAYER_TABS=new Set(['feed','people','races','top','chats']); // everyone'
 function syncFindChip(){ const b=$('findBtn'); if(b&&b.parentElement) b.parentElement.style.display=(Me&&Me.token&&Me.handle)?'none':''; }
 function buildToolbar(){ const row=$('toolsRow'); row.innerHTML=''; syncFindChip();
   const tabs=[{id:'feed',name:'Town Square'},{id:'me',name:'My card'},{id:'people',name:'Colonists'},{id:'races',name:'Races'}].concat(Me&&Me.token?[{id:'chats',name:'Chats'}]:[]);
-  const all = Store.canWrite ? tabs.concat([{id:'reports',name:'Reports'},{id:'stats',name:'Stats'},{id:'stream',name:'Stream'},{sep:true}],CATS) : tabs;
+  const all = Store.canWrite ? tabs.concat([{id:'reports',name:'Reports'},{id:'stats',name:'Stats'},{id:'money',name:'Accounts'},{id:'stream',name:'Stream'},{sep:true}],CATS) : tabs;
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
     const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(c.id==='me'?myCardOpen():activeTab===c.id),onclick:()=>c.id==='me'?openMyCard():openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='me') btn.dataset.me='1'; if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); if(c.id==='reports'&&typeof Reports!=='undefined'&&Reports.open) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Reports.open))})); row.append(btn); } }
 function openTab(name){ if(!name) document.body.classList.remove('pane-max');
@@ -3635,6 +3638,7 @@ function renderPane(){
   if(activeTab==='chats'){ Chats.render(p); return; }
   if(activeTab==='reports'){ Reports.render(p); return; }
   if(activeTab==='stats'){ Stats.render(p); return; }
+  if(activeTab==='money'){ Accounts.render(p); return; }
   if(activeTab==='stream'){ StreamAdmin.render(p); return; }
   if(activeTab==='top'){ activeTab='feed'; feedMode='top'; return renderPane(); }
   if(activeTab==='races'){ p.append(paneHead('Races')); const body=el('div',{class:'pane-body',id:'raceBody'}); p.append(body); renderRaces(true); return; }
@@ -4262,6 +4266,32 @@ const Ledger={ data:null, at:0, busy:false, filter:'all', more:false,
 // A flow's [kind, name]: Game House games are 'game:<id>:bet' (coins in) and 'game:<id>:win' (coins out).
 const flowInfo=k=>{ if(FLOW_NAMES[k]) return FLOW_NAMES[k]; if(k==='table:rake') return ['sink','House share of table pots']; const tb=/^table:(\w+):(stake|win|refund)$/.exec(k); if(tb) return ['move', `${(TABLE_GAMES[tb[1]]||{name:tb[1]}).name} table ${tb[2]==='stake'?'stakes':tb[2]==='win'?'winnings':'refunds'}`]; const m=/^game:(\w+):(bet|win)$/.exec(k); if(m) return [m[2]==='bet'?'sink':'source', `${(GH_GAMES[m[1]]||{name:m[1]}).name} ${m[2]==='bet'?'stakes':'winnings'}`]; return ['source',k]; };
 const EARN_KEYS=['earn:shifts','earn:gigs','earn:fish','earn:forage','earn:scavenged','daily','earn:supplies','crime:rob','casino:win','race:win','lottery:win'];
+// The builder's Accounts: every player's cash, savings and debt, and each one's full money history.
+const Accounts={ list:null, q:'', who:null, detail:null, busy:false,
+  async load(){ if(!Store.canWrite) return; try{ this.list=await api('/api/admin/accounts'+(this.q?'?q='+encodeURIComponent(this.q):'')); }catch(e){ toast(e.message); } this.renderNow(); },
+  async open(h){ this.who=h; this.detail=null; this.renderNow(); try{ this.detail=await api('/api/admin/accounts/'+encodeURIComponent(h)); }catch(e){ toast(e.message); } this.renderNow(); },
+  async older(){ const D0=this.detail, L=D0&&D0.list; if(!L||!L.length) return; try{ const d=await api(`/api/admin/accounts/${encodeURIComponent(this.who)}?before=${L[L.length-1].id}`); D0.list.push(...d.list); D0.more=d.list.length>=100; this.renderNow(); }catch(e){ toast(e.message); } },
+  renderNow(){ if(activeTab!=='money') return; const p=$('pane'); if(p){ p.innerHTML=''; this.render(p); } },
+  render(p){ p.append(paneHead('Accounts')); const body=el('div',{class:'pane-body'}); p.append(body);
+    if(this.who){ const D0=this.detail; body.append(el('button',{class:'linkb',text:'‹ All players',onclick:()=>{ this.who=null; this.renderNow(); }}));
+      if(!D0){ body.append(el('p',{class:'hint',text:'Loading…'})); return; } const W0=D0.who;
+      body.append(el('h3',{text:`${W0.n?W0.n+' · ':''}@${W0.h}`}), el('div',{class:'kpis'}, Stats.kpi(fmt(W0.cash),'Cash on hand'), Stats.kpi(fmt(W0.bank),'In the bank'), Stats.kpi(fmt(W0.cash+W0.bank),'Total'), Stats.kpi(W0.net?fmt(W0.net):'—','Daily pay/bills')),
+        el('p',{class:'hint',text:`Last 24 hours: +${fmt(D0.day.in)} in · −${fmt(D0.day.out)} out. Last seen ${W0.seen?ago(W0.seen):'never'}.`}));
+      if(D0.totals.length){ const t=el('table',{class:'atable'}); t.append(el('tr',null,el('th',{text:'Where the money went (all time)'}),el('th',{text:'Times'}),el('th',{text:'Coins'})));
+        for(const x of D0.totals){ const [ic,nm]=ledgerName(x.key); t.append(el('tr',null, el('td',{text:`${ic} ${nm}`}), el('td',{text:fmt(x.n)}), el('td',{class:x.coins>=0?'lin':'lout',text:`${x.coins>=0?'+':'−'}${fmt(Math.abs(x.coins))}`}))); }
+        body.append(el('h3',{text:'By kind'}), t); }
+      body.append(el('h3',{text:'History'})); let lastDay=''; const ul=el('ul',{class:'llist'});
+      for(const x of D0.list){ const day=new Date(x.t).toLocaleDateString([], {weekday:'short',day:'numeric',month:'short'}); if(day!==lastDay){ lastDay=day; ul.append(el('li',{class:'lday',text:day})); }
+        const [ic,nm]=ledgerName(x.key); ul.append(el('li',{class:'lrow'}, el('span',{class:'lic',text:ic}), el('span',{class:'ltx'}, el('b',{text:nm}), el('small',{text:`${new Date(x.t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}${x.note?' · '+x.note:''}`})), el('b',{class:'lamt '+(x.coins>0?'lin':'lout'),text:`${x.coins>0?'+':'−'}${fmt(Math.abs(x.coins))}`}))); }
+      if(!D0.list.length) body.append(el('p',{class:'hint',text:'No money has moved yet.'})); body.append(ul);
+      if(D0.list.length>=100&&D0.more!==false) body.append(el('button',{class:'linkb',text:'Show older',onclick:()=>this.older()})); return; }
+    const inp=el('input',{type:'search',class:'bsearch',style:'width:100%',placeholder:'Search @handle or name',value:this.q,'aria-label':'Search players'}); let tm=null; inp.oninput=()=>{ this.q=inp.value; clearTimeout(tm); tm=setTimeout(()=>this.load(),300); };
+    body.append(el('div',{class:'cbet'}, inp));
+    if(!this.list){ body.append(el('p',{class:'hint',text:'Loading…'})); this.load(); return; } const L0=this.list;
+    body.append(el('div',{class:'kpis'}, Stats.kpi(fmt(L0.count),'Players'), Stats.kpi(fmt(L0.sum.cash),'Cash on hand'), Stats.kpi(fmt(L0.sum.bank),'In the bank')));
+    const t=el('table',{class:'atable'}); t.append(el('tr',null, el('th',{text:'Player'}), el('th',{text:'Cash'}), el('th',{text:'Bank'}), el('th',{text:'Total'})));
+    for(const x of L0.players) t.append(el('tr',{class:'arow',onclick:()=>this.open(x.h),title:'See their money history'}, el('td',{text:`${x.jailed?'🔒 ':''}@${x.h}`}), el('td',{class:x.cash<0?'lout':'',text:fmt(x.cash)}), el('td',{text:fmt(x.bank)}), el('td',null,el('b',{text:fmt(x.total)}))));
+    body.append(t, el('p',{class:'hint',text:'Tap a player to see everything they earned and spent.'})); } };
 var Stats={ data:null, days:30, busy:false, at:0,
   async load(){ if(!Store.canWrite||this.busy) return; this.busy=true; try{ this.data=await api('/api/admin/stats?days='+this.days); this.at=Date.now(); }catch(e){ toast(e.message); } this.busy=false; if(activeTab==='stats') this.renderNow(); },
   renderNow(){ if(activeTab!=='stats') return; const p=$('pane'); if(p){ const keep=$('statsBody')?.scrollTop||0; p.innerHTML=''; this.render(p); const b=$('statsBody'); if(b) b.scrollTop=keep; } },
@@ -5658,6 +5688,9 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
       if(info.offers&&info.offers.length){ const ul=el('ul',{class:'joblist offers'}); for(const o of info.offers) ul.append(this.offerRow(o)); card.append(el('h3',{text:'🤝 Offers for it'}), ul); } }
     else if(Me&&Me.token) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🤝 Make an offer',onclick:()=>this.offerSheet('plot',info.id,info.name||`the ${info.w}×${info.d} plot${info.buildings.length?' and what stands on it':''}`,info.owner)})));
   },
+  renameSheet(b,t){ const {box,close}=sheetBox(`✏️ Rename ${b.name||t.name}`), n=el('input',{type:'text',maxlength:'40',value:b.name||'',placeholder:t.name,'aria-label':'Name'});
+    box.append(el('p',{class:'hint',text:`The name over the door, shown on the map and its card. Leave it empty to call it just “${t.name}”.`}), n, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Save',onclick:async()=>{ const r=await meAction(`/api/me/buildings/${encodeURIComponent(b.id)}/name`,{name:n.value},r=>`Renamed to ${r.name}.`); if(r){ close(); if(b.plot) this.drop(b.plot); } }})));
+    setTimeout(()=>n.focus(),50); },
   // extra parts of a building's card: who owns it, its level, rushing the builders, upgrading, knocking it down, making an offer
   buildingBits(card,b,t){ if(!(Me&&Me.token&&Me.handle)||Store.canWrite) return; const mine=isMe(b.owner), lv=b.lv||1, now=Date.now()+skew;
     if(b.plot&&!mine) card.append(el('p',{class:'hint',text:`It stands on @${b.owner}'s land.`}));
@@ -5675,6 +5708,9 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
             if(q.problem) box.append(el('p',{class:'warnline',text:q.problem}));
             else box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Upgrade for ${fmt(q.total)}`,onclick:()=>toast(`Upgrade ${b.name||t.name} to level ${q.level} for ${fmt(q.total)} coins?`,'Upgrade',async()=>{ const r=await meAction(`/api/me/buildings/${encodeURIComponent(b.id)}/upgrade`,{},r=>`The builders are on it. Level ${r.level} in ${realTime(r.minutes*GAME_MIN_MS)}.`); if(r) this.up=null; })}))); } } }
       card.append(box); }
+    if(mine&&!b.ruin) card.append(el('div',{class:'row-actions'},
+      el('button',{class:'btn sm',text:'✏️ Rename',onclick:()=>this.renameSheet(b,t)}),
+      b.plot&&!b.upAt?el('button',{class:'btn sm',text:'✥ Move',onclick:()=>{ closeCard(); setTool({kind:'move',id:b.id,rot:b.rot||0,mine:true}); toast(`Drag ${b.name||t.name} to another spot on your plot and let go. Tap ⟲ Turn to face it the other way. It can't leave the plot.`); }}):''));
     if(mine&&b.plot&&b.done!==false&&!b.upAt) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn sm',text:'🗺️ Your plot',onclick:()=>{ sel={kind:'p',id:b.plot}; renderCard(true); }}), el('button',{class:'linkb',text:'Knock it down',onclick:()=>toast(`Knock down ${b.name||t.name}? The builders give back 30% of what it cost.`,'Knock down',()=>meAction(`/api/me/buildings/${encodeURIComponent(b.id)}/knock`,{},r=>r.back?`Knocked down. ${fmt(r.back)} coins back.`:'Knocked down.'))})));
     if(b.owner&&!mine&&b.done!==false&&!b.ruin) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'🤝 Make an offer',onclick:()=>b.plot?this.offerSheet('plot',b.plot,`@${b.owner}'s plot with ${b.name||t.name}`,b.owner):this.offerSheet('building',b.id,b.name||t.name,b.owner)})));
   } };

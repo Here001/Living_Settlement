@@ -20,7 +20,7 @@ export const bRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy
   done: r.done !== false, readyAt: r.ready_at || 0, ruin: !!r.ruin, ruinedAt: r.ruined_at || 0, owner: r.owner_handle || null,
   w: r.w, d: r.d, lv: r.level || 1, plot: r.plot_id || null, upAt: Number(r.up_at || 0) });
 export const pRow = r => ({ id: r.id, x: r.x, y: r.y, w: r.w, d: r.d, cx: r.cx, cy: r.cy, owner: r.owner_handle, name: r.name || '' });
-const vRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, placedAt: r.placed_at });
+const vRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, placedAt: r.placed_at, owner: r.owner_handle || null });
 const tileKeys = keys => keys.filter(k => /^-?\d{1,7},-?\d{1,7}$/.test(k));
 const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_cy], [c.hang_cx, c.hang_cy], [c.visit_cx, c.visit_cy]]
   .filter(([x]) => x !== null && x !== undefined).map(([x, y]) => R.chunkKey(x, y)))];

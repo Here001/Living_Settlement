@@ -265,7 +265,7 @@ export class Housing {
       const oid = uid(), now = Date.now();
       await ch.q('insert into offers (id, kind, target_id, label, from_id, from_handle, to_id, to_handle, amount, message, created_at, expires_at) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
         [oid, t.kind, t.id, t.label, c.id, c.handle, t.owner_id, t.owner_handle, amount, message, now, now + OFFER_MS]);
-      await this.world.actions?.notify(ch, t.owner_id, 'offer', `🤝 @${c.handle} offers ${fmt(amount)} coins for ${t.label}${message ? `: “${message}”` : '.'} Answer within 24 hours (Home tab).`);
+      await this.world.actions?.notify(ch, t.owner_id, 'offer', `🤝 @${c.handle} offers ${fmt(amount)} coins for ${t.label}${message ? `: “${message}”` : '.'} Answer within 24 hours in Chats → 🤝 Offers.`);
       return { ok: true, id: oid };
     });
   }
@@ -275,7 +275,7 @@ export class Housing {
   }
   async offers(id) {
     await this.expireOffers(true);
-    const rows = (await pool.query("select * from offers where (to_id = $1 or from_id = $1) and (status in ('open', 'countered') or closed_at > $2) order by created_at desc limit 60", [id, Date.now() - 3 * 86400000])).rows;
+    const rows = (await pool.query("select * from offers where ((to_id = $1 and not to_hidden) or (from_id = $1 and not from_hidden)) and (status in ('open', 'countered') or closed_at > $2) order by created_at desc limit 100", [id, Date.now() - 7 * 86400000])).rows;
     return { incoming: rows.filter(o => o.to_id === id).map(o => this.offerOut(o, id)), outgoing: rows.filter(o => o.from_id === id).map(o => this.offerOut(o, id)), tax: R.TRANSFER_TAX };
   }
   async offersOn(kind, targetId) { return (await pool.query("select * from offers where kind = $1 and target_id = $2 and status in ('open', 'countered') and expires_at > $3 order by amount desc", [kind, targetId, Date.now()])).rows.map(o => this.offerOut(o, o.to_id)); }
@@ -288,6 +288,13 @@ export class Housing {
     const act = String(body?.action || ''), reply = String(body?.reply || '').trim().slice(0, 200);
     return this.world.change(async ch => {
       const o = (await ch.q('select * from offers where id = $1 for update', [String(offerId)])).rows[0]; if (!o) throw new HttpError(404, 'No such offer.');
+      if (act === 'delete') { // take it off your list: an open offer you made is withdrawn first; one made to you must be answered first
+        if (o.from_id !== id && o.to_id !== id) throw new HttpError(403, 'That offer is not yours.');
+        const live = ['open', 'countered'].includes(o.status) && Number(o.expires_at) > Date.now();
+        if (live && o.to_id === id) throw new HttpError(409, 'Answer the offer first (accept, counter or decline).');
+        if (live) { await ch.q("update offers set status = 'withdrawn', closed_at = $2 where id = $1", [o.id, Date.now()]); await this.world.actions?.notify(ch, o.to_id, 'offer', `🤝 @${o.from_handle} withdrew their offer for ${o.label}.`); }
+        await ch.q(`update offers set ${o.from_id === id ? 'from_hidden' : 'to_hidden'} = true where id = $1`, [o.id]); return { ok: true, status: 'deleted' };
+      }
       if (!['open', 'countered'].includes(o.status) || Number(o.expires_at) <= Date.now()) throw new HttpError(409, 'That offer is closed.');
       const seller = o.to_id === id, buyer = o.from_id === id; if (!seller && !buyer) throw new HttpError(403, 'That offer is not yours.');
       const close = async status => ch.q('update offers set status = $2, reply = $3, closed_at = $4 where id = $1', [o.id, status, reply || o.reply, Date.now()]);

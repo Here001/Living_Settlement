@@ -282,7 +282,11 @@ const MIGRATIONS = [
    create index if not exists fight_bets_bout on fight_bets (n, i);
    create index if not exists fight_bets_who on fight_bets (citizen_id, n);
    create table if not exists fighters (citizen_id text primary key, handle text not null, wins int not null default 0, losses int not null default 0,
-     kos int not null default 0, rating int not null default 1000, purses bigint not null default 0);`
+     kos int not null default 0, rating int not null default 1000, purses bigint not null default 0);`,
+  // v53: boats and aircraft players buy at the dealer show on the map as their own vehicles; offers can be cleared from your list
+  `alter table vehicles add column if not exists owner_id text; alter table vehicles add column if not exists owner_handle text; alter table vehicles add column if not exists car_id text;
+   create index if not exists vehicles_owner on vehicles (owner_id);
+   alter table offers add column if not exists from_hidden boolean not null default false; alter table offers add column if not exists to_hidden boolean not null default false;`
 ];
 
 export async function migrate() {

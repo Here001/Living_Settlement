@@ -725,6 +725,13 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     { const Rr = await import('../shared/rules.js'); const hp = Rr.propertyPrice('house'), inc = Rr.fullIncome('house') * 48;
       ok(hp === 37000 && hp / inc > 28 && hp / inc < 32 && Rr.propertyPrice('tent') === 5000, 'a full building pays for itself in about a real month (a House: 37,000)', JSON.stringify({ hp, inc })); }
     ok((await call('POST', '/api/me/cars', { model: 'tank', buildingId: lot }, P)).status === 400, 'only cars the dealer sells');
+    { await set('zara_ng', 'coins_base = 2000000'); const bk = await call('POST', '/api/me/cars', { model: 'bicycle', buildingId: lot }, P);
+      ok(bk.status === 200 && bk.json.car.m === 'bicycle', 'bikes are sold at the dealer too', JSON.stringify(bk.json));
+      ok((await call('POST', '/api/me/cars', { model: 'motorbike', buildingId: lot }, P)).status === 409, 'cars and bikes share the 3-place garage');
+      const hc = await call('POST', '/api/me/cars', { model: 'helicopter', buildingId: lot }, P), v = (await pool.query("select * from vehicles where owner_id = (select id from citizens where handle = 'zara_ng')")).rows;
+      ok(hc.status === 200 && v.length === 1 && v[0].type === 'helicopter' && v[0].owner_handle === 'zara_ng', 'boats and aircraft are sold at the dealer too: a helicopter takes to the sky over your home', JSON.stringify(hc.json).slice(0, 200));
+      ok((await call('PUT', '/api/me/cars/active', { id: hc.json.car.id }, P)).status === 409, "you don't ride a helicopter to work");
+      const sh = await call('DELETE', `/api/me/cars/${hc.json.car.id}`, undefined, P); ok(sh.status === 200 && sh.json.back === 360000 && !(await pool.query("select 1 from vehicles where car_id = $1", [hc.json.car.id])).rowCount, 'sell it back: it leaves the sky', JSON.stringify(sh.json)); }
     // moving home
     const spare = await build('house', 950, 900);
     const hl = (await call('GET', '/api/me/homes', undefined, P)).json;
@@ -1525,6 +1532,11 @@ r = await call('POST', '/api/me/offers', { kind: 'plot', targetId: p2, amount: 1
 r = await call('POST', `/api/me/offers/${o3}`, { action: 'decline', reply: 'No way' }, A.P); ok(r.json.status === 'declined', 'the owner declines');
 r = await call('POST', '/api/me/offers', { kind: 'plot', targetId: p2, amount: 20 }, B.P); const o4 = r.json.id;
 r = await call('POST', `/api/me/offers/${o4}`, { action: 'withdraw' }, B.P); ok(r.json.status === 'withdrawn', 'the buyer withdraws');
+ok((await call('POST', `/api/me/offers/${o3}`, { action: 'delete' }, A.P)).json.status === 'deleted' && !(await call('GET', '/api/me/offers', undefined, A.P)).json.incoming.some(o => o.id === o3), 'a closed offer can be deleted from your list');
+{ r = await call('POST', '/api/me/offers', { kind: 'plot', targetId: p2, amount: 25 }, B.P); const o6 = r.json.id;
+  ok((await call('POST', `/api/me/offers/${o6}`, { action: 'delete' }, A.P)).status === 409, "the owner can't delete an offer before answering it");
+  const dl = await call('POST', `/api/me/offers/${o6}`, { action: 'delete' }, B.P), ob = (await call('GET', '/api/me/offers', undefined, B.P)).json, oa = (await call('GET', '/api/me/offers', undefined, A.P)).json;
+  ok(dl.json.status === 'deleted' && !ob.outgoing.some(o => o.id === o6) && oa.incoming.find(o => o.id === o6)?.status === 'withdrawn', 'the buyer deletes an offer they changed their mind about: it is withdrawn and gone from their list', JSON.stringify(dl.json)); }
 // expiry
 r = await call('POST', '/api/me/offers', { kind: 'plot', targetId: p2, amount: 30 }, B.P); const o5 = r.json.id;
 await pool.query('update offers set expires_at = $2 where id = $1', [o5, Date.now() - 1]);
@@ -1568,6 +1580,7 @@ const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 
   const col = await call('POST', '/api/admin/buildings', { type: 'colosseum', x: 4300, y: 4300 }); await call('POST', `/api/admin/buildings/${col.json.building?.id}/finish`);
   ok(col.status === 200, 'build a Colosseum', JSON.stringify(col.json).slice(0, 200));
   await sleep(5200); // the arena list refreshes every few seconds
+  await call('POST', '/api/admin/test/fight-soon', { in: 2 * 3600000, gap: 4000 }); // the next night is hours away: sign-ups open (whatever the clock says)
   let fi = (await call('GET', '/api/fight', undefined, F1.P)).json;
   ok(fi.arena && fi.night && fi.night.open && !fi.bouts.length, 'the next Fight Night is open for sign-ups', JSON.stringify(fi.night));
   ok(fi.me && fi.me.style && fi.me.rating === 1000, 'every player has a fighting style and a starting rating', JSON.stringify(fi.me));

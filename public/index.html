@@ -860,7 +860,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 </script>
 <script type="module">
 window.__booted=true; try{ sessionStorage.removeItem('resurgence-reloaded'); const u=new URL(location.href); if(u.searchParams.has('r')){ u.searchParams.delete('r'); history.replaceState(null,'',u.pathname+u.search+u.hash); } }catch(e){} /* the code loaded: no rescue needed */
-import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank, carPaid, kindOf } from '/shared/catalog.js';
+import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank, carPaid, kindOf, carKind, ridden } from '/shared/catalog.js';
 import { TABLE_W, TABLE_H, BALL_R, POCKETS } from '/shared/snooker.js';
 import { placeOk, placeAuto, HEAD_X, BAULK_X, D_R } from '/shared/cuegames.js';
 import { TABLE_GAMES, WHOT_SHAPES, LUDO_SAFE, RAKE, MAX_STAKE } from '/shared/boardgames.js';
@@ -4334,10 +4334,18 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     body.append(el('div',{class:'chatseg',role:'tablist'},
       el('button',{class:'pill'+(this.view==='chats'?' on':''),role:'tab','aria-selected':String(this.view==='chats'),text:'Chats',onclick:()=>{ this.view='chats'; this.renderNow(); }}),
       el('button',{class:'pill'+(this.view==='requests'?' on':''),role:'tab','aria-selected':String(this.view==='requests'),onclick:()=>{ this.view='requests'; this.renderNow(); }}, 'Requests', reqs.length?el('b',{class:'tbadge',text:String(reqs.length)}):null),
+      (()=>{ const O=Plots.loadOffers(), n=O?O.incoming.filter(o=>o.status==='open').length+O.outgoing.filter(o=>o.status==='countered').length:0;
+        return el('button',{class:'pill'+(this.view==='offers'?' on':''),role:'tab','aria-selected':String(this.view==='offers'),onclick:()=>{ this.view='offers'; Plots.loadOffers(true); this.renderNow(); }}, '🤝 Offers', n?el('b',{class:'tbadge',text:String(n)}):null); })(),
       el('button',{class:'pill newg',text:'➕ New group',onclick:()=>{ this.making={name:'',pick:new Set(),extra:''}; this.renderNow(); }})));
     const row=c=>{ const av=el('span',{class:'ava sm'+(c.with.online?' on':'')}); av.innerHTML=avatarSVG({handle:c.with.h,id:c.with.id||c.with.h,gender:c.with.g});
       return el('button',{class:'person dmrow'+(c.unread?' unread':''),onclick:()=>this.open(c.with.h)}, av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:(c.pinned?'📌 ':'')+(c.with.n?`${c.with.n} · @${c.with.h}`:'@'+c.with.h)}), el('div',{class:'what',text:c.last?(c.last.mine?'You: ':'')+plainMsg(c.last.text):''})),
         c.unread?el('b',{class:'tbadge',text:String(c.unread)}):el('time',{class:'hint',text:c.last?ago(c.last.t):''})); };
+    if(this.view==='offers'){ const O=Plots.loadOffers();
+      body.append(el('p',{class:'hint',text:'Offers to buy homes, businesses and land. Anyone can make an offer on your property, and you can answer each one. You can have one offer waiting on each property; withdraw it or wait for an answer before making another.'}));
+      if(!O){ body.append(el('p',{class:'hint',text:'Loading…'})); p.append(body); return; }
+      const sec=(title,list,empty)=>{ body.append(el('h3',{text:`${title} (${list.length})`})); if(!list.length){ body.append(el('p',{class:'hint',text:empty})); return; } const ul=el('ul',{class:'offers'}); for(const o of list) ul.append(Plots.offerRow(o,true)); body.append(ul); };
+      sec('📥 Offers for your property',O.incoming,'No offers for your property right now.'); sec('📤 Offers you made',O.outgoing,'You haven’t made any offers. Tap a home or business someone owns and choose 🤝 Make an offer.');
+      p.append(body); return; }
     if(this.view==='requests'){
       body.append(el('p',{class:'hint',text:'Chats other colonists started with you. You can reply to them here; accept one to move it to your chats.'}));
       if(!reqs.length) body.append(el('p',{class:'hint',text:'No friend requests.'}));
@@ -4600,11 +4608,13 @@ setInterval(()=>{ if(document.hidden||activeTab!=='races'||!Race.info) return; u
   const live=liveRace(), lr=Race.info.last; if(anyStart||(nx&&raceNow()>=nx.start&&raceNow()<nx.start+3000) || (live&&!$('raceLanes')&&live.el<Race.info.len/1000) || (lr&&!lr.settled&&live&&live.el>Race.info.len/1000+3&&Date.now()-Race.loadAt>4000)) loadRace(); },250);
 function watchTrack(){ const I=Race.info&&Race.info.track; if(!I) return; const t=D.buildings.get(I.id)||{type:'racetrack',x:I.x,y:I.y}; const [w,d]=T(t).size, p=iso(t.x+w/2,t.y+d/2); cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.4); follow=null; openTab(null); }
 // The track's oval in tile space; runners go once round, starting at the front straight.
-function trackPoint(b, lane, p){ const rot=!!b.rot, t0=BUILDING_TYPES[b.type], [w,d]=t0.size, bx=rot?b.y:b.x, by=rot?b.x:b.y;
-  const rx=w/2-0.46+(lane-2.5)*0.075, ry=d/2-0.44+(lane-2.5)*0.075, a=Math.PI/2-p*Math.PI*2, px=bx+w/2+Math.cos(a)*rx, py=by+d/2+Math.sin(a)*ry;
+// Where runner `lane` (of `n` in the field) is at progress p (0 = the start, 1 = the chequered finish line on the home
+// straight). The lanes are spread across the dirt between the two rails, however many run.
+function trackPoint(b, lane, p, n=6){ const rot=!!b.rot, t0=BUILDING_TYPES[b.type], [w,d]=t0.size, bx=rot?b.y:b.x, by=rot?b.x:b.y;
+  const inset=0.2+(n-1-Math.min(lane,n-1)+0.5)/Math.max(1,n)*0.52, rx=w/2-inset, ry=d/2-inset*(0.76/0.8), a=Math.PI/2-p*Math.PI*2, px=bx+w/2+Math.cos(a)*rx, py=by+d/2+Math.sin(a)*ry;
   return rot?[py,px]:[px,py]; }
 function drawRunners(b){ const live=liveOnTrack(b.id); if(!live) return; const order=[];
-  fieldOf(live.r).forEach((id,i)=>{ const p=raceProgress(live.r,id,live.el), [x,y]=trackPoint(b,i,p), [x2,y2]=trackPoint(b,i,Math.min(1,p+0.01)); const P=iso(x,y), Q=iso(x2,y2); order.push({id,P,dir:Q.x>=P.x?1:-1,run:p<1&&live.el>=0}); });
+  const fl=fieldOf(live.r), n=fl.length; fl.forEach((id,i)=>{ const p=raceProgress(live.r,id,live.el), [x,y]=trackPoint(b,i,p,n), [x2,y2]=trackPoint(b,i,Math.min(1,p+0.01),n); const P=iso(x,y), Q=iso(x2,y2); order.push({id,P,dir:Q.x>=P.x?1:-1,run:p<1&&live.el>=0}); });
   order.sort((a,b2)=>a.P.y-b2.P.y);
   for(const o of order){ ctx.save(); ctx.translate(o.P.x,o.P.y); ctx.scale(o.dir,1); drawCreature(o.id,0,0,0.8,T_NOW+CREATURE_IDS.indexOf(o.id)*137,o.run); ctx.restore(); } }
 
@@ -5319,11 +5329,16 @@ async function openMyTab(tab, panel){ if(!(Me&&Me.handle)) return; actTab=tab; a
   if(tab==='casino'&&casino) casino.open=true; renderCard(true);
   const show=()=>{ const box=panel&&document.querySelector('#card '+panel); if(box) box.scrollIntoView({block:'nearest',behavior:'smooth'}); };
   requestAnimationFrame(show); setTimeout(show,700); }
+// Opening one of My card's sections (Earn, Work, Home…) scrolls the card so the row of buttons sits at the top, with
+// the section right under it.
+function scrollTabsUp(){ requestAnimationFrame(()=>requestAnimationFrame(()=>{ const sc=$('card'), r=sc&&sc.querySelector('.acttabs'); if(!r) return;
+  let box=r.parentElement; while(box&&box!==document.body){ const st=getComputedStyle(box); if(/(auto|scroll)/.test(st.overflowY)&&box.scrollHeight>box.clientHeight) break; box=box.parentElement; }
+  if(!box||box===document.body) return; box.scrollTo({top:box.scrollTop+r.getBoundingClientRect().top-box.getBoundingClientRect().top-6,behavior:'smooth'}); })); }
 const BUYABLE=new Set(['housing','shops','offices','industry']); // what players may own (matches the server)
 function actionTabs(c){ const wrap=el('div',null); const gb=GuideUI.box(); if(gb) wrap.append(gb); const dr=Daily.row(); if(dr) wrap.append(dr);
   if(!PushUI.st&&!PushUI.busy) PushUI.load().then(()=>{ if(sel&&sel.kind==='c') renderCard(true); });
   wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}), el('button',{class:'btn sm',text:'⚙️ Settings',onclick:()=>PushUI.sheet()}))); const row=el('div',{class:'acttabs',role:'tablist'});
-  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home',MyHome.data&&MyHome.data.props?`🏠 Home · ${MyHome.data.props} 🏢`:'🏠 Home'],['wallet','👛 Wallet'],['cars','Cars'],['crime','Crime'],['badges','⭐ Stars']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=actTab===id?null:id; renderCard(true); }}));
+  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home',MyHome.data&&MyHome.data.props?`🏠 Home · ${MyHome.data.props} 🏢`:'🏠 Home'],['wallet','👛 Wallet'],['cars','Cars'],['crime','Crime'],['badges','⭐ Stars']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=actTab===id?null:id; renderCard(true); if(actTab) scrollTabsUp(); }}));
   if(actTab==='bank') actTab='wallet'; if(actTab==='pet'||actTab==='casino'||actTab==='out') actTab='earn'; if(!actTab){ wrap.append(row); return wrap; } const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>Stars.panel(c), earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
 // ---- Home (rent or move, and the buildings you own), Bank, Cars ----
@@ -5350,7 +5365,7 @@ function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🏠
       el('p',{class:'hint',text:'Find a home to rent: tap a housing building on the map and choose 🔑 Rent here. You pay a moving-in fee and the movers, and you’ll be given a job nearby.'}),
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🔎 Find a home to rent',onclick:()=>findHomeToRent()}))); }
   const ob=ownedBox(c); if(ob) box.append(ob);
-  const of=Plots.offersBox(); if(of) box.append(of);
+  { const O=Plots.loadOffers(), n=O?O.incoming.filter(o=>o.status==='open').length:0; box.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:`🤝 Offers${n?` (${n} new)`:''}`,onclick:()=>{ Chats.view='offers'; openTab('chats'); Plots.loadOffers(true); }}))); }
   return box; }
 // ---- Sending a location: a spot on the map travels in a message as "📍 label" plus a tag [at:x,y] that chats show as a
 // little card with "View on map" and "Go there". Anyone can send one from a building, a plot, empty grass, or a chat.
@@ -5470,8 +5485,8 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
   offerSheet(kind,targetId,label,owner){ const {box,close}=sheetBox(`🤝 Make an offer`), amt=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric',placeholder:'Coins','aria-label':'Coins'}), msg=el('textarea',{maxlength:'200',rows:'3',placeholder:`A message for @${owner} (optional)`,'aria-label':'Message'});
     box.append(el('p',{class:'hint',text:`For ${label}, owned by @${owner}. They have 24 hours to accept, turn it down, or name their price. Your coins (cash, then savings) are only taken if the deal is agreed. ${Math.round(TRANSFER_TAX*100)}% of the price goes to the treasury as transfer tax.`}), amt, msg,
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Send offer',onclick:async()=>{ const n=Math.floor(Number(amt.value)); if(!(n>=1)){ toast('Enter how many coins you offer.'); return; } const r=await meAction('/api/me/offers',{kind,targetId,amount:n,message:msg.value},`Offer sent to @${owner}. You'll hear back within 24 hours.`); if(r){ close(); Plots.offersAt=0; } }}), el('button',{class:'linkb',text:'Cancel',onclick:close}))); },
-  loadOffers(force){ if(!(Me&&Me.token)) return null; if((force||Date.now()-this.offersAt>20000)&&!this.offersBusy){ this.offersBusy=true; api('/api/me/offers').then(d=>{ this.offers=d; this.offersAt=Date.now(); }).catch(()=>{}).finally(()=>{ this.offersBusy=false; if(sel) renderCard(true); }); } return this.offers; },
-  async answer(o,action,extra){ const r=await meAction(`/api/me/offers/${encodeURIComponent(o.id)}`,{action,...(extra||{})},r=>r.status==='accepted'?`🔑 Deal done for ${fmt(r.price)} coins.`:r.status==='failed'?`The deal fell through: ${r.why}`:r.status==='countered'?'Counter-offer sent.':r.status==='declined'?'Turned down.':'Offer withdrawn.'); if(r){ this.offersAt=0; this.loadOffers(true); Money.at=0; MyHome.at=0; this.info.clear(); } },
+  loadOffers(force){ if(!(Me&&Me.token)) return null; if((force||Date.now()-this.offersAt>20000)&&!this.offersBusy){ this.offersBusy=true; api('/api/me/offers').then(d=>{ this.offers=d; this.offersAt=Date.now(); }).catch(()=>{}).finally(()=>{ this.offersBusy=false; if(sel) renderCard(true); if(activeTab==='chats'&&Chats.view==='offers') Chats.renderNow(); }); } return this.offers; },
+  async answer(o,action,extra){ const r=await meAction(`/api/me/offers/${encodeURIComponent(o.id)}`,{action,...(extra||{})},r=>r.status==='accepted'?`🔑 Deal done for ${fmt(r.price)} coins.`:r.status==='failed'?`The deal fell through: ${r.why}`:r.status==='countered'?'Counter-offer sent.':r.status==='declined'?'Turned down.':r.status==='deleted'?(o.mine&&(o.status==='open'||o.status==='countered')?'Offer withdrawn and deleted.':'Deleted.'):'Offer withdrawn.'); if(r){ this.offersAt=0; this.loadOffers(true); Money.at=0; MyHome.at=0; this.info.clear(); if(activeTab==='chats') Chats.renderNow(); } },
   counterSheet(o){ const {box,close}=sheetBox('Name your price'), amt=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric',value:String(Math.round(o.amount*1.2)),'aria-label':'Coins'}), msg=el('input',{type:'text',maxlength:'200',placeholder:'A message (optional)','aria-label':'Message'});
     box.append(el('p',{class:'hint',text:`@${o.from} offered ${fmt(o.amount)} coins for ${o.label}. What would you sell it for? They'll have 24 hours to accept.`}), amt, msg, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Send counter-offer',onclick:async()=>{ const n=Math.floor(Number(amt.value)); if(!(n>=1)) return; close(); this.answer(o,'counter',{amount:n,reply:msg.value}); }})));
   },
@@ -5482,8 +5497,9 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
       if(!o.mine&&o.status==='open') acts.append(el('button',{class:'btn primary sm',text:'Accept',onclick:()=>toast(`Sell ${o.label} to @${o.from} for ${fmt(o.amount)}? You get ${fmt(o.amount-Math.round(o.amount*TRANSFER_TAX))} after the transfer tax.`,'Sell',()=>this.answer(o,'accept'))}), el('button',{class:'btn sm',text:'Counter',onclick:()=>this.counterSheet(o)}), el('button',{class:'linkb',text:'Decline',onclick:()=>this.answer(o,'decline')}));
       else if(!o.mine) acts.append(el('span',{class:'hint',text:'Waiting for their answer to your counter.'}));
       else if(o.status==='countered') acts.append(el('button',{class:'btn primary sm',text:`Pay ${fmt(o.counter)}`,onclick:()=>toast(`Buy ${o.label} for ${fmt(o.counter)} coins?`,'Buy',()=>this.answer(o,'accept'))}), el('button',{class:'linkb',text:'Decline',onclick:()=>this.answer(o,'decline')}));
-      else acts.append(el('button',{class:'linkb',text:'Withdraw',onclick:()=>this.answer(o,'withdraw')}));
+      else acts.append(el('button',{class:'btn sm danger',text:'Withdraw',onclick:()=>toast(`Withdraw your ${fmt(o.amount)}-coin offer for ${o.label}?`,'Withdraw',()=>this.answer(o,'delete'))}));
       li.append(acts); }
+    else li.append(el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'🗑 Delete',onclick:()=>this.answer(o,'delete')})));
     return li; },
   offersBox(){ const O=this.loadOffers(); if(!O) return null; const all=[...O.incoming,...O.outgoing]; if(!all.length) return null;
     const box=el('div',{class:'owned'}, el('h3',{text:`🤝 Offers${O.incoming.some(o=>o.status==='open')?' · answer needed':''}`})), ul=el('ul',{class:'joblist offers'});
@@ -5609,15 +5625,17 @@ function giftBox(handle){ const wrap=el('div',{class:'row-actions'});
   return el('div',{class:'authbox'}, el('h3',{text:`Gift coins to @${handle}`}), el('p',{class:'hint',text:'Paid from the cash on you. Up to 10,000 a day.'}),
     el('div',{class:'cbet'}, inp, el('button',{class:'btn primary',text:'Send',onclick:()=>sendGift(handle, inp.value)}), el('button',{class:'linkb',text:'Cancel',onclick:()=>{ giftOpen=null; renderCard(true); }}))); }
 let carPick={ m:'hatch', col:null };
-function carThumb(m,col){ const k='car:'+m+':'+col; if(creatureThumbs[k]) return creatureThumbs[k]; const cv2=document.createElement('canvas'); cv2.width=96; cv2.height=64; const keep=ctx; ctx=cv2.getContext('2d');
+function carThumb(m,col){ const M0=CAR_MODELS[m]; if(M0&&M0.vtype) return vehicleThumb(M0.vtype); const k='car:'+m+':'+col; if(creatureThumbs[k]) return creatureThumbs[k]; const cv2=document.createElement('canvas'); cv2.width=96; cv2.height=64; const keep=ctx; ctx=cv2.getContext('2d');
   try{ ctx.setTransform(2.2,0,0,2.2,48,40); drawVehicle0(0,0,1,0,CAR_MODELS[m],col,false,1); } finally { ctx=keep; } return creatureThumbs[k]=cv2.toDataURL(); }
 // The Cars tab: the cars you own (drive one, or sell). Buying happens at a Car dealership.
 function myCars(){ if(!(Me&&Me.handle)) return { cars:[], active:null, home:false }; const c=[...S.citizens.values()].find(x=>x.handle.toLowerCase()===Me.handle.toLowerCase()), d=c&&detail.get(c.id);
   if(c&&!d&&!myCars.loading){ myCars.loading=true; loadDetail(c.handle).finally(()=>{ myCars.loading=false; if(sel) renderCard(true); }); }
   return { cars:(d&&d.cars)||[], active:d&&d.carActive, home:!!(c&&c.home), c }; }
-function garageList(cars, active){ const ul=el('ul',{class:'joblist'}); for(const car of cars){ const M=CAR_MODELS[car.m]; if(!M) continue;
-    ul.append(el('li',null, el('img',{src:carThumb(car.m,car.col),alt:'',width:'48',height:'32'}), el('div',{class:'jt'}, el('b',{text:M.name+(car.id===active?' · driving':'')}), el('span',{text:`Sells for ${fmt(Math.floor(carPaid(car)*0.6))}`})),
-      car.id===active?'':el('button',{class:'btn',text:'Drive',onclick:()=>meAction('/api/me/cars/active',{id:car.id},`You're driving the ${M.name.toLowerCase()} now.`,'PUT')}),
+function garageList(cars, active){ const ul=el('ul',{class:'joblist'}); for(const car of cars){ const M=CAR_MODELS[car.m]; if(!M) continue; const road=ridden(car.m);
+    const where=M.kind==='water'?' · on the water':M.kind==='air'?' · in the sky':car.id===active?(M.kind==='bike'?' · riding':' · driving'):'';
+    const find=()=>{ const v=[...D.vehicles.values()].find(x=>x.owner&&Me&&x.owner.toLowerCase()===Me.handle.toLowerCase()&&x.type===M.vtype); if(!v){ toast('It’s out of sight right now.'); return; } const p=iso(v.x,v.y); cam.x=p.x; cam.y=p.y-(VEHICLE_TYPES[v.type].alt||0); follow=null; sel={kind:'v',id:v.id}; renderCard(true); };
+    ul.append(el('li',null, el('img',{src:carThumb(car.m,car.col),alt:'',width:'48',height:'32'}), el('div',{class:'jt'}, el('b',{text:M.name+where}), el('span',{text:`Sells for ${fmt(Math.floor(carPaid(car)*0.6))}`})),
+      !road?el('button',{class:'btn',text:'Find it',onclick:find}):car.id===active?'':el('button',{class:'btn',text:M.kind==='bike'?'Ride':'Drive',onclick:()=>meAction('/api/me/cars/active',{id:car.id},`You're ${M.kind==='bike'?'riding':'driving'} the ${M.name.toLowerCase()} now.`,'PUT')}),
       el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell your ${M.name.toLowerCase()} for ${fmt(Math.floor(carPaid(car)*0.6))} coins?`,'Sell',()=>meAction(`/api/me/cars/${car.id}`,null,r=>`Sold for ${fmt(r.back)} coins.`,'DELETE'))}))); }
   return ul; }
 function carsPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚗 Your cars'})); const d=detail.get(c.id); const cars=(d&&d.cars)||[], active=d&&d.carActive;
@@ -5627,14 +5645,14 @@ function carsPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚗
   box.append(el('div',{class:'row-actions'}, lot?el('button',{class:'btn primary',text:'🚘 Go to the Car dealership',onclick:()=>goToBuilding(lot)}):el('span',{class:'hint',text:'Cars are bought at a Car dealership. The colony doesn’t have one yet.'})));
   return box; }
 // The Car dealership's card: buy a new car, or sell one of yours.
-function dealerSection(b){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚘 Showroom'}));
+function dealerSection(b){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚘 Showroom: cars, bikes, boats and aircraft'}));
   if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to buy a car.'})); return box; }
   const my=myCars(); if(!my.home){ box.append(el('p',{class:'hint',text:'You need a home (and a driveway) before you buy a car.'})); }
-  else if(my.cars.length>=3) box.append(el('p',{class:'hint',text:'Your garage is full (3 cars). Sell one below to make room.'}));
   else { const M=CAR_MODELS[carPick.m]; if(!carPick.col||!M.colors.includes(carPick.col)) carPick.col=M.colors[0];
-    const g=el('div',{class:'petgrid'}); for(const [k,m] of Object.entries(CAR_MODELS)) g.append(el('button',{class:'petb'+(carPick.m===k?' on':''),'aria-pressed':String(carPick.m===k),onclick:()=>{ carPick={m:k,col:null}; renderCard(true); }}, el('img',{src:carThumb(k,k===carPick.m?carPick.col:m.colors[0]),alt:'',width:'54',height:'36'}), el('span',{text:`${m.name}`}), el('span',{class:'hint',text:`${fmt(m.price)}`})));
+    const g=el('div',null); for(const [kind,label] of [['car','🚗 Cars'],['bike','🚲 Bikes'],['water','🚤 Boats & ships'],['air','🚁 Aircraft']]){ const gg=el('div',{class:'petgrid'}); g.append(el('h4',{class:'bgroup',text:label}),gg); for(const [k,m] of Object.entries(CAR_MODELS).filter(([k])=>carKind(k)===kind)) gg.append(el('button',{class:'petb'+(carPick.m===k?' on':''),'aria-pressed':String(carPick.m===k),onclick:()=>{ carPick={m:k,col:null}; renderCard(true); }}, el('img',{src:carThumb(k,k===carPick.m?carPick.col:m.colors[0]),alt:'',width:'54',height:'36'}), el('span',{text:`${m.name}`}), el('span',{class:'hint',text:`${fmt(m.price)}`}))); }
     const sw=el('div',{class:'swatches'}); for(const col of M.colors) sw.append(el('button',{class:'sw'+(carPick.col===col?' on':''),style:`background:${col}`,'aria-label':'Colour','aria-pressed':String(carPick.col===col),onclick:()=>{ carPick.col=col; renderCard(true); }}));
-    box.append(el('h4',{class:'bgroup',text:'Buy a car'}), g, sw, el('p',{class:'hint',text:`Upkeep: ${fmt(M.upkeep)} coins a week. Resale value: 60% of what you paid.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy the ${M.name.toLowerCase()} for ${fmt(M.price)}`,onclick:()=>meAction('/api/me/cars',{model:carPick.m,color:carPick.col,buildingId:b.id},r=>`Enjoy your new ${M.name.toLowerCase()}!`)}))); }
+    const why=M.kind==='water'?'It’s kept on the water nearest your home, where everyone can see it cruise. ':M.kind==='air'?'It flies over the colony from your home, for everyone to see. ':M.kind==='bike'?'You ride it on longer trips. ':'';
+    box.append(g, M.colors.length>1?sw:'', el('p',{class:'hint',text:`${why}Upkeep: ${fmt(M.upkeep)} coins a week. Resale value: 60% of what you paid. You can keep 3 cars and bikes, and 3 boats and aircraft.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy the ${M.name.toLowerCase()} for ${fmt(M.price)}`,onclick:()=>meAction('/api/me/cars',{model:carPick.m,color:carPick.col,buildingId:b.id},r=>`Enjoy your new ${M.name.toLowerCase()}!`)}))); }
   if(my.cars.length) box.append(el('h4',{class:'bgroup',text:'Sell one of yours'}), garageList(my.cars, my.active));
   return box; }
 async function meAction(path, body, ok, method){ try{ const r=await api(path,{method:method||'POST',body}); GuideUI.at=0; if(ok) toast(typeof ok==='function'?ok(r):ok); if(r&&typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
@@ -5841,7 +5859,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
   } else if(sel.kind==='p'){ Plots.card(card, close);
   } else if(sel.kind==='g'){ Plots.grassCard(card, close);
   } else if(sel.kind==='v'){ const v=D.vehicles.get(sel.id); if(!v){ closeCard(); return; } const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car;
-    const head=el('div',{class:'chead'}); head.append(el('img',{class:'cthumb',alt:'',src:vehicleThumb(v.type)}), el('div',null, el('h2',{text:V.name}), el('p',{class:'now',text:'Driving around the neighbourhood'})));
+    const head=el('div',{class:'chead'}); head.append(el('img',{class:'cthumb',alt:'',src:vehicleThumb(v.type)}), el('div',null, el('h2',{text:V.name}), el('p',{class:'now',text:v.owner?`Owned by @${v.owner}`:V.mode==='water'?'Cruising the water':V.mode==='air'?'Flying over the colony':'Driving around the neighbourhood'})));
     card.append(close, head); if(Store.canWrite) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:'Remove vehicle',onclick:async()=>{ if(draftOn){ draftEdit(`removing a ${V.name.toLowerCase()}`,d=>{ if(isDraftId(v.id)) d.vehicles=d.vehicles.filter(q=>q.tid!==v.id); else d.removeVehicles.push(v.id); }); closeCard(); return; } try{ await api('/api/admin/vehicles/'+encodeURIComponent(v.id),{method:'DELETE'}); closeCard(); toast(`Removed the ${V.name.toLowerCase()}`); }catch(e){ toast(e.message); } }})));
   } else if(D.buildings.get(sel.id)?.ruin){ const b=D.buildings.get(sel.id), t=T(b);
     const head=el('div',{class:'chead'}); head.append(el('img',{class:'cthumb',alt:'',src:thumbFor(b.type)}), el('div',null, el('h2',{text:`${b.name||t.name} (ruins)`}), el('p',{class:'now',text:'Destroyed in a disaster. Nobody can live or work here until it’s rebuilt.'})));

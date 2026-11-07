@@ -497,7 +497,19 @@ export const CAR_MODELS = {
   pickup: { name:'Pickup',     price:70000, upkeep:70,  len:0.72, wid:0.32, h:7, cargo:'#8C7B66', colors:['#C8382E','#2F4A7A','#E2A23B','#F2F0EA','#4A5A44'] },
   suv:    { name:'SUV',        price:95000, upkeep:95,  len:0.7,  wid:0.33, h:8, colors:['#2B2621','#F2F0EA','#5E7C99','#8C2F1B','#7C8288'] },
   sports: { name:'Sports car', price:300000, upkeep:300, len:0.66, wid:0.3,  h:5, colors:['#E4572E','#F2B33D','#2E5E8C','#F2F0EA','#2B2621'] },
+  // two wheels: ridden on trips like a car
+  bicycle:   { name:'Bicycle',   kind:'bike', price:3000,  upkeep:0,  shape:'bike', len:0.36, wid:0.1,  h:9, colors:['#D9544A','#4A7BD9','#2F7D63','#F2C94C'] },
+  motorbike: { name:'Motorbike', kind:'bike', price:18000, upkeep:15, shape:'moto', len:0.42, wid:0.14, h:9, colors:['#2B2621','#C8382E','#2F4A7A','#F2F0EA'] },
+  // boats and aircraft: kept at the water or in the sky over the colony, where everyone sees them (vtype: how they draw)
+  speedboat: { name:'Motor boat',      kind:'water', vtype:'boat',       price:150000,  upkeep:150,  colors:['#F4F4F0'] },
+  sailboat:  { name:'Sailing boat',    kind:'water', vtype:'sailboat',   price:120000,  upkeep:100,  colors:['#F4F4F0'] },
+  ship:      { name:'Ship',            kind:'water', vtype:'ferry',      price:900000,  upkeep:900,  colors:['#F4F4F0'] },
+  helicopter:{ name:'Helicopter',      kind:'air',   vtype:'helicopter', price:600000,  upkeep:600,  colors:['#C8382E'] },
+  jet:       { name:'Private plane',   kind:'air',   vtype:'plane',      price:1500000, upkeep:1500, colors:['#F4F4F0'] },
+  balloon:   { name:'Hot-air balloon', kind:'air',   vtype:'balloon',    price:250000,  upkeep:200,  colors:['#D9544A'] },
 };
+export const carKind = m => CAR_MODELS[m]?.kind || 'car'; // 'car' | 'bike' (both ridden on trips) | 'water' | 'air'
+export const ridden = m => ['car', 'bike'].includes(carKind(m));
 
 export const DISASTER_TYPES = {
   fire:       { name:'Fire', note:'burns a block', radius:2 },

@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { pool } from './db.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
-import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES, carPaid } from '../shared/catalog.js';
+import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES, carPaid, carKind, ridden } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
 import { track, snapshot, ledger } from './stats.js';
 import { bump } from './achievements.js';
@@ -168,12 +168,21 @@ export class Economy {
       const lot = (await ch.q("select id from buildings where id = $1 and type = 'cardealer' and done and not ruin", [String(buildingId || '')])).rows[0];
       if (!lot) throw new HttpError(409, 'Cars are sold at a Car dealership. Tap one on the map.');
       const c = await this.lockMe(ch, id); if (!c.home_id) throw new HttpError(400, 'You need a home (and a driveway) before you buy a car.');
-      const cars = Array.isArray(c.cars) ? c.cars : [];
-      if (cars.length >= MAX_CARS) throw new HttpError(409, `Your garage holds ${MAX_CARS} cars. Sell one first.`);
+      const cars = Array.isArray(c.cars) ? c.cars : [], road = ridden(model), same = cars.filter(x => ridden(x.m) === road).length;
+      // up to 3 cars and bikes in the garage, and up to 3 boats and aircraft
+      if (same >= MAX_CARS) throw new HttpError(409, road ? `Your garage holds ${MAX_CARS} cars and bikes. Sell one first.` : `You can keep ${MAX_CARS} boats and aircraft. Sell one first.`);
       ch.coins(c); if (c.coins_base < M.price) throw new HttpError(400, `The ${M.name} costs ${fmt(M.price)} coins. You have ${fmt(c.coins_base)} on you.`);
+      // a boat goes on the water nearest your home; an aircraft takes to the sky over it
+      let spot = null; const home = (await ch.q('select x, y from buildings where id = $1', [c.home_id])).rows[0];
+      if (M.kind === 'water') { spot = (await ch.q('select x, y from water order by (x - $1) * (x - $1) + (y - $2) * (y - $2) limit 1', [home.x, home.y])).rows[0];
+        if (!spot) throw new HttpError(409, 'The colony has no water for a boat yet.'); }
+      else if (M.kind === 'air') spot = { x: home.x, y: home.y };
       c.coins_base -= M.price; treasuryAdd(ch, M.price); track(ch, 'car:buy', M.price, c.id);
       const car = { id: crypto.randomUUID().slice(0, 8), m: model, col: color, at: Date.now(), paid: M.price }; cars.push(car); await bump(ch, c.id, { cars_bought: 1 });
-      await ch.q('update citizens set cars = $2, car_active = coalesce(car_active, $3) where id = $1', [c.id, JSON.stringify(cars), car.id]);
+      await ch.q('update citizens set cars = $2, car_active = coalesce(car_active, $3) where id = $1', [c.id, JSON.stringify(cars), road ? car.id : null]);
+      if (spot) { const [cx, cy] = R.chunkOf(spot.x, spot.y), vid = crypto.randomUUID();
+        const v = (await ch.q('insert into vehicles (id, type, x, y, cx, cy, placed_at, owner_id, owner_handle, car_id) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *', [vid, M.vtype, spot.x, spot.y, cx, cy, Date.now(), c.id, c.handle, car.id])).rows[0];
+        ch.extraOps.push({ op: 'vehicle', data: { id: v.id, type: v.type, x: v.x, y: v.y, cx, cy, placedAt: v.placed_at, owner: c.handle }, chunks: [R.chunkKey(cx, cy)] }); }
       ch.touch(c); await ch.saveCitizen(c);
       return { ok: true, car, coins: c.coins_base };
     });
@@ -183,7 +192,9 @@ export class Economy {
       const c = await this.lockMe(ch, id); const cars = Array.isArray(c.cars) ? c.cars : [], car = cars.find(x => x.id === carId);
       if (!car) throw new HttpError(404, "That car isn't in your garage.");
       const back = Math.floor(carPaid(car) * CAR_RESALE); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'car:sell', back, c.id);
-      const left = cars.filter(x => x.id !== carId), active = c.car_active === carId ? (left[0]?.id ?? null) : c.car_active;
+      const left = cars.filter(x => x.id !== carId), active = c.car_active === carId ? (left.find(x => ridden(x.m))?.id ?? null) : c.car_active;
+      const v = (await ch.q('delete from vehicles where car_id = $1 and owner_id = $2 returning id, cx, cy', [carId, c.id])).rows[0];
+      if (v) ch.extraOps.push({ op: 'removeVehicle', id: v.id, chunks: [R.chunkKey(v.cx, v.cy)] });
       await ch.q('update citizens set cars = $2, car_active = $3 where id = $1', [c.id, left.length ? JSON.stringify(left) : null, active]);
       ch.touch(c); await ch.saveCitizen(c); return { ok: true, back, coins: c.coins_base };
     });
@@ -191,7 +202,8 @@ export class Economy {
   async driveCar(id, carId) {
     return this.world.change(async ch => {
       const c = await this.lockMe(ch, id); const cars = Array.isArray(c.cars) ? c.cars : [];
-      if (!cars.some(x => x.id === carId)) throw new HttpError(404, "That car isn't in your garage.");
+      const car = cars.find(x => x.id === carId); if (!car) throw new HttpError(404, "That car isn't in your garage.");
+      if (!ridden(car.m)) throw new HttpError(409, 'Boats and aircraft stay at the water and in the sky. Pick a car or bike to ride.');
       await ch.q('update citizens set car_active = $2 where id = $1', [c.id, carId]); ch.touch(c); return { ok: true };
     });
   }

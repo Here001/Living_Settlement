@@ -874,6 +874,13 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .hparts{list-style:none;padding:0;margin:6px 0;font-size:14px}.hparts li{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
 .hcard.live{border-color:#E4572E;box-shadow:0 0 0 3px rgba(228,87,46,.35)}
 @media (prefers-reduced-motion:reduce){.mg.shakeit,.mgwin .who{animation:none;transition:none}}
+.mgcount.sm{font-size:56px;margin:4px 0;animation:none;text-shadow:0 3px 0 #2B2621}
+.arole{background:#2B2621;color:#fff;border-radius:10px;padding:5px 10px;font-weight:800;white-space:nowrap}.arole.ch{background:#C8473D}.arole.ru{background:#2E6B45}
+.acount{background:rgba(43,38,33,.85);color:#fff;border-radius:10px;padding:5px 10px;font-weight:700;white-space:nowrap;font-size:14px}
+.afeed{position:absolute;top:calc(56px + env(safe-area-inset-top));left:12px;right:12px;display:flex;flex-direction:column;gap:4px;align-items:center;pointer-events:none;z-index:2}
+.aline{background:rgba(43,38,33,.85);color:#fff;border-radius:10px;padding:4px 10px;font-size:13.5px;font-weight:700;animation:mgpop .3s ease-out 1}
+.abig{position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);font-size:clamp(26px,8vw,44px);font-weight:900;color:#F2C94C;text-shadow:0 4px 0 #2B2621;text-align:center;pointer-events:none;z-index:2;white-space:nowrap}
+.mg.arena .mgx.aquit{position:absolute;top:auto;bottom:calc(14px + env(safe-area-inset-bottom));right:14px;z-index:3;background:rgba(246,241,230,.9)}
 @media (prefers-reduced-motion:reduce){.mgcount,.mg.siren,.mgpad.shake,.mgsock.spark{animation:none}}
 </style>
 </head>
@@ -947,6 +954,7 @@ import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
 import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
+import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
 import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
@@ -1095,6 +1103,8 @@ function connect(){
       if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); Chats.load(); Daily.load(); Notices.load(); PushUI.auto(); CEvent.load(); Mayor.load(); buildToolbar(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); catchUp(); } }
     else if(m.type==='ops'){ opBatch++; try{ for(const o of m.ops){ try{ applyOp(o); }catch(err){ console.error('Skipped an update:', err); } } } finally { opBatch--; } if(!opBatch&&batchChanged){ batchChanged=false; changed(); } }
     else if(m.type==='resync') reloadAll();
+    else if(m.type==='arena') arenaMsg(m);
+    else if(m.type==='authed'){ if(m.ok) resumeArena(arenaCtx()); }
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
     else if(m.type==='gm' && m.data) Chats.gincoming(m.data);
@@ -5776,6 +5786,8 @@ function outPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Go ou
   if(P.places.length) box.append(ul); else box.append(el('p',{class:'hint',text:'Nowhere to go yet. Parks, shops and cafés appear here once they are built.'}));
   const fi=el('input',{type:'text',placeholder:'@friend',autocomplete:'off','aria-label':"Friend's username"});
   box.append(el('div',{class:'cbet'}, el('span',{text:'Visit a friend:'}), fi, el('button',{class:'btn',text:'Go',onclick:()=>meAction('/api/me/visit',{friend:fi.value},r=>`You're on your way to ${r.place}.`)}))); return box; }
+// What the street games borrow from the page: the live connection, and a few helpers.
+function arenaCtx(){ return {send:o=>{ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'arena',...o})); }catch(e){} },toast,fmt,me:()=>Me&&Me.handle,done:()=>{ loadMyMoney(); }}; }
 // What the crime mini games borrow from the page.
 function crimeCtx(){ return {api,toast,fmt,avatarSVG,me:()=>Me&&Me.handle,done:()=>{ Acts.at=0; Heist.at=0; loadMyMoney(); const me=myCitizen(); if(me) detail.delete(me.id); if(sel) renderCard(true); }}; }
 async function doCrime(kind, target){ const r=await meAction('/api/me/crime',{kind,target}); if(!r) return;
@@ -5815,8 +5827,13 @@ function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cri
   for(const [k,S0] of Object.entries(SOLO_CRIMES)){ const o=K.solo&&K.solo[k]; if(!o) continue;
     box.append(el('div',{class:'crow'}, el('div',{class:'jt'}, el('b',{text:`${S0.icon} ${S0.name}`}), el('span',{text:`${S0.blurb} ${fmt(S0.loot[0])}–${fmt(S0.loot[1])} coins.${o.at?` At ${o.at}.`:''}`}), el('span',{class:'hint',text:oddsText(o)})),
       el('button',{class:'btn danger',text:'🎮 Play',onclick:()=>play(k,o)}))); }
-  box.append(Heist.box(c));
+  box.append(Heist.box(c), streetGames());
   return box; }
+// Street games: live chase games with other colonists (and the town's own colonists filling the gaps).
+function streetGames(){ const b=el('div',{class:'heists'}, el('h3',{text:'🎮 Street games'}), el('p',{class:'hint',text:'Play live with other colonists. Empty places are filled by colonists from the town. Win with at least one other player for 400 coins (3 paid wins a day).'}));
+  for(const [k,M0] of Object.entries({tag:{icon:'🏃',name:'Hunters & Civilians',blurb:'Hunters chase the civilians; anyone caught becomes a hunter. Grab cash bags and last until the end.'},hide:{icon:'🙈',name:'Hide and seek',blurb:'25 seconds to hide in a bin, bush, crate or doorway. Then the seekers come looking.'}}))
+    b.append(el('div',{class:'crow'}, el('div',{class:'jt'}, el('b',{text:`${M0.icon} ${M0.name}`}), el('span',{text:M0.blurb})), el('button',{class:'btn primary',text:'▶ Play',onclick:()=>{ if(!(ws&&ws.readyState===1)){ toast('Connecting… try again in a moment.'); return; } openArena(k,arenaCtx()); }})));
+  return b; }
 // ---- Group crimes: plan a job, invite a crew (they get a group chat), and it goes down at the set time ----
 const Heist={ data:null, at:0, busy:false, form:null, prompted:new Set(),
   playPart(h){ const L0=h.live; openCrimeGame(L0.myRole,{heist:h.id,until:L0.until,band:L0.band,chance:L0.chance,night:L0.night,at:L0.at},crimeCtx()); },

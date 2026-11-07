@@ -977,6 +977,52 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
         const Dl = MG.genDrive(7, 1); let st = MG.driveStart(); const mv = []; while (!st.done) { st = MG.driveStep(Dl, st, st.lane); } ok(st.crashes > 0 && MG.driveReplay(Dl, []).state.crashes === st.crashes, 'driving straight ahead crashes, and the server sees the same crashes');
         const spam = []; for (let t = 0.1; t < 40; t += 0.05) spam.push(+t.toFixed(2)); ok(!MG.safeReplay(MG.genSafe(3, 2), spam, 40).money, "hammering the dial sets the alarm off"); }
       await pool.query("update citizens set jailed_until = 0, heist_at = 0, crime_at = 0, coins_base = 5000 where handle in ('zara_ng', 'jobfill_a')"); }
+    // street games: a live match over the live connection, with the town's colonists filling the empty places
+    { const AR = await import('../shared/arena.js');
+      const sock = token => new Promise(res => { const w = { msgs: [] }; w.ws = new WebSocket(BASE.replace(/^http/, 'ws') + '/ws'); w.ws.on('message', d => { try { w.msgs.push(JSON.parse(d)); } catch {} });
+        w.ws.on('open', () => { w.ws.send(JSON.stringify({ type: 'auth', token })); }); const t0 = Date.now(), wait = () => w.msgs.some(m => m.type === 'authed') || Date.now() - t0 > 3000 ? res(w) : setTimeout(wait, 50); wait(); });
+      const waitFor = async (w, f, ms = 6000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const m = w.msgs.find(f); if (m) return m; await sleep(50); } return null; };
+      const send = (w, m) => w.ws.send(JSON.stringify({ type: 'arena', ...m }));
+      await pool.query("update citizens set jailed_until = 0 where handle in ('zara_ng', 'jobfill_a')");
+      const wa = await sock(P.headers['x-player']), wb = await sock(PB.headers['x-player']);
+      send(wa, { a: 'join', mode: 'tag' }); await sleep(300); send(wb, { a: 'join', mode: 'tag' });
+      const lb = await waitFor(wb, m => m.type === 'arena' && m.k === 'lobby' && m.players.length === 2);
+      ok(lb && lb.players.includes('zara_ng') && lb.startsIn > 5000, 'joining a street game: the lobby shows who is in and when it starts', JSON.stringify(lb));
+      send(wa, { a: 'go' });
+      const sa = await waitFor(wa, m => m.type === 'arena' && m.k === 'start'), sb = await waitFor(wb, m => m.type === 'arena' && m.k === 'start');
+      ok(sa && sb && sa.id === sb.id && sa.roster.length === AR.A.minPlayers && sa.roster.filter(p => p.bot).length === AR.A.minPlayers - 2, 'start now: the match begins, and the town fills the empty places', JSON.stringify(sa && sa.roster));
+      ok(sa.role === 'civilian' && sb.role === 'civilian', 'the computer takes the hunters first, so people get to run', JSON.stringify([sa.role, sb.role]));
+      const L = AR.genArena(sa.seed); ok(AR.fits(L, sa.x, sa.y), 'everyone starts on open ground');
+      const s1 = await waitFor(wa, m => m.type === 'arena' && m.k === 's');
+      ok(s1 && s1.p.length === AR.A.minPlayers - 1 && s1.b.length === 6 && s1.n >= 2, 'ten times a second, everyone hears where everyone is (and the cash bags)', JSON.stringify(s1).slice(0, 200));
+      // a move that's too far is put back; a fair one is kept
+      wa.msgs.length = 0; send(wa, { a: 'pos', id: sa.id, x: sa.x + 6, y: sa.y });
+      const fx = await waitFor(wa, m => m.type === 'arena' && m.k === 's' && m.fix);
+      ok(fx && Math.abs(fx.fix[0] - sa.x) < 0.01, 'a move faster than you can run is refused', JSON.stringify(fx && fx.fix));
+      const q = AR.moveBy(L, sa, 1, 0, 0.3); await sleep(200); wa.msgs.length = 0; send(wa, { a: 'pos', id: sa.id, x: q.x, y: q.y });
+      ok(!(await waitFor(wa, m => m.type === 'arena' && m.k === 's' && m.fix, 600)), 'a fair move is kept');
+      const c0 = (await whoDev('zara_ng')).coins;
+      await call('POST', '/api/admin/test/arena-end');
+      const ea = await waitFor(wa, m => m.type === 'arena' && m.k === 'end'), eb = await waitFor(wb, m => m.type === 'arena' && m.k === 'end');
+      ok(ea && eb && ea.side === 'civilian' && ea.won && eb.won && ea.paid && ea.prize === AR.A.prize, 'the clock runs out with civilians still free: they win, and the people among them win coins', JSON.stringify(ea));
+      await sleep(300); ok((await whoDev('zara_ng')).coins === c0 + ea.prize, 'the prize lands in your cash');
+      ok(ea.players.length === AR.A.minPlayers && ea.players.some(p => p.bot && p.first === 'hunter'), 'the result lists everyone and what they did');
+      ok((await pool.query("select humans from arena_results where id = $1", [ea.id])).rows[0]?.humans === 2, 'the match is recorded');
+      // practice alone: no prize
+      wa.msgs.length = 0; send(wa, { a: 'join', mode: 'hide' }); await waitFor(wa, m => m.type === 'arena' && m.k === 'lobby'); send(wa, { a: 'go' });
+      const sh = await waitFor(wa, m => m.type === 'arena' && m.k === 'start');
+      ok(sh && sh.mode === 'hide' && sh.playFrom - sh.now >= 20000, 'hide and seek: the hiders get a head start', JSON.stringify(sh && { p: sh.playFrom - sh.now, r: sh.role }));
+      const sh1 = await waitFor(wa, m => m.type === 'arena' && m.k === 's' && m.id === sh.id);
+      ok(sh1 && !sh1.live && (sh.role === 'seeker' ? sh1.p.every(x => x[3] === 1) : true), 'while the hiders hide, a seeker sees none of them', JSON.stringify(sh1 && sh1.p));
+      await call('POST', '/api/admin/test/arena-end'); const eh = await waitFor(wa, m => m.type === 'arena' && m.k === 'end' && m.id === sh.id);
+      ok(eh && !eh.paid && eh.prize === 0, 'playing with only the town: a practice game, no prize', JSON.stringify(eh && { paid: eh.paid, prize: eh.prize }));
+      // leaving the lobby
+      send(wb, { a: 'join', mode: 'tag' }); await waitFor(wb, m => m.type === 'arena' && m.k === 'lobby' && m.mode === 'tag'); wb.msgs.length = 0; send(wb, { a: 'leave' });
+      ok(await waitFor(wb, m => m.type === 'arena' && m.k === 'idle'), 'and you can leave the lobby');
+      // the computer's hunters do catch people
+      { const Lr = AR.genArena(77); let h = { ...Lr.corners[0] }, v = { ...Lr.spawn }, caught = false; for (let i = 0; i < 400 && !caught; i++) { const wp = AR.nextStep(Lr, h, v); const q2 = AR.moveBy(Lr, h, wp.x - h.x, wp.y - h.y, 0.34); h = q2; caught = Math.hypot(h.x - v.x, h.y - v.y) < AR.A.tagR; }
+        ok(caught, 'a hunter can always find the way to someone standing still'); }
+      wa.ws.close(); wb.ws.close(); }
     // stars
     { const st = (await call('GET', '/api/me/stars', undefined, P)).json;
       ok(st.acts > 5 && st.stars >= 1 && st.stars <= 12 && st.score === st.acts + 20 * st.days && st.steps.length === 12, 'stars count the things you do yourself, plus the days you play', JSON.stringify(st));
@@ -1060,7 +1106,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     // missing two turns forfeits the match
     { await pool.query("update citizens set coins_base = 5000, table_id = null where handle in ('zara_ng', 'jobfill_a')");
       const f0 = await T(P, { action: 'create', buildingId: gh, game: 'ayo', stake: 100, seats: 2 }); await T(PB, { action: 'join', id: f0.json.id });
-      const late = async () => { await pool.query('update game_tables set turn_at = $2 where id = $1', [f0.json.id, Date.now() - 1000]); await sleep(300); return (await call('GET', '/api/me/table', undefined, P)).json.table; };
+      const late = async () => { const before = (await call('GET', '/api/me/table', undefined, P)).json.table; await pool.query('update game_tables set turn_at = $2 where id = $1', [f0.json.id, Date.now() - 1000]); let t = null; for (let i = 0; i < 30; i++) { await sleep(150); t = (await call('GET', '/api/me/table', undefined, P)).json.table; if (!t || t.status !== before?.status || JSON.stringify(t.players) !== JSON.stringify(before?.players)) break; } return t || before; };
       const m1 = await late(); ok(m1.status === 'playing' && m1.players[0].missed === 1 && m1.view.turn === 1, 'a missed turn is played for you (and counted)', JSON.stringify(m1.players));
       await T(PB, { action: 'move', id: f0.json.id, move: { pit: m1.view.pits.findIndex((n, i) => i >= 6 && n > 0) } });
       const m2 = await late(); ok(m2.status === 'done' && m2.result.winners[0] === 'jobfill_a', 'a second missed turn forfeits the match: the opponent wins', JSON.stringify(m2.result));

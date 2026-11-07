@@ -17,6 +17,7 @@ import { Leaderboards } from './leaderboards.js';
 import { CasinoTables } from './tables.js';
 import { GameHouse } from './gamehouse.js';
 import { Heists } from './heists.js';
+import { Arena } from './arena.js';
 import { streamRoutes } from './streaming.js';
 import { Radio, radioRoutes } from './radio.js';
 import { Stars } from './stars.js';
@@ -62,6 +63,7 @@ world.tables = new CasinoTables(world);
 world.gamehouse = new GameHouse(world);
 world.gametables = new GameTables(world);
 world.heists = new Heists(world);
+world.arena = new Arena(world, bus); world.arena.leader = () => isLeader;
 world.radio = new Radio(world, bus);
 setInterval(() => { if (isLeader && world.meta) world.radio.tick().catch(e => console.error('radio:', e.message)); }, 15000).unref(); // DJ talk breaks
 world.stars = new Stars(world, bus);
@@ -141,6 +143,7 @@ app.get('/api/race', limit, send(async req => races.info((await playerFrom(req))
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/election-end', admin, send(async () => { const { weekOf, weekStart } = await import('./leaderboards.js'); const win = await world.elections.tally(weekStart(weekOf() + 1) + 1000); world.elections.testShift = 1; world.elections.cache.t = 0; return { winner: win?.handle || null }; }));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/bills', admin, send(() => world.change(ch => economy.weeklyBills(ch, true))));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.get('/api/admin/test/pushlog', admin, send(async () => ({ log: push.log })));
+if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/arena-end', admin, send(async () => { for (const M of world.arena.matches.values()) { M.playFrom = Math.min(M.playFrom, Date.now()); M.until = Date.now(); } return { n: world.arena.matches.size }; }));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/rollover', admin, send(async () => ({ winners: await leaderboards.rollover() })));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/payday', admin, send(() => world.change(ch => economy.day(ch, 1))));
 app.get('/api/lottery', limit, send(async req => lottery.info((await playerFrom(req))?.id)));
@@ -278,20 +281,31 @@ wss.on('connection', ws => {
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (m?.type === 'sub' && Array.isArray(m.chunks)) ws.subs = new Set(m.chunks.filter(k => typeof k === 'string' && CHUNK_KEY.test(k)).slice(0, 100));
     // A signed-in colonist identifies their connection, so private chats reach them and they show as online.
+    // Street games: moves and lobby requests go to the leader server, which runs the matches.
+    if (m?.type === 'arena' && ws.playerId) { const now = Date.now(); if (now - (ws.arenaAt || 0) > 1000) { ws.arenaAt = now; ws.arenaN = 0; } if (++ws.arenaN > 30) return;
+      const a = String(m.a || ''); if (!['join', 'leave', 'go', 'pos', 'state'].includes(a)) return;
+      bus.publish([{ arena: true, k: 'in', pid: ws.playerId, handle: ws.playerHandle, m: { a, mode: String(m.mode || ''), id: String(m.id || ''), x: Number(m.x), y: Number(m.y) } }]); return; }
     if (m?.type === 'auth') playerByToken(m.token).then(p => {
-      const was = ws.playerId; ws.playerId = p ? p.id : null;
+      const was = ws.playerId; ws.playerId = p ? p.id : null; ws.playerHandle = p ? p.handle : null;
       if (was && was !== ws.playerId && !localOnline(was)) chat.gone(was).catch(() => {});
       if (p) chat.seen([p.id]).catch(() => {});
       ws.send(JSON.stringify({ type: 'authed', ok: !!p }));
     }).catch(() => {});
   });
-  ws.on('close', () => { if (ws.playerId && !localOnline(ws.playerId)) chat.gone(ws.playerId).catch(() => {}); });
+  ws.on('close', () => { if (ws.playerId && !localOnline(ws.playerId)) { chat.gone(ws.playerId).catch(() => {}); bus.publish([{ arena: true, k: 'in', pid: ws.playerId, m: { a: 'gone' } }]); } });
   ws.send(JSON.stringify({ type: 'hello', meta: world.publicMeta(), serverNow: Date.now() }));
 });
 const localOnline = id => [...wss.clients].some(w => w.readyState === 1 && w.playerId === id);
 // Every minute, everyone with the colony open is marked as seen (that's what "online" means).
 setInterval(() => { const ids = [...new Set([...wss.clients].filter(w => w.readyState === 1 && w.playerId).map(w => w.playerId))]; chat.seen(ids).catch(e => console.error('presence:', e.message)); achievements.checkMany(ids).catch(() => {}); }, 60000).unref();
 bus.on(ops => {
+  // Street games: the leader runs them; every server passes the leader's messages on to its own players.
+  if (ops.some(o => o.arena)) { const ar = ops.filter(o => o.arena); ops = ops.filter(o => !o.arena);
+    for (const o of ar) {
+      if (o.k === 'in') { if (isLeader) world.arena.handle(o).catch(e => console.error('arena:', e.message)); }
+      else if (o.k === 'out') { const by = new Map(); for (const ws of wss.clients) if (ws.readyState === 1 && ws.playerId) { const l = by.get(ws.playerId) || []; l.push(ws); by.set(ws.playerId, l); }
+        for (const [to, json] of o.msgs) for (const ws of by.get(to) || []) { if (ws.bufferedAmount > MAX_BUFFER) continue; try { ws.send(json); } catch {} } } }
+    if (!ops.length) return; }
   // Private chat messages go only to the two people's own connections.
   const priv = ops.filter(o => o.private); if (priv.length) ops = ops.filter(o => !o.private);
   for (const o of priv) { const msg = JSON.stringify({ type: o.op, data: o.data, id: o.id }); for (const ws of wss.clients) if (ws.readyState === 1 && o.to.includes(ws.playerId)) { try { ws.send(msg); } catch {} } }

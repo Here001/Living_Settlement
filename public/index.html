@@ -1165,7 +1165,7 @@ function drawB(b,t){ if(t.style==='fence'&&b.mask==null&&!RAW) b={...b,mask:fenc
   const t0=t.base||BUILDING_TYPES[b.type], wq=windowQuads.length, lq=lights.length, ft=CanvasRenderingContext2D.prototype.fillText;
   ctx.save(); ctx.scale(-1,1); ctx.fillText=function(str,x,y,m){ this.save(); this.translate(x,y); this.scale(-1,1); m===undefined?ft.call(this,str,0,0):ft.call(this,str,0,0,m); this.restore(); }; // keep lettering readable
   SPR_MIRROR=true; try{ (DRAW[t0.style]||DRAW.house)({...b,x:b.y,y:b.x,rot:0},t0); } finally { SPR_MIRROR=false; delete ctx.fillText; ctx.restore(); }
-  for(let i=wq;i<windowQuads.length;i++) windowQuads[i]=windowQuads[i].map(p=>({x:-p.x,y:p.y}));
+  for(let i=wq;i<windowQuads.length;i++){ const q=windowQuads[i], m=q.map(p=>({x:-p.x,y:p.y})); if(q.cut) m.cut=true; windowQuads[i]=m; }
   for(let i=lq;i<lights.length;i++) lights[i]={...lights[i],x:-lights[i].x}; }
 
 // ---- Building pictures ----
@@ -1182,7 +1182,7 @@ const bspCap = () => Quality.level>=2 ? 6e6 : 9e6; // pixels kept (about 4 bytes
 const bspHard = () => bspCap()*1.75;
 function bCacheable(t){ const t0=t.base||t; return !ANIM_STYLES.has(t0.style) && !t0.anim && !(t0.style==='block'&&t0.neon); }
 function bspBucket(){ return Math.min(4, Math.pow(2, Math.ceil(Math.log2(Math.max(0.2, cam.z*dpr))*2)/2)); }
-function bspFree(e){ if(!e) return; BSPR.px-=e.px; e.cv.width=e.cv.height=0; } // frees the memory straight away (iOS counts it)
+function bspFree(e){ if(!e) return; BSPR.px-=e.px; e.cv.width=e.cv.height=0; if(e.rim) e.rim.width=e.rim.height=0; } // frees the memory straight away (iOS counts it)
 // How far a type's drawing reaches around its spot, measured once by drawing it small and looking for painted pixels.
 const bspBox=new Map(); let bspScratch=null;
 function bspBounds(b,t){ const key=b.type+'|'+(b.rot||0)+'|'+VIEW+'|'+(b.lv||1)+'|'+(b.upAt?1:0); let bx=bspBox.get(key); if(bx) return bx;
@@ -1202,7 +1202,14 @@ function bspMake(b,t,sc,base){ const bx=bspBounds(b,t); if(!bx) return null; con
   const keep=ctx, wq=windowQuads.length, lq=lights.length; ctx=g; SPR_REC=[];
   try{ drawB(b,t); } catch(e){ ctx=keep; SPR_REC=null; windowQuads.length=wq; lights.length=lq; cv.width=cv.height=0; return null; }
   ctx=keep; const e={ cv, x0, y0, w:x1-x0, h:y1-y0, quads:windowQuads.splice(wq), lts:lights.splice(lq), rec:SPR_REC, px:W*Hh, base };
-  SPR_REC=null; return e; }
+  SPR_REC=null; if(DARK>0.3&&!t.outdoor&&t.cat!=="decor"&&t.cat!=="nature") e.rim=rimOf(cv), e.px*=2; return e; }
+// At night a building's outline: its picture minus a slightly shrunk copy of itself, painted moonlight blue, so
+// neighbouring towers keep their edges instead of melting into one dark mass.
+function rimOf(cv){ const W=cv.width, H=cv.height, r=document.createElement('canvas'); r.width=W; r.height=H; const g=r.getContext('2d'); if(!g) return null;
+  const k=document.createElement('canvas'); k.width=W; k.height=H; const h=k.getContext('2d'), d=1.6;
+  h.drawImage(cv,0,0); h.globalCompositeOperation='destination-in'; for(const [dx,dy] of [[d,0],[-d,0],[0,d],[0,-d]]) h.drawImage(cv,dx,dy);
+  g.drawImage(cv,0,0); g.globalCompositeOperation='destination-out'; g.drawImage(k,0,0); g.globalCompositeOperation='source-in'; g.fillStyle='#BFD6FF'; g.fillRect(0,0,W,H);
+  k.width=k.height=0; return r; }
 function drawBCached(b,t){
   if(!bCacheable(t)){ BSPR.live++; drawB(b,t); return; }
   if(t.style==='fence') b={...b,mask:fenceMask(b)}; // the picture depends on which neighbours it joins
@@ -1217,6 +1224,7 @@ function drawBCached(b,t){
         if(BSPR.px>cap) for(const [k,v] of BSPR.map){ if(BSPR.px<=cap) break; if(v.used>=BSPR.frame-2&&BSPR.px<=hard) continue; drop(k,v); } } } }
   if(!e){ BSPR.live++; drawB(b,t); return; }
   e.used=BSPR.frame; ctx.drawImage(e.cv, e.x0, e.y0, e.w, e.h);
+  if(DARK>0.01) windowQuads.push({occ:e}); // at night this building hides the lit windows of whatever stands behind it
   for(const q of e.quads) windowQuads.push(q); for(const l of e.lts) lights.push(l);
   for(const [x,y,seed] of e.rec) smoke(x,y,seed); }
 const blocks = b => !T(b).outdoor;
@@ -1433,6 +1441,8 @@ try{ const v=Number(localStorage.getItem('resurgence-view')); if(v>=0&&v<=3) VIE
 const iso=(x,y)=>{ if(VIEW&&!RAW){ const v=toView(x,y); x=v[0]; y=v[1]; } return { x:(x-y)*HW, y:(x+y)*HH }; };
 { const p=iso(...HOME_VIEW.tile); cam.x=p.x; cam.y=p.y-30; }
 const up=(p,h)=>({ x:p.x, y:p.y-h });
+// A box that stands in front of windows drawn earlier in the same building: at night its outline wipes them out.
+function litCut(x,y,w,d,h){ const q=[up(iso(x,y),h),up(iso(x+w,y),h),iso(x+w,y),iso(x+w,y+d),iso(x,y+d),up(iso(x,y+d),h)]; q.cut=true; windowQuads.push(q); }
 const mid=(a,b)=>({ x:(a.x+b.x)/2, y:(a.y+b.y)/2 });
 const lerp=(a,b,u)=>({ x:a.x+(b.x-a.x)*u, y:a.y+(b.y-a.y)*u });
 const INK='#2B2621';
@@ -2855,7 +2865,7 @@ function skyCrown(t,x,y,w,d,z){ const c=t.colors, cp=up(iso(x+w/2,y+d/2),z), k=t
   else if(k==='garden'){ for(const [u,v] of [[0.3,0.3],[0.7,0.35],[0.45,0.7]]) blob(lerp(iso(x,y),iso(x+w,y+d),0.5).x+(u-0.5)*w*30,cp.y-6+(v-0.5)*10,7,'#5E9E45',hash((t.name||'')+u)); } }
 DRAW.sky=function(b,t){ const [W,Dd]=t.size, H=t.height||200, tiers=t.tiers||[[0,1]];
   const towers=t.twins?[[b.x,b.y,W*0.4,Dd],[b.x+W*0.6,b.y,W*0.4,Dd]]:[[b.x,b.y,W,Dd]];
-  towers.forEach(([tx,ty,tw,td],ti)=>{ let z=0, lw=tw, ld=td, lx=tx, ly=ty;
+  towers.forEach(([tx,ty,tw,td],ti)=>{ let z=0, lw=tw, ld=td, lx=tx, ly=ty; if(ti) litCut(tx,ty,tw,td,H*1.04); // the front tower hides the lit windows of the one behind
     for(const [inset,frac] of tiers){ const ins=Math.min(inset,Math.min(tw,td)/2-0.25), x=tx+ins, y=ty+ins, w=tw-2*ins, d=td-2*ins, h=H*frac*(t.twins&&ti===1?1.04:1);
       skyTier(t,x,y,w,d,z,h); z+=h; lw=w; ld=d; lx=x; ly=y; }
     skyCrown(t,lx,ly,lw,ld,z);
@@ -3239,8 +3249,7 @@ function drawFrame(ts){
       if(lights.length>cap){ lights.sort((a,b)=>Math.hypot(a.x-cam.x,a.y-cam.y)-Math.hypot(b.x-cam.x,b.y-cam.y)); lights.length=cap; } }
     ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle=`rgba(10,14,42,${0.8*DARK})`; ctx.fillRect(0,0,cw,ch);
     worldT();
-    if(windowQuads.length){ ctx.fillStyle=`rgba(255,206,120,${0.92*DARK})`; const hw=cw/2/cam.z+20, hh=ch/2/cam.z+20; let n=0; ctx.beginPath(); // lit windows on screen, filled 48 at a time
-      for(const q of windowQuads){ const p=q[0]; if(Math.abs(p.x-cam.x)>hw||Math.abs(p.y-cam.y)>hh) continue; ctx.moveTo(p.x,p.y); for(let i=1;i<q.length;i++) ctx.lineTo(q[i].x,q[i].y); if(++n%48===0){ ctx.fill(); ctx.beginPath(); } } if(n%48) ctx.fill(); }
+    if(windowQuads.length) drawLitWindows();
     ctx.globalCompositeOperation='lighter';
     for(const L of lights){ const a=0.36*DARK*(L.a||1); if(a<0.004) continue; ctx.globalAlpha=Math.min(1,a); ctx.drawImage(glowSprite(L.col),L.x-L.r,L.y-L.r,L.r*2,L.r*2); }
     ctx.globalAlpha=1;
@@ -3481,6 +3490,26 @@ async function removeBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
   try{ await api('/api/admin/buildings/'+encodeURIComponent(id),{method:'DELETE'}); if(sel&&sel.id===id) closeCard();
     remember(`demolishing ${nm}`,()=>api('/api/admin/buildings/restore',{method:'POST',body:{building:b}})); toast(`Demolished ${nm}`); }
   catch(e){ toast(e.message); } }
+// Lit windows at night. They're painted after the dark sky, so on their own they'd shine straight through any tower in
+// front. Instead they go on a layer of their own in the same order the buildings were drawn: each building first wipes
+// out (with its exact outline) the windows behind it, then adds its own. Some rooms are dark too, so every block
+// gets its own rhythm of light rather than one solid glow.
+let winLayer=null;
+function drawLitWindows(){ const W=Math.round(cw*dpr), H=Math.round(ch*dpr);
+  if(!winLayer) winLayer=document.createElement('canvas'); if(winLayer.width!==W||winLayer.height!==H){ winLayer.width=W; winLayer.height=H; }
+  const g=winLayer.getContext('2d'); g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,W,H); g.setTransform(ctx.getTransform());
+  const hw=cw/2/cam.z+20, hh=ch/2/cam.z+20, warm=`rgba(255,206,120,${0.92*DARK})`, dim=`rgba(255,170,95,${0.55*DARK})`;
+  const lit=[], low=[];
+  for(const q of windowQuads){
+    if(q.occ){ const e=q.occ; if(e.x0>cam.x+hw||e.x0+e.w<cam.x-hw||e.y0>cam.y+hh||e.y0+e.h<cam.y-hh) continue;
+      paint(lit,warm); paint(low,dim); g.globalCompositeOperation='destination-out'; g.drawImage(e.cv,e.x0,e.y0,e.w,e.h); g.globalCompositeOperation='source-over';
+      if(e.rim){ g.globalAlpha=0.55*DARK; g.drawImage(e.rim,e.x0,e.y0,e.w,e.h); g.globalAlpha=1; } continue; }
+    const p=q[0]; if(q.cut){ paint(lit,warm); paint(low,dim); g.globalCompositeOperation='destination-out'; g.fillStyle='#000'; g.beginPath(); g.moveTo(p.x,p.y); for(let i=1;i<q.length;i++) g.lineTo(q[i].x,q[i].y); g.fill(); g.globalCompositeOperation='source-over'; continue; }
+    if(Math.abs(p.x-cam.x)>hw||Math.abs(p.y-cam.y)>hh) continue;
+    const h=((Math.round(p.x*7)*73856093)^(Math.round(p.y*7)*19349663))>>>0, r=h%100; if(r<18) continue; (r<34?low:lit).push(q); }
+  paint(lit,warm); paint(low,dim);
+  function paint(list,col){ if(!list.length) return; g.fillStyle=col; g.beginPath(); let k=0; for(const q of list){ g.moveTo(q[0].x,q[0].y); for(let i=1;i<q.length;i++) g.lineTo(q[i].x,q[i].y); if(++k%64===0){ g.fill(); g.beginPath(); } } g.fill(); list.length=0; }
+  ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(winLayer,0,0); ctx.restore(); }
 function tap(sx,sy){
   const [x,y]=tileAt(sx,sy);
   if(tool.kind==='place'){ placeBuilding(tool.type,x,y); return; }

@@ -9,6 +9,7 @@ import { BUILDING_TYPES, BANK_TYPES, kindOf, pgList } from '../shared/catalog.js
 import { CREATURES, petPrice } from '../shared/creatures.js';
 import { treasuryAdd } from './races.js';
 import { track, ledger } from './stats.js';
+import * as MG from '../shared/minigames.js';
 
 export const CRIME_COOLDOWN = 10 * 60 * 1000;    // one crime every 10 real minutes
 export const JAIL_TIME = 10 * 60 * 1000;         // caught: 10 real minutes in the Jail
@@ -152,6 +153,7 @@ export class Actions {
       rates: R.CRIME_RATES, near: R.CRIME_NEAR, far: R.CRIME_FAR, rob, pick };
   }
   async crime(id, { kind, target }) {
+    if (MG.GAMES[kind]) throw new HttpError(409, 'This crime is a mini game now. Update the game (close and reopen it) to play it.');
     if (!['pickpocket', 'rob', ...Object.keys(R.SOLO_CRIMES)].includes(kind)) throw new HttpError(400, 'Pick a crime.');
     return this.world.change(async ch => {
       const { c, hx, hy } = await this.load(ch, id), now = Date.now();
@@ -206,6 +208,80 @@ export class Actions {
       } else await ch.event(`🚓 @${c.handle} was caught ${what} and fined ${fmt(fine)} coins.`, 'crime');
       return { ok: true, caught: true, fine, paid, jailed: !!jail, jailFor: jail ? JAIL_TIME : 0, coins: c.coins_base, chance, band: odds.band, police: odds.dist };
     });
+  }
+
+  // ---------- crime mini games ----------
+  // Where a solo crime happens and what's there to take: the nearest shop, the ATM at the nearest Bank, or a tourist on
+  // the street near home.
+  async crimeScene(db, c, kind) {
+    let shop = null, px = c.hx, py = c.hy, loot;
+    if (kind === 'rob') { shop = (await db.query(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [c.hx, c.hy, SHOPS])).rows[0];
+      if (!shop) throw new HttpError(409, 'There are no shops to rob.'); loot = 5000 + Math.floor(rand() * 5001); }
+    else { const S = R.SOLO_CRIMES[kind];
+      if (S.needs === 'bank') { shop = (await db.query(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [c.hx, c.hy, BANKS])).rows[0];
+        if (!shop) throw new HttpError(409, "There's no Bank, so no ATM to hack."); }
+      loot = Math.floor(S.loot[0] + rand() * (S.loot[1] - S.loot[0] + 1)); }
+    if (shop) { px = shop.x; py = shop.y; }
+    return { shop: shop ? { id: shop.id, name: nameOf(shop), type: shop.type, x: shop.x, y: shop.y } : null, px, py, loot };
+  }
+  // Deal a game: a level from a fresh seed, its difficulty from the setting, and (for real) the cooldown starts now, so
+  // walking away from a bad game doesn't give you another go. Practice is free: no money, no risk, no waiting.
+  async crimeStart(id, { kind, practice }) {
+    if (!MG.GAMES[kind]) throw new HttpError(400, 'Pick a crime.');
+    const go = async db => {
+      const c = (await db.query(`select c.*, h.x hx, h.y hy from citizens c left join buildings h on h.id = c.home_id where c.id = $1${practice ? '' : ' for update of c'}`, [id])).rows[0];
+      if (!c) throw new HttpError(404, 'No such citizen.'); if (!c.home_id) throw new HttpError(400, "You're still in cryosleep.");
+      const now = Date.now();
+      if (!practice) { const why = await this.blockedReason(c); if (why) throw new HttpError(409, why);
+        const wait = Number(c.crime_at || 0) + CRIME_COOLDOWN - now; if (wait > 0) throw new HttpError(429, `Lie low for ${Math.ceil(wait / 60000)} more minute${wait > 60000 ? 's' : ''} before the next job. You can practise meanwhile.`); }
+      const sc = await this.crimeScene(db, c, kind), wave = await this.waveNow(), odds = await this.odds(kind, await this.policeDist(db, sc.px, sc.py), wave);
+      const diff = MG.difficultyOf(kind, odds.band), seed = crypto.randomInt(1, 2 ** 31), rid = crypto.randomUUID();
+      await db.query('insert into crime_runs (id, citizen_id, kind, seed, diff, practice, started_at, chance, band, night, loot, scene) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+        [rid, id, kind, seed, diff, !!practice, now, odds.chance, odds.band, !!odds.night, sc.loot, JSON.stringify(sc)]);
+      if (!practice) await db.query('update citizens set crime_at = $2 where id = $1', [id, now]);
+      await db.query('delete from crime_runs where citizen_id = $1 and started_at < $2', [id, now - 7 * 86400000]);
+      return { id: rid, kind, seed, diff, practice: !!practice, chance: odds.chance, band: odds.band, police: odds.dist, night: !!odds.night, wave, at: sc.shop?.name || null, loot: practice ? null : [Math.round(sc.loot * 0.3), Math.round(sc.loot * 1.5)] };
+    };
+    return practice ? go(pool) : this.world.change(ch => go({ query: (a, v) => ch.q(a, v) }));
+  }
+  // The game is over: replay what the player did with the game's own rules, score it, and settle.
+  async crimeFinish(id, { runId, log }) {
+    return this.world.change(async ch => {
+      const run = (await ch.q('select * from crime_runs where id = $1 for update', [String(runId || '')])).rows[0];
+      if (!run || run.citizen_id !== id) throw new HttpError(404, 'No such game.'); if (run.finished_at) throw new HttpError(409, 'That game is already over.');
+      const now = Date.now(), L = MG.levelOf(run.kind, Number(run.seed), run.diff), took = (now - Number(run.started_at)) / 1000;
+      let rp = MG.replay(run.kind, L, log || {});
+      // a result faster than the game can be played, or one that breaks the game's rules, counts as a botched job
+      if (rp.ok && took + 4 < MG.minTime(run.kind, L, rp.state)) rp = { ok: false, why: 'too quick' };
+      if (took > (L.limit || 75) + 600) rp = { ok: false, why: 'too late' };
+      const perf = rp.ok ? rp.perf : 0, sc = MG.scoreOf(perf, Number(run.chance)), out = MG.outcomeOf(sc.total, rp.ok && rp.money);
+      const res = { score: sc, outcome: out.key, title: out.title, mult: out.mult, game: rp.ok ? rp.state : { invalid: rp.why }, practice: run.practice };
+      await ch.q('update crime_runs set finished_at = $2, result = $3 where id = $1', [run.id, now, JSON.stringify(res)]);
+      if (run.practice) return { ...res, money: 0, practiceLoot: out.mult ? Math.round(Number(run.loot) * out.mult) : 0 };
+      return { ...res, ...(await this.settleCrime(ch, id, run, out, sc)) };
+    });
+  }
+  async settleCrime(ch, id, run, out, sc) {
+    const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
+    const scene = run.scene || {}, shop = scene.shop, kind = run.kind, base = Number(run.loot);
+    const where = kind === 'scam' ? 'conning a tourist' : kind === 'atm' ? `hacking the ATM at ${shop?.name || 'the Bank'}` : `robbing ${shop?.name || 'a shop'}`;
+    ch.coins(c);
+    if (out.mult > 0) {
+      const loot = Math.max(1, Math.min(R.treasuryOn(ch.meta, ch.today), Math.round(base * out.mult)));
+      c.coins_base += loot; ch.touch(c); await ch.saveCitizen(c); treasuryAdd(ch, -loot); track(ch, 'crime:' + kind, loot, c.id); await bump(ch, c.id, { crimes: 1 }); await score(ch, c.id, 'crimes', 1);
+      await ch.event(kind === 'scam' ? `🎭 A tourist was conned out of ${fmt(loot)} coins. The con artist vanished.` : kind === 'atm' ? `🏧 The ATM at ${shop?.name || 'the Bank'} was hacked for ${fmt(loot)} coins!` : `🚨 ${shop?.name || 'A shop'} was robbed of ${fmt(loot)} coins! The thief got away.`, 'crime');
+      return { money: loot, coins: c.coins_base };
+    }
+    if (out.key === 'empty') { await ch.event(kind === 'scam' ? '🎭 A con artist tried their luck on a tourist and came away with nothing.' : kind === 'atm' ? `🏧 Someone tampered with the ATM at ${shop?.name || 'the Bank'}, but got nothing.` : `🚨 A thief slipped into ${shop?.name || 'a shop'} and out again, empty-handed.`, 'crime');
+      return { money: 0, coins: c.coins_base }; }
+    // caught: a fine (twice the takings on offer, at least 250) from cash, then savings, then into the minus; jail for the worst
+    const fine = Math.max(250, base * 2), paid = await ch.takeFrom(c, fine); treasuryAdd(ch, fine); track(ch, 'crime:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
+    await this.notify(ch, c.id, 'crime', `🚓 You were caught ${where} and fined ${fmt(fine)} coins: ${paid.how}.`);
+    let jailed = false;
+    if (out.key === 'jailed') { const jail = (await ch.q(`select * from buildings where type = any('${pgList('jail')}') and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [scene.px ?? 0, scene.py ?? 0])).rows[0];
+      if (jail) { const until = Date.now() + JAIL_TIME; await ch.q('update citizens set jailed_until = $2 where id = $1', [c.id, until]); await bump(ch, c.id, { jailed: 1 }); await this.setVisit(ch, c, jail, until); jailed = true; } }
+    await ch.event(`🚓 @${c.handle} was caught ${where}${jailed ? `, fined ${fmt(fine)} coins and locked up for ${JAIL_TIME / 60000} minutes` : ` and fined ${fmt(fine)} coins`}.`, 'crime');
+    return { money: 0, fine, paid, jailed, jailFor: jailed ? JAIL_TIME : 0, coins: c.coins_base };
   }
 
   // ---------- going somewhere ----------

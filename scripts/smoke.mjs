@@ -585,7 +585,8 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     const k = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P);
     const z1 = await coins('zara_ng'), v1 = await coins('jobfill_a');
     ok(k.status === 200 && (k.json.caught ? z1 === 1000 - k.json.fine && v1 === 500 : z1 === 1000 + k.json.loot && v1 === 500 - k.json.loot), `a pickpocket ${k.json.caught ? 'is caught and fined' : 'gets away with it'}, and the coins add up`, JSON.stringify(k.json));
-    ok((await call('POST', '/api/me/crime', { kind: 'rob' }, P)).status === 429 || (await whoDev('zara_ng')).jailedUntil, 'one crime every 10 minutes');
+    ok((await call('POST', '/api/me/crime/start', { kind: 'rob' }, P)).status === 429 || (await whoDev('zara_ng')).jailedUntil, 'one crime every 10 minutes');
+    ok((await call('POST', '/api/me/crime', { kind: 'rob' }, P)).status === 409, 'robbing a shop is a mini game now: the old instant robbery is gone');
     // police near the victim and a jail: keep trying until caught (each try is ~80% likely to be caught)
     let policeId = null;
     for (const [t, x, y] of [['police', 930, 900], ['police', 930, 903], ['police', 933, 900], ['jail', 933, 903]]) { const b = await call('POST', '/api/admin/buildings', { type: t, x, y }); policeId = policeId || b.json.building?.id; await call('POST', `/api/admin/buildings/${b.json.building?.id}/finish`); }
@@ -626,10 +627,47 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok((await call('POST', '/api/me/bail', {}, P)).status === 409, "no bail when you're not in jail");
       await set('zara_ng', `jailed_until = ${Date.now() + 5 * 60000}, coins_base = 10, bank = 0`); ok((await call('POST', '/api/me/bail', {}, P)).status === 400, "bail can't be owed: you need the coins");
       await set('zara_ng', 'jailed_until = null, coins_base = 1000'); }
-    { await call('POST', '/api/admin/treasury', { amount: 100000 }); let got = null;
-      for (let i = 0; i < 40 && !got; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 100000, visit_id = null, visit_until = null'); const r = await call('POST', '/api/me/crime', { kind: 'rob' }, P); if (r.json.ok && !r.json.caught) got = r.json; }
-      ok(got && got.loot >= 5000 && got.loot <= 10000, 'a shop robbery takes 5,000 to 10,000 from the till', JSON.stringify(got));
-      await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 1000'); await call('POST', '/api/admin/treasury', { amount: -100000 }); }
+    // ---- crime mini games: rob a shop, con a tourist, hack an ATM ----
+    { const MG = await import('../shared/minigames.js'); await call('POST', '/api/admin/treasury', { amount: 100000 });
+      const fresh = () => set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 1000, bank = 0, net = 0, visit_id = null, visit_until = null');
+      const start = (kind, practice, who = P) => call('POST', '/api/me/crime/start', { kind, practice }, who), finish = (runId, log, who = P) => call('POST', '/api/me/crime/finish', { runId, log }, who);
+      // a good talker: each turn, the line that wins the most trust for the least suspicion, well timed
+      const smartCon = L => { const picks = []; while (!MG.conReplay(L, picks).ok) { let best = 0, bv = -1e9; for (let o = 0; o < 3; o++) { const r = MG.conReplay(L, [...picks, { o, t: 0.95 }]), st = r.state; const v = r.ok ? (r.money ? 1e6 : -1e6) : st.trust - st.sus; if (v > bv) { bv = v; best = o; } } picks.push({ o: best, t: 0.95 }); } return picks; };
+      await fresh(); const c0 = await coins('zara_ng');
+      const pr = await start('rob', true); ok(pr.status === 200 && pr.json.practice && pr.json.seed > 0 && pr.json.diff >= 1 && pr.json.diff <= 5 && pr.json.loot === null, 'practise robbing the shop: a fresh level, no takings on offer', JSON.stringify(pr.json));
+      ok(!(await pool.query("select crime_at from citizens where handle = 'zara_ng'")).rows[0].crime_at, 'practice is free: no lying low afterwards');
+      const L0 = MG.levelOf('rob', pr.json.seed, pr.json.diff), s0 = MG.stealthStart(L0), s1 = MG.stealthStep(L0, s0, 1, 0);
+      const pf = await finish(pr.json.id, { path: [[s0.x, s0.y], [s1.x, s1.y]] });
+      ok(pf.status === 200 && pf.json.practice && pf.json.money === 0 && pf.json.score.total >= 0 && pf.json.score.setting <= 40 && pf.json.score.play <= 60, 'a practice game is scored like the real thing, but pays nothing', JSON.stringify(pf.json));
+      ok(await coins('zara_ng') === c0, "practice doesn't touch your coins");
+      ok((await finish(pr.json.id, { path: [[0, 0], [1, 1]] })).status === 409, 'a game can only be finished once');
+      const pr2 = await start('rob', true), tp = await finish(pr2.json.id, { path: [[L0.entry.x, L0.entry.y], [L0.till.x, L0.till.y], [L0.entry.x, L0.entry.y]] });
+      ok(tp.status === 200 && tp.json.game.invalid && tp.json.score.play === 0, "teleporting to the till doesn't count: the server replays every step", JSON.stringify(tp.json.game));
+      ok((await finish(crypto.randomUUID(), { picks: [] })).status === 404 && (await finish(pr2.json.id, { picks: [] }, { auth: false })).status === 401, "only your own games can be finished");
+      // for real: the con, played well, pays (up to 1.5× the takings)
+      const rs = await start('scam', false); ok(rs.status === 200 && !rs.json.practice && rs.json.loot[0] > 0 && rs.json.loot[1] >= rs.json.loot[0], 'conning a tourist for real: the range you could take shows up front', JSON.stringify(rs.json));
+      ok((await start('rob', false)).status === 429 && (await start('rob', true)).status === 200, "one real job at a time, but you can practise while you lie low");
+      const Ls = MG.levelOf('scam', rs.json.seed, rs.json.diff), picks = smartCon(Ls), sold = MG.conReplay(Ls, picks).money;
+      await sleep(1000 * Math.min(5, picks.length)); const c1 = await coins('zara_ng'), rf = await finish(rs.json.id, { picks }), c2 = await coins('zara_ng');
+      ok(rf.status === 200 && rf.json.score.total === rf.json.score.play + rf.json.score.setting, 'the score is your play plus the setting', JSON.stringify(rf.json.score));
+      const paid = rf.json.outcome === 'clean' || rf.json.outcome === 'partial';
+      ok(!sold || rf.json.score.play >= 36, 'selling the moon rock is a good game', JSON.stringify({ sold, sc: rf.json.score }));
+      ok(paid ? rf.json.money > 0 && c2 === c1 + rf.json.money && rf.json.money <= Math.round(rs.json.loot[1]) : rf.json.money === 0, `the result (${rf.json.title}) and the coins add up`, JSON.stringify({ r: rf.json, c1, c2 }));
+      ok(rf.json.outcome !== 'clean' || rf.json.mult > 1 || rf.json.score.total === 80, 'a clean getaway pays more than the takings', JSON.stringify(rf.json));
+      // a botched job: nothing done, so the play earns nothing, and that's caught
+      await fresh(); const rb = await start('scam', false), bad = await finish(rb.json.id, { picks: [{ o: 9, t: 1 }] });
+      ok(bad.status === 200 && bad.json.game.invalid && ['fined', 'jailed'].includes(bad.json.outcome) && bad.json.fine >= 250 && (await coins('zara_ng')) === 1000 - bad.json.fine, 'a botched job is caught and fined', JSON.stringify(bad.json));
+      ok(!bad.json.jailed || (await whoDev('zara_ng')).jailedUntil > Date.now(), 'and the worst ones go to jail');
+      await fresh(); ok((await start('rob', false)).status === 200, 'after lying low, the next real job can start');
+      ok((await start('pickpocket', true)).status === 400, 'pickpocketing stays instant: no mini game');
+      // the scoring
+      ok(MG.outcomeOf(100).key === 'clean' && MG.outcomeOf(100).mult === 1.5 && MG.outcomeOf(80).mult === 1 && MG.outcomeOf(70).key === 'partial' && MG.outcomeOf(50).key === 'empty' && MG.outcomeOf(30).key === 'fined' && MG.outcomeOf(10).key === 'jailed' && MG.outcomeOf(95, false).mult === 0,
+        'outcomes: 80+ clean (up to 1.5×), 60–79 some of it, 40–59 nothing, 20–39 fined, below 20 jailed');
+      // every level can be won: a perfect ATM hack opens it, and a bot walking the shop's route is a valid replay
+      { let okA = 0, okR = 0; for (let seed = 1; seed <= 30; seed++) { const A = MG.genAtm(seed, 1 + seed % 5), ev = []; let t = 1; A.wires.forEach((w, i) => ev.push(['w', i, A.sockets.indexOf(A.card[i].sym), t += 0.5])); A.pin.forEach(d => ev.push(['k', d, t += 0.3])); if (MG.atmReplay(A, ev, t).money) okA++;
+          const Lr = MG.genStealth(seed, 1 + seed % 5); let st = MG.stealthStart(Lr); const path = [[st.x, st.y]]; for (let i = 0; i < 40 && !st.done; i++) { st = MG.stealthStep(Lr, st, 0.7, -0.7); path.push([st.x, st.y]); } if (MG.stealthReplay(Lr, path).ok) okR++; }
+        ok(okA === 30 && okR === 30, 'the ATM can always be cracked, and an honest walk around the shop always replays', JSON.stringify({ okA, okR })); }
+      await fresh(); await call('POST', '/api/admin/treasury', { amount: -100000 }); }
     await set('zara_ng', 'jailed_until = null, visit_id = null, visit_until = null');
     // going out
     const pl = (await call('GET', '/api/me/places', undefined, P)).json;
@@ -901,9 +939,6 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       const caughtMe = go.json.caught.find(x => x.h === 'zara_ng'); if (caughtMe) ok((await whoDev('zara_ng')).jailedUntil > Date.now(), 'anyone caught goes to jail');
       ok((await call('GET', `/api/chat/groups/${pl.json.group}`, undefined, PB)).json.messages.some(m => m.system && /(came off|went wrong)/.test(m.text)), 'the result is posted in the crew chat');
       ok((await call('POST', '/api/me/heists', { kind: 'armored', inMinutes: 10, members: ['jobfill_a'] }, PB)).status === 429 || (await whoDev('jobfill_a')).jailedUntil > Date.now(), 'and the crew lies low for a while afterwards');
-      // solo: con a tourist
-      await pool.query("update citizens set crime_at = 0, jailed_until = 0, coins_base = 5000 where handle = 'zara_ng'"); const sc = await call('POST', '/api/me/crime', { kind: 'scam' }, P);
-      ok(sc.status === 200 && (sc.json.caught ? sc.json.fine >= 250 : sc.json.loot >= 800 && sc.json.loot <= 2000), 'a new solo crime: con a tourist (800–2,000 coins)', JSON.stringify(sc.json));
       await pool.query("update citizens set jailed_until = 0, heist_at = 0, crime_at = 0, coins_base = 5000 where handle in ('zara_ng', 'jobfill_a')"); }
     // stars
     { const st = (await call('GET', '/api/me/stars', undefined, P)).json;

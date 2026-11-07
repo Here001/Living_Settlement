@@ -798,6 +798,70 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .funnel .fr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;padding:5px 0;border-top:1px solid var(--glass-line,rgba(0,0,0,.08));font-size:12.5px}
 .funnel .fr .hb{grid-column:1/-1;height:6px;border-radius:3px;background:var(--accent)}
 .funnel .fr .n{font-variant-numeric:tabular-nums;text-align:right} .funnel .fr .d{color:var(--warm,#A63E22);font-size:11.5px}
+/* Crime mini games: a full-screen game over the map (the map pauses behind it) */
+.mg{position:fixed;inset:0;z-index:9000;background:#1B1612;color:#F6F1E6;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.mg.siren{animation:mgsiren .5s steps(2) 4}
+@keyframes mgsiren{50%{background:#5A1410}}
+.mgcard{position:relative;width:min(420px,calc(100% - 32px));max-height:calc(100% - 32px);overflow:auto;touch-action:pan-y;background:var(--panel);color:var(--ink);border:2px solid #2B2621;border-radius:18px;box-shadow:0 6px 0 #2B2621;padding:20px 18px;text-align:center}
+.mgcard h2{margin:4px 0 6px;font-size:22px}
+.mgicon{font-size:46px;line-height:1}
+.mgat{margin:0 0 8px;color:var(--muted)}
+.mgx{position:absolute;top:8px;right:10px;width:36px;height:36px;border-radius:50%;border:2px solid #2B2621;background:var(--paper);color:var(--ink);font-size:22px;line-height:1;cursor:pointer}
+.mgrow{display:flex;justify-content:space-between;align-items:center;padding:7px 2px;border-bottom:1px dashed var(--soft)}
+.mgpips{display:flex;gap:4px}.mgpips i{width:14px;height:14px;border-radius:4px;border:2px solid #2B2621;background:transparent}.mgpips i.on{background:#E4572E}
+.mghint{color:var(--muted);font-size:13.5px;margin:8px 0}
+.mg>.mghint,.mgcon .mghint,.mgatm .mghint{color:#D8CDB8}
+.mghow{text-align:left;margin:8px 0;padding-left:20px;font-size:14px}.mghow li{margin:4px 0}
+.mgbtns{display:flex;gap:10px;margin-top:14px}.mgbtns .mgb{flex:1}
+.mgb{min-height:48px;padding:10px 14px;border-radius:14px;border:2px solid #2B2621;background:var(--paper);color:var(--ink);font:inherit;font-weight:800;font-size:15px;box-shadow:0 3px 0 #2B2621;cursor:pointer}
+.mgb.hot{background:#E4572E;color:#fff}.mgb:disabled{opacity:.55;cursor:not-allowed}
+.mgb:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 #2B2621}
+.mgcount{font-size:120px;font-weight:900;color:#F2C94C;text-shadow:0 6px 0 #2B2621;animation:mgpop .65s ease-out infinite}
+@keyframes mgpop{from{transform:scale(1.4);opacity:.3}to{transform:scale(1);opacity:1}}
+.mgcanvas{position:absolute;inset:0;display:block}
+.mghud{position:absolute;top:calc(10px + env(safe-area-inset-top));left:12px;right:12px;display:flex;gap:10px;align-items:center;z-index:2;pointer-events:none}
+.mgclock{margin-left:auto;background:#2B2621;color:#F2C94C;border-radius:10px;padding:5px 10px;font-variant-numeric:tabular-nums;font-size:16px}
+.mgmeter{flex:1;display:flex;align-items:center;gap:6px;max-width:220px}.mgmeter span{font-size:18px}
+.mgtrack{flex:1;height:12px;border-radius:7px;background:rgba(255,255,255,.15);border:2px solid #2B2621;overflow:hidden}
+.mgtrack i{display:block;height:100%;width:0;background:#F2C94C;transition:width .15s linear}
+.mgmeter.eye i{background:#F2C94C}.mgmeter.eye.hot i,.mgmeter.alarm.hot i{background:#FF4B3A}.mgmeter.trust i{background:#3CC46A}.mgmeter.sus i{background:#E4572E}.mgmeter.alarm i{background:#F2994A}
+.mggoal{position:absolute;top:calc(48px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:#2B2621;color:#fff;padding:6px 14px;border-radius:12px;font-weight:800;white-space:nowrap;z-index:2;pointer-events:none}
+.mgjoyhint{position:absolute;bottom:calc(16px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);color:#D8CDB8;font-size:13px;pointer-events:none}
+.mgcon,.mgatm{width:min(440px,calc(100% - 32px));display:flex;flex-direction:column;gap:10px;margin-top:40px;max-height:calc(100% - 60px);overflow:auto;touch-action:pan-y}
+.mgtop{display:flex;justify-content:center;align-items:flex-end;gap:6px}
+.mgtourist{width:110px;height:110px}.mgtourist svg{width:100%;height:100%}
+.mgface{font-size:42px}
+.mgbubble{background:#F6F1E6;color:#2B2621;border:2px solid #2B2621;border-radius:16px;padding:10px 14px;font-weight:700;text-align:center;position:relative}
+.mgturn{text-align:center;color:#D8CDB8;font-size:13px}
+.mgopts{display:flex;flex-direction:column;gap:8px}
+.mgopt{text-align:left;padding:10px 12px;border-radius:14px;border:2px solid #2B2621;background:var(--panel);color:var(--ink);font:inherit;box-shadow:0 3px 0 #2B2621;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.mgopt b{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#E4572E}
+.mgtime{position:relative;height:30px;border-radius:15px;background:#3A332B;border:2px solid #2B2621;overflow:hidden;margin:4px 0}
+.mgtime .z{position:absolute;top:0;bottom:0;background:#3CC46A}
+.mgtime .m{position:absolute;top:-2px;bottom:-2px;width:6px;margin-left:-3px;background:#fff;border-radius:3px;box-shadow:0 0 0 2px #2B2621}
+.mgcardsheet{background:#F6F1E6;color:#2B2621;border:2px solid #2B2621;border-radius:12px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.mgcardsheet b{width:100%;font-size:13px}
+.mgchip{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:700;background:#fff;border:1.5px solid #2B2621;border-radius:8px;padding:2px 7px}
+.mgchip i{width:12px;height:12px;border-radius:50%;border:1.5px solid #2B2621}
+.mgboard{position:relative;display:flex;justify-content:space-between;background:#3A3A44;border:2px solid #2B2621;border-radius:14px;padding:12px;min-height:220px}
+.mgwires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.mgcol{display:flex;flex-direction:column;justify-content:space-around;gap:8px;z-index:1}
+.mgwire{width:64px;height:30px;border-radius:0 15px 15px 0;border:2px solid #2B2621;background:var(--c);cursor:pointer;box-shadow:0 3px 0 #111}
+.mgwire.on{outline:3px solid #fff;outline-offset:2px}.mgwire.done{opacity:.6;cursor:default}
+.mgsock{width:48px;height:40px;border-radius:10px;border:2px solid #2B2621;background:#1F1F26;color:#F6F1E6;font-size:20px;cursor:pointer}
+.mgsock.done{background:#2E6B45}.mgsock.spark{background:#FF4B3A;animation:mgshake .3s}
+.mgscreen{background:#0F2A1C;color:#7CFFB2;border:2px solid #2B2621;border-radius:10px;padding:12px;text-align:center;font-family:ui-monospace,monospace;font-weight:700;letter-spacing:.1em}
+.mgpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:12px;background:#3A3A44;border:2px solid #2B2621;border-radius:14px}
+.mgpad.shake{animation:mgshake .3s}
+.mgkey{height:62px;border-radius:12px;border:2px solid #2B2621;background:#D9D4C7;color:#2B2621;font-size:24px;font-weight:900;box-shadow:0 3px 0 #111;cursor:pointer}
+.mgkey.lit{background:#F2C94C;box-shadow:0 0 18px #F2C94C}
+@keyframes mgshake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.mgbar{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:14px}.mgbar span{width:90px;text-align:left}.mgbar b{width:46px;text-align:right}
+.mgbar .mgtrack{background:var(--soft)}.mgbar i.p{background:#4A7BD9}.mgbar i.s{background:#B05FD6}
+.mgtotal{display:flex;justify-content:space-between;font-size:18px;font-weight:900;border-top:2px solid #2B2621;padding-top:8px;margin-top:6px}
+.mgmoney{font-size:18px;font-weight:800;margin:12px 0 4px}
+.mgcard.res.good .mgmoney{color:#2E9B57}.mgcard.res.bad .mgmoney{color:#C8473D}
+@media (prefers-reduced-motion:reduce){.mgcount,.mg.siren,.mgpad.shake,.mgsock.spark{animation:none}}
 </style>
 </head>
 <body>
@@ -869,6 +933,7 @@ import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULET
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
 import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
+import { openCrimeGame } from '/crimegames.js';
 import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
@@ -1372,7 +1437,7 @@ const MOBILE=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)||(navigator
 const Power={ pref:(()=>{ try{ return localStorage.getItem('resurgence-saver')||'auto'; }catch(e){ return 'auto'; } })(), low:false,
   get saver(){ return this.pref==='on'||(this.pref==='auto'&&this.low); },
   set(v){ this.pref=v; try{ localStorage.setItem('resurgence-saver',v); }catch(e){} resize(); },
-  covered(){ return document.body.classList.contains('card-max')||document.body.classList.contains('pane-max')||!!document.querySelector('.rsheet-bg:not(.dock)'); },
+  covered(){ return document.body.classList.contains('mg-on')||document.body.classList.contains('card-max')||document.body.classList.contains('pane-max')||!!document.querySelector('.rsheet-bg:not(.dock)'); },
   // the gap (ms) between redraws right now
   gap(ts){ if(this.covered()) return this.saver?250:160;
     if(ts-lastInput<1500) return this.saver?33:0; // touching the map: full speed
@@ -5721,15 +5786,19 @@ function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cri
       el('li',{text:`🟡 ${miles(K.near)} to ${miles(K.far)}: pickpocket ${pct(Rt.pickpocket.mid)}, robbery ${pct(Rt.rob.mid)}`}),
       el('li',{text:`🔴 Within ${miles(K.near)}: pickpocket ${pct(Rt.pickpocket.low)}, robbery ${pct(Rt.rob.low)}`})),
     el('p',{class:'hint',text:`${K.wave?'🦹 A crime wave is on: +15% right now. ':''}Caught: a fine of twice what you tried to take (at least 250), and jail if the colony has one.`}));
-  if(K.waitFor>0){ box.append(el('p',{class:'jobnow',text:`Lie low for ${mins(K.waitFor)} more minute${K.waitFor>60000?'s':''} before the next solo job.`}), Heist.box(c)); return box; }
-  const ti=el('input',{type:'text',placeholder:'@username',autocomplete:'off','aria-label':'Whose pocket'});
-  box.append(el('div',{class:'cbet'}, el('span',{text:'Pickpocket:'}), ti, el('button',{class:'btn',text:'Try',onclick:()=>tryPickpocket(ti.value)})),
-    el('p',{class:'hint',text:'You’ll see their odds before you commit: it depends on where they are right now.'}));
-  if(K.rob) box.append(el('p',{class:'jobnow',text:`Nearest shop: ${K.rob.shop}. ${oddsText(K.rob)}.`}), el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:`Rob ${K.rob.shop} (${Math.round(K.rob.chance*100)}%)`,onclick:()=>toast(`Rob ${K.rob.shop}? ${oddsText(K.rob)}. You could get away with 5,000–10,000 coins, or end up in jail.`,'Do it',()=>doCrime('rob'))})));
+  const waiting=K.waitFor>0, blocked=waiting?`Lie low ${mins(K.waitFor)} min`:null;
+  if(waiting) box.append(el('p',{class:'jobnow',text:`Lie low for ${mins(K.waitFor)} more minute${K.waitFor>60000?'s':''} before the next solo job. You can still practise the mini games for free.`}));
+  else { const ti=el('input',{type:'text',placeholder:'@username',autocomplete:'off','aria-label':'Whose pocket'});
+    box.append(el('div',{class:'cbet'}, el('span',{text:'Pickpocket:'}), ti, el('button',{class:'btn',text:'Try',onclick:()=>tryPickpocket(ti.value)})),
+      el('p',{class:'hint',text:'You’ll see their odds before you commit: it depends on where they are right now.'})); }
+  box.append(el('p',{class:'hint',text:'🎮 Robbing a shop, conning a tourist and hacking an ATM are mini games: play well and you can take up to 1.5× the money. Practice is free.'}));
+  const play=(k,o)=>openCrimeGame(k,{...o,blocked},{api,toast,fmt,avatarSVG,done:()=>{ Acts.at=0; loadMyMoney(); const me=myCitizen(); if(me) detail.delete(me.id); renderCard(true); }});
+  if(K.rob) box.append(el('div',{class:'crow'}, el('div',{class:'jt'}, el('b',{text:`🛒 Rob ${K.rob.shop}`}), el('span',{text:'Sneak in the back, empty the till and get out unseen. Usually 5,000–10,000 coins.'}), el('span',{class:'hint',text:oddsText(K.rob)})),
+      el('button',{class:'btn danger',text:'🎮 Play',onclick:()=>play('rob',{...K.rob,at:K.rob.shop})})));
   else box.append(el('p',{class:'hint',text:'There are no shops to rob.'}));
   for(const [k,S0] of Object.entries(SOLO_CRIMES)){ const o=K.solo&&K.solo[k]; if(!o) continue;
     box.append(el('div',{class:'crow'}, el('div',{class:'jt'}, el('b',{text:`${S0.icon} ${S0.name}`}), el('span',{text:`${S0.blurb} ${fmt(S0.loot[0])}–${fmt(S0.loot[1])} coins.${o.at?` At ${o.at}.`:''}`}), el('span',{class:'hint',text:oddsText(o)})),
-      el('button',{class:'btn danger',text:`${Math.round(o.chance*100)}%`,onclick:()=>toast(`${S0.name}? ${oddsText(o)}.`,'Do it',()=>doCrime(k))}))); }
+      el('button',{class:'btn danger',text:'🎮 Play',onclick:()=>play(k,o)}))); }
   box.append(Heist.box(c));
   return box; }
 // ---- Group crimes: plan a job, invite a crew (they get a group chat), and it goes down at the set time ----

@@ -150,7 +150,8 @@ app.post('/api/admin/race/cup', admin, send(req => races.setCup((req.body || {})
 // phone comes back to the app (and every few minutes), and reloads itself when it changed, so nobody keeps playing an old
 // copy for hours after an update.
 const APP_VERSION = (() => { const h = crypto.createHash('sha1'); try { h.update(fs.readFileSync(path.join(root, 'public', 'index.html')));
-  for (const f of fs.readdirSync(path.join(root, 'shared')).sort()) h.update(fs.readFileSync(path.join(root, 'shared', f))); } catch (e) { h.update(String(Date.now())); }
+  for (const f of fs.readdirSync(path.join(root, 'shared')).sort()) h.update(fs.readFileSync(path.join(root, 'shared', f)));
+  for (const f of fs.readdirSync(path.join(root, 'public')).filter(f => f.endsWith('.js')).sort()) h.update(fs.readFileSync(path.join(root, 'public', f))); } catch (e) { h.update(String(Date.now())); }
   return h.digest('hex').slice(0, 12); })();
 app.get('/api/version', (req, res) => { res.set('cache-control', 'no-store'); res.json({ v: APP_VERSION }); });
 app.get('/health', (req, res) => res.json({ ok: true, founded: !!world.meta, population: world.meta?.population || 0, viewers: wss?.clients.size || 0, bus: bus.kind, leader: isLeader }));

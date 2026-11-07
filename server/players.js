@@ -202,6 +202,8 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/notices/:id/seen', limit, send(async req => world.actions.seenNotice((await me(req)).id, req.params.id)));
   r.get('/me/crime', limit, send(async req => world.actions.crimeInfo((await me(req)).id, req.query.target)));
   r.post('/me/bail', limit, send(async req => world.actions.bail((await me(req)).id)));
+  r.post('/me/crime/start', limit, send(async req => { const b = req.body || {}; return world.actions.crimeStart((await me(req)).id, { kind: String(b.kind || ''), practice: !!b.practice }); }));
+  r.post('/me/crime/finish', limit, send(async req => { const b = req.body || {}; return world.actions.crimeFinish((await me(req)).id, { runId: b.runId, log: b.log }); }));
   r.post('/me/crime', limit, send(async req => { const b = req.body || {}; return world.actions.crime((await me(req)).id, { kind: b.kind, target: b.target }); }));
   r.get('/me/places', limit, send(async req => world.actions.places((await me(req)).id)));
   // Every trip starts from where the colonist really is: the phone sends it with the request.

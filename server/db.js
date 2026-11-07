@@ -286,7 +286,12 @@ const MIGRATIONS = [
   // v53: boats and aircraft players buy at the dealer show on the map as their own vehicles; offers can be cleared from your list
   `alter table vehicles add column if not exists owner_id text; alter table vehicles add column if not exists owner_handle text; alter table vehicles add column if not exists car_id text;
    create index if not exists vehicles_owner on vehicles (owner_id);
-   alter table offers add column if not exists from_hidden boolean not null default false; alter table offers add column if not exists to_hidden boolean not null default false;`
+   alter table offers add column if not exists from_hidden boolean not null default false; alter table offers add column if not exists to_hidden boolean not null default false;`,
+  // v54: crime mini games: each game the server deals (its level comes from the seed), and what came of it
+  `create table if not exists crime_runs (id text primary key, citizen_id text not null, kind text not null, seed bigint not null, diff int not null,
+     practice boolean not null default false, started_at bigint not null, finished_at bigint, chance numeric not null default 0, band text, night boolean,
+     loot int not null default 0, scene jsonb, result jsonb);
+   create index if not exists crime_runs_who on crime_runs (citizen_id, started_at);`
 ];
 
 export async function migrate() {

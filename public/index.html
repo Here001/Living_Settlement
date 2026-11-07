@@ -861,6 +861,19 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .mgtotal{display:flex;justify-content:space-between;font-size:18px;font-weight:900;border-top:2px solid #2B2621;padding-top:8px;margin-top:6px}
 .mgmoney{font-size:18px;font-weight:800;margin:12px 0 4px}
 .mgcard.res.good .mgmoney{color:#2E9B57}.mgcard.res.bad .mgmoney{color:#C8473D}
+.mgbig{position:absolute;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%);min-width:220px;min-height:64px;font-size:22px;z-index:2}
+.mgcrew{list-style:none;padding:0;margin:8px 0;text-align:left}.mgcrew li{display:flex;justify-content:space-between;gap:8px;padding:6px 2px;border-bottom:1px dashed var(--soft)}
+.mg.shakeit{animation:mgshake .3s}
+.mgstreet{width:min(440px,calc(100% - 24px));display:grid;grid-template-columns:repeat(3,1fr);gap:14px 10px;padding:18px 14px 26px;margin-top:40px;background:linear-gradient(#C8473D 0 52%,#9C917B 52% 100%);border:3px solid #2B2621;border-radius:16px;box-shadow:0 6px 0 #2B2621}
+.mgwin{position:relative;aspect-ratio:3/4;border:3px solid #2B2621;border-radius:10px 10px 4px 4px;background:#2E3B55;cursor:pointer;overflow:hidden;padding:0}
+.mgwin.up{background:linear-gradient(#9CC3D9,#5D86A8)}.mgwin.down{background:#4A3426;border-radius:40px 40px 4px 4px}
+.mgwin .who{position:absolute;left:0;right:0;bottom:-60%;font-size:min(13vw,58px);line-height:1;text-align:center;transition:bottom .12s ease-out}
+.mgwin.on .who{bottom:6%}
+.mgwin.hit{box-shadow:0 0 0 4px #3CC46A inset}.mgwin.wrong{box-shadow:0 0 0 4px #FF4B3A inset;animation:mgshake .3s}
+.hrole{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0}.hrole .pill.on{background:#2B2621;color:#fff}
+.hparts{list-style:none;padding:0;margin:6px 0;font-size:14px}.hparts li{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
+.hcard.live{border-color:#E4572E;box-shadow:0 0 0 3px rgba(228,87,46,.35)}
+@media (prefers-reduced-motion:reduce){.mg.shakeit,.mgwin .who{animation:none;transition:none}}
 @media (prefers-reduced-motion:reduce){.mgcount,.mg.siren,.mgpad.shake,.mgsock.spark{animation:none}}
 </style>
 </head>
@@ -934,6 +947,7 @@ import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
 import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
+import { ROLES as MG_ROLES } from '/shared/minigames.js';
 import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
@@ -5762,6 +5776,8 @@ function outPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Go ou
   if(P.places.length) box.append(ul); else box.append(el('p',{class:'hint',text:'Nowhere to go yet. Parks, shops and cafés appear here once they are built.'}));
   const fi=el('input',{type:'text',placeholder:'@friend',autocomplete:'off','aria-label':"Friend's username"});
   box.append(el('div',{class:'cbet'}, el('span',{text:'Visit a friend:'}), fi, el('button',{class:'btn',text:'Go',onclick:()=>meAction('/api/me/visit',{friend:fi.value},r=>`You're on your way to ${r.place}.`)}))); return box; }
+// What the crime mini games borrow from the page.
+function crimeCtx(){ return {api,toast,fmt,avatarSVG,me:()=>Me&&Me.handle,done:()=>{ Acts.at=0; Heist.at=0; loadMyMoney(); const me=myCitizen(); if(me) detail.delete(me.id); if(sel) renderCard(true); }}; }
 async function doCrime(kind, target){ const r=await meAction('/api/me/crime',{kind,target}); if(!r) return;
   toast(r.caught ? (r.jailed?`🚓 Caught! You were fined ${fmt(r.fine)} coins and locked up for ${mins(r.jailFor)} minutes.`:`🚓 Caught! You were fined ${fmt(r.fine)} coins.`) : `💰 You got away with ${fmt(r.loot)} coins.`); }
 // Crime odds come in three bands, set by how far the nearest Police station is from where it happens.
@@ -5792,7 +5808,7 @@ function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cri
     box.append(el('div',{class:'cbet'}, el('span',{text:'Pickpocket:'}), ti, el('button',{class:'btn',text:'Try',onclick:()=>tryPickpocket(ti.value)})),
       el('p',{class:'hint',text:'You’ll see their odds before you commit: it depends on where they are right now.'})); }
   box.append(el('p',{class:'hint',text:'🎮 Robbing a shop, conning a tourist and hacking an ATM are mini games: play well and you can take up to 1.5× the money. Practice is free.'}));
-  const play=(k,o)=>openCrimeGame(k,{...o,blocked},{api,toast,fmt,avatarSVG,done:()=>{ Acts.at=0; loadMyMoney(); const me=myCitizen(); if(me) detail.delete(me.id); renderCard(true); }});
+  const play=(k,o)=>openCrimeGame(k,{...o,blocked},crimeCtx());
   if(K.rob) box.append(el('div',{class:'crow'}, el('div',{class:'jt'}, el('b',{text:`🛒 Rob ${K.rob.shop}`}), el('span',{text:'Sneak in the back, empty the till and get out unseen. Usually 5,000–10,000 coins.'}), el('span',{class:'hint',text:oddsText(K.rob)})),
       el('button',{class:'btn danger',text:'🎮 Play',onclick:()=>play('rob',{...K.rob,at:K.rob.shop})})));
   else box.append(el('p',{class:'hint',text:'There are no shops to rob.'}));
@@ -5802,7 +5818,12 @@ function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cri
   box.append(Heist.box(c));
   return box; }
 // ---- Group crimes: plan a job, invite a crew (they get a group chat), and it goes down at the set time ----
-const Heist={ data:null, at:0, busy:false, form:null,
+const Heist={ data:null, at:0, busy:false, form:null, prompted:new Set(),
+  playPart(h){ const L0=h.live; openCrimeGame(L0.myRole,{heist:h.id,until:L0.until,band:L0.band,chance:L0.chance,night:L0.night,at:L0.at},crimeCtx()); },
+  // while you're on a job, keep an eye on it: when it goes live, say so wherever you are in the game
+  watch(){ if(!(Me&&Me.token)) return; const D0=this.data, on=D0&&D0.mine.some(h=>h.status==='planning'&&h.me==='member'||h.status==='live');
+    if(Date.now()-this.at>(on?10000:60000)) this.load(true); const live=D0&&D0.mine.find(h=>h.status==='live'&&h.live&&h.live.myRole&&!h.live.iPlayed&&!h.live.iStarted&&!this.prompted.has(h.id));
+    if(live&&!document.body.classList.contains('mg-on')){ this.prompted.add(live.id); toast(`🚨 Go time! ${live.icon} ${live.name}: the job is on. Play your part: ${MG_ROLES[live.live.myRole].icon} ${MG_ROLES[live.live.myRole].name}.`,'Play',()=>this.playPart(live)); } },
   load(force){ if(this.busy||(!force&&this.data&&Date.now()-this.at<10000)) return; this.busy=true; api('/api/me/heists').then(d=>{ this.data=d; this.at=Date.now(); }).catch(()=>{}).finally(()=>{ this.busy=false; if(actTab==='crime'&&sel&&sel.kind==='c') renderCard(true); }); },
   async act(path, body, ok){ try{ const r=await api(path,{method:'POST',body:body||{}}); if(ok) toast(typeof ok==='function'?ok(r):ok); this.form=null; this.load(true); Chats.load(); return r; }catch(e){ toast(e.message); return null; } },
   box(c){ this.load(); const D0=this.data, box=el('div',{class:'heists'}, el('h3',{text:'🕶️ Group crimes'}));
@@ -5812,13 +5833,21 @@ const Heist={ data:null, at:0, busy:false, form:null,
     for(const h of D0.mine){ const left=h.at-Date.now(), H=HEISTS[h.kind]||{min:2}, card=el('div',{class:'hcard '+h.status});
       card.append(el('div',{class:'hhead'}, el('b',{text:`${h.icon} ${h.name}`}), el('span',{class:'hint',text:h.status==='planning'?(left>0?`in ${mins(left)} min`:'any moment'):h.status==='cancelled'?'called off':h.result&&h.result.win?'came off':'went wrong'})),
         el('p',{class:'hint',text:`Target: ${h.target} · planned by ${h.mine?'you':'@'+h.planner} · crew: ${h.crew.map(x=>'@'+x).join(', ')||'nobody yet'}${h.invited.length?` · invited: ${h.invited.map(x=>'@'+x).join(', ')}`:''}`}));
-      if(h.status==='done'&&h.result){ const R0=h.result, me=Me.handle.toLowerCase(), mine=R0.caught.find(x=>x.h.toLowerCase()===me);
-        card.append(el('p',{class:'jobnow',text:mine?`🚓 You were caught: fined ${fmt(mine.fine)}${R0.jail?` and jailed for ${R0.jail} minutes`:''}.`:R0.win&&R0.got.some(x=>x.toLowerCase()===me)?`💰 Your share: ${fmt(R0.each)} coins.`:R0.win?'It came off.':'You got away with nothing.'})); }
+      const RL=k=>MG_ROLES[k]?`${MG_ROLES[k].icon} ${MG_ROLES[k].name}`:k;
+      if(h.status==='planning'&&h.parts&&h.crew.length){ card.append(el('ul',{class:'hparts'}, ...h.crew.map(x=>el('li',null, el('span',{text:'@'+x}), el('b',{text:h.parts[x]?RL(h.parts[x].role)+(h.parts[x].picked?'':' (for now)'):''})))));
+        if(h.me==='member'&&h.roles) card.append(el('div',{class:'hrole'}, el('span',{class:'hint',text:'Your part:'}), ...h.roles.map(r=>el('button',{class:'pill'+(h.parts[Me.handle]?.role===r&&h.parts[Me.handle]?.picked?' on':''),text:RL(r),title:MG_ROLES[r].blurb,onclick:()=>this.act(`/api/me/heists/${encodeURIComponent(h.id)}/role`,{role:r},`You'll be the ${MG_ROLES[r].name.toLowerCase()}.`)})))); }
+      if(h.status==='live'&&h.live){ const L0=h.live, left=Math.max(0,L0.until-Date.now());
+        card.append(el('p',{class:'jobnow',text:`🚨 It's on! ${Math.ceil(left/1000)}s left for the crew to play.`}), el('ul',{class:'hparts'}, ...L0.crew.map(m=>el('li',null, el('span',{text:`${RL(m.role)} @${m.h}`}), el('b',{text:m.done?'✅ done':m.playing?'🎮 playing':'⏳'})))));
+        if(L0.myRole&&!L0.iPlayed) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:`🎮 Play my part: ${RL(L0.myRole)}`,onclick:()=>Heist.playPart(h)}))); }
+      if(h.status==='done'&&h.result){ const R0=h.result, me=Me.handle.toLowerCase(), mine=R0.caught.find(x=>x.h.toLowerCase()===me), part=(R0.parts||[]).find(p=>p.h.toLowerCase()===me);
+        if(R0.parts) card.append(el('p',{class:'hint',text:`${R0.title}. Crew score ${R0.score.total} (play ${R0.score.play} + setting ${R0.score.setting}): ${R0.parts.map(p=>`${MG_ROLES[p.role]?.icon||''} @${p.h} ${p.status==='noshow'?'didn’t show':p.play+'/60'}`).join(', ')}.`}));
+        card.append(el('p',{class:'jobnow',text:mine?`🚓 You were caught: fined ${fmt(mine.fine)}${(mine.jailed??R0.jail)&&R0.jail?` and jailed for ${R0.jail} minutes`:''}.`:part&&part.status==='noshow'?'You sat this one out.':R0.win&&R0.got.some(x=>x.toLowerCase()===me)?`💰 Your share: ${fmt(R0.each)} coins.`:R0.win?'It came off.':'You got away with nothing.'})); }
       const row=el('div',{class:'row-actions'}, el('button',{class:'btn sm',text:'💬 Crew chat',onclick:()=>Chats.openGroup(h.group)}));
       if(h.status==='planning'&&h.me==='invited') row.append(el('button',{class:'btn primary sm',text:'Join the crew',onclick:()=>this.act(`/api/chat/groups/${encodeURIComponent(h.group)}/join`,{},'You’re in. Check the crew chat.')}), el('button',{class:'btn sm',text:'No thanks',onclick:()=>this.act(`/api/chat/groups/${encodeURIComponent(h.group)}/decline`,{},'You turned it down.')}));
       if(h.status==='planning'&&h.mine){ row.append(el('button',{class:'btn danger sm',text:`Go now (${h.crew.length}/${H.min})`,disabled:h.crew.length<H.min,onclick:()=>toast(`Do the ${h.name.toLowerCase()} now with ${h.crew.length} of you?`,'Go',()=>this.act(`/api/me/heists/${encodeURIComponent(h.id)}/go`,{},r=>r.message||'Done.'))}),
         el('button',{class:'linkb',text:'Call it off',onclick:()=>this.act(`/api/me/heists/${encodeURIComponent(h.id)}/cancel`,{},'Called off.')})); }
       card.append(row); box.append(card); }
+    box.append(el('div',{class:'hrole'}, el('span',{class:'hint',text:'🎮 Practise a part (free):'}), ...Object.entries(MG_ROLES).map(([k,R1])=>el('button',{class:'pill',text:`${R1.icon} ${R1.name}`,onclick:()=>openCrimeGame(k,{practiceOnly:true,band:'mid',chance:0.3},crimeCtx())}))));
     if(D0.jailedFor>0) return box;
     if(D0.waitFor>0){ box.append(el('p',{class:'jobnow',text:`Lie low for ${mins(D0.waitFor)} more minutes before the next job.`})); return box; }
     if(D0.mine.some(h=>h.status==='planning'&&h.me==='member')){ box.append(el('p',{class:'hint',text:'One job at a time: you can plan another once this one is done.'})); return box; }
@@ -6295,6 +6324,7 @@ const Watch={ id:null, until:0, label:'', bar:null, done:false,
       if(Date.now()-this.started>10*60000){ this.stop(); return; } } if(this.bar){ const shown=this.bar.querySelector('.wdot.on')!=null; if(shown!==(follow===this.id)) this.show(); const cd=this.bar.querySelector('.cdown'); if(cd&&this.until){ const ms=Math.max(0,this.until-(Date.now()+skew)); cd.textContent=`${Math.floor(ms/60000)}:${String(Math.floor(ms%60000/1000)).padStart(2,'0')}`; } }
     if(this.until&&Date.now()+skew>=this.until&&!this.done){ this.done=true; toast('📦 Delivered! Open 💰 Earn on your card to get paid.','Get paid',()=>{ this.stop(); openMyTab('earn'); }); setTimeout(()=>{ if(this.done) this.stop(); },6000); } } };
 setInterval(()=>Watch.tick(),500);
+setInterval(()=>{ if(!document.hidden) Heist.watch(); },10000); setTimeout(()=>Heist.watch(),4000);
 
 /* ---------------- who's online (Town Square header) ---------------- */
 var Online={ n:null, at:0,

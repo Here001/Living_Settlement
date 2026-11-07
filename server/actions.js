@@ -215,6 +215,7 @@ export class Actions {
   // the street near home.
   async crimeScene(db, c, kind) {
     let shop = null, px = c.hx, py = c.hy, loot;
+    if (MG.ROLES[kind]) return { shop: null, px, py, loot: 0 }; // practising a heist part: the setting is home turf
     if (kind === 'rob') { shop = (await db.query(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [c.hx, c.hy, SHOPS])).rows[0];
       if (!shop) throw new HttpError(409, 'There are no shops to rob.'); loot = 5000 + Math.floor(rand() * 5001); }
     else { const S = R.SOLO_CRIMES[kind];
@@ -228,13 +229,14 @@ export class Actions {
   // walking away from a bad game doesn't give you another go. Practice is free: no money, no risk, no waiting.
   async crimeStart(id, { kind, practice }) {
     if (!MG.GAMES[kind]) throw new HttpError(400, 'Pick a crime.');
+    if (!practice && !MG.SOLO.includes(kind)) throw new HttpError(400, 'Heist parts are played when the job goes live. You can practise them any time.');
     const go = async db => {
       const c = (await db.query(`select c.*, h.x hx, h.y hy from citizens c left join buildings h on h.id = c.home_id where c.id = $1${practice ? '' : ' for update of c'}`, [id])).rows[0];
       if (!c) throw new HttpError(404, 'No such citizen.'); if (!c.home_id) throw new HttpError(400, "You're still in cryosleep.");
       const now = Date.now();
       if (!practice) { const why = await this.blockedReason(c); if (why) throw new HttpError(409, why);
         const wait = Number(c.crime_at || 0) + CRIME_COOLDOWN - now; if (wait > 0) throw new HttpError(429, `Lie low for ${Math.ceil(wait / 60000)} more minute${wait > 60000 ? 's' : ''} before the next job. You can practise meanwhile.`); }
-      const sc = await this.crimeScene(db, c, kind), wave = await this.waveNow(), odds = await this.odds(kind, await this.policeDist(db, sc.px, sc.py), wave);
+      const sc = await this.crimeScene(db, c, kind), wave = await this.waveNow(), odds = await this.odds(MG.ROLES[kind] ? 'armored' : kind, await this.policeDist(db, sc.px, sc.py), wave);
       const diff = MG.difficultyOf(kind, odds.band), seed = crypto.randomInt(1, 2 ** 31), rid = crypto.randomUUID();
       await db.query('insert into crime_runs (id, citizen_id, kind, seed, diff, practice, started_at, chance, band, night, loot, scene) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
         [rid, id, kind, seed, diff, !!practice, now, odds.chance, odds.band, !!odds.night, sc.loot, JSON.stringify(sc)]);
@@ -245,7 +247,14 @@ export class Actions {
     return practice ? go(pool) : this.world.change(ch => go({ query: (a, v) => ch.q(a, v) }));
   }
   // The game is over: replay what the player did with the game's own rules, score it, and settle.
-  async crimeFinish(id, { runId, log }) {
+  async crimeFinish(id, body) {
+    const r = await this.crimeFinish0(id, body);
+    if (r.heistId) { // a heist part: settle the job once the whole crew has played, and say where it stands
+      await this.world.heists.settle(r.heistId).catch(e => console.error('heist settle:', e.message));
+      r.heist = await this.world.heists.status(id, r.heistId).catch(() => null); }
+    return r;
+  }
+  async crimeFinish0(id, { runId, log }) {
     return this.world.change(async ch => {
       const run = (await ch.q('select * from crime_runs where id = $1 for update', [String(runId || '')])).rows[0];
       if (!run || run.citizen_id !== id) throw new HttpError(404, 'No such game.'); if (run.finished_at) throw new HttpError(409, 'That game is already over.');
@@ -257,6 +266,7 @@ export class Actions {
       const perf = rp.ok ? rp.perf : 0, sc = MG.scoreOf(perf, Number(run.chance)), out = MG.outcomeOf(sc.total, rp.ok && rp.money);
       const res = { score: sc, outcome: out.key, title: out.title, mult: out.mult, game: rp.ok ? rp.state : { invalid: rp.why }, practice: run.practice };
       await ch.q('update crime_runs set finished_at = $2, result = $3 where id = $1', [run.id, now, JSON.stringify(res)]);
+      if (run.heist_id) return { ...res, money: 0, heistId: run.heist_id, role: run.kind };
       if (run.practice) return { ...res, money: 0, practiceLoot: out.mult ? Math.round(Number(run.loot) * out.mult) : 0 };
       return { ...res, ...(await this.settleCrime(ch, id, run, out, sc)) };
     });

@@ -13,7 +13,13 @@ const INFO = {
   rob: { icon: '🛒', name: 'Rob the shop', how: ['Sneak in the back door, get to the till and stay next to it while you empty it. Then get out the way you came in.', 'Stay out of the shopkeeper\'s view (the yellow cone) and away from cameras. If the eye meter fills, you\'re spotted.', 'Move: drag anywhere on the screen (or use the arrow keys).'] },
   scam: { icon: '🎭', name: 'Con a tourist', how: ['Sell a tourist a "genuine" Gliese moon rock before they smell a rat.', 'Each turn, pick a line that suits their mood (watch what they say), then tap "Say it" while the marker is in the green.', 'Trust full: sold. Suspicion full: they walk off.'] },
   atm: { icon: '🏧', name: 'Hack the ATM', how: ['Rewire the cash machine: tap a wire, then the socket with that colour\'s symbol on the service card.', 'Then watch the keypad flash a code and tap it back.', 'Wrong moves make the alarm jump. If the alarm fills, the bank\'s siren goes off.'] },
+  driver: { icon: '🚗', name: 'Driver: the getaway', how: ['Get the crew\'s car to the end of the road.', 'Tap the left or right side of the screen (or swipe, or use the arrow keys) to change lane and dodge the traffic and roadblocks.', 'Each crash slows you right down. Four crashes and the car\'s wrecked.'] },
+  hacker: { icon: '💻', name: 'Hacker: the security panel', how: ['Rewire the panel: tap a wire, then the socket with that colour\'s symbol on the service card.', 'Then watch the keypad flash a code and tap it back.', 'Wrong moves make the alarm jump. If the alarm fills, the sirens go off.'] },
+  safecracker: { icon: '🔐', name: 'Safecracker: the dial', how: ['The dial spins by itself. Tap when the pointer is on the green number to lock it in.', 'Then the next number, spinning the other way, until the safe opens.', 'A tap off the number makes a noise. Five noises and the alarm goes.'] },
+  lookout: { icon: '👀', name: 'Lookout: spot the police', how: ['Watch the windows and doorways. Tap the police (👮 🕵️) before they duck away.', 'Don\'t tap ordinary people: a false alarm adds heat. So does every officer you miss.', 'Keep watch until the time is up. Full heat and the job is blown.'] },
+  muscle: { icon: '💪', name: 'Muscle: hold the doors', how: ['Guards run at the doors from both sides.', 'Tap the left or right side to shove back the nearest guard on that side, once they\'re in the red zone.', 'Shoving at nobody wastes your strength. Three guards through and the doors are lost.'] },
 };
+const ROLE = k => !!MG.ROLES[k];
 
 // The game's frame: the intro, the countdown, the game, and the result.
 export function openCrimeGame(kind, info, ctx) {
@@ -27,7 +33,7 @@ function intro(root, kind, info) {
   root._stop && root._stop(); root.innerHTML = '';
   const I = INFO[kind], diff = MG.difficultyOf(kind, info.band || 'mid'), setting = MG.scoreOf(0, info.chance || 0).setting;
   const pips = $c('span', { class: 'mgpips', 'aria-label': `Difficulty ${diff} of 5` }); for (let i = 1; i <= 5; i++) pips.append($c('i', { class: i <= diff ? 'on' : '' }));
-  const real = !info.blocked;
+  const real = !info.blocked && !info.practiceOnly, heist = info.heist;
   root.append($c('div', { class: 'mgcard' },
     $c('button', { class: 'mgx', 'aria-label': 'Close', text: '×', onclick: close }),
     $c('div', { class: 'mgicon', text: I.icon }), $c('h2', { text: I.name }), info.at ? $c('p', { class: 'mgat', text: `At ${info.at}` }) : null,
@@ -35,14 +41,19 @@ function intro(root, kind, info) {
     $c('div', { class: 'mgrow' }, $c('span', { text: 'The setting' }), $c('b', { text: `${setting} of 40 points` })),
     $c('p', { class: 'mghint', text: [info.band === 'low' ? '🔴 Police close by' : info.band === 'mid' ? '🟡 Police not far' : '🟢 No police nearby', info.night ? '🌙 dark streets' : null, info.wave ? '🦹 crime wave' : null].filter(Boolean).join(' · ') }),
     $c('ul', { class: 'mghow' }, ...I.how.map(t => $c('li', { text: t }))),
-    $c('p', { class: 'mghint', text: 'Your play earns up to 60 points and the setting up to 40. 80+ is a clean getaway (up to 1.5× the takings), 60–79 gets you some of it, 40–59 nothing, below 40 you\'re caught: fined, and below 20 jailed too.' }),
+    $c('p', { class: 'mghint', text: heist ? 'The whole crew plays at the same time. The crew\'s average play (up to 60) plus the setting (up to 40) decides the job: 80+ pays up to 1.5× the loot, below 40 the crew is caught. Botch your own part and you\'re caught whatever the rest do.'
+      : ROLE(kind) ? 'Practice for a heist part: it\'s free and scored out of 60, like the real thing.' : 'Your play earns up to 60 points and the setting up to 40. 80+ is a clean getaway (up to 1.5× the takings), 60–79 gets you some of it, 40–59 nothing, below 40 you\'re caught: fined, and below 20 jailed too.' }),
+    heist ? $c('p', { class: 'mgat mgleft', text: '' }) : null,
     $c('div', { class: 'mgbtns' },
-      $c('button', { class: 'mgb', text: '▶ Practise (free)', onclick: () => begin(root, kind, info, true) }),
-      $c('button', { class: 'mgb hot', text: real ? '🎯 Do it for real' : info.blocked, disabled: real ? null : '', onclick: () => real && begin(root, kind, info, false) }))));
+      $c('button', { class: 'mgb', text: heist ? '▶ Practise first' : '▶ Practise (free)', onclick: () => begin(root, kind, info, true) }),
+      heist ? $c('button', { class: 'mgb hot', text: '🎯 Play my part now', onclick: () => begin(root, kind, info, false) })
+        : info.practiceOnly ? null : $c('button', { class: 'mgb hot', text: real ? '🎯 Do it for real' : info.blocked, disabled: real ? null : '', onclick: () => real && begin(root, kind, info, false) }))));
+  if (heist && info.until) { const lab = root.querySelector('.mgleft'); const tick = () => { if (!lab.isConnected) return; const left = Math.max(0, info.until - Date.now()); lab.textContent = `⏱️ ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')} left for the crew to play`; setTimeout(tick, 500); }; tick(); }
 }
 async function begin(root, kind, info, practice) {
   root.innerHTML = ''; root.append($c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'Setting up…' })));
-  let run; try { run = await X.api('/api/me/crime/start', { method: 'POST', body: { kind, practice } }); } catch (e) { X.toast(e.message); intro(root, kind, info); return; }
+  let run; try { run = info.heist && !practice ? await X.api(`/api/me/heists/${encodeURIComponent(info.heist)}/play`, { method: 'POST', body: {} }) : await X.api('/api/me/crime/start', { method: 'POST', body: { kind, practice } }); }
+  catch (e) { X.toast(e.message); if (info.heist && !practice) close(); else intro(root, kind, info); return; }
   const L = MG.levelOf(kind, run.seed, run.diff);
   root.innerHTML = ''; const cd = $c('div', { class: 'mgcount', text: '3' }); root.append(cd);
   let n = 3; const tick = () => { n--; if (n > 0) { cd.textContent = String(n); setTimeout(tick, 650); } else { cd.remove(); play(root, kind, L, run, info); } }; setTimeout(tick, 650);
@@ -50,13 +61,39 @@ async function begin(root, kind, info, practice) {
 function play(root, kind, L, run, info) {
   const finish = async log => { root._stop && root._stop(); root.innerHTML = ''; root.append($c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'Counting up…' })));
     let r; try { r = await X.api('/api/me/crime/finish', { method: 'POST', body: { runId: run.id, log } }); } catch (e) { X.toast(e.message); close(); return; }
+    if (r.heistId) { heistWait(root, kind, info, r); return; }
     result(root, kind, info, run, r); if (!run.practice) X.done && X.done(r); };
-  if (kind === 'rob') stealth(root, L, finish); else if (kind === 'scam') con(root, L, finish); else atm(root, L, finish);
+  const g = MG.GAMES[kind];
+  if (g === 'stealth') stealth(root, L, finish); else if (g === 'con') con(root, L, finish); else if (g === 'atm') atm(root, L, finish);
+  else if (g === 'drive') drive(root, L, finish); else if (g === 'safe') safe(root, L, finish); else if (g === 'lookout') lookout(root, L, finish); else muscle(root, L, finish);
+}
+// After your part in a heist: your score, then the crew as they finish, then how the job went.
+function heistWait(root, kind, info, r) {
+  root.innerHTML = ''; buzz(40);
+  const I = INFO[kind], card = $c('div', { class: 'mgcard res' }), list = $c('ul', { class: 'mgcrew' }), head = $c('p', { class: 'mghint', text: 'Waiting for the crew…' }), body = $c('div');
+  card.append(...[$c('div', { class: 'mgicon', text: I.icon }), $c('h2', { text: `Your part: ${r.score.play} of 60` }), r.game && r.game.invalid ? $c('p', { class: 'mghint', text: 'That game didn\'t add up, so it counts as botched.' }) : null, head, list, body].filter(Boolean));
+  root.append(card); let stop = false; root._stop = () => { stop = true; };
+  const show = st => { list.innerHTML = ''; const L0 = st.live || {};
+    for (const m of L0.crew || []) list.append($c('li', null, $c('span', { text: `${MG.ROLES[m.role].icon} @${m.h}` }), $c('b', { text: m.done ? '✅ done' : m.playing ? '🎮 playing' : '⏳ not started' })));
+    if (st.status !== 'done' || !st.result) { const left = Math.max(0, (L0.until || 0) - Date.now()); head.textContent = `Waiting for the crew… ${Math.ceil(left / 1000)}s left`; return false; }
+    const R0 = st.result, me = (X.me() || '').toLowerCase(), mine = (R0.parts || []).find(p => p.h.toLowerCase() === me) || {};
+    head.textContent = ''; list.innerHTML = '';
+    for (const p of R0.parts || []) list.append($c('li', null, $c('span', { text: `${MG.ROLES[p.role].icon} @${p.h}` }), $c('b', { text: p.status === 'noshow' ? 'didn\'t show' : `${p.play}/60 ${p.status === 'caught' ? '🚓' : '✅'}` })));
+    const good = R0.win, bad = (R0.parts || []).some(p => p.status === 'caught') && !R0.win;
+    const bar = (label, v, max, cls) => $c('div', { class: 'mgbar' }, $c('span', { text: label }), $c('div', { class: 'mgtrack' }, $c('i', { class: cls, style: `width:${Math.round(v / max * 100)}%` })), $c('b', { text: `${v}/${max}` }));
+    body.innerHTML = ''; body.append($c('h2', { text: (good ? '💰 ' : bad ? '🚓 ' : '🫥 ') + R0.title }), bar('Crew play', R0.score.play, 60, 'p'), bar('The setting', R0.score.setting, 40, 's'), $c('div', { class: 'mgtotal' }, $c('span', { text: 'Crew score' }), $c('b', { text: `${R0.score.total}` })),
+      $c('p', { class: 'mgmoney', text: mine.status === 'got' ? (mine.each ? `+${X.fmt(mine.each)} coins` : 'You got away, with nothing.') : mine.status === 'caught' ? `🚓 You were caught: fined ${X.fmt(mine.fine)} coins${mine.jailed ? ' and jailed' : ''}.` : 'You sat this one out.' }),
+      $c('div', { class: 'mgbtns' }, $c('button', { class: 'mgb hot', text: 'Back to the map', onclick: close })));
+    card.classList.add(good ? 'good' : bad ? 'bad' : 'meh'); buzz(good ? [30, 40, 30] : 200); X.done && X.done(R0); return true; };
+  const poll = async () => { if (stop || !card.isConnected) return; let st = null; try { st = await X.api(`/api/me/heists/${encodeURIComponent(r.heistId)}/live`); } catch (e) {}
+    if (st && show(st)) return; setTimeout(poll, 2500); };
+  if (r.heist && show(r.heist)) return; setTimeout(poll, 1500);
+  body.append($c('div', { class: 'mgbtns' }, $c('button', { class: 'mgb', text: 'Wait on the map', onclick: close })));
 }
 function result(root, kind, info, run, r) {
   root.innerHTML = ''; const good = r.outcome === 'clean' || r.outcome === 'partial', bad = r.outcome === 'fined' || r.outcome === 'jailed';
   const bar = (label, v, max, cls) => $c('div', { class: 'mgbar' }, $c('span', { text: label }), $c('div', { class: 'mgtrack' }, $c('i', { class: cls, style: `width:${Math.round(v / max * 100)}%` })), $c('b', { text: `${v}/${max}` }));
-  const money = r.practice ? (r.practiceLoot ? `For real, that would have paid about ${X.fmt(r.practiceLoot)} coins.` : bad ? 'For real, you\'d have been caught.' : 'For real, you\'d have got away with nothing.')
+  const money = r.practice && ROLE(kind) ? `Your part: ${r.score.play} of 60. ${r.score.play >= 45 ? 'The crew will be glad of you.' : r.score.play >= 12 ? 'Good enough to get away.' : 'Play like that on the job and you\'d be caught.'}` : r.practice ? (r.practiceLoot ? `For real, that would have paid about ${X.fmt(r.practiceLoot)} coins.` : bad ? 'For real, you\'d have been caught.' : 'For real, you\'d have got away with nothing.')
     : r.money ? `+${X.fmt(r.money)} coins` : r.fine ? `Fined ${X.fmt(r.fine)} coins${r.jailed ? ` and jailed for ${Math.round(r.jailFor / 60000)} minutes` : ''}.` : 'No money this time.';
   root.append($c('div', { class: 'mgcard res ' + (good ? 'good' : bad ? 'bad' : 'meh') },
     $c('div', { class: 'mgicon', text: good ? '💰' : bad ? '🚓' : '🫥' }), $c('h2', { text: (r.practice ? 'Practice: ' : '') + r.title }),
@@ -194,4 +231,145 @@ function atm(root, L, finish) {
   loop(root, () => { const t = (performance.now() - t0) / 1000, a = pen + t / L.limit; alarm.set(a); alarm.classList.toggle('hot', a > 0.7); clock.textContent = `${Math.max(0, Math.ceil(L.limit - t))}s`;
     if (!done && a >= 1) { stage = 'alarm'; status.textContent = '🚨 The alarm went off!'; root.classList.add('siren'); buzz(500); end(); } });
   const stop = root._stop; root._stop = () => { stop && stop(); removeEventListener('resize', draw); };
+}
+
+// A full-screen canvas sized for the phone, redrawn by the game each frame.
+function canvasFor(root) {
+  const cv = $c('canvas', { class: 'mgcanvas' }), g = cv.getContext('2d'), dpr = Math.min(window.devicePixelRatio || 1, 2), box = { W: 0, H: 0, g, cv, dpr };
+  const fit = () => { box.W = root.clientWidth; box.H = root.clientHeight; cv.width = Math.round(box.W * dpr); cv.height = Math.round(box.H * dpr); cv.style.width = box.W + 'px'; cv.style.height = box.H + 'px'; };
+  root.append(cv); fit(); const ro = new ResizeObserver(fit); ro.observe(root); box.off = () => ro.disconnect(); return box;
+}
+const rr = (g, x, y, w, h, r) => { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); };
+function keyHook(root, fn) { const k = e => { if (fn(e) !== false && e.key.startsWith('Arrow')) e.preventDefault(); }; addEventListener('keydown', k); const stop = root._stop; root._stop = () => { stop && stop(); removeEventListener('keydown', k); }; }
+
+// ---------------- Getaway drive ----------------
+function drive(root, L, finish) {
+  const C = canvasFor(root), dmg = meter('alarm', '💥'), prog = meter('trust', '🏁'), clock = $c('b', { class: 'mgclock' });
+  root.append(hud(prog, dmg, clock), $c('div', { class: 'mgjoyhint', text: 'Tap left or right to change lane' }));
+  const s = MG.driveStart(), moves = []; let prevD = 0, acc = 0, want = 1, carX = 1, ended = false, shake = 0, lastCr = 0;
+  const steer = dir => { if (ended) return; want = Math.max(0, Math.min(2, want + dir)); };
+  let sx = null; C.cv.addEventListener('pointerdown', e => { sx = e.clientX; }); C.cv.addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; steer(Math.abs(dx) > 30 ? Math.sign(dx) : e.clientX < C.W / 2 ? -1 : 1); sx = null; });
+  keyHook(root, e => { if (e.key === 'ArrowLeft' || e.key === 'a') steer(-1); else if (e.key === 'ArrowRight' || e.key === 'd') steer(1); else return false; });
+  const COL = { car: ['#4A7BD9', '#3CC46A', '#F2C94C', '#B05FD6', '#F4F4F0'], van: ['#F4F4F0'], bus: ['#F2C94C'], police: ['#1E2A44'], cones: ['#F2994A'] };
+  const vehicle = (g, x, y, w, h, col, kind, me) => {
+    g.fillStyle = 'rgba(0,0,0,.3)'; rr(g, x - w / 2 + 3, y - h / 2 + 4, w, h, w * 0.25); g.fill();
+    if (kind === 'cones') { for (const dx of [-0.3, 0, 0.3]) { g.fillStyle = '#F2994A'; g.beginPath(); g.moveTo(x + dx * w, y - h * 0.22); g.lineTo(x + dx * w + w * 0.13, y + h * 0.18); g.lineTo(x + dx * w - w * 0.13, y + h * 0.18); g.closePath(); g.fill(); g.strokeStyle = '#2B2621'; g.lineWidth = 1.5; g.stroke(); } return; }
+    g.fillStyle = col; rr(g, x - w / 2, y - h / 2, w, h, w * 0.25); g.fill(); g.strokeStyle = '#2B2621'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = 'rgba(30,40,60,.75)'; rr(g, x - w * 0.36, y - h * (me ? 0.3 : 0.18), w * 0.72, h * 0.18, 4); g.fill(); rr(g, x - w * 0.36, y + h * (me ? 0.14 : 0.24), w * 0.72, h * 0.12, 4); g.fill();
+    if (kind === 'police') { g.fillStyle = '#F4F4F0'; g.fillRect(x - w / 2 + 2, y - h * 0.05, w - 4, h * 0.12); g.fillStyle = (performance.now() / 180 | 0) % 2 ? '#FF4B3A' : '#4A7BD9'; g.fillRect(x - w * 0.3, y - h * 0.02, w * 0.6, h * 0.06); }
+    if (me) { g.fillStyle = '#F4F4F0'; g.fillRect(x - w * 0.08, y - h / 2 + 2, w * 0.16, h - 4); }
+  };
+  loop(root, dt => {
+    if (!ended) { acc += dt; while (acc >= MG.STEP && !s.done) { acc -= MG.STEP; prevD = s.d; let lane = s.lane; if (want !== s.lane) { lane = s.lane + Math.sign(want - s.lane); moves.push([s.n, lane]); } MG.driveStep(L, s, lane); } }
+    if (s.crashes > lastCr) { lastCr = s.crashes; shake = 0.35; buzz(200); }
+    const { g, W, H, dpr } = C, u = s.done ? 1 : Math.min(1, acc / MG.STEP), d = prevD + (s.d - prevD) * u;
+    carX += (s.lane - carX) * Math.min(1, dt * 14); shake = Math.max(0, shake - dt);
+    const roadW = Math.min(W * 0.86, 380), laneW = roadW / 3, rx = (W - roadW) / 2, k = H / 75, carY = H * 0.8, ox = shake ? (Math.random() - 0.5) * 10 : 0;
+    g.setTransform(dpr, 0, 0, dpr, ox * dpr, 0);
+    g.fillStyle = '#6FA84B'; g.fillRect(-20, 0, W + 40, H);
+    g.fillStyle = '#5E9440'; const off = (d * k) % 60; for (let y = -60 + off; y < H; y += 60) { g.fillRect(0, y, rx - 10, 24); g.fillRect(rx + roadW + 10, y + 30, W, 24); }
+    g.fillStyle = '#4A4A52'; g.fillRect(rx, 0, roadW, H); g.fillStyle = '#F4F4F0'; g.fillRect(rx - 4, 0, 4, H); g.fillRect(rx + roadW, 0, 4, H);
+    g.fillStyle = '#F2C94C'; const doff = (d * k) % 40; for (const i of [1, 2]) for (let y = -40 + doff; y < H; y += 40) g.fillRect(rx + i * laneW - 2, y, 4, 20);
+    const fy = carY - (L.D - d) * k; if (fy > -20) { for (let i = 0; i < 12; i++) { g.fillStyle = i % 2 ? '#2B2621' : '#F4F4F0'; g.fillRect(rx + i * roadW / 12, fy - 10, roadW / 12, 10); g.fillStyle = i % 2 ? '#F4F4F0' : '#2B2621'; g.fillRect(rx + i * roadW / 12, fy, roadW / 12, 10); } }
+    const vw = laneW * 0.56;
+    for (let j = s.i; j < L.obs.length; j++) { const o = L.obs[j], y = carY - (o.d - d) * k; if (y < -80) break; if (s.gone.includes(j)) continue; const cs = COL[o.k] || COL.car;
+      vehicle(g, rx + (o.lane + 0.5) * laneW, y, o.k === 'cones' ? vw * 1.3 : vw, o.k === 'bus' ? vw * 2.6 : o.k === 'van' ? vw * 2.1 : vw * 1.8, cs[j % cs.length], o.k, false); }
+    vehicle(g, rx + (carX + 0.5) * laneW, carY, vw, vw * 1.8, '#E4572E', 'car', true);
+    if (shake) { g.fillStyle = `rgba(255,75,58,${shake})`; g.fillRect(0, 0, W, H); }
+    prog.set(d / L.D); dmg.set(s.crashes / MG.DRIVE.wreck); dmg.classList.toggle('hot', s.crashes >= MG.DRIVE.wreck - 1); clock.textContent = `${Math.max(0, Math.ceil(L.limit - s.t))}s`;
+    if (s.done && !ended) { ended = true; C.off(); setTimeout(() => finish({ moves }), s.done === 'escaped' ? 500 : 900); }
+  });
+  const stop = root._stop; root._stop = () => { stop && stop(); C.off(); };
+}
+
+// ---------------- The dial ----------------
+function safe(root, L, finish) {
+  const C = canvasFor(root), noise = meter('alarm', '🔊'), clock = $c('b', { class: 'mgclock' }), info = $c('div', { class: 'mggoal' });
+  const btn = $c('button', { class: 'mgb hot mgbig', text: '🔓 Click' }); root.append(hud(noise, clock), info, btn);
+  const taps = [], t0 = performance.now(); let st = { stage: 'dial', got: 0, noise: 0 }, from = 0, flash = 0, flashCol = '', ended = false;
+  const now = () => +((performance.now() - t0) / 1000).toFixed(2);
+  const tap = () => { if (ended) return; const t = now(); taps.push(t); const r = MG.safeReplay(L, taps, t); if (!r.ok) return; const was = st.got; st = r.state;
+    if (st.got > was) { from = t; flash = 0.4; flashCol = '60,196,106'; buzz(30); } else { flash = 0.4; flashCol = '255,75,58'; buzz(120); root.classList.add('shakeit'); setTimeout(() => root.classList.remove('shakeit'), 300); } };
+  btn.addEventListener('pointerdown', e => { e.preventDefault(); tap(); }); C.cv.addEventListener('pointerdown', tap); keyHook(root, e => { if (e.key === ' ' || e.key === 'Enter') { tap(); e.preventDefault(); } else return false; });
+  const num = a => ((Math.round((((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * 100) % 100) + 100) % 100;
+  loop(root, dt => {
+    const t = (performance.now() - t0) / 1000, { g, W, H, dpr } = C; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#1B1612'; g.fillRect(0, 0, W, H);
+    const R0 = Math.min(W * 0.4, H * 0.26), cx = W / 2, cy = H * 0.42, N = L.nums[Math.min(st.got, L.nums.length - 1)];
+    // the safe door and the dial
+    const dw = Math.min(W - 16, R0 * 2.5); g.fillStyle = '#5C6068'; rr(g, cx - dw / 2, cy - R0 * 1.25, dw, R0 * 2.5, 18); g.fill(); g.strokeStyle = '#2B2621'; g.lineWidth = 3; g.stroke();
+    g.fillStyle = '#2E3238'; g.beginPath(); g.arc(cx, cy, R0 * 1.05, 0, 7); g.fill();
+    g.fillStyle = '#D9D4C7'; g.beginPath(); g.arc(cx, cy, R0, 0, 7); g.fill(); g.stroke();
+    if (st.stage === 'dial') { g.fillStyle = 'rgba(60,196,106,.85)'; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R0, N.a - L.tol - Math.PI / 2, N.a + L.tol - Math.PI / 2); g.closePath(); g.fill(); }
+    g.strokeStyle = '#2B2621'; g.fillStyle = '#2B2621'; g.font = `700 ${Math.max(10, R0 * 0.11)}px system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (let i = 0; i < 100; i++) { const a = i / 100 * Math.PI * 2 - Math.PI / 2, l = i % 10 ? 0.06 : 0.12; g.lineWidth = i % 10 ? 1 : 2; g.beginPath(); g.moveTo(cx + Math.cos(a) * R0, cy + Math.sin(a) * R0); g.lineTo(cx + Math.cos(a) * R0 * (1 - l), cy + Math.sin(a) * R0 * (1 - l)); g.stroke();
+      if (!(i % 10)) g.fillText(String(i), cx + Math.cos(a) * R0 * 0.78, cy + Math.sin(a) * R0 * 0.78); }
+    const pa = st.stage === 'dial' ? MG.safeAngle(N, t - from) - Math.PI / 2 : -Math.PI / 2;
+    g.strokeStyle = '#C8473D'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(pa) * R0 * 0.92, cy + Math.sin(pa) * R0 * 0.92); g.stroke(); g.lineCap = 'butt';
+    g.fillStyle = '#2B2621'; g.beginPath(); g.arc(cx, cy, R0 * 0.16, 0, 7); g.fill();
+    // the locked numbers
+    const n = L.nums.length, bw = Math.min(46, (W - 40) / n - 6); for (let i = 0; i < n; i++) { const x = cx + (i - (n - 1) / 2) * (bw + 6), y = cy + R0 * 1.25 + 30; g.fillStyle = i < st.got ? '#3CC46A' : i === st.got ? '#F2C94C' : '#3A332B'; rr(g, x - bw / 2, y, bw, 34, 8); g.fill(); g.fillStyle = '#2B2621';
+      g.font = `800 15px system-ui`; g.fillText(i < st.got ? String(num(L.nums[i].a)) : i === st.got ? '?' : '·', x, y + 17); }
+    if (flash > 0) { flash -= dt; g.fillStyle = `rgba(${flashCol},${Math.max(0, flash) * 0.6})`; g.fillRect(0, 0, W, H); }
+    const msg = st.stage === 'open' ? '🔓 It\'s open!' : `Stop on ${num(N.a)} · number ${st.got + 1} of ${n}`; if (info.textContent !== msg) info.textContent = msg;
+    noise.set(st.noise); noise.classList.toggle('hot', st.noise > 0.55); clock.textContent = `${Math.max(0, Math.ceil(L.limit - t))}s`;
+    if (!ended && (st.stage === 'open' || st.stage === 'alarm' || t >= L.limit)) { ended = true; C.off(); if (st.stage !== 'open') { root.classList.add('siren'); buzz(500); } setTimeout(() => finish({ taps, time: Math.min(+t.toFixed(2), L.limit) }), 700); }
+  });
+  const stop = root._stop; root._stop = () => { stop && stop(); C.off(); };
+}
+
+// ---------------- Spot the police ----------------
+const COPS = ['👮', '👮‍♀️', '🕵️', '🕵️‍♀️'], FOLK = ['🧑', '👩', '👨‍🦳', '🧔', '👵', '👷', '🧑‍🍳', '💁', '🧕', '👨‍🦱', '👩‍🦰', '🧑‍🎤'];
+function lookout(root, L, finish) {
+  const heat = meter('alarm', '🔥'), clock = $c('b', { class: 'mgclock' }), score = $c('div', { class: 'mggoal', text: '👮 0 spotted' }), street = $c('div', { class: 'mgstreet' });
+  root.append(hud(heat, clock), score, street);
+  const taps = [], t0 = performance.now(), slots = [], shown = Array(MG.LOOK.spots).fill(-2), mark = new Map(); let ended = false, ev = { heat: 0, hits: 0 };
+  for (let i = 0; i < MG.LOOK.spots; i++) { const b = $c('button', { class: 'mgwin ' + (i < 3 ? 'up' : 'down'), 'aria-label': `Spot ${i + 1}` }); const who = $c('span', { class: 'who' }); b.append(who);
+    b.addEventListener('pointerdown', e => { e.preventDefault(); if (ended) return; const t = +((performance.now() - t0) / 1000).toFixed(2); taps.push([i, t]);
+      const pi = L.pops.findIndex((p, j) => p.s === i && p.t0 <= t && t <= p.t0 + p.dur && !mark.has(j)); if (pi >= 0) { mark.set(pi, L.pops[pi].cop ? 'hit' : 'wrong'); buzz(L.pops[pi].cop ? 25 : 150); b.classList.add(L.pops[pi].cop ? 'hit' : 'wrong'); setTimeout(() => b.classList.remove('hit', 'wrong'), 350); } });
+    street.append(b); slots.push({ b, who }); }
+  let lastEval = -1;
+  loop(root, () => {
+    const t = (performance.now() - t0) / 1000;
+    for (let i = 0; i < slots.length; i++) { const pi = L.pops.findIndex((p, j) => p.s === i && p.t0 <= t && t <= p.t0 + p.dur && mark.get(j) !== 'hit'); if (pi !== shown[i]) { shown[i] = pi; const p = L.pops[pi];
+        slots[i].who.textContent = p ? (p.cop ? COPS : FOLK)[p.look % (p.cop ? COPS.length : FOLK.length)] : ''; slots[i].b.classList.toggle('on', !!p); } }
+    if (t - lastEval > 0.1) { lastEval = t; ev = MG.lookEval(L, taps, t) || ev; heat.set(ev.heat); heat.classList.toggle('hot', ev.heat > 0.6); const sc = `👮 ${ev.hits} spotted`; if (score.textContent !== sc) score.textContent = sc; }
+    clock.textContent = `${Math.max(0, Math.ceil(L.limit - t))}s`;
+    if (!ended && (ev.blown != null || t >= L.limit)) { ended = true; if (ev.blown != null) { root.classList.add('siren'); buzz(500); } setTimeout(() => finish({ taps, time: Math.min(+t.toFixed(2), L.limit) }), 700); }
+  });
+}
+
+// ---------------- Hold the doors ----------------
+function muscle(root, L, finish) {
+  const C = canvasFor(root), door = meter('trust', '🚪'), clock = $c('b', { class: 'mgclock' }), info = $c('div', { class: 'mggoal', text: '💪 0 shoved' });
+  root.append(hud(door, clock), info, $c('div', { class: 'mgjoyhint', text: 'Tap the left or right side to shove' }));
+  const taps = [], t0 = performance.now(); let ended = false, ev = { shoved: 0, through: 0, lost: null, shovedSet: new Map() }, hitFx = [], lastThrough = 0;
+  const shove = side => { if (ended) return; const t = +((performance.now() - t0) / 1000).toFixed(2); taps.push([side, t]); const before = ev.shoved; ev = MG.muscleEval(L, taps, t) || ev; if (ev.shoved > before) { buzz(25); hitFx.push({ side, at: performance.now() }); } else buzz(8); };
+  C.cv.addEventListener('pointerdown', e => shove(e.clientX < C.W / 2 ? 0 : 1)); keyHook(root, e => { if (e.key === 'ArrowLeft' || e.key === 'a') shove(0); else if (e.key === 'ArrowRight' || e.key === 'd') shove(1); else return false; });
+  const SK = ['#8D5524', '#C68642', '#E0AC69', '#5C3A21'];
+  loop(root, () => {
+    const t = (performance.now() - t0) / 1000, { g, W, H, dpr } = C; ev = MG.muscleEval(L, taps, t) || ev;
+    if (ev.through > lastThrough) { lastThrough = ev.through; buzz(250); root.classList.add('shakeit'); setTimeout(() => root.classList.remove('shakeit'), 300); }
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const fy = H * 0.62, cx = W / 2, half = W / 2 - 20, dw = Math.min(90, W * 0.2), s = Math.min(1.4, W / 400);
+    g.fillStyle = '#3B342C'; g.fillRect(0, 0, W, H); g.fillStyle = '#7A6A5A'; g.fillRect(0, fy, W, H - fy); // wall and floor
+    g.fillStyle = '#6E5E4E'; for (let x = 0; x < W; x += 48) g.fillRect(x, fy, 2, H - fy);
+    g.fillStyle = 'rgba(255,75,58,.35)'; g.fillRect(cx - dw / 2 - half * MG.MUSCLE.reach, fy, half * MG.MUSCLE.reach, 14); g.fillRect(cx + dw / 2, fy, half * MG.MUSCLE.reach, 14);
+    // the doors (cracks as guards get through)
+    g.fillStyle = '#8A5A33'; g.fillRect(cx - dw / 2, fy - dw * 1.7, dw, dw * 1.7); g.strokeStyle = '#2B2621'; g.lineWidth = 3; g.strokeRect(cx - dw / 2, fy - dw * 1.7, dw, dw * 1.7); g.beginPath(); g.moveTo(cx, fy - dw * 1.7); g.lineTo(cx, fy); g.stroke();
+    g.strokeStyle = '#1B1612'; g.lineWidth = 2; for (let i = 0; i < ev.through; i++) { g.beginPath(); g.moveTo(cx - dw * 0.3 + i * 12, fy - dw * (1.4 - i * 0.3)); g.lineTo(cx - dw * 0.1 + i * 10, fy - dw * (1.1 - i * 0.3)); g.lineTo(cx + dw * 0.2, fy - dw * (1.2 - i * 0.3)); g.stroke(); }
+    // me, in front of the doors
+    const me = (x, col) => { g.fillStyle = col; rr(g, x - 16 * s, fy - 62 * s, 32 * s, 40 * s, 8 * s); g.fill(); g.strokeStyle = '#2B2621'; g.lineWidth = 2; g.stroke(); g.fillStyle = '#7A4E2D'; g.beginPath(); g.arc(x, fy - 72 * s, 11 * s, 0, 7); g.fill(); g.stroke(); g.fillStyle = '#2B2621'; g.fillRect(x - 12 * s, fy - 22 * s, 9 * s, 22 * s); g.fillRect(x + 3 * s, fy - 22 * s, 9 * s, 22 * s); };
+    me(cx, '#2E3440');
+    // guards
+    L.guards.forEach((gd, i) => { if (gd.t0 > t) return; const sh = ev.shovedSet.get(i); let p = MG.guardPos(gd, t), a = 1;
+      if (sh != null && sh <= t) { const k = t - sh; if (k > 0.5) return; p = MG.guardPos(gd, sh) + k * 2.2; a = 1 - k * 2; } else if (p <= 0) return;
+      const x = gd.side ? cx + dw / 2 + p * half : cx - dw / 2 - p * half; g.globalAlpha = Math.max(0, a);
+      g.fillStyle = '#2F4A7A'; rr(g, x - 14 * s, fy - 58 * s, 28 * s, 36 * s, 7 * s); g.fill(); g.strokeStyle = '#2B2621'; g.lineWidth = 2; g.stroke();
+      g.fillStyle = SK[gd.look % SK.length]; g.beginPath(); g.arc(x, fy - 68 * s, 10 * s, 0, 7); g.fill(); g.stroke(); g.fillStyle = '#1E2A44'; g.fillRect(x - 11 * s, fy - 80 * s, 22 * s, 6 * s);
+      const leg = Math.sin(t * 14 + i) * 5 * s; g.fillStyle = '#2B2621'; g.fillRect(x - 9 * s + leg, fy - 22 * s, 7 * s, 22 * s); g.fillRect(x + 2 * s - leg, fy - 22 * s, 7 * s, 22 * s); g.globalAlpha = 1; });
+    hitFx = hitFx.filter(f => performance.now() - f.at < 300); for (const f of hitFx) { const k = (performance.now() - f.at) / 300; g.fillStyle = `rgba(242,201,76,${1 - k})`; g.font = `900 ${28 + k * 20}px system-ui`; g.textAlign = 'center'; g.fillText('POW!', f.side ? cx + dw + 40 : cx - dw - 40, fy - 100 * s - k * 30); }
+    door.set(1 - ev.through / MG.MUSCLE.breaches); door.classList.toggle('hot', ev.through >= MG.MUSCLE.breaches - 1); const it = `💪 ${ev.shoved} shoved`; if (info.textContent !== it) info.textContent = it; clock.textContent = `${Math.max(0, Math.ceil(L.limit - t))}s`;
+    if (!ended && (ev.lost != null || t >= L.limit)) { ended = true; C.off(); if (ev.lost != null) { root.classList.add('siren'); buzz(500); } setTimeout(() => finish({ taps, time: Math.min(+t.toFixed(2), L.limit) }), 700); }
+  });
+  const stop = root._stop; root._stop = () => { stop && stop(); C.off(); };
 }

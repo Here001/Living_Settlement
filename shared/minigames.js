@@ -7,16 +7,20 @@
 //   scam → Smooth talker: win a tourist's trust before they smell a rat.
 //   atm  → Wire & code: rewire the cash machine, then crack the PIN before the alarm goes.
 //
+// Heists give each crew member a role, played live at the same time on their own phone:
+//   driver → Getaway drive · hacker → Wire & code · safecracker → The dial · lookout → Spot the police · muscle → Hold the doors
+//
 // Score out of 100: your play is worth up to 60 points, the setting (how far the police are, night, a crime wave) up to 40.
 
-export const GAMES = { rob: 'stealth', scam: 'con', atm: 'atm' };
+export const GAMES = { rob: 'stealth', scam: 'con', atm: 'atm', driver: 'drive', hacker: 'atm', safecracker: 'safe', lookout: 'lookout', muscle: 'muscle' };
+export const SOLO = ['rob', 'scam', 'atm']; // the crimes you do alone; the rest are heist roles (practice is open to all)
 export const STEP = 0.1; // the stealth game moves in steps of a tenth of a second, on the phone and on the server alike
 
 export function rng(seed) { let s = (seed >>> 0) || 1; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // Difficulty 1 (easy) to 5 (hard): each crime has its own base, and police close by make it harder.
-const BASE = { rob: 2, scam: 1, atm: 3 };
+const BASE = { rob: 2, scam: 1, atm: 3, driver: 2, hacker: 3, safecracker: 3, lookout: 2, muscle: 2 };
 export function difficultyOf(kind, band) { return clamp((BASE[kind] || 2) + (band === 'low' ? 1 : band === 'high' ? -1 : 0), 1, 5); }
 
 export function scoreOf(perf, chance) {
@@ -221,17 +225,170 @@ export function atmReplay(L, events, time) {
   return { ok: true, state: { stage, alarm: +clamp(total, 0, 1).toFixed(3), wrongs, progress }, perf, money: stage === 'open' };
 }
 
+// ======================= Heist roles =======================
+export const ROLES = {
+  driver: { name: 'Driver', icon: '🚗', blurb: 'Weave the getaway car through traffic and roadblocks.' },
+  hacker: { name: 'Hacker', icon: '💻', blurb: 'Rewire the security panel and crack its code.' },
+  safecracker: { name: 'Safecracker', icon: '🔐', blurb: 'Stop the dial on each number.' },
+  lookout: { name: 'Lookout', icon: '👀', blurb: 'Spot the plain-clothes police before they spot the crew.' },
+  muscle: { name: 'Muscle', icon: '💪', blurb: 'Hold the doors against the guards.' },
+};
+// The parts each job needs, most important first: a crew of 3 fills the first three.
+export const HEIST_ROLES = {
+  armored: ['driver', 'muscle', 'hacker', 'lookout', 'muscle'],
+  mayor: ['lookout', 'muscle', 'driver', 'muscle', 'muscle'],
+  jailbreak: ['hacker', 'driver', 'lookout', 'muscle', 'safecracker', 'muscle'],
+  bank: ['safecracker', 'hacker', 'driver', 'lookout', 'muscle', 'muscle'],
+};
+// Who plays what: everyone gets the part they asked for while the job still has room for it; the rest fill the
+// job's open parts in order. `wants` is one role (or null) per crew member, in crew order.
+export function assignRoles(kind, wants) {
+  const slots = [...(HEIST_ROLES[kind] || ['muscle'])], out = wants.map(() => null);
+  wants.forEach((w, i) => { const k = slots.indexOf(w); if (w && k >= 0) { out[i] = w; slots.splice(k, 1); } });
+  out.forEach((r, i) => { if (!r) out[i] = slots.length ? slots.shift() : 'muscle'; });
+  return out;
+}
+
+// ======================= Getaway drive (driver) =======================
+// Three lanes, traffic and roadblocks coming at you; tap left or right to change lane. A crash slows you right down;
+// four crashes and the car's wrecked. Reach the end of the road to get away. Moves: [step, lane] when the lane changes.
+export const DRIVE = { hit: 3, wreck: 4 };
+export function genDrive(seed, diff) {
+  const r = rng(seed), D = 520 + diff * 60, obs = [], kinds = ['car', 'van', 'cones', 'police', 'car', 'bus'];
+  let d = 45;
+  while (d < D - 25) {
+    d += 26 - diff * 1.8 + r() * (16 - diff * 1.5);
+    const lane = Math.floor(r() * 3), k = kinds[Math.floor(r() * kinds.length)];
+    obs.push({ d: +d.toFixed(2), lane, k });
+    if (diff >= 2 && r() < 0.1 + diff * 0.06) obs.push({ d: +d.toFixed(2), lane: (lane + 1 + Math.floor(r() * 2)) % 3, k: kinds[Math.floor(r() * kinds.length)] });
+  }
+  const v0 = 15 + diff, v1 = 21 + diff * 1.5;
+  return { seed, diff, D, obs, v0, v1, limit: Math.ceil(D / v0) + 14 };
+}
+export const driveStart = () => ({ t: 0, n: 0, d: 0, lane: 1, slow: 1, crashes: 0, gone: [], i: 0, done: null });
+// One step (mutates and returns the state). `lane` is where the player is steering: one lane over at most.
+export function driveStep(L, s, lane) {
+  if (s.done) return s;
+  if (lane !== s.lane && Math.abs(lane - s.lane) === 1 && lane >= 0 && lane <= 2) s.lane = lane;
+  const v = (L.v0 + (L.v1 - L.v0) * Math.min(1, s.d / L.D)) * s.slow;
+  s.d = +(s.d + v * STEP).toFixed(4); s.n++; s.t = +(s.n * STEP).toFixed(3); s.slow = Math.min(1, +(s.slow + 0.45 * STEP).toFixed(4));
+  while (s.i < L.obs.length && L.obs[s.i].d < s.d - DRIVE.hit) s.i++;
+  for (let j = s.i; j < L.obs.length && L.obs[j].d < s.d + DRIVE.hit; j++) if (L.obs[j].lane === s.lane && !s.gone.includes(j)) { s.gone.push(j); s.crashes++; s.slow = 0.3; }
+  if (s.crashes >= DRIVE.wreck) s.done = 'wrecked'; else if (s.d >= L.D) s.done = 'escaped'; else if (s.t >= L.limit) s.done = 'caught';
+  return s;
+}
+export function driveReplay(L, moves) {
+  if (!Array.isArray(moves) || moves.length > 800) return { ok: false, why: 'bad moves' };
+  const s = driveStart(), max = Math.ceil(L.limit / STEP) + 1; let k = 0, lastN = -1;
+  for (const m of moves) { const n = Number(m && m[0]); if (!Number.isInteger(n) || n <= lastN || n > max) return { ok: false, why: 'bad moves' }; lastN = n; }
+  while (!s.done && s.n < max) { let lane = s.lane; if (k < moves.length && Number(moves[k][0]) === s.n) { lane = Number(moves[k][1]); k++; } driveStep(L, s, lane); }
+  const perf = s.done === 'escaped' ? clamp(0.55 + 0.45 * (1 - s.crashes / DRIVE.wreck), 0, 1) : s.done === 'wrecked' ? clamp(0.1 + 0.2 * s.d / L.D, 0, 0.3) : 0.2;
+  return { ok: true, state: { t: s.t, done: s.done, crashes: s.crashes, d: Math.round(s.d) }, perf, money: s.done === 'escaped' };
+}
+
+// ======================= The dial (safecracker) =======================
+// The dial spins by itself; tap when the pointer is on the marked number to lock it in, then the next number, spinning
+// the other way. A tap off the number makes a noise; too much noise and the alarm goes. Taps: the times you tapped.
+const TAU = Math.PI * 2, angDiff = (a, b) => Math.abs((((a - b) % TAU) + TAU * 1.5) % TAU - Math.PI);
+export function genSafe(seed, diff) {
+  const r = rng(seed), n = 3 + Math.ceil(diff / 2), nums = [];
+  for (let i = 0; i < n; i++) nums.push({ a: +(r() * TAU).toFixed(4), a0: +(r() * TAU).toFixed(4), sp: +(1.4 + diff * 0.25 + r() * 0.6).toFixed(3), dir: i % 2 ? -1 : 1 });
+  return { seed, diff, nums, tol: +(0.3 - diff * 0.025).toFixed(3), limit: 34 + n * 3, wrong: 0.2 };
+}
+export const safeAngle = (N, since) => N.a0 + N.dir * N.sp * since; // where the pointer is, `since` seconds into this number
+export function safeReplay(L, taps, time) {
+  if (!Array.isArray(taps) || taps.length > 200) return { ok: false, why: 'bad taps' };
+  const T = clamp(Number(time) || 0, 0, L.limit + 2); let k = 0, from = 0, noise = 0, last = 0, stage = 'dial';
+  for (const x of taps) { const t = Number(x); if (!(t >= last) || t > T + 0.5) return { ok: false, why: 'bad timing' }; last = t; if (t > L.limit) break;
+    const N = L.nums[k]; if (angDiff(safeAngle(N, t - from), N.a) <= L.tol) { k++; from = t; if (k === L.nums.length) { stage = 'open'; break; } }
+    else { noise += L.wrong; if (noise >= 0.999) { stage = 'alarm'; break; } } }
+  if (stage === 'dial') stage = T >= L.limit - 0.5 ? 'alarm' : 'gaveup';
+  const tUsed = stage === 'open' ? from : T, perf = stage === 'open' ? clamp(0.55 + 0.3 * (1 - noise) + 0.15 * (1 - tUsed / L.limit), 0, 1) : clamp(0.3 * k / L.nums.length, 0, 0.3);
+  return { ok: true, state: { t: +tUsed.toFixed(2), stage, got: k, noise: +noise.toFixed(2) }, perf, money: stage === 'open' };
+}
+
+// ======================= Spot the police (lookout) =======================
+// Six windows and corners on the street. People pop up; tap the plain-clothes police (the ones with the earpiece)
+// before they duck away. Every officer you miss, and every innocent you point at, adds heat; full heat and the job's
+// blown. Keep watch until the time's up. Taps: [spot, time].
+export const LOOK = { spots: 6, miss: 0.25, wrong: 0.15 };
+export function genLook(seed, diff) {
+  const r = rng(seed), pops = [], limit = 36, busy = Array(LOOK.spots).fill(0), dur0 = 1.75 - diff * 0.17; let t = 1.2;
+  while (t < limit - 2) {
+    let sp = Math.floor(r() * LOOK.spots); for (let i = 0; i < LOOK.spots && busy[sp] > t; i++) sp = (sp + 1) % LOOK.spots;
+    const cop = r() < 0.42, dur = +(dur0 * (0.8 + r() * 0.4)).toFixed(2), look = Math.floor(r() * 1000);
+    if (busy[sp] <= t) { pops.push({ s: sp, t0: +t.toFixed(2), dur, cop, look }); busy[sp] = t + dur + 0.3; }
+    t += 0.55 + r() * (1.1 - diff * 0.08);
+  }
+  return { seed, diff, pops, limit };
+}
+// What the taps add up to by time T (the browser shows this live; the server checks the same).
+export function lookEval(L, taps, T) {
+  const tapped = new Map(), ev = []; let last = 0;
+  for (const x of taps) { const sp = Number(x && x[0]), t = Number(x && x[1]); if (!(t >= last) || !(sp >= 0 && sp < LOOK.spots)) return null; last = t; if (t > T) break;
+    const i = L.pops.findIndex((p, j) => p.s === sp && p.t0 <= t && t <= p.t0 + p.dur && !tapped.has(j));
+    if (i < 0) continue; tapped.set(i, t); ev.push([t, L.pops[i].cop ? 0 : LOOK.wrong, L.pops[i].cop ? 'hit' : 'wrong']); }
+  L.pops.forEach((p, i) => { if (p.cop && !tapped.has(i) && p.t0 + p.dur <= T) ev.push([p.t0 + p.dur, LOOK.miss, 'miss']); });
+  ev.sort((a, b) => a[0] - b[0]);
+  let heat = 0, hits = 0, wrong = 0, missed = 0, blown = null;
+  for (const [t, h, k] of ev) { heat += h; if (k === 'hit') hits++; else if (k === 'wrong') wrong++; else missed++; if (heat >= 0.999) { blown = t; break; } }
+  return { heat: Math.min(1, heat), hits, wrong, missed, blown, seen: L.pops.filter(p => p.cop && p.t0 < (blown ?? T)).length };
+}
+export function lookReplay(L, taps, time) {
+  if (!Array.isArray(taps) || taps.length > 300) return { ok: false, why: 'bad taps' };
+  const T = clamp(Number(time) || 0, 0, L.limit + 2), e = lookEval(L, taps, Math.min(T, L.limit)); if (!e) return { ok: false, why: 'bad timing' };
+  const done = e.blown != null ? 'blown' : T >= L.limit - 0.5 ? 'clear' : 'gaveup', t = e.blown ?? T;
+  const perf = done === 'clear' ? clamp(0.5 + 0.5 * e.hits / Math.max(1, e.seen) - 0.08 * e.wrong, 0.3, 1) : done === 'blown' ? clamp(0.25 * e.hits / Math.max(1, e.seen), 0, 0.25) : clamp(0.2 * T / L.limit, 0, 0.2);
+  return { ok: true, state: { t: +t.toFixed(2), done, hits: e.hits, wrong: e.wrong, missed: e.missed, heat: +e.heat.toFixed(2) }, perf, money: done === 'clear' };
+}
+
+// ======================= Hold the doors (muscle) =======================
+// Guards run at the doors from both sides. Tap a side to shove back the nearest guard on that side once they're
+// close; shoving at nobody wastes your strength. Three guards through and the doors are lost. Taps: [side, time].
+export const MUSCLE = { reach: 0.62, breaches: 3 };
+export function genMuscle(seed, diff) {
+  const r = rng(seed), guards = [], limit = 32; let t = 1;
+  while (t < limit - 1.5) { guards.push({ side: r() < 0.5 ? 0 : 1, t0: +t.toFixed(2), sp: +(0.3 + diff * 0.05 + r() * 0.12).toFixed(3), look: Math.floor(r() * 1000) }); t += 0.9 - diff * 0.08 + r() * 0.7; }
+  return { seed, diff, guards, limit };
+}
+export const guardPos = (g, t) => 1 - g.sp * (t - g.t0); // 1 = the end of the hall, 0 = at the doors
+export function muscleEval(L, taps, T) {
+  const shoved = new Map(); let last = 0, whiffs = 0; const whiffAt = [];
+  for (const x of taps) { const side = Number(x && x[0]), t = Number(x && x[1]); if (!(t >= last) || (side !== 0 && side !== 1)) return null; last = t; if (t > T) break;
+    let best = -1, bp = 9; L.guards.forEach((g, i) => { if (g.side !== side || shoved.has(i) || g.t0 > t) return; const p = guardPos(g, t); if (p > 0 && p <= MUSCLE.reach && p < bp) { bp = p; best = i; } });
+    if (best >= 0) shoved.set(best, t); else { whiffs++; whiffAt.push(t); } }
+  const through = L.guards.map((g, i) => [g.t0 + 1 / g.sp, i]).filter(([t, i]) => t <= T && !(shoved.has(i) && shoved.get(i) < t)).map(([t]) => t).sort((a, b) => a - b);
+  const lost = through.length >= MUSCLE.breaches ? through[MUSCLE.breaches - 1] : null, until = lost ?? T;
+  return { shoved: [...shoved.values()].filter(t => t <= until).length, whiffs: whiffAt.filter(t => t <= until).length, through: through.filter(t => t <= until).length, lost, shovedSet: shoved };
+}
+export function muscleReplay(L, taps, time) {
+  if (!Array.isArray(taps) || taps.length > 600) return { ok: false, why: 'bad taps' };
+  const T = clamp(Number(time) || 0, 0, L.limit + 2), e = muscleEval(L, taps, Math.min(T, L.limit)); if (!e) return { ok: false, why: 'bad timing' };
+  const done = e.lost != null ? 'lost' : T >= L.limit - 0.5 ? 'held' : 'gaveup', t = e.lost ?? T;
+  const perf = done === 'held' ? clamp(0.6 + 0.4 * (1 - e.through / MUSCLE.breaches) - 0.01 * e.whiffs, 0.25, 1) : done === 'lost' ? clamp(0.25 * t / L.limit, 0, 0.25) : clamp(0.2 * T / L.limit, 0, 0.2);
+  return { ok: true, state: { t: +t.toFixed(2), done, shoved: e.shoved, through: e.through, whiffs: e.whiffs }, perf, money: done === 'held' };
+}
+
 // How long a game must at least take (a fast human), so a result can't come back quicker than it could be played.
 export function minTime(kind, L, st) {
-  if (kind === 'rob') return st && st.t ? st.t : 0;
+  if (kind === 'rob' || kind === 'driver' || kind === 'lookout' || kind === 'muscle') return st && st.t ? st.t : 0;
   if (kind === 'scam') return (st?.turns || 1) * 0.8;
-  if (kind === 'atm') return L.wires.length * 0.35 + L.pin.length * 0.2;
+  if (kind === 'atm' || kind === 'hacker') return L.wires.length * 0.35 + L.pin.length * 0.2;
+  if (kind === 'safecracker') return (st?.got || 0) * 0.4;
   return 0;
 }
-export function levelOf(kind, seed, diff) { return kind === 'rob' ? genStealth(seed, diff) : kind === 'scam' ? genCon(seed, diff) : genAtm(seed, diff); }
+export function levelOf(kind, seed, diff) {
+  const g = GAMES[kind];
+  return g === 'stealth' ? genStealth(seed, diff) : g === 'con' ? genCon(seed, diff) : g === 'atm' ? genAtm(seed, diff) : g === 'drive' ? genDrive(seed, diff) : g === 'safe' ? genSafe(seed, diff) : g === 'lookout' ? genLook(seed, diff) : genMuscle(seed, diff);
+}
 export function replay(kind, L, log) {
-  if (kind === 'rob') return stealthReplay(L, log && log.path);
-  if (kind === 'scam') return conReplay(L, log && log.picks);
-  if (kind === 'atm') return atmReplay(L, log && log.events, log && log.time);
+  const g = GAMES[kind], x = log || {};
+  if (g === 'stealth') return stealthReplay(L, x.path);
+  if (g === 'con') return conReplay(L, x.picks);
+  if (g === 'atm') return atmReplay(L, x.events, x.time);
+  if (g === 'drive') return driveReplay(L, x.moves);
+  if (g === 'safe') return safeReplay(L, x.taps, x.time);
+  if (g === 'lookout') return lookReplay(L, x.taps, x.time);
+  if (g === 'muscle') return muscleReplay(L, x.taps, x.time);
   return { ok: false, why: 'unknown game' };
 }

@@ -932,19 +932,56 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok((await call('POST', `/api/me/heists/${pl.json.id}/go`, {}, PB)).status === 403, 'only the planner says go');
       for (let i = 0; i < 40 && (await pool.query('select 1 from treasury_pending limit 1')).rowCount; i++) await sleep(100); // earlier trips' fares are in the treasury
       const t0 = Number((await pool.query("select data->>'treasuryBase' t from meta")).rows[0].t), m0 = Number((await pool.query("select sum(coins_base + coalesce(bank, 0)) s from citizens where handle in ('zara_ng','jobfill_a')")).rows[0].s);
+      // parts: everyone picks one (the job has room for each part it needs); the rest are filled in order
+      const MG = await import('../shared/minigames.js');
+      ok((await call('POST', `/api/me/heists/${pl.json.id}/role`, { role: 'safecracker' }, PB)).status === 400, "a part the job doesn't need can't be picked");
+      ok((await call('POST', `/api/me/heists/${pl.json.id}/role`, { role: 'driver' }, PB)).status === 200 && (await call('POST', `/api/me/heists/${pl.json.id}/role`, { role: 'hacker' }, P)).status === 200, 'each member picks a part');
+      { const hv = (await call('GET', '/api/me/heists', undefined, PB)).json.mine.find(h => h.id === pl.json.id);
+        ok(hv.parts.jobfill_a.role === 'driver' && hv.parts.jobfill_a.picked && hv.parts.zara_ng.role === 'hacker' && hv.roles.includes('muscle'), 'the crew sees who plays what', JSON.stringify(hv.parts)); }
+      ok(MG.assignRoles('bank', ['driver', 'driver', null]).join() === 'driver,safecracker,hacker' && MG.assignRoles('mayor', [null, null]).join() === 'lookout,muscle', 'unpicked parts are filled in order of what the job needs most');
       const go = await call('POST', `/api/me/heists/${pl.json.id}/go`, {}, P);
-      ok(go.status === 200 && typeof go.json.win === 'boolean' && go.json.got.length + go.json.caught.length === 2, 'the job happens: it comes off or not, and each member gets away or is caught', JSON.stringify(go.json));
+      ok(go.status === 200 && go.json.live && go.json.until > Date.now(), 'go: the job goes live, and the crew has a couple of minutes to play their parts', JSON.stringify(go.json));
+      ok((await call('POST', `/api/me/heists/${pl.json.id}/role`, { role: 'muscle' }, PB)).status === 409, 'no changing parts once it has started');
+      ok((await call('POST', '/api/me/crime/start', { kind: 'driver' }, P)).status === 400 && (await call('POST', '/api/me/crime/start', { kind: 'driver', practice: true }, P)).status === 200, 'heist parts can be practised any time, but only played for real on the job');
+      { const lv = (await call('GET', `/api/me/heists/${pl.json.id}/live`, undefined, P)).json;
+        ok(lv.status === 'live' && lv.live.myRole === 'hacker' && lv.live.crew.length === 2 && lv.live.crew.every(m => !m.done), 'everyone sees the live job: who plays what, and who has finished', JSON.stringify(lv)); }
+      ok((await call('GET', `/api/me/heists/${pl.json.id}/live`, undefined, { auth: false })).status === 401, 'only the crew can watch it');
+      const rz = (await call('POST', `/api/me/heists/${pl.json.id}/play`, {}, P)).json, rb = (await call('POST', `/api/me/heists/${pl.json.id}/play`, {}, PB)).json;
+      ok(rz.kind === 'hacker' && rb.kind === 'driver' && rz.seed > 0 && rz.heist === pl.json.id, 'each member gets the game for their part', JSON.stringify({ rz, rb }));
+      ok((await call('POST', `/api/me/heists/${pl.json.id}/play`, {}, P)).json.id === rz.id, 'opening it again carries on the same game');
+      // the driver botches it (a log that doesn't add up), the hacker plays it perfectly
+      const fb = await call('POST', '/api/me/crime/finish', { runId: rb.id, log: { moves: [[5, 2], [3, 1]] } }, PB);
+      ok(fb.status === 200 && fb.json.heistId === pl.json.id && fb.json.heist.status === 'live' && fb.json.heist.live.crew.find(m => m.h === 'jobfill_a').done, 'a part played: waiting for the rest of the crew', JSON.stringify(fb.json.heist));
+      ok((await call('POST', `/api/me/heists/${pl.json.id}/play`, {}, PB)).status === 409, 'one go at your part');
+      const A = MG.levelOf('hacker', rz.seed, rz.diff), ev = []; let tt = 0.6; A.wires.forEach((w, i) => ev.push(['w', i, A.sockets.indexOf(A.card[i].sym), tt += 0.4])); A.pin.forEach(d => ev.push(['k', d, tt += 0.25]));
+      await sleep(Math.max(0, (MG.minTime('hacker', A) - 3) * 1000));
+      const fz = await call('POST', '/api/me/crime/finish', { runId: rz.id, log: { events: ev, time: tt + 0.1 } }, P), R0 = fz.json.heist?.result;
+      ok(fz.status === 200 && fz.json.heist.status === 'done' && R0 && R0.parts.length === 2, 'when the whole crew has played, the job is settled', JSON.stringify(fz.json.heist));
+      const pz = R0.parts.find(p => p.h === 'zara_ng'), pb = R0.parts.find(p => p.h === 'jobfill_a');
+      ok(pz.play >= 50 && pb.play === 0 && R0.score.play === Math.round((pz.play + pb.play) / 2) && R0.score.total === R0.score.play + R0.score.setting, "the crew's play is the average of the parts, plus the setting", JSON.stringify(R0.score));
+      ok(pb.status === 'caught' && pb.fine >= 1000, 'whoever botches their part is caught and fined', JSON.stringify(pb));
+      ok(['got', 'caught'].includes(pz.status) && (pz.status === 'caught') === ['fined', 'jailed'].includes(R0.outcome), "the rest get away unless the whole job goes wrong", JSON.stringify({ pz, o: R0.outcome }));
       const t1 = Number((await pool.query("select data->>'treasuryBase' t from meta")).rows[0].t), m1 = Number((await pool.query("select sum(coins_base + coalesce(bank, 0)) s from citizens where handle in ('zara_ng','jobfill_a')")).rows[0].s);
       ok(Math.abs((m1 - m0) + (t1 - t0)) < 1, 'coins only move between the crew and the treasury (nothing is made up)', JSON.stringify({ crew: m1 - m0, treasury: t1 - t0 }));
-      const caughtMe = go.json.caught.find(x => x.h === 'zara_ng'); if (caughtMe) ok((await whoDev('zara_ng')).jailedUntil > Date.now(), 'anyone caught goes to jail');
-      ok((await call('GET', `/api/chat/groups/${pl.json.group}`, undefined, PB)).json.messages.some(m => m.system && /(came off|went wrong)/.test(m.text)), 'the result is posted in the crew chat');
+      if (pb.jailed) ok((await whoDev('jobfill_a')).jailedUntil > Date.now(), 'the worst are jailed');
+      ok((await call('GET', `/api/chat/groups/${pl.json.group}`, undefined, PB)).json.messages.some(m => m.system && /GO TIME/.test(m.text)) && (await call('GET', `/api/chat/groups/${pl.json.group}`, undefined, PB)).json.messages.some(m => m.system && /Crew score \d+/.test(m.text)), 'go time and the result are posted in the crew chat');
       ok((await call('POST', '/api/me/heists', { kind: 'armored', inMinutes: 10, members: ['jobfill_a'] }, PB)).status === 429 || (await whoDev('jobfill_a')).jailedUntil > Date.now(), 'and the crew lies low for a while afterwards');
+      { const hv = (await call('GET', '/api/me/heists', undefined, P)).json.mine.find(h => h.id === pl.json.id); ok(hv.status === 'done' && hv.result.parts, 'the result stays on the job card'); }
+      // every part can be played well: bots for the driver, safecracker, lookout and muscle
+      { let good = 0; for (let seed = 1; seed <= 10; seed++) { const diff = 1 + seed % 3;
+          const S = MG.genSafe(seed, diff); let from = 0; const taps = []; for (const N of S.nums) { let t = from + 0.3; while (Math.abs((((MG.safeAngle(N, t - from) - N.a) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI) > S.tol * 0.5) t += 0.01; t = +t.toFixed(2); taps.push(t); from = t; }
+          const Lk = MG.genLook(seed, diff), lt = Lk.pops.filter(p => p.cop).map(p => [p.s, +(p.t0 + 0.4).toFixed(2)]).sort((a, b) => a[1] - b[1]);
+          const Ms = MG.genMuscle(seed, diff), mt = Ms.guards.map(g => [g.side, +(g.t0 + 0.5 / g.sp).toFixed(2)]).sort((a, b) => a[1] - b[1]);
+          if (MG.safeReplay(S, taps, taps.at(-1) + 0.1).perf > 0.8 && MG.lookReplay(Lk, lt, Lk.limit).perf > 0.9 && MG.muscleReplay(Ms, mt, Ms.limit).perf > 0.9) good++; }
+        ok(good === 10, 'the dial, the lookout and the doors can all be played to a top score', String(good));
+        const Dl = MG.genDrive(7, 1); let st = MG.driveStart(); const mv = []; while (!st.done) { st = MG.driveStep(Dl, st, st.lane); } ok(st.crashes > 0 && MG.driveReplay(Dl, []).state.crashes === st.crashes, 'driving straight ahead crashes, and the server sees the same crashes');
+        const spam = []; for (let t = 0.1; t < 40; t += 0.05) spam.push(+t.toFixed(2)); ok(!MG.safeReplay(MG.genSafe(3, 2), spam, 40).money, "hammering the dial sets the alarm off"); }
       await pool.query("update citizens set jailed_until = 0, heist_at = 0, crime_at = 0, coins_base = 5000 where handle in ('zara_ng', 'jobfill_a')"); }
     // stars
     { const st = (await call('GET', '/api/me/stars', undefined, P)).json;
       ok(st.acts > 5 && st.stars >= 1 && st.stars <= 12 && st.score === st.acts + 20 * st.days && st.steps.length === 12, 'stars count the things you do yourself, plus the days you play', JSON.stringify(st));
       ok((await who('zara_ng')).stars === st.stars, 'and everyone sees your stars on your card'); }
-    ok((await call('POST', '/api/dm/zara_ng', { text: 'again' }, PB)).status === 429, 'sending is slowed down a little');
+    await call('POST', '/api/dm/zara_ng', { text: 'one more thing' }, PB); ok((await call('POST', '/api/dm/zara_ng', { text: 'again' }, PB)).status === 429, 'sending is slowed down a little');
     // ---- reporting and blocking ----
     ok((await call('POST', '/api/report', { kind: 'dm', id: sent.json.id, reason: 'nope' }, PB)).status === 400, 'a report needs a reason');
     ok((await call('POST', '/api/report', { kind: 'dm', id: sent.json.id, reason: 'abuse' }, P)).status === 404, "you can only report messages sent to you");

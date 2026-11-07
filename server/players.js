@@ -248,6 +248,9 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/heists', limit, send(async req => world.heists.plan(await me(req), req.body || {})));
   r.post('/me/heists/:id/go', limit, send(async req => world.heists.goNow((await me(req)).id, req.params.id)));
   r.post('/me/heists/:id/cancel', limit, send(async req => world.heists.cancel((await me(req)).id, req.params.id)));
+  r.post('/me/heists/:id/role', limit, send(async req => world.heists.role((await me(req)).id, req.params.id, req.body || {})));
+  r.post('/me/heists/:id/play', limit, send(async req => world.heists.play((await me(req)).id, req.params.id)));
+  r.get('/me/heists/:id/live', limit, send(async req => world.heists.status((await me(req)).id, req.params.id)));
   r.get('/me/stars', limit, send(async req => world.stars.info((await me(req)).id)));
   r.get('/me/ledger', limit, send(async req => history((await me(req)).id, Math.min(100, Number(req.query.n) || 60), Number(req.query.before) || null)));
   r.get('/me/badges', limit, send(async req => world.achievements.list((await me(req)).id)));

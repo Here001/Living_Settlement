@@ -291,7 +291,10 @@ const MIGRATIONS = [
   `create table if not exists crime_runs (id text primary key, citizen_id text not null, kind text not null, seed bigint not null, diff int not null,
      practice boolean not null default false, started_at bigint not null, finished_at bigint, chance numeric not null default 0, band text, night boolean,
      loot int not null default 0, scene jsonb, result jsonb);
-   create index if not exists crime_runs_who on crime_runs (citizen_id, started_at);`
+   create index if not exists crime_runs_who on crime_runs (citizen_id, started_at);`,
+  // v55: heists played live: each member's chosen part, the live job (crew, parts, levels, the deadline), and each part's game
+  `alter table heists add column if not exists roles jsonb; alter table heists add column if not exists live jsonb;
+   alter table crime_runs add column if not exists heist_id text; create index if not exists crime_runs_heist on crime_runs (heist_id);`
 ];
 
 export async function migrate() {

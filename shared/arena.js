@@ -1,6 +1,6 @@
-// Street games: Hunters & Civilians, and Hide and seek. Played live by up to 8 colonists at once on a small walled-off
-// city block (the server runs the match ten times a second; colonists who aren't playing are filled in by the colony's
-// own unclaimed colonists, played by the computer). The map, movement and sight rules are shared, so a phone moves its
+// Street games: Hunters & Civilians, and Hide and seek. Played live by 8 at once (up to 4 real colonists ); on a small walled-off
+// city block (the server runs the match ten times a second; the rest of the places are filled by the colony's own
+// unclaimed colonists, played by the computer). The map, movement and sight rules are shared, so a phone moves its
 // own player exactly as the server would allow.
 //
 //   tag  → Hunters & Civilians: hunters chase the civilians; anyone caught joins the hunters. Civilians grab cash bags
@@ -15,7 +15,7 @@ export const MODES = {
     blurb: 'Hiders get 25 seconds to find a spot (bins, bushes, crates, doorways). Then the seekers come looking. Anyone found becomes a seeker.' },
 };
 export const A = { W: 28, H: 22, r: 0.3, speed: { civilian: 3.6, hunter: 3.75, hider: 3.5, seeker: 3.7 }, tagR: 0.75, findR: 1.15, sight: 6.5, hideR: 0.45,
-  tick: 0.1, minPlayers: 6, maxPlayers: 8, prize: 400, paidWins: 3, lobby: 20 };
+  tick: 0.1, players: 8, maxPeople: 4, prize: 400, paidWins: 3, lobby: 20 };
 export const chasers = mode => mode === 'tag' ? 'hunter' : 'seeker';
 export const runners = mode => mode === 'tag' ? 'civilian' : 'hider';
 

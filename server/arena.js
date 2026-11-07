@@ -40,7 +40,7 @@ export class Arena {
     for (const q of Object.values(this.queues)) q.delete(pid);
     const Q = this.queues[mode]; Q.set(pid, { id: pid, h: c.handle || handle, at: Date.now() });
     if (Q.size === 1 || !this.startAt[mode]) this.startAt[mode] = Date.now() + A.lobby * 1000;
-    if (Q.size >= A.maxPlayers) this.startAt[mode] = Date.now();
+    if (Q.size >= A.maxPeople) this.startAt[mode] = Date.now(); // a full set of real people: off we go
     this.lobbyNews(mode); this.run();
   }
   leave(pid) {
@@ -49,7 +49,7 @@ export class Arena {
     if (M) { const p = M.players.find(x => x.id === pid); if (p) { p.bot = true; p.left = true; } this.inMatch.delete(pid); }
     this.send([[pid, { k: 'idle' }]]);
   }
-  lobbyMsg(mode) { const Q = this.queues[mode]; return { k: 'lobby', mode, players: [...Q.values()].map(p => p.h), startsIn: Math.max(0, this.startAt[mode] - Date.now()), need: A.minPlayers }; }
+  lobbyMsg(mode) { const Q = this.queues[mode]; return { k: 'lobby', mode, players: [...Q.values()].map(p => p.h), startsIn: Math.max(0, this.startAt[mode] - Date.now()), max: A.maxPeople }; }
   lobbyNews(mode) { const msg = this.lobbyMsg(mode); this.send([...this.queues[mode].keys()].map(pid => [pid, msg])); }
 
   // ---------- running ----------
@@ -64,8 +64,8 @@ export class Arena {
     if (!this.matches.size && ![...Object.values(this.queues)].some(q => q.size)) { clearInterval(this.timer); this.timer = null; }
   }
   async start(mode) {
-    const Q = this.queues[mode], humans = [...Q.values()].slice(0, A.maxPlayers); for (const h of humans) Q.delete(h.id); this.startAt[mode] = Q.size ? Date.now() + A.lobby * 1000 : 0;
-    const nBots = Math.max(0, A.minPlayers - humans.length);
+    const Q = this.queues[mode], humans = [...Q.values()].slice(0, A.maxPeople); for (const h of humans) Q.delete(h.id); this.startAt[mode] = Q.size ? Date.now() + A.lobby * 1000 : 0;
+    const nBots = Math.max(0, A.players - humans.length); // the computer fills the rest
     const bots = nBots ? (await pool.query('select id, handle from citizens where pass_hash is null and home_id is not null and handle is not null order by random() limit $1', [nBots])).rows : [];
     while (bots.length < nBots) bots.push({ id: 'bot' + bots.length, handle: ['Kemi', 'Tunde', 'Ada', 'Bayo', 'Zainab', 'Chidi'][bots.length % 6] + '_' + (bots.length + 1) });
     const seed = crypto.randomInt(1, 2 ** 31), L = AR.genArena(seed), all = [...humans.map(h => ({ id: h.id, h: h.h, bot: false, human: true })), ...bots.map(b => ({ id: 'b:' + b.id, h: b.handle, bot: true, human: false }))];

@@ -46,10 +46,10 @@ function lobby(m) {
   const left = Math.ceil((m.startsIn || 0) / 1000);
   card.append($c('button', { class: 'mgx', 'aria-label': 'Leave', text: '×', onclick: () => closeArena() }),
     $c('div', { class: 'mgicon', text: M0.icon }), $c('h2', { text: M0.name }), $c('p', { class: 'mghint', text: M0.blurb }),
-    $c('div', { class: 'mgrow' }, $c('span', { text: 'Players ready' }), $c('b', { text: `${m.players.length}` })),
+    $c('div', { class: 'mgrow' }, $c('span', { text: 'Players ready' }), $c('b', { text: `${m.players.length} of ${A.maxPeople}` })),
     $c('p', { class: 'mgat', text: m.players.length ? m.players.map(h => '@' + h).join(', ') : 'Finding players…' }),
     $c('div', { class: 'mgcount sm', text: left > 0 ? `${left}` : '…' }),
-    $c('p', { class: 'mghint', text: `Starts in ${left}s. Empty places are filled by colonists from the town. Win with at least one other player and you get ${X.fmt(A.prize)} coins (${A.paidWins} paid wins a day).` }),
+    $c('p', { class: 'mghint', text: `Starts in ${left}s, or as soon as ${A.maxPeople} people are in. The computer fills the rest of the ${A.players} places with colonists from the town. Win with at least one other player and you get ${X.fmt(A.prize)} coins (${A.paidWins} paid wins a day).` }),
     $c('div', { class: 'mgbtns' }, $c('button', { class: 'mgb', text: 'Leave', onclick: () => closeArena() }), $c('button', { class: 'mgb hot', text: '▶ Start now', onclick: () => X.send({ a: 'go' }) })));
   clearTimeout(S.lobbyT); if (left > 0) S.lobbyT = setTimeout(() => { if (S && S.phase === 'lobby') lobby({ ...m, startsIn: m.startsIn - 1000 }); }, 1000);
 }

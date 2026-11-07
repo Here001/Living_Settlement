@@ -5830,7 +5830,7 @@ function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cri
   box.append(Heist.box(c), streetGames());
   return box; }
 // Street games: live chase games with other colonists (and the town's own colonists filling the gaps).
-function streetGames(){ const b=el('div',{class:'heists'}, el('h3',{text:'🎮 Street games'}), el('p',{class:'hint',text:'Play live with other colonists. Empty places are filled by colonists from the town. Win with at least one other player for 400 coins (3 paid wins a day).'}));
+function streetGames(){ const b=el('div',{class:'heists'}, el('h3',{text:'🎮 Street games'}), el('p',{class:'hint',text:'Play live with up to 3 other people. The computer fills the rest of the 8 places with colonists from the town. Win with at least one other player for 400 coins (3 paid wins a day).'}));
   for(const [k,M0] of Object.entries({tag:{icon:'🏃',name:'Hunters & Civilians',blurb:'Hunters chase the civilians; anyone caught becomes a hunter. Grab cash bags and last until the end.'},hide:{icon:'🙈',name:'Hide and seek',blurb:'25 seconds to hide in a bin, bush, crate or doorway. Then the seekers come looking.'}}))
     b.append(el('div',{class:'crow'}, el('div',{class:'jt'}, el('b',{text:`${M0.icon} ${M0.name}`}), el('span',{text:M0.blurb})), el('button',{class:'btn primary',text:'▶ Play',onclick:()=>{ if(!(ws&&ws.readyState===1)){ toast('Connecting… try again in a moment.'); return; } openArena(k,arenaCtx()); }})));
   return b; }

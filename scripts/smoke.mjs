@@ -990,11 +990,11 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok(lb && lb.players.includes('zara_ng') && lb.startsIn > 5000, 'joining a street game: the lobby shows who is in and when it starts', JSON.stringify(lb));
       send(wa, { a: 'go' });
       const sa = await waitFor(wa, m => m.type === 'arena' && m.k === 'start'), sb = await waitFor(wb, m => m.type === 'arena' && m.k === 'start');
-      ok(sa && sb && sa.id === sb.id && sa.roster.length === AR.A.minPlayers && sa.roster.filter(p => p.bot).length === AR.A.minPlayers - 2, 'start now: the match begins, and the town fills the empty places', JSON.stringify(sa && sa.roster));
+      ok(sa && sb && sa.id === sb.id && sa.roster.length === AR.A.players && sa.roster.filter(p => p.bot).length === AR.A.players - 2, 'start now: the match begins, and the town fills the empty places', JSON.stringify(sa && sa.roster));
       ok(sa.role === 'civilian' && sb.role === 'civilian', 'the computer takes the hunters first, so people get to run', JSON.stringify([sa.role, sb.role]));
       const L = AR.genArena(sa.seed); ok(AR.fits(L, sa.x, sa.y), 'everyone starts on open ground');
       const s1 = await waitFor(wa, m => m.type === 'arena' && m.k === 's');
-      ok(s1 && s1.p.length === AR.A.minPlayers - 1 && s1.b.length === 6 && s1.n >= 2, 'ten times a second, everyone hears where everyone is (and the cash bags)', JSON.stringify(s1).slice(0, 200));
+      ok(s1 && s1.p.length === AR.A.players - 1 && s1.b.length === 6 && s1.n >= 2, 'ten times a second, everyone hears where everyone is (and the cash bags)', JSON.stringify(s1).slice(0, 200));
       // a move that's too far is put back; a fair one is kept
       wa.msgs.length = 0; send(wa, { a: 'pos', id: sa.id, x: sa.x + 6, y: sa.y });
       const fx = await waitFor(wa, m => m.type === 'arena' && m.k === 's' && m.fix);
@@ -1006,7 +1006,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       const ea = await waitFor(wa, m => m.type === 'arena' && m.k === 'end'), eb = await waitFor(wb, m => m.type === 'arena' && m.k === 'end');
       ok(ea && eb && ea.side === 'civilian' && ea.won && eb.won && ea.paid && ea.prize === AR.A.prize, 'the clock runs out with civilians still free: they win, and the people among them win coins', JSON.stringify(ea));
       await sleep(300); ok((await whoDev('zara_ng')).coins === c0 + ea.prize, 'the prize lands in your cash');
-      ok(ea.players.length === AR.A.minPlayers && ea.players.some(p => p.bot && p.first === 'hunter'), 'the result lists everyone and what they did');
+      ok(ea.players.length === AR.A.players && ea.players.some(p => p.bot && p.first === 'hunter'), 'the result lists everyone and what they did');
       ok((await pool.query("select humans from arena_results where id = $1", [ea.id])).rows[0]?.humans === 2, 'the match is recorded');
       // practice alone: no prize
       wa.msgs.length = 0; send(wa, { a: 'join', mode: 'hide' }); await waitFor(wa, m => m.type === 'arena' && m.k === 'lobby'); send(wa, { a: 'go' });

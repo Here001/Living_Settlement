@@ -243,7 +243,54 @@ const rr = (g, x, y, w, h, r) => { g.beginPath(); if (g.roundRect) g.roundRect(x
 function keyHook(root, fn) { const k = e => { if (fn(e) !== false && e.key.startsWith('Arrow')) e.preventDefault(); }; addEventListener('keydown', k); const stop = root._stop; root._stop = () => { stop && stop(); removeEventListener('keydown', k); }; }
 
 // ---------------- Getaway drive ----------------
-function drive(root, L, finish) {
+let W3 = null; const load3d = () => W3 || (W3 = import('/world3d.js'));
+async function drive(root, L, finish) {
+  const loading = $c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'Warming up the engine…' })); root.append(loading);
+  let W; try { W = await load3d(); } catch (e) { loading.remove(); return drive2d(root, L, finish); }
+  loading.remove(); if (!root.isConnected) return;
+  const cv = $c('canvas', { class: 'mgcanvas' }), dmg = meter('alarm', '💥'), prog = meter('trust', '🏁'), clock = $c('b', { class: 'mgclock' }), speedo = $c('div', { class: 'speedo' });
+  root.append(cv, hud(prog, dmg, clock), speedo, $c('div', { class: 'mgjoyhint', text: 'Tap left or right to change lane' }));
+  const view = W.createView(cv), THREE = W.THREE, S2 = 2; // one unit of the game's road is 2 metres
+  view.resize(); W.buildRoadTrip(view, { length: L.D * S2, seed: L.seed, types: X.townTypes ? X.townTypes() : [] }); view.setTime(X.minute ? X.minute() : 720);
+  const ro = new ResizeObserver(() => view.resize()); ro.observe(root);
+  const laneX = l => (l - 1) * W.LANE;
+  // the getaway car, the traffic, and the police on your tail
+  const car = W.makeCar('getaway', '#c8382e'); view.scene.add(car);
+  const cop = W.makeCar('police'); view.scene.add(cop);
+  const COLS = ['#2f5d9e', '#3c8a5a', '#e9e4d8', '#2b2f33', '#e2b13c', '#8e44ad', '#c0392b'];
+  const obs = L.obs.map((o, j) => { const m = o.k === 'cones' ? W.makeCones() : W.makeCar(o.k === 'police' ? 'police' : o.k === 'bus' ? 'bus' : o.k === 'van' ? 'van' : 'car', COLS[j % COLS.length]); m.position.set(laneX(o.lane), 0, -o.d * S2); m.visible = false; view.scene.add(m); return m; });
+  let head = null; if (view.night > 0.3) { head = new THREE.SpotLight('#fff3d6', 120, 70, 0.45, 0.4, 1.2); view.scene.add(head, head.target); }
+  const s = MG.driveStart(), moves = []; let prevD = 0, acc = 0, want = 1, carX = laneX(1), ended = false, shake = 0, lastCr = 0, tilt = 0, flash = 0;
+  const steer = dir => { if (ended) return; want = Math.max(0, Math.min(2, want + dir)); };
+  let sx = null; cv.addEventListener('pointerdown', e => { sx = e.clientX; }); cv.addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; steer(Math.abs(dx) > 30 ? Math.sign(dx) : e.clientX < root.clientWidth / 2 ? -1 : 1); sx = null; });
+  keyHook(root, e => { if (e.key === 'ArrowLeft' || e.key === 'a') steer(-1); else if (e.key === 'ArrowRight' || e.key === 'd') steer(1); else return false; });
+  const cam = new THREE.Vector3(carX, 4.5, 9);
+  view.start((dt, now) => {
+    if (!ended) { acc += dt; while (acc >= MG.STEP && !s.done) { acc -= MG.STEP; prevD = s.d; let lane = s.lane; if (want !== s.lane) { lane = s.lane + Math.sign(want - s.lane); moves.push([s.n, lane]); } MG.driveStep(L, s, lane); } }
+    if (s.crashes > lastCr) { lastCr = s.crashes; shake = 0.5; flash = 0.35; buzz(200); }
+    const u = s.done ? 1 : Math.min(1, acc / MG.STEP), d = prevD + (s.d - prevD) * u, z = -d * S2;
+    const tx = laneX(s.lane), dx = tx - carX; carX += dx * Math.min(1, dt * 9); tilt += ((-dx * 0.08) - tilt) * Math.min(1, dt * 10);
+    car.position.set(carX, 0, z); car.rotation.y = -dx * 0.06; car.rotation.z = tilt;
+    const speed = (L.v0 + (L.v1 - L.v0) * Math.min(1, s.d / L.D)) * s.slow * S2; for (const w of car.userData.wheels) w.rotation.x -= speed * dt / 0.42;
+    // the police keep up behind you, closer after every crash
+    const back = 14 - s.crashes * 2.6 + Math.sin(now / 900) * 1.2; cop.position.set(carX * 0.6 + Math.sin(now / 700) * 0.8, 0, z + back);
+    const on = (now / 160 | 0) % 2; cop.userData.bar[0].material.color.set(on ? '#ff2a2a' : '#4a0000'); cop.userData.bar[1].material.color.set(on ? '#001040' : '#2a5bff');
+    for (let j = 0; j < obs.length; j++) { const oz = -L.obs[j].d * S2; obs[j].visible = !s.gone.includes(j) && oz < z + 20 && oz > z - 260; if (L.obs[j].k === 'police' && obs[j].visible) { obs[j].userData.bar[0].material.color.set(on ? '#ff2a2a' : '#4a0000'); } }
+    // the chase camera: low behind the car, pulling back and widening as you speed up, shaking when you hit something
+    shake = Math.max(0, shake - dt); const sh = shake ? (Math.random() - 0.5) * shake : 0;
+    cam.lerp(new THREE.Vector3(carX * 0.85 + sh, 4.2 + sh, z + 9.5 + speed * 0.05), Math.min(1, dt * 6)); view.camera.position.copy(cam); view.camera.lookAt(carX * 0.9, 1.2, z - 18);
+    const fov = 58 + speed * 0.25; if (Math.abs(view.camera.fov - fov) > 0.2) { view.camera.fov += (fov - view.camera.fov) * Math.min(1, dt * 3); view.camera.updateProjectionMatrix(); }
+    view.cut.R.value = 0; view.center.set(0, 0, z - 40); if ((now / 500 | 0) !== (view._sh || 0)) { view._sh = now / 500 | 0; view.setTime(X.minute ? X.minute() : 720); }
+    if (head) { head.position.set(carX, 1.2, z - 2); head.target.position.set(carX, 0, z - 30); }
+    if (flash > 0) { flash -= dt; root.style.boxShadow = `inset 0 0 0 ${Math.round(flash * 60)}px rgba(255,60,40,.5)`; } else if (root.style.boxShadow) root.style.boxShadow = '';
+    prog.set(d / L.D); dmg.set(s.crashes / MG.DRIVE.wreck); dmg.classList.toggle('hot', s.crashes >= MG.DRIVE.wreck - 1); clock.textContent = `${Math.max(0, Math.ceil(L.limit - s.t))}s`;
+    speedo.textContent = `${Math.round(speed * 3.6)} km/h`;
+    if (s.done && !ended) { ended = true; setTimeout(() => finish({ moves }), s.done === 'escaped' ? 600 : 1000); }
+  });
+  const stop = root._stop; root._stop = () => { stop && stop(); view.dispose(); ro.disconnect(); };
+}
+// The flat version, if a phone can't do 3D.
+function drive2d(root, L, finish) {
   const C = canvasFor(root), dmg = meter('alarm', '💥'), prog = meter('trust', '🏁'), clock = $c('b', { class: 'mgclock' });
   root.append(hud(prog, dmg, clock), $c('div', { class: 'mgjoyhint', text: 'Tap left or right to change lane' }));
   const s = MG.driveStart(), moves = []; let prevD = 0, acc = 0, want = 1, carX = 1, ended = false, shake = 0, lastCr = 0;

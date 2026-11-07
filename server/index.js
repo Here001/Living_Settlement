@@ -250,6 +250,9 @@ setInterval(() => { if (isLeader) sweepPlayers().catch(e => console.error('sweep
 // mismatched part stops the game from starting. Pictures, video and sound keep their cache times.
 const fresh = (res, file) => { if (/\.(html|js|mjs|css|json|webmanifest)$/i.test(file)) res.setHeader('Cache-Control', 'no-cache'); };
 app.use('/shared', express.static(path.join(root, 'shared'), { maxAge: '5m', setHeaders: fresh }));
+// The 3D engine for the mini games (three.js), loaded only when a game opens.
+app.use('/vendor/three', express.static(path.join(root, 'node_modules', 'three', 'build'), { maxAge: '7d' }));
+app.use('/vendor/three-addons', express.static(path.join(root, 'node_modules', 'three', 'examples', 'jsm'), { maxAge: '7d' }));
 // A shared colonist link (/?c=handle) gets its own title in link previews on X, WhatsApp and so on.
 app.get('/', async (req, res, next) => {
   const h = typeof req.query.c === 'string' ? R.cleanHandle(req.query.c) : ''; if (!h) return next();

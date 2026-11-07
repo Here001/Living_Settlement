@@ -992,15 +992,19 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       const sa = await waitFor(wa, m => m.type === 'arena' && m.k === 'start'), sb = await waitFor(wb, m => m.type === 'arena' && m.k === 'start');
       ok(sa && sb && sa.id === sb.id && sa.roster.length === AR.A.players && sa.roster.filter(p => p.bot).length === AR.A.players - 2, 'start now: the match begins, and the town fills the empty places', JSON.stringify(sa && sa.roster));
       ok(sa.role === 'civilian' && sb.role === 'civilian', 'the computer takes the hunters first, so people get to run', JSON.stringify([sa.role, sb.role]));
-      const L = AR.genArena(sa.seed); ok(AR.fits(L, sa.x, sa.y), 'everyone starts on open ground');
+      const L = AR.prepare(JSON.parse(JSON.stringify(sa.L))); ok(AR.fits(L, sa.x, sa.y), 'everyone starts on open ground');
+      { const bt = L.buildings.filter(b => !b.outdoor).length, real = (await pool.query("select count(*)::int n from buildings where done and not ruin and x >= $1 and x < $2 and y >= $3 and y < $4 and type not in ('tree','pine','birch','poplar','palm','bush','hedge','lamp','bench')", [L.x0, L.x0 + L.tw, L.y0, L.y0 + L.th])).rows[0].n;
+        ok(L.tw === AR.A.tilesW && L.grid.length === L.W * L.H && L.W === L.tw * AR.PER && L.buildings.length >= Math.min(1, real), 'the game is played on the real streets around your home: the same buildings, roads and water as the map', JSON.stringify({ x0: L.x0, y0: L.y0, bt, real, roads: L.roads.length, spots: L.spots.length })); }
       const s1 = await waitFor(wa, m => m.type === 'arena' && m.k === 's');
       ok(s1 && s1.p.length === AR.A.players - 1 && s1.b.length === 6 && s1.n >= 2, 'ten times a second, everyone hears where everyone is (and the cash bags)', JSON.stringify(s1).slice(0, 200));
       // a move that's too far is put back; a fair one is kept
-      wa.msgs.length = 0; send(wa, { a: 'pos', id: sa.id, x: sa.x + 6, y: sa.y });
+      wa.msgs.length = 0; send(wa, { a: 'pos', id: sa.id, x: sa.x + 30, y: sa.y });
       const fx = await waitFor(wa, m => m.type === 'arena' && m.k === 's' && m.fix);
       ok(fx && Math.abs(fx.fix[0] - sa.x) < 0.01, 'a move faster than you can run is refused', JSON.stringify(fx && fx.fix));
-      const q = AR.moveBy(L, sa, 1, 0, 0.3); await sleep(200); wa.msgs.length = 0; send(wa, { a: 'pos', id: sa.id, x: q.x, y: q.y });
+      const q = AR.moveBy(L, sa, 1, 0, 1.0); await sleep(200); wa.msgs.length = 0; send(wa, { a: 'pos', id: sa.id, x: q.x, y: q.y });
       ok(!(await waitFor(wa, m => m.type === 'arena' && m.k === 's' && m.fix, 600)), 'a fair move is kept');
+      { let p = { x: q.x, y: q.y }; await sleep(400); wa.msgs.length = 0; for (let i = 0; i < 4; i++) { const n = AR.moveBy(L, p, i % 2 ? 0 : 1, i % 2 ? 1 : 0, 0.55); if (Math.hypot(n.x - p.x, n.y - p.y) < 0.1) continue; p = n; send(wa, { a: 'pos', id: sa.id, x: p.x, y: p.y }); }
+        ok(!(await waitFor(wa, m => m.type === 'arena' && m.k === 's' && m.fix, 600)), 'moves that arrive bunched together (a jumpy connection) are not snapped back'); }
       const c0 = (await whoDev('zara_ng')).coins;
       await call('POST', '/api/admin/test/arena-end');
       const ea = await waitFor(wa, m => m.type === 'arena' && m.k === 'end'), eb = await waitFor(wb, m => m.type === 'arena' && m.k === 'end');
@@ -1020,7 +1024,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       send(wb, { a: 'join', mode: 'tag' }); await waitFor(wb, m => m.type === 'arena' && m.k === 'lobby' && m.mode === 'tag'); wb.msgs.length = 0; send(wb, { a: 'leave' });
       ok(await waitFor(wb, m => m.type === 'arena' && m.k === 'idle'), 'and you can leave the lobby');
       // the computer's hunters do catch people
-      { const Lr = AR.genArena(77); let h = { ...Lr.corners[0] }, v = { ...Lr.spawn }, caught = false; for (let i = 0; i < 400 && !caught; i++) { const wp = AR.nextStep(Lr, h, v); const q2 = AR.moveBy(Lr, h, wp.x - h.x, wp.y - h.y, 0.34); h = q2; caught = Math.hypot(h.x - v.x, h.y - v.y) < AR.A.tagR; }
+      { const Lr = L; let h = { ...Lr.corners[0] }, v = { ...Lr.spawn }, caught = false; for (let i = 0; i < 2000 && !caught; i++) { const wp = AR.nextStep(Lr, h, v); const q2 = AR.moveBy(Lr, h, wp.x - h.x, wp.y - h.y, Math.min(0.6, Math.hypot(wp.x - h.x, wp.y - h.y))); h = q2; caught = Math.hypot(h.x - v.x, h.y - v.y) < AR.A.tagR; }
         ok(caught, 'a hunter can always find the way to someone standing still'); }
       wa.ws.close(); wb.ws.close(); }
     // stars

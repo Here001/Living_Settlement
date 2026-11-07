@@ -12,14 +12,13 @@ const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (
 const ROLE = { hunter: { icon: '👮', name: 'Hunter', goal: 'Catch the civilians!' }, civilian: { icon: '🏃', name: 'Civilian', goal: 'Run! Grab the cash bags.' },
   seeker: { icon: '🔦', name: 'Seeker', goal: 'Find the hiders!' }, hider: { icon: '🫥', name: 'Hider', goal: 'Stay hidden!' } };
 const hash = s => { let h = 2166136261 >>> 0; for (const ch of String(s)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; };
-const COLS = ['#4A7BD9', '#3CC46A', '#F2C94C', '#B05FD6', '#F28CB1', '#2EC4B6', '#F2994A', '#8D6E63'];
 
 export function openArena(mode, ctx) {
   X = ctx; closeArena(true);
   const root = $c('div', { class: 'mg arena', role: 'dialog', 'aria-label': MODES[mode].name }); document.body.append(root); document.body.classList.add('mg-on');
   S = { root, mode, phase: 'lobby', match: null };
   lobby({ k: 'lobby', mode, players: [], startsIn: A.lobby * 1000 });
-  X.send({ a: 'join', mode });
+  X.send({ a: 'join', mode }); load3d().catch(() => {}); // get the 3D engine ready while the lobby fills
 }
 // Reopening the game after the page reloads (or the line dropped): ask where we stand.
 export function resumeArena(ctx) { X = ctx; X.send({ a: 'state' }); }
@@ -55,42 +54,84 @@ function lobby(m) {
 }
 
 // ---------------- the match ----------------
-function start(m) {
+// The 3D engine loads only when a game starts (the map itself never needs it).
+let W3 = null; const load3d = () => W3 || (W3 = import('/world3d.js'));
+async function start(m) {
   clearTimeout(S.lobbyT); S.stop && S.stop();
-  const L = AR.genArena(m.seed), root = S.root; root.innerHTML = ''; S.phase = 'play';
-  const skew = m.now - Date.now(), me = { x: m.x ?? L.spawn.x, y: m.y ?? L.spawn.y, role: m.role }, others = new Map();
+  const root = S.root; root.innerHTML = ''; S.phase = 'play';
+  root.append($c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'Loading the neighbourhood…' })));
+  let W; try { W = await load3d(); } catch (e) { X.toast('Your phone could not load the 3D view.'); closeArena(); return; }
+  if (!S || S.phase !== 'play') return;
+  const L = AR.prepare(m.L), wire = m.L; root.innerHTML = '';
+  const skew = m.now - Date.now(), me = { x: m.x ?? L.spawn.x, y: m.y ?? L.spawn.y, role: m.role, vx: 0, vy: 0 }, others = new Map();
   S.match = { id: m.id, mode: m.mode, L, me, others, roster: m.roster, you: m.you, skew, playFrom: m.playFrom, until: m.until, live: Date.now() + skew >= m.playFrom, tl: 0, n: 0, sc: 0, bags: [], feed: [] };
-  const cv = $c('canvas', { class: 'mgcanvas' }), g = cv.getContext('2d'), dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const roleB = $c('div', { class: 'arole' }), clock = $c('b', { class: 'mgclock' }), info = $c('b', { class: 'acount' }), feed = $c('div', { class: 'afeed' }), big = $c('div', { class: 'abig' });
+  const cv = $c('canvas', { class: 'mgcanvas' });
+  const roleB = $c('div', { class: 'arole' }), clock = $c('b', { class: 'mgclock' }), info = $c('b', { class: 'acount' }), feed = $c('div', { class: 'afeed' }), big = $c('div', { class: 'abig' }), stick = $c('div', { class: 'astick' }, $c('i'));
   let sure = 0; const quit = $c('button', { class: 'mgx aquit', 'aria-label': 'Leave the game', text: '×', onclick: () => { if (Date.now() - sure < 2500) return closeArena(); sure = Date.now(); say('Tap × again to leave. The computer will play for you.'); } });
-  root.append(cv, $c('div', { class: 'mghud' }, roleB, info, clock), feed, big, quit, $c('div', { class: 'mgjoyhint', text: 'Drag anywhere to move' }));
-  let W = 0, H = 0, tile = 40, bg = null;
-  const fit = () => { W = root.clientWidth; H = root.clientHeight; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + 'px'; cv.style.height = H + 'px';
-    tile = Math.max(30, Math.min(56, Math.min(W, H) / 10)); bg = paintBlock(L, tile, Math.min(dpr, 1.5)); };
-  const ro = new ResizeObserver(fit); ro.observe(root); fit();
-  // moving: drag anywhere (a joystick that appears under your thumb), or the arrow keys
+  root.append(cv, $c('div', { class: 'mghud' }, roleB, info, clock), feed, big, stick, quit, $c('div', { class: 'mgjoyhint', text: 'Drag anywhere to move' }));
+  // the world: the real streets, built in 3D, lit for the colony's time of day
+  const view = W.createView(cv), THREE = W.THREE; try { window.__arena3d = view; } catch (e) {} view.resize(); W.buildArea(view, wire); view.setTime(X.minute ? X.minute() : 720);
+  const ro = new ResizeObserver(() => view.resize()); ro.observe(root);
+  // the hiding spots glow while the hiders hide; cash bags spin and bob
+  const rings = []; if (m.mode === 'hide') for (const sp of L.spots) { const rg = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.07, 6, 28), new THREE.MeshBasicMaterial({ color: '#7cffb2', transparent: true, opacity: 0.85 })); rg.rotation.x = -Math.PI / 2; rg.position.set(sp.x, 0.08, sp.y); view.scene.add(rg); rings.push(rg); }
+  const bagGeo = new THREE.SphereGeometry(0.42, 14, 10), bagMat = new THREE.MeshStandardMaterial({ color: '#e2b13c', roughness: 0.4, metalness: 0.6, emissive: '#5a3a00', emissiveIntensity: 0.4 }); const bags = [];
+  // people: you, and everyone else (built when they first show up)
+  const mine = W.makePerson(X.me ? X.me() : 'me', me.role); view.scene.add(mine.group); mine.setPos(me.x, me.y);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.72, 28), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9, depthWrite: false })); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; mine.group.add(ring);
+  // you can always see yourself, even behind a building
+  const ghost = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.1, 4, 8), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.28, depthTest: false })); ghost.position.y = 0.95; ghost.renderOrder = 20; mine.group.add(ghost);
+  let torchLight = null; const people = new Map(); S.match.mine = mine;
+  const rebuildMe = role => { const p = W.makePerson(X.me ? X.me() : 'me', role); p.setPos(me.x, me.y); p.group.add(ring, ghost); view.scene.remove(mine.group); view.scene.add(p.group); Object.assign(mine, p); };
+  // a torch for a seeker at night
+  const torchFor = () => { if (torchLight) { view.scene.remove(torchLight); torchLight = null; } if (me.role === AR.chasers(m.mode) && view.night > 0.3) { torchLight = new THREE.SpotLight('#fff1c9', 60, 34, 0.5, 0.5, 1.4); view.scene.add(torchLight, torchLight.target); } };
+  torchFor(); let role0 = me.role;
+  // the camera: high behind you, turned like the map (so up on the screen is up the map), easing after you
+  const camYaw = Math.PI / 4, camDist = 22, camH = 25, look = new THREE.Vector3(me.x, 0, me.y); view.camera.position.set(me.x + Math.sin(camYaw) * camDist, camH, me.y + Math.cos(camYaw) * camDist); view.camera.lookAt(look);
+  // moving: a joystick that appears under your thumb, or the arrow keys
   let joy = null; const keys = new Set();
-  cv.addEventListener('pointerdown', e => { joy = { x: e.clientX, y: e.clientY, dx: 0, dy: 0, id: e.pointerId }; try { cv.setPointerCapture(e.pointerId); } catch (er) {} });
-  cv.addEventListener('pointermove', e => { if (!joy || e.pointerId !== joy.id) return; let dx = e.clientX - joy.x, dy = e.clientY - joy.y; const d = Math.hypot(dx, dy); if (d > 55) { dx *= 55 / d; dy *= 55 / d; } joy.dx = dx; joy.dy = dy; });
-  const up = () => { joy = null; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('pointerdown', e => { joy = { x: e.clientX, y: e.clientY, dx: 0, dy: 0, id: e.pointerId }; try { cv.setPointerCapture(e.pointerId); } catch (er) {} stick.style.cssText = `display:block;left:${e.clientX}px;top:${e.clientY}px`; stick.firstChild.style.transform = 'translate(-50%,-50%)'; });
+  cv.addEventListener('pointermove', e => { if (!joy || e.pointerId !== joy.id) return; let dx = e.clientX - joy.x, dy = e.clientY - joy.y; const d = Math.hypot(dx, dy); if (d > 55) { dx *= 55 / d; dy *= 55 / d; } joy.dx = dx; joy.dy = dy; stick.firstChild.style.transform = `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`; });
+  const up = () => { joy = null; stick.style.display = 'none'; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
   const kd = e => { keys.add(e.key); if (e.key.startsWith('Arrow')) e.preventDefault(); }, ku = e => keys.delete(e.key); addEventListener('keydown', kd); addEventListener('keyup', ku);
-  const input = () => { let vx = 0, vy = 0; if (joy && Math.hypot(joy.dx, joy.dy) > 6) { vx = joy.dx / 55; vy = joy.dy / 55; }
-    if (keys.has('ArrowUp') || keys.has('w')) vy -= 1; if (keys.has('ArrowDown') || keys.has('s')) vy += 1; if (keys.has('ArrowLeft') || keys.has('a')) vx -= 1; if (keys.has('ArrowRight') || keys.has('d')) vx += 1; return [vx, vy]; };
-  let on = true, last = performance.now(), sentAt = 0, sx = me.x, sy = me.y;
-  const frame = now => { if (!on) return; const dt = Math.min(0.1, (now - last) / 1000); last = now; const M = S.match, t = Date.now() + M.skew;
-    M.live = t >= M.playFrom;
+  const input = () => { let sx = 0, sy = 0; if (joy && Math.hypot(joy.dx, joy.dy) > 6) { sx = joy.dx / 55; sy = joy.dy / 55; }
+    if (keys.has('ArrowUp') || keys.has('w')) sy -= 1; if (keys.has('ArrowDown') || keys.has('s')) sy += 1; if (keys.has('ArrowLeft') || keys.has('a')) sx -= 1; if (keys.has('ArrowRight') || keys.has('d')) sx += 1;
+    // screen directions to ground directions, given how the camera is turned
+    const c = Math.cos(camYaw), s = Math.sin(camYaw); return [sx * c + sy * s, -sx * s + sy * c].map(v => Math.max(-1, Math.min(1, v))); };
+  let sentAt = 0, lx = me.x, ly = me.y, tTime = 0;
+  view.start((dt, now) => { const M = S && S.match; if (!M) return; const t = Date.now() + M.skew; M.live = t >= M.playFrom;
     const frozen = !M.live && me.role === AR.chasers(M.mode);
-    if (!frozen && !M.auto) { const [vx, vy] = input(); if (vx || vy) { const q = AR.moveBy(L, me, vx, vy, A.speed[me.role] * dt * Math.min(1, Math.hypot(vx, vy))); me.x = q.x; me.y = q.y; } }
-    if (performance.now() - sentAt > 100 && (Math.abs(me.x - sx) > 0.01 || Math.abs(me.y - sy) > 0.01 || performance.now() - sentAt > 1000)) { sentAt = performance.now(); sx = me.x; sy = me.y; X.send({ a: 'pos', id: M.id, x: +me.x.toFixed(3), y: +me.y.toFixed(3) }); }
-    draw(g, W, H, dpr, tile, bg, M, t); hud(roleB, clock, info, big, M, t);
-    requestAnimationFrame(frame); };
-  requestAnimationFrame(frame);
-  S.ui = { feed }; S.stop = () => { on = false; ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); };
+    if (me.role !== role0) { role0 = me.role; rebuildMe(me.role); torchFor(); }
+    // your own moves happen here straight away; the server checks them with the same rules
+    let vx = 0, vy = 0; if (!frozen && !M.auto) { const [ix, iy] = input(), mag = Math.min(1, Math.hypot(ix, iy)); if (mag > 0.05) { const q = AR.moveBy(L, me, ix, iy, A.speed[me.role] * dt * mag); vx = (q.x - me.x) / dt; vy = (q.y - me.y) / dt; me.x = q.x; me.y = q.y; } }
+    if (me.fx != null) { const k = Math.min(1, dt * 10); me.x += (me.fx - me.x) * k; me.y += (me.fy - me.y) * k; if (Math.hypot(me.fx - me.x, me.fy - me.y) < 0.05) me.fx = me.fy = null; } // a correction eases in
+    mine.setPos(me.x, me.y); mine.animate(dt, vx, vy);
+    const hidden = M.mode === 'hide' && me.role === 'hider' && AR.spotAt(L, me); mine.body.visible = !hidden; ghost.material.opacity = hidden ? 0.55 : 0.28;
+    if (now - sentAt > 66 && (Math.abs(me.x - lx) > 0.01 || Math.abs(me.y - ly) > 0.01 || now - sentAt > 1000)) { sentAt = now; lx = me.x; ly = me.y; X.send({ a: 'pos', id: M.id, x: +me.x.toFixed(3), y: +me.y.toFixed(3) }); }
+    // everyone else, a tenth of a second behind, smoothly
+    const back = performance.now() - 110;
+    for (const [i, o] of M.others) { let P = people.get(i); const R0 = M.roster[i] || { h: '?' };
+      if (!P || P.role !== (o.ch ? AR.chasers(M.mode) : AR.runners(M.mode))) { if (P) view.scene.remove(P.group); P = W.makePerson(R0.h, o.ch ? AR.chasers(M.mode) : AR.runners(M.mode)); const tag = W.nameTag('@' + R0.h, o.ch ? '#ffb3a8' : '#ffffff'); tag.position.y = 2.35; P.group.add(tag); view.scene.add(P.group); people.set(i, P); }
+      const b = o.buf; if (!b.length) continue; let x = b[b.length - 1][1], y = b[b.length - 1][2];
+      for (let k = b.length - 1; k > 0; k--) if (b[k - 1][0] <= back && back <= b[k][0]) { const u = (back - b[k - 1][0]) / Math.max(1, b[k][0] - b[k - 1][0]); x = b[k - 1][1] + (b[k][1] - b[k - 1][1]) * u; y = b[k - 1][2] + (b[k][2] - b[k - 1][2]) * u; break; }
+      const pvx = (x - P.x) / Math.max(dt, 0.001), pvy = (y - P.z) / Math.max(dt, 0.001); P.setPos(x, y); P.animate(dt, pvx, pvy);
+      P.group.visible = !(o.gone && performance.now() - o.gone > 300); P.body.visible = !o.hid; }
+    for (const [i, P] of people) if (!M.others.has(i)) { view.scene.remove(P.group); people.delete(i); }
+    // cash bags
+    while (bags.length < M.bags.length) { const b = new THREE.Mesh(bagGeo, bagMat); b.castShadow = false; view.scene.add(b); bags.push(b); }
+    bags.forEach((b, k) => { const p = M.bags[k]; b.visible = !!p; if (p) b.position.set(p[0], 0.8 + Math.sin(now / 300 + k) * 0.15, p[1]); b.rotation.y = now / 600; });
+    for (const rg of rings) { rg.visible = !M.live && me.role === 'hider'; rg.scale.setScalar(1 + Math.sin(now / 250) * 0.06); }
+    // the camera follows (and the torch points where you're going)
+    look.lerp(new THREE.Vector3(me.x, 0, me.y), Math.min(1, dt * 6)); view.camera.position.set(look.x + Math.sin(camYaw) * camDist, camH, look.z + Math.cos(camYaw) * camDist); view.camera.lookAt(look.x, 1, look.z); view.cut.A.value.set(me.x, 1.0, me.y); view.cut.B.value.copy(view.camera.position); view.cut.R.value = 9;
+    if (torchLight) { const h = mine.group.rotation.y; torchLight.position.set(me.x, 1.6, me.y); torchLight.target.position.set(me.x + Math.sin(h) * 8, 0, me.y + Math.cos(h) * 8); }
+    if (frozen) { view.renderer.toneMappingExposure = 0.08; } else if (view.renderer.toneMappingExposure < 0.5) view.setTime(X.minute ? X.minute() : 720);
+    if ((tTime += dt) > 30) { tTime = 0; view.setTime(X.minute ? X.minute() : 720); torchFor(); }
+    hud(roleB, clock, info, big, M, t); });
+  S.ui = { feed }; S.stop = () => { view.dispose(); ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); };
 }
 function snap(m) {
   const M = S.match, me = M.me, now = performance.now();
   if (m.role !== me.role) { if (me.role && m.role === AR.chasers(M.mode)) { buzz(300); say(M.mode === 'tag' ? '🚓 You were caught! Now you\'re a hunter.' : '🔦 You were found! Now help seek.'); } me.role = m.role; }
-  if (m.fix) { me.x = m.fix[0]; me.y = m.fix[1]; }
+  if (m.fix) { if (Math.hypot(m.fix[0] - me.x, m.fix[1] - me.y) > 6) { me.x = m.fix[0]; me.y = m.fix[1]; } else { me.fx = m.fix[0]; me.fy = m.fix[1]; } }
   M.auto = !!m.auto; if (M.auto) { /* the computer is playing for you until you move again */ }
   M.tl = m.tl; M.n = m.n; if (m.sc > M.sc) buzz(30); M.sc = m.sc; if (m.b) M.bags = m.b;
   const seen = new Set();
@@ -109,68 +150,6 @@ function hud(roleB, clock, info, big, M, t) {
 }
 
 // The block itself, painted once into its own picture.
-function paintBlock(L, tile, dpr) {
-  const c = document.createElement('canvas'); c.width = Math.round(L.W * tile * dpr); c.height = Math.round(L.H * tile * dpr); const g = c.getContext('2d'); g.scale(dpr, dpr);
-  const T = tile;
-  for (let y = 0; y < L.H; y++) for (let x = 0; x < L.W; x++) { const k = y * L.W + x, lk = L.look[k];
-    g.fillStyle = lk === 2 ? ((x + y) % 2 ? '#7DB45A' : '#78AE55') : lk === 1 ? '#C9BFAE' : '#5A5A63'; g.fillRect(x * T, y * T, T + 0.5, T + 0.5);
-    if (lk === 1) { g.strokeStyle = 'rgba(0,0,0,.08)'; g.strokeRect(x * T + 0.5, y * T + 0.5, T - 1, T - 1); } }
-  // road markings
-  g.strokeStyle = 'rgba(242,201,76,.5)'; g.lineWidth = Math.max(2, T * 0.06); g.setLineDash([T * 0.4, T * 0.4]);
-  for (let y = 0; y < L.H; y++) { let run = 0; for (let x = 0; x <= L.W; x++) { const open = x < L.W && L.look[y * L.W + x] === 0 && !L.grid[y * L.W + x]; if (open) run++; else { if (run >= 4 && y > 0 && L.look[(y - 1) * L.W + x - 1] === 0) { g.beginPath(); g.moveTo((x - run) * T, y * T); g.lineTo(x * T, y * T); g.stroke(); } run = 0; } } }
-  g.setLineDash([]);
-  const B = ['#C8473D', '#E8DFC9', '#9CC3D9', '#D9B98A', '#B9A3D0', '#8FBF9F'];
-  for (const b of L.blocks) { if (b.park) continue; const w = Math.min(b.w, L.W - 1 - b.x), h = Math.min(b.h, L.H - 1 - b.y); if (w <= 0 || h <= 0) continue;
-    const x = b.x * T, y = b.y * T, wall = T * 0.35;
-    g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x + 6, y + 6, w * T, h * T);
-    g.fillStyle = '#6E655A'; g.fillRect(x, y + h * T - wall, w * T, wall); // the front wall
-    g.fillStyle = B[b.hue % B.length]; g.fillRect(x, y, w * T, h * T - wall); g.strokeStyle = '#2B2621'; g.lineWidth = 2; g.strokeRect(x + 1, y + 1, w * T - 2, h * T - 2);
-    g.fillStyle = 'rgba(255,255,255,.18)'; for (let i = 0; i < w; i++) g.fillRect(x + i * T + T * 0.2, y + T * 0.2, T * 0.25, T * 0.25); // roof vents
-    g.fillStyle = '#F2E6B8'; for (let i = 0; i < w; i++) g.fillRect(x + i * T + T * 0.3, y + h * T - wall + wall * 0.25, T * 0.4, wall * 0.45); }
-  // cars, benches and trees
-  const CAR = ['#E4572E', '#4A7BD9', '#F2C94C', '#F4F4F0', '#3CC46A'];
-  for (let y = 0; y < L.H; y++) for (let x = 0; x < L.W; x++) { if (L.grid[y * L.W + x] !== 2) continue; const cx = x * T + T / 2, cy = y * T + T / 2;
-    if (L.look[y * L.W + x] === 2) { g.fillStyle = 'rgba(0,0,0,.2)'; g.beginPath(); g.arc(cx + 3, cy + 4, T * 0.45, 0, 7); g.fill(); g.fillStyle = '#3F7D32'; g.beginPath(); g.arc(cx, cy, T * 0.45, 0, 7); g.fill(); g.strokeStyle = '#2B2621'; g.lineWidth = 1.5; g.stroke(); g.fillStyle = '#5A9E48'; g.beginPath(); g.arc(cx - T * 0.12, cy - T * 0.12, T * 0.2, 0, 7); g.fill(); }
-    else { g.fillStyle = CAR[(x * 7 + y * 3) % CAR.length]; const w = T * 0.62, h = T * 0.9; g.beginPath(); if (g.roundRect) g.roundRect(cx - w / 2, cy - h / 2, w, h, 6); else g.rect(cx - w / 2, cy - h / 2, w, h); g.fill(); g.strokeStyle = '#2B2621'; g.lineWidth = 1.5; g.stroke(); g.fillStyle = 'rgba(30,40,60,.7)'; g.fillRect(cx - w * 0.35, cy - h * 0.25, w * 0.7, h * 0.18); } }
-  // hiding spots
-  for (const s of L.spots) { const cx = s.x * T, cy = s.y * T, r = T * 0.36; g.strokeStyle = '#2B2621'; g.lineWidth = 1.5;
-    if (s.k === 'bush') { g.fillStyle = '#2F6B2A'; for (const [dx, dy] of [[-0.4, 0.1], [0.4, 0.1], [0, -0.3], [0, 0.25]]) { g.beginPath(); g.arc(cx + dx * r, cy + dy * r, r * 0.65, 0, 7); g.fill(); } }
-    else if (s.k === 'bin') { g.fillStyle = '#3B7A57'; g.beginPath(); g.arc(cx, cy, r * 0.8, 0, 7); g.fill(); g.stroke(); g.fillStyle = '#2C5E43'; g.beginPath(); g.arc(cx, cy, r * 0.5, 0, 7); g.fill(); }
-    else if (s.k === 'crate') { g.fillStyle = '#A9743F'; g.fillRect(cx - r * 0.8, cy - r * 0.8, r * 1.6, r * 1.6); g.strokeRect(cx - r * 0.8, cy - r * 0.8, r * 1.6, r * 1.6); g.beginPath(); g.moveTo(cx - r * 0.8, cy - r * 0.8); g.lineTo(cx + r * 0.8, cy + r * 0.8); g.moveTo(cx + r * 0.8, cy - r * 0.8); g.lineTo(cx - r * 0.8, cy + r * 0.8); g.stroke(); }
-    else { g.fillStyle = '#3A2A1E'; g.fillRect(cx - r * 0.7, cy - r, r * 1.4, r * 2); g.strokeRect(cx - r * 0.7, cy - r, r * 1.4, r * 2); g.fillStyle = '#F2C94C'; g.beginPath(); g.arc(cx + r * 0.4, cy, 2, 0, 7); g.fill(); } }
-  return { c, dpr };
-}
-function person(g, x, y, T, col, chaser, me, alpha, name) {
-  g.globalAlpha = alpha; const r = T * 0.3;
-  g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(x + 2, y + r * 0.9, r, r * 0.4, 0, 0, 7); g.fill();
-  g.fillStyle = col; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.strokeStyle = me ? '#fff' : '#2B2621'; g.lineWidth = me ? 3 : 2; g.stroke();
-  g.fillStyle = '#7A4E2D'; g.beginPath(); g.arc(x, y - r * 0.15, r * 0.5, 0, 7); g.fill();
-  if (chaser) { g.fillStyle = '#1E2A44'; g.beginPath(); g.arc(x, y - r * 0.3, r * 0.52, Math.PI, 0); g.fill(); g.fillStyle = '#F2C94C'; g.fillRect(x - 2, y - r * 0.75, 4, 4); }
-  if (name) { g.font = `700 ${Math.max(10, T * 0.26)}px system-ui`; g.textAlign = 'center'; g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.6)'; g.strokeText(name, x, y - r - 6); g.fillStyle = '#fff'; g.fillText(name, x, y - r - 6); }
-  g.globalAlpha = 1;
-}
-function draw(g, W, H, dpr, T, bg, M, t) {
-  const L = M.L, me = M.me, cx = Math.max(Math.min(me.x * T, L.W * T - W / 2), W / 2), cy = Math.max(Math.min(me.y * T, L.H * T - H / 2 + 40), H / 2 - 60);
-  const ox = W / 2 - (L.W * T <= W ? L.W * T / 2 : cx), oy = H / 2 - (L.H * T <= H ? L.H * T / 2 : cy);
-  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#2B2621'; g.fillRect(0, 0, W, H);
-  if (bg) { const sx = Math.max(0, -ox), sy = Math.max(0, -oy); g.drawImage(bg.c, sx * bg.dpr, sy * bg.dpr, Math.min(W, L.W * T - sx) * bg.dpr, Math.min(H, L.H * T - sy) * bg.dpr, Math.max(0, ox), Math.max(0, oy), Math.min(W, L.W * T - sx), Math.min(H, L.H * T - sy)); }
-  g.translate(ox, oy);
-  const hiding = M.mode === 'hide' && me.role === 'hider';
-  if (hiding && !M.live) for (const s of L.spots) { g.strokeStyle = 'rgba(124,255,178,.9)'; g.lineWidth = 3; g.beginPath(); g.arc(s.x * T, s.y * T, T * 0.5 + Math.sin(t / 200) * 3, 0, 7); g.stroke(); }
-  for (const [x, y] of M.bags) { const bx = x * T, by = y * T + Math.sin(t / 250 + x) * 3; g.fillStyle = '#E2B13C'; g.beginPath(); g.arc(bx, by, T * 0.22, 0, 7); g.fill(); g.strokeStyle = '#2B2621'; g.lineWidth = 2; g.stroke(); g.fillStyle = '#2B2621'; g.font = `900 ${T * 0.26}px system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('$', bx, by + 1); g.textBaseline = 'alphabetic'; }
-  // everyone else, a tenth of a second behind, smoothly
-  const now = performance.now(), back = now - 110;
-  for (const [i, o] of M.others) { if (o.gone && now - o.gone > 300) continue; const b = o.buf; if (!b.length) continue;
-    let x = b[b.length - 1][1], y = b[b.length - 1][2]; for (let k = b.length - 1; k > 0; k--) if (b[k - 1][0] <= back && back <= b[k][0]) { const u = (back - b[k - 1][0]) / Math.max(1, b[k][0] - b[k - 1][0]); x = b[k - 1][1] + (b[k][1] - b[k - 1][1]) * u; y = b[k - 1][2] + (b[k][2] - b[k - 1][2]) * u; break; }
-    const R0 = M.roster[i] || { h: '?' }; person(g, x * T, y * T, T, o.ch ? '#C8473D' : COLS[hash(R0.h) % COLS.length], !!o.ch, false, o.hid ? 0.45 : o.gone ? 0.4 : 1, '@' + R0.h); }
-  const chaser = me.role === AR.chasers(M.mode), hidden = hiding && AR.spotAt(L, me);
-  person(g, me.x * T, me.y * T, T, chaser ? '#C8473D' : '#2E3440', chaser, true, hidden ? 0.55 : 1, 'You');
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  // a seeker only sees so far; while counting, nothing at all
-  if (M.mode === 'hide' && chaser) { const px = ox + me.x * T, py = oy + me.y * T, R = A.sight * T;
-    if (!M.live) { g.fillStyle = 'rgba(15,12,10,.94)'; g.fillRect(0, 0, W, H); }
-    else { const gr = g.createRadialGradient(px, py, R * 0.55, px, py, R); gr.addColorStop(0, 'rgba(15,12,10,0)'); gr.addColorStop(1, 'rgba(15,12,10,.82)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); } }
-}
 function end(m) {
   S.stop && S.stop(); S.phase = 'end'; const root = S.root; root.innerHTML = ''; buzz(m.won ? [30, 40, 30] : 150);
   const M0 = MODES[m.mode], RU = AR.runners(m.mode);

@@ -68,22 +68,34 @@ export class Arena {
     const nBots = Math.max(0, A.players - humans.length); // the computer fills the rest
     const bots = nBots ? (await pool.query('select id, handle from citizens where pass_hash is null and home_id is not null and handle is not null order by random() limit $1', [nBots])).rows : [];
     while (bots.length < nBots) bots.push({ id: 'bot' + bots.length, handle: ['Kemi', 'Tunde', 'Ada', 'Bayo', 'Zainab', 'Chidi'][bots.length % 6] + '_' + (bots.length + 1) });
-    const seed = crypto.randomInt(1, 2 ** 31), L = AR.genArena(seed), all = [...humans.map(h => ({ id: h.id, h: h.h, bot: false, human: true })), ...bots.map(b => ({ id: 'b:' + b.id, h: b.handle, bot: true, human: false }))];
+    const seed = crypto.randomInt(1, 2 ** 31), wire = await this.area(humans[0]?.id, seed), L = AR.prepare({ ...wire }), all = [...humans.map(h => ({ id: h.id, h: h.h, bot: false, human: true })), ...bots.map(b => ({ id: 'b:' + b.id, h: b.handle, bot: true, human: false }))];
     for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
-    const nCh = Math.max(1, Math.round(all.length / 4)), M = { id: crypto.randomUUID(), mode, seed, L, started: Date.now(), humans: humans.length, feed: [], bags: [], over: false };
+    const nCh = Math.max(1, Math.round(all.length / 4)), M = { id: crypto.randomUUID(), mode, seed, L, wire, started: Date.now(), humans: humans.length, feed: [], bags: [], over: false };
     const hideMs = MODES[mode].hide * 1000; M.playFrom = M.started + hideMs; M.until = M.playFrom + MODES[mode].play * 1000;
     // the computer's players take the chasing parts first, so people get to run and hide
     all.sort((a, b) => (b.bot ? 1 : 0) - (a.bot ? 1 : 0)); const roles = all.map((p, i) => i < nCh ? AR.chasers(mode) : AR.runners(mode));
-    M.players = all.map((p, i) => { const ch = roles[i] === AR.chasers(mode), at = ch ? L.corners[i % L.corners.length] : { x: L.spawn.x + (rand() - 0.5) * 2, y: L.spawn.y + (rand() - 0.5) * 2 };
+    M.players = all.map((p, i) => { const ch = roles[i] === AR.chasers(mode), at = ch ? L.corners[i % L.corners.length] : { x: L.spawn.x + (rand() - 0.5) * 4, y: L.spawn.y + (rand() - 0.5) * 4 };
       const pos = AR.fits(L, at.x, at.y) ? at : L.spawn;
-      return { ...p, i, role: roles[i], first: roles[i], x: pos.x, y: pos.y, out: false, catches: 0, bags: 0, seenAt: Date.now(), lastPos: Date.now(), ai: {}, caughtAt: 0 }; });
+      return { ...p, i, role: roles[i], first: roles[i], x: pos.x, y: pos.y, out: false, catches: 0, bags: 0, seenAt: Date.now(), lastPos: Date.now(), credit: 2, ai: {}, caughtAt: 0 }; });
     M.players.sort((a, b) => a.i - b.i);
     if (mode === 'tag') for (let i = 0; i < 6; i++) M.bags.push(this.freeTile(M));
     this.matches.set(M.id, M); for (const p of M.players) if (p.human) this.inMatch.set(p.id, M.id);
     this.send(M.players.filter(p => p.human).map(p => [p.id, this.startMsg(M, p)]));
   }
-  startMsg(M, p) { return { k: 'start', id: M.id, mode: M.mode, seed: M.seed, you: p ? p.i : -1, roster: M.players.map(q => ({ i: q.i, h: q.h, bot: q.bot && !q.human })), playFrom: M.playFrom, until: M.until, now: Date.now(), x: p?.x, y: p?.y, role: p?.role }; }
-  freeTile(M) { const L = M.L; for (let i = 0; i < 200; i++) { const x = 1 + Math.floor(rand() * (L.W - 2)) + 0.5, y = 1 + Math.floor(rand() * (L.H - 2)) + 0.5; if (AR.fits(L, x, y) && M.players.every(p => Math.hypot(p.x - x, p.y - y) > 2.5)) return { x, y }; } return { ...L.spawn }; }
+  startMsg(M, p) { return { k: 'start', id: M.id, mode: M.mode, seed: M.seed, L: M.wire, you: p ? p.i : -1, roster: M.players.map(q => ({ i: q.i, h: q.h, bot: q.bot && !q.human })), playFrom: M.playFrom, until: M.until, now: Date.now(), x: p?.x, y: p?.y, role: p?.role }; }
+  freeTile(M) { const L = M.L; for (let i = 0; i < 300; i++) { const x = (1 + Math.floor(rand() * (L.W - 2))) * AR.CELL + AR.CELL / 2, y = (1 + Math.floor(rand() * (L.H - 2))) * AR.CELL + AR.CELL / 2; if (AR.fits(L, x, y) && M.players.every(p => Math.hypot(p.x - x, p.y - y) > 12)) return { x, y }; } return { ...L.spawn }; }
+  // The play area: the real streets around the first player's home (or the middle of town).
+  async area(pid, seed) {
+    const home = pid ? (await pool.query('select h.x, h.y from citizens c join buildings h on h.id = c.home_id where c.id = $1', [pid])).rows[0] : null;
+    const at = home || (await pool.query('select round(avg(x)) x, round(avg(y)) y from buildings where done and not ruin')).rows[0] || { x: 0, y: 0 };
+    const x0 = Math.round(Number(at.x || 0)) - Math.floor(A.tilesW / 2), y0 = Math.round(Number(at.y || 0)) - Math.floor(A.tilesH / 2), x1 = x0 + A.tilesW, y1 = y0 + A.tilesH;
+    const m = 8, X0 = x0 - m, Y0 = y0 - m, X1 = x1 + m, Y1 = y1 + m; // the town around it too, as scenery
+    const [b, r, w] = await Promise.all([
+      pool.query('select id, type, x, y, rot, level, name from buildings where done and not ruin and x > $1 - 7 and x < $2 and y > $3 - 7 and y < $4 limit 900', [X0, X1, Y0, Y1]),
+      pool.query('select x, y, type from roads where x >= $1 and x < $2 and y >= $3 and y < $4 limit 3000', [X0, X1, Y0, Y1]),
+      pool.query('select x, y from water where x >= $1 and x < $2 and y >= $3 and y < $4 limit 3000', [X0, X1, Y0, Y1])]);
+    return AR.arenaFromMap({ x0, y0, buildings: b.rows, roads: r.rows.map(q => [q.x, q.y, q.type]), water: w.rows.map(q => [q.x, q.y]) }, seed);
+  }
 
   // A player's phone says where they are now. It's checked: no faster than the role allows, never through a wall.
   pos(pid, m) {
@@ -91,9 +103,13 @@ export class Arena {
     const p = M.players.find(x => x.id === pid); if (!p || p.out) return;
     const now = Date.now(), x = Number(m.x), y = Number(m.y); p.seenAt = now; if (p.left) return; p.bot = false;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    const frozen = now < M.playFrom && p.role === AR.chasers(M.mode), dt = Math.min(1, (now - p.lastPos) / 1000), max = frozen ? 0.05 : A.speed[p.role] * dt * 1.35 + 0.25;
-    if (Math.hypot(x - p.x, y - p.y) > max || !AR.fits(M.L, x, y)) { p.fix = true; return; }
-    p.x = x; p.y = y; p.lastPos = now;
+    // how far you may have moved: a running allowance that refills at your top speed (with some slack), so messages
+    // that arrive bunched together over a jumpy connection are never mistaken for running too fast
+    const frozen = now < M.playFrom && p.role === AR.chasers(M.mode), dt = Math.min(2, (now - p.lastPos) / 1000);
+    p.credit = frozen ? 0.3 : Math.min(A.speed[p.role] * 1.6, p.credit + A.speed[p.role] * dt * 1.25); p.lastPos = now;
+    const d = Math.hypot(x - p.x, y - p.y);
+    if (d > p.credit + 0.3 || !AR.fits(M.L, x, y)) { p.fix = true; return; }
+    p.credit = Math.max(0, p.credit - d); p.x = x; p.y = y;
   }
 
   step(M, now) {
@@ -105,7 +121,7 @@ export class Arena {
       for (const c of M.players) { if (c.role !== CH) continue;
         for (const v of M.players) { if (v.role !== RU || v.out) continue; const d = Math.hypot(c.x - v.x, c.y - v.y);
           if (d <= (mode === 'tag' ? A.tagR : A.findR)) { v.role = CH; v.caughtAt = now; c.catches++; M.feed.push(mode === 'tag' ? `🏃 @${c.h} caught @${v.h}!` : `🙈 @${c.h} found @${v.h}!`); } } }
-      if (mode === 'tag') for (const v of M.players) { if (v.role !== RU) continue; const bi = M.bags.findIndex(b => Math.hypot(b.x - v.x, b.y - v.y) < 0.7); if (bi >= 0) { v.bags++; M.bags[bi] = this.freeTile(M); M.feed.push(`💰 @${v.h} grabbed a bag`); } }
+      if (mode === 'tag') for (const v of M.players) { if (v.role !== RU) continue; const bi = M.bags.findIndex(b => Math.hypot(b.x - v.x, b.y - v.y) < 1.3); if (bi >= 0) { v.bags++; M.bags[bi] = this.freeTile(M); M.feed.push(`💰 @${v.h} grabbed a bag`); } }
       const left = M.players.filter(p => p.role === RU).length;
       if (!left || now >= M.until) return this.end(M, now);
     }
@@ -130,7 +146,7 @@ export class Arena {
   // The computer's players.
   ai(M, p, now, live) {
     const L = M.L, CH = AR.chasers(M.mode), RU = AR.runners(M.mode), sp = A.speed[p.role] * (p.human ? 1 : 0.9) * A.tick, a = p.ai;
-    const go = (tx, ty) => { if (!a.wp || now - a.at > 400 || Math.hypot(a.wp.x - p.x, a.wp.y - p.y) < 0.15) { a.wp = AR.nextStep(L, p, { x: tx, y: ty }); a.at = now; }
+    const go = (tx, ty) => { if (!a.wp || now - a.at > 400 || Math.hypot(a.wp.x - p.x, a.wp.y - p.y) < 0.4) { a.wp = AR.nextStep(L, p, { x: tx, y: ty }); a.at = now; }
       const q = AR.moveBy(L, p, a.wp.x - p.x, a.wp.y - p.y, Math.min(sp, Math.hypot(a.wp.x - p.x, a.wp.y - p.y))); p.x = q.x; p.y = q.y; };
     if (p.role === CH) {
       if (!live) return; // seekers wait while the hiders hide
@@ -141,17 +157,17 @@ export class Arena {
       a.checked = a.checked || new Set(); const spots = L.spots.filter((s, i) => !a.checked.has(i)).map(s => [s, L.spots.indexOf(s)]);
       if (!spots.length) a.checked.clear();
       spots.sort((u, v) => Math.hypot(u[0].x - p.x, u[0].y - p.y) - Math.hypot(v[0].x - p.x, v[0].y - p.y));
-      const t = spots[0]; if (t) { if (Math.hypot(t[0].x - p.x, t[0].y - p.y) < 0.6) a.checked.add(t[1]); return go(t[0].x, t[0].y); }
+      const t = spots[0]; if (t) { if (Math.hypot(t[0].x - p.x, t[0].y - p.y) < 1.5) a.checked.add(t[1]); return go(t[0].x, t[0].y); }
       return;
     }
     // running and hiding
     if (M.mode === 'hide') {
       if (a.spot == null || (M.players.some(o => o !== p && o.role === RU && o.ai?.spot === a.spot && o.i < p.i))) { const free = L.spots.map((s, i) => i).filter(i => !M.players.some(o => o !== p && o.role === RU && o.ai?.spot === i)); a.spot = free.length ? free[Math.floor(rand() * free.length)] : 0; }
-      const s = L.spots[a.spot]; if (Math.hypot(s.x - p.x, s.y - p.y) > 0.2) go(s.x, s.y); return;
+      const s = L.spots[a.spot]; if (Math.hypot(s.x - p.x, s.y - p.y) > 0.4) go(s.x, s.y); return;
     }
-    const hunters = M.players.filter(h => h.role === CH), near = hunters.filter(h => Math.hypot(h.x - p.x, h.y - p.y) < 5);
+    const hunters = M.players.filter(h => h.role === CH), near = hunters.filter(h => Math.hypot(h.x - p.x, h.y - p.y) < 16);
     if (near.length) { // flee: of the nearby open tiles, the one furthest from the hunters
-      if (!a.flee || now - a.fleeAt > 600) { let best = null, bv = -1; for (let i = 0; i < 16; i++) { const ang = i / 16 * Math.PI * 2, tx = p.x + Math.cos(ang) * 3, ty = p.y + Math.sin(ang) * 3; if (!AR.fits(L, tx, ty)) continue; const v = Math.min(...near.map(h => Math.hypot(h.x - tx, h.y - ty))); if (v > bv) { bv = v; best = { x: tx, y: ty }; } } a.flee = best; a.fleeAt = now; }
+      if (!a.flee || now - a.fleeAt > 600) { let best = null, bv = -1; for (let i = 0; i < 16; i++) { const ang = i / 16 * Math.PI * 2, tx = p.x + Math.cos(ang) * 8, ty = p.y + Math.sin(ang) * 8; if (!AR.fits(L, tx, ty)) continue; const v = Math.min(...near.map(h => Math.hypot(h.x - tx, h.y - ty))); if (v > bv) { bv = v; best = { x: tx, y: ty }; } } a.flee = best; a.fleeAt = now; }
       if (a.flee) return go(a.flee.x, a.flee.y);
     }
     const bag = M.bags.slice().sort((u, v) => Math.hypot(u.x - p.x, u.y - p.y) - Math.hypot(v.x - p.x, v.y - p.y))[0]; if (bag) go(bag.x, bag.y);

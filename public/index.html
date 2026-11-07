@@ -880,6 +880,8 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .afeed{position:absolute;top:calc(56px + env(safe-area-inset-top));left:12px;right:12px;display:flex;flex-direction:column;gap:4px;align-items:center;pointer-events:none;z-index:2}
 .aline{background:rgba(43,38,33,.85);color:#fff;border-radius:10px;padding:4px 10px;font-size:13.5px;font-weight:700;animation:mgpop .3s ease-out 1}
 .abig{position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);font-size:clamp(26px,8vw,44px);font-weight:900;color:#F2C94C;text-shadow:0 4px 0 #2B2621;text-align:center;pointer-events:none;z-index:2;white-space:nowrap}
+.speedo{position:absolute;right:14px;bottom:calc(70px + env(safe-area-inset-bottom));background:rgba(20,18,16,.7);color:#fff;font:800 22px/1 system-ui;padding:8px 12px;border-radius:12px;font-variant-numeric:tabular-nums;z-index:2;pointer-events:none}
+.astick{display:none;position:fixed;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.4);pointer-events:none;z-index:3}.astick i{position:absolute;left:50%;top:50%;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 2px 8px rgba(0,0,0,.4)}
 .mg.arena .mgx.aquit{position:absolute;top:auto;bottom:calc(14px + env(safe-area-inset-bottom));right:14px;z-index:3;background:rgba(246,241,230,.9)}
 @media (prefers-reduced-motion:reduce){.mgcount,.mg.siren,.mgpad.shake,.mgsock.spark{animation:none}}
 </style>
@@ -942,6 +944,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
   window.addEventListener('error',function(e){ if(window.__booted) return; var t=e.target; if((t&&t.tagName==='SCRIPT')||/module|export|import|SyntaxError|Unexpected/i.test(e.message||'')) setTimeout(function(){ rescue('error'); },200); },true);
   setTimeout(function(){ rescue('slow'); },45000); })();
 </script>
+<script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js","three/addons/":"/vendor/three-addons/"}}</script>
 <script type="module">
 window.__booted=true; try{ sessionStorage.removeItem('resurgence-reloaded'); const u=new URL(location.href); if(u.searchParams.has('r')){ u.searchParams.delete('r'); history.replaceState(null,'',u.pathname+u.search+u.hash); } }catch(e){} /* the code loaded: no rescue needed */
 import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank, carPaid, kindOf, carKind, ridden } from '/shared/catalog.js';
@@ -5787,9 +5790,9 @@ function outPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Go ou
   const fi=el('input',{type:'text',placeholder:'@friend',autocomplete:'off','aria-label':"Friend's username"});
   box.append(el('div',{class:'cbet'}, el('span',{text:'Visit a friend:'}), fi, el('button',{class:'btn',text:'Go',onclick:()=>meAction('/api/me/visit',{friend:fi.value},r=>`You're on your way to ${r.place}.`)}))); return box; }
 // What the street games borrow from the page: the live connection, and a few helpers.
-function arenaCtx(){ return {send:o=>{ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'arena',...o})); }catch(e){} },toast,fmt,me:()=>Me&&Me.handle,done:()=>{ loadMyMoney(); }}; }
+function arenaCtx(){ return {minute:()=>((gmAt(Date.now()+skew)%1440)+1440)%1440,send:o=>{ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'arena',...o})); }catch(e){} },toast,fmt,me:()=>Me&&Me.handle,done:()=>{ loadMyMoney(); }}; }
 // What the crime mini games borrow from the page.
-function crimeCtx(){ return {api,toast,fmt,avatarSVG,me:()=>Me&&Me.handle,done:()=>{ Acts.at=0; Heist.at=0; loadMyMoney(); const me=myCitizen(); if(me) detail.delete(me.id); if(sel) renderCard(true); }}; }
+function crimeCtx(){ return {minute:()=>((gmAt(Date.now()+skew)%1440)+1440)%1440,townTypes:()=>{ const n=new Map(); for(const b of D.buildings.values()) if(b.done!==false&&!b.ruin) n.set(b.type,(n.get(b.type)||0)+1); return [...n.keys()]; },api,toast,fmt,avatarSVG,me:()=>Me&&Me.handle,done:()=>{ Acts.at=0; Heist.at=0; loadMyMoney(); const me=myCitizen(); if(me) detail.delete(me.id); if(sel) renderCard(true); }}; }
 async function doCrime(kind, target){ const r=await meAction('/api/me/crime',{kind,target}); if(!r) return;
   toast(r.caught ? (r.jailed?`🚓 Caught! You were fined ${fmt(r.fine)} coins and locked up for ${mins(r.jailFor)} minutes.`:`🚓 Caught! You were fined ${fmt(r.fine)} coins.`) : `💰 You got away with ${fmt(r.loot)} coins.`); }
 // Crime odds come in three bands, set by how far the nearest Police station is from where it happens.

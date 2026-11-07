@@ -129,6 +129,7 @@ export class Housing {
       if (on.some(b => !b.done || Number(b.up_at))) throw new HttpError(409, 'Wait until the builders have finished.');
       const back = Math.floor((Number(p.price) + on.reduce((s, b) => s + Number(b.price || 0), 0)) * PROPERTY_RESALE);
       ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'land:sell', back, c.id); ch.touch(c); await ch.saveCitizen(c);
+      for (const b of on) await ch.ownerChanged(b.id, p.owner_id, null); // the seller pays rent again if they live there
       await ch.q('update buildings set plot_id = null, owner_id = null, owner_handle = null, bought_at = null, price = null where plot_id = $1', [p.id]); for (const b of on) ch.buildings.add(b.id);
       await ch.q('delete from plots where id = $1', [p.id]); ch.removedPlots.set(p.id, R.chunkKey(p.cx, p.cy));
       await this.closeOffers(ch, 'plot', p.id, 'withdrawn');
@@ -334,8 +335,8 @@ export class Housing {
       const p = (await ch.q('select * from plots where id = $1 for update', [t.id])).rows[0], on = (await ch.q('select * from buildings where plot_id = $1 for update', [t.id])).rows;
       const old = Number(p.price) + on.reduce((s, b) => s + Number(b.price || 0), 0), k = old > 0 ? price / old : 1; // what each part is worth now follows what was paid
       await ch.q('update plots set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [p.id, buyer.id, buyer.handle, now, Math.round(Number(p.price) * k)]); ch.plots.add(p.id);
-      for (const b of on) { await ch.q('update buildings set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [b.id, buyer.id, buyer.handle, now, Math.round(Number(b.price || 0) * k)]); ch.buildings.add(b.id); }
-    } else { await ch.q('update buildings set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [t.id, buyer.id, buyer.handle, now, price]); ch.buildings.add(t.id); }
+      for (const b of on) { await ch.ownerChanged(b.id, seller.id, buyer.id); await ch.q('update buildings set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [b.id, buyer.id, buyer.handle, now, Math.round(Number(b.price || 0) * k)]); ch.buildings.add(b.id); }
+    } else { await ch.ownerChanged(t.id, seller.id, buyer.id); await ch.q('update buildings set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [t.id, buyer.id, buyer.handle, now, price]); ch.buildings.add(t.id); }
     await ch.q("update offers set status = 'accepted', reply = $2, closed_at = $3 where id = $1", [o.id, reply || o.reply, now]);
     await this.closeOffers(ch, o.kind, t.id, 'sold', o.id);
     await this.world.actions?.notify(ch, buyer.id, 'offer', `🔑 Deal! ${o.label} is yours for ${fmt(price)} coins${fromBank ? ` (${fmt(fromBank)} came from your savings)` : ''}.`);

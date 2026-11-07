@@ -378,7 +378,7 @@ body.pane-max .composer textarea{height:70px}
 @keyframes tipin{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
 @keyframes tiphand{0%{transform:translateX(-40px)}35%{transform:translateX(40px)}50%,60%{transform:translateX(0) scale(1)}55%,65%{transform:scale(.8)}100%{transform:translateX(0)}}
 @media (prefers-reduced-motion:reduce){.landtip,.landtip .tiphand{animation:none}}
-.rsheet-bg.dock{background:transparent;pointer-events:none;align-items:flex-end;padding:0 10px calc(10px + env(safe-area-inset-bottom))}.rsheet-bg.dock .rsheet{pointer-events:auto;max-height:52vh;width:min(460px,100%);padding:10px 14px}.rsheet-bg.dock .bill{font-size:12.5px;margin:4px 0}.rsheet-bg.dock .bill td{padding:2px}.rsheet-bg.dock .hint{margin:4px 0;font-size:12px}.rsheet-bg.dock input[type=text]{margin:4px 0;padding:6px 10px}.rsheet input[type=text],.rsheet input[type=number],.rsheet textarea{width:100%;box-sizing:border-box;margin:6px 0;padding:8px 10px;border-radius:10px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:var(--glass-2,#fff);font:inherit;color:inherit}
+.rsheet-bg.dock{background:transparent;pointer-events:none;align-items:flex-end;padding:0 10px var(--dock-b,calc(10px + env(safe-area-inset-bottom)))}.rsheet-bg.dock details.charges{margin:4px 0;font-size:13px}.rsheet-bg.dock details.charges summary{cursor:pointer;font-weight:700}.rsheet-bg.dock .rsheet{pointer-events:auto;max-height:min(52vh,calc(100vh - var(--dock-b,0px) - 140px));width:min(460px,100%);padding:10px 14px}.rsheet-bg.dock .bill{font-size:12.5px;margin:4px 0}.rsheet-bg.dock .bill td{padding:2px}.rsheet-bg.dock .hint{margin:4px 0;font-size:12px}.rsheet-bg.dock input[type=text]{margin:4px 0;padding:6px 10px}.rsheet input[type=text],.rsheet input[type=number],.rsheet textarea{width:100%;box-sizing:border-box;margin:6px 0;padding:8px 10px;border-radius:10px;border:1px solid var(--glass-line,rgba(0,0,0,.15));background:var(--glass-2,#fff);font:inherit;color:inherit}
 .bill{width:100%;border-collapse:collapse;margin:8px 0;font-size:13.5px}.bill td{padding:4px 2px;border-bottom:1px dashed rgba(0,0,0,.12)}.bill td:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.bill tr.tot td{font-weight:800;border-bottom:none;border-top:1.5px solid currentColor}
 .warnline{margin:8px 0;padding:7px 10px;border-radius:10px;background:rgba(210,56,46,.12);color:#9E2A22;font-size:13px}
 .plotthumb{display:flex;align-items:center;justify-content:center;font-size:30px;background:rgba(143,196,99,.35);border-radius:12px}
@@ -622,6 +622,13 @@ body.clean #djBubble{display:none}
 body.mini #pane, body.mini #toolsRow, body.mini #card{display:none!important}
 #toolLabel{max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toolchip button{border:0;background:var(--accent);color:#fff;border-radius:999px;padding:4px 12px;font-weight:600}
+/* the tool bar (Turn, Undo, Hide menu, Done) always fits the screen: its label shortens first, the buttons never wrap */
+.toolchip{max-width:calc(100vw - 16px);box-sizing:border-box}
+.toolchip button{white-space:nowrap;flex:none}
+#toolLabel{flex:1 1 auto;min-width:0}
+@media (max-width:520px){ .toolchip{gap:6px;padding:5px 5px 5px 12px;font-size:13px} .toolchip button{padding:4px 10px} #toolLabel{max-width:none} }
+/* the radio host's bubble steps aside while a tool is in hand or a card or menu is open, so it never covers their buttons */
+body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBubble, body:has(#pane:not([hidden])) #djBubble{display:none}
 .overlay{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:20px;background:rgba(43,38,33,.35)}
 .overlay[hidden]{display:none}
 .found{padding:22px;max-width:380px;width:100%}
@@ -2519,7 +2526,7 @@ function drawDisasters(){ const now=Date.now()+skew; shake={x:0,y:0};
 let vehicleHits=[], lastStates=new Map(); // what the last frame drew, for taps
 
 /* ---------------- economy ---------------- */
-function pay(c){ const j=bOf(c.job), h=bOf(c.home); return { salary:j?T(j).work.salary:0, rent:h?T(h).home.rent:0 }; }
+function pay(c){ const j=bOf(c.job), h=bOf(c.home), own=h&&h.owner&&c.handle&&h.owner.toLowerCase()===String(c.handle).toLowerCase(); return { salary:j?T(j).work.salary:0, rent:h&&!own?T(h).home.rent:0 }; } // no rent in a home you own
 const today = () => Math.floor(gmNow()/1440);
 const treasury = () => S.meta ? treasuryOn(S.meta, today()) : 0;
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -3338,7 +3345,7 @@ function setTool(t){ tool=t; ghost=null; roadStart=null; if(t.kind!=='land'){ la
 $('toolDone').onclick=()=>setTool({kind:'pan'});
 // Minimise: tuck the menus away while keeping the chosen tool, so the whole map is free to build on.
 let mini=false;
-function setMini(on){ mini=!!on; document.body.classList.toggle('mini',mini); const b=$('toolMin'); if(b){ b.textContent=mini?'Show menu':'Hide menu'; b.setAttribute('aria-pressed',String(mini)); } }
+function setMini(on){ mini=!!on; document.body.classList.toggle('mini',mini); const b=$('toolMin'); if(b){ b.textContent=innerWidth<=520?(mini?'Menu':'Hide'):(mini?'Show menu':'Hide menu'); b.setAttribute('aria-pressed',String(mini)); } }
 $('toolMin').onclick=()=>setMini(!mini);
 $('toolTurn').onclick=turnTool; $('toolUndo').onclick=undoLast;
 addEventListener('keydown',e=>{ if((e.key==='r'||e.key==='R')&&!e.ctrlKey&&!e.metaKey&&!/INPUT|TEXTAREA/.test(e.target.tagName||'')) turnTool(); }); $('undoBtn').onclick=undoLast;
@@ -3349,11 +3356,12 @@ addEventListener('keydown',e=>{ if((e.key==='m'||e.key==='M') && !/INPUT|TEXTARE
 
 let activeTab=null, feedMode='posts';
 
-// The "My card" button: opens your own colonist card straight away (same as Find me), and shows as pressed while it's open.
+// The "My card" button: opens your own colonist card straight away, without moving the map (🎥 Follow me on the card
+// does that), and shows as pressed while it's open.
 function syncMyCardBtn(){ const b=document.querySelector('#toolsRow .tb[data-me]'); if(b) b.setAttribute('aria-pressed',String(myCardOpen())); }
 function myHandle(){ if(Store.canWrite) return S.meta&&S.meta.founder; let h=(Me&&Me.handle)||null; if(!h){ try{ const v=localStorage.getItem('settlement-me'); h=v&&v.startsWith('"')?JSON.parse(v):v; }catch(e){} } return h; }
 function myCardOpen(){ const h=myHandle(); if(!h||!sel||sel.kind!=='c') return false; const c=S.citizens.get(sel.id); return !!c&&c.handle===h; }
-function openMyCard(){ if(myCardOpen()){ closeCard&&closeCard(); buildToolbar(); return; } actTab=null; if(innerWidth<900) openTab(null); findMe(); setTimeout(buildToolbar,60); }
+function openMyCard(){ if(myCardOpen()){ closeCard&&closeCard(); buildToolbar(); return; } actTab=null; if(innerWidth<900) openTab(null); const h=myHandle(); if(h) openCitizen(h,{stay:true}); else findMe(); setTimeout(buildToolbar,60); }
 const PLAYER_TABS=new Set(['feed','people','races','top','chats']); // everyone's tabs; the rest are the developer's build menus
 // Find me is for signing in: once you're signed in (you have a password), My card does the same job, so it goes.
 function syncFindChip(){ const b=$('findBtn'); if(b&&b.parentElement) b.parentElement.style.display=(Me&&Me.token&&Me.handle)?'none':''; }
@@ -3470,8 +3478,9 @@ function coinsReload(c){ if(detailLoading.has(c.id)) return; detailLoading.add(c
 async function loadDetail(handle){ try{ const d=await api('/api/citizens/'+encodeURIComponent(handle)); detail.set(d.id,d); return d; }catch(e){ toast(e.message); return null; } }
 function selectCitizen(id){ const c=S.citizens.get(id); if(!c) return; if(auth&&auth.handle!==c.handle&&!auth.claimId) auth=null; sel={kind:'c',id,handle:c.handle}; follow=id; renderCard(); loadDetail(c.handle).then(()=>{ if(sel&&sel.id===id) renderCard(); }); }
 // Find anyone by name: residents fly the camera to their home; Outskirts residents show their place in the queue.
-async function openCitizen(handle){ const d=await loadDetail(handle); if(!d) return; const c=normC(d); pinned=c.id; S.citizens.set(c.id,c);
-  if(c.home){ const p=iso(c.home[2]+0.5,c.home[3]+0.5); cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.6); follow=c.id; } else follow=null;
+async function openCitizen(handle, o={}){ const d=await loadDetail(handle); if(!d) return; const c=normC(d); pinned=c.id; S.citizens.set(c.id,c);
+  if(o.stay) follow=null; /* My card: just the card; the camera stays put until you tap 🎥 Follow me */
+  else if(c.home){ const p=iso(c.home[2]+0.5,c.home[3]+0.5); cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.6); follow=c.id; } else follow=null;
   sel={kind:'c',id:c.id,handle:c.handle}; if(innerWidth<900) openTab(null); renderCard(); }
 // The developer's job and home pickers: the nearest places first, full ones greyed out.
 async function openPicker(kind,c){ const at=c.home||c.job; const ctr=worldToTileF(cam.x,cam.y); const x=at?at[2]:Math.round(ctr.x), y=at?at[3]:Math.round(ctr.y);
@@ -5131,7 +5140,7 @@ function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🏠
   if(H.home){ const b=D.buildings.get(H.home.id);
     box.append(el('p',{class:'jobnow'}, 'You live at ', el('b',{text:H.home.name}), H.home.mine?' (you own it)':'', '.'),
       H.home.where?el('p',{class:'hint',text:`📍 ${H.home.where[0].toUpperCase()+H.home.where.slice(1)}.`}):'',
-      el('p',{class:'hint',text:`Rent is ${fmt(H.home.rent)} a day, taken from your wages.`}),
+      el('p',{class:'hint',text:H.home.mine?'You own this home, so you pay no rent.':`Rent is ${fmt(H.home.rent)} a day, taken from your wages.`}),
       el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Go see it',onclick:()=>goToBuilding(b||{id:H.home.id,x:H.home.x,y:H.home.y})}),
         el('button',{class:'btn danger',text:'Leave this home',onclick:()=>toast(`Move out of ${H.home.name}?${H.hasJob?' You’ll leave your job too, until you rent somewhere new.':''}`,'Move out',async()=>{ const r=await meAction('/api/me/home/leave',{},'You moved out. Find a home and tap 🔑 Rent here to move in somewhere.'); if(r){ MyHome.load(true); } })})),
       el('p',{class:'hint',text:'To move, tap any home on the map and choose 🔑 Rent here. You’ll move out of here automatically.'})); }
@@ -5184,6 +5193,9 @@ const Loc={
 // ---- Land: buying plots, building on them, upgrades and offers between colonists ----
 // While choosing where to build, the camera moves the spot into the top part of the screen so the docked panel below doesn't cover it.
 function showAbove(x,y,w,d,h){ const q=iso(x+w/2,y+d/2); cam.x=q.x; cam.y=q.y-(h||0)/2+ch*0.24/cam.z; follow=null; }
+// After a docked sheet opens, keep what it's about (the plot, the building being placed) in the clear space above it.
+function focusAbove(box,x,y,w,d,h){ requestAnimationFrame(()=>{ const top=box.getBoundingClientRect().top-(innerHeight-ch); if(!(top>80)) return; const q=iso(x+w/2,y+d/2), want=Math.max(70,top*0.52);
+  cam.x=q.x; cam.y=q.y-(h||0)/2-(want-ch/2)/cam.z; follow=null; }); }
 function sheetBox(label, cls){ document.querySelector('.rsheet-bg')?.remove(); const dock=/\bdock\b/.test(cls||''); const wrap=el('div',{class:'rsheet-bg'+(dock?' dock':'')}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
   const box=el('div',{class:'rsheet inked '+(cls||''),role:'dialog','aria-label':label}); wrap.append(box); document.body.append(wrap);
   const close=()=>{ wrap.remove(); if(dock&&wrap.onClose) wrap.onClose(); };
@@ -5221,7 +5233,7 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
     this.markAt(x,y); },
   async quote(r){ const bad=landProblem(r); if(bad){ toast(bad+'. Try another spot.'); return; }
     let q; try{ q=await api(`/api/land/quote?x=${r.x}&y=${r.y}&w=${r.w}&d=${r.d}`); }catch(e){ toast(e.message); return; }
-    showAbove(r.x,r.y,r.w,r.d,0); landSel={a:[r.x,r.y],b:[r.x+r.w-1,r.y+r.d-1],held:true}; const {box,close,wrap}=sheetBox(`🗺️ Buy this land`,'dock'); wrap.onClose=()=>{ if(landSel&&landSel.held) landSel=null; }; const nm=el('input',{type:'text',maxlength:'30',placeholder:'Name it (optional)','aria-label':'Plot name'});
+    showAbove(r.x,r.y,r.w,r.d,0); landSel={a:[r.x,r.y],b:[r.x+r.w-1,r.y+r.d-1],held:true}; const {box,close,wrap}=sheetBox(`🗺️ Buy this land`,'dock'); requestAnimationFrame(()=>focusAbove(box,r.x,r.y,r.w,r.d,0)); wrap.onClose=()=>{ if(landSel&&landSel.held) landSel=null; }; const nm=el('input',{type:'text',maxlength:'30',placeholder:'Name it (optional)','aria-label':'Plot name'});
     box.append(el('p',{class:'hint',text:`${q.w}×${q.d} tiles (${q.tiles}) ${q.where||''}.`}),
       bill([[`Land: ${q.tiles} tiles × ${fmt(q.perTile)}`,q.land], ...q.charges.map(c=>[c.name,c.amount])], q.total),
       el('p',{class:'hint',text:`${q.homes?`Buildings around here are worth about ${fmt(q.homeValue)} coins each, and land follows them: the dearer the neighbourhood, the dearer the land (up to ${fmt(LAND_TILE_MAX*PLOT_MAX*PLOT_MAX)} for an ${PLOT_MAX}×${PLOT_MAX} plot).`:'No homes or businesses nearby yet, so the land is cheap. It gets dearer as buildings go up around it.'} Charges go to the colony treasury. You'll pay ${fmt(Math.round(q.land*0.001))} a week in land tax. You own ${q.props} of ${q.max} properties.`}));
@@ -5248,9 +5260,11 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
       catch(e){ toast(e.message); } finally{ this.placing=false; } return; }
     tool.pending=[x,y]; const [w,d]=sizeOf(type,rot); showAbove(x,y,w,d,Math.min(140,SHADOW_H[t.style]?SHADOW_H[t.style](t):24));
     const {box,close,wrap}=sheetBox(`🏗️ Build ${t.name}`,'dock'); wrap.onClose=()=>{ delete tool.pending; }; const nm=el('input',{type:'text',maxlength:'40',placeholder:'Name it (optional)','aria-label':'Name'});
-    box.append(bill([['Builders',q.cost], ...q.charges.map(c=>[c.name,c.amount])], q.total), el('p',{class:'hint',text:q.minutes?`Ready in ${realTime(q.minutes*GAME_MIN_MS)} (you can pay to rush it). The fees go to the colony treasury.`:'Goes up straight away.'}), nm,
-      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Build for ${fmt(q.total)}`,onclick:async()=>{ const r=await meAction(`/api/me/plots/${encodeURIComponent(plot)}/build`,{type,x,y,rot,name:nm.value},r=>r.building.done?`${t.name} is built!`:`The builders have started on your ${t.name}.`); if(r){ close(); setTool({kind:'pan'}); Plots.drop(plot); setTimeout(()=>{ sel={kind:'b',id:r.building.id}; renderCard(true); },400); } }}),
-        el('button',{class:'linkb',text:'Move it',onclick:()=>{ close(); toast('Drag it to another spot on your plot and let go.'); }}))); },
+    const det=el('details',{class:'charges'}, el('summary',{text:`${fmt(q.total)} coins · ${q.minutes?`ready in ${realTime(q.minutes*GAME_MIN_MS)}`:'goes up straight away'}`}), bill([['Builders',q.cost], ...q.charges.map(c=>[c.name,c.amount])], q.total), el('p',{class:'hint',text:q.minutes?'You can pay to rush it. The fees go to the colony treasury.':'The fees go to the colony treasury.'}));
+    box.append(det, nm,
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Build for ${fmt(q.total)}`,onclick:async()=>{ const r=await meAction(`/api/me/plots/${encodeURIComponent(plot)}/build`,{type,x,y,rot:tool.rot||0,name:nm.value},r=>r.building.done?`${t.name} is built!`:`The builders have started on your ${t.name}.`); if(r){ close(); setTool({kind:'pan'}); Plots.drop(plot); setTimeout(()=>{ sel={kind:'b',id:r.building.id}; renderCard(true); },400); } }}),
+        el('button',{class:'linkb',text:'Move it',onclick:()=>{ close(); toast('Drag it to another spot on your plot and let go.'); }})));
+    focusAbove(box,x,y,w,d,Math.min(140,SHADOW_H[t.style]?SHADOW_H[t.style](t):24)); },
   offerSheet(kind,targetId,label,owner){ const {box,close}=sheetBox(`🤝 Make an offer`), amt=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric',placeholder:'Coins','aria-label':'Coins'}), msg=el('textarea',{maxlength:'200',rows:'3',placeholder:`A message for @${owner} (optional)`,'aria-label':'Message'});
     box.append(el('p',{class:'hint',text:`For ${label}, owned by @${owner}. They have 24 hours to accept, turn it down, or name their price. Your coins (cash, then savings) are only taken if the deal is agreed. ${Math.round(TRANSFER_TAX*100)}% of the price goes to the treasury as transfer tax.`}), amt, msg,
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Send offer',onclick:async()=>{ const n=Math.floor(Number(amt.value)); if(!(n>=1)){ toast('Enter how many coins you offer.'); return; } const r=await meAction('/api/me/offers',{kind,targetId,amount:n,message:msg.value},`Offer sent to @${owner}. You'll hear back within 24 hours.`); if(r){ close(); Plots.offersAt=0; } }}), el('button',{class:'linkb',text:'Cancel',onclick:close}))); },
@@ -5316,7 +5330,7 @@ function rentBox(b, t){ const box=el('div',{class:'authbox rentbox'}, el('h3',{t
   if(H.home&&H.home.id===b.id){ box.append(el('p',{class:'jobnow',text:'You live here.'})); return box; }
   const mine=b.owner&&Me.handle&&b.owner.toLowerCase()===Me.handle.toLowerCase(), full=(b.homeUsed||0)>=t.home.capacity;
   const cost=rentCost(b.type, H.home?[H.home.x,H.home.y]:null, [b.x,b.y]), fee=mine?0:cost.fee, total=fee+cost.movers;
-  box.append(el('p',{class:'hint',text:`Rent: ${fmt(t.home.rent)} a day from your wages. To move in: ${fee?`${fmt(fee)} moving-in fee${b.owner&&!mine?` (to @${b.owner})`:''} + `:''}${fmt(cost.movers)} for the movers${cost.dist?` (${miles(cost.dist)})`:''} = ${fmt(total)} coins.`}));
+  box.append(el('p',{class:'hint',text:`${mine?'No rent: it’s yours.':`Rent: ${fmt(t.home.rent)} a day from your wages.`} To move in: ${fee?`${fmt(fee)} moving-in fee${b.owner&&!mine?` (to @${b.owner})`:''} + `:''}${fmt(cost.movers)} for the movers${cost.dist?` (${miles(cost.dist)})`:''} = ${fmt(total)} coins.`}));
   if(H.home) box.append(el('p',{class:'hint',text:`You’ll move out of ${H.home.name}.`}));
   if(full&&!mine){ box.append(el('p',{class:'hint',text:'It’s full right now.'})); return box; }
   if(!H.canMoveToday){ box.append(el('p',{class:'hint',text:"You've moved today already. You can move again tomorrow (game time)."})); return box; }
@@ -5859,6 +5873,15 @@ PushUI.auto=async function(){ if(!(Me&&Me.token)||!this.supported()||this.iosNee
     addEventListener('pointerup',ask,true); } };
 function urlB64(b64){ const pad='='.repeat((4-b64.length%4)%4), s=atob((b64+pad).replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from([...s].map(c=>c.charCodeAt(0))); }
 if('serviceWorker' in navigator) addEventListener('load',()=>{ PushUI.reg().catch(()=>{}); });
+// While a tool is in hand, the turn / full-screen / hide buttons on the right sit just above the tool bar instead of under it.
+{ const vb=$('viewBtns'), tc=$('toolchip'), bar=document.querySelector('.bar');
+  const place=()=>{ if(!vb||!tc) return; const rs=document.documentElement.style;
+    /* a price sheet (land or a building to place) docks just above the tool bar, so Turn, Undo and Done stay in reach */
+    if(tc.hidden) rs.removeProperty('--dock-b'); else { const t0=tc.getBoundingClientRect().top; if(t0>0) rs.setProperty('--dock-b',`${Math.round(innerHeight-t0+8)}px`); }
+    if(tc.hidden){ vb.style.bottom=''; vb.style.visibility=''; return; }
+    const top=Math.min(...[tc,$('card'),$('pane'),document.querySelector('.rsheet-bg.dock .rsheet')].filter(e=>e&&!e.hidden&&e.offsetHeight).map(e=>e.getBoundingClientRect().top)); if(!(top>0)) return;
+    vb.style.bottom=`${Math.round(innerHeight-top+10)}px`; vb.style.visibility=top<260?'hidden':''; };
+  if(window.ResizeObserver&&bar) new ResizeObserver(place).observe(bar); if(tc) new MutationObserver(place).observe(tc,{attributes:true,attributeFilter:['hidden']}); new MutationObserver(()=>requestAnimationFrame(place)).observe(document.body,{childList:true}); addEventListener('resize',place); }
 // Updates reach open games: the game remembers the version it started with, and checks again when the phone comes back to
 // it and every 10 minutes. If a new version is out, it reloads right away on coming back (unless the player is typing), or
 // otherwise offers a one-tap "Update" note, so an app left open on a phone never keeps running an old copy.

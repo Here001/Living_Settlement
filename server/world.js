@@ -113,9 +113,15 @@ class Change {
   // ---- the moves a citizen can make ----
   // Rent comes out of wages. A resident without a job lives rent-free until they find one,
   // so nobody's balance goes negative and the treasury never books money that wasn't paid.
+  // A colonist living in a home they own pays no rent (only claimed players can own homes, so only they need the check).
+  async rentFor(c, homeType, home) {
+    const rent = homeType ? R.capacities(homeType).rent || 0 : 0; if (!rent || !c.pass_hash) return rent;
+    if (home) return home.owner_id === c.id ? 0 : rent; if (!c.home_id) return rent;
+    const o = (await this.q('select owner_id from buildings where id = $1', [c.home_id])).rows[0]; return o && o.owner_id === c.id ? 0 : rent;
+  }
   async takeJob(c, j, homeType) {
     this.touch(c); this.coins(c);
-    const { salary } = R.capacities(j.type), { rent } = R.capacities(homeType);
+    const { salary } = R.capacities(j.type), rent = await this.rentFor(c, homeType);
     c.job_id = j.id; c.job_cx = j.cx; c.job_cy = j.cy; c.net = R.netOf(salary, rent);
     this.income(R.taxOf(salary) + rent); this.meta.employed = (this.meta.employed || 0) + 1;
     await this.bump(j.id, 'job_used', 1);
@@ -123,7 +129,7 @@ class Change {
   async leaveJob(c, jobType, homeType) {
     if (!c.job_id) return;
     this.touch(c); this.coins(c);
-    const { salary } = R.capacities(jobType), { rent } = R.capacities(homeType);
+    const { salary } = R.capacities(jobType), rent = await this.rentFor(c, homeType);
     await this.bump(c.job_id, 'job_used', -1);
     c.job_id = c.job_cx = c.job_cy = null; c.net = 0;
     this.income(-(R.taxOf(salary) + rent)); this.meta.employed = Math.max(0, (this.meta.employed || 0) - 1);
@@ -152,10 +158,22 @@ class Change {
     await this.saveCitizen(c);
   }
 
+  // When a home changes hands, its new owner (if they live there) stops paying rent and the old one starts: call this
+  // before the owner changes (old = the previous owner's id) and it settles both.
+  async ownerChanged(buildingId, oldOwner, newOwner) {
+    const b = (await this.q('select id, type, owner_id from buildings where id = $1', [buildingId])).rows[0]; if (!b) return;
+    const rent = R.capacities(b.type).rent || 0; if (!rent) return;
+    for (const id of [oldOwner, newOwner]) { if (!id) continue;
+      const c = (await this.q('select c.*, j.type jtype from citizens c left join buildings j on j.id = c.job_id where c.id = $1 and c.home_id = $2 and c.job_id is not null for update of c', [id, b.id])).rows[0]; if (!c) continue;
+      const jt = c.jtype; delete c.jtype; this.touch(c); this.coins(c);
+      const was = id === oldOwner ? 0 : rent, now = id === newOwner ? 0 : rent; if (was === now) continue;
+      this.income(now - was); c.net = R.netOf(R.capacities(jt).salary, now); await this.saveCitizen(c); }
+  }
+
   async rehome(c, home, types) {
     this.touch(c); this.coins(c);
     if (c.job_id) {
-      const { salary } = R.capacities(types.job), oldRent = R.capacities(types.home).rent, newRent = R.capacities(home.type).rent;
+      const { salary } = R.capacities(types.job), oldRent = await this.rentFor(c, types.home), newRent = await this.rentFor(c, home.type, home);
       this.income(newRent - oldRent); c.net = R.netOf(salary, newRent);
     }
     await this.bump(c.home_id, 'home_used', -1);
@@ -784,13 +802,13 @@ export class World {
   // is held by someone the game placed automatically who hasn't claimed their avatar. Claimed colonists and anyone the
   // developer placed by hand are never pushed out.
   async jobBoard(id) {
-    const c = (await pool.query(`select c.*, h.x hx, h.y hy, h.type htype, j.type jtype, j.name jname, j.x jx, j.y jy
+    const c = (await pool.query(`select c.*, h.x hx, h.y hy, h.type htype, h.owner_id howner, j.type jtype, j.name jname, j.x jx, j.y jy
       from citizens c left join buildings h on h.id = c.home_id left join buildings j on j.id = c.job_id where c.id = $1`, [id])).rows[0];
     if (!c) throw new HttpError(404, 'No such citizen.');
     const today = this.meta ? R.gameDay(Date.now(), this.meta.epoch) : 0;
     const out = { housed: !!c.home_id, choosing: !!c.manual, canTakeToday: c.job_changed_day !== today, current: null, openings: [] };
     if (!c.home_id) return out;
-    const rent = R.capacities(c.htype).rent, dist = (x, y, t) => { const [w, d] = BUILDING_TYPES[t]?.size || [1, 1]; return Math.abs(x + Math.floor(w / 2) - c.hx) + Math.abs(y + Math.floor(d / 2) - c.hy); };
+    const rent = c.howner === c.id ? 0 : R.capacities(c.htype).rent, dist = (x, y, t) => { const [w, d] = BUILDING_TYPES[t]?.size || [1, 1]; return Math.abs(x + Math.floor(w / 2) - c.hx) + Math.abs(y + Math.floor(d / 2) - c.hy); };
     out.rent = rent;
     if (c.job_id) { const t = BUILDING_TYPES[c.jtype]; out.current = { id: c.job_id, title: t?.work?.title || 'Worker', place: c.jname || t?.name || '', salary: t?.work?.salary || 0, takeHome: R.netOf(t?.work?.salary || 0, rent), dist: dist(c.jx, c.jy, c.jtype), shift: R.shiftOf(c.id, c.job_id, c.jtype) }; }
     const rows = (await pool.query(`select b.id, b.type, b.name, b.x, b.y, b.job_cap - b.job_used free from buildings b

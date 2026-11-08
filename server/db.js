@@ -307,6 +307,13 @@ const MIGRATIONS = [
    create table if not exists econ_snaps (t bigint primary key, money numeric not null, players numeric not null, treasury numeric not null, top10 numeric not null default 0, wages numeric not null default 0, f numeric not null default 1);`,
   // v60: finding the few players who hold a status title (for the badges by their names) without reading every citizen
   `create index if not exists citizens_status on citizens (status_tier) where status_tier > 0;`,
+  // v61: land auctions (prime plots the developer puts up for bidding) and every bid made on them
+  `create table if not exists auctions (id text primary key, x int not null, y int not null, w int not null, d int not null, cx int not null, cy int not null,
+     name text not null default '', place text not null default '', start_price bigint not null, top_bid bigint not null default 0, top_id text, top_handle text,
+     bids int not null default 0, ends_at bigint not null, status text not null default 'open', created_at bigint not null, plot_id text);
+   create index if not exists auctions_status on auctions (status, ends_at);
+   create table if not exists auction_bids (id bigserial primary key, auction_id text not null, t bigint not null, citizen_id text not null, handle text not null, amount bigint not null);
+   create index if not exists auction_bids_auction on auction_bids (auction_id, id desc);`,
 ];
 
 export async function migrate() {

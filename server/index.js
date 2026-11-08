@@ -31,6 +31,7 @@ import { Guide } from './guide.js';
 import { Push } from './push.js';
 import { Elections } from './elections.js';
 import { Lottery } from './lottery.js';
+import { Auctions } from './auctions.js';
 import { Housing } from './housing.js';
 import { Economy } from './economy.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
@@ -53,6 +54,7 @@ const bus = createBus();
 const world = new World(bus);
 const races = new Races(world); world.races = races; const fights = new Fights(world); world.fights = fights;
 const lottery = new Lottery(world); world.lottery = lottery;
+const auctions = new Auctions(world); world.auctions = auctions;
 const economy = new Economy(world); world.economy = economy;
 world.housing = new Housing(world);
 const chat = new Chat(bus); world.chat = chat; chat.world = world;
@@ -156,6 +158,10 @@ if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/rollover', 
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/payday', admin, send(() => world.change(ch => economy.day(ch, 1))));
 app.get('/api/lottery', limit, send(async req => lottery.info((await playerFrom(req))?.id)));
 app.post('/api/admin/lottery', admin, send(req => lottery.start(req.body || {})));
+app.get('/api/auctions', limit, send(() => auctions.list()));
+app.get('/api/auctions/:id', limit, send(async req => auctions.info((await playerFrom(req))?.id, req.params.id)));
+app.post('/api/admin/auctions', admin, send(req => auctions.start(req.body || {})));
+app.post('/api/admin/auctions/:id/cancel', admin, send(req => auctions.cancel(req.params.id)));
 app.post('/api/admin/race/cup', admin, send(req => races.setCup((req.body || {}).bonus, (req.body || {}).name, (req.body || {}).track)));
 // The game's version: a fingerprint of the page and the shared code, taken at start-up. An open game asks for it when the
 // phone comes back to the app (and every few minutes), and reloads itself when it changed, so nobody keeps playing an old
@@ -395,6 +401,7 @@ setInterval(async () => { if (!isLeader || ticking) return; ticking = true; try 
 setInterval(() => { if (isLeader) races.tick().catch(e => console.error('races:', e.message)); }, 2000);
 setInterval(() => { if (isLeader) fights.tick().catch(e => console.error('fights:', e.message)); }, 2000); // set the card, ring the bells, settle the bouts // announce, start and settle races
 setInterval(() => { if (isLeader) lottery.tick().catch(e => console.error('lottery:', e.message)); }, 2000); // announce and draw the lottery
+setInterval(() => { if (isLeader) auctions.tick().catch(e => console.error('auctions:', e.message)); }, 2000); // close land auctions when their time is up
 
 await migrate();
 await loadIgStatus();

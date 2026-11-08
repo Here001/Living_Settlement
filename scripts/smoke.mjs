@@ -1698,6 +1698,58 @@ const card = (await call('GET', '/api/citizens/buyer_bob', undefined, { auth: fa
 const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props === 5 && hm.max === 5, 'the Home tab knows the count and the limit', JSON.stringify(hm).slice(0, 300));
 // bills include land
 const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 'weekly bills run with plots', JSON.stringify(bl2.json));
+{ // land auctions: the developer puts prime land up, players bid with held cash, the top bid wins it as a plot
+  const player = async (handle, coins) => { await call('POST', '/api/admin/citizens', { handle }); const id = (await pool.query('select id from citizens where handle = $1', [handle])).rows[0].id;
+    const link = (await call('POST', `/api/admin/citizens/${id}/setup-link`)).json.claimId, tok = (await call('POST', `/api/claim/${link}/password`, { password: 'secret88' }, { auth: false })).json.token;
+    await pool.query("update citizens set coins_base = $2, net = 0, stars = 6, home_id = coalesce(home_id, (select id from buildings where home_cap > 0 limit 1)) where id = $1", [id, coins]);
+    return { id, handle, P: { auth: false, headers: { 'x-player': tok } } }; };
+  const cash = async id => Number((await pool.query('select coins_base from citizens where id = $1', [id])).rows[0].coins_base);
+  const until = async (fn, ms = 8000) => { for (let t = 0; t < ms; t += 250) { if (await fn()) return true; await sleep(250); } return false; };
+  const X = await player('bidder_x', 500000), Y = await player('bidder_y', 500000);
+  const road = {}; for (let x = 5000; x < 5012; x++) road[x + ',5000'] = 'street'; await call('POST', '/api/admin/roads', { set: road }); // a quiet street of its own
+  const s = { x: 5000, y: 5001, w: 2, d: 2 }, s2 = { x: 5004, y: 5001, w: 2, d: 2 }, s3 = { x: 5008, y: 5001, w: 2, d: 2 };
+  ok((await call('POST', '/api/admin/auctions', { ...s, minutes: 7 })).status === 400, 'an auction must run for one of the set lengths');
+  ok((await call('POST', '/api/admin/auctions', { ...s, minutes: 60 }, X.P)).status === 401, 'only the developer can start an auction');
+  let r = await call('POST', '/api/admin/auctions', { ...s, minutes: 60, start: 1000, name: 'Prime corner' });
+  ok(r.status === 200 && r.json.auction.status === 'open' && r.json.auction.start === 1000, 'the developer puts land up for auction', JSON.stringify(r.json).slice(0, 200)); const aid = r.json.auction.id;
+  ok((await call('POST', '/api/me/land', s, X.P)).status === 409, "land up for auction can't be bought the ordinary way");
+  ok(/auction/.test((await call('GET', `/api/land/quote?x=${s.x}&y=${s.y}&w=${s.w}&d=${s.d}`, undefined, X.P)).json.problem || ''), 'the land quote says it is up for auction');
+  ok((await call('POST', '/api/admin/auctions', { ...s, minutes: 60 })).status === 409, "the same land can't be auctioned twice at once");
+  ok((await call('GET', '/api/auctions', undefined, { auth: false })).json.auctions.some(a => a.id === aid), 'everyone can see the open auctions');
+  ok((await pool.query("select 1 from events where kind = 'auction' and text like '%Prime corner%'")).rowCount === 1, 'the Colony Log announces the auction');
+  ok((await call('POST', `/api/me/auctions/${aid}/bid`, { amount: 999 }, X.P)).status === 400, 'a bid below the opening bid is refused');
+  r = await call('POST', `/api/me/auctions/${aid}/bid`, { amount: 1000 }, X.P); ok(r.status === 200 && r.json.auction.leader === 'bidder_x', 'a player bids the opening price', JSON.stringify(r.json).slice(0, 200));
+  ok(await cash(X.id) === 499000, 'the bid is taken from their cash and held');
+  ok((await call('POST', `/api/me/auctions/${aid}/bid`, { amount: 2000 }, X.P)).status === 409, "the top bidder can't bid against themselves");
+  let info = (await call('GET', `/api/auctions/${aid}`, undefined, Y.P)).json; ok(info.next === 1100 && !info.mine, 'the next bid must be 5% more, at least 100 more', JSON.stringify(info).slice(0, 200));
+  ok((await call('POST', `/api/me/auctions/${aid}/bid`, { amount: 1050 }, Y.P)).status === 400, 'a bid that is too small is refused');
+  r = await call('POST', `/api/me/auctions/${aid}/bid`, { amount: 1100 }, Y.P); ok(r.status === 200 && r.json.auction.leader === 'bidder_y' && r.json.auction.bids === 2, 'someone outbids them');
+  ok(await cash(X.id) === 500000 && await cash(Y.id) === 498900, 'the outbid player gets every coin back at once');
+  ok((await pool.query("select 1 from notices where citizen_id = $1 and kind = 'auction' and text like '%outbid%'", [X.id])).rowCount === 1, 'and a notice saying they were outbid');
+  await pool.query('update auctions set ends_at = $2 where id = $1', [aid, Date.now() + 30000]);
+  r = await call('POST', `/api/me/auctions/${aid}/bid`, { amount: 1200 }, X.P); const ends = Number((await pool.query('select ends_at from auctions where id = $1', [aid])).rows[0].ends_at);
+  ok(r.status === 200 && r.json.extended && ends >= Date.now() + 100000, 'a bid in the last 2 minutes moves the close to 2 minutes later', JSON.stringify(r.json).slice(0, 120));
+  info = (await call('GET', `/api/auctions/${aid}`, undefined, X.P)).json; ok(info.bids.length === 3 && info.mine && info.bids[0].amount === 1200, 'the card lists the latest bids, newest first');
+  await pool.query('update auctions set ends_at = $2 where id = $1', [aid, Date.now() - 1000]);
+  ok(await until(async () => (await pool.query("select 1 from auctions where id = $1 and status = 'sold'", [aid])).rowCount), 'the auction closes when its time is up');
+  const won = (await pool.query('select p.* from plots p join auctions a on a.plot_id = p.id where a.id = $1', [aid])).rows[0];
+  ok(won && won.owner_id === X.id && Number(won.price) === 1200 && won.name === 'Prime corner' && won.x === s.x && won.w === 2, 'the winner gets the land as their own plot', JSON.stringify(won));
+  ok(await cash(X.id) === 498800 && await cash(Y.id) === 500000, 'the winner paid their bid; the loser has all their coins');
+  ok((await pool.query("select 1 from notices where citizen_id = $1 and kind = 'auction' and text like '%won%'", [X.id])).rowCount === 1, 'the winner gets a notice');
+  ok((await pool.query("select 1 from events where kind = 'auction' and text like '%Sold! @bidder_x won%'")).rowCount === 1, 'the Colony Log reports the sale');
+  ok((await call('GET', `/api/plots/${won.id}`, undefined, X.P)).json.mine === true, 'they can build on it like any plot');
+  // called off: the top bid goes back
+  r = await call('POST', '/api/admin/auctions', { ...s2, minutes: 30 }); const a2 = r.json.auction.id;
+  ok(r.status === 200 && r.json.auction.start === r.json.quote.total, 'with no opening bid given, it opens at the ordinary land price', JSON.stringify(r.json).slice(0, 160));
+  ok((await call('POST', `/api/me/auctions/${a2}/bid`, { amount: r.json.auction.start }, Y.P)).status === 200 && await cash(Y.id) === 500000 - r.json.auction.start, 'a bid on the second auction');
+  ok((await call('POST', `/api/admin/auctions/${a2}/cancel`, {})).status === 200 && await cash(Y.id) === 500000, 'calling an auction off gives the top bid back');
+  ok(!(await call('GET', `/api/land/quote?x=${s2.x}&y=${s2.y}&w=2&d=2`, undefined, Y.P)).json.problem, 'and the land is free again');
+  ok((await call('POST', `/api/me/auctions/${a2}/bid`, { amount: 99999 }, X.P)).status === 409, "a closed auction takes no bids");
+  // nobody bids
+  const a3 = (await call('POST', '/api/admin/auctions', { ...s3, minutes: 30 })).json.auction.id;
+  await pool.query('update auctions set ends_at = $2 where id = $1', [a3, Date.now() - 1000]);
+  ok(await until(async () => (await pool.query("select 1 from auctions where id = $1 and status = 'unsold'", [a3])).rowCount), 'an auction with no bids closes unsold, and the land is free again');
+}
 }
 { // one player's own actions don't wait for the colony-wide lock; their coins still reach the treasury within a second
   for (let i = 0; i < 40 && (await pool.query('select 1 from treasury_pending limit 1')).rowCount; i++) await sleep(100);
@@ -1757,6 +1809,7 @@ const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 
 ok((await call('POST', '/api/admin/reset', { confirm: 'nope' })).status === 400, 'reset needs the word RESET');
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' }, { auth: false })).status === 401, 'only the developer can reset');
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' })).status === 200 && !(await call('GET', '/api/meta', undefined, { auth: false })).json.meta, 'reset wipes the colony');
+ok(!(await pool.query('select 1 from plots union all select 1 from auctions limit 1')).rowCount, 'reset clears everyone’s land and the auctions too');
 ok((await call('POST', '/api/admin/found', { name: 'New Dawn', handle: 'builder' })).status === 200 && (await meta()).population === 1, 'found it again from scratch');
 await call('POST', '/api/admin/citizens/bulk', { handles: ['fresh_one', 'fresh_two'] });
 

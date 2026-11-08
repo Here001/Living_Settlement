@@ -67,9 +67,11 @@ export class Housing {
     const value = weight ? sum / weight : 0;
     return { ...R.landQuote(w, d, value, weight), homes, homeValue: Math.round(value), where: this.placeName(Math.round(mx), Math.round(my)) };
   }
-  // What's in the way of buying this patch: water, roads, buildings (trees, rocks and benches are cleared), others' land, and no road beside it.
-  async landProblems(q, { x, y, w, d }) {
+  // What's in the way of buying this patch: water, roads, buildings (trees, rocks and benches are cleared), others' land,
+  // land up for auction (except the auction asking, `auctionId`, when it hands the land to its winner), and no road beside it.
+  async landProblems(q, { x, y, w, d }, auctionId = null) {
     const box = [x, y, w, d];
+    if ((await q("select 1 from auctions where status = 'open' and id is distinct from $5::text and x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int limit 1", [...box, auctionId])).rowCount) return 'This land is up for auction. Tap it on the map to bid.';
     if ((await q('select 1 from plots where x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int limit 1', box)).rowCount) return "Part of it is someone's land already.";
     if ((await q('select 1 from roads where x >= $1::int and x < $1::int + $3::int and y >= $2::int and y < $2::int + $4::int limit 1', box)).rowCount) return 'There’s a road across it. Mark grass beside the road instead.';
     if ((await q('select 1 from water where x >= $1::int and x < $1::int + $3::int and y >= $2::int and y < $2::int + $4::int limit 1', box)).rowCount) return 'Part of it is water.';

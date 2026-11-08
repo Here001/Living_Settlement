@@ -976,7 +976,7 @@ import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
-import { statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
+import { nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
@@ -1049,6 +1049,7 @@ function applyOp(o){
   case 'race': raceSoon(o.data); break;
   case 'fight': fightSoon(o.data); break;
   case 'lottery': lotterySoon(o.data); break;
+  case 'auction': Auction.upsert(o.data); break;
   case 'building': { const old=S.buildings.get(o.data.id), n=o.data; putBuilding(n);
     // Occupancy or owner changes don't move anything on the map, so they don't need every route worked out again.
     const same=old&&old.x===n.x&&old.y===n.y&&old.type===n.type&&(old.rot||0)===(n.rot||0)&&old.done===n.done&&!!old.ruin===!!n.ruin&&old.name===n.name;
@@ -1105,7 +1106,7 @@ async function syncChunks(){
     subscribe(); changed();
   } finally { syncing=false; } }
 function reloadAll(){ for(const k of [...S.chunks.keys()]) dropChunk(k); S.citizens.clear(); subKey=''; syncChunks(); }
-async function loadMeta(){ const r=await api('/api/meta'); S.meta=r.meta; S.events=r.events||[]; S.disasters=r.disasters||[]; skew=r.serverNow-Date.now(); loadChat(); loadStatus(); }
+async function loadMeta(){ const r=await api('/api/meta'); S.meta=r.meta; S.events=r.events||[]; S.disasters=r.disasters||[]; skew=r.serverNow-Date.now(); loadChat(); loadStatus(); Auction.load(); }
 S.chat=[]; async function loadChat(){ try{ S.chat=await api('/api/square'); feedDirty=true; renderFeed(); }catch(e){} }
 // The live connection: the server sends a clock tick every 1.25 s, so a silent line for 20 s means it died without telling us
 // (common on phones switching networks). Reconnects back off gently and happen at once when the phone wakes or comes back online.
@@ -3129,6 +3130,15 @@ function drawPlots(x0,x1,y0,y1){ if(sel&&sel.kind==='g'){ const {x,y}=sel; poly(
     ctx.save(); ctx.setLineDash(on?[]:[7,5]); poly(q,false,mine?'#E4572E':'#F4EDE0',on?3:1.6); ctx.restore();
     for(const c of q){ line(c,up(c,9),'#7A5634',2); }
     if(cam.z>=0.9){ const s=iso(p.x+0.5,p.y+0.5), tx=(p.name||'@'+p.owner); ctx.font='700 10px system-ui,sans-serif'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.strokeText(tx,s.x,s.y-4); ctx.fillStyle=mine?'#B23A14':'#3B332B'; ctx.fillText(tx,s.x,s.y-4); } } }
+// Land up for auction: a gold patch with a dashed edge and a sign showing the top bid (or the opening one).
+function drawAuctions(x0,x1,y0,y1){ if(!Auction.occ.size) return;
+  for(const a of Auction.list.values()){ if(a.status!=='open'||a.x+a.w<x0-1||a.x>x1+1||a.y+a.d<y0-1||a.y>y1+1) continue; const on=sel&&sel.kind==='a'&&sel.id===a.id;
+    const q=[iso(a.x,a.y),iso(a.x+a.w,a.y),iso(a.x+a.w,a.y+a.d),iso(a.x,a.y+a.d)]; poly(q,'rgba(226,177,60,.24)',false);
+    ctx.save(); ctx.setLineDash(on?[]:[8,5]); poly(q,false,'#C8941E',on?3.2:2.2); ctx.restore();
+    for(const c of q){ line(c,up(c,10),'#7A5634',2); }
+    const s=iso(a.x+a.w/2,a.y+a.d/2), tx=`🔨 ${a.bids?fmt(a.top):'from '+fmt(a.start)}`; ctx.font='800 11px system-ui,sans-serif'; ctx.textAlign='center'; ctx.lineWidth=3.5;
+    ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.strokeText(tx,s.x,s.y); ctx.fillStyle='#6B4A06'; ctx.fillText(tx,s.x,s.y);
+    if(cam.z>=0.9&&a.name){ ctx.font='700 10px system-ui,sans-serif'; ctx.strokeText(a.name,s.x,s.y-13); ctx.fillStyle='#3B332B'; ctx.fillText(a.name,s.x,s.y-13); } } }
 // Road and water tiles as parsed lists, rebuilt only when the map changes (not every frame).
 const tileLists=new WeakMap(); let tileListGen=0;
 function tileList(m){ let e=tileLists.get(m); if(e&&e.gen===tileListGen&&e.n===m.size) return e.list;
@@ -3221,7 +3231,7 @@ function drawFrame(ts){
   else { ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,cw,ch); worldT(); ctx.drawImage(Ground.cv, Ground.wx0, Ground.wy0, Ground.ww, Ground.wh); }
   const items=[];
   { const wl=[]; for(const w of tileList(D.water)){ const x=w.x, y=w.y; if(x<tminX||x>tmaxX||y<tminY||y>tmaxY||D.roads.has(w.k)) continue; wl.push([x,y,w.v]); } drawWaterTiles(wl,'ripples'); }
-  drawPlots(tminX,tmaxX,tminY,tmaxY);
+  drawPlots(tminX,tmaxX,tminY,tmaxY); drawAuctions(tminX,tmaxX,tminY,tmaxY);
   for(const d of Ground.deco) if(d.x>=tminX-1&&d.x<=tmaxX+1&&d.y>=tminY-1&&d.y<=tmaxY+1) items.push(d);
   if(Store.canWrite && draftOn) drawDraftGround(); // blue over drafted roads and water, red over what's being removed
   const selB = sel&&sel.kind==='b' ? D.buildings.get(sel.id) : null;
@@ -3355,7 +3365,7 @@ function landRect(a,b){ let x0=Math.min(a[0],b[0]), x1=Math.max(a[0],b[0]), y0=M
   return { x:x0, y:y0, w:x1-x0+1, d:y1-y0+1 }; }
 // What's wrong with a patch, judged from what this screen knows (the server checks again).
 function landProblem(r){ if(r.w<PLOT_MIN||r.d<PLOT_MIN) return `At least ${PLOT_MIN}×${PLOT_MIN} tiles`;
-  let road=false; for(let i=0;i<r.w;i++) for(let j=0;j<r.d;j++){ const k=(r.x+i)+','+(r.y+j); if(D.water.has(k)) return 'Water in the way'; if(D.roads.has(k)) return 'A road crosses it'; if(D.plotOcc.has(k)) return "Someone's land";
+  let road=false; for(let i=0;i<r.w;i++) for(let j=0;j<r.d;j++){ const k=(r.x+i)+','+(r.y+j); if(D.water.has(k)) return 'Water in the way'; if(D.roads.has(k)) return 'A road crosses it'; if(D.plotOcc.has(k)) return "Someone's land"; if(Auction.occ.has(k)) return 'Up for auction';
     const id=D.occ.get(k), b=id&&D.buildings.get(id); if(b&&!roadClears(b.type)) return 'Buildings in the way'; }
   for(let i=0;i<r.w&&!road;i++) road=D.roads.has((r.x+i)+','+(r.y-1))||D.roads.has((r.x+i)+','+(r.y+r.d));
   for(let j=0;j<r.d&&!road;j++) road=D.roads.has((r.x-1)+','+(r.y+j))||D.roads.has((r.x+r.w)+','+(r.y+j));
@@ -3550,6 +3560,7 @@ function tap(sx,sy){
     if(dd<r&&dd<vbd){ vbd=dd; vbest=h; } }
   if(vbest){ sel={kind:'v',id:vbest.id}; follow=null; renderCard(); return; }
   const id=buildingAt(sx,sy); if(id){ selectBuilding(id); return; }
+  const aid=Auction.occ.get(x+','+y); if(aid){ sel={kind:'a',id:aid}; follow=null; renderCard(); return; }
   const pid=D.plotOcc.get(x+','+y); if(pid){ sel={kind:'p',id:pid}; follow=null; renderCard(); return; }
   // Empty grass: with nothing open, a signed-in player gets a card to buy land right here (a tap with a card open just closes it).
   if(!sel&&!Store.canWrite&&Me&&Me.token&&!D.roads.has(x+','+y)&&!D.water.has(x+','+y)&&!draftOn){ sel={kind:'g',id:x+','+y,x,y}; follow=null; renderCard(); return; }
@@ -3684,7 +3695,7 @@ function renderPane(){
   const p=$('pane'); if(!activeTab){ p.hidden=true; return; } p.hidden=false; p.innerHTML='';
   if(activeTab==='feed'){
     const seg=el('div',{class:'seg',role:'tablist'}); if(!Store.canWrite&&feedMode==='log') feedMode='posts';
-    for(const [id,nm] of [['posts','Posts'],['news','News flash'],['top','Top'],['mayor','👑 Mayor'],...(Store.canWrite?[['log','Daily log']]:[]),['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
+    for(const [id,nm] of [['posts','Posts'],['news','News flash'],['top','Top'],['auctions','🔨 Auctions'],['mayor','👑 Mayor'],...(Store.canWrite?[['log','Daily log']]:[]),['story','The story']]) seg.append(el('button',{'aria-pressed':String(feedMode===id),onclick:()=>{ feedMode=id; renderPane(); }, text:nm}));
     seg.classList.add('ts-tabs'); const ph=paneHead('Town Square'); ph.querySelector('.pane-title').after(Online.chip()); p.append(ph, seg); Online.load(); requestAnimationFrame(()=>{ const on=seg.querySelector('[aria-pressed="true"]'); if(on) on.scrollIntoView({block:'nearest',inline:'center'}); }); if(feedMode==='posts') p.append(composer()); if(feedMode==='posts'&&Store.canWrite) p.append(eventAdmin(), nameAdmin()); p.append(el('div',{class:'pane-body',id:'feedBody'})); feedDirty=true; feedKey=''; renderFeed(true); return; }
   if(activeTab==='chats'){ Chats.render(p); return; }
   if(activeTab==='reports'){ Reports.render(p); return; }
@@ -5676,14 +5687,14 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
     card.append(dl, goHereRow({ id:`spot:${x},${y}`, type:'spot', x, y, name:'the spot you picked' }), el('div',{class:'row-actions'}, el('button',{class:'btn',text:'🗺️ Buy land here',onclick:()=>this.markAt(x,y)}), Loc.btn(q&&q.where?`A spot ${q.where}`:'A spot on the map',x,y)));
   },
   markAt(x,y){ try{ localStorage.setItem('land-tip-seen','1'); }catch(e){} document.querySelector('.landtip')?.remove(); closeCard();
-    setTool({kind:'land',mark:true}); landSel={a:[x-1,y-1],b:[x+1,y+1],held:true,hint:true};
+    setTool({kind:'land',mark:true,auction:tool.auction}); landSel={a:[x-1,y-1],b:[x+1,y+1],held:true,hint:true};
     const q=iso(x+0.5,y+0.5); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.4); follow=null;
     toast(`Drag over the grass to mark your plot, ${PLOT_MIN}×${PLOT_MIN} up to ${PLOT_MAX}×${PLOT_MAX}, beside a road.`); },
   tapLand(sx,sy,x,y){ const now=performance.now(), L=this.lastTap; this.lastTap={t:now,sx,sy};
     if(tool.mark){ return; }
     if(!(L&&now-L.t<400&&Math.hypot(sx-L.sx,sy-L.sy)<36)) return; this.lastTap=null; document.querySelector('.landtip')?.remove(); try{ localStorage.setItem('land-tip-seen','1'); }catch(e){}
     this.markAt(x,y); },
-  async quote(r){ const bad=landProblem(r); if(bad){ toast(bad+'. Try another spot.'); return; }
+  async quote(r){ const bad=landProblem(r); if(bad){ toast(bad+'. Try another spot.'); return; } if(tool.auction){ Auction.startSheet(r); return; }
     let q; try{ q=await api(`/api/land/quote?x=${r.x}&y=${r.y}&w=${r.w}&d=${r.d}`); }catch(e){ toast(e.message); return; }
     showAbove(r.x,r.y,r.w,r.d,0); landSel={a:[r.x,r.y],b:[r.x+r.w-1,r.y+r.d-1],held:true}; const {box,close,wrap}=sheetBox(`🗺️ Buy this land`,'dock'); requestAnimationFrame(()=>focusAbove(box,r.x,r.y,r.w,r.d,0)); wrap.onClose=()=>{ if(landSel&&landSel.held) landSel=null; }; const nm=el('input',{type:'text',maxlength:'30',placeholder:'Name it (optional)','aria-label':'Plot name'});
     box.append(el('p',{class:'hint',text:`${q.w}×${q.d} tiles (${q.tiles}) ${q.where||''}.`}),
@@ -5783,6 +5794,58 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
     if(mine&&b.plot&&b.done!==false&&!b.upAt) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn sm',text:'🗺️ Your plot',onclick:()=>{ sel={kind:'p',id:b.plot}; renderCard(true); }}), el('button',{class:'linkb',text:'Knock it down',onclick:()=>toast(`Knock down ${b.name||t.name}? The builders give back 30% of what it cost.`,'Knock down',()=>meAction(`/api/me/buildings/${encodeURIComponent(b.id)}/knock`,{},r=>r.back?`Knocked down. ${fmt(r.back)} coins back.`:'Knocked down.'))})));
     if(b.owner&&!mine&&b.done!==false&&!b.ruin) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'🤝 Make an offer',onclick:()=>b.plot?this.offerSheet('plot',b.plot,`@${b.owner}'s plot with ${b.name||t.name}`,b.owner):this.offerSheet('building',b.id,b.name||t.name,b.owner)})));
   } };
+// ---- Land auctions (server/auctions.js): prime plots the developer puts up for bidding ----
+// The open ones (and those that ended in the last hour) are kept here, updated live; `occ` maps each tile to its auction.
+const Auction={ list:new Map(), occ:new Map(), info:new Map(), busy:new Set(),
+  async load(){ try{ const r=await api('/api/auctions'); this.list.clear(); for(const a of r.auctions||[]) this.list.set(a.id,a); this.reindex(); }catch(e){} },
+  upsert(a){ if(!a) return; this.list.set(a.id,a); this.info.delete(a.id); this.reindex(); if(sel&&sel.kind==='a'&&sel.id===a.id) cardSoon(); },
+  reindex(){ this.occ.clear(); for(const a of this.list.values()) if(a.status==='open') for(let i=0;i<a.w;i++) for(let j=0;j<a.d;j++) this.occ.set((a.x+i)+','+(a.y+j),a.id);
+    if(activeTab==='feed'&&feedMode==='auctions'){ feedDirty=true; renderFeed(); } },
+  get(id){ const e=this.info.get(id); if((!e||Date.now()-e.at>10000)&&!this.busy.has(id)){ this.busy.add(id); api('/api/auctions/'+encodeURIComponent(id)).then(d=>{ this.info.set(id,{d,at:Date.now()}); this.list.set(id,d.auction); }).catch(()=>{}).finally(()=>{ this.busy.delete(id); if(sel&&sel.kind==='a'&&sel.id===id) renderCard(true); }); } return e?e.d:null; },
+  left(a){ return a.endsAt-(Date.now()+skew); },
+  clock(ms){ if(ms<=0) return 'closing…'; const s=Math.ceil(ms/1000); return s<120?`${s} s`:s<7200?`${Math.floor(s/60)} min ${s%60?`${s%60} s`:''}`.trim():realTime(ms); },
+  title(a){ return a.name||`${a.w}×${a.d} plot`; },
+  result(a){ return a.status==='sold'?`Sold to @${a.leader} for ${fmt(a.top)}`:a.status==='unsold'?'Nobody bid':a.status==='cancelled'?'Called off':'Closing…'; },
+  // Every 4 seconds while its card is open: only the countdown changes, so a bid being typed isn't wiped.
+  tickCard(){ const a=this.list.get(sel.id); if(!a) return; const e=$('aucLeft'); if(a.status==='open'&&this.left(a)>-3000){ if(e) e.textContent=this.clock(this.left(a)); } else renderCard(true); },
+  card(card, close){ const I=this.get(sel.id), a=(I&&I.auction)||this.list.get(sel.id); if(!a){ closeCard(); return; } const open=a.status==='open';
+    card.append(close, el('div',{class:'chead'}, el('div',{class:'cthumb plotthumb',text:'🔨'}), el('div',null, el('h2',{text:a.name?`${a.name} · land auction`:'Land auction'}), el('p',{class:'now',text:a.where?a.where[0].toUpperCase()+a.where.slice(1):'Prime land'}))));
+    const dl=el('dl',null), add=(k,v)=>{ const dd=el('dd',{text:v}); dl.append(el('dt',{text:k}),dd); return dd; };
+    add('Land',`${a.w}×${a.d} tiles (${a.w*a.d}), beside a road`); add('Opening bid',`${fmt(a.start)} coins`);
+    add(open?'Top bid':'Final bid', a.bids?`${fmt(a.top)} coins by ${withSt(a.leader,'@'+a.leader)} (${a.bids} bid${a.bids===1?'':'s'})`:'No bids yet');
+    if(open) add('Closes in',this.clock(this.left(a))).id='aucLeft'; else add('Result',this.result(a));
+    card.append(dl);
+    if(open&&!Store.canWrite){
+      if(!(Me&&Me.token)) card.append(el('p',{class:'hint',text:'Sign in to your colonist to bid.'}));
+      else if(I&&I.mine) card.append(el('p',{class:'jobnow',text:`🏆 You're the top bidder. Your ${fmt(a.top)} coins are held until the auction closes, and come straight back if someone outbids you.`}));
+      else { const next=(I&&I.next)||nextBid(a), inp=el('input',{type:'number',min:String(next),step:'10',inputmode:'numeric',value:String(next),'aria-label':'Your bid'});
+        card.append(el('div',{class:'cbet'}, inp, el('button',{class:'btn primary',text:'🔨 Bid',onclick:()=>{ const n=Math.floor(Number(inp.value)); if(!(n>=next)){ toast(`Bid at least ${fmt(next)} coins.`); return; }
+          toast(`Bid ${fmt(n)} coins for this land? It comes out of your cash now, and comes back if someone outbids you.`,'Bid',async()=>{ const r=await meAction(`/api/me/auctions/${encodeURIComponent(a.id)}/bid`,{amount:n},r=>r.extended?`You're the top bidder! The close moved to 2 minutes from now, so others can answer.`:`You're the top bidder at ${fmt(n)}!`); if(r) this.upsert(r.auction); }); }})),
+          el('p',{class:'hint',text:`Bids are paid in cash and held. Each must beat the last by 5% (at least ${fmt(AUCTION_STEP_MIN)} more). A bid in the last 2 minutes moves the close to 2 minutes after it. The winning bid goes to the colony treasury, and the land becomes the winner's plot to build on. Counts as one of your properties.`})); } }
+    if(I&&I.bids&&I.bids.length){ const ul=el('ul',{class:'joblist'}); for(const b of I.bids) ul.append(el('li',null, el('div',{class:'jt'}, el('b',{text:`${fmt(b.amount)} coins`}), el('span',{text:`${withSt(b.h,'@'+b.h)} · ${ago(b.t)}`})))); card.append(el('h3',{text:'Latest bids'}), ul); }
+    if(Store.canWrite&&open) card.append(el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Call it off',onclick:()=>toast(`Call off this auction?${a.bids?` @${a.leader} gets their ${fmt(a.top)} coins back.`:''}`,'Call it off',async()=>{ try{ await api(`/api/admin/auctions/${encodeURIComponent(a.id)}/cancel`,{method:'POST',body:{}}); toast('Auction called off.'); }catch(e){ toast(e.message); } })})));
+    if(a.status==='sold') card.append(el('p',{class:'hint',text:'The land is now their plot. Tap it on the map to see it.'})); },
+  // The Town Square's Auctions tab: everything open, then what closed in the last hour. The developer starts new ones here.
+  renderList(body){ const L=[...this.list.values()], open=L.filter(a=>a.status==='open').sort((a,b)=>a.endsAt-b.endsAt), done=L.filter(a=>a.status!=='open').sort((a,b)=>b.endsAt-a.endsAt);
+    if(Store.canWrite) body.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🔨 Put land up for auction',onclick:()=>this.mark()})),
+      el('p',{class:'hint',text:'Pick prime land beside a road, set the opening bid and how long it runs. Nobody can buy it the ordinary way while it’s up for auction.'}));
+    const row=a=>el('button',{class:'person',onclick:()=>{ sel={kind:'a',id:a.id}; const q=iso(a.x+a.w/2,a.y+a.d/2); cam.z=Math.max(cam.z,1.2); cam.x=q.x; cam.y=q.y+(innerWidth<900?innerHeight*0.22/cam.z:0); /* above the card on a phone */ follow=null; renderCard(); if(innerWidth<900) openTab(null); }},
+      el('span',{class:'ava sm',text:'🔨',style:'display:grid;place-items:center;font-size:20px'}), el('span',{class:'dmtxt'}, el('div',{class:'who',text:`${this.title(a)}${a.where?' · '+a.where:''}`}),
+        el('div',{class:'what',text:a.status==='open'?`${a.bids?`Top bid ${fmt(a.top)} by ${withSt(a.leader,'@'+a.leader)}`:`Opening bid ${fmt(a.start)}`} · closes in ${this.clock(this.left(a))}`:this.result(a)})));
+    if(open.length){ body.append(el('h3',{text:'Up for auction'})); for(const a of open) body.append(row(a)); }
+    else body.append(el('p',{class:'hint',text:'No land is up for auction right now. When there is, it shows here and in gold on the map, and the Colony Log announces it.'}));
+    if(done.length){ body.append(el('h3',{text:'Just closed'})); for(const a of done) body.append(row(a)); } },
+  // The developer marks the land the same way players do: swipe to the spot, double-tap, drag over the grass.
+  mark(){ closeCard(); if(innerWidth<900) openTab(null); landSel=null; setTool({kind:'land',mark:false,auction:true}); toast('Swipe to the land you want to auction, then double-tap it and drag over the grass.'); },
+  async startSheet(r){ let q; try{ q=await api(`/api/land/quote?x=${r.x}&y=${r.y}&w=${r.w}&d=${r.d}`); }catch(e){ toast(e.message); return; }
+    showAbove(r.x,r.y,r.w,r.d,0); landSel={a:[r.x,r.y],b:[r.x+r.w-1,r.y+r.d-1],held:true}; const {box,close,wrap}=sheetBox('🔨 Auction this land','dock'); requestAnimationFrame(()=>focusAbove(box,r.x,r.y,r.w,r.d,0)); wrap.onClose=()=>{ if(landSel&&landSel.held) landSel=null; };
+    const nm=el('input',{type:'text',maxlength:'30',placeholder:'Name it (optional), e.g. Riverside corner','aria-label':'Name'}), st=el('input',{type:'number',min:'100',step:'100',inputmode:'numeric',value:String(q.total),'aria-label':'Opening bid'});
+    let mins=1440; const dur=el('div',{class:'seg'}), fillDur=()=>{ dur.innerHTML=''; for(const m of AUCTION_MINUTES) dur.append(el('button',{'aria-pressed':String(m===mins),text:m<60?`${m} min`:`${m/60} h`,onclick:()=>{ mins=m; fillDur(); }})); }; fillDur();
+    box.append(el('p',{class:'hint',text:`${q.w}×${q.d} tiles (${q.tiles}) ${q.where||''}. Bought the ordinary way it would cost ${fmt(q.total)} with the charges.`}));
+    if(q.problem){ box.append(el('p',{class:'warnline',text:q.problem})); return; }
+    box.append(nm, el('label',{class:'hint',text:'Opening bid (coins)'}), st, el('label',{class:'hint',text:'How long it runs'}), dur,
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Start the auction',onclick:async()=>{ try{ const res=await api('/api/admin/auctions',{method:'POST',body:{x:q.x,y:q.y,w:q.w,d:q.d,name:nm.value,start:st.value,minutes:mins}}); toast('The auction is open. The Colony Log has announced it.'); close(); landSel=null; setTool({kind:'pan'}); this.upsert(res.auction); sel={kind:'a',id:res.auction.id}; renderCard(true); }catch(e){ toast(e.message); } }}),
+        el('button',{class:'linkb',text:'Pick another spot',onclick:()=>{ close(); landSel=null; setTool({kind:'land',mark:false,auction:true}); toast('Swipe to the land you want to auction, then double-tap it.'); }}))); } };
 // The 🔑 Rent here section on a home's card.
 function rentBox(b, t){ const box=el('div',{class:'authbox rentbox'}, el('h3',{text:'🔑 Rent here'})); MyHome.load(); const H=MyHome.data;
   if(!H){ box.append(el('p',{class:'hint',text:'…'})); return box; }
@@ -6134,6 +6197,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}), c.home?el('button',{class:'btn',text:'👀 Watch',onclick:()=>Watch.start(0,`Watching @${c.handle}`,null,c.handle)}):'')); }
   } else if(sel.kind==='p'){ Plots.card(card, close);
   } else if(sel.kind==='g'){ Plots.grassCard(card, close);
+  } else if(sel.kind==='a'){ Auction.card(card, close);
   } else if(sel.kind==='v'){ const v=D.vehicles.get(sel.id); if(!v){ closeCard(); return; } const V=VEHICLE_TYPES[v.type]||VEHICLE_TYPES.car;
     const head=el('div',{class:'chead'}); head.append(el('img',{class:'cthumb',alt:'',src:vehicleThumb(v.type)}), el('div',null, el('h2',{text:V.name}), el('p',{class:'now',text:v.owner?`Owned by @${v.owner}`:V.mode==='water'?'Cruising the water':V.mode==='air'?'Flying over the colony':'Driving around the neighbourhood'})));
     card.append(close, head); if(Store.canWrite) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn danger',text:'Remove vehicle',onclick:async()=>{ if(draftOn){ draftEdit(`removing a ${V.name.toLowerCase()}`,d=>{ if(isDraftId(v.id)) d.vehicles=d.vehicles.filter(q=>q.tid!==v.id); else d.removeVehicles.push(v.id); }); closeCard(); return; } try{ await api('/api/admin/vehicles/'+encodeURIComponent(v.id),{method:'DELETE'}); closeCard(); toast(`Removed the ${V.name.toLowerCase()}`); }catch(e){ toast(e.message); } }})));
@@ -6597,6 +6661,7 @@ function renderFeed(force){
   if(feedMode==='story'){ body.append(storyPage()); return; }
   if(feedMode==='news'){ News.render(body); body.scrollTop=keep; return; }
   if(feedMode==='top'){ Top.renderBody(body); body.scrollTop=keep; return; }
+  if(feedMode==='auctions'){ Auction.renderList(body); body.scrollTop=keep; return; }
   if(feedMode==='mayor'){ Mayor.render(body); body.scrollTop=keep; return; }
   if(!S.meta){ body.append(el('p',{class:'hint',text:'The story starts once the colony is founded.'})); return; }
   if(feedMode==='posts'){ for(const m of S.chat.filter(m=>m.p&&shownMsg(m)).sort((a,b)=>b.t-a.t)) body.append(msgPost(m)); const items=postItems(); if(!items.length&&!S.chat.some(m=>m.p)){ body.append(el('p',{class:'hint',text:'Quiet so far. Check back in a few minutes.'})); return; }
@@ -6939,6 +7004,7 @@ function refreshCardLive(){ if(!sel) return;
   if(sel.kind==='c'){ const c=S.citizens.get(sel.id), p=document.querySelector('#card .chead .now'); if(c&&p){ p.textContent=cardNow(c, detail.get(c.id)); return; } }
   else if(sel.kind==='b'){ const b=S.buildings.get(sel.id); if(b&&b.done!==false&&!b.ruin&&!b.upAt) return; }
   else if(sel.kind==='p'||sel.kind==='g') return;
+  else if(sel.kind==='a'){ Auction.tickCard(); return; }
   renderCard(); }
 setInterval(()=>{ if(document.hidden) return; feedDirty=true; renderFeed(); refreshCardLive(); if(activeTab==='people'&&document.activeElement!==$('search')) renderPeople(); refreshHUD(); },4000);
 // The second line at the top is a news flash: when something new happens in the colony (a race winner, an event, an arrest…)

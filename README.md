@@ -123,7 +123,7 @@ In developer mode, the Town Square has **🪧 Colony name**. Renaming changes th
 In developer view, **Colonists** (at the bottom) has:
 - **Remove these**: paste usernames to remove several colonists at once. Their homes and jobs open up for others.
 - **Remove everyone except me**: clears all colonists but keeps the buildings.
-- **Reset colony**: type `RESET` to wipe the whole colony (map, colonists, news, Town Square messages, drafts) and return to "Found your colony". The Instagram connection is kept. Everyone watching is reloaded automatically.
+- **Reset colony**: type `RESET` to wipe the whole colony (map, colonists, everyone's land and offers, land auctions, news, Town Square messages, drafts) and return to "Found your colony". The Instagram connection is kept. Everyone watching is reloaded automatically.
 
 ## Town Square
 
@@ -444,6 +444,15 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
   - Buildings sell back to the colony for 70% of what was paid. If the developer knocks one down, the owner gets back what they paid.
   - **✏️ Rename** on the card of a building you own puts your own name over the door, shown on the map and its card (up to 40 letters; leave it empty to go back to the usual name). The landing site keeps its name.
   - **✥ Move** (on a building you built on your own plot) lets you drag it to another free spot on that plot and let go; **⟲ Turn** faces it the other way. It can't leave the plot, and it can't move during an upgrade. Bought buildings stay where they are.
+- **🔨 Land auctions** (`server/auctions.js`, `AUCTION_*` in `shared/rules.js`): prime land the developer puts up for bidding.
+  - **Starting one (developer):** Town Square → **🔨 Auctions** → **Put land up for auction**. Swipe to the spot, double-tap it and drag over the grass (2×2 to 8×8, beside a road), just like buying land. Then give it a name if you like, set the opening bid (it starts at what the land would cost the ordinary way) and how long it runs (30 minutes to 48 hours). The Colony Log announces it.
+  - **On the map** the land shows in gold with a dashed edge and a sign with the top bid (or the opening bid). Nobody can buy it the ordinary way while it's up for auction.
+  - **Bidding:** tap the land (or the auction in Town Square → 🔨 Auctions) and bid. Bids are paid in cash straight away and held by the auction. Each bid must beat the last by 5% (at least 100 coins). The top bidder can't bid against themselves.
+  - **Outbid?** Every coin comes straight back to your cash, with a notice (and a phone notification if they're switched on) so you can bid again.
+  - **No last-second snatching:** a bid in the last 2 minutes moves the close to 2 minutes after it.
+  - **Closing:** the winning bid goes to the treasury and the land becomes the winner's plot, to build on like any other (it counts as one of their properties; you can't bid if leading would take you over your limit). The Colony Log names the winner. With no bids, the land is simply free again.
+  - **Calling it off:** the developer's **Call it off** on the auction's card gives the top bid back.
+  - Finished auctions stay listed for an hour. Tables: `auctions` and `auction_bids` (migration 61).
 - **Gifts.** Signed-in colonists can send coins to each other, with **Send a gift** on another colonist's card or **Gift coins** in the Wallet tab.
   - Gifts are paid in cash, from what you have on you; withdraw savings at a Bank first.
   - Each colonist can send up to 10,000 a real day, so nobody can funnel a stack of accounts into one.

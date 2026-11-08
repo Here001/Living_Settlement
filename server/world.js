@@ -969,7 +969,7 @@ export class World {
   // The Instagram connection and its settings are kept.
   async resetColony() {
     await this.change(async ch => {
-      await ch.q(`truncate buildings, roads, water, vehicles, disasters, citizens, events, comments, messages, claims, sessions, draft, fight_nights, fight_bouts, fight_signups, fight_bets, fighters`);
+      await ch.q(`truncate buildings, roads, water, vehicles, disasters, citizens, events, comments, messages, claims, sessions, draft, fight_nights, fight_bouts, fight_signups, fight_bets, fighters, plots, offers, auctions, auction_bids`);
       await ch.q('delete from meta where id = 1');
       ch.meta = null; ch.extraOps.push({ op: 'reset' });
     }, { allowUnfounded: true });

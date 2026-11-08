@@ -289,6 +289,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/me/offers', limit, send(async req => H().offers((await me(req)).id)));
   r.post('/me/offers', limit, send(async req => H().makeOffer((await me(req)).id, bd(req))));
   r.post('/me/offers/:id', limit, send(async req => H().answer((await me(req)).id, req.params.id, bd(req))));
+  r.post('/me/auctions/:id/bid', limit, send(async req => world.auctions.bid((await me(req)).id, req.params.id, (req.body || {}).amount)));
   r.post('/me/lottery', limit, send(async req => world.lottery.buy((await me(req)).id, (req.body || {}).count, world.blockedReason?.bind(world))));
   // Fight Night: sign up to fight (until the card is set), and one bet per bout before its bell.
   r.post('/me/fight/signup', limit, send(async req => world.fights.signup((await me(req)).id, (req.body || {}).on !== false, world.blockedReason?.bind(world))));

@@ -233,6 +233,12 @@ const PROPERTY_LIMITS = [5, 5, 5, 5, 8, 10, 12, 15, 18, 21, 24, 27, 30];
 export const propertyLimit = stars => PROPERTY_LIMITS[Math.max(0, Math.min(12, Math.floor(Number(stars) || 0)))];
 export const PLOT_MIN = 2, PLOT_MAX = 8;
 
+// Land auctions: the developer puts a prime patch of land up for auction. Each bid must beat the last by 5% (at least 100
+// coins); a bid in the last 2 minutes pushes the end back to 2 minutes after it, so nobody can snatch it at the final second.
+export const AUCTION_STEP = 0.05, AUCTION_STEP_MIN = 100, AUCTION_SNIPE = 2 * 60 * 1000;
+export const AUCTION_MINUTES = [30, 60, 180, 360, 720, 1440, 2880];
+export const nextBid = a => a.bids > 0 ? Math.max(a.top + AUCTION_STEP_MIN, Math.ceil(a.top * (1 + AUCTION_STEP) / 10) * 10) : a.start;
+
 // Upgrades: every home, business or place to go out can be raised from level 1 to 5. Each level holds 30% more people,
 // earns its owner 10% more on each of them, and looks grander; level 3 makes it a tile wider and level 5 a tile deeper,
 // so those need the room (on its plot, or free ground beside a building that has no plot).

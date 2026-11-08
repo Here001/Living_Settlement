@@ -18,7 +18,7 @@ Postgres (the truth) ◀─▶ web server(s) ─▶ WebSocket, per district ─�
 - **Time:** 30 real minutes = 1 game day (1 game minute = 1.25 real seconds), so 48 game days pass per real day. Every citizen's day (commute, work, lunch, evenings out, sleep) is worked out from the clock, so the city keeps living with nobody watching. A town started on the old slower clock switches over smoothly on its next start, without skipping time.
 - **Day, night and weather:** the sky follows the clock. Street lamps, windows and headlights come on at dusk. Weather (sun, cloud, rain, fog, storm) changes every 6 game hours, and the same for every viewer.
 - **Traffic:** about half of citizens own a car and drive longer trips along roads. Buses, taxis and delivery vans fill the streets by time of day, busier at rush hour. Fire trucks, police and ambulances drive out to disasters.
-- **Money:** jobs pay daily wages. Rent and 20% tax come out of wages and fund the treasury, along with a daily grant of 200. Unemployed residents live rent-free. Building costs coins from the treasury.
+- **Money:** jobs pay daily wages. Rent and 20% tax come out of wages and fund the treasury, along with a daily grant of 200. Unemployed residents live rent-free. Building costs coins from the treasury. The full picture, and the dials for tuning it, is under **The economy** below.
 - **Only you build.** Open the site with `#builder` and enter your `ADMIN_TOKEN`. Everyone else gets a view-only city.
 
 ## Moving around the map
@@ -65,7 +65,14 @@ The **Stats** tab in the developer's toolbar shows how the colony is really bein
 - **Which ways to earn players use:** the share of this week's players who used each way to earn.
 - **Where players drop off:** started claiming → proved it → set a password, then the share of players who got a job, collected a daily reward, earned on the side, went somewhere, used the Bank, came back another day, bought a car or a building.
 - **When players were last here**, and **Do new players come back?** (by sign-up day: the next day, days 2–3 and days 6–8).
-- Data is kept in `activity` (who played each real day), `flows` and `flow_players` (coins by kind and day) and `snapshots` (money each day). Tracking starts from this version, so earlier days are empty.
+- **Economy health** (at the top): all the coins in the colony (players plus treasury), how fast that grew over the last real day against the 2% aim, the stabiliser's dial, how much the richest 10% of players hold, the treasury (shown in red as a debt if it's below zero), today's wealth tax and how many players hold a status title. A bar chart shows the coins over the last 7 days (hover a bar for the treasury, the dial and the top 10%'s share at that hour). **− 10%**, **Reset to 100%** and **+ 10%** set the dial by hand, and **Measure now** takes a reading straight away. See **The economy** below.
+- Data is kept in `activity` (who played each real day), `flows` and `flow_players` (coins by kind and day), `snapshots` (money each day) and `econ_snaps` (the hourly economy readings, kept for 30 days). Tracking starts from this version, so earlier days are empty.
+
+### 💰 Accounts (developer only)
+
+The **Accounts** tab in the developer's toolbar lists every player (anyone who has set a password) with their cash, bank and total, and totals for the whole colony at the top. Search by @handle or name. A 🔒 marks someone in jail, their status badge shows by their name, and 💸 with a number shows how many crimes or heists they've pulled today. A cash figure in red means they owe coins.
+
+Tap a player to see everything about their money: cash, bank, total and daily pay, what came in and went out in the last 24 hours, a table of where their money went by kind (all time), and their full history, newest first and grouped by day (**Show older** loads more). It reads from the same `ledger` as the players' own Cash flow (`GET /api/admin/accounts` and `/api/admin/accounts/:handle`, in `server/index.js`).
 
 ## Adjusting a colonist's coins
 
@@ -90,7 +97,22 @@ Cars can't use railway or platform tiles, and people cross the tracks only when 
 
 ## The colony treasury
 
-In developer mode, the coin counter at the top shows the treasury. **Tap it** to add coins (with quick +1,000 / +10,000 / +100,000 / +1,000,000 buttons, or any amount up to 10 million at a time) or to take some out. Added coins are new money; they aren't taken from anyone. The treasury pays wages, bank interest, daily rewards, casino and race winnings, and everything in the Earn tab, so top it up if it runs low. For a player, tapping their own coin counter opens their Earn tab.
+In developer mode, the coin counter at the top shows the treasury. **Tap it** to add coins (with quick +1,000 / +10,000 / +100,000 / +1,000,000 buttons, or any amount up to 10 million at a time) or to take some out. Added coins are new money; they aren't taken from anyone. The treasury pays wages, bank interest, daily rewards, casino and race winnings, crime loot, and everything in the Earn tab. For a player, tapping their own coin counter opens their Earn tab.
+
+The treasury never makes up coins of its own. It can go **into debt** (below zero) instead, and pays it back from the taxes, fees and bills that keep coming in. While it's in debt, anything that pays "up to what the treasury holds" (crime loot, daily rewards, Earn-tab payouts, interest) pays nothing. If it can't cover every owner's rent and profit for the day, each owner gets the same share of what it has. You can still top it up by hand.
+
+## The economy
+
+The economy was rebuilt so coins can't pile up without limit, and so it can be tuned from real numbers. The dials are at the bottom of `shared/rules.js`, under "The economy's dials".
+
+- **Where coins go in and out.** Coins move between players and the treasury; the treasury doesn't create them (see above). It takes in tax, rent's cut, fares, bills, fees, fines, purchases, the casino's edge, wealth tax and status titles, and pays out wages, rewards, loot, rents, profits and interest.
+- **Wages.** Take-home pay is salary minus 20% tax minus rent (`taxOf()` and `netOf()` in `shared/rules.js`). Before, the tax was added on top of the salary. When the live server first starts on this version it cuts everyone's existing pay to match, once (`world.taxOutOfWages()`, remembered as `meta.taxOut`); take-home pay drops noticeably (by about 44% on the test town). If pay feels too low, the 20% is `TAX_RATE` in `shared/rules.js`.
+- **Crime pays less the more you do it.** Each crime or heist that comes off in the same real day pays 15% less than the one before (`CRIME_DECAY`). It's back to full pay the next day (midnight UTC). The Crime tab shows how many you've pulled today and what the next one pays.
+- **Loot is capped by the treasury.** One job can take at most a share of what the treasury holds (`CRIME_SHARE`): robbing a shop 3%, conning a tourist 1%, an ATM 5%, an armoured truck 10%, a jailbreak bounty 4% and a bank heist 20%. Robbing the Mayor is capped by the Mayor's own cash instead. So one crew can't empty the town, and nothing pays while the treasury is in debt.
+- **Wealth tax.** 0.5% a real day on cash plus savings above 250,000 (`WEALTH_FREE` and `WEALTH_RATE`), taken a little each game day (`economy.day()` in `server/economy.js`) and paid to the treasury. It shows in Cash flow as wealth tax. Below 250,000 nobody pays anything.
+- **Status titles.** Something worth spending on for the richest players: titles bought for cash, each 4 times the price of the last (`STATUS`): 🥉 Bronze 50,000, 🥈 Silver 200,000, 🥇 Gold 800,000, 💠 Platinum 3,200,000, 💎 Diamond 12,800,000, 👑 Legend 51,200,000. They're only for show. Buy the next one from the **👛 Wallet** tab, which shows the whole ladder (`POST /api/me/status`); the badge then shows on your card, and the Colony Log announces it. The coins go to the treasury. For now the badge shows on the card and in the developer's Accounts list, not yet in chat or other lists.
+- **The stabiliser.** Every hour (`econTick()` in `server/stats.js`) the server counts all the coins in the colony and works out how fast that's growing over a real day. It aims for about 2% a day (new players and building need some growth), give or take 1% (`ECON`). Growing faster than that, it turns a dial down 4%; slower, it turns it up 4%; at most once an hour, and always between 50% and 150%. The dial scales crime takings, heist loot, daily rewards and bank interest. Wages, prices and bills are never touched. The developer sees it all under **Economy health** in the Stats tab, and can set the dial by hand (`POST /api/admin/economy` with `{f}`, or `{measure:true}` to measure now); the stabiliser carries on nudging from there.
+- **Tuning.** Watch Economy health for a day or two, then adjust `CRIME_SHARE`, `CRIME_DECAY`, the wealth tax (`WEALTH_RATE`, `WEALTH_FREE`), the growth aim (`ECON.target`) or the wage tax (`TAX_RATE`).
 
 ## Renaming the colony
 
@@ -181,7 +203,7 @@ They comment it on any of your Instagram posts **from their own account**. After
 - **Bedtimes vary** too: early birds head home an hour early, night owls up to an hour and a half late, so the colony doesn't all go to bed at once.
 - Pickpocketing follows the same hours: a night-shift worker is safe at home in the morning and out and about in the late afternoon.
 
-- **Automatic jobs.** Colonists start with 0 coins. When they move into a home, the game gives them the nearest free job. Each game day they earn their salary minus their rent.
+- **Automatic jobs.** Colonists start with 0 coins. When they move into a home, the game gives them the nearest free job. Each game day they take home their salary minus 20% tax minus their rent (`netOf()` in `shared/rules.js`). The tax comes out of the salary; it isn't added on top.
 - **The Work box.** A signed-in colonist's own card has a Work box. It shows their job and take-home pay, a **Quit** button, and **Find a job**: a list of open jobs nearest their home, each with take-home pay and distance.
 - **Taking a job.** Colonists can take a new job once per game day. Quitting is always allowed, but doesn't reset that limit.
 - **After quitting.** Automatic hiring leaves them alone until they choose another job. If their workplace is demolished, automatic hiring takes over again.
@@ -276,13 +298,20 @@ Every colonist's card has a full-screen button beside Share and ×, like Town Sq
     - 🚕 cab: 10 coins plus 6 a mile
     - 🚗 your own car: fuel, 2 coins a mile
     - Not enough cash for the fare? You walk, for free. The Go here line shows the fare before you go, and fares go to the treasury.
-- **Crime.** Crimes can be tried once every 10 minutes.
+- **Crime.** After any crime, win or lose, you lie low for 20 seconds before the next one.
+  - **Crimes are mini games.** Robbing a shop, conning a tourist and hacking an ATM each open a full-screen game, and how well you play decides whether you get away and how much you take. The police odds below set how hard it is. The games run on the phone, but the server replays every move (`shared/minigames.js`, shared by both) to decide the result, so they can't be faked. **Practise (free)** plays any of them for nothing first, and heist parts can be practised from the Crime tab too.
+    - **🛒 Rob the shop:** a cut-away 3D shop on the real map. Sneak in, empty the till and get out, staying out of the staff's yellow view cones and away from cameras and lasers. Grabbing extra goods off the shelves on the way pays more.
+    - **🎭 Con a tourist:** pick the line that suits their mood, and say it while the marker is in the green.
+    - **🏧 Hack the ATM:** rewire it (each wire to the socket with its colour's symbol), then tap back the code the keypad flashes. Win and the next one is harder: the sockets shift around and a fuse burns down.
+  - **A winning streak makes it harder.** Each win in a row makes the next game harder and the odds a little worse; getting caught wipes the streak (`crime_streak`).
+  - **Sound and feel** (`public/juice.js`): the games have their own sounds, made in the browser (no sound files), plus a camera shake that builds up and fades, flashes, pop-up text, and a coin count that ticks up on a win. The 🔊 button in a game's corner turns the sound off or on, and the phone remembers it. None of this changes the result.
+  - **Pay:** each job pulled in the same real day pays 15% less than the last, and what a job can take is capped by what the treasury holds. See **The economy**.
   - **Pickpocket:** steal 10–25% of a colonist's coins, up to 1,500. Other colonists' cards have **Pick their pocket**.
     - Only someone **out and about** can be pickpocketed: on their lunch break, commuting, out in the evening, job hunting, or on a trip somewhere that isn't a home. When that is depends on their shift and bedtime (see **Shifts and bedtimes** under Jobs).
     - Nobody can be pickpocketed at home (asleep or relaxing: for a day worker roughly 19:20 to 07:55 game time, later for night owls), while visiting someone's home, or in the Jail.
     - At work (during their shift), only a workmate at the same building can try.
     - The server checks this (`routineAt` in `shared/rules.js`, `whereIs` in `server/actions.js`). The card shows "🛡️ … is safe at home right now" instead of the button when it isn't possible.
-  - **Rob the nearest shop:** 5,000–10,000 coins from the till, which the treasury pays.
+  - **Rob the nearest shop:** 5,000–10,000 coins from the till (at most 3% of the treasury), which the treasury pays.
   - **Chances** depend on how far the nearest Police station is from where the crime happens (`crimeOdds()` in `shared/rules.js`):
     - 🟢 more than 40 tiles away, or no police at all: pickpocket 75%, robbery 60%
     - 🟡 16 to 40 tiles: pickpocket 45%, robbery 32%
@@ -293,11 +322,13 @@ Every colonist's card has a full-screen button beside Share and ×, like Town Sq
   - **Getting caught:** a fine of twice the amount they tried to take, at least 250, which goes to the treasury.
   - **Jail:** if the colony has a Jail, 10 minutes in it, seen inside. A jailed colonist can't gamble, bet, go out, adopt or commit crimes.
   - **News:** successes are reported anonymously in the Colony Log; arrests name the culprit.
-  - **More solo crimes** (`SOLO_CRIMES` in `shared/rules.js`): **🎭 Con a tourist** (800–2,000 coins; 85% / 60% / 35%) and **🏧 Hack an ATM** at the nearest Bank (8,000–15,000; 50% / 28% / 10%). Same cooldown, fines, jail, night and crime-wave bonuses.
+  - **More solo crimes** (`SOLO_CRIMES` in `shared/rules.js`): **🎭 Con a tourist** (800–2,000 coins; 85% / 60% / 35%) and **🏧 Hack an ATM** at the nearest Bank (8,000–15,000; 50% / 28% / 10%). Same cooldown, fines, jail, night and crime-wave bonuses; at most 1% and 5% of the treasury.
 - **Group crimes (heists)** (`server/heists.js`, `HEISTS` in `shared/rules.js`), at the bottom of the Crime tab:
   - **🚚 Hit an armoured truck** (crew 2–5, 20,000–50,000, jail 20 min), **👑 Rob the Mayor** (crew 2–5, 30–50% of the cash on the Mayor, jail 25 min; needs a Mayor), **🔓 Break someone out of jail** (crew 2–6, frees the inmate and pays a 6,000–12,000 bounty; fail and the inmate gets 10 more minutes; jail 30 min), **🏦 Bank heist** (crew 3–6, 60,000–150,000 from the vault, jail 30 min). Odds use the same police bands (armoured 50/30/14%, Mayor 50/30/15%, jailbreak 45/28/12%, bank 40/24/10%), plus night, a crime wave or the Mayor's pledge, and +4 points for each crew member beyond the minimum.
   - **Planning:** pick the job, when it goes down (5, 10, 20, 30 or 60 real minutes away) and who to invite. The crew get a group chat named after the job, with an invite from the colony saying who invited them, to agree the plan. Joining the chat is joining the crew; the Crime tab shows each job, its crew, a countdown, **💬 Crew chat**, and for the planner **Go now** (once the minimum crew has joined) and **Call it off**.
-  - **What happens:** at the set time (checked every 15 seconds) one roll decides whether the job comes off; then each member is caught or not (15% if it came off, 70% if it went wrong, 10 points less at night). Everyone who gets away splits the loot equally; anyone caught is fined twice their share (at least 1,000, never more than they have) and jailed. Members who are in jail or homeless when it happens sit it out; with too few left, it's called off. The result goes to the crew chat, the Colony Log and each member's notices. Loot comes from the treasury (from the Mayor's own pocket for that job), so no coins are made up. Afterwards the crew lie low for 30 minutes.
+  - **What happens:** at the set time (checked every 15 seconds) one roll decides whether the job comes off; then each member is caught or not (15% if it came off, 70% if it went wrong, 10 points less at night). Everyone who gets away splits the loot equally; anyone caught is fined twice their share (at least 1,000, never more than they have) and jailed. Members who are in jail or homeless when it happens sit it out; with too few left, it's called off. The result goes to the crew chat, the Colony Log and each member's notices. Loot comes from the treasury (from the Mayor's own pocket for that job), so no coins are made up, and it's capped at a share of the treasury (see **The economy**). Afterwards the crew lie low for 20 seconds.
+  - **Each member plays a part** when the job goes live, as a mini game: 🚗 the **driver** steers the getaway car down a road that keeps speeding up, 💻 the **hacker** rewires the security panel, 🔐 the **safecracker** stops a spinning dial on each number, 👀 the **lookout** watches the doorways round a 3D yard and taps the police before they slip away, and 💪 the **muscle** holds off a zombie horde (move with the left thumb, hold the red button to fight, pick up weapons; the waves keep growing). How the crew plays sets the loot.
+  - **The crew chat closes** 2 minutes after the result. It sits under **Heists** in Chats.
 - **Pet.** Adopt one of the six native creatures at a Pet store (2,500–10,000 coins), name it, and it walks beside you on the map. You can rename it or let it go.
 
 ## Finding a building to build
@@ -397,7 +428,8 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
   - **Deposits and withdrawals happen at a Bank.** Tap any bank on the map (Microfinance, Community, Local or International, all under Offices; or type "bank" in the build menu search): its card has **🏦 Your account**, with Deposit, Withdraw and Deposit all my cash. The server refuses both unless the request names a finished Bank.
   - The **👛 Wallet** tab on your own card shows your cash and savings, and has **Go to the nearest Bank**, the buildings you own, and **📒 Cash flow**: everything that came in (green) or went out (red), newest first, grouped by day, with totals for the last 24 hours and All / Money in / Money out filters. It covers wages (once a game day), gigs, rewards, winnings and bets, fares, rent and movers, cars, buildings, bills, gifts sent and received, crimes, fines and bank deposits and withdrawals (`ledger` table, migration 43; kept for a month).
   - Money in the bank can't be pickpocketed.
-  - Savings grow 0.02% each game day (about 1% a real day), up to 100 coins a game day. The treasury pays interest only when it can afford to, so the bank never creates coins.
+  - Savings grow 0.02% each game day (about 1% a real day), up to 100 coins a game day, scaled by the stabiliser's dial (see **The economy**). Interest is paid only from what the treasury has left after rents and profits; if that isn't enough for everyone, everyone gets the same share. The bank never creates coins.
+  - The Wallet also has the **status ladder** (titles to buy, only for show; see **The economy**).
 - **Cars.**
   - Cars are bought at a **🚘 Car dealership** (a new building, under Shops → Large): its card has the showroom and a list of your cars to sell. The **Cars** tab on your card just lists your cars (drive or sell) and has **Go to the Car dealership**.
   - The dealer sells five models (Hatchback 25,000, Sedan 45,000, Pickup 70,000, SUV 95,000, Sports car 300,000), each in a choice of colours.
@@ -410,6 +442,8 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
   - Every game day owners are paid automatically: 80% of the rent their residents pay, or 80% of a business's profit (25% of its wage bill). The treasury keeps 20%.
   - **Prices** (`propertyPrice()` in `shared/rules.js`) are set so a full building pays for itself in about a real month (30 real days, 1,440 game days), and slower when it isn't full. For example: Market stall or Shelter tent 5,000; Log cabin 14,000; House 37,000; Small office 48,000; Restaurant 46,000; Casino 59,000; Panel block 195,000; Local bank 275,000; Apartment tower 485,000; Shopping mall 760,000; Belle époque tower 7,900,000. A building's "Cost" in the build menu is what the developer pays to build it, not what a player pays to buy it.
   - Buildings sell back to the colony for 70% of what was paid. If the developer knocks one down, the owner gets back what they paid.
+  - **✏️ Rename** on the card of a building you own puts your own name over the door, shown on the map and its card (up to 40 letters; leave it empty to go back to the usual name). The landing site keeps its name.
+  - **✥ Move** (on a building you built on your own plot) lets you drag it to another free spot on that plot and let go; **⟲ Turn** faces it the other way. It can't leave the plot, and it can't move during an upgrade. Bought buildings stay where they are.
 - **Gifts.** Signed-in colonists can send coins to each other, with **Send a gift** on another colonist's card or **Gift coins** in the Wallet tab.
   - Gifts are paid in cash, from what you have on you; withdraw savings at a Bank first.
   - Each colonist can send up to 10,000 a real day, so nobody can funnel a stack of accounts into one.
@@ -434,6 +468,7 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
 - **@ suggestions.** Type @ in any text box (a gift, a pickpocket target, group or crew invites, searches, messages) and the people you chat with pop up, most messages first: chats you started and requests you accepted (`GET /api/dm-contacts`). Tap one (or press Enter) to fill in their @username.
 - **The far-away fee.** Messaging a colonist whose home is within 40 tiles of yours (your area) is free. Anyone further away, or without a home, costs **2 coins a message** from your cash, paid to the treasury. The chat shows which applies above the message box. In a group, a message is free only if every other member lives near you.
 - **Pin and delete.** **⋯ → 📌 Pin chat** keeps a chat at the top. **⋯ → 🗑 Delete chat** clears it for you only (tap twice to confirm); the other person keeps theirs, and a new message brings it back starting fresh.
+- **Groups and Heists.** Along the top of the Chats tab, **Groups** gathers your group chats (with **Create a group chat**) and **Heists** your crew chats, each with its own unread count. A crew chat closes 2 minutes after the job's result.
 - **Group chats.** **➕ New group** on the Chats tab: give it a name and pick colonists from your chats or who's online, or type @handles (up to 30 people). Each invitee gets a message from the colony (for example "🪐 Gliese-12b: @zara invited you to join the group chat “Night owls”. Do you want to join?"), live and as a phone notification, and it waits at the top of their Chats tab with **Join** and **Decline**. Members see who joins and leaves, can invite more people, pin, clear the chat for themselves, or **Leave group**. Tap a sender's name to open their card.
 - **Under the hood.** Migration 42 adds reply and fee columns to `dms`, `chat_state` (per-person pin, cleared-at, accepted, read-at), `chat_groups`, `group_members` and `group_msgs`. Group messages go out as the private live op `gm`, invites as `chatInvite`.
 - **Online status.** A colonist is online while they're signed in with the colony open. Verified colonists show a green dot and "● Online now" or "Last seen 5 min ago" on their card, in the Colonists list and in chats.

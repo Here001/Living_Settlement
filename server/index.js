@@ -80,6 +80,11 @@ setInterval(() => { if (isLeader && world.meta) leaderboards.rollover().catch(e 
 const actions = new Actions(world); world.actions = actions; world.blockedReason = c => actions.blockedReason(c);
 const app = express();
 app.disable('x-powered-by');
+// While the server is starting (migrations, loading the world) its port is already open, so the host sees it alive, but it
+// answers "starting up" to everything except the health check, which says not ready yet. The host keeps sending players to
+// the old server until the health check passes, so an update never fails for being slow to start, and nobody sees a gap.
+let ready = false;
+app.use((req, res, next) => { if (ready || req.path === '/health') return next(); res.status(503).set('retry-after', '5').type('text').send('Starting up, back in a moment.'); });
 app.use(compression()); // map data is very repetitive JSON; this shrinks it several times over
 app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1)); // Render, Fly and most hosts sit one proxy in front
 
@@ -171,7 +176,7 @@ const APP_VERSION = (() => { const h = crypto.createHash('sha1'); try { h.update
   for (const f of fs.readdirSync(path.join(root, 'public')).filter(f => f.endsWith('.js')).sort()) h.update(fs.readFileSync(path.join(root, 'public', f))); } catch (e) { h.update(String(Date.now())); }
   return h.digest('hex').slice(0, 12); })();
 app.get('/api/version', (req, res) => { res.set('cache-control', 'no-store'); res.json({ v: APP_VERSION }); });
-app.get('/health', (req, res) => res.json({ ok: true, founded: !!world.meta, population: world.meta?.population || 0, viewers: wss?.clients.size || 0, bus: bus.kind, leader: isLeader }));
+app.get('/health', (req, res) => ready ? res.json({ ok: true, founded: !!world.meta, population: world.meta?.population || 0, viewers: wss?.clients.size || 0, bus: bus.kind, leader: isLeader }) : res.status(503).json({ ok: false, starting: true }));
 
 // Point a free pinger (cron-job.org, UptimeRobot) here every few minutes.
 // It keeps sleepy hosts awake and runs the clock's catch-up work.
@@ -311,6 +316,7 @@ const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 8192 });
 const MAX_BUFFER = 2 * 1024 * 1024;
 wss.on('error', e => console.error('websocket server:', e.message));
 wss.on('connection', ws => {
+  if (!ready) { try { ws.close(1013, 'starting'); } catch {} return; } // try again in a moment
   ws.isAlive = true; ws.subs = new Set(); ws.out = [];
   ws.on('error', () => { try { ws.terminate(); } catch {} });
   ws.on('pong', () => { ws.isAlive = true; });
@@ -403,15 +409,18 @@ setInterval(() => { if (isLeader) fights.tick().catch(e => console.error('fights
 setInterval(() => { if (isLeader) lottery.tick().catch(e => console.error('lottery:', e.message)); }, 2000); // announce and draw the lottery
 setInterval(() => { if (isLeader) auctions.tick().catch(e => console.error('auctions:', e.message)); }, 2000); // close land auctions when their time is up
 
-await migrate();
-await loadIgStatus();
-await bus.start();
-await world.load();
-await tryLead();
+// Open the port first (see `ready` above), then get the world ready, timing each step in the log.
+server.keepAliveTimeout = 65000; server.headersTimeout = 66000; // longer than the host's proxy, so it never reuses a closed connection
+server.listen(PORT, () => console.log(`Port ${PORT} open; starting up…`));
+const step = async (name, fn) => { const t = Date.now(); const r = await fn(); console.log(`startup: ${name} took ${Date.now() - t} ms`); return r; };
+await step('migrations', migrate);
+await step('Instagram settings', loadIgStatus);
+await step('update bus', () => bus.start());
+await step('loading the world', () => world.load());
+await step('leader check', tryLead);
 if (isLeader && await world.reanchor().catch(e => { console.error('reanchor failed:', e.message); return false; })) console.log('Switched the clock to 30 real minutes per game day.');
 if (isLeader) await world.upgradeCampfire().catch(e => console.error('landing station:', e.message));
 if (isLeader) await world.taxOutOfWages().then(n => n && console.log(`Took the 20% tax out of ${n} wages.`)).catch(e => console.error('wage tax:', e.message));
-if (isLeader) await world.tick().catch(e => console.error('tick failed:', e.message)); // catch up on anything missed while off
-server.keepAliveTimeout = 65000; server.headersTimeout = 66000; // longer than the host's proxy, so it never reuses a closed connection
-server.listen(PORT, () => { started = true; console.log(`City running on :${PORT} with ${world.meta?.population || 0} citizens (bus: ${bus.kind})`); });
+if (isLeader) await step('catching up the clock', () => world.tick().catch(e => console.error('tick failed:', e.message))); // anything missed while off
+ready = true; started = true; console.log(`City running on :${PORT} with ${world.meta?.population || 0} citizens (bus: ${bus.kind})`);
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => { server.close(); try { const { drainFlows } = await import('./stats.js'); await Promise.race([drainFlows(), new Promise(r => setTimeout(r, 3000))]); } catch {} process.exit(0); }); // the last few seconds of stats are saved first

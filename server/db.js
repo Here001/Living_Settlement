@@ -343,11 +343,13 @@ export async function migrate() {
       console.log(`Database migrated to version ${v}`);
     }
     // Keep each building's capacities in step with the catalog, so changing a number there takes effect on restart.
-    for (const lv of (await c.query('select distinct level from buildings')).rows.map(r => r.level)) for (const [type, t] of Object.entries(BUILDING_TYPES)) {
-      const cap = capacities(type, lv);
-      await c.query('update buildings set home_cap = $2, job_cap = $3, hang_cap = $4, leisure = $5 where type = $1 and level = $6 and done and not ruin and (home_cap, job_cap, hang_cap, leisure) is distinct from ($2, $3, $4, $5)',
-        [type, cap.homeCap, cap.jobCap, cap.hangCap, cap.leisure, lv]);
-    }
+    // One query for every type and level (not one each: on a database in another region, a thousand round trips take minutes).
+    const V = { type: [], level: [], h: [], j: [], g: [], l: [] };
+    for (const lv of (await c.query('select distinct level from buildings')).rows.map(r => r.level)) for (const type of Object.keys(BUILDING_TYPES)) {
+      const cap = capacities(type, lv); V.type.push(type); V.level.push(lv); V.h.push(cap.homeCap); V.j.push(cap.jobCap); V.g.push(cap.hangCap); V.l.push(cap.leisure); }
+    if (V.type.length) await c.query(`update buildings b set home_cap = v.h, job_cap = v.j, hang_cap = v.g, leisure = v.l
+      from unnest($1::text[], $2::int[], $3::int[], $4::int[], $5::int[], $6::boolean[]) v(type, level, h, j, g, l)
+      where b.type = v.type and b.level = v.level and b.done and not b.ruin and (b.home_cap, b.job_cap, b.hang_cap, b.leisure) is distinct from (v.h, v.j, v.g, v.l)`, [V.type, V.level, V.h, V.j, V.g, V.l]);
   } catch (e) { await c.query('rollback').catch(() => {}); throw e; }
   finally { await c.query('select pg_advisory_unlock(90210)').catch(() => {}); c.release(); }
 }

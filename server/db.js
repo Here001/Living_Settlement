@@ -319,6 +319,8 @@ const MIGRATIONS = [
    create table if not exists crime_best (citizen_id text not null, kind text not null, score int not null, at bigint not null, primary key (citizen_id, kind));
    create table if not exists crime_contracts (citizen_id text not null, day text not null, ids text[] not null, prog int[] not null, paid boolean[] not null,
      bonus boolean not null default false, primary key (citizen_id, day));`,
+  // v63: daily usage quotas and budgets (posts, messages, offers… per player; the radio's paid AI per colony)
+  `create table if not exists usage_daily (subject text not null, day text not null, kind text not null, n int not null default 0, primary key (subject, day, kind));`,
 ];
 
 export async function migrate() {

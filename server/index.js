@@ -32,6 +32,7 @@ import { Push } from './push.js';
 import { Elections } from './elections.js';
 import { Lottery } from './lottery.js';
 import { Auctions } from './auctions.js';
+import { throttle, apiThrottle, take, ipOf, locked, failed, usageReport, WS_PER_IP } from './limits.js';
 import { Housing } from './housing.js';
 import { Economy } from './economy.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
@@ -87,28 +88,33 @@ let ready = false;
 app.use((req, res, next) => { if (ready || req.path === '/health') return next(); res.status(503).set('retry-after', '5').type('text').send('Starting up, back in a moment.'); });
 app.use(compression()); // map data is very repetitive JSON; this shrinks it several times over
 app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1)); // Render, Fly and most hosts sit one proxy in front
+// Security headers on every reply: browsers mustn't guess file types, frame the game inside other sites, leak full
+// addresses to other sites, or (on https) ever fall back to plain http; and nothing may use the camera or microphone.
+app.use((req, res, next) => { res.set({ 'x-content-type-options': 'nosniff', 'x-frame-options': 'SAMEORIGIN', 'referrer-policy': 'strict-origin-when-cross-origin',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=()' }); if (req.secure) res.set('strict-transport-security', 'max-age=15552000; includeSubDomains'); next(); });
 
-// ---------- rate limiting (per visitor IP, per server instance) ----------
-const buckets = new Map(); const RATE = Number(process.env.RATE_PER_MIN || 240);
-const limit = (req, res, next) => {
-  const now = Date.now(); const k = req.ip; let b = buckets.get(k);
-  if (!b || now - b.t > 60000) buckets.set(k, b = { t: now, n: 0 });
-  if (++b.n > RATE) return res.status(429).json({ error: 'Too many requests. Slow down a little.' });
-  next();
-};
-setInterval(() => { const now = Date.now(); for (const [k, b] of buckets) if (now - b.t > 60000) buckets.delete(k); }, 60000).unref();
-
-// Webhooks need the raw body for signature checks, so they mount before the JSON parser.
-app.use('/webhooks/instagram', instagramRouter(world));
-app.use(express.json({ limit: '512kb' }));
+// ---------- rate limits, quotas and cost caps (see server/limits.js) ----------
+// Every IP has an overall allowance; the API has its own (smaller for searches and sign-ins), and each signed-in player
+// one for actions. Route handlers still list `limit` (the API throttle has already counted them), so it lets them through.
+app.use(throttle('all'));
+const limit = (req, res, next) => next();
+app.use('/webhooks', throttle('hook'));
+app.use('/api', apiThrottle);
 
 const safeEq = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
+// The builder's password: ten wrong guesses from one address and it's locked out for 15 minutes (then it can try again).
 const admin = (req, res, next) => {
-  const token = (req.get('authorization') || '').replace(/^Bearer\s+/i, '');
-  if (!token || !safeEq(token, process.env.ADMIN_TOKEN)) return res.status(401).json({ error: 'Builder token required.' });
+  const token = (req.get('authorization') || '').replace(/^Bearer\s+/i, ''), ip = ipOf(req);
+  if (locked('admin', ip)) return res.status(429).set('retry-after', '900').json({ error: 'Too many wrong builder passwords. Try again in 15 minutes.' });
+  if (!token || !safeEq(token, process.env.ADMIN_TOKEN)) { if (token) failed('admin', ip); return res.status(401).json({ error: 'Builder token required.' }); }
   next();
 };
-admin.check = req => { const t = (req.get('authorization') || '').replace(/^Bearer\s+/i, ''); return !!t && safeEq(t, process.env.ADMIN_TOKEN); };
+admin.check = req => { const t = (req.get('authorization') || '').replace(/^Bearer\s+/i, ''); return !!t && !locked('admin', ipOf(req)) && safeEq(t, process.env.ADMIN_TOKEN); };
+// Webhooks need the raw body for signature checks, so they mount before the JSON parser. Players send small things;
+// only the builder (maps, drafts) needs room for big ones.
+app.use('/webhooks/instagram', instagramRouter(world));
+const jsonSmall = express.json({ limit: '64kb' }), jsonBig = express.json({ limit: '512kb' });
+app.use((req, res, next) => (admin.check(req) ? jsonBig : jsonSmall)(req, res, next));
 const send = fn => async (req, res) => {
   try { res.json(await fn(req) ?? { ok: true }); }
   catch (e) { const s = e instanceof HttpError ? e.status : 500; if (s === 500) console.error(e); res.status(s).json({ error: s === 500 ? 'Something went wrong on the server.' : e.message }); }
@@ -181,12 +187,14 @@ app.get('/health', (req, res) => ready ? res.json({ ok: true, founded: !!world.m
 // Point a free pinger (cron-job.org, UptimeRobot) here every few minutes.
 // It keeps sleepy hosts awake and runs the clock's catch-up work.
 app.get('/api/cron/tick', send(async req => {
-  if (!process.env.CRON_KEY || !safeEq(req.query.key || '', process.env.CRON_KEY)) throw new HttpError(401, 'Wrong key.');
+  if (locked('key', ipOf(req))) throw new HttpError(429, 'Too many wrong keys. Try again in 15 minutes.');
+  if (!process.env.CRON_KEY || !safeEq(req.query.key || '', process.env.CRON_KEY)) { failed('key', ipOf(req)); throw new HttpError(401, 'Wrong key.'); }
   return { ok: true, ...(await world.tick()), drained: await world.drainComments() };
 }));
 
 // ---------- builder (you) ----------
 app.get('/api/admin/check', admin, (req, res) => res.json({ ok: true }));
+app.get('/api/admin/usage', admin, send(() => usageReport()));
 // Developer stats: daily players, coins in circulation, how players earn and spend, and where they drop off.
 app.get('/api/admin/stats', admin, send(async req => { const S = await import('./stats.js'); return S.dashboard(world, req.query.days); }));
 // The builder's view of players' money: cash on hand, savings at the bank, debt, and each player's history.
@@ -315,12 +323,21 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 8192 });
 const MAX_BUFFER = 2 * 1024 * 1024;
 wss.on('error', e => console.error('websocket server:', e.message));
-wss.on('connection', ws => {
+// The client's address behind the host's proxy (the same rule Express uses: the last address the proxy added).
+const wsIp = req => { const cf = req.headers['cf-connecting-ip']; if (cf) return String(cf).trim().slice(0, 64); const f = String(req.headers['x-forwarded-for'] || '').split(',').map(x => x.trim()).filter(Boolean); return f.length && Number(process.env.TRUST_PROXY ?? 1) > 0 ? f[f.length - 1] : req.socket.remoteAddress || '?'; };
+const wsByIp = new Map();
+wss.on('connection', (ws, req) => {
   if (!ready) { try { ws.close(1013, 'starting'); } catch {} return; } // try again in a moment
+  // limits: new connections per minute and open connections per address, messages per second per connection
+  const ip = wsIp(req), open = wsByIp.get(ip) || 0;
+  if (open >= WS_PER_IP || !take('wsConn', 'wsConn:' + ip).ok) { try { ws.close(1008, 'too many connections'); } catch {} return; }
+  wsByIp.set(ip, open + 1); ws.once('close', () => { const n = (wsByIp.get(ip) || 1) - 1; if (n > 0) wsByIp.set(ip, n); else wsByIp.delete(ip); });
+  const wsKey = 'ws:' + crypto.randomBytes(6).toString('hex');
   ws.isAlive = true; ws.subs = new Set(); ws.out = [];
   ws.on('error', () => { try { ws.terminate(); } catch {} });
   ws.on('pong', () => { ws.isAlive = true; });
   ws.on('message', raw => {
+    if (!take('wsMsg', wsKey).ok) { ws.strikes = (ws.strikes || 0) + 1; if (ws.strikes > 200) { try { ws.close(1008, 'too many messages'); } catch {} } return; } // flooding: dropped, then cut off
     let m; try { m = JSON.parse(raw); } catch { return; }
     if (m?.type === 'sub' && Array.isArray(m.chunks)) ws.subs = new Set(m.chunks.filter(k => typeof k === 'string' && CHUNK_KEY.test(k)).slice(0, 100));
     // A signed-in colonist identifies their connection, so private chats reach them and they show as online.
@@ -328,7 +345,7 @@ wss.on('connection', ws => {
     if (m?.type === 'arena' && ws.playerId) { const now = Date.now(); if (now - (ws.arenaAt || 0) > 1000) { ws.arenaAt = now; ws.arenaN = 0; } if (++ws.arenaN > 30) return;
       const a = String(m.a || ''); if (!['join', 'leave', 'go', 'pos', 'state'].includes(a)) return;
       bus.publish([{ arena: true, k: 'in', pid: ws.playerId, handle: ws.playerHandle, m: { a, mode: String(m.mode || ''), id: String(m.id || ''), x: Number(m.x), y: Number(m.y) } }]); return; }
-    if (m?.type === 'auth') playerByToken(m.token).then(p => {
+    if (m?.type === 'auth' && take('wsAuth', wsKey).ok) playerByToken(m.token).then(p => {
       const was = ws.playerId; ws.playerId = p ? p.id : null; ws.playerHandle = p ? p.handle : null;
       if (was && was !== ws.playerId && !localOnline(was)) chat.gone(was).catch(() => {});
       if (p) chat.seen([p.id]).catch(() => {});

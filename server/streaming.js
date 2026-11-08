@@ -9,6 +9,7 @@
 import crypto from 'node:crypto';
 import { pool } from './db.js';
 import { HttpError } from './world.js';
+import { locked, failed, ipOf } from './limits.js';
 import { STATIONS } from '../shared/radio.js';
 
 export const PLATFORMS = {
@@ -49,9 +50,10 @@ function cleanShot(x) { if (!x || !SHOTS.has(x.type)) throw new HttpError(400, '
   if (x.label) o.label = clean(x.label).slice(0, 60); return o; }
 
 export function streamRoutes(app, { admin, send, limit, bus }) {
-  const streamer = (req, res, next) => { const t = (req.get('authorization') || '').replace(/^Bearer\s+/i, ''), want = process.env.STREAM_TOKEN;
+  const streamer = (req, res, next) => { const t = (req.get('authorization') || '').replace(/^Bearer\s+/i, ''), want = process.env.STREAM_TOKEN, ip = ipOf(req);
+    if (locked('key', ip)) return res.status(429).set('retry-after', '900').json({ error: 'Too many wrong keys. Try again in 15 minutes.' });
     if (want && t && t.length === want.length && crypto.timingSafeEqual(Buffer.from(t), Buffer.from(want))) return next();
-    if (admin.check(req)) return next(); return res.status(401).json({ error: 'Stream token required.' }); };
+    if (admin.check(req)) return next(); if (t) failed('key', ip); return res.status(401).json({ error: 'Stream token required.' }); }; // wrong keys count towards a lock-out
   // the stream page: the call to action and the radio choice (no keys)
   app.get('/api/stream/public', limit, send(async () => { const c = await getConfig(); return { cta: c.cta, radio: c.radio, director: await getDirector() }; }));
   // a stream page checks in every 30 s: what it is (OBS, the cloud streamer, a browser), its size, the station and whether sound is running

@@ -4362,6 +4362,14 @@ const Accounts={ list:null, q:'', who:null, detail:null, busy:false,
 var Stats={ data:null, days:30, busy:false, at:0,
   // The economy's health: how fast the coins grow, the stabiliser's dial (it scales crime takings, daily rewards and
   // interest), how much the richest tenth hold, and the dial by hand.
+  // Limits and costs today (server/limits.js): the paid AI's budget, each daily quota with who's used it most, and lock-outs.
+  limits(U){ const out=[el('div',{class:'sh'},'Limits and costs today', el('small',{text:`${U.day} (UTC)`}))], B=U.budgets||{};
+    out.push(el('div',{class:'kpis'}, this.kpi(`${fmt(B.ai_calls?.used||0)} / ${fmt(B.ai_calls?.max||0)}`,'radio AI breaks','the paid writer: past this, free phrases'), this.kpi(`${fmt(B.voice_chars?.used||0)} / ${fmt(B.voice_chars?.max||0)}`,'radio voice characters','the paid voice: past this, text only'), this.kpi(fmt(U.lockouts||0),'addresses locked out','too many wrong passwords or keys, for 15 minutes')));
+    const t=el('table',{class:'atable'}); t.append(el('tr',null, el('th',{text:'Per player, per day'}), el('th',{text:'Limit'}), el('th',{text:'Used'}), el('th',{text:'Most'})));
+    for(const q of Object.values(U.quotas||{})) t.append(el('tr',null, el('td',{text:q.name}), el('td',{text:fmt(q.max)}), el('td',{text:fmt(q.total)}), el('td',{text:q.top.length?q.top.map(x=>`@${x.h||'?'} ${fmt(x.n)}`).join(', ')+(q.atLimit?` · ${q.atLimit} at the limit`:''):'–'})));
+    const L=U.limits||{}, per=k=>L[k]?`${fmt(L[k].perMin)}/min`:'–';
+    out.push(t, el('p',{class:'hint',text:`Request limits: ${per('api')} per address for the game (searches ${per('heavy')}, sign-ins ${per('auth')}), ${per('act')} actions per player, ${fmt(U.wsPerIp||0)} live connections per address. Change any of them with environment variables on Render (see server/limits.js).`}));
+    return out; },
   econ(D){ const E=D.econ, M=D.money, pct=v=>v==null?'–':`${v>=0?'+':''}${(v*100).toFixed(1)}%`, tre=M.treasury, out=[];
     const g=E.g, hot=g!=null&&g>E.dial.target+E.dial.band, cold=g!=null&&g<E.dial.target-E.dial.band;
     out.push(el('div',{class:'sh'},'Economy health', el('small',{text:E.at?`measured ${ago(E.at)}`:'not measured yet'})),
@@ -4377,7 +4385,7 @@ var Stats={ data:null, days:30, busy:false, at:0,
       el('button',{class:'btn',text:'+ 10%',onclick:()=>set({f:Math.min(E.dial.max,+(E.f+0.1).toFixed(2))})}), el('button',{class:'linkb',text:'Measure now',onclick:()=>set({measure:true})})),
       el('p',{class:'hint',text:`The dial scales crime takings, heist loot, daily rewards and savings interest. Setting it by hand is a starting point: the stabiliser keeps nudging it each hour. Also in force: wages lose 20% tax at source, after the first 5 jobs each day, each pays ${Math.round((1-E.decay)*100)}% less than the last, and ${(E.wealthRate*100).toFixed(1)}% a day wealth tax above ${fmt(E.wealthFree)}.`}));
     return out; },
-  async load(){ if(!Store.canWrite||this.busy) return; this.busy=true; try{ this.data=await api('/api/admin/stats?days='+this.days); this.at=Date.now(); }catch(e){ toast(e.message); } this.busy=false; if(activeTab==='stats') this.renderNow(); },
+  async load(){ if(!Store.canWrite||this.busy) return; this.busy=true; try{ this.usage=await api('/api/admin/usage').catch(()=>null); this.data=await api('/api/admin/stats?days='+this.days); this.at=Date.now(); }catch(e){ toast(e.message); } this.busy=false; if(activeTab==='stats') this.renderNow(); },
   renderNow(){ if(activeTab!=='stats') return; const p=$('pane'); if(p){ const keep=$('statsBody')?.scrollTop||0; p.innerHTML=''; this.render(p); const b=$('statsBody'); if(b) b.scrollTop=keep; } },
   date(d){ return new Date(d*86400000).toLocaleDateString([], {month:'short', day:'numeric', timeZone:'UTC'}); },
   kpi(v,label,title){ return el('div',{class:'kpi',title:title||''}, el('b',{text:v}), el('span',{text:label})); },
@@ -4418,6 +4426,7 @@ var Stats={ data:null, days:30, busy:false, at:0,
     const ms=D.series.map(s=>s.money?s.money.playerCash+s.money.playerBank:0);
     if(ms.some(Boolean)) body.append(el('div',{class:'sh'},"Players' coins over time", el('small',{text:'cash and savings, end of each day'})), this.bars(ms, D.series.map(s=>this.date(s.day)), i=>`${this.date(D.series[i].day)}: ${fmt(ms[i])} coins`));
     if(D.econ) body.append(...this.econ(D));
+    if(this.usage) body.append(...this.limits(this.usage));
     const wages=M.playerWagesPerGameDay*48, wagesRow={ k:'wages', name:'Wages (now, a real day)', est:true, range:{ coins:wages, n:0, players:0 } };
     const earned=Object.entries(D.flows).filter(([k])=>flowInfo(k)[0]==='source').reduce((s,[,f])=>s+f.range.coins,0), spent=Object.entries(D.flows).filter(([k])=>flowInfo(k)[0]==='sink').reduce((s,[,f])=>s+f.range.coins,0);
     body.append(el('div',{class:'sh'},'Where coins come from', el('small',{text:`last ${D.days} days · ${fmt(earned)} in, besides wages`})), this.flowTable(D,'source',wagesRow),

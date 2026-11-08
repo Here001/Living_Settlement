@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 import { pool } from './db.js';
 import { HttpError } from './world.js';
+import { spend, locked, failed, ipOf as clientIp } from './limits.js';
 import * as R from '../shared/rules.js';
 
 // Players prove an avatar is theirs, then set a password.
@@ -73,6 +74,9 @@ export async function playerByToken(t) {
 }
 
 export function playersRouter({ limit, send, admin, world }) {
+  // A daily quota on a route: one more of `kind` for the signed-in player, refused once today's limit is reached (server/limits.js).
+  const quota = (kind, when = () => true) => async (req, res, next) => { try { if (when(req)) { const p = await playerFrom(req); if (p) await spend(p.id, kind); } next(); }
+    catch (e) { res.status(e.status || 500).json({ error: e.status ? e.message : 'Something went wrong on the server.' }); } };
   const r = express.Router();
   // The signed-in colonist making this request (or a 401 asking them to log in).
   const me = async req => { const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Log in to your colonist first.'); return p; };
@@ -112,11 +116,12 @@ export function playersRouter({ limit, send, admin, world }) {
   }));
 
   r.post('/login', limit, send(async req => {
-    const { handle, password } = req.body || {}; const key = String(R.cleanHandle(handle)).toLowerCase();
+    const { handle, password } = req.body || {}; const key = String(R.cleanHandle(handle)).toLowerCase(), ip = clientIp(req);
     if (tooManyFailures(key)) throw new HttpError(429, 'Too many wrong passwords. Wait 15 minutes, or reset it with a new code.');
+    if (locked('login_ip', ip)) throw new HttpError(429, 'Too many wrong passwords from this network. Wait 15 minutes.'); // guessing across many usernames
     const c = await citizenByHandle(handle);
     if (!c.pass_hash) throw new HttpError(409, `@${c.handle} hasn’t set a password yet. Prove it’s you first.`);
-    if (!(await checkPassword(String(password ?? ''), c.pass_hash))) { noteFailure(key); throw new HttpError(401, 'Wrong password.'); }
+    if (!(await checkPassword(String(password ?? ''), c.pass_hash))) { noteFailure(key); failed('login_ip', ip); throw new HttpError(401, 'Wrong password.'); }
     failures.delete(key);
     return { token: await newSession(c.id), handle: c.handle };
   }));
@@ -128,7 +133,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/auth/config', send(async () => ({ google: process.env.GOOGLE_CLIENT_ID || null, turnstile: process.env.TURNSTILE_SITE_KEY || null })));
   const signups = new Map(); setInterval(() => signups.clear(), 24 * 3600 * 1000).unref();
   const SIGNUPS_PER_IP = Number(process.env.SIGNUPS_PER_IP || 3);
-  const ipOf = req => String(req.get('cf-connecting-ip') || (req.get('x-forwarded-for') || '').split(',')[0].trim() || req.ip || '');
+  const ipOf = clientIp; // the visitor's real address (see server/limits.js)
   async function botCheck(req, tok) {
     const secret = process.env.TURNSTILE_SECRET; if (!secret) return; // not set up: no check (development)
     if (!tok) throw new HttpError(400, 'Please complete the "I am human" check.');
@@ -178,22 +183,22 @@ export function playersRouter({ limit, send, admin, world }) {
   }));
   // Once their avatar is claimed, a colonist picks man or woman, one time only. (The developer can still change it.)
   // A colonist's display name, changeable any time by its owner.
-  r.post('/me/name', limit, send(async req => {
+  r.post('/me/name', limit, quota('rename'), send(async req => {
     const p = await me(req);
     return world.setName(p.id, (req.body || {}).name);
   }));
   // Crime, going somewhere, and pets.
   // Mayor elections
   r.get('/election', limit, send(async req => { let id = null; try { id = (await me(req)).id; } catch {} return world.elections.info(id); }));
-  r.post('/me/election/run', limit, send(async req => { const b = req.body || {}; return world.elections.run((await me(req)).id, { policy: b.policy, pitch: b.pitch }); }));
+  r.post('/me/election/run', limit, quota('election'), send(async req => { const b = req.body || {}; return world.elections.run((await me(req)).id, { policy: b.policy, pitch: b.pitch }); }));
   r.delete('/me/election/run', limit, send(async req => world.elections.withdraw((await me(req)).id)));
-  r.post('/me/election/vote', limit, send(async req => world.elections.vote((await me(req)).id, (req.body || {}).handle)));
+  r.post('/me/election/vote', limit, quota('election'), send(async req => world.elections.vote((await me(req)).id, (req.body || {}).handle)));
   // Phone notifications
   r.get('/push/key', limit, send(async () => world.push.key()));
   r.get('/me/push', limit, send(async req => world.push.status((await me(req)).id)));
-  r.post('/me/push', limit, send(async req => { const b = req.body || {}; return world.push.subscribe((await me(req)).id, b.subscription, b.prefs); }));
+  r.post('/me/push', limit, quota('push'), send(async req => { const b = req.body || {}; return world.push.subscribe((await me(req)).id, b.subscription, b.prefs); }));
   r.delete('/me/push', limit, send(async req => world.push.unsubscribe((await me(req)).id, (req.body || {}).endpoint)));
-  r.put('/me/push/prefs', limit, send(async req => world.push.setPrefs((await me(req)).id, (req.body || {}).prefs)));
+  r.put('/me/push/prefs', limit, quota('push'), send(async req => world.push.setPrefs((await me(req)).id, (req.body || {}).prefs)));
   // The first-day guide
   r.get('/me/guide', limit, send(async req => world.guide.info((await me(req)).id)));
   r.post('/me/guide/claim', limit, send(async req => world.guide.claim((await me(req)).id, String((req.body || {}).step || ''))));
@@ -202,7 +207,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/notices/:id/seen', limit, send(async req => world.actions.seenNotice((await me(req)).id, req.params.id)));
   r.get('/me/crime', limit, send(async req => world.actions.crimeInfo((await me(req)).id, req.query.target)));
   r.post('/me/bail', limit, send(async req => world.actions.bail((await me(req)).id)));
-  r.post('/me/crime/start', limit, send(async req => { const b = req.body || {}; return world.actions.crimeStart((await me(req)).id, { kind: String(b.kind || ''), practice: !!b.practice }); }));
+  r.post('/me/crime/start', limit, quota('practice', req => !!(req.body || {}).practice), send(async req => { const b = req.body || {}; return world.actions.crimeStart((await me(req)).id, { kind: String(b.kind || ''), practice: !!b.practice }); }));
   r.post('/me/crime/finish', limit, send(async req => { const b = req.body || {}; return world.actions.crimeFinish((await me(req)).id, { runId: b.runId, log: b.log }); }));
   r.post('/me/crime', limit, send(async req => { const b = req.body || {}; return world.actions.crime((await me(req)).id, { kind: b.kind, target: b.target }); }));
   r.get('/me/places', limit, send(async req => world.actions.places((await me(req)).id)));
@@ -211,7 +216,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/visit', limit, send(async req => { const b = req.body || {}; return world.actions.visit((await me(req)).id, { buildingId: b.buildingId, friend: b.friend, spot: b.spot && typeof b.spot === 'object' ? b.spot : null }); }));
   r.post('/me/visit/end', limit, send(async req => world.actions.visit((await me(req)).id, {})));
   r.post('/me/pet', limit, send(async req => { const b = req.body || {}; return world.actions.adopt((await me(req)).id, { kind: b.kind, name: b.name, buildingId: b.buildingId }); }));
-  r.put('/me/pet', limit, send(async req => world.actions.renamePet((await me(req)).id, (req.body || {}).name)));
+  r.put('/me/pet', limit, quota('rename'), send(async req => world.actions.renamePet((await me(req)).id, (req.body || {}).name)));
   r.delete('/me/pet', limit, send(async req => world.actions.release((await me(req)).id)));
   // The Bank, cars, moving home, and owning buildings.
   // Private chats between verified colonists, and who's online.
@@ -220,32 +225,32 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/blocks', limit, send(async req => world.chat.blocks((await me(req)).id)));
   r.post('/blocks/:handle', limit, send(async req => world.chat.block((await me(req)).id, req.params.handle)));
   r.delete('/blocks/:handle', limit, send(async req => world.chat.unblock((await me(req)).id, req.params.handle)));
-  r.post('/report', limit, send(async req => world.chat.report(await me(req), req.body || {})));
+  r.post('/report', limit, quota('report'), send(async req => world.chat.report(await me(req), req.body || {})));
   r.get('/admin/reports', admin, send(req => world.chat.reports(req.query.status)));
   r.post('/admin/reports/:id', admin, send(req => world.chat.resolve(req.params.id, (req.body || {}).action)));
   r.get('/dm', limit, send(async req => world.chat.conversations((await me(req)).id)));
   r.get('/dm-contacts', limit, send(async req => world.chat.contacts((await me(req)).id)));
   r.get('/dm/:handle', limit, send(async req => world.chat.thread((await me(req)).id, req.params.handle)));
-  r.post('/dm/:handle', limit, send(async req => world.chat.send(await me(req), req.params.handle, (req.body || {}).text, (req.body || {}).replyTo)));
+  r.post('/dm/:handle', limit, quota('dm'), send(async req => world.chat.send(await me(req), req.params.handle, (req.body || {}).text, (req.body || {}).replyTo)));
   r.post('/dm/:handle/read', limit, send(async req => world.chat.read((await me(req)).id, req.params.handle)));
   r.post('/dm/:handle/accept', limit, send(async req => world.chat.accept((await me(req)).id, req.params.handle)));
   r.post('/dm/:handle/delete', limit, send(async req => world.chat.clear((await me(req)).id, req.params.handle)));
   r.post('/dm/:handle/pin', limit, send(async req => { const id = (await me(req)).id, o = await world.chat.other(req.params.handle); return world.chat.pin(id, 'dm:' + o.id, (req.body || {}).on !== false); }));
   r.get('/chat/groups', limit, send(async req => world.chat.groups((await me(req)).id)));
-  r.post('/chat/groups', limit, send(async req => world.chat.createGroup(await me(req), req.body || {})));
+  r.post('/chat/groups', limit, quota('group_create'), send(async req => world.chat.createGroup(await me(req), req.body || {})));
   r.get('/chat/groups/:id', limit, send(async req => world.chat.gthread((await me(req)).id, req.params.id)));
-  r.post('/chat/groups/:id', limit, send(async req => world.chat.gsend(await me(req), req.params.id, (req.body || {}).text, (req.body || {}).replyTo)));
+  r.post('/chat/groups/:id', limit, quota('group_msg'), send(async req => world.chat.gsend(await me(req), req.params.id, (req.body || {}).text, (req.body || {}).replyTo)));
   r.post('/chat/groups/:id/join', limit, send(async req => world.chat.respond((await me(req)).id, req.params.id, true)));
   r.post('/chat/groups/:id/decline', limit, send(async req => world.chat.respond((await me(req)).id, req.params.id, false)));
   r.post('/chat/groups/:id/leave', limit, send(async req => world.chat.leave((await me(req)).id, req.params.id)));
   r.post('/chat/groups/:id/delete', limit, send(async req => world.chat.gclear((await me(req)).id, req.params.id)));
   r.post('/chat/groups/:id/pin', limit, send(async req => { const id = (await me(req)).id, g = await world.chat.group(req.params.id); return world.chat.pin(id, 'g:' + g.id, (req.body || {}).on !== false); }));
-  r.post('/chat/groups/:id/invite', limit, send(async req => { const p = await me(req), g = await world.chat.group(req.params.id);
+  r.post('/chat/groups/:id/invite', limit, quota('group_invite'), send(async req => { const p = await me(req), g = await world.chat.group(req.params.id);
     const m = (await world.chat.members(g.id)).find(x => x.citizen_id === p.id); if (!m || m.status !== 'member') throw new HttpError(403, "You're not in this group.");
     return { ok: true, invited: await world.chat.inviteTo(p, g, (req.body || {}).members) }; }));
   r.get('/leaderboards/:board', limit, send(async req => { const p = await playerFrom(req); const b = await world.leaderboards.board(req.params.board, p?.id || null); if (!b) throw new HttpError(404, 'No such leaderboard.'); return b; }));
   r.get('/me/heists', limit, send(async req => world.heists.info((await me(req)).id)));
-  r.post('/me/heists', limit, send(async req => world.heists.plan(await me(req), req.body || {})));
+  r.post('/me/heists', limit, quota('heist'), send(async req => world.heists.plan(await me(req), req.body || {})));
   r.post('/me/heists/:id/go', limit, send(async req => world.heists.goNow((await me(req)).id, req.params.id)));
   r.post('/me/heists/:id/cancel', limit, send(async req => world.heists.cancel((await me(req)).id, req.params.id)));
   r.post('/me/heists/:id/role', limit, send(async req => world.heists.role((await me(req)).id, req.params.id, req.body || {})));
@@ -279,15 +284,15 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/plots/:id', limit, send(async req => H().plot((await playerFrom(req))?.id || null, req.params.id)));
   r.post('/me/plots/:id/build', limit, send(async req => H().buildOn((await me(req)).id, req.params.id, bd(req))));
   r.post('/me/plots/:id/sell', limit, send(async req => H().sellPlot((await me(req)).id, req.params.id)));
-  r.post('/me/plots/:id/name', limit, send(async req => H().renamePlot((await me(req)).id, req.params.id, bd(req).name)));
+  r.post('/me/plots/:id/name', limit, quota('rename'), send(async req => H().renamePlot((await me(req)).id, req.params.id, bd(req).name)));
   r.get('/me/buildings/:id/upgrade', limit, send(async req => H().upgradeQuote((await me(req)).id, req.params.id)));
   r.post('/me/buildings/:id/upgrade', limit, send(async req => H().upgrade((await me(req)).id, req.params.id)));
   r.post('/me/buildings/:id/rush', limit, send(async req => H().rush((await me(req)).id, req.params.id)));
-  r.post('/me/buildings/:id/name', limit, send(async req => H().renameBuilding((await me(req)).id, req.params.id, bd(req).name)));
+  r.post('/me/buildings/:id/name', limit, quota('rename'), send(async req => H().renameBuilding((await me(req)).id, req.params.id, bd(req).name)));
   r.post('/me/buildings/:id/move', limit, send(async req => H().moveBuilding((await me(req)).id, req.params.id, bd(req))));
   r.post('/me/buildings/:id/knock', limit, send(async req => H().knockDown((await me(req)).id, req.params.id)));
   r.get('/me/offers', limit, send(async req => H().offers((await me(req)).id)));
-  r.post('/me/offers', limit, send(async req => H().makeOffer((await me(req)).id, bd(req))));
+  r.post('/me/offers', limit, quota('offer'), send(async req => H().makeOffer((await me(req)).id, bd(req))));
   r.post('/me/offers/:id', limit, send(async req => H().answer((await me(req)).id, req.params.id, bd(req))));
   r.post('/me/auctions/:id/bid', limit, send(async req => world.auctions.bid((await me(req)).id, req.params.id, (req.body || {}).amount)));
   r.post('/me/lottery', limit, send(async req => world.lottery.buy((await me(req)).id, (req.body || {}).count, world.blockedReason?.bind(world))));
@@ -379,7 +384,7 @@ export function playersRouter({ limit, send, admin, world }) {
   const msgOut = m => ({ id: m.id, h: m.handle, n: m.official ? m.handle : (m.display_name || ''), g: m.gender, text: m.text, t: Number(m.t), o: m.official ? 1 : 0, p: m.pinned ? 1 : 0 });
   r.get('/square', limit, send(async () => (await pool.query(`(select m.*, c.display_name from messages m left join citizens c on c.id = m.citizen_id order by m.t desc limit 80)
     union (select m.*, c.display_name from messages m left join citizens c on c.id = m.citizen_id where m.pinned) order by t desc`)).rows.map(msgOut)));
-  r.post('/square', limit, send(async req => {
+  r.post('/square', limit, quota('square'), send(async req => {
     const p = await me(req);
     let text = String((req.body || {}).text ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
     if (!text) throw new HttpError(400, 'Write something first.');

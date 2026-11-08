@@ -21,6 +21,7 @@ import * as R from '../shared/rules.js';
 import express from 'express';
 import * as store from './storage.js';
 import { prepare } from './audio.js';
+import { budget } from './limits.js';
 import { STATIONS, STATION_IDS, slotOf, slotStart, talkSlot, songTitle, timeline, hostsOn, hash, rng } from '../shared/radio.js';
 
 const uid = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16);
@@ -180,14 +181,15 @@ export class Radio {
     // who's on: this shift's pair; most breaks are the two of them, some are the lead alone
     const on = hostsOn(st, at), duo = typeof opts.duo === 'boolean' ? opts.duo : rng(hash(st + ':duo:' + slot))() < 0.65, cast = { lead: on.lead, support: duo ? on.support : null };
     let lines = null, source = 'phrases';
-    if (process.env.ANTHROPIC_API_KEY) { try { lines = await this.write(st, f, recent, title, cast); source = 'claude'; } catch (e) { console.error('radio writer:', e.message); } }
+    // the paid AI writer and voice have a daily budget (server/limits.js); past it, the free phrases and text only
+    if (process.env.ANTHROPIC_API_KEY && await budget('ai_calls')) { try { lines = await this.write(st, f, recent, title, cast); source = 'claude'; } catch (e) { console.error('radio writer:', e.message); } }
     if (!lines) lines = this.phrases(st, f, recent, title, cast);
     const text = lines.map(l => (cast.support ? `${l.who.name}: ` : '') + l.text).join(' '), dj = cast.support ? `${cast.lead.name} & ${cast.support.name}` : cast.lead.name;
     // what the camera should look at while the DJ talks: the first person or place in the break
     const ev = f.events.find(e => text.includes(e.text.slice(0, 18))) || f.events[0], handle = /@([\w.]+)/.exec(text)?.[1] || (ev && /@([\w.]+)/.exec(ev.text)?.[1]);
     const focus = handle ? { handle } : (f.race && /race|track/i.test(text) && f.race.inMinutes < 5) ? { x: f.race.x, y: f.race.y, race: true } : null;
     let audio = null, dur = Math.max(6, words(text).length / 2.6);
-    if (this.voiceKind() !== 'text') { try { const v = await this.speakLines(st, lines); if (v) { audio = v.audio; dur = audio.length * 8 / v.bps; } } catch (e) { console.error('radio voice:', e.message); } }
+    if (this.voiceKind() !== 'text' && await budget('voice_chars', lines.reduce((a, l) => a + String(l.text || '').length, 0))) { try { const v = await this.speakLines(st, lines); if (v) { audio = v.audio; dur = audio.length * 8 / v.bps; } } catch (e) { console.error('radio voice:', e.message); } }
     const row = { id: uid(), station: st, slot, t: Date.now(), at, kind: opts.kind || 'talk', text, events: f.events.filter((e, i) => text.includes(e.text.slice(0, 18)) || (/@[\w.]+/.exec(e.text) && text.includes(/@[\w.]+/.exec(e.text)[0])) || (source === 'claude' && i === 0)).flatMap(e => e.ids), focus, dur, source };
     const saved = await pool.query(`insert into radio_talk (id, station, slot, t, at, kind, text, events, focus, audio, dur, source, dj, lines) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) on conflict (station, slot) do nothing`,
       [row.id, st, slot, row.t, at, row.kind, text, row.events, focus, audio, dur, source, dj, JSON.stringify(lines.map(l => ({ who: l.who.id, name: l.who.name, text: l.text })))]);
@@ -207,10 +209,10 @@ export class Radio {
       yoruba: 'Ẹ jọ̀wọ́, ẹ tẹ́tí sílẹ̀. An important announcement for {colony}.', igbo: 'Biko, nụrụ m. An important announcement for {colony}.', hausa: 'Don Allah, ku saurara. An important announcement for {colony}.' };
     const at = Date.now() + 2500, out = [];
     await Promise.all(want.map(async st => { const S = STATIONS[st], lead = hostsOn(st, at).lead; let say = null;
-      if (rewrite && process.env.ANTHROPIC_API_KEY) { try { say = await this.rewriteAlert(st, text, lead); } catch (e) { console.error('radio announce:', e.message); } }
+      if (rewrite && process.env.ANTHROPIC_API_KEY && await budget('ai_calls')) { try { say = await this.rewriteAlert(st, text, lead); } catch (e) { console.error('radio announce:', e.message); } }
       if (!say) say = `${LEAD[st].replace('{colony}', this.world.meta?.name || 'the colony')} ${text}${text.length < 220 ? ` I repeat. ${text}` : ''}`;
       let audio = null, dur = Math.max(5, words(say).length / 2.6);
-      if (this.voiceKind() !== 'text') { try { const v = await this.voice(st, say, lead); if (v) { audio = v.audio; dur = audio.length * 8 / v.bps; } } catch (e) { console.error('radio voice:', e.message); } }
+      if (this.voiceKind() !== 'text' && await budget('voice_chars', String(say || '').length)) { try { const v = await this.voice(st, say, lead); if (v) { audio = v.audio; dur = audio.length * 8 / v.bps; } } catch (e) { console.error('radio voice:', e.message); } }
       const id = uid(); await pool.query(`insert into radio_talk (id, station, slot, t, at, kind, text, audio, dur, source) values ($1,$2,$3,$4,$5,'alert',$6,$7,$8,'announce')`, [id, st, -1 - Math.floor(Math.random() * 2e9), Date.now(), at, say, audio, dur]);
       await pool.query('update radio_talk set dj = $2 where id = $1', [id, lead.name]);
       const talk = { id, station: st, at, kind: 'alert', text: say, focus: null, dur, audio: audio ? `/api/radio/voice/${id}` : null, dj: lead.name };

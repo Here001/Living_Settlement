@@ -1852,6 +1852,35 @@ const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 
   ok((await pool.query("select 1 from events where kind = 'fight' and text like '%Main event%' limit 1")).rowCount > 0, 'the Colony Log reports the results');
   fi = (await call('GET', '/api/fight', undefined, FAN.P)).json; ok(fi.last.length >= 1 && fi.top.length >= 2, 'the Fight Night tab shows the last results and the top fighters', JSON.stringify(fi.last));
 }
+{ // security: throttles, lock-outs, quotas, budgets, headers and live-connection limits (each from its own made-up address)
+  const from = ip => ({ 'cf-connecting-ip': ip }), LIM = await import('../server/limits.js');
+  const h = (await fetch(BASE + '/api/version')).headers; ok(h.get('x-content-type-options') === 'nosniff' && h.get('x-frame-options') === 'SAMEORIGIN' && /camera=\(\)/.test(h.get('permissions-policy') || ''), 'security headers on every reply');
+  // the builder's password: ten wrong guesses from one address lock it out, even with the right one; other addresses are fine
+  for (let i = 0; i < 10; i++) await call('GET', '/api/admin/check', undefined, { auth: false, headers: { ...from('203.0.113.7'), authorization: 'Bearer wrong-guess-' + i } });
+  ok((await call('GET', '/api/admin/check', undefined, { headers: from('203.0.113.7') })).status === 429 && (await call('GET', '/api/admin/check', undefined, { headers: from('203.0.113.8') })).status === 200, 'ten wrong builder passwords lock that address out for 15 minutes; others are unaffected');
+  // the cron key, likewise
+  for (let i = 0; i < 10; i++) await call('GET', '/api/cron/tick?key=nope' + i, undefined, { auth: false, headers: from('203.0.113.9') });
+  ok((await call('GET', `/api/cron/tick?key=${encodeURIComponent(process.env.CRON_KEY)}`, undefined, { auth: false, headers: from('203.0.113.9') })).status === 429, 'wrong cron keys lock that address out too');
+  // sign-ins from one address are throttled, and wrong passwords across many usernames lock it out
+  let codes = []; for (let i = 0; i < 260 && !codes.includes(429); i++) codes.push((await call('POST', '/api/login', { handle: 'nobody_' + i, password: 'x' }, { auth: false, headers: from('198.51.100.4') })).status);
+  ok(codes.includes(429), 'a burst of sign-in attempts from one address is slowed down', codes.slice(-5).join());
+  const su = await call('POST', '/api/signup', { handle: 'quota_qa', password: 'secret88' }, { auth: false, headers: from('198.51.100.5') }); const QP = { auth: false, headers: { 'x-player': su.json.token, ...from('198.51.100.6') } };
+  ok(su.status === 200, 'a fresh player for the quota checks', JSON.stringify(su.json));
+  // a daily quota: once today's limit is used, the next post is refused with a clear message
+  const qid = (await pool.query("select id from citizens where handle = 'quota_qa'")).rows[0].id, today = new Date().toISOString().slice(0, 10);
+  await pool.query("insert into usage_daily (subject, day, kind, n) values ($1, $2, 'square', $3) on conflict (subject, day, kind) do update set n = $3", [qid, today, LIM.QUOTAS.square]);
+  const over = await call('POST', '/api/square', { text: 'one more' }, QP); ok(over.status === 429 && /today's limit/.test(over.json.error), 'past the daily quota, posting is refused until midnight UTC', JSON.stringify(over.json));
+  await pool.query("update usage_daily set n = 0 where subject = $1 and kind = 'square'", [qid]); ok((await call('POST', '/api/square', { text: 'hello again' }, QP)).status === 200, 'under the quota it works, and is counted');
+  ok(Number((await pool.query("select n from usage_daily where subject = $1 and kind = 'square' and day = $2", [qid, today])).rows[0]?.n) === 1, 'each post counts once towards the quota');
+  // the paid AI budget: past it, the radio falls back to the free phrases
+  ok(await LIM.budget('ai_calls', 1) === true && await LIM.budget('ai_calls', LIM.BUDGETS.ai_calls + 1) === false, 'the radio\'s paid AI has a daily budget');
+  const us = (await call('GET', '/api/admin/usage')).json; ok(us.quotas?.square?.max === LIM.QUOTAS.square && us.budgets?.ai_calls?.used >= 1 && us.lockouts >= 2, 'the builder sees today\'s usage, quotas, budgets and lock-outs', JSON.stringify(us).slice(0, 300));
+  // live connections: at most so many open at once from one address
+  const socks = [], openOne = () => new Promise(res => { const w = new WebSocket(BASE.replace(/^http/, 'ws') + '/ws', { headers: from('192.0.2.50') }); let closed = null; w.on('close', c => { closed = c; res({ w, closed }); }); w.on('message', () => res({ w, closed })); w.on('error', () => res({ w, closed: -1 })); setTimeout(() => res({ w, closed }), 1500); });
+  for (let i = 0; i < LIM.WS_PER_IP; i++) socks.push(await openOne()); const extra = await openOne(); await sleep(300);
+  ok(socks.every(x => x.closed == null) && (extra.closed === 1008 || extra.w.readyState === 3), `at most ${LIM.WS_PER_IP} live connections from one address`, JSON.stringify({ last: extra.closed, state: extra.w.readyState }));
+  for (const x of [...socks, extra]) try { x.w.close(); } catch {}
+}
 ok((await call('POST', '/api/admin/reset', { confirm: 'nope' })).status === 400, 'reset needs the word RESET');
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' }, { auth: false })).status === 401, 'only the developer can reset');
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' })).status === 200 && !(await call('GET', '/api/meta', undefined, { auth: false })).json.meta, 'reset wipes the colony');

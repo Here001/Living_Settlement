@@ -748,6 +748,20 @@ In Development mode, Meta only sends comments from accounts with a role on the a
 **Build votes:** mark your "what should we build tomorrow?" post, then read its comments:
 `curl -X PUT https://YOUR-APP/api/admin/build-post -H "authorization: Bearer $ADMIN_TOKEN" -H "content-type: application/json" -d '{"mediaId":"1789..."}'` and `GET /api/admin/requests` · `POST /api/admin/buildings/:id/finish|repair` · `POST /api/admin/construction/finish-all` · `POST /api/admin/bulldoze` · `POST /api/admin/citizens/bulk` · `PATCH /api/admin/citizens/:id` · `POST /api/admin/water` · `POST|DELETE /api/admin/vehicles` · `POST /api/admin/disasters` · `POST /api/admin/ruins/clear` · `PUT /api/admin/weather`.
 
+## Security: limits, quotas and costs
+
+Everything is in `server/limits.js`, and any number can be changed with an environment variable on Render (named in that file).
+
+- **Speed limits.** Each visitor's address gets a steady allowance that refills over time: 300 game requests a minute, with smaller allowances for heavy ones (searches, map chunks, land quotes, the builder's stats: 60 a minute) and for signing in (20 a minute). Each signed-in player gets 120 actions a minute wherever they connect from. A minute of very busy play uses about 90, so real players never notice. Too fast, and the game answers "slow down a little" with how long to wait.
+- **Real addresses.** The game sits behind Cloudflare, which passes on each visitor's real address (`cf-connecting-ip`), so one busy player can't slow down everyone else on the same Cloudflare server.
+- **Wrong passwords and keys.** Ten wrong builder passwords from one address lock that address out for 15 minutes (even if the next one is right); the same for the stream and cron keys. Players: 8 wrong passwords lock that username for 15 minutes, and 30 wrong passwords from one address (across any usernames) lock that address.
+- **Live connections.** At most 20 open at once from one address, 30 new ones a minute, about 40 messages a second on each, and a few sign-ins a minute. Flooding one gets it cut off.
+- **Daily quotas, per player** (they reset at midnight UTC and are kept in the database, table `usage_daily`): 50 Town Square posts, 800 private messages, 1,500 group messages, 15 new group chats, 150 group invites, 50 offers, 30 reports, 20 renames, 40 heists planned, 400 practice games, and a few notification and election changes. Past one, the player is told when it resets.
+- **Costs.** The radio's paid AI writer has 300 breaks a day and the paid voice 150,000 characters; past those it uses the free phrases and plain text until tomorrow. Requests are kept small (64 KB from players; only the builder can send big ones).
+- **Browser safety headers** on every page: no guessing file types, no framing the game inside other sites, no camera, microphone or location, and https only.
+- **Who sees what.** Every player action works from the signed-in player's own account; anything addressed by an id (a notice, a group chat, a heist, an offer, a car, a post) checks it's theirs first, and only the builder sees others' coins, accounts and reports.
+- **The builder's view.** Stats → **Limits and costs today**: the AI budget used, each quota with who's used it most, and how many addresses are locked out (`GET /api/admin/usage`).
+
 ## Settings
 
 **⚙️ Settings** on your own card has **Your name** (the name shown above your avatar; it used to be on the card itself), phone notifications and the getting-started guide.

@@ -863,8 +863,12 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .mgbar .mgtrack{background:var(--soft)}.mgbar i.p{background:#4A7BD9}.mgbar i.s{background:#B05FD6}
 .mgtotal{display:flex;justify-content:space-between;font-size:18px;font-weight:900;border-top:2px solid #2B2621;padding-top:8px;margin-top:6px}
 .mgmoney{font-size:18px;font-weight:800;margin:12px 0 4px}
-.crprog{border-bottom:1px dashed var(--soft);padding-bottom:8px;margin-bottom:8px}.crrank{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}.crrank b{font-size:17px}.crrank span{font-size:13px;color:#2E9B57;font-weight:700}
-.crxp{margin:6px 0 2px;height:10px}.crxp i{background:#E2B13C}.crprog h4{margin:10px 0 4px}.crcon{list-style:none;padding:0;margin:0}.crcon li{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px dashed var(--soft);font-size:14px}.crcon li b{white-space:nowrap}.crcon li.done{opacity:.65}
+.crtop{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.crrank{display:flex;align-items:center;gap:8px;flex:1;min-width:0}.crrank b{white-space:nowrap;font-size:15px}
+.crxp{flex:1;max-width:140px;height:9px}.crxp i{background:#E2B13C}.crstatus{font-size:13.5px;font-weight:700;color:#C2410C;margin:2px 0 8px}
+.crgames{display:grid;gap:10px;margin:6px 0 4px}
+.crtile{display:flex;align-items:center;gap:12px;text-align:left;padding:12px;border-radius:16px;border:2px solid #2B2621;background:var(--card,#fffaf0);box-shadow:0 3px 0 #2B2621;cursor:pointer;font:inherit;color:inherit}
+.crtile:active{transform:translateY(2px);box-shadow:0 1px 0 #2B2621}.crti{font-size:34px;line-height:1}.crtt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.crtt b{font-size:16px}.crtt span{font-size:12.5px;opacity:.85}
+.crtt .crtm{font-weight:700;opacity:1}.crgo{background:#E4572E;color:#fff;font-weight:800;border-radius:999px;padding:8px 14px;white-space:nowrap;border:2px solid #2B2621}.crcon{list-style:none;padding:0;margin:0}.crcon li{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px dashed var(--soft);font-size:14px}.crcon li b{white-space:nowrap}.crcon li.done{opacity:.65}
 .mgmoney.small{font-size:15px;margin:4px 0}.mgbar i.x{background:#E2B13C}.mgstreak{font-weight:800;color:#C2410C;margin:8px 0 2px}.mgrankup{font-weight:900;font-size:16px;background:linear-gradient(135deg,#f6e3a1,#e2b13c);color:#3b2a06;border-radius:10px;padding:8px 10px;margin:10px 0 4px}
 .mgcon li{font-size:14px}.mgcon li.new{background:color-mix(in srgb,#2E9B57 14%,transparent);border-radius:6px}.mgcon li b{white-space:nowrap}
 .mgbtns button[disabled]{opacity:.55}
@@ -6002,55 +6006,41 @@ async function doCrime(kind, target){ const r=await meAction('/api/me/crime',{ki
   toast(r.caught ? (r.jailed?`🚓 Caught! You were fined ${fmt(r.fine)} coins and locked up for ${mins(r.jailFor)} minutes.`:`🚓 Caught! You were fined ${fmt(r.fine)} coins.`) : `💰 You got away with ${fmt(r.loot)} coins.`); }
 // Crime odds come in three bands, set by how far the nearest Police station is from where it happens.
 const BAND={ high:{ic:'🟢',nm:'High'}, mid:{ic:'🟡',nm:'Medium'}, low:{ic:'🔴',nm:'Low'} };
-const oddsText = o => `${BAND[o.band].ic} ${BAND[o.band].nm} chance, ${Math.round(o.chance*100)}% · ${o.dist==null?'no police station in the colony':`police ${miles(o.dist)} away`}${o.night?' · 🌙 night, +15%':''}`;
-async function tryPickpocket(target){ const h=(target||'').trim().replace(/^@+/,''); if(!h){ toast("Whose pocket? Type their username."); return; }
-  let k; try{ k=await api('/api/me/crime?target='+encodeURIComponent(h)); }catch(e){ toast(e.message); return; } const P=k.pick;
-  if(!P||P.error){ toast(P?P.error:'Couldn’t find them.'); return; }
-  if(P.blocked){ toast(`@${P.handle} is ${P.blocked} right now, so you can't get close. Try when they're out and about.`); return; }
-  toast(`@${P.handle} is at ${P.at}. ${oddsText(P)} of getting away. Try it?`,'Do it',()=>doCrime('pickpocket',h)); }
+const oddsText = o => `${BAND[o.band].ic} ${o.band==='high'?'Easy':o.band==='mid'?'Medium':'Hard'} (${o.dist==null?'no police in the colony':`police ${miles(o.dist)} away`})${o.night?' · 🌙 night':''}`;
 // Pay bail and walk out of jail now (from your cash, then your savings).
 function bailBtn(left){ const cost=bailCost(left);
   return el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`🔓 Pay bail (${fmt(cost)} coins)`,onclick:()=>toast(`Pay ${fmt(cost)} coins bail and leave jail now? It comes from your cash first, then your savings.`,'Pay bail',async()=>{
     const r=await meAction('/api/me/bail',{},r=>`🔓 You're free. Bail: ${fmt(r.cost)} coins.`); if(r){ Acts.at=0; loadMyMoney(); const c=myCitizen(); if(c){ detail.delete(c.id); renderCard(true); } } })})); }
-function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Crime'})); const A=actsFor(c), K=A&&A.crime;
-  if(!K){ box.append(el('p',{class:'hint',text:'Checking who’s watching…'})); return box; }
-  if(!K.housed){ box.append(el('p',{class:'hint',text:'Wake up and move in first.'})); return box; }
-  if(K.jailedFor>0){ box.append(el('p',{class:'jobnow',text:`🔒 You're in jail for ${mins(K.jailedFor)} more minute${K.jailedFor>60000?'s':''}.`}), bailBtn(K.jailedFor)); return box; }
-  const Rt=K.rates||{pickpocket:{},rob:{}}, pct=v=>Math.round((v||0)*100)+'%';
-  box.append(el('p',{class:'hint',text:'Crime pays… sometimes. Your chance of getting away depends on how far the nearest Police station is from where it happens:'}),
-    el('ul',{class:'bands'}, el('li',{text:`🟢 More than ${miles(K.far)} away (or no police): pickpocket ${pct(Rt.pickpocket.high)}, robbery ${pct(Rt.rob.high)}`}),
-      el('li',{text:`🟡 ${miles(K.near)} to ${miles(K.far)}: pickpocket ${pct(Rt.pickpocket.mid)}, robbery ${pct(Rt.rob.mid)}`}),
-      el('li',{text:`🔴 Within ${miles(K.near)}: pickpocket ${pct(Rt.pickpocket.low)}, robbery ${pct(Rt.rob.low)}`})),
-    el('p',{class:'hint',text:`${K.wave?'🦹 A crime wave is on: +15% right now. ':''}Caught: a fine of a quarter of the takings on offer (${fmt(FINE_MIN)} to ${fmt(FINE_MAX)}, never more than you have), and jail if you play really badly.`}));
-  if(K.rank) box.prepend(crimeProgress(K));
-  const secs=ms=>ms<60000?`${Math.ceil(ms/1000)}s`:`${mins(ms)} min`, waiting=K.waitFor>0, blocked=waiting?`Lie low ${secs(K.waitFor)}`:null;
-  if(waiting){ box.append(el('p',{class:'jobnow',text:`Lie low for ${secs(K.waitFor)} before the next solo job.${K.streak?` 🔥 ${K.streak} in a row: the next one will be harder.`:''}`})); clearTimeout(Acts.wt); Acts.wt=setTimeout(()=>{ if(sel&&Acts.crime){ Acts.at=0; renderCard(true); } },Math.min(K.waitFor+300,20500)); }
-  else if(K.streak) box.append(el('p',{class:'jobnow',text:`🔥 ${K.streak} job${K.streak>1?'s':''} in a row! The next pays ×${(K.hot||1).toFixed(2)}, but it's harder. Get caught and the streak starts over.`}));
-  const free=K.free||5; if(K.jobsToday) box.append(el('p',{class:'hint',text:K.jobsToday<free?`💸 ${K.jobsToday} of today's ${free} full-pay jobs used.`:`💸 ${K.jobsToday} jobs pulled today: the next pays ${Math.round((K.pay??1)*100)}% of the usual takings (each one beyond ${free} pays ${Math.round((1-CRIME_DECAY)*100)}% less). Full pay again tomorrow.`}));
-  { const ti=el('input',{type:'text',placeholder:'@username',autocomplete:'off','aria-label':'Whose pocket'});
-    box.append(el('div',{class:'cbet'}, el('span',{text:'Pickpocket:'}), ti, el('button',{class:'btn',text:'Try',onclick:()=>tryPickpocket(ti.value)})),
-      el('p',{class:'hint',text:'You’ll see their odds before you commit: it depends on where they are right now.'})); }
-  box.append(el('p',{class:'hint',text:'🎮 Robbing a shop, conning a tourist and hacking an ATM are mini games: play well and you can take up to 1.5× the money. Practice is free.'}));
-  const play=(k,o)=>openCrimeGame(k,{...o,blocked,hot:K.hot,streak:K.streak},crimeCtx());
-  if(K.rob) box.append(el('div',{class:'crow'}, el('div',{class:'jt'}, el('b',{text:`🛒 Rob ${K.rob.shop}`}), el('span',{text:'Sneak in the back, empty the till and get out unseen. Usually 5,000–10,000 coins.'}), el('span',{class:'hint',text:oddsText(K.rob)})),
-      el('button',{class:'btn danger',text:'🎮 Play',onclick:()=>play('rob',{...K.rob,at:K.rob.shop})})));
-  else box.append(el('p',{class:'hint',text:'There are no shops to rob.'}));
-  for(const [k,S0] of Object.entries(SOLO_CRIMES)){ const o=K.solo&&K.solo[k]; if(!o) continue;
-    box.append(el('div',{class:'crow'}, el('div',{class:'jt'}, el('b',{text:`${S0.icon} ${S0.name}`}), el('span',{text:`${S0.blurb} ${fmt(S0.loot[0])}–${fmt(S0.loot[1])} coins.${o.at?` At ${o.at}.`:''}`}), el('span',{class:'hint',text:oddsText(o)})),
-      el('button',{class:'btn danger',text:'🎮 Play',onclick:()=>play(k,o)}))); }
+function crimePanel(c){ const box=el('div',{class:'authbox'}); const A=actsFor(c), K=A&&A.crime;
+  if(!K){ box.append(el('h3',{text:'Crime'}), el('p',{class:'hint',text:'Checking who’s watching…'})); return box; }
+  if(!K.housed){ box.append(el('h3',{text:'Crime'}), el('p',{class:'hint',text:'Wake up and move in first.'})); return box; }
+  if(K.jailedFor>0){ box.append(el('h3',{text:'Crime'}), el('p',{class:'jobnow',text:`🔒 You're in jail for ${mins(K.jailedFor)} more minute${K.jailedFor>60000?'s':''}.`}), bailBtn(K.jailedFor)); return box; }
+  // one slim line: your rank and XP, then a button for today's contracts (they pop up once a day on their own)
+  if(K.rank){ const R0=K.rank, C=K.contracts, span=R0.next?R0.next.xp-R0.xp:1, got=R0.next?R0.total-R0.xp:1, done=C?C.list.filter(k=>k.done).length:0;
+    box.append(el('div',{class:'crtop'}, el('span',{class:'crrank',title:R0.next?`${fmt(R0.toNext)} XP to ${R0.next.name}`:'Top rank'}, el('b',{text:`${R0.icon} ${R0.name}`}), el('span',{class:'mgtrack crxp'}, el('i',{style:`width:${Math.round(got/span*100)}%`}))),
+      C?el('button',{class:'pill'+(done<3?' on':''),text:`📋 Contracts ${done}/3`,onclick:()=>crimeContracts(K)}):''));
+    if(C){ let seen=''; try{ seen=localStorage.getItem('contracts-seen')||''; }catch(e){} if(seen!==C.day){ try{ localStorage.setItem('contracts-seen',C.day); }catch(e){} setTimeout(()=>crimeContracts(K,true),400); } } }
+  const secs=ms=>ms<60000?`${Math.ceil(ms/1000)}s`:`${mins(ms)} min`, waiting=K.waitFor>0, blocked=waiting?`Lie low ${secs(K.waitFor)}`:null, free=K.free||5;
+  const status=[K.wave?'🦹 Crime wave: +15%':'', K.streak?`🔥 ${K.streak} in a row: ×${(K.hot||1).toFixed(2)} pay`:'', K.jobsToday>=free?`💸 Next pays ${Math.round((K.pay??1)*100)}%`:''].filter(Boolean);
+  if(waiting){ box.append(el('p',{class:'jobnow',text:`⏳ Lie low for ${secs(K.waitFor)}. You can practise meanwhile.`})); clearTimeout(Acts.wt); Acts.wt=setTimeout(()=>{ if(sel&&Acts.crime){ Acts.at=0; renderCard(true); } },Math.min(K.waitFor+300,20500)); }
+  if(status.length) box.append(el('p',{class:'crstatus',text:status.join(' · ')}));
+  // the games, front and centre
+  const play=(k,o)=>openCrimeGame(k,{...o,blocked,hot:K.hot,streak:K.streak},crimeCtx()), B=K.bests||{};
+  const tile=(k,icon,name,loot,o,at)=>el('button',{class:'crtile',onclick:()=>play(k,{...o,at})},
+    el('span',{class:'crti',text:icon}), el('span',{class:'crtt'}, el('b',{text:name}), el('span',{text:`${loot} coins${at?` · ${at}`:''}`}),
+      el('span',{class:'crtm',text:[`${BAND[o.band].ic} ${o.band==='high'?'Easy':o.band==='mid'?'Medium':'Hard'}`, B[k]!=null?`🏅 Best ${B[k]}`:''].filter(Boolean).join(' · ')})),
+    el('span',{class:'crgo',text:'▶ Play'}));
+  const grid=el('div',{class:'crgames'});
+  if(K.rob) grid.append(tile('rob','🛒','Rob the shop','5,000–10,000',K.rob,K.rob.shop));
+  for(const [k,S0] of Object.entries(SOLO_CRIMES)){ const o=K.solo&&K.solo[k]; if(o) grid.append(tile(k,S0.icon,S0.name,`${fmt(S0.loot[0])}–${fmt(S0.loot[1])}`,o,o.at)); }
+  if(grid.childNodes.length) box.append(grid); else box.append(el('p',{class:'hint',text:'There are no shops or Banks to hit yet.'}));
   box.append(Heist.box(c));
   return box; }
-// The top of the Crime tab: your criminal rank and XP, today's three contracts and your best scores.
-function crimeProgress(K){ const R0=K.rank, C=K.contracts, wrap=el('div',{class:'crprog'});
-  const span=R0.next?R0.next.xp-R0.xp:1, got=R0.next?R0.total-R0.xp:1;
-  wrap.append(el('div',{class:'crrank'}, el('b',{text:`${R0.icon} ${R0.name}`}), el('span',{text:R0.i?` +${Math.round(R0.bonus*100)}% on everything you take`:''})),
-    el('div',{class:'mgtrack crxp'}, el('i',{style:`width:${Math.round(got/span*100)}%`})),
-    el('p',{class:'hint',text:R0.next?`${fmt(R0.total)} XP · ${fmt(R0.toNext)} more to ${R0.next.icon} ${R0.next.name}. Every real job earns XP, more for a cleaner getaway.`:`${fmt(R0.total)} XP · the top rank.`}));
-  if(C&&C.list){ const ul=el('ul',{class:'crcon'}); for(const k of C.list) ul.append(el('li',{class:k.done?'done':''}, el('span',{text:`${k.done?'✅':'📋'} ${k.text}`}), el('b',{text:k.done?'done':`${k.prog}/${k.n} · +${fmt(k.pay.coins)}`})));
-    wrap.append(el('h4',{text:'📋 Today’s contracts'}), ul, el('p',{class:'hint',text:C.bonus?'🎉 All three done today. New ones tomorrow (midnight UTC).':`Each pays coins and XP the moment it's done; all three pays ${fmt(C.all.coins)} more. New ones every day.`})); }
-  const B=K.bests||{}, names={rob:'🛒 Shop',scam:'🎭 Con',atm:'🏧 ATM'}, bl=Object.entries(names).filter(([k])=>B[k]!=null).map(([k,n])=>`${n} ${B[k]}`);
-  if(bl.length) wrap.append(el('p',{class:'hint',text:`🏅 Your best scores: ${bl.join(' · ')}`}));
-  return wrap; }
+// Today's three contracts, in a sheet: it pops up the first time the Crime tab opens each day, and from 📋 Contracts.
+function crimeContracts(K, auto){ const C=K.contracts; if(!C) return; const {box,close}=sheetBox('📋 Today’s contracts');
+  const ul=el('ul',{class:'crcon'}); for(const k of C.list) ul.append(el('li',{class:k.done?'done':''}, el('span',{text:`${k.done?'✅':['','🟢','🟡','🔴'][k.tier]||'📋'} ${k.text}`}), el('b',{text:k.done?'done':`${k.prog}/${k.n} · +${fmt(k.pay.coins)}`})));
+  box.append(ul, el('p',{class:'hint',text:C.bonus?'🎉 All three done today. New ones at midnight UTC.':`Each pays coins and XP the moment it's done; all three pays ${fmt(C.all.coins)} more. New ones every day.`}),
+    el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:auto?'Let’s go':'OK',onclick:close}))); }
 // ---- Group crimes: plan a job, invite a crew (they get a group chat), and it goes down at the set time ----
 const Heist={ data:null, at:0, busy:false, form:null, prompted:new Set(),
   playPart(h){ const L0=h.live; openCrimeGame(L0.myRole,{heist:h.id,until:L0.until,band:L0.band,chance:L0.chance,night:L0.night,at:L0.at},crimeCtx()); },

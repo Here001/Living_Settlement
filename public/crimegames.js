@@ -32,7 +32,7 @@ function close() { const r = document.querySelector('.mg'); if (r) { r._stop && 
 
 function intro(root, kind, info) {
   root._stop && root._stop(); root.innerHTML = '';
-  const I = INFO[kind], diff = MG.difficultyOf(kind, info.band || 'mid'), setting = MG.scoreOf(0, info.chance || 0).setting;
+  const I = INFO[kind], diff = Math.min(5, MG.difficultyOf(kind, info.band || 'mid') + (info.heist ? 0 : Math.min(4, info.streak || 0))), setting = MG.scoreOf(0, info.chance || 0).setting;
   const pips = $c('span', { class: 'mgpips', 'aria-label': `Difficulty ${diff} of 5` }); for (let i = 1; i <= 5; i++) pips.append($c('i', { class: i <= diff ? 'on' : '' }));
   const real = !info.blocked && !info.practiceOnly, heist = info.heist;
   root.append($c('div', { class: 'mgcard' },
@@ -40,6 +40,7 @@ function intro(root, kind, info) {
     $c('div', { class: 'mgicon', text: I.icon }), $c('h2', { text: I.name }), info.at ? $c('p', { class: 'mgat', text: `At ${info.at}` }) : null,
     $c('div', { class: 'mgrow' }, $c('span', { text: 'Difficulty' }), pips),
     $c('div', { class: 'mgrow' }, $c('span', { text: 'The setting' }), $c('b', { text: `${setting} of 40 points` })),
+    !heist && info.hot > 1 ? $c('div', { class: 'mgrow' }, $c('span', { text: '🔥 Hot streak' }), $c('b', { text: `×${info.hot.toFixed(2)} pay (and harder)` })) : null,
     $c('p', { class: 'mghint', text: [info.band === 'low' ? '🔴 Police close by' : info.band === 'mid' ? '🟡 Police not far' : '🟢 No police nearby', info.night ? '🌙 dark streets' : null, info.wave ? '🦹 crime wave' : null].filter(Boolean).join(' · ') }),
     $c('ul', { class: 'mghow' }, ...I.how.map(t => $c('li', { text: t }))),
     $c('p', { class: 'mghint', text: heist ? 'The whole crew plays at the same time. The crew\'s average play (up to 60) plus the setting (up to 40) decides the job: 80+ pays up to 1.5× the loot, below 40 the crew is caught. Botch your own part and you\'re caught whatever the rest do.'
@@ -101,11 +102,44 @@ function result(root, kind, info, run, r) {
     r.game && r.game.invalid ? $c('p', { class: 'mghint', text: 'That game didn\'t add up, so it counts as a botched job.' }) : null,
     bar('Your play', r.score.play, 60, 'p'), bar('The setting', r.score.setting, 40, 's'), $c('div', { class: 'mgtotal' }, $c('span', { text: 'Score' }), $c('b', { text: `${r.score.total}` })),
     $c('p', { class: 'mgmoney', text: money }),
-    $c('div', { class: 'mgbtns' }, $c('button', { class: 'mgb hot', text: 'Done', onclick: close }))));
+    ...progress(r),
+    againRow(root, kind, info, run, r)));
   buzz(good ? [30, 40, 30] : bad ? 300 : 60); sfx(good ? 'win' : bad ? 'lose' : 'wrong');
+  if (r.xp && r.xp.up) setTimeout(() => { sfx('win'); flash(root, '246,227,161', 0.25, 260); }, 900);
   // the takings count up, coin by coin
   const mEl = root.querySelector('.mgmoney'); if (r.money && !r.practice && mEl) { const full = mEl.textContent, t0 = performance.now(), dur = Math.min(1400, 500 + r.money / 50);
     const up = now => { if (!mEl.isConnected) return; const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3); mEl.textContent = `+${X.fmt(Math.round(r.money * e))} coins`; if (k < 1) { sfx('tick'); requestAnimationFrame(up); } else { mEl.textContent = full; bump(mEl); sfx('coin'); } }; requestAnimationFrame(up); }
+}
+
+// What a real job added up to: the hot streak, XP towards the next rank, a personal best, and today's contracts.
+function progress(r) {
+  if (r.practice || !r.xp) return [];
+  const out = [], R0 = r.xp.rank;
+  if (r.money && r.streak) out.push($c('p', { class: 'mgstreak', text: `🔥 ${r.streak} in a row! The next job pays ×${(r.hotNext || 1).toFixed(2)}, but it'll be harder.` }));
+  else if (r.fine != null || r.outcome === 'fined' || r.outcome === 'jailed') out.push($c('p', { class: 'mghint', text: 'Your streak is over. Start a new one: every job in a row pays 15% more.' }));
+  if (r.xp.up) out.push($c('p', { class: 'mgrankup', text: `${r.xp.up.icon} You're now a ${r.xp.up.name}! Everything you take is ${Math.round(r.xp.up.bonus * 100)}% bigger, for good.` }));
+  const span = R0.next ? R0.next.xp - R0.xp : 1, got = R0.next ? R0.total - R0.xp : 1;
+  out.push($c('div', { class: 'mgbar' }, $c('span', { text: `${R0.icon} ${R0.name}` }), $c('div', { class: 'mgtrack' }, $c('i', { class: 'x', style: `width:${Math.round(got / span * 100)}%` })),
+    $c('b', { text: `+${r.xp.gain} XP` })));
+  out.push($c('p', { class: 'mghint', text: R0.next ? `${R0.toNext} XP to ${R0.next.icon} ${R0.next.name} (+3% on everything).` : 'The top rank. Legend.' }));
+  if (r.best && r.best.isNew) out.push($c('p', { class: 'mgstreak', text: `🏅 New personal best: ${r.best.score} (was ${r.best.prev})!` }));
+  else if (r.best && r.best.prev != null) out.push($c('p', { class: 'mghint', text: `Your best here: ${Math.max(r.best.prev, r.best.score)}.` }));
+  else if (r.best) out.push($c('p', { class: 'mghint', text: `🏅 Your first score here: ${r.best.score}. Beat it next time.` }));
+  const C = r.contracts; if (C && C.list) { const ul = $c('ul', { class: 'mgcrew mgcon' }), fresh = new Set((C.done || []).map(d => d.id));
+    for (const k of C.list) ul.append($c('li', { class: fresh.has(k.id) ? 'new' : '' }, $c('span', { text: `${k.done ? '✅' : '📋'} ${k.text}` }), $c('b', { text: k.done ? (fresh.has(k.id) ? `+${X.fmt(k.pay.coins)}` : 'done') : `${k.prog}/${k.n}` })));
+    out.push($c('p', { class: 'mghint', text: (C.done || []).some(d => d.id === 'all') ? `🎉 All three contracts done! +${X.fmt(C.all.coins)} coins bonus.` : 'Today’s contracts' }), ul);
+    if (C.coins) out.push($c('p', { class: 'mgmoney small', text: `+${X.fmt(C.coins)} coins from contracts` })); }
+  return out;
+}
+// The way back in: Go again as soon as the lie-low time is up (a countdown until then), or Done.
+function againRow(root, kind, info, run, r) {
+  const row = $c('div', { class: 'mgbtns' });
+  if (r.jailed) { row.append($c('button', { class: 'mgb hot', text: 'Back to the map', onclick: close })); return row; }
+  const go = $c('button', { class: 'mgb hot', text: run.practice ? '🔁 Practise again' : '🔁 Go again', onclick: () => { if (!go.disabled) begin(root, kind, info, !!run.practice); } });
+  row.append($c('button', { class: 'mgb', text: 'Done', onclick: close }), go);
+  if (!run.practice && r.waitFor > 0) { const until = Date.now() + r.waitFor; go.disabled = true;
+    const tick = () => { if (!go.isConnected) return; const left = until - Date.now(); if (left <= 0) { go.disabled = false; go.textContent = '🔁 Go again'; bump(go); sfx('tick'); return; } go.textContent = `🔁 Go again in ${Math.ceil(left / 1000)}s`; setTimeout(tick, 250); }; tick(); }
+  return row;
 }
 
 // A game loop that only runs while the game is on screen, and stops cleanly.

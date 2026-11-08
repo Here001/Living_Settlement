@@ -620,7 +620,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', buildingId: petShop }, P)).status === 409, 'no adopting from jail');
     { let c2 = null; for (let i = 0; i < 30 && !c2; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 100, bank = 100'); const r = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P); if (r.json.caught) c2 = r.json; }
       const zz = (await pool.query("select coins_base, bank from citizens where handle = 'zara_ng'")).rows[0];
-      ok(c2 && c2.paid.fromCash === 100 && c2.paid.fromBank === 100 && Number(zz.bank) === 0 && Number(zz.coins_base) === 100 - (c2.fine - 100), 'a fine comes from cash, then savings, then puts the wallet in the minus', JSON.stringify({ c2: c2 && c2.paid, fine: c2 && c2.fine, zz }));
+      ok(c2 && c2.paid.fromCash === 100 && c2.fine <= 200 && c2.paid.fromBank === c2.fine - 100 && !c2.paid.debt && Number(zz.bank) === 200 - c2.fine && Number(zz.coins_base) === 0, 'a fine comes from cash, then savings, and never puts the wallet in the minus', JSON.stringify({ c2: c2 && c2.paid, fine: c2 && c2.fine, zz }));
       // bail: out of jail early, from cash then savings
       await set('zara_ng', `jailed_until = ${Date.now() + 5 * 60000}, coins_base = 200, bank = 1000, net = 0`);
       const bq = await call('POST', '/api/me/bail', {}, P), zb = (await pool.query("select coins_base, bank, jailed_until from citizens where handle = 'zara_ng'")).rows[0];
@@ -653,19 +653,42 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok(rf.status === 200 && rf.json.score.total === rf.json.score.play + rf.json.score.setting, 'the score is your play plus the setting', JSON.stringify(rf.json.score));
       const paid = rf.json.outcome === 'clean' || rf.json.outcome === 'partial';
       ok(!sold || rf.json.score.play >= 36, 'selling the moon rock is a good game', JSON.stringify({ sold, sc: rf.json.score }));
-      ok(paid ? rf.json.money > 0 && c2 === c1 + rf.json.money && rf.json.money <= Math.round(rs.json.loot[1]) : rf.json.money === 0, `the result (${rf.json.title}) and the coins add up`, JSON.stringify({ r: rf.json, c1, c2 }));
+      ok(paid ? rf.json.money > 0 && c2 === c1 + rf.json.money + (rf.json.contracts?.coins || 0) && rf.json.money <= Math.round(rs.json.loot[1]) : rf.json.money === 0, `the result (${rf.json.title}) and the coins add up`, JSON.stringify({ r: rf.json, c1, c2 }));
       ok(rf.json.outcome !== 'clean' || rf.json.mult > 1 || rf.json.score.total === 80, 'a clean getaway pays more than the takings', JSON.stringify(rf.json));
       if (paid) { const w = (await call('GET', '/api/me/crime', undefined, P)).json;
         ok(w.waitFor > 0 && w.waitFor <= 20000 && w.streak === 1, 'a job that comes off: lie low just 20 seconds, but the next one is harder', JSON.stringify({ wait: w.waitFor, streak: w.streak }));
-        ok(w.jobsToday === 1 && Math.abs(w.pay - 0.85) < 1e-9 && Math.abs(rf.json.payNext - 0.85) < 1e-9, "each job pulled today makes the next one pay 15% less", JSON.stringify({ jobs: w.jobsToday, pay: w.pay, next: rf.json.payNext }));
+        ok(w.jobsToday === 1 && w.pay === 1 && rf.json.payNext === 1 && w.free === 5, 'the first 5 jobs each day pay in full', JSON.stringify({ jobs: w.jobsToday, pay: w.pay, next: rf.json.payNext }));
+        ok(rf.json.hotNext === 1.15 && w.hot === 1.15, 'a job that comes off heats up the streak: the next pays 15% more', JSON.stringify({ hot: rf.json.hotNext, w: w.hot }));
+        ok(rf.json.xp && rf.json.xp.gain >= 30 && rf.json.xp.rank.name && rf.json.contracts.list.length === 3, 'it earns XP towards a criminal rank, and shows the day’s contracts', JSON.stringify({ xp: rf.json.xp, c: rf.json.contracts }).slice(0, 300));
+        await set('zara_ng', `crime_day = '${new Date().toISOString().slice(0, 10)}', crime_today = 5`); ok(Math.abs((await call('GET', '/api/me/crime', undefined, P)).json.pay - 0.85) < 1e-9, 'after 5 jobs in a day, each pays 15% less than the last');
+        await set('zara_ng', `crime_today = 1`);
         await set('zara_ng', 'crime_at = null'); const r2 = (await start('scam', false)).json;
-        ok(Math.abs(r2.pay - 0.85) < 1e-9, '…and the takings on offer for the next job show it', JSON.stringify(r2));
+        ok(r2.pay === 1 && r2.hot === 1.15, '…and the takings on offer for the next job show the hot streak', JSON.stringify(r2));
         await set('zara_ng', "crime_day = '2000-01-01'"); ok(Math.abs((await call('GET', '/api/me/crime', undefined, P)).json.pay - 1) < 1e-9, 'a new day: jobs pay in full again'); await set('zara_ng', 'crime_day = null, crime_today = 0');
         ok(r2.streak === 1 && (r2.diff > rs.json.diff || r2.diff === 5) && r2.chance < rs.json.chance, 'the next job: a harder game, and less help from the setting', JSON.stringify({ before: [rs.json.diff, rs.json.chance], after: [r2.diff, r2.chance] }));
         await finish(r2.id, { picks: [{ o: 7, t: 1 }] }); ok((await call('GET', '/api/me/crime', undefined, P)).json.streak === 0, 'getting caught wipes the slate clean'); }
       // a botched job: nothing done, so the play earns nothing, and that's caught
       await fresh(); const rb = await start('scam', false), bad = await finish(rb.json.id, { picks: [{ o: 9, t: 1 }] });
-      ok(bad.status === 200 && bad.json.game.invalid && ['fined', 'jailed'].includes(bad.json.outcome) && bad.json.fine >= 250 && (await coins('zara_ng')) === 1000 - bad.json.fine, 'a botched job is caught and fined', JSON.stringify(bad.json));
+      ok(bad.status === 200 && bad.json.game.invalid && ['fined', 'jailed'].includes(bad.json.outcome) && bad.json.fine >= 100 && bad.json.fine <= 1000 && (await coins('zara_ng')) === 1000 - bad.json.fine + (bad.json.contracts?.coins || 0), 'a botched job is caught and fined', JSON.stringify(bad.json));
+      ok(bad.json.fine === Math.min(1000, (await import('../shared/rules.js')).crimeFine(Number((await pool.query('select loot from crime_runs where id = $1', [rb.json.id])).rows[0].loot))), 'the fine is a quarter of the takings on offer (100 to 3,000)', JSON.stringify(bad.json.fine));
+      ok(bad.json.xp.gain >= 10 && bad.json.xp.gain - bad.json.contracts.done.reduce((a, d) => a + d.xp, 0) === 10 && bad.json.streak === 0 && bad.json.hotNext === 1, 'even a botched job earns a little XP; the streak is over', JSON.stringify(bad.json.xp));
+      { // a fine is never more than you have: no debt from a bad game
+        await fresh(); await set('zara_ng', 'coins_base = 60, bank = 0'); const rp = await start('scam', false), bp = await finish(rp.json.id, { picks: [{ o: 9, t: 1 }] });
+        ok(bp.json.fine === 60 && (await coins('zara_ng')) === (bp.json.contracts?.coins || 0), 'the fine is never more than the thief has: no debt', JSON.stringify({ fine: bp.json.fine, coins: await coins('zara_ng') })); }
+      { // contracts and ranks
+        const R0 = await import('../shared/rules.js'), zid = (await pool.query("select id from citizens where handle = 'zara_ng'")).rows[0].id, day = R0.realDayKey();
+        const cr = (await call('GET', '/api/me/crime', undefined, P)).json; ok(cr.rank && cr.contracts.list.length === 3 && [1, 2, 3].every((t, i) => cr.contracts.list[i].tier === t), 'the Crime tab shows your rank and three contracts (easy, medium, hard)', JSON.stringify(cr.contracts).slice(0, 300));
+        ok(R0.pickContracts('a', day, {}).every(id => !R0.contractOf(id).needs) && R0.pickContracts('a', day, { shop: 1, bank: 1 }).length === 3, "nobody gets a contract the colony can't offer (no shop, no Bank)");
+        ok(R0.contractHit('ghost', { solo: true, kind: 'rob', won: true, state: { peak: 0.3 } }) && !R0.contractHit('ghost', { solo: true, kind: 'rob', won: true, state: { peak: 0.6 } }) && R0.contractHit('nowire', { solo: true, kind: 'atm', won: true, state: { wrongs: 0 } }) && R0.contractHit('heist', { heist: true }), 'contracts check what really happened in the game');
+        await pool.query("update crime_contracts set ids = '{tries3,tries3,tries3}', prog = '{2,2,2}', paid = '{f,f,f}', bonus = false where citizen_id = $1 and day = $2", [zid, day]);
+        await fresh(); await set('zara_ng', 'crime_xp = 95'); const rc = await start('scam', false), bc = await finish(rc.json.id, { picks: [{ o: 9, t: 1 }] });
+        const want = 3 * 300 + R0.CONTRACT_ALL.coins;
+        ok(bc.json.contracts.done.length === 4 && bc.json.contracts.done.some(d => d.id === 'all') && bc.json.contracts.coins === want, 'finishing contracts pays each one, and a bonus for all three', JSON.stringify(bc.json.contracts).slice(0, 300));
+        ok((await coins('zara_ng')) === 1000 - bc.json.fine + want, 'the contract coins land in your cash', JSON.stringify({ c: await coins('zara_ng'), fine: bc.json.fine }));
+        ok(bc.json.xp.up && bc.json.xp.up.name === 'Hustler' && bc.json.xp.rank.total === 95 + 10 + 3 * 30 + R0.CONTRACT_ALL.xp, 'XP from jobs and contracts lifts you to the next rank', JSON.stringify(bc.json.xp));
+        ok(R0.rankMult(100) === 1.03 && R0.rankMult(12000) > 1.2, 'each rank adds 3% to everything you take');
+        ok((await pool.query("select 1 from events where text like '%zara_ng is now a Hustler%'")).rowCount >= 1, 'the Colony Log announces a new rank', JSON.stringify((await pool.query("select kind, text from events order by t desc limit 4")).rows));
+        ok((await pool.query("select score from crime_best where citizen_id = $1 and kind = 'scam'", [zid])).rows[0]?.score >= 0 && (await call('GET', '/api/me/crime', undefined, P)).json.bests.scam >= 0, 'your best score in each game is kept and shown'); }
       ok(!bad.json.jailed || (await whoDev('zara_ng')).jailedUntil > Date.now(), 'and the worst ones go to jail');
       await fresh(); ok((await start('rob', false)).status === 200, 'after lying low, the next real job can start');
       ok((await start('pickpocket', true)).status === 400, 'pickpocketing stays instant: no mini game');

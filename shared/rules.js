@@ -307,13 +307,81 @@ export const BAIL_PER_MIN = 150, BAIL_MIN = 300;
 export const bailCost = msLeft => Math.max(BAIL_MIN, Math.ceil(Math.max(0, msLeft) / 60000) * BAIL_PER_MIN);
 
 // ---------- The economy's dials ----------
-// Each job (crime or heist) that comes off in the same real day pays 15% less than the last; it's back to full the next day.
-export const CRIME_DECAY = 0.85;
+// The first 5 jobs (crimes or heists) that come off each real day pay in full; after that each pays 15% less than the last.
+// It's back to full the next day (midnight UTC).
+export const CRIME_DECAY = 0.85, CRIME_FREE = 5;
 // The most one job can take from the treasury, as a share of what it holds, so one crew can't empty the town.
 export const CRIME_SHARE = { rob: 0.03, scam: 0.01, atm: 0.05, armored: 0.1, jailbreak: 0.04, bank: 0.2 };
 export const realDayKey = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
 export const jobsToday = (c, t = Date.now()) => c && c.crime_day === realDayKey(t) ? Number(c.crime_today || 0) : 0;
-export const crimePayMult = (c, t = Date.now()) => Math.pow(CRIME_DECAY, jobsToday(c, t));
+export const crimePayMult = (c, t = Date.now()) => Math.pow(CRIME_DECAY, Math.max(0, jobsToday(c, t) + 1 - CRIME_FREE)); // what the next job pays
+
+// ---- Keeping crime worth coming back to ----
+// Hot streak: each job in a row that comes off makes the next one harder, but it pays 15% more for each, up to +60%.
+// Getting caught ends the streak.
+export const HOT_STEP = 0.15, HOT_MAX = 4;
+export const hotMult = streak => 1 + HOT_STEP * Math.min(HOT_MAX, Math.max(0, Math.floor(Number(streak) || 0)));
+// Getting caught: a quarter of the takings on offer (at least 100, never more than 3,000), and never more than the
+// thief has in cash and savings, so a bad game never puts anyone in debt.
+export const FINE_SHARE = 0.25, FINE_MIN = 100, FINE_MAX = 3000;
+export const crimeFine = base => Math.min(FINE_MAX, Math.max(FINE_MIN, Math.round((Number(base) || 0) * FINE_SHARE / 10) * 10));
+// Criminal ranks: every real job earns XP (more for a better result), and so does each daily contract. Each rank adds
+// 3% to everything you take, for good, and shows by your name in the Crime tab.
+export const CRIME_RANKS = [
+  { name: 'Pickpocket', icon: '🧤', xp: 0 }, { name: 'Hustler', icon: '🃏', xp: 100 }, { name: 'Prowler', icon: '🐈‍⬛', xp: 300 },
+  { name: 'Smooth operator', icon: '🕶️', xp: 700 }, { name: 'Ringleader', icon: '🎩', xp: 1500 }, { name: 'Mastermind', icon: '🧠', xp: 3000 },
+  { name: 'Kingpin', icon: '♠️', xp: 6000 }, { name: 'Legend of Gliese', icon: '🌒', xp: 12000 },
+];
+export const RANK_BONUS = 0.03;
+export const CRIME_XP = { clean: 40, partial: 30, empty: 15, fined: 10, jailed: 10, heist: 30, perStreak: 5 };
+export function rankOf(xp) { xp = Math.max(0, Number(xp) || 0); let i = 0; while (i + 1 < CRIME_RANKS.length && xp >= CRIME_RANKS[i + 1].xp) i++;
+  const R0 = CRIME_RANKS[i], N = CRIME_RANKS[i + 1] || null; return { i, ...R0, total: xp, next: N, toNext: N ? N.xp - xp : 0, bonus: i * RANK_BONUS }; }
+export const rankMult = xp => 1 + rankOf(xp).i * RANK_BONUS;
+// Daily contracts: three challenges each real day, one easy, one medium and one hard, the same all day for each player.
+// `n` is how many times it must happen. Each pays coins (from the treasury, scaled by the stabiliser) and XP; all three
+// done pays a bonus on top. `needs` says what the colony must have for it to be possible (a shop to rob, a Bank).
+export const CONTRACTS = [
+  { id: 'tries3', tier: 1, n: 3, text: 'Try 3 jobs today, win or lose' },
+  { id: 'rob1', tier: 1, n: 1, needs: 'shop', text: 'Pull off a shop robbery' },
+  { id: 'scam1', tier: 1, n: 1, text: 'Con a tourist and get away with it' },
+  { id: 'atm1', tier: 1, n: 1, needs: 'bank', text: 'Hack an ATM and get away with the cash' },
+  { id: 'wins3', tier: 2, n: 3, text: 'Get away with 3 jobs today' },
+  { id: 'ghost', tier: 2, n: 1, needs: 'shop', text: 'Rob a shop without the staff’s eye ever getting past half' },
+  { id: 'grab2', tier: 2, n: 1, needs: 'shop', text: 'Grab 2 extra goods in one shop robbery and get out' },
+  { id: 'nowire', tier: 2, n: 1, needs: 'bank', text: 'Hack an ATM without a single wrong move' },
+  { id: 'streak2', tier: 2, n: 1, text: 'Get away with 2 jobs in a row' },
+  { id: 'clean', tier: 3, n: 1, text: 'Make a Clean getaway (a score of 80 or more)' },
+  { id: 'streak3', tier: 3, n: 1, text: 'Get away with 3 jobs in a row' },
+  { id: 'heist', tier: 3, n: 1, text: 'Play your part in a heist when it goes down' },
+];
+export const CONTRACT_PAY = { 1: { coins: 300, xp: 30 }, 2: { coins: 600, xp: 60 }, 3: { coins: 1000, xp: 100 } }, CONTRACT_ALL = { coins: 1000, xp: 100 };
+// Does this happening count towards the contract? `ev`: { solo, heist, kind, won, outcome, total, streak, state }.
+export function contractHit(id, ev) {
+  const st = ev.state || {};
+  switch (id) {
+    case 'tries3': return !!ev.solo;
+    case 'rob1': return ev.solo && ev.kind === 'rob' && ev.won;
+    case 'scam1': return ev.solo && ev.kind === 'scam' && ev.won;
+    case 'atm1': return ev.solo && ev.kind === 'atm' && ev.won;
+    case 'wins3': return !!(ev.solo && ev.won);
+    case 'ghost': return ev.solo && ev.kind === 'rob' && ev.won && Number(st.peak) < 0.5;
+    case 'grab2': return ev.solo && ev.kind === 'rob' && ev.won && Number(st.got) >= 2;
+    case 'nowire': return ev.solo && ev.kind === 'atm' && ev.won && Number(st.wrongs) === 0;
+    case 'streak2': return ev.solo && ev.won && ev.streak >= 2;
+    case 'clean': return ev.solo && ev.outcome === 'clean';
+    case 'streak3': return ev.solo && ev.won && ev.streak >= 3;
+    case 'heist': return !!ev.heist;
+  }
+  return false;
+}
+// The day's three, picked from the player's id and the date (so everyone gets a different set, the same all day).
+export function pickContracts(id, day, has = {}) {
+  let h = 2166136261; for (const ch of String(id) + '|' + day) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  const out = [];
+  for (const tier of [1, 2, 3]) { const pool = CONTRACTS.filter(k => k.tier === tier && (!k.needs || has[k.needs])); out.push(pool[h % pool.length].id); h = Math.imul(h ^ (h >>> 13), 2654435761) >>> 0; }
+  return out;
+}
+export const contractOf = id => CONTRACTS.find(k => k.id === id) || null;
 export const crimeCap = (kind, treasury) => CRIME_SHARE[kind] ? Math.max(0, Math.floor(treasury * CRIME_SHARE[kind])) : Math.max(0, Math.floor(treasury));
 // Wealth tax: 0.5% a real day on cash plus savings above 250,000 (taken a game day at a time), paid to the treasury.
 export const WEALTH_FREE = 250000, WEALTH_RATE = 0.005;

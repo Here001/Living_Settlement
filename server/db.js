@@ -314,6 +314,11 @@ const MIGRATIONS = [
    create index if not exists auctions_status on auctions (status, ends_at);
    create table if not exists auction_bids (id bigserial primary key, auction_id text not null, t bigint not null, citizen_id text not null, handle text not null, amount bigint not null);
    create index if not exists auction_bids_auction on auction_bids (auction_id, id desc);`,
+  // v62: keeping crime worth coming back to: criminal XP (ranks), each player's best score in each game, and daily contracts
+  `alter table citizens add column if not exists crime_xp int not null default 0;
+   create table if not exists crime_best (citizen_id text not null, kind text not null, score int not null, at bigint not null, primary key (citizen_id, kind));
+   create table if not exists crime_contracts (citizen_id text not null, day text not null, ids text[] not null, prog int[] not null, paid boolean[] not null,
+     bonus boolean not null default false, primary key (citizen_id, day));`,
 ];
 
 export async function migrate() {

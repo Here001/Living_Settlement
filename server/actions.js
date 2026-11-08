@@ -10,6 +10,7 @@ import { CREATURES, petPrice } from '../shared/creatures.js';
 import { treasuryAdd } from './races.js';
 import { track, ledger } from './stats.js';
 import * as MG from '../shared/minigames.js';
+import { note as noteProgress, progressOf } from './crimeprog.js';
 
 export const CRIME_COOLDOWN = 20 * 1000;         // lie low 20 seconds between crimes, whatever happened
 export const CRIME_QUICK = 20 * 1000;
@@ -19,9 +20,13 @@ export const STREAK_CHANCE = 0.07;
 const waitText = ms => ms < 60000 ? `${Math.ceil(ms / 1000)} more seconds` : `${Math.ceil(ms / 60000)} more minute${ms > 60000 ? 's' : ''}`;
 const streakDiff = (base, streak) => Math.min(5, base + Math.min(4, streak || 0));
 const streakChance = (chance, streak) => Math.max(0.05, chance - STREAK_CHANCE * (streak || 0));
-// What a job really pays: the takings, 15% less for each job already pulled today, times the stabiliser's dial, and
-// never more than that kind of job's share of the treasury.
-export const jobPay = (ch, c, kind, raw) => Math.max(1, Math.min(R.crimeCap(kind, R.treasuryOn(ch.meta, ch.today)), Math.round(raw * R.crimePayMult(c) * R.econF(ch.meta))));
+// What a job really pays: the takings, 15% less for each job already pulled today beyond the first 5, times the hot
+// streak (+15% for each job in a row), the criminal rank (+3% a rank) and the stabiliser's dial, and never more than
+// that kind of job's share of the treasury.
+export const payMult = (c, meta) => R.crimePayMult(c) * R.hotMult(c.crime_streak) * R.rankMult(c.crime_xp) * R.econF(meta);
+export const jobPay = (ch, c, kind, raw) => Math.max(1, Math.min(R.crimeCap(kind, R.treasuryOn(ch.meta, ch.today)), Math.round(raw * payMult(c, ch.meta))));
+// Getting caught costs a quarter of the takings on offer (100 to 3,000), and never more than the thief has.
+export const fairFine = (c, base) => Math.min(R.crimeFine(base), Math.max(0, Number(c.coins_base) || 0) + Math.max(0, Number(c.bank) || 0));
 export const noteJob = (ch, id) => ch.q('update citizens set crime_today = case when crime_day = $2 then crime_today + 1 else 1 end, crime_day = $2 where id = $1', [id, R.realDayKey()]);
 export const JAIL_TIME = 10 * 60 * 1000;         // caught: 10 real minutes in the Jail
 export const VISIT_TIME = 4 * 60 * R.GAME_MIN_MS; // going somewhere lasts 4 game hours (5 real minutes)
@@ -160,7 +165,7 @@ export class Actions {
     const solo = {}; for (const [k, S] of Object.entries(R.SOLO_CRIMES)) { let x = c.hx, y = c.hy, at = null;
       if (S.needs === 'bank' && c.home_id) { const bk = (await pool.query(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [c.hx, c.hy, BANKS])).rows[0]; if (!bk) continue; x = bk.x; y = bk.y; at = nameOf(bk); }
       if (c.home_id) solo[k] = { ...(await this.odds(k, await this.policeDist(pool, x, y), wave)), at }; }
-    return { streak: Number(c.crime_streak || 0), jobsToday: R.jobsToday(c), pay: R.crimePayMult(c), solo, housed: !!c.home_id, jailedFor: Math.max(0, Number(c.jailed_until || 0) - now), waitFor: Math.max(0, Number(c.crime_at || 0) + CRIME_COOLDOWN - now), wave,
+    return { streak: Number(c.crime_streak || 0), jobsToday: R.jobsToday(c), pay: R.crimePayMult(c), free: R.CRIME_FREE, ...(await progressOf((s, v) => pool.query(s, v), c)), solo, housed: !!c.home_id, jailedFor: Math.max(0, Number(c.jailed_until || 0) - now), waitFor: Math.max(0, Number(c.crime_at || 0) + CRIME_COOLDOWN - now), wave,
       rates: R.CRIME_RATES, near: R.CRIME_NEAR, far: R.CRIME_FAR, rob, pick };
   }
   async crime(id, { kind, target }) {
@@ -207,9 +212,9 @@ export class Actions {
         await ch.q('update citizens set crime_at = $2 where id = $1', [c.id, now - CRIME_COOLDOWN + CRIME_QUICK]); // it came off: lie low just a moment
         return { ok: true, caught: false, loot, coins: c.coins_base, chance, band: odds.band, police: odds.dist };
       }
-      // Caught: a fine (twice what they tried to take, at least 250), and jail if the colony has one. The fine comes from
-      // their cash, then their savings, and whatever's left puts their wallet in the minus.
-      const fine = Math.max(250, loot * 2), paid = await ch.takeFrom(c, fine); treasuryAdd(ch, fine); track(ch, 'crime:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
+      // Caught: a fine (a quarter of what they tried to take, 100 to 3,000, never more than they have), and jail if the
+      // colony has one. The fine comes from their cash, then their savings.
+      const fine = fairFine(c, loot), paid = await ch.takeFrom(c, fine); treasuryAdd(ch, fine); track(ch, 'crime:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
       await this.notify(ch, c.id, 'crime', `🚓 You were caught and fined ${fmt(fine)} coins: ${paid.how}.`);
       const jail = (await ch.q(`select * from buildings where type = any('${pgList('jail')}') and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [px, py])).rows[0];
       const what = victim ? `pickpocketing @${victim.handle}` : kind === 'scam' ? 'conning a tourist' : kind === 'atm' ? `hacking the ATM at ${nameOf(shop)}` : `robbing ${nameOf(shop)}`;
@@ -249,12 +254,12 @@ export class Actions {
       if (!practice) { const why = await this.blockedReason(c); if (why) throw new HttpError(409, why);
         const wait = Number(c.crime_at || 0) + CRIME_COOLDOWN - now; if (wait > 0) throw new HttpError(429, `Lie low for ${waitText(wait)} before the next job. You can practise meanwhile.`); }
       const sc = await this.crimeScene(db, c, kind), wave = await this.waveNow(), odds = await this.odds(MG.ROLES[kind] ? 'armored' : kind, await this.policeDist(db, sc.px, sc.py), wave);
-      const pay = practice ? 1 : R.crimePayMult(c) * R.econF(this.world.meta), streak = practice ? 0 : Number(c.crime_streak || 0), diff = streakDiff(MG.difficultyOf(kind, odds.band), streak), chance = streakChance(odds.chance, streak), seed = crypto.randomInt(1, 2 ** 31), rid = crypto.randomUUID();
+      const pay = practice ? 1 : payMult(c, this.world.meta), streak = practice ? 0 : Number(c.crime_streak || 0), diff = streakDiff(MG.difficultyOf(kind, odds.band), streak), chance = streakChance(odds.chance, streak), seed = crypto.randomInt(1, 2 ** 31), rid = crypto.randomUUID();
       await db.query('insert into crime_runs (id, citizen_id, kind, seed, diff, practice, started_at, chance, band, night, loot, scene) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
         [rid, id, kind, seed, diff, !!practice, now, chance, odds.band, !!odds.night, sc.loot, JSON.stringify({ ...sc, hard: streak > 0 })]);
       if (!practice) await db.query('update citizens set crime_at = $2 where id = $1', [id, now]);
       await db.query('delete from crime_runs where citizen_id = $1 and started_at < $2', [id, now - 7 * 86400000]);
-      return { id: rid, kind, seed, diff, streak, hard: streak > 0, practice: !!practice, chance, band: odds.band, police: odds.dist, night: !!odds.night, wave, at: sc.shop?.name || null, loot: practice ? null : [Math.round(sc.loot * 0.3 * pay), Math.round(sc.loot * 1.5 * pay)], pay: R.crimePayMult(c) };
+      return { id: rid, kind, seed, diff, streak, hard: streak > 0, practice: !!practice, chance, band: odds.band, police: odds.dist, night: !!odds.night, wave, at: sc.shop?.name || null, loot: practice ? null : [Math.round(sc.loot * 0.3 * pay), Math.round(sc.loot * 1.5 * pay)], pay: R.crimePayMult(c), hot: practice ? 1 : R.hotMult(streak) };
     };
     return practice ? go(pool) : this.world.change(ch => go({ query: (a, v) => ch.q(a, v) }));
   }
@@ -280,10 +285,10 @@ export class Actions {
       await ch.q('update crime_runs set finished_at = $2, result = $3 where id = $1', [run.id, now, JSON.stringify(res)]);
       if (run.heist_id) return { ...res, money: 0, heistId: run.heist_id, role: run.kind };
       if (run.practice) return { ...res, money: 0, practiceLoot: out.mult ? Math.round(Number(run.loot) * out.mult) : 0 };
-      return { ...res, ...(await this.settleCrime(ch, id, run, out, sc, rp.ok ? rp.extra || 0 : 0)) };
+      return { ...res, ...(await this.settleCrime(ch, id, run, out, sc, rp.ok ? rp.extra || 0 : 0, rp.ok ? rp.state : null)) };
     });
   }
-  async settleCrime(ch, id, run, out, sc, extra = 0) {
+  async settleCrime(ch, id, run, out, sc, extra = 0, state = null) {
     const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
     const scene = run.scene || {}, shop = scene.shop, kind = run.kind, base = Number(run.loot);
     const where = kind === 'scam' ? 'conning a tourist' : kind === 'atm' ? `hacking the ATM at ${shop?.name || 'the Bank'}` : `robbing ${shop?.name || 'a shop'}`;
@@ -295,19 +300,22 @@ export class Actions {
       await ch.event(kind === 'scam' ? `🎭 A tourist was conned out of ${fmt(loot)} coins. The con artist vanished.` : kind === 'atm' ? `🏧 The ATM at ${shop?.name || 'the Bank'} was hacked for ${fmt(loot)} coins!` : `🚨 ${shop?.name || 'A shop'} was robbed of ${fmt(loot)} coins! The thief got away.`, 'crime');
       // it came off: lie low just a moment, but the next job will be harder
       const streak = Number(c.crime_streak || 0) + 1; await ch.q('update citizens set crime_at = $2, crime_streak = $3 where id = $1', [c.id, Date.now() - CRIME_COOLDOWN + CRIME_QUICK, streak]);
-      return { money: loot, coins: c.coins_base, extra, streak, waitFor: CRIME_QUICK, payNext: R.crimePayMult({ crime_day: R.realDayKey(), crime_today: R.jobsToday(c) + 1 }) };
+      const prog = await noteProgress(ch, this.world, c, { solo: true, kind, won: true, outcome: out.key, total: sc.total, streak, state }); await ch.saveCitizen(c);
+      return { money: loot, coins: c.coins_base, extra, streak, hotNext: R.hotMult(streak), waitFor: CRIME_QUICK, payNext: R.crimePayMult({ crime_day: R.realDayKey(), crime_today: R.jobsToday(c) + 1 }), ...prog };
     }
     if (out.key === 'empty') { await ch.event(kind === 'scam' ? '🎭 A con artist tried their luck on a tourist and came away with nothing.' : kind === 'atm' ? `🏧 Someone tampered with the ATM at ${shop?.name || 'the Bank'}, but got nothing.` : `🚨 A thief slipped into ${shop?.name || 'a shop'} and out again, empty-handed.`, 'crime');
-      return { money: 0, coins: c.coins_base }; }
-    // caught: a fine (twice the takings on offer, at least 250) from cash, then savings, then into the minus; jail for the worst
-    const fine = Math.max(250, base * 2), paid = await ch.takeFrom(c, fine); treasuryAdd(ch, fine); track(ch, 'crime:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
+      const prog = await noteProgress(ch, this.world, c, { solo: true, kind, won: false, outcome: out.key, total: sc.total, streak: Number(c.crime_streak || 0), state }); await ch.saveCitizen(c);
+      return { money: 0, coins: c.coins_base, streak: Number(c.crime_streak || 0), hotNext: R.hotMult(c.crime_streak), waitFor: Math.max(0, Number(run.started_at) + CRIME_COOLDOWN - Date.now()), ...prog }; }
+    // caught: a fine (a quarter of the takings on offer, 100 to 3,000, never more than they have) from cash, then savings; jail for the worst
+    const fine = fairFine(c, base), paid = await ch.takeFrom(c, fine); treasuryAdd(ch, fine); track(ch, 'crime:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
     await ch.q('update citizens set crime_streak = 0 where id = $1', [c.id]); // caught: the slate is wiped clean
     await this.notify(ch, c.id, 'crime', `🚓 You were caught ${where} and fined ${fmt(fine)} coins: ${paid.how}.`);
     let jailed = false;
     if (out.key === 'jailed') { const jail = (await ch.q(`select * from buildings where type = any('${pgList('jail')}') and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [scene.px ?? 0, scene.py ?? 0])).rows[0];
       if (jail) { const until = Date.now() + JAIL_TIME; await ch.q('update citizens set jailed_until = $2 where id = $1', [c.id, until]); await bump(ch, c.id, { jailed: 1 }); await this.setVisit(ch, c, jail, until); jailed = true; } }
     await ch.event(`🚓 @${c.handle} was caught ${where}${jailed ? `, fined ${fmt(fine)} coins and locked up for ${JAIL_TIME / 60000} minutes` : ` and fined ${fmt(fine)} coins`}.`, 'crime');
-    return { money: 0, fine, paid, jailed, jailFor: jailed ? JAIL_TIME : 0, coins: c.coins_base };
+    c.crime_streak = 0; const prog = await noteProgress(ch, this.world, c, { solo: true, kind, won: false, outcome: out.key, total: sc.total, streak: 0, state }); await ch.saveCitizen(c);
+    return { money: 0, fine, paid, jailed, jailFor: jailed ? JAIL_TIME : 0, coins: c.coins_base, streak: 0, hotNext: 1, waitFor: jailed ? JAIL_TIME : Math.max(0, Number(run.started_at) + CRIME_COOLDOWN - Date.now()), ...prog };
   }
 
   // ---------- going somewhere ----------

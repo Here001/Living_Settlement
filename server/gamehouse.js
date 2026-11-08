@@ -67,7 +67,7 @@ export class GameHouse {
       const { c, name } = await this.seat(ch, id, bid, CASINO_OK);
       if (free) {
         if (c.wheel_day === realDay()) throw new HttpError(409, 'You’ve had your free spin today. Come back tomorrow, or spin for coins.');
-        const slot = crypto.randomInt(WHEEL_FREE.length), prize = Math.min(WHEEL_FREE[slot], Math.floor(R.treasuryOn(ch.meta, ch.today)));
+        const slot = crypto.randomInt(WHEEL_FREE.length), prize = Math.max(0, Math.min(WHEEL_FREE[slot], Math.floor(R.treasuryOn(ch.meta, ch.today))));
         await ch.q('update citizens set wheel_day = $2 where id = $1', [c.id, realDay()]);
         await this.pay(ch, c, 'wheel', prize, 0, name);
         return { ok: true, free: true, slot, prize, coins: c.coins_base };
@@ -153,7 +153,7 @@ export class GameHouse {
       g.balls = foul ? [...r.balls, respot(r.balls)] : r.balls; g.shots++; g.potted += reds; g.last = { potted: r.potted, foul, frames: r.frames };
       if (g.potted >= g.need || g.shots >= g.max || !g.balls.some(b => b.id !== 'c')) {
         g.done = true; g.won = g.potted >= g.need; g.paid = 0;
-        if (g.won && c.snooker_day !== realDay()) { g.paid = Math.min(PRACTICE.prize, Math.floor(R.treasuryOn(ch.meta, ch.today))); await ch.q('update citizens set snooker_day = $2 where id = $1', [c.id, realDay()]); }
+        if (g.won && c.snooker_day !== realDay()) { g.paid = Math.max(0, Math.min(PRACTICE.prize, Math.floor(R.treasuryOn(ch.meta, ch.today)))); await ch.q('update citizens set snooker_day = $2 where id = $1', [c.id, realDay()]); }
         await this.pay(ch, c, 'snooker', g.paid, 0, name); await this.save(ch, c, null);
       } else await this.save(ch, c, { ...g, last: null });
       return { ...g, coins: c.coins_base };

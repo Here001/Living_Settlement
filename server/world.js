@@ -245,6 +245,17 @@ export class World {
     this.plots = new Map(); for (const r of (await pool.query('select * from plots')).rows) this.putP(pRow(r));
     this.founderHandle = (await pool.query('select handle from citizens where founder order by seq limit 1')).rows[0]?.handle || null;
   }
+  // Wages used to have their tax added on top (the treasury got 20% more coins out of nothing). Now the tax comes out of
+  // the wage: everyone with a job takes home their salary's tax less. Runs once, on the leader, at startup.
+  async taxOutOfWages() {
+    if (!this.meta || this.meta.taxOut) return 0;
+    return this.change(async ch => {
+      if (ch.meta.taxOut) return 0; let n = 0;
+      for (const c of (await ch.q('select c.*, j.type jtype from citizens c join buildings j on j.id = c.job_id for update of c')).rows) {
+        const tax = R.taxOf(R.capacities(c.jtype).salary || 0); delete c.jtype; if (!tax) continue;
+        ch.coins(c); c.net = Number(c.net) - tax; await ch.saveCitizen(c); n++; }
+      ch.meta.taxOut = true; return n; });
+  }
   // Colonies founded before the landing station existed started around a campfire. Swap it for the station,
   // using the first 2×2 spot around it that's clear. Runs once, on the leader, at startup.
   async upgradeCampfire() {
@@ -315,10 +326,10 @@ export class World {
       if (!row && !allowUnfounded) throw new HttpError(409, 'Found the colony first.');
       const ch = new Change(db, row ? row.data : null), before = row && !personal ? JSON.stringify(row.data) : null; ch.personal = personal;
       if (personal && ch.meta) { const p = Number((await db.query('select coalesce(sum(delta), 0) s from treasury_pending')).rows[0].s); // what the treasury really holds right now
-        if (p) ch.meta.treasuryBase = Math.max(0, R.treasuryOn(ch.meta, ch.today) + p), ch.meta.treasuryDay = ch.today; }
+        if (p) ch.meta.treasuryBase = R.treasuryOn(ch.meta, ch.today) + p, ch.meta.treasuryDay = ch.today; }
       if (!personal && ch.meta) { // coins from personal changes since the last colony-wide one
         const p = (await db.query('delete from treasury_pending returning delta')).rows;
-        if (p.length) ch.meta.treasuryBase = Math.max(0, R.treasuryOn(ch.meta, ch.today) + p.reduce((a, x) => a + Number(x.delta), 0)), ch.meta.treasuryDay = ch.today;
+        if (p.length) ch.meta.treasuryBase = R.treasuryOn(ch.meta, ch.today) + p.reduce((a, x) => a + Number(x.delta), 0), ch.meta.treasuryDay = ch.today;
       }
       const r = await changeScope.run(ch, () => fn(ch));
       if (ch.ledger) await flushLedger(db, ch.ledger); // each player's cash-flow history
@@ -342,7 +353,7 @@ export class World {
   // Coins a personal change paid into (or out of) the treasury: shown at once, and added to the saved treasury within half
   // a second by one colony-wide change for everything that came in meanwhile.
   notePending(delta) {
-    if (this.meta) { this.meta = { ...this.meta, treasuryBase: Math.max(0, R.treasuryOn(this.meta, R.gameDay(Date.now(), this.meta.epoch)) + delta), treasuryDay: R.gameDay(Date.now(), this.meta.epoch) }; }
+    if (this.meta) { this.meta = { ...this.meta, treasuryBase: R.treasuryOn(this.meta, R.gameDay(Date.now(), this.meta.epoch)) + delta, treasuryDay: R.gameDay(Date.now(), this.meta.epoch) }; }
     if (!this.foldTimer) this.foldTimer = setTimeout(() => { this.foldTimer = null; this.change(async () => {}).catch(e => console.error('treasury:', e.message)); }, 500);
   }
   publish(ops) {
@@ -399,10 +410,10 @@ export class World {
     return rows.map(r => ({ ...cOut(r), o: Number(r.last_seen || 0) > Date.now() - 90000 ? 1 : 0 })); // o: online right now
   }
   async citizenDetail(handle) {
-    const r = (await pool.query(`${CITIZEN_SELECT.replace('select c.id,', 'select c.coins_base, c.coins_day, c.net, c.pass_hash is not null has_pw, c.jailed_until, c.bank, c.id,')} where lower(c.handle) = lower($1)`, [R.cleanHandle(handle)])).rows[0];
+    const r = (await pool.query(`${CITIZEN_SELECT.replace('select c.id,', 'select c.coins_base, c.coins_day, c.net, c.pass_hash is not null has_pw, c.jailed_until, c.bank, c.status_tier, c.id,')} where lower(c.handle) = lower($1)`, [R.cleanHandle(handle)])).rows[0];
     if (!r) return null;
     const out = cOut(r); const today = this.meta ? R.gameDay(Date.now(), this.meta.epoch) : 0;
-    out.coins = R.balanceOn(r.coins_base, r.coins_day, r.net, today); out.net = r.net; out.claimed = !!r.has_pw;
+    out.coins = R.balanceOn(r.coins_base, r.coins_day, r.net, today); out.net = r.net; out.claimed = !!r.has_pw; out.status = Number(r.status_tier || 0);
     out.jailedUntil = Number(r.jailed_until || 0) > Date.now() ? Number(r.jailed_until) : 0;
     out.online = Number(r.last_seen || 0) > Date.now() - 90000; out.seen = Number(r.last_seen || 0);
     out.bank = Number(r.bank || 0); out.cars = Array.isArray(r.cars) ? r.cars : []; out.carActive = r.car_active || null;
@@ -420,7 +431,7 @@ export class World {
     return this.change(async ch => {
       if (ch.meta) throw new HttpError(409, 'This colony is already founded.');
       const now = Date.now(); name = String(name || '').trim().slice(0, 40) || 'Followville'; handle = R.cleanHandle(handle) || 'founder';
-      ch.meta = { name, epoch: now - 7 * 60 * R.GAME_MIN_MS, createdAt: now, treasuryBase: R.START_FUNDS, treasuryDay: 0, income: R.GRANT,
+      ch.meta = { name, epoch: now - 7 * 60 * R.GAME_MIN_MS, createdAt: now, treasuryBase: R.START_FUNDS, treasuryDay: 0, income: R.GRANT, taxOut: true,
         population: 0, residents: 0, employed: 0, newsDay: 0, buildPostId: null, founder: handle, minMs: R.GAME_MIN_MS, weather: null };
       ch.today = 0;
       const starter = [['tent', 0, 0, ''], ['landing', 2, 1, 'The landing station'], ['tree', -3, -2], ['pine', 4, -3], ['birch', -2, 4], ['pine', 5, 3], ['tree', -4, 1], ['bush', 3, -1], ['rocks', -1, -3]];

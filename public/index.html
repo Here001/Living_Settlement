@@ -883,6 +883,9 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .aline{background:rgba(43,38,33,.85);color:#fff;border-radius:10px;padding:4px 10px;font-size:13.5px;font-weight:700;animation:mgpop .3s ease-out 1}
 .abig{position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);font-size:clamp(26px,8vw,44px);font-weight:900;color:#F2C94C;text-shadow:0 4px 0 #2B2621;text-align:center;pointer-events:none;z-index:2;white-space:nowrap}
 .speedo{position:absolute;right:14px;bottom:calc(70px + env(safe-area-inset-bottom));background:rgba(20,18,16,.7);color:#fff;font:800 22px/1 system-ui;padding:8px 12px;border-radius:12px;font-variant-numeric:tabular-nums;z-index:2;pointer-events:none}
+.statbox{margin-top:12px}.statlad{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 8px}.statstep{display:flex;flex-direction:column;align-items:center;min-width:52px;padding:6px 4px;border-radius:10px;border:1.5px dashed var(--line,#d9d2c3);opacity:.55}
+.statstep b{font-size:20px;line-height:1}.statstep small{font-size:11px;margin-top:2px}.statstep.got{opacity:1;border-style:solid;background:rgba(242,201,76,.18)}.statstep.next{opacity:1;border-color:#e2b13c}
+.badge.stat{background:linear-gradient(135deg,#f6e3a1,#e2b13c);color:#3b2a06}.badge.stat.t1{background:#e8c39e;color:#4a2a10}.badge.stat.t2{background:#e3e6ea;color:#2f3640}.badge.stat.t4{background:linear-gradient(135deg,#d6f1ff,#8fd3f4)}.badge.stat.t5{background:linear-gradient(135deg,#e7f9ff,#9be7ff);color:#08324a}.badge.stat.t6{background:linear-gradient(135deg,#ffe58a,#ff9f43);color:#3b1d00}
 .mgsnd{pointer-events:auto;margin-left:auto;flex:none;width:36px;height:36px;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(20,18,16,.55);color:#fff;font-size:16px;line-height:1;display:grid;place-items:center}
 .mgflash{position:absolute;inset:0;pointer-events:none;z-index:4;animation:mgflash 160ms ease-out forwards}
 @keyframes mgflash{from{opacity:1}to{opacity:0}}
@@ -972,7 +975,7 @@ import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
-import { treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
+import { statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
@@ -4275,9 +4278,9 @@ const FLOW_NAMES={ 'earn:shifts':['source','Extra shifts'], 'earn:gigs':['source
   travel:['sink','Cab fares and fuel'], 'bills:car':['sink','Car maintenance'], 'bills:property':['sink','Property upkeep'], 'car:buy':['sink','Buying cars'], 'property:buy':['sink','Buying buildings'],
   pet:['sink','Pets'], 'crime:fine':['sink','Crime fines'], 'election:fee':['sink','Running for mayor'], 'casino:bet':['sink','Casino bets'], 'race:bet':['sink','Race bets'], 'lottery:ticket':['sink','Lottery tickets'],
   gift:['move','Gifts'], 'crime:pickpocket':['move','Pickpocketing'], 'chat:fee':['sink','Messages to far-away colonists'], 'rent:fee':['sink','Moving-in fees (rent)'], 'rent:movers':['sink','Movers'],
-  'crime:scam':['source','Scams'], 'crime:atm':['source','ATM hacks'], 'heist:loot':['source','Heist loot'], 'heist:fine':['sink','Heist fines'], 'rent:income':['move','Moving-in fees to owners'] };
+  'status:buy':['sink','Status titles'], 'tax:wealth':['sink','Wealth tax'], 'crime:scam':['source','Scams'], 'crime:atm':['source','ATM hacks'], 'heist:loot':['source','Heist loot'], 'heist:fine':['sink','Heist fines'], 'rent:income':['move','Moving-in fees to owners'] };
 // Labels and icons for a player's own cash-flow history (Wallet), from the player's side.
-const LEDGER_NAMES={ wages:['💼','Wages (after rent)'], 'gift:in':['🎁','Gift received'], gift:['🎁','Gift sent'], 'crime:victim':['👛','Pocket picked'], 'bank:deposit':['🏦','Paid into the bank'], 'bank:withdraw':['🏦','Taken out of the bank'],
+const LEDGER_NAMES={ wages:['💼','Wages (after tax and rent)'], 'status:buy':['🏅','Bought a status title'], 'tax:wealth':['🏛️','Wealth tax'], 'gift:in':['🎁','Gift received'], gift:['🎁','Gift sent'], 'crime:victim':['👛','Pocket picked'], 'bank:deposit':['🏦','Paid into the bank'], 'bank:withdraw':['🏦','Taken out of the bank'],
   'bank:interest':['🏦','Savings interest (in the bank)'], travel:['🚕','Cab fare or fuel'], 'rent:fee':['🏠','Moving-in fee'], 'rent:movers':['🚚','Movers'], 'rent:income':['🏠','Moving-in fee from a new tenant'], 'car:buy':['🚗','Bought a car'], 'land:buy':['🗺️','Bought land'], 'land:charges':['🏛️','Land charges (survey, registration, stamp duty)'], 'land:sell':['🗺️','Sold land to the colony'], 'build:own':['🏗️','Builders on your land'], 'build:charges':['🏛️','Building permit and inspection'], 'build:rush':['⚡','Rushed the builders'], 'build:upgrade':['⬆️','Upgraded a building'], 'property:offer':['🤝','Bought property from a colonist'], 'property:sale':['🤝','Sold property to a colonist'], 'car:sell':['🚗','Sold a car'],
   'property:buy':['🏢','Bought a building'], 'property:sell':['🏢','Sold a building'], 'property:income':['🏢','Rent and profits'], 'bills:car':['🧾','Car upkeep'], 'bills:property':['🧾','Property upkeep'], daily:['🔥','Daily reward'], guide:['🧭','Guide reward'],
   'casino:bet':['🎰','Casino bet'], 'casino:win':['🎰','Casino win'], 'race:bet':['🏁','Race bet'], 'race:win':['🏁','Race win'], 'lottery:ticket':['🎟️','Lottery tickets'], 'lottery:win':['🎟️','Lottery win'], pet:['🐾','Pet'],
@@ -4328,9 +4331,26 @@ const Accounts={ list:null, q:'', who:null, detail:null, busy:false,
     if(!this.list){ body.append(el('p',{class:'hint',text:'Loading…'})); this.load(); return; } const L0=this.list;
     body.append(el('div',{class:'kpis'}, Stats.kpi(fmt(L0.count),'Players'), Stats.kpi(fmt(L0.sum.cash),'Cash on hand'), Stats.kpi(fmt(L0.sum.bank),'In the bank')));
     const t=el('table',{class:'atable'}); t.append(el('tr',null, el('th',{text:'Player'}), el('th',{text:'Cash'}), el('th',{text:'Bank'}), el('th',{text:'Total'})));
-    for(const x of L0.players) t.append(el('tr',{class:'arow',onclick:()=>this.open(x.h),title:'See their money history'}, el('td',{text:`${x.jailed?'🔒 ':''}@${x.h}`}), el('td',{class:x.cash<0?'lout':'',text:fmt(x.cash)}), el('td',{text:fmt(x.bank)}), el('td',null,el('b',{text:fmt(x.total)}))));
+    for(const x of L0.players) t.append(el('tr',{class:'arow',onclick:()=>this.open(x.h),title:'See their money history'}, el('td',{text:`${x.jailed?'🔒 ':''}${x.st?statusOf(x.st).icon+' ':''}@${x.h}${x.jobs?` · 💸${x.jobs}`:''}`,title:x.jobs?`${x.jobs} jobs pulled today`:''}), el('td',{class:x.cash<0?'lout':'',text:fmt(x.cash)}), el('td',{text:fmt(x.bank)}), el('td',null,el('b',{text:fmt(x.total)}))));
     body.append(t, el('p',{class:'hint',text:'Tap a player to see everything they earned and spent.'})); } };
 var Stats={ data:null, days:30, busy:false, at:0,
+  // The economy's health: how fast the coins grow, the stabiliser's dial (it scales crime takings, daily rewards and
+  // interest), how much the richest tenth hold, and the dial by hand.
+  econ(D){ const E=D.econ, M=D.money, pct=v=>v==null?'–':`${v>=0?'+':''}${(v*100).toFixed(1)}%`, tre=M.treasury, out=[];
+    const g=E.g, hot=g!=null&&g>E.dial.target+E.dial.band, cold=g!=null&&g<E.dial.target-E.dial.band;
+    out.push(el('div',{class:'sh'},'Economy health', el('small',{text:E.at?`measured ${ago(E.at)}`:'not measured yet'})),
+      el('div',{class:'kpis'}, this.kpi(fmt(E.money||(M.playerCash+M.playerBank+Math.max(0,tre))),'coins in the colony','players and treasury'),
+        this.kpi(pct(g),'growth a day',`aim ${pct(E.dial.target)} (±${(E.dial.band*100).toFixed(0)})`), this.kpi(`${Math.round(E.f*100)}%`,'stabiliser dial','crime, rewards, interest'),
+        this.kpi(E.top10!=null?`${Math.round(E.top10*100)}%`:'–','held by the richest 10%'), this.kpi(tre<0?`−${fmt(-tre)}`:fmt(tre),tre<0?'treasury in debt':'treasury',tre<0?'paying it back from taxes':''),
+        this.kpi(fmt(D.flows['tax:wealth']?.today.coins||0),'wealth tax today'), this.kpi(fmt((E.statusOwners||[]).reduce((a,x)=>a+x.n,0)),'players with status')),
+      el('p',{class:'hint',text:g==null?'The stabiliser needs a few hours of readings before it starts adjusting.':hot?`Coins are growing faster than the aim, so each hour the dial comes down ${Math.round(E.dial.step*100)}% (to at least ${Math.round(E.dial.min*100)}%).`:cold?`Coins are growing slower than the aim, so each hour the dial goes up ${Math.round(E.dial.step*100)}% (to at most ${Math.round(E.dial.max*100)}%).`:'Growth is on target: the dial stays where it is.'}));
+    const sn=E.snaps||[]; if(sn.length>1){ const step=Math.max(1,Math.ceil(sn.length/60)), pts=sn.filter((_,i)=>i%step===0||i===sn.length-1);
+      out.push(el('div',{class:'sh'},'Coins in the colony', el('small',{text:'players and treasury, last 7 days'})), this.bars(pts.map(x=>x.money), pts.map(x=>new Date(x.t).toLocaleString([], {weekday:'short',hour:'2-digit'})), i=>`${new Date(pts[i].t).toLocaleString()}: ${fmt(pts[i].money)} coins (treasury ${fmt(pts[i].treasury)}, dial ${Math.round(pts[i].f*100)}%, top 10% hold ${Math.round(pts[i].top10*100)}%)`)); }
+    const set=async b=>{ try{ await api('/api/admin/economy',{method:'POST',body:b}); toast(b.measure?'Measured.':`Dial set to ${Math.round(b.f*100)}%.`); this.load(); }catch(e){ toast(e.message); } };
+    out.push(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'− 10%',onclick:()=>set({f:Math.max(E.dial.min,+(E.f-0.1).toFixed(2))})}), el('button',{class:'btn',text:'Reset to 100%',onclick:()=>set({f:1})}),
+      el('button',{class:'btn',text:'+ 10%',onclick:()=>set({f:Math.min(E.dial.max,+(E.f+0.1).toFixed(2))})}), el('button',{class:'linkb',text:'Measure now',onclick:()=>set({measure:true})})),
+      el('p',{class:'hint',text:`The dial scales crime takings, heist loot, daily rewards and savings interest. Setting it by hand is a starting point: the stabiliser keeps nudging it each hour. Also in force: wages lose 20% tax at source, each job pulled in a day pays ${Math.round((1-E.decay)*100)}% less than the last, and ${(E.wealthRate*100).toFixed(1)}% a day wealth tax above ${fmt(E.wealthFree)}.`}));
+    return out; },
   async load(){ if(!Store.canWrite||this.busy) return; this.busy=true; try{ this.data=await api('/api/admin/stats?days='+this.days); this.at=Date.now(); }catch(e){ toast(e.message); } this.busy=false; if(activeTab==='stats') this.renderNow(); },
   renderNow(){ if(activeTab!=='stats') return; const p=$('pane'); if(p){ const keep=$('statsBody')?.scrollTop||0; p.innerHTML=''; this.render(p); const b=$('statsBody'); if(b) b.scrollTop=keep; } },
   date(d){ return new Date(d*86400000).toLocaleDateString([], {month:'short', day:'numeric', timeZone:'UTC'}); },
@@ -4371,6 +4391,7 @@ var Stats={ data:null, days:30, busy:false, at:0,
       this.kpi(M.players?fmt(Math.round(pc/M.players)):'–','per player'), this.kpi(fmt(M.treasury),'treasury'), this.kpi(fmt(M.townCash+M.townBank),'townspeople')));
     const ms=D.series.map(s=>s.money?s.money.playerCash+s.money.playerBank:0);
     if(ms.some(Boolean)) body.append(el('div',{class:'sh'},"Players' coins over time", el('small',{text:'cash and savings, end of each day'})), this.bars(ms, D.series.map(s=>this.date(s.day)), i=>`${this.date(D.series[i].day)}: ${fmt(ms[i])} coins`));
+    if(D.econ) body.append(...this.econ(D));
     const wages=M.playerWagesPerGameDay*48, wagesRow={ k:'wages', name:'Wages (now, a real day)', est:true, range:{ coins:wages, n:0, players:0 } };
     const earned=Object.entries(D.flows).filter(([k])=>flowInfo(k)[0]==='source').reduce((s,[,f])=>s+f.range.coins,0), spent=Object.entries(D.flows).filter(([k])=>flowInfo(k)[0]==='sink').reduce((s,[,f])=>s+f.range.coins,0);
     body.append(el('div',{class:'sh'},'Where coins come from', el('small',{text:`last ${D.days} days · ${fmt(earned)} in, besides wages`})), this.flowTable(D,'source',wagesRow),
@@ -5807,7 +5828,19 @@ function walletPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'�
   box.append(el('div',{class:'row-actions'}, nb?el('button',{class:'btn primary',text:'🏦 Go to the nearest Bank',onclick:()=>goToBuilding(nb)}):el('span',{class:'hint',text:B.hasBank?'Find a Bank on the map to deposit.':"The colony doesn't have a Bank yet."})));
   const gto=el('input',{type:'text',placeholder:'@friend',autocomplete:'off','aria-label':'Gift to'}), gam=el('input',{type:'number',min:'1',step:'1',inputmode:'numeric','aria-label':'Coins to gift',placeholder:'Coins'});
   box.append(el('h3',{text:'🎁 Gift coins'}), el('p',{class:'hint',text:'Send cash to a verified colonist, up to 10,000 a day. Gifts come out of the cash on you.'}), el('div',{class:'cbet'}, gto, gam, el('button',{class:'btn',text:'Send',onclick:()=>sendGift(gto.value, gam.value)})));
-  box.append(Ledger.box()); return box; }
+  { const tot=B.wallet+B.bank; if(tot>WEALTH_FREE) box.append(el('p',{class:'hint',text:`🏛️ Wealth tax: ${(WEALTH_RATE*100).toFixed(1)}% a day on what you hold above ${fmt(WEALTH_FREE)} — about ${fmt(Math.floor((tot-WEALTH_FREE)*WEALTH_RATE))} coins a day right now. It goes to the treasury, which pays for rewards, interest and rents.`})); }
+  box.append(statusBox(c)); box.append(Ledger.box()); return box; }
+// Status: titles for sale (Bronze, Silver, Gold…), each four times the last, shown by your name. Just for show.
+function statusBox(c){ const d=detail.get(c.id), tier=(d&&d.status)||0, cur=statusOf(tier), next=STATUS[tier], M=moneyFor(c), cash=M&&M.bank?M.bank.wallet:0;
+  const box=el('div',{class:'statbox'}, el('h3',{text:'🏅 Status'}),
+    el('p',{class:'hint',text:cur?`You're ${cur.icon} ${cur.name}. It shows by your name on your card.`:'Buy a title that shows by your name on your card. Each one costs four times the last, paid in cash to the treasury.'}));
+  const lad=el('div',{class:'statlad'}); STATUS.forEach((S,i)=>lad.append(el('span',{class:'statstep'+(i<tier?' got':i===tier?' next':''),title:`${S.name}: ${fmt(S.price)} coins`}, el('b',{text:S.icon}), el('small',{text:S.name}))));
+  box.append(lad);
+  if(next) box.append(el('div',{class:'row-actions'}, el('button',{class:'btn'+(cash>=next.price?' primary':''),text:`${next.icon} Become ${next.name} · ${fmt(next.price)}`,disabled:cash>=next.price?null:'',
+    onclick:()=>toast(`Pay ${fmt(next.price)} coins for ${next.name} status? It's only for show.`,'Buy',async()=>{ const r=await moneyAction(c,'/api/me/status',{},r=>`${r.status.icon} You're now ${r.status.name}!`); if(r&&d){ d.status=r.tier; renderCard(true); } })}),
+    cash<next.price?el('span',{class:'hint',text:`You need ${fmt(next.price-cash)} more in cash.`}):''));
+  else box.append(el('p',{class:'jobnow',text:'👑 You hold the highest status there is.'}));
+  return box; }
 // The account section on a Bank's card: the only place to deposit and withdraw.
 const BankAcct={ at:0, data:null, busy:false,
   load(){ if(this.busy) return; this.busy=true; api('/api/me/bank').then(d=>{ this.data=d; this.at=Date.now(); }).catch(()=>{}).finally(()=>{ this.busy=false; if(sel&&sel.kind==='b') renderCard(true); }); },
@@ -5914,6 +5947,7 @@ function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cri
   const secs=ms=>ms<60000?`${Math.ceil(ms/1000)}s`:`${mins(ms)} min`, waiting=K.waitFor>0, blocked=waiting?`Lie low ${secs(K.waitFor)}`:null;
   if(waiting){ box.append(el('p',{class:'jobnow',text:`Lie low for ${secs(K.waitFor)} before the next solo job.${K.streak?` 🔥 ${K.streak} in a row: the next one will be harder.`:''}`})); clearTimeout(Acts.wt); Acts.wt=setTimeout(()=>{ if(sel&&Acts.crime){ Acts.at=0; renderCard(true); } },Math.min(K.waitFor+300,20500)); }
   else if(K.streak) box.append(el('p',{class:'hint',text:`🔥 ${K.streak} job${K.streak>1?'s':''} in a row came off: the next one is harder. Get caught and it starts over.`}));
+  if(K.jobsToday) box.append(el('p',{class:'hint',text:`💸 ${K.jobsToday} job${K.jobsToday>1?'s':''} pulled today: the next pays ${Math.round((K.pay??1)*100)}% of the usual takings (each one ${Math.round((1-CRIME_DECAY)*100)}% less). Full pay again tomorrow.`}));
   else { const ti=el('input',{type:'text',placeholder:'@username',autocomplete:'off','aria-label':'Whose pocket'});
     box.append(el('div',{class:'cbet'}, el('span',{text:'Pickpocket:'}), ti, el('button',{class:'btn',text:'Try',onclick:()=>tryPickpocket(ti.value)})),
       el('p',{class:'hint',text:'You’ll see their odds before you commit: it depends on where they are right now.'})); }
@@ -6044,7 +6078,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(!d && !detailLoading.has(c.id)){ detailLoading.add(c.id); const id=c.id; loadDetail(c.handle).finally(()=>{ detailLoading.delete(id); if(sel&&sel.id===id&&detail.has(id)) renderCard(); }); }
     const h=bOf(c.home), j=bOf(c.job); const st=h?citizenAt(c,gmNow()):null;
     const now = cardNow(c, d);
-    const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,nameOf(c), el('span',{class:'gsym',title:c.gender==='f'?'Woman':'Man',text:c.gender==='f'?' ♀':' ♂'}), c.web?el('span',{class:'webtag',title:'Joined on the website, not through Instagram',text:'🌐'}):''); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); head.append(av, el('div',null,title, c.name?el('p',{class:'uname',text:'@'+c.handle}):'', el('p',{class:'now',text:now})));
+    const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,nameOf(c), el('span',{class:'gsym',title:c.gender==='f'?'Woman':'Man',text:c.gender==='f'?' ♀':' ♂'}), c.web?el('span',{class:'webtag',title:'Joined on the website, not through Instagram',text:'🌐'}):''); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); { const st=d&&statusOf(d.status||0); if(st) title.append(el('span',{class:'badge stat t'+d.status,title:`${st.name} status`,text:`${st.icon} ${st.name}`})); } head.append(av, el('div',null,title, c.name?el('p',{class:'uname',text:'@'+c.handle}):'', el('p',{class:'now',text:now})));
     const nm=b=>(D.buildings.get(b.id)||b).name||T(b).name;
     const shr=el('button',{class:'x shr','aria-label':'Share','title':'Share',text:'↗',onclick:()=>Share.colonist(c)});
     const strip=d&&d.claimed?Stars.strip(d.stars||0, mineCard(c)):null;
@@ -6459,8 +6493,8 @@ var Notices={ shown:new Set(),
 /* ---------------- News flash (Town Square) ---------------- */
 // Everything that's happened lately, newest first: gifts, new pets, big wins, races, arrests, streaks, badges, colony
 // events and major construction. This week's leaders sit at the top. @names open that colonist.
-const NEWS_KINDS={ people:['gift','pet','streak','badge','career','movein','spawn','leave'], wins:['casino','lottery','race','champions','find','gig'], crime:['crime'], colony:['build','demolish','disaster','cevent','rename','found','day','property','election'] };
-const NEWS_ICON={ gift:'🎁', pet:'🐾', streak:'🔥', badge:'🏅', career:'💼', movein:'🏠', spawn:'🚀', leave:'👋', casino:'🎰', lottery:'🎟️', race:'🏁', champions:'🏆', find:'🎣', gig:'📦', crime:'🚨', election:'🗳️', build:'🏗️', demolish:'🧱', disaster:'⚠️', cevent:'🎉', rename:'🪧', found:'🌱', day:'🌅', property:'🏙️' };
+const NEWS_KINDS={ people:['gift','pet','streak','badge','status','career','movein','spawn','leave'], wins:['casino','lottery','race','champions','find','gig'], crime:['crime'], colony:['build','demolish','disaster','cevent','rename','found','day','property','election'] };
+const NEWS_ICON={ status:'🏅', gift:'🎁', pet:'🐾', streak:'🔥', badge:'🏅', career:'💼', movein:'🏠', spawn:'🚀', leave:'👋', casino:'🎰', lottery:'🎟️', race:'🏁', champions:'🏆', find:'🎣', gig:'📦', crime:'🚨', election:'🗳️', build:'🏗️', demolish:'🧱', disaster:'⚠️', cevent:'🎉', rename:'🪧', found:'🌱', day:'🌅', property:'🏙️' };
 const LEAD_BOARDS=['racer','casino','wanted','generous'];
 var News={ filter:'all', seen:false,
   leaders(){ const box=el('div',{class:'nf-lead'}, el('div',{class:'nf-h',text:"This week's leaders"})); const row=el('div',{class:'nf-chips'}); let any=false;

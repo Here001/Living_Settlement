@@ -5,7 +5,7 @@ import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES, carPaid, carKind, ridden } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
-import { track, snapshot, ledger } from './stats.js';
+import { track, snapshot, ledger, econTick } from './stats.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 import { MAYOR_PAY } from '../shared/elections.js';
@@ -70,7 +70,7 @@ export class Economy {
     return this.world.change(async ch => {
       const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
       const st = this.dailyState(c); if (st.claimed) throw new HttpError(409, `You've collected today's reward. Come back after midnight UTC for day ${st.streak + 1}.`);
-      const streak = st.streak + 1, want = Math.round(dailyRewardFor(streak) * await this.dailyBoost()), t = Math.floor(R.treasuryOn(ch.meta, ch.today)), paid = Math.max(0, Math.min(want, t));
+      const streak = st.streak + 1, want = Math.round(dailyRewardFor(streak) * await this.dailyBoost() * R.econF(ch.meta)), t = Math.floor(R.treasuryOn(ch.meta, ch.today)), paid = Math.max(0, Math.min(want, t));
       ch.coins(c); c.coins_base += paid; if (paid) treasuryAdd(ch, -paid); track(ch, 'daily', paid, c.id);
       ch.touch(c); await ch.saveCitizen(c);
       await ch.q('update citizens set daily_day = $2, daily_streak = $3, daily_best = greatest(daily_best, $3) where id = $1', [c.id, realDay(), streak]);
@@ -355,12 +355,27 @@ export class Economy {
     return { billed, total };
   }
 
+  // Status: the next title up (Bronze, Silver, Gold…), each four times the price of the last, paid in cash to the treasury.
+  // Only for show: it sits by your name. It's there so the richest players have something worth spending on.
+  async buyStatus(id) {
+    return this.world.change(async ch => {
+      const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
+      const tier = Number(c.status_tier || 0); if (tier >= R.STATUS.length) throw new HttpError(409, `You already hold the highest status, ${R.STATUS[R.STATUS.length - 1].name}.`);
+      const S = R.STATUS[tier]; ch.coins(c);
+      if (c.coins_base < S.price) throw new HttpError(402, `${S.name} status costs ${fmt(S.price)} coins in cash. You have ${fmt(Math.max(0, c.coins_base))}.`);
+      c.coins_base -= S.price; treasuryAdd(ch, S.price); track(ch, 'status:buy', S.price, c.id);
+      await ch.q('update citizens set status_tier = $2 where id = $1', [c.id, tier + 1]); ch.touch(c); await ch.saveCitizen(c);
+      await ch.event(`${S.icon} @${c.handle} bought ${S.name} status.`, 'status');
+      return { ok: true, tier: tier + 1, status: S, next: R.STATUS[tier + 1] || null, coins: c.coins_base };
+    });
+  }
+
   // ---------- once a game day (called by the clock) ----------
   // Owners collect their buildings' income, and savings earn interest. The treasury pays both, keeping its cut.
   async day(ch, days) {
     days = Math.max(1, Math.min(3, days)); let rent = 0, owners = 0, interest = 0;
     await this.weeklyBills(ch);
-    const mayor = await this.world.elections?.mayor(), im = mayor?.policy === 'savers' ? 2 : 1; // a mayor's Savers first pledge doubles interest
+    const mayor = await this.world.elections?.mayor(), im = (mayor?.policy === 'savers' ? 2 : 1) * R.econF(ch.meta); // a mayor's Savers first pledge doubles interest; the stabiliser trims or loosens it
     const own = (await ch.q('select * from buildings where owner_id is not null and done and not ruin')).rows, byOwner = new Map();
     // Players living in a home they own pay no rent: anyone still being charged it (from before that rule) is put right here.
     for (const c of (await ch.q(`select c.*, j.type jtype, h.type htype from citizens c join buildings h on h.id = c.home_id and h.owner_id = c.id
@@ -369,6 +384,9 @@ export class Economy {
       delete c.jtype; delete c.htype; ch.coins(c); ch.income(Number(c.net) - want); c.net = want; await ch.saveCitizen(c); }
     const selfIn = new Set((await ch.q('select c.home_id from citizens c join buildings b on b.id = c.home_id and b.owner_id = c.id')).rows.map(r => r.home_id));
     for (const b of own) { const inc = dailyIncome(b, selfIn.has(b.id) ? 1 : 0).net * days; if (inc > 0) byOwner.set(b.owner_id, (byOwner.get(b.owner_id) || 0) + inc); }
+    // Rents and profits come out of the treasury: if it can't cover them all, every owner gets the same share (never new coins).
+    { const all = [...byOwner.values()].reduce((a, b) => a + b, 0), have = Math.max(0, Math.floor(R.treasuryOn(ch.meta, ch.today)));
+      if (all > have) { const k = have / all; for (const [id, v] of byOwner) { const v2 = Math.floor(v * k); if (v2 > 0) byOwner.set(id, v2); else byOwner.delete(id); } } }
     // Interest is paid only from what the treasury holds after rents and profits; if it can't cover everyone, everyone gets the same share.
     const kitty = Math.max(0, R.treasuryOn(ch.meta, ch.today) - [...byOwner.values()].reduce((a, b) => a + b, 0));
     const want = Number((await ch.q('select coalesce(sum(least($1::numeric, floor(bank * $2::numeric))), 0) w from citizens where bank > 0', [BANK_CAP, BANK_RATE])).rows[0].w) * days * im;
@@ -389,6 +407,11 @@ export class Economy {
         from unnest($1::text[], $2::numeric[], $3::numeric[]) u(id, base, add) where c.id = u.id`, [up.id, up.base, up.add, ch.today]);
     }
     if (rent || interest) treasuryAdd(ch, -(rent + interest));
+    // Wealth tax: a small slice of cash plus savings above 250,000 goes back to the treasury (0.5% a real day).
+    { let wt = 0; for (const c of (await ch.q(`select * from citizens where pass_hash is not null and coins_base + bank + greatest(0, net) * greatest(0, $1 - coins_day) > $2 for update`, [ch.today, R.WEALTH_FREE])).rows) {
+        ch.coins(c); const tax = R.wealthTaxPerGameDay(c.coins_base + Number(c.bank || 0)) * days; if (tax <= 0) continue;
+        await ch.takeFrom(c, tax); await ch.saveCitizen(c); track(ch, 'tax:wealth', tax, c.id); wt += tax; }
+      if (wt) treasuryAdd(ch, wt); }
     // Wages (after rent) build up in each player's pocket through the day; the ledger notes them once a day.
     for (const w of (await ch.q('select id, net from citizens where pass_hash is not null and net > 0')).rows) ledger(ch, w.id, Number(w.net) * days, 'wages');
     await ch.q('delete from ledger where t < $1', [Date.now() - 30 * 86400000]); // a month of history is plenty
@@ -396,6 +419,7 @@ export class Economy {
     if (mayor) { const pay = Math.min(MAYOR_PAY * days, Math.floor(R.treasuryOn(ch.meta, ch.today))); const m = pay > 0 && (await ch.q('select * from citizens where id = $1 for update', [mayor.id])).rows[0];
       if (m) { ch.coins(m); m.coins_base += pay; treasuryAdd(ch, -pay); track(ch, 'mayor:pay', pay, m.id); ch.touch(m); await ch.saveCitizen(m); } }
     if (rent) await ch.event(`🏠 ${owners} building owner${owners === 1 ? '' : 's'} collected ${fmt(rent)} coins in rent and profits (the treasury kept its ${Math.round(TREASURY_CUT * 100)}%).`, 'property');
+    await econTick(ch).catch(e => console.error('econ:', e.message)); // the stabiliser, once a real hour
     await snapshot(ch.db, ch.meta); // developer stats: how many coins exist, saved through each real day
     return { rent, interest };
   }

@@ -256,6 +256,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/me/badges', limit, send(async req => world.achievements.list((await me(req)).id)));
   r.get('/me/daily', limit, send(async req => world.economy.dailyInfo((await me(req)).id)));
   r.post('/me/daily', limit, send(async req => world.economy.daily((await me(req)).id)));
+  r.post('/me/status', limit, send(async req => world.economy.buyStatus((await me(req)).id)));
   r.get('/me/gift', limit, send(async req => world.economy.giftInfo((await me(req)).id)));
   r.post('/me/gift', limit, send(async req => { const b = req.body || {}; return world.economy.gift((await me(req)).id, b.to, b.amount); }));
   r.get('/me/bank', limit, send(async req => world.economy.bankInfo((await me(req)).id)));

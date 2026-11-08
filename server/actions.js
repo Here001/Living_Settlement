@@ -19,6 +19,10 @@ export const STREAK_CHANCE = 0.07;
 const waitText = ms => ms < 60000 ? `${Math.ceil(ms / 1000)} more seconds` : `${Math.ceil(ms / 60000)} more minute${ms > 60000 ? 's' : ''}`;
 const streakDiff = (base, streak) => Math.min(5, base + Math.min(4, streak || 0));
 const streakChance = (chance, streak) => Math.max(0.05, chance - STREAK_CHANCE * (streak || 0));
+// What a job really pays: the takings, 15% less for each job already pulled today, times the stabiliser's dial, and
+// never more than that kind of job's share of the treasury.
+export const jobPay = (ch, c, kind, raw) => Math.max(1, Math.min(R.crimeCap(kind, R.treasuryOn(ch.meta, ch.today)), Math.round(raw * R.crimePayMult(c) * R.econF(ch.meta))));
+export const noteJob = (ch, id) => ch.q('update citizens set crime_today = case when crime_day = $2 then crime_today + 1 else 1 end, crime_day = $2 where id = $1', [id, R.realDayKey()]);
 export const JAIL_TIME = 10 * 60 * 1000;         // caught: 10 real minutes in the Jail
 export const VISIT_TIME = 4 * 60 * R.GAME_MIN_MS; // going somewhere lasts 4 game hours (5 real minutes)
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -156,7 +160,7 @@ export class Actions {
     const solo = {}; for (const [k, S] of Object.entries(R.SOLO_CRIMES)) { let x = c.hx, y = c.hy, at = null;
       if (S.needs === 'bank' && c.home_id) { const bk = (await pool.query(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [c.hx, c.hy, BANKS])).rows[0]; if (!bk) continue; x = bk.x; y = bk.y; at = nameOf(bk); }
       if (c.home_id) solo[k] = { ...(await this.odds(k, await this.policeDist(pool, x, y), wave)), at }; }
-    return { streak: Number(c.crime_streak || 0), solo, housed: !!c.home_id, jailedFor: Math.max(0, Number(c.jailed_until || 0) - now), waitFor: Math.max(0, Number(c.crime_at || 0) + CRIME_COOLDOWN - now), wave,
+    return { streak: Number(c.crime_streak || 0), jobsToday: R.jobsToday(c), pay: R.crimePayMult(c), solo, housed: !!c.home_id, jailedFor: Math.max(0, Number(c.jailed_until || 0) - now), waitFor: Math.max(0, Number(c.crime_at || 0) + CRIME_COOLDOWN - now), wave,
       rates: R.CRIME_RATES, near: R.CRIME_NEAR, far: R.CRIME_FAR, rob, pick };
   }
   async crime(id, { kind, target }) {
@@ -185,18 +189,18 @@ export class Actions {
         const S = R.SOLO_CRIMES[kind];
         if (S.needs === 'bank') { shop = (await ch.q(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [hx, hy, BANKS])).rows[0];
           if (!shop) throw new HttpError(409, "There's no Bank, so no ATM to hack."); px = shop.x; py = shop.y; }
-        loot = Math.max(1, Math.min(R.treasuryOn(ch.meta, ch.today), Math.floor(S.loot[0] + rand() * (S.loot[1] - S.loot[0] + 1))));
+        loot = jobPay(ch, c, kind, Math.floor(S.loot[0] + rand() * (S.loot[1] - S.loot[0] + 1)));
       } else {
         shop = (await ch.q(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [hx, hy, SHOPS])).rows[0];
         if (!shop) throw new HttpError(409, 'There are no shops to rob.');
-        px = shop.x; py = shop.y; loot = Math.max(1, Math.min(R.treasuryOn(ch.meta, ch.today), Math.floor(5000 + rand() * 5001)));
+        px = shop.x; py = shop.y; loot = jobPay(ch, c, 'rob', Math.floor(5000 + rand() * 5001));
       }
       // The farther the nearest Police station is from the scene, the likelier the thief gets away (a crime wave helps too).
       const odds = await this.odds(kind, await this.policeDist(ch.db, px, py), await this.waveNow()), chance = odds.chance;
       await ch.q('update citizens set crime_at = $2 where id = $1', [c.id, now]);
       ch.coins(c);
       if (rand() < chance) {
-        c.coins_base += loot; ch.touch(c); await ch.saveCitizen(c); track(ch, victim ? 'crime:pickpocket' : 'crime:' + kind, loot, c.id); await bump(ch, c.id, { crimes: 1 }); await score(ch, c.id, 'crimes', 1);
+        c.coins_base += loot; ch.touch(c); await ch.saveCitizen(c); track(ch, victim ? 'crime:pickpocket' : 'crime:' + kind, loot, c.id); await bump(ch, c.id, { crimes: 1 }); await score(ch, c.id, 'crimes', 1); if (!victim) await noteJob(ch, c.id);
         if (victim) { victim.coins_base -= loot; ledger(ch, victim.id, -loot, 'crime:victim', 'Pickpocketed'); ch.touch(victim); await ch.saveCitizen(victim); await ch.event(`👛 Someone picked @${victim.handle}'s pocket and got away with ${fmt(loot)} coins!`, 'crime');
           await this.notify(ch, victim.id, 'pickpocket', `👛 Someone just picked your pocket and got away with ${fmt(loot)} coins. Keep your cash in a Bank to keep it safe.`); }
         else { treasuryAdd(ch, -loot); await ch.event(kind === 'scam' ? `🎭 A tourist was conned out of ${fmt(loot)} coins. The con artist vanished.` : kind === 'atm' ? `🏧 The ATM at ${nameOf(shop)} was hacked for ${fmt(loot)} coins!` : `🚨 ${nameOf(shop)} was robbed of ${fmt(loot)} coins! The thief got away.`, 'crime'); }
@@ -245,12 +249,12 @@ export class Actions {
       if (!practice) { const why = await this.blockedReason(c); if (why) throw new HttpError(409, why);
         const wait = Number(c.crime_at || 0) + CRIME_COOLDOWN - now; if (wait > 0) throw new HttpError(429, `Lie low for ${waitText(wait)} before the next job. You can practise meanwhile.`); }
       const sc = await this.crimeScene(db, c, kind), wave = await this.waveNow(), odds = await this.odds(MG.ROLES[kind] ? 'armored' : kind, await this.policeDist(db, sc.px, sc.py), wave);
-      const streak = practice ? 0 : Number(c.crime_streak || 0), diff = streakDiff(MG.difficultyOf(kind, odds.band), streak), chance = streakChance(odds.chance, streak), seed = crypto.randomInt(1, 2 ** 31), rid = crypto.randomUUID();
+      const pay = practice ? 1 : R.crimePayMult(c) * R.econF(this.world.meta), streak = practice ? 0 : Number(c.crime_streak || 0), diff = streakDiff(MG.difficultyOf(kind, odds.band), streak), chance = streakChance(odds.chance, streak), seed = crypto.randomInt(1, 2 ** 31), rid = crypto.randomUUID();
       await db.query('insert into crime_runs (id, citizen_id, kind, seed, diff, practice, started_at, chance, band, night, loot, scene) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
         [rid, id, kind, seed, diff, !!practice, now, chance, odds.band, !!odds.night, sc.loot, JSON.stringify({ ...sc, hard: streak > 0 })]);
       if (!practice) await db.query('update citizens set crime_at = $2 where id = $1', [id, now]);
       await db.query('delete from crime_runs where citizen_id = $1 and started_at < $2', [id, now - 7 * 86400000]);
-      return { id: rid, kind, seed, diff, streak, hard: streak > 0, practice: !!practice, chance, band: odds.band, police: odds.dist, night: !!odds.night, wave, at: sc.shop?.name || null, loot: practice ? null : [Math.round(sc.loot * 0.3), Math.round(sc.loot * 1.5)] };
+      return { id: rid, kind, seed, diff, streak, hard: streak > 0, practice: !!practice, chance, band: odds.band, police: odds.dist, night: !!odds.night, wave, at: sc.shop?.name || null, loot: practice ? null : [Math.round(sc.loot * 0.3 * pay), Math.round(sc.loot * 1.5 * pay)], pay: R.crimePayMult(c) };
     };
     return practice ? go(pool) : this.world.change(ch => go({ query: (a, v) => ch.q(a, v) }));
   }
@@ -286,12 +290,12 @@ export class Actions {
     ch.coins(c);
     if (out.mult > 0) {
       // the extra loot grabbed in a shop adds to the takings
-      const loot = Math.max(1, Math.min(R.treasuryOn(ch.meta, ch.today), Math.round(base * out.mult * (1 + MG.STEALTH.itemBonus * extra))));
+      const loot = jobPay(ch, c, kind, base * out.mult * (1 + MG.STEALTH.itemBonus * extra)); await noteJob(ch, c.id);
       c.coins_base += loot; ch.touch(c); await ch.saveCitizen(c); treasuryAdd(ch, -loot); track(ch, 'crime:' + kind, loot, c.id); await bump(ch, c.id, { crimes: 1 }); await score(ch, c.id, 'crimes', 1);
       await ch.event(kind === 'scam' ? `🎭 A tourist was conned out of ${fmt(loot)} coins. The con artist vanished.` : kind === 'atm' ? `🏧 The ATM at ${shop?.name || 'the Bank'} was hacked for ${fmt(loot)} coins!` : `🚨 ${shop?.name || 'A shop'} was robbed of ${fmt(loot)} coins! The thief got away.`, 'crime');
       // it came off: lie low just a moment, but the next job will be harder
       const streak = Number(c.crime_streak || 0) + 1; await ch.q('update citizens set crime_at = $2, crime_streak = $3 where id = $1', [c.id, Date.now() - CRIME_COOLDOWN + CRIME_QUICK, streak]);
-      return { money: loot, coins: c.coins_base, extra, streak, waitFor: CRIME_QUICK };
+      return { money: loot, coins: c.coins_base, extra, streak, waitFor: CRIME_QUICK, payNext: R.crimePayMult({ crime_day: R.realDayKey(), crime_today: R.jobsToday(c) + 1 }) };
     }
     if (out.key === 'empty') { await ch.event(kind === 'scam' ? '🎭 A con artist tried their luck on a tourist and came away with nothing.' : kind === 'atm' ? `🏧 Someone tampered with the ATM at ${shop?.name || 'the Bank'}, but got nothing.` : `🚨 A thief slipped into ${shop?.name || 'a shop'} and out again, empty-handed.`, 'crime');
       return { money: 0, coins: c.coins_base }; }

@@ -87,7 +87,9 @@ export function buildMinutes(type) {
 
 // What one citizen adds to the treasury each day, and what they gain themselves.
 export const taxOf = salary => Math.round(salary * TAX_RATE);
-export const netOf = (salary, rent) => salary - rent;
+// Take-home pay: the salary less its tax (which goes to the treasury) and the rent. The tax comes out of the wage;
+// it used to be added on top, which made 20% more coins out of nothing every day.
+export const netOf = (salary, rent) => salary - taxOf(salary) - rent;
 
 // Balances aren't rewritten every day. Each one is stored as (amount, day, change per day)
 // and worked out on demand. That makes paydays free no matter how many citizens there are.
@@ -297,3 +299,26 @@ export function rushCost(cost, msLeft) { const hours = Math.max(1, Math.ceil(Mat
 // Bail: pay to walk out of jail early. 150 coins for every minute left (at least 300), from cash and then savings.
 export const BAIL_PER_MIN = 150, BAIL_MIN = 300;
 export const bailCost = msLeft => Math.max(BAIL_MIN, Math.ceil(Math.max(0, msLeft) / 60000) * BAIL_PER_MIN);
+
+// ---------- The economy's dials ----------
+// Each job (crime or heist) that comes off in the same real day pays 15% less than the last; it's back to full the next day.
+export const CRIME_DECAY = 0.85;
+// The most one job can take from the treasury, as a share of what it holds, so one crew can't empty the town.
+export const CRIME_SHARE = { rob: 0.03, scam: 0.01, atm: 0.05, armored: 0.1, jailbreak: 0.04, bank: 0.2 };
+export const realDayKey = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
+export const jobsToday = (c, t = Date.now()) => c && c.crime_day === realDayKey(t) ? Number(c.crime_today || 0) : 0;
+export const crimePayMult = (c, t = Date.now()) => Math.pow(CRIME_DECAY, jobsToday(c, t));
+export const crimeCap = (kind, treasury) => CRIME_SHARE[kind] ? Math.max(0, Math.floor(treasury * CRIME_SHARE[kind])) : Math.max(0, Math.floor(treasury));
+// Wealth tax: 0.5% a real day on cash plus savings above 250,000 (taken a game day at a time), paid to the treasury.
+export const WEALTH_FREE = 250000, WEALTH_RATE = 0.005;
+export const wealthTaxPerGameDay = total => Math.max(0, Math.floor((total - WEALTH_FREE) * WEALTH_RATE * DAY_MS / 86400000));
+// Status: titles bought for coins, each 4× the last, shown by your name. The money goes to the treasury.
+export const STATUS = [
+  { name: 'Bronze', icon: '🥉', price: 50000 }, { name: 'Silver', icon: '🥈', price: 200000 }, { name: 'Gold', icon: '🥇', price: 800000 },
+  { name: 'Platinum', icon: '💠', price: 3200000 }, { name: 'Diamond', icon: '💎', price: 12800000 }, { name: 'Legend', icon: '👑', price: 51200000 },
+];
+export const statusOf = tier => tier > 0 ? STATUS[Math.min(STATUS.length, tier) - 1] : null;
+// The stabiliser: aims for the money in the colony to grow about 2% a real day (new players and building need some
+// growth). Faster than that and crime takings, daily rewards and interest are trimmed; slower and they're loosened.
+export const ECON = { target: 0.02, band: 0.01, step: 0.04, min: 0.5, max: 1.5 };
+export const econF = meta => Math.max(ECON.min, Math.min(ECON.max, Number(meta?.econ?.f ?? 1)));

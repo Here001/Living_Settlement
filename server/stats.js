@@ -16,7 +16,7 @@ export function track(ch, key, coins = 0, citizenId = null) {
 // The cash-flow history each player sees in their Wallet: money in (+) and out (-), by kind. Most entries come from
 // track(); a few (gifts received, a picked pocket, bank deposits, wages) are added where they happen.
 const IN = /^(casino:win|game:\w+:win|table:\w+:(win|refund)|race:win|property:(sell|refund|income|sale)|land:sell|mayor:pay|lottery:win|guide|daily|car:sell|earn:.*|crime:(pickpocket|rob|scam|atm)|heist:loot|arena:win|bank:interest|rent:income|fight:(win|purse))$/;
-const OUT = /^(casino:bet|game:\w+:bet|table:\w+:stake|travel|race:bet|property:buy|property:offer|land:buy|land:charges|build:own|build:charges|build:rush|build:upgrade|pet|lottery:ticket|election:fee|crime:fine|chat:fee|car:buy|bills:\w+|gift|rent:(fee|movers)|heist:fine|crime:bail|fight:bet)$/;
+const OUT = /^(casino:bet|game:\w+:bet|table:\w+:stake|travel|race:bet|property:buy|property:offer|land:buy|land:charges|build:own|build:charges|build:rush|build:upgrade|pet|lottery:ticket|election:fee|crime:fine|chat:fee|car:buy|bills:\w+|gift|rent:(fee|movers)|heist:fine|crime:bail|fight:bet|status:buy|tax:wealth)$/;
 export const signOf = key => (key === 'dev:adjust' ? 1 : IN.test(key) ? 1 : OUT.test(key) ? -1 : 0);
 export function ledger(ch, citizenId, coins, key, note = null) {
   coins = Math.round(Number(coins) || 0); if (!ch || !citizenId || !coins) return; (ch.ledger ||= []).push([citizenId, coins, key, note]);
@@ -70,6 +70,28 @@ async function money(db, meta) {
   const P = r.find(x => x.player) || {}, N = r.find(x => !x.player) || {};
   return { players: Number(P.n || 0), playerCash: Number(P.cash || 0), playerBank: Number(P.bank || 0), playerWagesPerGameDay: Number(P.wages || 0),
     townCash: Number(N.cash || 0), townBank: Number(N.bank || 0), treasury: Math.floor(R.treasuryOn(meta, today)) };
+}
+// The stabiliser, once a real hour (from the game-day tick): note how many coins exist, work out how fast that's growing
+// over the last day, and nudge the dial that scales crime takings, daily rewards and interest toward the target growth.
+export async function econTick(ch, force = false) {
+  const meta = ch.meta; if (!meta) return null; const now = Date.now(), e = meta.econ || {};
+  if (!force && e.at && now - e.at < 3600000) return null;
+  const m = await money(ch.db, meta), players = m.playerCash + m.playerBank, total = players + Math.max(0, m.treasury);
+  const top = (await ch.db.query(`with w as (select greatest(0, coins_base + greatest(0, $1 - coalesce(coins_day, $1)) * coalesce(net, 0)) + bank v from citizens where pass_hash is not null)
+    select coalesce(sum(v), 0) s, coalesce((select sum(v) from (select v from w order by v desc limit greatest(1, ceil((select count(*) from w) * 0.1)::int)) t), 0) top from w`, [ch.today])).rows[0];
+  const top10 = Number(top.s) > 0 ? Number(top.top) / Number(top.s) : 0;
+  const then = (await ch.db.query('select t, money from econ_snaps where t <= $1 order by t desc limit 1', [now - 86400000])).rows[0]
+    || (await ch.db.query('select t, money from econ_snaps where t <= $1 order by t limit 1', [now - 3 * 3600000])).rows[0];
+  let g = null, f = R.econF(meta);
+  let nudged = e.nudged || 0;
+  if (then && Number(then.money) > 0) { const span = (now - Number(then.t)) / 86400000; g = Math.pow(total / Number(then.money), 1 / Math.max(span, 1 / 8)) - 1;
+    if (now - nudged >= 3600000) { nudged = now; // at most one nudge an hour, however often it's measured
+      if (g > R.ECON.target + R.ECON.band) f *= 1 - R.ECON.step; else if (g < R.ECON.target - R.ECON.band) f *= 1 + R.ECON.step; }
+    f = Math.max(R.ECON.min, Math.min(R.ECON.max, Math.round(f * 1000) / 1000)); }
+  meta.econ = { f, at: now, nudged, g, top10, money: total };
+  await ch.db.query('insert into econ_snaps (t, money, players, treasury, top10, wages, f) values ($1,$2,$3,$4,$5,$6,$7) on conflict (t) do nothing', [now, total, players, m.treasury, top10, m.playerWagesPerGameDay * 48, f]);
+  await ch.db.query('delete from econ_snaps where t < $1', [now - 30 * 86400000]);
+  return meta.econ;
 }
 export async function snapshot(db, meta) {
   if (!meta) return; const m = await money(db, meta);
@@ -128,6 +150,9 @@ export async function dashboard(world, days = 30) {
   return { now: Date.now(), today, days, since: firstFlow[0]?.d ?? today,
     players: { today: series[series.length - 1].active, week: wau, month: mau, signedUp: fn('signed'), newToday: series[series.length - 1].new, newWeek: series.slice(-7).reduce((s, x) => s + x.new, 0) },
     money: now, series, flows,
+    econ: { ...(meta?.econ || {}), f: R.econF(meta), dial: R.ECON, wealthFree: R.WEALTH_FREE, wealthRate: R.WEALTH_RATE, decay: R.CRIME_DECAY, status: R.STATUS,
+      snaps: (await q('select t, money, players, treasury, top10, f from econ_snaps where t > $1 order by t', [Date.now() - 7 * 86400000])).map(r => ({ t: Number(r.t), money: Number(r.money), players: Number(r.players), treasury: Number(r.treasury), top10: Number(r.top10), f: Number(r.f) })),
+      statusOwners: (await q('select status_tier tier, count(*) n from citizens where status_tier > 0 group by 1 order by 1')).map(r => ({ tier: r.tier, n: Number(r.n) })) },
     funnel: [['claimed', 'Started claiming an avatar', fn('claimed')], ['verified', 'Proved it on Instagram', fn('verified')], ['signed', 'Set a password', fn('signed')],
       ['job', 'Has a job', fn('job')], ['daily', 'Collected a daily reward', fn('daily')], ['earned', 'Earned on the side', fn('earned')], ['outing', 'Went somewhere', fn('outing')],
       ['banked', 'Used the Bank', fn('banked')], ['returned', 'Came back another day', fn('returned')], ['car', 'Bought a car', fn('car')], ['owner', 'Bought a building', fn('owner')]],

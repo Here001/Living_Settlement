@@ -15,6 +15,7 @@ import { treasuryAdd } from './races.js';
 import { track, ledger } from './stats.js';
 import { bump } from './achievements.js';
 import * as MG from '../shared/minigames.js';
+const noteJob = (ch, id) => ch.q('update citizens set crime_today = case when crime_day = $2 then crime_today + 1 else 1 end, crime_day = $2 where id = $1', [id, R.realDayKey()]);
 
 export const LIVE_MS = 150 * 1000; const LIVE_TXT = '2½ minutes'; // how long the crew has to play their parts once the job goes live
 const BOTCHED = 12; // a part played this badly (out of 60) gets that member caught, whatever the rest do
@@ -181,13 +182,15 @@ export class Heists {
           p.status = 'caught'; p.fine = fine; p.jailed = jailed; caught.push({ c, fine, jailed }); }
         else { p.status = 'got'; got.push(c); } }
       // the money: the takings times the outcome (up to 1.5x), shared by everyone who got away
-      let loot = 0; if (out.mult > 0 && got.length) { const cap = mayor ? mayor.coins_base : Math.floor(R.treasuryOn(ch.meta, ch.today)); loot = Math.max(0, Math.min(cap, Math.round(base * out.mult))); }
-      const each = got.length ? Math.floor(loot / got.length) : 0, paid = each * got.length, win = paid > 0;
-      for (const c of got) { if (each) { c.coins_base += each; track(ch, 'heist:loot', each, c.id); } ch.touch(c); await ch.saveCitizen(c); await bump(ch, c.id, { crimes: 1, heists: win ? 1 : 0 });
+      let loot = 0; if (out.mult > 0 && got.length) { const cap = mayor ? mayor.coins_base : R.crimeCap(h.kind, R.treasuryOn(ch.meta, ch.today)); loot = Math.max(0, Math.min(cap, Math.round(base * out.mult * (mayor ? 1 : R.econF(ch.meta))))); }
+      // shared equally, then each member's cut is 15% less for every job they've already pulled today
+      const each0 = got.length ? Math.floor(loot / got.length) : 0, cuts = new Map(got.map(c => [c.id, Math.floor(each0 * R.crimePayMult(c))]));
+      const paid = [...cuts.values()].reduce((a, b) => a + b, 0), win = paid > 0, each = each0;
+      for (const c of got) { const mine = cuts.get(c.id); if (mine) { c.coins_base += mine; track(ch, 'heist:loot', mine, c.id); await noteJob(ch, c.id); } ch.touch(c); await ch.saveCitizen(c); await bump(ch, c.id, { crimes: 1, heists: win ? 1 : 0 });
         // it came off: lie low just a moment, but the next job will be harder
         if (win) await ch.q('update citizens set heist_at = $2, crime_streak = crime_streak + 1 where id = $1', [c.id, t - R.HEIST_COOLDOWN + 20000]); }
       for (const x of caught) await ch.q('update citizens set crime_streak = 0 where id = $1', [x.c.id]);
-      for (const p of parts) if (p.status === 'got') p.each = each;
+      for (const p of parts) if (p.status === 'got') p.each = cuts.get(p.id) ?? each;
       if (win) { if (mayor) { mayor.coins_base -= paid; ledger(ch, mayor.id, -paid, 'crime:victim', 'Robbed by a crew'); ch.touch(mayor); await ch.saveCitizen(mayor);
           await this.acts.notify(ch, mayor.id, 'pickpocket', `👑 A crew robbed you of ${fmt(paid)} coins! ${caught.length ? `The police caught ${caught.map(x => '@' + x.c.handle).join(', ')}.` : 'They all got away.'}`); }
         else treasuryAdd(ch, -paid); }

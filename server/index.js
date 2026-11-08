@@ -173,8 +173,8 @@ app.get('/api/admin/stats', admin, send(async req => { const S = await import('.
 // The builder's view of players' money: cash on hand, savings at the bank, debt, and each player's history.
 app.get('/api/admin/accounts', admin, send(async req => {
   const q = String(req.query.q || '').trim().replace(/^@/, '').toLowerCase(), today = world.meta ? R.gameDay(Date.now(), world.meta.epoch) : 0;
-  const rows = (await pool.query(`select id, handle, display_name, coins_base, coins_day, net, bank, last_seen, jailed_until from citizens where pass_hash is not null ${q ? 'and (lower(handle) like $1 or lower(display_name) like $1)' : ''} limit 2000`, q ? ['%' + q + '%'] : [])).rows;
-  const list = rows.map(r => { const cash = R.balanceOn(r.coins_base, r.coins_day, r.net, today), bank = Number(r.bank || 0); return { id: r.id, h: r.handle, n: r.display_name || '', cash, bank, total: cash + bank, net: Number(r.net || 0), seen: Number(r.last_seen || 0), jailed: Number(r.jailed_until || 0) > Date.now() }; });
+  const rows = (await pool.query(`select id, handle, display_name, coins_base, coins_day, net, bank, last_seen, jailed_until, status_tier, crime_day, crime_today from citizens where pass_hash is not null ${q ? 'and (lower(handle) like $1 or lower(display_name) like $1)' : ''} limit 2000`, q ? ['%' + q + '%'] : [])).rows;
+  const list = rows.map(r => { const cash = R.balanceOn(r.coins_base, r.coins_day, r.net, today), bank = Number(r.bank || 0); return { id: r.id, h: r.handle, n: r.display_name || '', cash, bank, total: cash + bank, net: Number(r.net || 0), seen: Number(r.last_seen || 0), jailed: Number(r.jailed_until || 0) > Date.now(), st: Number(r.status_tier || 0), jobs: R.jobsToday(r) }; });
   list.sort((a, b) => b.total - a.total);
   const sum = list.reduce((a, x) => ({ cash: a.cash + x.cash, bank: a.bank + x.bank }), { cash: 0, bank: 0 });
   return { players: list.slice(0, 300), count: list.length, sum };
@@ -200,6 +200,10 @@ app.get('/api/colony-event', limit, send(async () => ({ event: await cevents.cur
 app.post('/api/admin/colony-event', admin, send(req => cevents.start(String((req.body || {}).kind || ''), (req.body || {}).mins)));
 app.delete('/api/admin/colony-event', admin, send(async () => ({ ended: await cevents.end('over') })));
 app.post('/api/admin/treasury', admin, send(req => world.adjustTreasury((req.body || {}).amount)));
+// The stabiliser's dial, by hand (it carries on adjusting itself from there each hour), or a fresh reading right now.
+app.post('/api/admin/economy', admin, send(async req => { const b = req.body || {}; const S = await import('./stats.js');
+  return world.change(async ch => { if (b.f != null) { const f = Number(b.f); if (!(f >= R.ECON.min && f <= R.ECON.max)) throw new HttpError(400, `Set the dial between ${R.ECON.min} and ${R.ECON.max}.`); ch.meta.econ = { ...(ch.meta.econ || {}), f }; }
+    if (b.measure) await S.econTick(ch, true); return { ok: true, econ: ch.meta.econ || null, f: R.econF(ch.meta) }; }); }));
 app.put('/api/admin/colony-name', admin, send(req => world.renameColony((req.body || {}).name)));
 app.put('/api/admin/weather', admin, send(req => world.setWeather((req.body || {}).kind)));
 app.get('/api/admin/draft', admin, send(async () => ({ draft: await world.getDraft() })));
@@ -391,6 +395,7 @@ await world.load();
 await tryLead();
 if (isLeader && await world.reanchor().catch(e => { console.error('reanchor failed:', e.message); return false; })) console.log('Switched the clock to 30 real minutes per game day.');
 if (isLeader) await world.upgradeCampfire().catch(e => console.error('landing station:', e.message));
+if (isLeader) await world.taxOutOfWages().then(n => n && console.log(`Took the 20% tax out of ${n} wages.`)).catch(e => console.error('wage tax:', e.message));
 if (isLeader) await world.tick().catch(e => console.error('tick failed:', e.message)); // catch up on anything missed while off
 server.keepAliveTimeout = 65000; server.headersTimeout = 66000; // longer than the host's proxy, so it never reuses a closed connection
 server.listen(PORT, () => { started = true; console.log(`City running on :${PORT} with ${world.meta?.population || 0} citizens (bus: ${bus.kind})`); });

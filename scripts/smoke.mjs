@@ -46,6 +46,7 @@ ok(near.msgs.length > 0 || await (async () => { await sleep(300); return near.ms
 ok((await call('GET', '/health', undefined, { auth: false })).status === 200, 'health check');
 ok((await call('GET', '/', undefined, { auth: false })).status === 200, 'city page is served');
 ok((await call('GET', '/shared/catalog.js', undefined, { auth: false })).status === 200, 'shared catalog is served');
+const R0 = await import('../shared/rules.js');
 ok((await call('POST', '/api/admin/buildings', { type: 'house', x: 0, y: 0 }, { auth: false })).status === 401, 'building without a token is refused');
 ok((await call('POST', '/api/admin/buildings', { type: 'house', x: 0, y: 0 }, { headers: { authorization: 'Bearer wrong-token-000000000' } })).status === 401, 'wrong token is refused');
 
@@ -90,7 +91,7 @@ const bakery = r.json.building;
 m = await meta();
 ok(m.employed === 2 && m.income === income0 + 2 * 5, 'two people hired; taxes raise daily income', JSON.stringify({ e: m.employed, i: m.income, i0: income0 }));
 const worker = await whoDev('builder');
-ok(worker.job?.[0] === bakery.id && worker.net === 24, 'the earliest resident works there and nets 24 a day', JSON.stringify(worker));
+ok(worker.job?.[0] === bakery.id && worker.net === 24 - 5, 'the earliest resident works there and nets 19 a day (24 less 5 tax; the tent is free)', JSON.stringify(worker));
 ok((await whoDev('chidi')).net === 0, 'unemployed residents live rent-free until they find work');
 
 console.log('Demolish, undo, move');
@@ -165,7 +166,7 @@ const desk = (await call('GET', '/api/admin/places?kind=job&x=36&y=0')).json.fin
 ok(desk && desk.title === 'Analyst' && desk.used < desk.cap, 'the new office shows up with free desks', JSON.stringify(desk));
 ok((await call('PATCH', `/api/admin/citizens/${kemi.id}`, { jobId: office.id })).status === 200, "change someone's career");
 let k = await whoDev('kemi');
-ok(k.job?.[0] === office.id && k.net === 32 - 12, 'they work at the office and earn its wage minus rent', JSON.stringify(k));
+ok(k.job?.[0] === office.id && k.net === 32 - 6 - 12, 'they work at the office and earn its wage minus tax and rent', JSON.stringify(k));
 ok((await call('PATCH', `/api/admin/citizens/${kemi.id}`, { jobId: null })).status === 200 && (await who('kemi')).job === null, 'make them quit');
 const bakeryNow = (await call('GET', '/api/admin/places?kind=job&x=14&y=10')).json.find(p => p.type === 'bakery');
 ok(bakeryNow.used === bakeryNow.cap, 'the bakery is full');
@@ -334,7 +335,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
   if (board.current) ok((await call('POST', '/api/me/job/quit', {}, P)).status === 200 && !(await whoDev('zara_ng')).job, 'a colonist can quit');
   ok((await whoDev('zara_ng')).net === 0, 'no job, no daily coins');
   board = (await call('GET', '/api/me/jobs', undefined, P)).json; const [o1, o2] = board.openings;
-  ok(o1 && o1.takeHome === o1.salary - board.rent && typeof o1.dist === 'number', 'each opening shows take-home pay after rent and distance');
+  ok(o1 && o1.takeHome === o1.salary - Math.round(o1.salary * 0.2) - board.rent && typeof o1.dist === 'number', 'each opening shows take-home pay after rent and distance');
   ok(board.openings.every((o, i, a) => i === 0 || a[i - 1].dist <= o.dist + 3), 'nearest openings first');
   await call('GET', `/api/cron/tick?key=${encodeURIComponent(process.env.CRON_KEY)}`, undefined, { auth: false });
   ok(!(await whoDev('zara_ng')).job, 'after quitting, automatic hiring leaves them alone');
@@ -656,7 +657,10 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok(rf.json.outcome !== 'clean' || rf.json.mult > 1 || rf.json.score.total === 80, 'a clean getaway pays more than the takings', JSON.stringify(rf.json));
       if (paid) { const w = (await call('GET', '/api/me/crime', undefined, P)).json;
         ok(w.waitFor > 0 && w.waitFor <= 20000 && w.streak === 1, 'a job that comes off: lie low just 20 seconds, but the next one is harder', JSON.stringify({ wait: w.waitFor, streak: w.streak }));
+        ok(w.jobsToday === 1 && Math.abs(w.pay - 0.85) < 1e-9 && Math.abs(rf.json.payNext - 0.85) < 1e-9, "each job pulled today makes the next one pay 15% less", JSON.stringify({ jobs: w.jobsToday, pay: w.pay, next: rf.json.payNext }));
         await set('zara_ng', 'crime_at = null'); const r2 = (await start('scam', false)).json;
+        ok(Math.abs(r2.pay - 0.85) < 1e-9, '…and the takings on offer for the next job show it', JSON.stringify(r2));
+        await set('zara_ng', "crime_day = '2000-01-01'"); ok(Math.abs((await call('GET', '/api/me/crime', undefined, P)).json.pay - 1) < 1e-9, 'a new day: jobs pay in full again'); await set('zara_ng', 'crime_day = null, crime_today = 0');
         ok(r2.streak === 1 && (r2.diff > rs.json.diff || r2.diff === 5) && r2.chance < rs.json.chance, 'the next job: a harder game, and less help from the setting', JSON.stringify({ before: [rs.json.diff, rs.json.chance], after: [r2.diff, r2.chance] }));
         await finish(r2.id, { picks: [{ o: 7, t: 1 }] }); ok((await call('GET', '/api/me/crime', undefined, P)).json.streak === 0, 'getting caught wipes the slate clean'); }
       // a botched job: nothing done, so the play earns nothing, and that's caught
@@ -804,14 +808,14 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(buy.status === 200 && (await whoDev('zara_ng')).coins === 500000 - buy.json.price, 'buy the house you live in', JSON.stringify(buy.json));
     ok((await call('POST', '/api/me/properties/buy', { buildingId: spare }, P)).status === 409, "can't buy it twice");
     { const z = (await pool.query("select c.net, j.type jt from citizens c left join buildings j on j.id = c.job_id where c.handle = 'zara_ng'")).rows[0], BT0 = (await import('../shared/catalog.js')).BUILDING_TYPES;
-      ok(!z.jt || Number(z.net) === BT0[z.jt].work.salary, 'buying the home you rent stops the rent at once', JSON.stringify(z)); }
+      ok(!z.jt || Number(z.net) === BT0[z.jt].work.salary - Math.round(BT0[z.jt].work.salary * 0.2), 'buying the home you rent stops the rent at once', JSON.stringify(z)); }
     const props = (await call('GET', '/api/me/properties', undefined, P)).json;
     ok(props.list.length === 1 && props.list[0].id === spare, 'it shows in your buildings');
     await set('zara_ng', 'bank = 50000');
     const t0 = await money(), pd = await call('POST', '/api/admin/test/payday', {});
     if (pd.status === 404) console.log('  (payday route only on test servers; start the server with ALLOW_TEST_ROUTES=1 to check paydays)');
     else { const t1 = await money();
-      const inc = props.list[0].income; ok(pd.status === 200 && t1.wallet - t0.wallet === inc && t1.bank - t0.bank === 10, `payday: ${inc} rent to the owner (none from herself: she lives there rent-free), interest on savings`, JSON.stringify({ t0, t1, inc, pd: pd.json })); }
+      const inc = props.list[0].income; ok(pd.status === 200 && t1.wallet - t0.wallet === inc - R0.wealthTaxPerGameDay(t0.wallet + inc + t0.bank + 10) && t1.bank - t0.bank === 10, `payday: ${inc} rent to the owner (none from herself: she lives there rent-free), interest on savings, and a little wealth tax (she has over 250,000)`, JSON.stringify({ t0, t1, inc, pd: pd.json })); }
     const shop = await build('stall', 965, 900), shopBuy = await call('POST', '/api/me/properties/buy', { buildingId: shop }, P);
     const before = (await money()).wallet; await call('DELETE', `/api/admin/buildings/${shop}`);
     { const after = (await money()).wallet; ok(after === before + 5000, 'if the developer knocks it down, the owner gets their money back', JSON.stringify({ before, after, buy: shopBuy.json })); }
@@ -1598,6 +1602,23 @@ r = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x
   const d = (await call('GET', '/api/admin/accounts/landlady')).json;
   ok(d.who?.h === 'landlady' && d.list.some(x => x.key === 'build:own' && x.coins < 0) && d.totals.some(x => x.key === 'land:buy' || x.key.startsWith('land')), "…and everything they spent, by kind and line by line", JSON.stringify(d).slice(0, 300));
   ok((await call('GET', '/api/admin/accounts', undefined, A.P)).status === 401, 'players can\'t see the accounts'); }
+// the economy: no coins from nothing (the treasury goes into debt instead), status to buy, and the builder's dials
+{ const meta = async () => (await pool.query('select data from meta where id = 1')).rows[0].data, tre = async () => { const m = await meta(); return R0.treasuryOn(m, R0.gameDay(Date.now(), m.epoch)); };
+  const setTre = async v => { const m = await meta(); await pool.query("update meta set data = data || jsonb_build_object('treasuryBase', $1::numeric, 'treasuryDay', $2::int) where id = 1", [v, R0.gameDay(Date.now(), m.epoch)]); };
+  const b2 = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x + 4, y: s1.y + 3 }, A.P); ok(b2.status === 200, 'another bench for the test', JSON.stringify(b2.json));
+  await setTre(0); const kn = await call('POST', `/api/me/buildings/${b2.json.building.id}/knock`, {}, A.P), t1 = await tre();
+  ok(kn.status === 200 && kn.json.back > 0 && Math.abs(t1 + kn.json.back) < 2, "an empty treasury still refunds, by going into debt: no coins made from nothing", JSON.stringify({ back: kn.json.back, t1 }));
+  const s0 = (await call('POST', '/api/me/daily', {}, A.P)).json; ok(!s0.paid, "while the treasury is in debt it pays no daily rewards", JSON.stringify(s0));
+  await setTre(1000000);
+  const cash0 = (await whoDev('landlady')).coins, m0 = await meta(); await pool.query("update citizens set coins_base = 60000, coins_day = $1 where handle = 'landlady'", [R0.gameDay(Date.now(), m0.epoch)]);
+  const st = await call('POST', '/api/me/status', {}, A.P); ok(st.status === 200 && st.json.tier === 1 && st.json.status.name === 'Bronze' && Math.abs(await tre() - 1050000) < 2, 'buying Bronze status: 50,000 coins to the treasury', JSON.stringify(st.json));
+  ok((await call('POST', '/api/me/status', {}, A.P)).status === 402, "Silver costs 4× as much (200,000): can't afford it yet");
+  ok((await who('landlady')).status === 1, 'the status shows on her card');
+  const E = await call('POST', '/api/admin/economy', { measure: true }); ok(E.status === 200 && E.json.econ && E.json.econ.money > 0 && E.json.econ.top10 > 0 && E.json.f === 1, 'the builder can take a reading of the economy', JSON.stringify(E.json));
+  ok((await call('POST', '/api/admin/economy', { f: 0.7 })).json.f === 0.7 && (await call('POST', '/api/admin/economy', { f: 5 })).status === 400, 'and set the dial by hand, within limits');
+  const D = (await call('GET', '/api/admin/stats')).json; ok(D.econ && D.econ.f === 0.7 && D.econ.snaps.length >= 1 && D.econ.statusOwners.some(x => x.tier === 1), 'the Stats tab gets the economy readings', JSON.stringify(D.econ).slice(0, 300));
+  await pool.query("update citizens set coins_base = coins_base + $1 where handle = 'landlady'", [cash0 - 60000]); // give back the test's cash
+  await call('POST', '/api/admin/economy', { f: 1 }); ok((await call('POST', '/api/admin/economy', { f: 1 }, A.P)).status === 401, "players can't touch the dial"); }
 pr = (await call('GET', '/api/me/properties', undefined, A.P)).json; ok(pr.count === 1 && pr.plots[0].buildings.length === 2, 'a plot counts as one property with its buildings', JSON.stringify(pr).slice(0, 300));
 r = await call('POST', `/api/me/buildings/${houseId}/rush`, {}, A.P); ok(r.status === 200 && r.json.paid > 0, 'rush the builders', JSON.stringify(r.json));
 let hb = (await pool.query('select * from buildings where id = $1', [houseId])).rows[0]; ok(hb.done && hb.home_cap === 4, 'the house is finished', JSON.stringify({ done: hb.done, cap: hb.home_cap }));
@@ -1628,7 +1649,7 @@ const BT = (await import('../shared/catalog.js')).BUILDING_TYPES;
   let me = (await pool.query('select c.net, c.job_id, j.type jt from citizens c left join buildings j on j.id = c.job_id where c.id = $1', [A.id])).rows[0];
   if (!me.job_id) { const w = (await pool.query('select id from buildings where done and not ruin and job_used < job_cap order by built_at limit 1')).rows[0];
     await call('POST', '/api/me/job', { buildingId: w.id }, A.P); me = (await pool.query('select c.net, c.job_id, j.type jt from citizens c left join buildings j on j.id = c.job_id where c.id = $1', [A.id])).rows[0]; }
-  const sal = BT[me.jt].work.salary; ok(Number(me.net) === sal, 'living in a home you own, you keep your whole wage: no rent', JSON.stringify({ net: me.net, sal }));
+  const sal = BT[me.jt].work.salary; ok(Number(me.net) === sal - Math.round(sal * 0.2), 'living in a home you own, you keep your whole wage less tax: no rent', JSON.stringify({ net: me.net, sal }));
   const hm = (await call('GET', '/api/me/home', undefined, A.P)).json; ok(hm.home && hm.home.mine && hm.home.rent === 0, 'her Home tab shows no rent', JSON.stringify(hm.home)); }
 // offers
 r = await call('POST', '/api/me/offers', { kind: 'building', targetId: houseId, amount: 50000, message: 'Lovely house!' }, B.P); ok(r.status === 200, 'offer for a building on a plot (becomes an offer for the plot)', JSON.stringify(r.json));
@@ -1649,7 +1670,7 @@ const tr2 = (await call('GET', '/api/meta', undefined, { auth: false })).json.me
 const pl = (await pool.query('select owner_handle from plots where id = $1', [plotId])).rows[0], bl = (await pool.query('select distinct owner_handle from buildings where plot_id = $1', [plotId])).rows;
 ok(pl.owner_handle === 'buyer_bob' && bl.length === 1 && bl[0].owner_handle === 'buyer_bob', 'the plot and everything on it changed hands');
 { const me = (await pool.query('select c.net, j.type jt, h.type ht, c.home_id from citizens c left join buildings j on j.id = c.job_id left join buildings h on h.id = c.home_id where c.id = $1', [A.id])).rows[0];
-  ok(me.home_id === houseId && Number(me.net) === BT[me.jt].work.salary - BT[me.ht].home.rent, 'she sold the house she lives in: now she pays rent to live there', JSON.stringify(me)); }
+  ok(me.home_id === houseId && Number(me.net) === BT[me.jt].work.salary - Math.round(BT[me.jt].work.salary * 0.2) - BT[me.ht].home.rent, 'she sold the house she lives in: now she pays rent to live there', JSON.stringify(me)); }
 // standalone building offer + decline + withdraw
 r = await call('POST', '/api/me/offers', { kind: 'plot', targetId: p2, amount: 10 }, B.P); const o3 = r.json.id;
 r = await call('POST', `/api/me/offers/${o3}`, { action: 'decline', reply: 'No way' }, A.P); ok(r.json.status === 'declined', 'the owner declines');

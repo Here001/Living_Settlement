@@ -116,6 +116,14 @@ app.get('/api/meta', limit, send(async () => {
   if (Date.now() - eventsCache.t > 2000) eventsCache = { t: Date.now(), rows: await world.recentEvents(), disasters: await world.recentDisasters() };
   return { meta: world.publicMeta(), events: eventsCache.rows, disasters: eventsCache.disasters, serverNow: Date.now() };
 }));
+// Who holds a status title (handle and tier, only those who bought one), for the badges by names in chats, lists and
+// posts. Few players hold one, an index finds them, and the list is kept for 15 seconds. New titles reach open pages
+// straight away through the Colony Log entry announcing them.
+let statusCache = { t: 0, list: [] };
+app.get('/api/status', limit, send(async () => {
+  if (Date.now() - statusCache.t > 15000) statusCache = { t: Date.now(), list: (await pool.query('select handle, status_tier from citizens where status_tier > 0 order by status_tier desc limit 20000')).rows.map(r => [r.handle, Number(r.status_tier)]) };
+  return { list: statusCache.list };
+}));
 // How many colonists are online right now (signed in and seen in the last 90 seconds), for the Town Square header.
 let onlineCache = { t: 0, n: 0 };
 app.get('/api/online/count', limit, send(async () => {

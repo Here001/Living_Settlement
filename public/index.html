@@ -201,6 +201,7 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .pitch{margin:4px 0;font-size:14px;font-style:italic}
 .vbar{position:relative;height:18px;border-radius:999px;background:var(--soft);overflow:hidden;margin-top:4px}.vbar i{position:absolute;inset:0 auto 0 0;background:color-mix(in srgb,#E2B13C 70%,transparent);border-radius:999px}.vbar span{position:relative;padding-left:8px;font-size:12px;font-weight:700;line-height:18px}
 .runbox{margin-top:12px}.runbox textarea{width:100%;box-sizing:border-box;min-height:60px;margin-top:6px;font:inherit;font-size:15px;padding:8px 10px;border-radius:12px}.polpick{display:flex;flex-wrap:wrap;gap:6px}
+.sbadge{margin-left:5px;font-size:13px;line-height:1}
 .mbadge{margin-left:6px;font-size:11px;font-weight:800;padding:1px 7px;border-radius:999px;background:color-mix(in srgb,#E2B13C 30%,transparent)}
 .pushk{display:flex;align-items:center;gap:10px;padding:7px 2px;font-size:15px;border-top:1px solid var(--soft)}.pushk input{width:20px;height:20px;accent-color:var(--warm,#E4572E)}
 .bsearch{flex:0 0 auto!important;height:auto!important;min-height:0!important;display:block;box-sizing:border-box;margin:2px 14px 8px!important;width:calc(100% - 28px)!important;max-width:calc(100% - 28px)}
@@ -1074,7 +1075,7 @@ function applyOp(o){
   case 'reports': Reports.soon(); break;
   case 'cevent': CEvent.set(o.data, true); break;
   case 'reset': location.reload(); break;
-  case 'event': News.seen=false; S.events.unshift(o.data); if(S.events.length>300) S.events.length=300; feedDirty=true; newsSoon(); break; } }
+  case 'event': News.seen=false; statusFromEvent(o.data); S.events.unshift(o.data); if(S.events.length>300) S.events.length=300; feedDirty=true; newsSoon(); break; } }
 let newsTimer=null; const newsSoon=()=>{ if(!newsTimer) newsTimer=setTimeout(()=>{ newsTimer=null; updateNews(); },300); }; // a burst of news updates the ticker once
 
 // Which chunks the screen needs: everything visible plus a one-chunk margin, capped when zoomed far out.
@@ -1104,7 +1105,7 @@ async function syncChunks(){
     subscribe(); changed();
   } finally { syncing=false; } }
 function reloadAll(){ for(const k of [...S.chunks.keys()]) dropChunk(k); S.citizens.clear(); subKey=''; syncChunks(); }
-async function loadMeta(){ const r=await api('/api/meta'); S.meta=r.meta; S.events=r.events||[]; S.disasters=r.disasters||[]; skew=r.serverNow-Date.now(); loadChat(); }
+async function loadMeta(){ const r=await api('/api/meta'); S.meta=r.meta; S.events=r.events||[]; S.disasters=r.disasters||[]; skew=r.serverNow-Date.now(); loadChat(); loadStatus(); }
 S.chat=[]; async function loadChat(){ try{ S.chat=await api('/api/square'); feedDirty=true; renderFeed(); }catch(e){} }
 // The live connection: the server sends a clock tick every 1.25 s, so a silent line for 20 s means it died without telling us
 // (common on phones switching networks). Reconnects back off gently and happen at once when the phone wakes or comes back online.
@@ -1162,6 +1163,15 @@ const rotCache=new Map();
 const rotType = t => { let r=rotCache.get(t); if(!r){ r={...t, size:[t.size[1],t.size[0]], base:t}; rotCache.set(t,r); } return r; };
 // What to call someone on screen: their chosen name, or @username until they set one.
 const nameOf = c => (c && c.name) ? c.name : '@'+(c&&c.handle);
+// Status titles by name: the server lists everyone who bought one (/api/status) when the page loads, and each new one
+// arrives with its Colony Log entry. withSt() adds the title's icon after a name; stBadge() is the same as a small chip.
+const StatusBy=new Map();
+const stOf=h=>{ const t=h?StatusBy.get(String(h).toLowerCase()):0; return t?statusOf(t):null; };
+const setSt=(h,t)=>{ if(!h) return; if(t>0) StatusBy.set(String(h).toLowerCase(),t); else StatusBy.delete(String(h).toLowerCase()); };
+const withSt=(h,label)=>{ const s=stOf(h); return s?`${label} ${s.icon}`:label; };
+const stBadge=h=>{ const s=stOf(h); return s?el('span',{class:'sbadge',title:`${s.name} status`,text:s.icon}):''; };
+async function loadStatus(){ try{ const r=await api('/api/status'); StatusBy.clear(); for(const [h,t] of r.list||[]) setSt(h,t); feedDirty=true; renderFeed(); }catch(e){} }
+function statusFromEvent(e){ if(!e||e.kind!=='status') return; const m=/@([A-Za-z0-9._]+?)\.? bought (\w+) status/.exec(e.text||''); if(!m) return; const i=STATUS.findIndex(x=>x.name===m[2]); if(i>=0) setSt(m[1],i+1); }
 // An upgraded building (level 2–5) is its type with more room inside, a taller build, and (levels 3 and 5) a bigger
 // footprint. While an upgrade is under way the scaffolding already covers the new ground.
 const lvCache=new Map();
@@ -3928,7 +3938,7 @@ var Top={ board:'racer', data:{}, busy:false,
   row(r,B){ const av=el('span',{class:'ava sm'}); av.innerHTML=avatarSVG({handle:r.h,gender:r.g,name:r.n});
     const medal=r.rank===1?'🥇':r.rank===2?'🥈':r.rank===3?'🥉':'#'+r.rank;
     return el('button',{class:'person toprow'+(r.me?' me':'')+(r.rank<=3?' podium':''),onclick:()=>{ openCitizen(r.h); if(innerWidth<900) openTab(null); }},
-      el('span',{class:'trank',text:medal}), av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:(r.n?`${r.n} · @${r.h}`:'@'+r.h)+(r.me?' (you)':'')})),
+      el('span',{class:'trank',text:medal}), av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:withSt(r.h,r.n?`${r.n} · @${r.h}`:'@'+r.h)+(r.me?' (you)':'')})),
       r.v!=null?el('b',{class:'tval',text:fmt(r.v)}):''); },
   render(p){
     p.append(paneHead('Leaderboards')); const body=el('div',{class:'pane-body',id:'topBody'}); p.append(body); this.renderBody(body); },
@@ -4487,7 +4497,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
   jump(id){ const t=document.querySelector(`#dmBody [data-id="${CSS.escape(id)}"]`); if(!t) return; t.scrollIntoView({block:'center',behavior:'smooth'}); t.classList.add('dmflash'); setTimeout(()=>t.classList.remove('dmflash'),1200); },
   bubble(m){ if(m.system) return el('div',{class:'dmsys','data-id':m.id||null,text:m.text});
     const b=el('div',{class:'dm '+(m.mine?'me':'them'),'data-id':m.id||null});
-    if(this.gid&&!m.mine&&m.from) b.append(el('button',{class:'dmfrom',text:m.from.n||'@'+m.from.h,onclick:e=>{ e.stopPropagation(); openCitizen(m.from.h); }}));
+    if(this.gid&&!m.mine&&m.from) b.append(el('button',{class:'dmfrom',text:withSt(m.from.h,m.from.n||'@'+m.from.h),onclick:e=>{ e.stopPropagation(); openCitizen(m.from.h); }}));
     if(m.reply) b.append(el('button',{class:'dmquote',onclick:e=>{ e.stopPropagation(); this.jump(m.reply.id); }}, el('b',{text:this.isMe(m.reply.from)?'You':'@'+m.reply.from}), el('span',{text:m.reply.text})));
     const loc=Loc.parse(m.text); if(loc) b.append(Loc.bubble(loc, m.mine)); else b.append(el('p',{text:m.text})); b.append(el('time',{text:hhmm(m.t)}));
     // Tap a message for its options: reply, and (for theirs in a private chat) report.
@@ -4514,7 +4524,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       const card=()=>openCitizen(this.with);
       const head=el('div',{class:'pane-head dmhead'}, el('button',{class:'x',text:'‹','aria-label':'Back to chats',onclick:()=>this.back()}),
         el('button',{class:'dmcard',title:`Open @${this.with}'s card`,onclick:card}, av,
-          el('div',{class:'dmwho'}, el('b',{text:w?(w.n||'@'+w.h):'@'+this.with}), el('span',{class:'hint'+(w&&w.online?' onl-now':''),text:w?(w.online?'● Online now':w.seen?`Last seen ${ago(w.seen)}`:'Offline'):'…'}))),
+          el('div',{class:'dmwho'}, el('b',{text:withSt(w?w.h:this.with,w?(w.n||'@'+w.h):'@'+this.with)}), el('span',{class:'hint'+(w&&w.online?' onl-now':''),text:w?(w.online?'● Online now':w.seen?`Last seen ${ago(w.seen)}`:'Offline'):'…'}))),
         el('button',{class:'x dmmore','aria-label':'More','aria-expanded':String(this.menu),text:'⋯',onclick:()=>{ this.menu=!this.menu; this.sure=null; this.renderNow(); }}),
         maxBtn(), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>openTab(null)}));
       const T=this.thread, lastTheirs=T&&[...T.messages].reverse().find(m=>!m.mine), H=encodeURIComponent(this.with);
@@ -4547,7 +4557,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       (()=>{ const n=this.groups.filter(g=>!g.heist).reduce((a,g)=>a+g.unread,0)+this.invites.filter(i=>!i.heist).length; return el('button',{class:'pill'+(this.view==='groups'?' on':''),role:'tab','aria-selected':String(this.view==='groups'),onclick:()=>{ this.view='groups'; this.renderNow(); }}, '👥 Groups', n?el('b',{class:'tbadge',text:String(n)}):null); })(),
       (()=>{ const n=this.groups.filter(g=>g.heist).reduce((a,g)=>a+g.unread,0)+this.invites.filter(i=>i.heist).length; return el('button',{class:'pill'+(this.view==='heists'?' on':''),role:'tab','aria-selected':String(this.view==='heists'),onclick:()=>{ this.view='heists'; this.renderNow(); }}, '🦹 Heists', n?el('b',{class:'tbadge',text:String(n)}):null); })()));
     const row=c=>{ const av=el('span',{class:'ava sm'+(c.with.online?' on':'')}); av.innerHTML=avatarSVG({handle:c.with.h,id:c.with.id||c.with.h,gender:c.with.g});
-      return el('button',{class:'person dmrow'+(c.unread?' unread':''),onclick:()=>this.open(c.with.h)}, av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:(c.pinned?'📌 ':'')+(c.with.n?`${c.with.n} · @${c.with.h}`:'@'+c.with.h)}), el('div',{class:'what',text:c.last?(c.last.mine?'You: ':'')+plainMsg(c.last.text):''})),
+      return el('button',{class:'person dmrow'+(c.unread?' unread':''),onclick:()=>this.open(c.with.h)}, av, el('span',{class:'dmtxt'}, el('div',{class:'who',text:(c.pinned?'📌 ':'')+withSt(c.with.h,c.with.n?`${c.with.n} · @${c.with.h}`:'@'+c.with.h)}), el('div',{class:'what',text:c.last?(c.last.mine?'You: ':'')+plainMsg(c.last.text):''})),
         c.unread?el('b',{class:'tbadge',text:String(c.unread)}):el('time',{class:'hint',text:c.last?ago(c.last.t):''})); };
     if(this.view==='offers'){ const O=Plots.loadOffers();
       body.append(el('p',{class:'hint',text:'Offers to buy homes, businesses and land. Anyone can make an offer on your property, and you can answer each one. You can have one offer waiting on each property; withdraw it or wait for an answer before making another.'}));
@@ -4586,7 +4596,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     // shows everyone online.
     const others=(this.friends||[]).filter(o=>o.online&&!this.isMe(o.h));
     if(others.length){ body.append(el('h3',{text:`Friends online (${others.length})`})); const orow=el('div',{class:'onlinerow'});
-      for(const o of others.slice(0,30)){ const av=el('span',{class:'ava sm on'}); av.innerHTML=avatarSVG({handle:o.h,id:o.id,gender:o.g}); orow.append(el('button',{class:'onl',title:'@'+o.h,onclick:()=>this.open(o.h)}, av, el('span',{text:o.n||'@'+o.h}))); }
+      for(const o of others.slice(0,30)){ const av=el('span',{class:'ava sm on'}); av.innerHTML=avatarSVG({handle:o.h,id:o.id,gender:o.g}); orow.append(el('button',{class:'onl',title:'@'+o.h,onclick:()=>this.open(o.h)}, av, el('span',{text:withSt(o.h,o.n||'@'+o.h)}))); }
       body.append(orow); }
     body.append(el('h3',{text:'Your chats'}));
     // Private chats and groups together: pinned first, then the newest.
@@ -4604,7 +4614,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
   picker(M, skip){ const wrap=el('div',{class:'gsel'}); const people=this.pickList(skip);
     if(!people.length) wrap.append(el('p',{class:'hint',text:'Chat with someone first, or type their @handle below.'}));
     for(const o of people){ const on=M.pick.has(o.h), av=el('span',{class:'ava sm'+(o.online?' on':'')}); av.innerHTML=avatarSVG({handle:o.h,id:o.id||o.h,gender:o.g});
-      wrap.append(el('button',{class:'gperson'+(on?' on':''),'aria-pressed':String(on),onclick:()=>{ on?M.pick.delete(o.h):M.pick.add(o.h); this.renderNow(); }}, av, el('span',{text:o.n?`${o.n} · @${o.h}`:'@'+o.h}), el('b',{text:on?'✓':'+'}))); }
+      wrap.append(el('button',{class:'gperson'+(on?' on':''),'aria-pressed':String(on),onclick:()=>{ on?M.pick.delete(o.h):M.pick.add(o.h); this.renderNow(); }}, av, el('span',{text:withSt(o.h,o.n?`${o.n} · @${o.h}`:'@'+o.h)}), el('b',{text:on?'✓':'+'}))); }
     const ex=el('input',{class:'gin',type:'text',placeholder:'Or type @handles, separated by spaces','aria-label':'More handles',value:M.extra}); ex.oninput=()=>{ M.extra=ex.value; };
     wrap.append(ex); return wrap; },
   handles(M){ return [...M.pick, ...String(M.extra||'').split(/[\s,]+/).map(s=>s.replace(/^@+/,'')).filter(Boolean)]; },
@@ -4626,7 +4636,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     p.append(head);
     if(this.menu&&T){ const menu=el('div',{class:'pane-body gmenu'}); const mem=el('div',{class:'gmembers'});
       for(const m of T.members){ const av=el('span',{class:'ava sm'+(m.online?' on':'')}); av.innerHTML=avatarSVG({handle:m.h,id:m.h,gender:m.g});
-        mem.append(el('button',{class:'gperson',onclick:()=>openCitizen(m.h)}, av, el('span',{text:(m.n?`${m.n} · @${m.h}`:'@'+m.h)+(m.me?' (you)':'')}), el('i',{class:'hint',text:m.status==='invited'?'invited':''}))); }
+        mem.append(el('button',{class:'gperson',onclick:()=>openCitizen(m.h)}, av, el('span',{text:withSt(m.h,m.n?`${m.n} · @${m.h}`:'@'+m.h)+(m.me?' (you)':'')}), el('i',{class:'hint',text:m.status==='invited'?'invited':''}))); }
       menu.append(el('b',{text:'Members'}), mem);
       if(this.inviting){ const M=this.inviting; menu.append(el('b',{text:'Invite more'}), this.picker(M, T.members.map(m=>m.h)), el('div',{class:'row-actions'},
         el('button',{class:'btn primary',text:'Send invites',onclick:()=>{ const members=this.handles(M); if(!members.length){ toast('Pick someone to invite.'); return; }
@@ -5837,7 +5847,7 @@ function statusBox(c){ const d=detail.get(c.id), tier=(d&&d.status)||0, cur=stat
   const lad=el('div',{class:'statlad'}); STATUS.forEach((S,i)=>lad.append(el('span',{class:'statstep'+(i<tier?' got':i===tier?' next':''),title:`${S.name}: ${fmt(S.price)} coins`}, el('b',{text:S.icon}), el('small',{text:S.name}))));
   box.append(lad);
   if(next) box.append(el('div',{class:'row-actions'}, el('button',{class:'btn'+(cash>=next.price?' primary':''),text:`${next.icon} Become ${next.name} · ${fmt(next.price)}`,disabled:cash>=next.price?null:'',
-    onclick:()=>toast(`Pay ${fmt(next.price)} coins for ${next.name} status? It's only for show.`,'Buy',async()=>{ const r=await moneyAction(c,'/api/me/status',{},r=>`${r.status.icon} You're now ${r.status.name}!`); if(r&&d){ d.status=r.tier; renderCard(true); } })}),
+    onclick:()=>toast(`Pay ${fmt(next.price)} coins for ${next.name} status? It's only for show.`,'Buy',async()=>{ const r=await moneyAction(c,'/api/me/status',{},r=>`${r.status.icon} You're now ${r.status.name}!`); if(r&&d){ d.status=r.tier; setSt(c.handle,r.tier); renderCard(true); } })}),
     cash<next.price?el('span',{class:'hint',text:`You need ${fmt(next.price-cash)} more in cash.`}):''));
   else box.append(el('p',{class:'jobnow',text:'👑 You hold the highest status there is.'}));
   return box; }
@@ -6078,7 +6088,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(!d && !detailLoading.has(c.id)){ detailLoading.add(c.id); const id=c.id; loadDetail(c.handle).finally(()=>{ detailLoading.delete(id); if(sel&&sel.id===id&&detail.has(id)) renderCard(); }); }
     const h=bOf(c.home), j=bOf(c.job); const st=h?citizenAt(c,gmNow()):null;
     const now = cardNow(c, d);
-    const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,nameOf(c), el('span',{class:'gsym',title:c.gender==='f'?'Woman':'Man',text:c.gender==='f'?' ♀':' ♂'}), c.web?el('span',{class:'webtag',title:'Joined on the website, not through Instagram',text:'🌐'}):''); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); { const st=d&&statusOf(d.status||0); if(st) title.append(el('span',{class:'badge stat t'+d.status,title:`${st.name} status`,text:`${st.icon} ${st.name}`})); } head.append(av, el('div',null,title, c.name?el('p',{class:'uname',text:'@'+c.handle}):'', el('p',{class:'now',text:now})));
+    const head=el('div',{class:'chead'}); const av=el('span',{class:'ava'}); av.innerHTML=avatarSVG(c); const title=el('h2',null,nameOf(c), el('span',{class:'gsym',title:c.gender==='f'?'Woman':'Man',text:c.gender==='f'?' ♀':' ♂'}), c.web?el('span',{class:'webtag',title:'Joined on the website, not through Instagram',text:'🌐'}):''); if(c.founder) title.append(el('span',{class:'badge',text:'Founder'})); { if(d&&d.status!=null) setSt(c.handle,d.status); const st=d&&statusOf(d.status||0); if(st) title.append(el('span',{class:'badge stat t'+d.status,title:`${st.name} status`,text:`${st.icon} ${st.name}`})); } head.append(av, el('div',null,title, c.name?el('p',{class:'uname',text:'@'+c.handle}):'', el('p',{class:'now',text:now})));
     const nm=b=>(D.buildings.get(b.id)||b).name||T(b).name;
     const shr=el('button',{class:'x shr','aria-label':'Share','title':'Share',text:'↗',onclick:()=>Share.colonist(c)});
     const strip=d&&d.claimed?Stars.strip(d.stars||0, mineCard(c)):null;
@@ -6178,7 +6188,7 @@ function renderPeople(){
   const list=$('peopleList'); if(!list) return; const q=cleanHandle(peopleQuery).toLowerCase(); const gm=gmNow();
   const show=(cits,empty)=>{ list.innerHTML=''; if(!cits.length){ list.append(el('p',{class:'hint',text:empty})); return; }
     for(const c of cits){ const st=c.home?citizenAt(c,gm):null; const av=el('span',{class:'ava sm'+(c.online?' on':'')}); av.innerHTML=avatarSVG(c);
-      list.append(el('button',{class:'person',onclick:()=>openCitizen(c.handle)}, av, el('span',null, el('div',{class:'who',text:(c.name?c.name+' · @'+c.handle:'@'+c.handle)+(c.founder?' ★':'')}), el('div',{class:'what',text:!c.home?'In cryosleep aboard the ark':st?st.act:'Arriving soon'})))); } };
+      list.append(el('button',{class:'person',onclick:()=>openCitizen(c.handle)}, av, el('span',null, el('div',{class:'who',text:withSt(c.handle,c.name?c.name+' · @'+c.handle:'@'+c.handle)+(c.founder?' ★':'')}), el('div',{class:'what',text:!c.home?'In cryosleep aboard the ark':st?st.act:'Arriving soon'})))); } };
   if(!q){ const near=[...S.citizens.values()].sort((a,b)=>(b.founder?1:0)-(a.founder?1:0)||a.handle.localeCompare(b.handle)).slice(0,60);
     show(near, S.meta&&S.meta.population?'Nobody lives in this part of town. Search for a name.':'Nobody lives here yet.');
     if(near.length && S.meta) list.prepend(el('p',{class:'hint',text:`People near you. Search to find anyone among ${fmt(S.meta.population)} citizens.`})); return; }
@@ -6554,7 +6564,7 @@ function msgPost(m,g){ const mineMsg=!m.o&&Me&&Me.handle&&Me.handle.toLowerCase(
   const del=(Store.canWrite||mineMsg)?el('button',{class:'show',text:'Delete',onclick:()=>toast('Delete this message?','Delete',async()=>{ try{ await api('/api/square/'+encodeURIComponent(m.id),{method:'DELETE'}); }catch(e){ toast(e.message); } })}):null;
   const flag=(!m.o&&!mineMsg&&Me&&Me.token)?el('button',{class:'show',text:'Report',onclick:()=>reportSheet({kind:'square',id:m.id,handle:m.h,text:m.text})}):null;
   const pin=Store.canWrite?el('button',{class:'show',text:m.p?'Unpin':'Pin',onclick:async()=>{ try{ await api(`/api/admin/square/${encodeURIComponent(m.id)}/pin`,{method:'PUT',body:{pinned:!m.p}}); m.p=m.p?0:1; feedDirty=true; renderFeed(true); }catch(e){ toast(e.message); } }}):null;
-  const who=m.o?el('b',null,m.h, el('span',{class:'obadge',text:'Official'})):el('b',null,m.n||('@'+m.h), el('span',{class:'vbadge',title:'Verified colonist',text:'✓'}), isMayor(m.h)?el('span',{class:'mbadge',text:'👑 Mayor'}):'', m.n?el('span',{class:'uname',text:' @'+m.h}):'');
+  const who=m.o?el('b',null,m.h, el('span',{class:'obadge',text:'Official'})):el('b',null,m.n||('@'+m.h), el('span',{class:'vbadge',title:'Verified colonist',text:'✓'}), stBadge(m.h), isMayor(m.h)?el('span',{class:'mbadge',text:'👑 Mayor'}):'', m.n?el('span',{class:'uname',text:' @'+m.h}):'');
   return el('article',{class:'post said'+(m.o?' official':'')+(m.p?' pinned':'')}, av, el('div',null,
     m.p?el('div',{class:'pinlabel',text:'📌 Pinned'}):'',
     el('div',{class:'ph'}, who, el('time',{text:when(g??gmAt(m.t))})), el('p',{class:'saidt',text:m.text}),

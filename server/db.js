@@ -304,7 +304,9 @@ const MIGRATIONS = [
   `alter table chat_groups add column if not exists closed_at bigint;`,
   // v59: the economy: jobs pulled today (each pays a bit less), the status a player has bought, and hourly money snapshots
   `alter table citizens add column if not exists crime_day text, add column if not exists crime_today int not null default 0, add column if not exists status_tier int not null default 0;
-   create table if not exists econ_snaps (t bigint primary key, money numeric not null, players numeric not null, treasury numeric not null, top10 numeric not null default 0, wages numeric not null default 0, f numeric not null default 1);`
+   create table if not exists econ_snaps (t bigint primary key, money numeric not null, players numeric not null, treasury numeric not null, top10 numeric not null default 0, wages numeric not null default 0, f numeric not null default 1);`,
+  // v60: finding the few players who hold a status title (for the badges by their names) without reading every citizen
+  `create index if not exists citizens_status on citizens (status_tier) where status_tier > 0;`,
 ];
 
 export async function migrate() {

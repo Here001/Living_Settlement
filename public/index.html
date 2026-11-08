@@ -6045,7 +6045,7 @@ const Heist={ data:null, at:0, busy:false, form:null, prompted:new Set(),
   async act(path, body, ok){ try{ const r=await api(path,{method:'POST',body:body||{}}); if(ok) toast(typeof ok==='function'?ok(r):ok); this.form=null; this.load(true); Chats.load(); return r; }catch(e){ toast(e.message); return null; } },
   box(c){ this.load(); const D0=this.data, box=el('div',{class:'heists'}, el('h3',{text:'🕶️ Group crimes'}));
     if(!D0){ box.append(el('p',{class:'hint',text:'Asking around…'})); return box; }
-    box.append(el('p',{class:'hint',text:'Bigger jobs need a crew. Plan one, invite people: they get a group chat to agree the plan. At the set time (or when you say go) it happens. The loot is shared by everyone who gets away; anyone caught is fined (a quarter of their share, 100 to 3,000, never more than they have) and jailed. Each extra person adds 4% to the odds.'}));
+    box.append(el('p',{class:'hint',text:'Bigger jobs need a crew. Plan one, invite people: they get a group chat to agree the plan. At the set time (or when you say go) it happens. The loot is shared by everyone who gets away; anyone caught is fined (about a seventh of their share, 50 to 1,500, never more than they have) and jailed. Each extra person adds 4% to the odds.'}));
     // jobs you're in
     for(const h of D0.mine){ const left=h.at-Date.now(), H=HEISTS[h.kind]||{min:2}, card=el('div',{class:'hcard '+h.status});
       card.append(el('div',{class:'hhead'}, el('b',{text:`${h.icon} ${h.name}`}), el('span',{class:'hint',text:h.status==='planning'?(left>0?`in ${mins(left)} min`:'any moment'):h.status==='cancelled'?'called off':h.result&&h.result.win?'came off':'went wrong'})),

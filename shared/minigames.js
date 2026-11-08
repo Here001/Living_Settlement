@@ -43,7 +43,7 @@ export function outcomeOf(total, gotMoney = true) {
 // The staff don't walk a fixed loop: they wander from aisle to aisle, stop, and look around. Laser tripwires blink on
 // and off across the aisles (walk through one while it's on and the alarm is half-way there). Smaller loot (a jewellery
 // case, a cash box, phones on display) is there for the taking too, if you dare: each one adds to the takings.
-export const STEALTH = { speed: 3.2, grab: 1.5, grabR: 0.95, exitR: 0.8, fill: 1.25, fillD: 0.22, drain: 0.5,
+export const STEALTH = { speed: 3.2, grab: 1.5, grabR: 0.95, exitR: 0.8, fill: 1.25, fillD: 0.13, drain: 0.5,
   guardFov: 0.62, guardRange: 3.4, camFov: 0.4, camRange: 4.6, laser: 0.55, itemR: 0.8, itemGrab: 0.8, itemBonus: 0.15 };
 export const ITEMS = { jewels: { name: 'Jewellery case', icon: '💎' }, cashbox: { name: 'Cash box', icon: '🗃️' }, phones: { name: 'Phones on display', icon: '📱' }, watches: { name: 'Watches', icon: '⌚' } };
 
@@ -62,14 +62,14 @@ function tryStealth(seed, diff, plain) {
         if (Math.hypot(x + 0.5 - entry.x, y + 0.5 - entry.y) < 2.2 || Math.hypot(x + 0.5 - till.x, y + 0.5 - till.y) < 1.8) continue; wall[y * W + x] = 1; } } }
   // the counter the till sits on
   wall[0 * W + (W - 3)] = 2; wall[0 * W + (W - 2)] = 2;
-  const L = { seed, diff, W, H, wall: Array.from(wall), entry, till, guards: [], cams: [], lasers: [], items: [], limit: 54 - diff * 3 };
+  const L = { seed, diff, W, H, wall: Array.from(wall), entry, till, guards: [], cams: [], lasers: [], items: [], limit: 56 - diff * 2 };
   if (!pathCells(L, cell(entry), cell(till))) return null;
   // the round: random floor spots joined up along the aisles
   const floors = []; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!at(x, y)) floors.push([x, y]);
-  const nG = diff >= 4 ? 2 : 1, far = f => Math.hypot(f[0] + 0.5 - entry.x, f[1] + 0.5 - entry.y) >= 3;
+  const nG = diff >= 5 ? 2 : 1, far = f => Math.hypot(f[0] + 0.5 - entry.x, f[1] + 0.5 - entry.y) >= 3;
   for (let g = 0; g < nG; g++) {
     // a wander: walk to a random spot, stop, look around (two or three glances), then on to another; never the same twice
-    const speed = 1.05 + diff * 0.15, legs = []; let at0 = floors.filter(far)[Math.floor(r() * floors.filter(far).length)], t = -3;
+    const speed = 1.1 + diff * 0.11, legs = []; let at0 = floors.filter(far)[Math.floor(r() * floors.filter(far).length)], t = -3;
     while (t < L.limit + 4) {
       let to = null; for (let k = 0; k < 20 && !to; k++) { const f = floors[Math.floor(r() * floors.length)]; if (far(f) && Math.abs(f[0] - at0[0]) + Math.abs(f[1] - at0[1]) >= 3) to = f; }
       if (!to) return null; const p = pathCells(L, at0, to); if (!p) return null;
@@ -97,7 +97,7 @@ function tryStealth(seed, diff, plain) {
     if (!far(f) || Math.hypot(x - till.x, y - till.y) < 2.5 || L.items.some(i => Math.hypot(i.x - x, i.y - y) < 3)) continue;
     let wallNear = false; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (at(f[0] + dx, f[1] + dy)) wallNear = true; if (!wallNear) continue;
     if (!pathCells(L, cell(entry), f)) continue; L.items.push({ x, y, k: kinds[(k + io) % kinds.length] }); k++; }
-  const nC = Math.max(0, diff - 2);
+  const nC = Math.max(0, diff - 3);
   const spots = [[W - 0.5, H / 2, Math.PI], [W / 2, 0.15, Math.PI / 2], [0.15, H / 2 - 1, 0], [W / 2 + 2, H - 0.15, -Math.PI / 2]];
   for (let i = 0; i < nC; i++) { const [x, y, a] = spots[i % spots.length]; L.cams.push({ x, y, base: a, sweep: 0.75, period: 5 + r() * 3, ph: r() * 6.28 }); }
   return L;
@@ -278,8 +278,8 @@ export function genAtm(seed, diff, hard = false) {
   const cols = shuffle([...Array(WIRE_COLS.length).keys()]).slice(0, n), syms = shuffle([...Array(SYMBOLS.length).keys()]).slice(0, n);
   const card = cols.map((c, i) => ({ col: c, sym: syms[i] })); // the service card: this colour goes to this symbol
   const sockets = shuffle([...syms]); // the sockets on the right, in the order they're fitted
-  const pin = [...Array(3 + diff)].map(() => Math.floor(r() * 9) + 1);
-  const L = { seed, diff, wires: cols, card, sockets, pin, limit: 58 - diff * 4, wrongWire: 0.1, wrongKey: 0.12 };
+  const pin = [...Array(3 + Math.ceil(diff * 0.7))].map(() => Math.floor(r() * 9) + 1);
+  const L = { seed, diff, wires: cols, card, sockets, pin, limit: 60 - diff * 3, wrongWire: 0.1, wrongKey: 0.12 };
   if (hard) { L.hard = true; L.shift = +Math.max(3.5, 7 - diff * 0.6).toFixed(2); L.fuse = +Math.max(4.5, 9 - diff * 0.7).toFixed(2); }
   return L;
 }
@@ -340,7 +340,7 @@ export function genDrive(seed, diff) {
   const r = rng(seed), D = 520 + diff * 60, obs = [], kinds = ['car', 'van', 'cones', 'police', 'car', 'bus'];
   let d = 45;
   while (d < D - 25) {
-    d += 26 - diff * 1.8 + r() * (16 - diff * 1.5);
+    d += 27 - diff * 1.3 + r() * (16 - diff * 1.1);
     const lane = Math.floor(r() * 3), k = kinds[Math.floor(r() * kinds.length)];
     obs.push({ d: +d.toFixed(2), lane, k });
     if (diff >= 2 && r() < 0.1 + diff * 0.06) obs.push({ d: +d.toFixed(2), lane: (lane + 1 + Math.floor(r() * 2)) % 3, k: kinds[Math.floor(r() * kinds.length)] });

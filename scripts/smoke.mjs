@@ -618,9 +618,9 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await call('POST', '/api/me/visit', { friend: 'jobfill_a' }, P)).status === 409, 'no going out from jail');
     const petShop = (await call('POST', '/api/admin/buildings', { type: 'petstore', x: 1230, y: 1230 })).json.building?.id; await call('POST', `/api/admin/buildings/${petShop}/finish`);
     ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', buildingId: petShop }, P)).status === 409, 'no adopting from jail');
-    { let c2 = null; for (let i = 0; i < 30 && !c2; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 100, bank = 100'); const r = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P); if (r.json.caught) c2 = r.json; }
+    { let c2 = null; for (let i = 0; i < 30 && !c2; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 30, bank = 100'); const r = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P); if (r.json.caught) c2 = r.json; }
       const zz = (await pool.query("select coins_base, bank from citizens where handle = 'zara_ng'")).rows[0];
-      ok(c2 && c2.paid.fromCash === 100 && c2.fine <= 200 && c2.paid.fromBank === c2.fine - 100 && !c2.paid.debt && Number(zz.bank) === 200 - c2.fine && Number(zz.coins_base) === 0, 'a fine comes from cash, then savings, and never puts the wallet in the minus', JSON.stringify({ c2: c2 && c2.paid, fine: c2 && c2.fine, zz }));
+      ok(c2 && c2.paid.fromCash === 30 && c2.fine <= 130 && c2.paid.fromBank === c2.fine - 30 && !c2.paid.debt && Number(zz.bank) === 130 - c2.fine && Number(zz.coins_base) === 0, 'a fine comes from cash, then savings, and never puts the wallet in the minus', JSON.stringify({ c2: c2 && c2.paid, fine: c2 && c2.fine, zz }));
       // bail: out of jail early, from cash then savings
       await set('zara_ng', `jailed_until = ${Date.now() + 5 * 60000}, coins_base = 200, bank = 1000, net = 0`);
       const bq = await call('POST', '/api/me/bail', {}, P), zb = (await pool.query("select coins_base, bank, jailed_until from citizens where handle = 'zara_ng'")).rows[0];
@@ -660,7 +660,8 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
         ok(w.jobsToday === 1 && w.pay === 1 && rf.json.payNext === 1 && w.free === 5, 'the first 5 jobs each day pay in full', JSON.stringify({ jobs: w.jobsToday, pay: w.pay, next: rf.json.payNext }));
         ok(rf.json.hotNext === 1.15 && w.hot === 1.15, 'a job that comes off heats up the streak: the next pays 15% more', JSON.stringify({ hot: rf.json.hotNext, w: w.hot }));
         ok(rf.json.xp && rf.json.xp.gain >= 30 && rf.json.xp.rank.name && rf.json.contracts.list.length === 3, 'it earns XP towards a criminal rank, and shows the day’s contracts', JSON.stringify({ xp: rf.json.xp, c: rf.json.contracts }).slice(0, 300));
-        await set('zara_ng', `crime_day = '${new Date().toISOString().slice(0, 10)}', crime_today = 5`); ok(Math.abs((await call('GET', '/api/me/crime', undefined, P)).json.pay - 0.85) < 1e-9, 'after 5 jobs in a day, each pays 15% less than the last');
+        await set('zara_ng', `crime_day = '${new Date().toISOString().slice(0, 10)}', crime_today = 5`); ok(Math.abs((await call('GET', '/api/me/crime', undefined, P)).json.pay - 0.92) < 1e-9, 'after 5 jobs in a day, each pays 8% less than the last');
+        await set('zara_ng', `crime_today = 40`); ok(Math.abs((await call('GET', '/api/me/crime', undefined, P)).json.pay - 0.5) < 1e-9, 'but a job never pays less than half');
         await set('zara_ng', `crime_today = 1`);
         await set('zara_ng', 'crime_at = null'); const r2 = (await start('scam', false)).json;
         ok(r2.pay === 1 && r2.hot === 1.15, '…and the takings on offer for the next job show the hot streak', JSON.stringify(r2));
@@ -669,8 +670,8 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
         await finish(r2.id, { picks: [{ o: 7, t: 1 }] }); ok((await call('GET', '/api/me/crime', undefined, P)).json.streak === 0, 'getting caught wipes the slate clean'); }
       // a botched job: nothing done, so the play earns nothing, and that's caught
       await fresh(); const rb = await start('scam', false), bad = await finish(rb.json.id, { picks: [{ o: 9, t: 1 }] });
-      ok(bad.status === 200 && bad.json.game.invalid && ['fined', 'jailed'].includes(bad.json.outcome) && bad.json.fine >= 100 && bad.json.fine <= 1000 && (await coins('zara_ng')) === 1000 - bad.json.fine + (bad.json.contracts?.coins || 0), 'a botched job is caught and fined', JSON.stringify(bad.json));
-      ok(bad.json.fine === Math.min(1000, (await import('../shared/rules.js')).crimeFine(Number((await pool.query('select loot from crime_runs where id = $1', [rb.json.id])).rows[0].loot))), 'the fine is a quarter of the takings on offer (100 to 3,000)', JSON.stringify(bad.json.fine));
+      ok(bad.status === 200 && bad.json.game.invalid && ['fined', 'jailed'].includes(bad.json.outcome) && bad.json.fine >= 50 && bad.json.fine <= 1000 && (await coins('zara_ng')) === 1000 - bad.json.fine + (bad.json.contracts?.coins || 0), 'a botched job is caught and fined', JSON.stringify(bad.json));
+      ok(bad.json.fine === Math.min(1000, (await import('../shared/rules.js')).crimeFine(Number((await pool.query('select loot from crime_runs where id = $1', [rb.json.id])).rows[0].loot))), 'the fine is about a seventh of the takings on offer (50 to 1,500)', JSON.stringify(bad.json.fine));
       ok(bad.json.waitFor === 20000 || bad.json.jailed, 'after a job that went wrong, Go again counts down a full 20 seconds from the end of the game', JSON.stringify(bad.json.waitFor));
       ok(bad.json.xp.gain >= 10 && bad.json.xp.gain - bad.json.contracts.done.reduce((a, d) => a + d.xp, 0) === 10 && bad.json.streak === 0 && bad.json.hotNext === 1, 'even a botched job earns a little XP; the streak is over', JSON.stringify(bad.json.xp));
       { // a fine is never more than you have: no debt from a bad game
@@ -700,6 +701,8 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       { let okA = 0, okR = 0; for (let seed = 1; seed <= 30; seed++) { const A = MG.genAtm(seed, 1 + seed % 5), ev = []; let t = 1; A.wires.forEach((w, i) => ev.push(['w', i, A.sockets.indexOf(A.card[i].sym), t += 0.5])); A.pin.forEach(d => ev.push(['k', d, t += 0.3])); if (MG.atmReplay(A, ev, t).money) okA++;
           const Lr = MG.genStealth(seed, 1 + seed % 5); let st = MG.stealthStart(Lr); const path = [[st.x, st.y]]; for (let i = 0; i < 40 && !st.done; i++) { st = MG.stealthStep(Lr, st, 0.7, -0.7); path.push([st.x, st.y]); } if (MG.stealthReplay(Lr, path).ok) okR++; }
         ok(okA === 30 && okR === 30, 'the ATM can always be cracked, and an honest walk around the shop always replays', JSON.stringify({ okA, okR })); }
+      { const A0 = await import('../server/actions.js').catch(() => null); if (A0 && A0.streakDiff) ok([0, 1, 2, 3, 4, 9].map(k => A0.streakDiff(2, k)).join() === '2,3,3,4,4,4', 'a winning streak raises the difficulty gently: one step for every two wins, two at most', [0, 1, 2, 3, 4, 9].map(k => A0.streakDiff(2, k)).join());
+        ok(MG.genStealth(7, 4).guards.length === 1 && MG.genStealth(7, 5).guards.length === 2 && MG.genStealth(7, 4).cams.length === 1, 'the shop adds a second member of staff only at the hardest level, and cameras gradually'); }
       { // tripping a laser brings the nearest member of staff over to look, then back to their round
         let checked = 0, good = 0;
         for (let seed = 1; seed < 300 && checked < 5; seed++) { const L = MG.genStealth(seed, 4); if (!L.lasers.length) continue; const z = L.lasers[0], tgt = { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 };
@@ -1000,7 +1003,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok(fz.status === 200 && fz.json.heist.status === 'done' && R0 && R0.parts.length === 2, 'when the whole crew has played, the job is settled', JSON.stringify(fz.json.heist));
       const pz = R0.parts.find(p => p.h === 'zara_ng'), pb = R0.parts.find(p => p.h === 'jobfill_a');
       ok(pz.play >= 50 && pb.play === 0 && R0.score.play === Math.round((pz.play + pb.play) / 2) && R0.score.total === R0.score.play + R0.score.setting, "the crew's play is the average of the parts, plus the setting", JSON.stringify(R0.score));
-      ok(pb.status === 'caught' && pb.fine >= 1000, 'whoever botches their part is caught and fined', JSON.stringify(pb));
+      ok(pb.status === 'caught' && pb.fine >= 50 && pb.fine <= 1500, 'whoever botches their part is caught and fined', JSON.stringify(pb));
       ok(['got', 'caught'].includes(pz.status) && (pz.status === 'caught') === ['fined', 'jailed'].includes(R0.outcome), "the rest get away unless the whole job goes wrong", JSON.stringify({ pz, o: R0.outcome }));
       const t1 = Number((await pool.query("select data->>'treasuryBase' t from meta")).rows[0].t), m1 = Number((await pool.query("select sum(coins_base + coalesce(bank, 0)) s from citizens where handle in ('zara_ng','jobfill_a')")).rows[0].s);
       ok(Math.abs((m1 - m0) + (t1 - t0)) < 1, 'coins only move between the crew and the treasury (nothing is made up)', JSON.stringify({ crew: m1 - m0, treasury: t1 - t0 }));
@@ -1037,7 +1040,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
         ok(MG.atmReplay(Lh, [['w', 0, 0, Lh.fuse + 0.5]], Lh.fuse + 0.6).state.burnt, 'and if the fuse burns down between moves, the alarm goes'); }
       // the robbery: wandering staff, laser tripwires and optional extras
       { const Ls = MG.genStealth(77, 3), g0 = Ls.guards[0]; ok(g0.legs.some(l => l.k === 'look') && g0.legs.filter(l => l.k === 'walk').length >= 3 && Ls.lasers.length >= 1 && Ls.items.length >= 2, 'the shop: staff wander and stop to look around, lasers blink across the aisles, and there are extras to take', JSON.stringify({ legs: g0.legs.length, lasers: Ls.lasers.length, items: Ls.items.length }));
-        const z = Ls.lasers[0], mid = { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 }; let tOn = 0; while (!MG.laserOn(z, tOn)) tOn += 0.1; ok(MG.laserOn(z, tOn) && !MG.laserOn(z, tOn + z.period * z.on + 0.05) || z.on >= 0.99, 'a laser blinks on and off'); }
+        const z = Ls.lasers[0], mid = { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 }; let tOn = 0; while (MG.laserOn(z, tOn)) tOn += 0.02; while (!MG.laserOn(z, tOn)) tOn += 0.02; /* the moment it switches on */ ok(MG.laserOn(z, tOn) && !MG.laserOn(z, tOn + z.period * z.on + 0.05) || z.on >= 0.99, 'a laser blinks on and off'); }
       await pool.query("update citizens set jailed_until = 0, heist_at = 0, crime_at = 0, coins_base = 5000 where handle in ('zara_ng', 'jobfill_a')"); }
     // street games are switched off: joining is refused
     { const sock = token => new Promise(res => { const w = { msgs: [] }; w.ws = new WebSocket(BASE.replace(/^http/, 'ws') + '/ws'); w.ws.on('message', d => { try { w.msgs.push(JSON.parse(d)); } catch {} });

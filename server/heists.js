@@ -3,7 +3,7 @@
 // lookout, muscle). At the set time, or when the planner says "go now" with enough crew, the job goes live: everyone
 // plays their part's mini game at the same time on their own phone (shared/minigames.js), within a couple of minutes.
 // The crew's average play (0-60) plus the setting (0-40) decides how it goes, like a solo crime: a great job pays up to
-// 1.5x the loot, a bad one gets the whole crew fined (a quarter of the share, 100 to 3,000, never more than they have; from cash then
+// 1.5x the loot, a bad one gets the whole crew fined (about a seventh of the share, 50 to 1,500, never more than they have; from cash then
 // savings) and, at worst, jailed. Anyone who botches their own part is caught even if the rest get away; anyone who
 // doesn't play sits it out with nothing. Rules and numbers are in shared/rules.js (HEISTS).
 import crypto from 'node:crypto';
@@ -122,7 +122,7 @@ export class Heists {
       const odds = await this.acts.odds(h.kind, await this.acts.policeDist(ch.db, sc.x, sc.y), await this.acts.waveNow()), chance = Math.min(0.92, odds.chance + R.HEIST_CREW_BONUS * (crew.length - H.min));
       const wants = h.roles || {}, parts = MG.assignRoles(h.kind, crew.map(c => wants[c.id] || null));
       const live = { chance, band: odds.band, night: !!odds.night, sc: { x: sc.x, y: sc.y, label: sc.label }, started: t, until: t + LIVE_MS, absent: out,
-        crew: crew.map((c, i) => ({ id: c.id, h: c.handle, role: parts[i], hard: Number(c.crime_streak || 0) > 0, seed: crypto.randomInt(1, 2 ** 31), diff: Math.min(5, MG.difficultyOf(parts[i], odds.band) + Math.min(4, Number(c.crime_streak || 0))) })) };
+        crew: crew.map((c, i) => ({ id: c.id, h: c.handle, role: parts[i], hard: Number(c.crime_streak || 0) > 0, seed: crypto.randomInt(1, 2 ** 31), diff: Math.min(5, MG.difficultyOf(parts[i], odds.band) + Math.min(2, Math.ceil(Number(c.crime_streak || 0) / 2))) })) };
       await ch.q("update heists set status = 'live', live = $2 where id = $1", [h.id, JSON.stringify(live)]);
       for (const c of crew) await ch.q('update citizens set heist_at = $2 where id = $1', [c.id, t]); // the crew lies low from now
       for (const m of live.crew) await this.acts.notify(ch, m.id, 'crime', `🚨 Go time! ${H.icon} ${H.name}: the job is on. Open the Crime tab and play your part (${MG.ROLES[m.role].icon} ${MG.ROLES[m.role].name}) in the next ${LIVE_TXT}.`);

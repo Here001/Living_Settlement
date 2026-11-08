@@ -14,12 +14,13 @@ import { note as noteProgress, progressOf } from './crimeprog.js';
 
 export const CRIME_COOLDOWN = 20 * 1000;         // lie low 20 seconds between crimes, whatever happened
 export const CRIME_QUICK = 20 * 1000;
-// Each job that comes off in a row makes the next one harder: a harder game, and the police are more on the lookout
-// (fewer points from the setting). Getting caught wipes the slate clean.
-export const STREAK_CHANCE = 0.07;
+// Jobs that come off in a row make the next ones harder, gently: one difficulty step for every two in a row (two at most),
+// and the police a little more on the lookout (3 points fewer from the setting for each, up to three). Getting caught
+// wipes the slate clean.
+export const STREAK_CHANCE = 0.03;
 const waitText = ms => ms < 60000 ? `${Math.ceil(ms / 1000)} more seconds` : `${Math.ceil(ms / 60000)} more minute${ms > 60000 ? 's' : ''}`;
-const streakDiff = (base, streak) => Math.min(5, base + Math.min(4, streak || 0));
-const streakChance = (chance, streak) => Math.max(0.05, chance - STREAK_CHANCE * (streak || 0));
+export const streakDiff = (base, streak) => Math.min(5, base + Math.min(2, Math.ceil((streak || 0) / 2)));
+const streakChance = (chance, streak) => Math.max(0.05, chance - STREAK_CHANCE * Math.min(3, streak || 0));
 // What a job really pays: the takings, 15% less for each job already pulled today beyond the first 5, times the hot
 // streak (+15% for each job in a row), the criminal rank (+3% a rank) and the stabiliser's dial, and never more than
 // that kind of job's share of the treasury.

@@ -307,23 +307,23 @@ export const BAIL_PER_MIN = 150, BAIL_MIN = 300;
 export const bailCost = msLeft => Math.max(BAIL_MIN, Math.ceil(Math.max(0, msLeft) / 60000) * BAIL_PER_MIN);
 
 // ---------- The economy's dials ----------
-// The first 5 jobs (crimes or heists) that come off each real day pay in full; after that each pays 15% less than the last.
-// It's back to full the next day (midnight UTC).
-export const CRIME_DECAY = 0.85, CRIME_FREE = 5;
+// The first 5 jobs (crimes or heists) that come off each real day pay in full; after that each pays 8% less than the last,
+// but never less than half. It's back to full the next day (midnight UTC).
+export const CRIME_DECAY = 0.92, CRIME_FREE = 5, CRIME_FLOOR = 0.5;
 // The most one job can take from the treasury, as a share of what it holds, so one crew can't empty the town.
 export const CRIME_SHARE = { rob: 0.03, scam: 0.01, atm: 0.05, armored: 0.1, jailbreak: 0.04, bank: 0.2 };
 export const realDayKey = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
 export const jobsToday = (c, t = Date.now()) => c && c.crime_day === realDayKey(t) ? Number(c.crime_today || 0) : 0;
-export const crimePayMult = (c, t = Date.now()) => Math.pow(CRIME_DECAY, Math.max(0, jobsToday(c, t) + 1 - CRIME_FREE)); // what the next job pays
+export const crimePayMult = (c, t = Date.now()) => Math.max(CRIME_FLOOR, Math.pow(CRIME_DECAY, Math.max(0, jobsToday(c, t) + 1 - CRIME_FREE))); // what the next job pays
 
 // ---- Keeping crime worth coming back to ----
 // Hot streak: each job in a row that comes off makes the next one harder, but it pays 15% more for each, up to +60%.
 // Getting caught ends the streak.
 export const HOT_STEP = 0.15, HOT_MAX = 4;
 export const hotMult = streak => 1 + HOT_STEP * Math.min(HOT_MAX, Math.max(0, Math.floor(Number(streak) || 0)));
-// Getting caught: a quarter of the takings on offer (at least 100, never more than 3,000), and never more than the
+// Getting caught: about a seventh of the takings on offer (at least 50, never more than 1,500), and never more than the
 // thief has in cash and savings, so a bad game never puts anyone in debt.
-export const FINE_SHARE = 0.25, FINE_MIN = 100, FINE_MAX = 3000;
+export const FINE_SHARE = 0.15, FINE_MIN = 50, FINE_MAX = 1500;
 export const crimeFine = base => Math.min(FINE_MAX, Math.max(FINE_MIN, Math.round((Number(base) || 0) * FINE_SHARE / 10) * 10));
 // Criminal ranks: every real job earns XP (more for a better result), and so does each daily contract. Each rank adds
 // 3% to everything you take, for good, and shows by your name in the Crime tab.

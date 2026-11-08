@@ -214,54 +214,126 @@ export function stealthReplay(L, path) {
 }
 
 // ======================= Smooth talker (con a tourist) =======================
-// Six turns to get the tourist to buy a "genuine" Gliese moon rock. Each turn you pick one of three lines; what works
-// depends on the tourist's mood, which shows in what they say and shifts as you talk. A good line builds trust, a bad one
-// raises suspicion; tapping the timing bar in the sweet spot lands a line better. Trust 100 = sold. Suspicion 100 = they walk.
-export const MOODS = {
-  curious: { name: 'Curious', face: '🤔', say: ['Moon rock? From which moon?', 'How do you know it\'s real?', 'Tell me more about it…'] },
-  skeptical: { name: 'Skeptical', face: '🤨', say: ['Hmm. That sounds made up.', 'I\'ve heard that one before.', 'Prove it.'] },
-  hurried: { name: 'In a hurry', face: '⌚', say: ['I\'ve got a shuttle to catch.', 'Make it quick.', 'I don\'t have all day.'] },
-  friendly: { name: 'Friendly', face: '😊', say: ['Ha! You\'re funny.', 'Go on then, I\'m listening.', 'What a lovely colony this is!'] },
-  vain: { name: 'Proud', face: '😎', say: ['I only buy the best.', 'Do I look like an ordinary tourist?', 'My friends back home will be so jealous.'] },
+// Sell a tourist a "genuine" Gliese moon rock. Every tourist is somebody: a collector, a bargain hunter, honeymooners, a
+// geology professor, an executive in a hurry, a nervous first-timer or an influencer, each with approaches they love and
+// ones they can't stand. Each turn they raise a real worry, worked out from how the talk is going (suspicious tourists want
+// proof or wonder about you; warm ones get to the price, their partner, or the final "I'm tempted…"). You pick one of four
+// lines (eight kinds of approach) and time it on the bar. Answer what they actually asked and trust climbs; dodge it and
+// they ask again, more suspicious; say the same kind of thing twice and it wears thin. They react to what you said, and
+// their face shows how it's going. Trust 100 = sold. Suspicion 100 = they walk. All worked out from the moves alone, so the
+// server replays it exactly.
+export const CON_TACTICS = {
+  facts: { name: 'Facts', icon: '📜' }, show: { name: 'Show it', icon: '🔦' }, story: { name: 'Story', icon: '📖' }, flatter: { name: 'Flattery', icon: '🌹' },
+  charm: { name: 'Charm', icon: '😄' }, deal: { name: 'Deal', icon: '🏷️' }, rush: { name: 'Hurry them', icon: '⏳' }, listen: { name: 'Listen', icon: '👂' },
 };
-export const TAGS = {
-  facts: { name: 'Facts', lines: ['It\'s from the second moon. You can tell by the blue flecks.', 'Certified by the Colony Geology Office. Here\'s the stamp.', 'Only 40 were ever brought back. This is number 17.', 'Feel how heavy it is. That\'s moon iron.'] },
-  flatter: { name: 'Flattery', lines: ['Someone with your eye for quality spotted it straight away.', 'I only show this to collectors like you.', 'It would look perfect in a home as fine as yours.', 'You clearly know a real treasure.'] },
-  urgency: { name: 'Hurry', lines: ['Last one. Another buyer is coming back at noon.', 'The price doubles when the shuttle docks.', 'Customs closes in ten minutes. Now or never.', 'I can only hold it for you for a minute.'] },
-  joke: { name: 'Charm', lines: ['If it\'s not real, I\'ll eat it. With ketchup.', 'My grandma mined it herself. On a Tuesday.', 'It\'s so rare even the moon doesn\'t have one any more.', 'Comes with free moon dust. Some assembly required.'] },
-  deal: { name: 'Deal', lines: ['For you, half price. Don\'t tell anyone.', 'Buy one, I\'ll throw in a meteorite.', 'Cash today, and I\'ll waive the certificate fee.', 'Special colony-day discount, just for you.'] },
+// What a tourist can be worried about, what they say, and how well each approach answers it (2 just right, 1 fair, 0 beside the point, -1 wrong move).
+export const CON_WORRIES = {
+  open: { say: ['What are you selling?', 'What have you got there?', 'Is that… a rock?'], again: ['I asked what you\'re selling.'],
+    fit: { charm: 2, story: 2, show: 1, flatter: 1, facts: 0, listen: 0, deal: -1, rush: -1 } },
+  proof: { say: ['How do I know it\'s really from the moon?', 'It looks like a painted pebble to me.', 'Anyone can say "moon rock". Can you prove it?'], again: ['You still haven\'t shown me it\'s real.', 'Again: how do I know it\'s genuine?'],
+    fit: { facts: 2, show: 2, story: 1, listen: 0, charm: 0, flatter: -1, deal: -1, rush: -1 } },
+  price: { say: ['That\'s a lot of money for a rock.', 'What\'s it going to cost me?', 'I could buy a shuttle ticket for that.'], again: ['You didn\'t answer me. The price?'],
+    fit: { deal: 2, flatter: 1, story: 1, listen: 1, facts: 0, charm: 0, show: 0, rush: -1 } },
+  time: { say: ['I\'ve got a shuttle to catch.', 'Make it quick, please.', 'I really don\'t have long.'], again: ['I said I\'m in a hurry!'],
+    fit: { rush: 2, deal: 2, show: 1, facts: 0, charm: 0, flatter: 0, story: -1, listen: -1 } },
+  need: { say: ['What would I even do with a moon rock?', 'Why would I want one?', 'Where would I put it?'], again: ['You still haven\'t said why I\'d want it.'],
+    fit: { story: 2, flatter: 2, charm: 1, show: 1, listen: 1, facts: 0, deal: 0, rush: -1 } },
+  trust: { say: ['Why should I trust a stranger in the street?', 'You\'re not one of those scammers, are you?', 'Something about this feels off.'], again: ['I\'m still not sure about you.'],
+    fit: { listen: 2, charm: 2, facts: 1, story: 1, show: 0, deal: 0, flatter: -1, rush: -1 } },
+  partner: { say: ['I should ask my partner first.', 'My other half would kill me.', 'Let me think it over with my partner.'], again: ['I really ought to ask my partner.'],
+    fit: { flatter: 2, rush: 1, deal: 1, story: 1, listen: 1, charm: 0, show: 0, facts: -1 } },
+  close: { say: ['I\'m tempted… really tempted.', 'Okay. Convince me one last time.', 'If I say yes, is that it?'], again: ['Go on, give me a reason to say yes.'],
+    fit: { rush: 2, deal: 2, flatter: 1, charm: 1, listen: 0, facts: 0, show: 0, story: 0 } },
 };
-const LIKE = { // [trust, suspicion] each kind of line earns with each mood
-  curious: { facts: [32, 0], flatter: [12, 6], urgency: [-4, 18], joke: [16, 4], deal: [8, 10] },
-  skeptical: { facts: [26, 2], flatter: [-6, 20], urgency: [-8, 26], joke: [6, 10], deal: [12, 8] },
-  hurried: { facts: [4, 10], flatter: [6, 8], urgency: [30, 2], joke: [-4, 14], deal: [22, 4] },
-  friendly: { facts: [12, 4], flatter: [20, 2], urgency: [4, 14], joke: [32, 0], deal: [10, 6] },
-  vain: { facts: [10, 6], flatter: [34, 0], urgency: [6, 12], joke: [2, 12], deal: [-6, 20] },
+// What you can say: a line for each approach and each worry.
+const CON_LINES = {
+  facts: { open: 'Genuine lunar basalt from Gliese 12 b\'s second moon. Registered.', proof: 'Number 17 of the 40 ever brought back. Here\'s the Geology Office stamp.', price: 'At auction they go for ten times this. Look up lot 17.', time: 'Registered, stamped, boxed. Ten seconds and it\'s yours.', need: 'It\'s an appreciating asset: they\'ve doubled in value in two years.', trust: 'My licence number\'s on the certificate. Check it with the Colony Office.', partner: 'Show them the certificate: it speaks for itself.', close: 'Certificate, stamp, serial number. Everything\'s in order.' },
+  show: { open: 'Hold it to the light. See the blue flecks? Only moon iron does that.', proof: 'Here, scratch it with your key. Moon iron doesn\'t mark.', price: 'Feel the weight of it. That\'s what you\'re paying for.', time: 'Just hold it for one second. Feel that? Done.', need: 'Picture it on your shelf, catching the light every morning.', trust: 'Hold it yourself. I\'m not going anywhere.', partner: 'Take a photo and send it to them right now.', close: 'Look at it glow. That\'s not going to be on any shelf but yours.' },
+  story: { open: 'My grandmother was on the first mining crew. This is the last piece she kept.', proof: 'It came down on the Ardent supply run. I was there when they unloaded it.', price: 'I\'d never sell, but my daughter\'s school fees are due.', time: 'Long story short: it\'s the last one.', need: 'A rock that\'s travelled further than anyone you know. Imagine telling that story.', trust: 'I\'ve had this stall nine years. Everyone here knows me.', partner: 'Imagine their face when you give them a piece of the moon.', close: 'You\'ll tell this story for the rest of your life.' },
+  flatter: { open: 'You look like someone who knows a real treasure.', proof: 'Someone with your eye can see it\'s real.', price: 'For someone of your taste, it\'s a bargain.', time: 'Busy people like you don\'t miss chances like this.', need: 'It suits you. Honestly.', trust: 'I only show this to people I trust. You\'re one of them.', partner: 'They\'ll say you\'ve got the best taste in the colony.', close: 'You were made for this piece.' },
+  charm: { open: 'If it\'s not real, I\'ll eat it. With ketchup.', proof: 'If it\'s fake, come back and I\'ll buy you dinner.', price: 'Cheaper than therapy, and twice as uplifting.', time: 'I\'ll be quicker than your shuttle, promise.', need: 'Everyone needs a moon. This one\'s pocket-sized.', trust: 'Do I look like a criminal? Don\'t answer that.', partner: 'Tell them the moon said hello.', close: 'Come on, say yes. Make a lonely rock happy.' },
+  deal: { open: 'Half price today, just for you.', proof: 'Real or not, at this price you can\'t lose.', price: 'Cash today and I\'ll knock off a third.', time: 'Quick deal: half price if you pay now.', need: 'At this price, it\'s a gift for anyone.', trust: 'Pay half now, half when you\'ve had it checked.', partner: 'I\'ll throw in a second one for them, free.', close: 'Final offer: half price and a certificate frame.' },
+  rush: { open: 'Quick, before the customs officer comes back!', proof: 'No time for tests, another buyer\'s on the way.', price: 'The price doubles when the shuttle docks.', time: 'Then let\'s be quick: take it, it\'s yours.', need: 'Decide now, there\'s one left.', trust: 'Trust me, there\'s no time!', partner: 'Your partner isn\'t here. The rock is, and not for long.', close: 'Last chance. Yes or no?' },
+  listen: { open: 'You look tired. Long trip?', proof: 'That\'s fair. What would convince you?', price: 'I hear you. What were you hoping to spend?', time: 'I understand. Shall I be brief?', need: 'What do you love collecting back home?', trust: 'You\'re right to be careful. Ask me anything.', partner: 'Of course. What do you think they\'d say?', close: 'Take your time. What\'s holding you back?' },
 };
+// How they react to the last thing you said: when it landed, when it fell flat, and when it was the wrong move.
+const CON_REACT = {
+  good: { facts: 'Number 17… with a certificate? Okay.', show: 'Huh. It really does glow.', story: 'Aww. That\'s quite a story.', flatter: 'Well… I do have a good eye.', charm: 'Ha! You\'re funny.', deal: 'Now that\'s more like it.', rush: 'Right, right, quickly then.', listen: 'Finally, someone who listens.' },
+  meh: ['Hmm.', 'Okay…', 'If you say so.', 'Right.'],
+  bad: { facts: 'I didn\'t ask for a lecture.', show: 'Don\'t wave it in my face.', story: 'I don\'t need your life story.', flatter: 'Flattery won\'t work on me.', charm: 'This isn\'t a joke to me.', deal: 'Cheap? Then it\'s fake.', rush: 'Don\'t rush me!', listen: 'I don\'t have time for chit-chat.' },
+  repeat: 'You said that already.',
+};
+// The tourists: who they are, what they love (+), what they can't stand (−), and what's on their mind (how often each worry comes up).
+export const CON_PERSONAS = {
+  collector: { title: 'Collector', likes: ['facts', 'show', 'flatter'], hates: ['charm', 'deal'], worries: { proof: 3, price: 1, trust: 1, need: 1 }, hi: 'Ooh. I collect rare minerals, you know.' },
+  bargain: { title: 'Bargain hunter', likes: ['deal', 'charm'], hates: ['flatter', 'story'], worries: { price: 3, trust: 1, proof: 1, time: 1 }, hi: 'Whatever it is, it\'s too expensive.' },
+  honeymoon: { title: 'Honeymooner', likes: ['story', 'flatter', 'charm'], hates: ['rush', 'facts'], worries: { need: 2, partner: 3, price: 1 }, hi: 'We\'re on our honeymoon! Isn\'t it beautiful here?' },
+  professor: { title: 'Geology professor', likes: ['show', 'facts'], hates: ['charm', 'flatter', 'rush'], worries: { proof: 4, trust: 1, price: 1 }, hi: 'I teach planetary geology. Show me what you have.' },
+  executive: { title: 'Executive in a hurry', likes: ['rush', 'deal', 'show'], hates: ['story', 'listen'], worries: { time: 3, price: 2, proof: 1 }, hi: 'You\'ve got thirty seconds.' },
+  nervous: { title: 'First-time traveller', likes: ['listen', 'charm', 'story'], hates: ['rush', 'deal'], worries: { trust: 3, need: 1, partner: 1, proof: 1 }, hi: 'Oh! Um. Hello. Is this allowed?' },
+  influencer: { title: 'Influencer', likes: ['show', 'flatter', 'story'], hates: ['facts', 'listen'], worries: { need: 2, price: 1, proof: 1, time: 1 }, hi: 'Wait, is that content? Hold it up for the camera.' },
+};
+const CON_NAMES = { f: ['Amara', 'Lena', 'Sofia', 'Mei', 'Zara', 'Ife', 'Aiko', 'Elsa', 'Ngozi', 'Priya'], m: ['Kofi', 'Ravi', 'Tunde', 'Jonas', 'Diego', 'Noah', 'Mateo', 'Chidi', 'Kenji', 'Emeka'] };
+const CON_FROM = ['Proxima b', 'Kepler Station', 'TRAPPIST-1e', 'Ross 128 b', 'Earth (Lagos)', 'Earth (Lisbon)', 'Wolf 1061 c', 'Earth (Osaka)', 'Teegarden b'];
 export function genCon(seed, diff) {
-  const r = rng(seed), moods = Object.keys(MOODS), tags = Object.keys(TAGS), turns = 6, rounds = [];
-  let mood = moods[Math.floor(r() * moods.length)];
-  for (let i = 0; i < turns; i++) {
-    if (i > 0 && r() < 0.28 + diff * 0.06) { const o = moods.filter(m => m !== mood); mood = o[Math.floor(r() * o.length)]; }
-    const pick = []; const pool = [...tags]; for (let k = 0; k < 3; k++) pick.push(pool.splice(Math.floor(r() * pool.length), 1)[0]);
-    rounds.push({ mood, say: Math.floor(r() * 3), options: pick.map(tg => ({ tag: tg, line: Math.floor(r() * TAGS[tg].lines.length) })) });
-  }
-  return { seed, diff, rounds, need: 100, zone: Math.max(0.12, 0.3 - diff * 0.035), limit: 75 };
+  const r = rng(seed), ids = Object.keys(CON_PERSONAS), persona = ids[Math.floor(r() * ids.length)];
+  const gender = r() < 0.5 ? 'f' : 'm', names = CON_NAMES[gender];
+  return { seed, diff, persona, gender, name: names[Math.floor(r() * names.length)], from: CON_FROM[Math.floor(r() * CON_FROM.length)],
+    turns: 7, need: 100, zone: Math.max(0.12, 0.3 - diff * 0.03), limit: 80 };
 }
-// Replaying the conversation: picks are the option chosen each turn (0–2) and how well the line was timed (0–1).
+const conRng = (L, turn, salt) => rng(((L.seed * 31 + turn * 7919 + salt * 104729) >>> 0) || 1);
+export const conStart = L => ({ trust: 0, sus: 0, turn: 0, worry: 'open', again: 0, last: null, q: null, done: null });
+// The four lines on offer: always one that answers the worry just right (not the approach you used last), one wrong move,
+// and two others, in a shuffled order.
+export function conOptions(L, st) {
+  const W = CON_WORRIES[st.worry], r = conRng(L, st.turn, Object.keys(CON_WORRIES).indexOf(st.worry) + 1), all = Object.keys(CON_TACTICS);
+  const best = all.filter(t => W.fit[t] === 2 && t !== st.last), bad = all.filter(t => W.fit[t] === -1), pick = [];
+  const take = list => { const ok = list.filter(t => !pick.includes(t)); if (ok.length) pick.push(ok[Math.floor(r() * ok.length)]); };
+  take(best.length ? best : all.filter(t => W.fit[t] === 2)); take(bad); while (pick.length < 4) take(all);
+  for (let i = pick.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [pick[i], pick[j]] = [pick[j], pick[i]]; }
+  return pick.map(t => ({ tactic: t, line: CON_LINES[t][st.worry] }));
+}
+// What the tourist says now: their reaction to your last line, then what's on their mind.
+export function conSay(L, st) {
+  const P = CON_PERSONAS[L.persona], W = CON_WORRIES[st.worry], r = conRng(L, st.turn, 99), ask = st.again ? W.again[Math.floor(r() * W.again.length)] : W.say[Math.floor(r() * W.say.length)];
+  const react = st.q === 'repeat' ? CON_REACT.repeat : st.q === 'good' ? CON_REACT.good[st.last] : st.q === 'bad' ? CON_REACT.bad[st.last] : st.q === 'meh' ? CON_REACT.meh[Math.floor(r() * CON_REACT.meh.length)] : P.hi;
+  return `${react} ${ask}`;
+}
+// Their face: how the talk is going for them.
+export function conMood(L, st) {
+  if (st.trust >= 75 && st.sus < 50) return { face: '🤩', name: 'eager' }; if (st.sus >= 70) return { face: '😠', name: 'annoyed' };
+  if (st.sus >= 45) return { face: '🤨', name: 'suspicious' }; if (st.worry === 'time') return { face: '⌚', name: 'impatient' };
+  if (st.trust >= 40 && st.trust > st.sus + 15) return { face: '😊', name: 'warming up' }; return { face: '🤔', name: 'curious' };
+}
+// One line said: pick {o: which of the four, t: how well timed, 0-1}. Returns the new state.
+export function conStep(L, st, pick) {
+  const opts = conOptions(L, st), o = opts[Number(pick && pick.o)]; if (!o) return null;
+  const P = CON_PERSONAS[L.persona], tactic = o.tactic, fit0 = CON_WORRIES[st.worry].fit[tactic] ?? 0, fit = fit0 < 0 && P.likes.includes(tactic) ? 0 : fit0, /* what they love is never quite the wrong move */ tm = clamp(Number(pick.t) || 0, 0, 1), repeat = tactic === st.last;
+  let [dt, ds] = fit === 2 ? [30, 0] : fit === 1 ? [16, 5] : fit === 0 ? [7, 10] : [-8, 22];
+  if (P.likes.includes(tactic)) { dt = dt > 0 ? dt * 1.35 : dt; ds *= 0.6; } if (P.hates.includes(tactic)) { dt = dt > 0 ? dt * 0.5 : dt - 4; ds += 10; }
+  if (repeat) { dt = dt > 0 ? dt * 0.5 : dt; ds += 6; }
+  const k = 1 - (L.diff - 1) * 0.06; dt = dt > 0 ? dt * k * (0.75 + 0.5 * tm) : dt; ds = ds * (1.15 - 0.4 * tm) + (L.diff - 1) * 1.5;
+  const trust = clamp(st.trust + dt, 0, 150), sus = clamp(st.sus + ds, 0, 150), turn = st.turn + 1;
+  const q = repeat ? 'repeat' : fit < 0 || P.hates.includes(tactic) ? 'bad' : fit >= 1 ? 'good' : 'meh';
+  let done = trust >= L.need ? 'sold' : sus >= 100 ? 'walked' : turn >= L.turns ? 'walked' : null;
+  // what's on their mind next: the same worry again if you dodged it, then the worries of a suspicious or a warm tourist, else their own
+  let worry = st.worry, again = 0;
+  if (!done) { const r = conRng(L, turn, 7);
+    if (fit <= 0 && st.worry !== 'open' && st.again < 1) { again = st.again + 1; }
+    else if (trust >= 70) worry = st.worry === 'close' ? (P.worries.partner ? 'partner' : 'price') : (r() < 0.6 || st.worry === 'price' || st.worry === 'partner' ? 'close' : P.worries.partner ? 'partner' : 'price');
+    else if (sus >= 55) worry = (P.worries.proof || 0) >= (P.worries.trust || 0) ? (st.worry === 'proof' ? 'trust' : 'proof') : (st.worry === 'trust' ? 'proof' : 'trust');
+    else { const ws = Object.entries(P.worries).filter(([w]) => w !== st.worry), tot = ws.reduce((a, [, n]) => a + n, 0); let x = r() * tot; worry = ws[0][0]; for (const [w, n] of ws) { if ((x -= n) < 0) { worry = w; break; } } } }
+  return { trust, sus, turn, worry, again, last: tactic, q, done };
+}
+// Replaying the conversation: picks are the line chosen each turn (0–3) and how well it was timed (0–1).
 export function conReplay(L, picks) {
-  if (!Array.isArray(picks) || picks.length > L.rounds.length) return { ok: false, why: 'bad picks' };
-  let trust = 0, sus = 0, done = null, turn = 0;
-  for (const p of picks) {
-    const R0 = L.rounds[turn], o = R0 && R0.options[Number(p && p.o)]; if (!o) return { ok: false, why: 'bad pick' };
-    const tm = clamp(Number(p.t) || 0, 0, 1), [dt, ds] = LIKE[R0.mood][o.tag], k = 1 - (L.diff - 1) * 0.06;
-    trust = clamp(trust + (dt > 0 ? dt * k * (0.75 + 0.5 * tm) : dt), 0, 150); sus = clamp(sus + ds * (1.15 - 0.4 * tm) + (L.diff - 1) * 1.5, 0, 150); turn++;
-    if (trust >= L.need) { done = 'sold'; break; } if (sus >= 100) { done = 'walked'; break; }
-  }
-  if (!done) done = turn >= L.rounds.length ? 'walked' : null;
-  if (!done) return { ok: false, why: 'unfinished', state: { trust: Math.round(trust), sus: Math.round(sus), turns: turn } };
-  const perf = done === 'sold' ? clamp(0.6 + 0.3 * (1 - sus / 100) + 0.1 * (L.rounds.length - turn) / L.rounds.length, 0, 1) : clamp(trust / L.need * 0.45, 0, 0.45);
-  return { ok: true, state: { trust: Math.round(trust), sus: Math.round(sus), turns: turn, done }, perf, money: done === 'sold' };
+  if (!Array.isArray(picks) || picks.length > L.turns) return { ok: false, why: 'bad picks' };
+  let st = conStart(L);
+  for (const p of picks) { if (st.done) return { ok: false, why: 'too many picks' }; st = conStep(L, st, p); if (!st) return { ok: false, why: 'bad pick' }; }
+  const state = { trust: Math.round(st.trust), sus: Math.round(st.sus), turns: st.turn };
+  if (!st.done) return { ok: false, why: 'unfinished', state };
+  const perf = st.done === 'sold' ? clamp(0.6 + 0.3 * (1 - st.sus / 100) + 0.1 * (L.turns - st.turn) / L.turns, 0, 1) : clamp(st.trust / L.need * 0.45, 0, 0.45);
+  return { ok: true, state: { ...state, done: st.done }, perf, money: st.done === 'sold' };
 }
 
 // ======================= Wire & code (hack an ATM) =======================

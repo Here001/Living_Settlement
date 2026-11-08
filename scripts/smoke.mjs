@@ -633,7 +633,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       const fresh = () => set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 1000, bank = 0, net = 0, visit_id = null, visit_until = null');
       const start = (kind, practice, who = P) => call('POST', '/api/me/crime/start', { kind, practice }, who), finish = (runId, log, who = P) => call('POST', '/api/me/crime/finish', { runId, log }, who);
       // a good talker: each turn, the line that wins the most trust for the least suspicion, well timed
-      const smartCon = L => { const picks = []; while (!MG.conReplay(L, picks).ok) { let best = 0, bv = -1e9; for (let o = 0; o < 3; o++) { const r = MG.conReplay(L, [...picks, { o, t: 0.95 }]), st = r.state; const v = r.ok ? (r.money ? 1e6 : -1e6) : st.trust - st.sus; if (v > bv) { bv = v; best = o; } } picks.push({ o: best, t: 0.95 }); } return picks; };
+      const smartCon = L => { const picks = []; while (!MG.conReplay(L, picks).ok) { let best = 0, bv = -1e9; for (let o = 0; o < 4; o++) { const r = MG.conReplay(L, [...picks, { o, t: 0.95 }]), st = r.state; const v = r.ok ? (r.money ? 1e6 : -1e6) : st.trust - st.sus; if (v > bv) { bv = v; best = o; } } picks.push({ o: best, t: 0.95 }); } return picks; };
       await fresh(); const c0 = await coins('zara_ng');
       const pr = await start('rob', true); ok(pr.status === 200 && pr.json.practice && pr.json.seed > 0 && pr.json.diff >= 1 && pr.json.diff <= 5 && pr.json.loot === null, 'practise robbing the shop: a fresh level, no takings on offer', JSON.stringify(pr.json));
       ok(!(await pool.query("select crime_at from citizens where handle = 'zara_ng'")).rows[0].crime_at, 'practice is free: no lying low afterwards');
@@ -703,6 +703,17 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
         ok(okA === 30 && okR === 30, 'the ATM can always be cracked, and an honest walk around the shop always replays', JSON.stringify({ okA, okR })); }
       { const A0 = await import('../server/actions.js').catch(() => null); if (A0 && A0.streakDiff) ok([0, 1, 2, 3, 4, 9].map(k => A0.streakDiff(2, k)).join() === '2,3,3,4,4,4', 'a winning streak raises the difficulty gently: one step for every two wins, two at most', [0, 1, 2, 3, 4, 9].map(k => A0.streakDiff(2, k)).join());
         ok(MG.genStealth(7, 4).guards.length === 1 && MG.genStealth(7, 5).guards.length === 2 && MG.genStealth(7, 4).cams.length === 1, 'the shop adds a second member of staff only at the hardest level, and cameras gradually'); }
+      { // the con: a real conversation with somebody, who reacts to what you say
+        const fitOf = (st, t) => MG.CON_WORRIES[st.worry].fit[t.tactic] ?? 0, run = (L, choose) => { let st = MG.conStart(L); const picks = []; while (!st.done) { const i = choose(MG.conOptions(L, st), st); picks.push({ o: i, t: 0.9 }); st = MG.conStep(L, st, picks[picks.length - 1]); } return MG.conReplay(L, picks); };
+        let good = 0, bad = 0; for (let seed = 1; seed <= 60; seed++) { const L = MG.genCon(seed, 3);
+          if (run(L, (o, st) => { const P = MG.CON_PERSONAS[L.persona]; let b = 0, bv = -99; o.forEach((t, i) => { const v = fitOf(st, t) * 10 + (P.likes.includes(t.tactic) ? 5 : 0) - (P.hates.includes(t.tactic) ? 8 : 0) - (t.tactic === st.last ? 6 : 0); if (v > bv) { bv = v; b = i; } }); return b; }).money) good++;
+          if (run(L, (o, st) => Math.max(0, o.findIndex(t => fitOf(st, t) === -1))).money) bad++; }
+        ok(good === 60 && bad === 0, 'the con: answering what the tourist actually asks sells; the wrong move every time never does', JSON.stringify({ good, bad }));
+        const L = MG.genCon(9, 2), s0 = MG.conStart(L), o0 = MG.conOptions(L, s0);
+        ok(o0.length === 4 && new Set(o0.map(x => x.tactic)).size === 4 && o0.some(x => fitOf(s0, x) === 2) && o0.some(x => fitOf(s0, x) === -1) && MG.CON_PERSONAS[L.persona] && L.name && L.from, 'each turn offers four different approaches, always including a right answer and a wrong move', JSON.stringify(o0));
+        let st = MG.conStep(L, s0, { o: o0.findIndex(x => fitOf(s0, x) === 2), t: 1 }); const o1 = MG.conOptions(L, st), dodge = o1.findIndex(x => fitOf(st, x) <= 0 && !MG.CON_PERSONAS[L.persona].likes.includes(x.tactic)), w1 = st.worry;
+        if (dodge >= 0 && w1 !== 'open') { const st2 = MG.conStep(L, st, { o: dodge, t: 1 }); ok(st2.done || (st2.worry === w1 && st2.again === 1 && /still|again|didn|said|really|asked|Go on/i.test(MG.conSay(L, st2))), 'dodge the question and they ask it again', JSON.stringify({ w1, st2, say: MG.conSay(L, st2) })); }
+        const same = o1.findIndex(x => x.tactic === st.last); if (same >= 0) ok(MG.conStep(L, st, { o: same, t: 1 }).q === 'repeat', 'saying the same kind of thing twice wears thin'); }
       { // tripping a laser brings the nearest member of staff over to look, then back to their round
         let checked = 0, good = 0;
         for (let seed = 1; seed < 300 && checked < 5; seed++) { const L = MG.genStealth(seed, 4); if (!L.lasers.length) continue; const z = L.lasers[0], tgt = { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 };

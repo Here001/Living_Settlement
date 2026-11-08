@@ -12,7 +12,7 @@ const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (
 
 const INFO = {
   rob: { icon: '🛒', name: 'Rob the shop', how: ['Sneak in the back door, get to the till and stay next to it while you empty it. Then get out the way you came in.', 'Stay out of the staff\'s view (the yellow cones) and away from cameras. They wander and stop to look around, so watch them. If the eye meter fills, you\'re spotted.', 'Red laser tripwires blink on and off: cross while they\'re off. Optional extras (jewels, a cash box, phones, watches) each add 15% to the takings, if you dare.', 'Move: drag anywhere on the screen (or use the arrow keys).'] },
-  scam: { icon: '🎭', name: 'Con a tourist', how: ['Sell a tourist a "genuine" Gliese moon rock before they smell a rat.', 'Each turn, pick a line that suits their mood (watch what they say), then tap "Say it" while the marker is in the green.', 'Trust full: sold. Suspicion full: they walk off.'] },
+  scam: { icon: '🎭', name: 'Con a tourist', how: ['Sell a tourist a "genuine" Gliese moon rock. Every tourist is different: a collector, a bargain hunter, honeymooners, a professor, someone in a hurry…', 'Each turn they tell you what\'s on their mind. Pick the line that answers it, and suits who they are, then tap "Say it" with the marker in the green.', 'Dodge the question and they\'ll ask again, more suspicious. Saying the same kind of thing twice wears thin. Trust full: sold. Suspicion full: they walk.'] },
   atm: { icon: '🏧', name: 'Hack the ATM', how: ['Rewire the cash machine: tap a wire, then the socket with that colour\'s symbol on the service card.', 'Then watch the keypad flash a code and tap it back.', 'Wrong moves make the alarm jump. If the alarm fills, the bank\'s siren goes off.'] },
   driver: { icon: '🚗', name: 'Driver: the getaway', how: ['Get the crew\'s car to the end of the road.', 'Tap the left or right side of the screen (or swipe, or use the arrow keys) to change lane and dodge the traffic and roadblocks.', 'Each crash slows you right down. Four crashes and the car\'s wrecked.'] },
   hacker: { icon: '💻', name: 'Hacker: the security panel', how: ['Rewire the panel: tap a wire, then the socket with that colour\'s symbol on the service card.', 'Then watch the keypad flash a code and tap it back.', 'Wrong moves make the alarm jump. If the alarm fills, the sirens go off.'] },
@@ -302,25 +302,26 @@ function stealth2d(root, L, finish) {
 
 // ---------------- Smooth talker ----------------
 function con(root, L, finish) {
-  const picks = [], trust = meter('trust', '🤝'), sus = meter('sus', '🤨'), clock = $c('b', { class: 'mgclock' }), wrap = $c('div', { class: 'mgcon' }); let done = false, t0 = performance.now();
+  const picks = [], trust = meter('trust', '🤝'), sus = meter('sus', '🤨'), clock = $c('b', { class: 'mgclock' }), wrap = $c('div', { class: 'mgcon' }); let done = false, t0 = performance.now(), st = MG.conStart(L);
   root.append(hud(trust, sus, clock), wrap);
-  const av = $c('div', { class: 'mgtourist' }); av.innerHTML = X.avatarSVG({ handle: 'tourist' + L.seed, id: 'tourist' + L.seed, gender: L.seed % 2 ? 'f' : 'm' });
+  const P = MG.CON_PERSONAS[L.persona], av = $c('div', { class: 'mgtourist' }); av.innerHTML = X.avatarSVG({ handle: 'tourist' + L.seed, id: 'tourist' + L.seed, gender: L.gender || (L.seed % 2 ? 'f' : 'm') });
   const face = $c('div', { class: 'mgface' }), bubble = $c('div', { class: 'mgbubble' }), opts = $c('div', { class: 'mgopts' }), turnLab = $c('div', { class: 'mgturn' });
-  wrap.append($c('div', { class: 'mgtop' }, av, face), bubble, turnLab, opts);
-  const state = () => MG.conReplay(L, picks), show = () => {
-    const st = state(), S0 = st.state || { trust: 0, sus: 0, turns: 0 }; trust.set(S0.trust / L.need); sus.set(S0.sus / 100);
-    if (st.ok) { done = true; setTimeout(() => finish({ picks }), 700); bubble.textContent = st.money ? 'Deal! I\'ll take it. 🤑' : 'Hmm… no thanks. I\'m off.'; face.textContent = st.money ? '🤩' : '😠'; bump(face); sfx(st.money ? 'coin' : 'wrong'); opts.innerHTML = ''; return; }
-    const R0 = L.rounds[picks.length], M = MG.MOODS[R0.mood]; face.textContent = M.face; bubble.textContent = M.say[R0.say]; turnLab.textContent = `Turn ${picks.length + 1} of ${L.rounds.length} · they seem ${M.name.toLowerCase()}`;
-    opts.innerHTML = ''; R0.options.forEach((o, i) => opts.append($c('button', { class: 'mgopt', onclick: () => aim(i) }, $c('b', { text: MG.TAGS[o.tag].name }), $c('span', { text: MG.TAGS[o.tag].lines[o.line] })))); };
+  wrap.append($c('div', { class: 'mgwho' }, $c('b', { text: L.name || 'A tourist' }), $c('span', { text: ` · ${P ? P.title : 'Tourist'}${L.from ? ' from ' + L.from : ''}` })), $c('div', { class: 'mgtop' }, av, face), bubble, turnLab, opts);
+  const show = () => { trust.set(st.trust / L.need); sus.set(st.sus / 100);
+    if (st.done) { done = true; setTimeout(() => finish({ picks }), 900); bubble.textContent = st.done === 'sold' ? ['Deal! I\'ll take it. 🤑', 'Fine, you\'ve convinced me. Wrap it up!', 'Sold. Don\'t tell my bank.'][L.seed % 3] : ['Hmm… no thanks. I\'m off.', 'Nice try. Goodbye.', 'I think I\'ll pass. Security!'][L.seed % 3];
+      face.textContent = st.done === 'sold' ? '🤩' : '😠'; bump(face); sfx(st.done === 'sold' ? 'coin' : 'wrong'); opts.innerHTML = ''; return; }
+    const M = MG.conMood(L, st); face.textContent = M.face; bubble.textContent = MG.conSay(L, st); turnLab.textContent = `Turn ${st.turn + 1} of ${L.turns} · they seem ${M.name}`;
+    opts.innerHTML = ''; MG.conOptions(L, st).forEach((o, i) => { const T = MG.CON_TACTICS[o.tactic]; opts.append($c('button', { class: 'mgopt', onclick: () => aim(i, o) }, $c('b', { text: `${T.icon} ${T.name}` }), $c('span', { text: o.line }))); }); };
   // the timing bar for the chosen line: tap "Say it" with the marker in the green
-  const aim = i => { opts.innerHTML = ''; const zoneW = L.zone, bar = $c('div', { class: 'mgtime' }), zone = $c('i', { class: 'z', style: `left:${(0.5 - zoneW / 2) * 100}%;width:${zoneW * 100}%` }), mk = $c('i', { class: 'm' }); bar.append(zone, mk);
-    let pos = 0, dir = 1, on = true; const sp = 0.9 + L.diff * 0.18; let last = performance.now();
+  const aim = (i, o) => { opts.innerHTML = ''; const zoneW = L.zone, bar = $c('div', { class: 'mgtime' }), zone = $c('i', { class: 'z', style: `left:${(0.5 - zoneW / 2) * 100}%;width:${zoneW * 100}%` }), mk = $c('i', { class: 'm' }); bar.append(zone, mk);
+    let pos = 0, dir = 1, on = true; const sp = 0.9 + L.diff * 0.15; let last = performance.now();
     const step = now => { if (!on) return; const dt = (now - last) / 1000; last = now; pos += dir * sp * dt; if (pos > 1) { pos = 1; dir = -1; } if (pos < 0) { pos = 0; dir = 1; } mk.style.left = (pos * 100) + '%'; requestAnimationFrame(step); }; requestAnimationFrame(step);
-    const say = () => { if (!on) return; on = false; const off = Math.abs(pos - 0.5), tm = Math.max(0, 1 - Math.max(0, off - zoneW / 2) / 0.35) * (off <= zoneW / 2 ? 1 : 0.7); picks.push({ o: i, t: +tm.toFixed(3) }); buzz(tm > 0.9 ? 25 : 10); sfx(tm > 0.9 ? 'ok' : tm > 0.5 ? 'tick' : 'wrong'); if (tm <= 0.5) shake(root, 0.25); show(); bump(face); };
-    opts.append($c('p', { class: 'mghint', text: MG.TAGS[L.rounds[picks.length].options[i].tag].lines[L.rounds[picks.length].options[i].line] }), bar, $c('button', { class: 'mgb hot', text: '🗣️ Say it', onclick: say })); };
+    const say = () => { if (!on) return; on = false; const off = Math.abs(pos - 0.5), tm = Math.max(0, 1 - Math.max(0, off - zoneW / 2) / 0.35) * (off <= zoneW / 2 ? 1 : 0.7); const pk = { o: i, t: +tm.toFixed(3) }; picks.push(pk);
+      st = MG.conStep(L, st, pk) || st; buzz(tm > 0.9 ? 25 : 10); sfx(st.q === 'good' ? 'ok' : st.q === 'meh' ? 'tick' : 'wrong'); if (st.q === 'bad' || st.q === 'repeat') shake(root, 0.25); show(); bump(face); };
+    opts.append($c('p', { class: 'mghint', text: `${MG.CON_TACTICS[o.tactic].icon} “${o.line}”` }), bar, $c('button', { class: 'mgb hot', text: '🗣️ Say it', onclick: say })); };
   show();
   loop(root, () => { const el = (performance.now() - t0) / 1000; clock.textContent = `${Math.max(0, Math.ceil(L.limit - el))}s`;
-    if (!done && el >= L.limit) { done = true; while (picks.length < L.rounds.length && !MG.conReplay(L, picks).ok) picks.push({ o: 0, t: 0 }); finish({ picks }); } });
+    if (!done && el >= L.limit) { done = true; while (picks.length < L.turns && !MG.conReplay(L, picks).ok) picks.push({ o: 0, t: 0 }); finish({ picks }); } });
 }
 
 // ---------------- Wire & code ----------------

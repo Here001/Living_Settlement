@@ -125,10 +125,11 @@ function progress(r) {
   if (r.best && r.best.isNew) out.push($c('p', { class: 'mgstreak', text: `🏅 New personal best: ${r.best.score} (was ${r.best.prev})!` }));
   else if (r.best && r.best.prev != null) out.push($c('p', { class: 'mghint', text: `Your best here: ${Math.max(r.best.prev, r.best.score)}.` }));
   else if (r.best) out.push($c('p', { class: 'mghint', text: `🏅 Your first score here: ${r.best.score}. Beat it next time.` }));
-  const C = r.contracts; if (C && C.list) { const ul = $c('ul', { class: 'mgcrew mgcon' }), fresh = new Set((C.done || []).map(d => d.id));
-    for (const k of C.list) ul.append($c('li', { class: fresh.has(k.id) ? 'new' : '' }, $c('span', { text: `${k.done ? '✅' : '📋'} ${k.text}` }), $c('b', { text: k.done ? (fresh.has(k.id) ? `+${X.fmt(k.pay.coins)}` : 'done') : `${k.prog}/${k.n}` })));
-    out.push($c('p', { class: 'mghint', text: (C.done || []).some(d => d.id === 'all') ? `🎉 All three contracts done! +${X.fmt(C.all.coins)} coins bonus.` : 'Today’s contracts' }), ul);
-    if (C.coins) out.push($c('p', { class: 'mgmoney small', text: `+${X.fmt(C.coins)} coins from contracts` })); }
+  // contracts: only the ones just finished get a line (with their reward); otherwise one short count
+  const C = r.contracts; if (C && C.list) { const fresh = (C.done || []).filter(d => d.id !== 'all'), n = C.list.filter(k => k.done).length;
+    for (const d of fresh) out.push($c('p', { class: 'mgstreak', text: `📋 Contract done: ${d.text}. +${X.fmt(d.coins)} coins` }));
+    if ((C.done || []).some(d => d.id === 'all')) out.push($c('p', { class: 'mgrankup', text: `🎉 All three contracts done! +${X.fmt(C.all.coins)} bonus` }));
+    else if (!fresh.length) out.push($c('p', { class: 'mghint', text: `📋 Contracts ${n}/3 today` })); }
   return out;
 }
 // The way back in: Go again as soon as the lie-low time is up (a countdown until then), or Done.
@@ -137,8 +138,12 @@ function againRow(root, kind, info, run, r) {
   if (r.jailed) { row.append($c('button', { class: 'mgb hot', text: 'Back to the map', onclick: close })); return row; }
   const go = $c('button', { class: 'mgb hot', text: run.practice ? '🔁 Practise again' : '🔁 Go again', onclick: () => { if (!go.disabled) begin(root, kind, info, !!run.practice); } });
   row.append($c('button', { class: 'mgb', text: 'Done', onclick: close }), go);
-  if (!run.practice && r.waitFor > 0) { const until = Date.now() + r.waitFor; go.disabled = true;
-    const tick = () => { if (!go.isConnected) return; const left = until - Date.now(); if (left <= 0) { go.disabled = false; go.textContent = '🔁 Go again'; bump(go); sfx('tick'); return; } go.textContent = `🔁 Go again in ${Math.ceil(left / 1000)}s`; setTimeout(tick, 250); }; tick(); }
+  // the countdown: the seconds tick down on the button, which fills up as they go; it starts once the button is on screen
+  if (!run.practice && r.waitFor > 0) { const total = r.waitFor, until = Date.now() + total; go.disabled = true; go.classList.add('wait'); let shown = false;
+    const tick = () => { if (!go.isConnected) { if (!shown) setTimeout(tick, 30); return; } shown = true; const left = until - Date.now();
+      if (left <= 0) { go.disabled = false; go.classList.remove('wait'); go.style.removeProperty('--p'); go.textContent = '🔁 Go again'; bump(go); sfx('ok'); return; }
+      const n = Math.ceil(left / 1000); go.style.setProperty('--p', `${Math.round((1 - left / total) * 100)}%`); const txt = `🔁 Again in ${n}`; if (go.textContent !== txt) { go.textContent = txt; if (n <= 3) sfx('tick'); } setTimeout(tick, 100); };
+    setTimeout(tick, 0); }
   return row;
 }
 
@@ -169,17 +174,23 @@ async function stealth(root, L, finish) {
   const me = W.makePerson('robber' + L.seed, 'civilian'); view.scene.add(me.group);
   const mask = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.4), new THREE.MeshStandardMaterial({ color: '#111' })); mask.position.y = 1.74; me.body.add(mask);
   const bag = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), new THREE.MeshStandardMaterial({ color: '#e2b13c', metalness: 0.5, roughness: 0.4 })); bag.position.set(0.38, 0.9, 0); bag.visible = false; me.group.add(bag);
-  const staff = L.guards.map((g, i) => { const p = W.makePerson('staff' + L.seed + i, g.kind === 'guard' ? 'hunter' : 'civilian'); view.scene.add(p.group); const cone = W.viewCone('#ffd54a'); view.scene.add(cone); return { p, cone, last: null }; });
+  const staff = L.guards.map((g, i) => { const p = W.makePerson('staff' + L.seed + i, g.kind === 'guard' ? 'hunter' : 'civilian'); view.scene.add(p.group); const cone = W.viewCone('#ffd54a'); view.scene.add(cone);
+    const mark = W.nameTag('❗ What was that?', '#ffb4a8'); mark.position.y = 2.45; mark.visible = false; p.group.add(mark); return { p, cone, mark, last: null }; });
   const cams = L.cams.map(c => { const g = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.25, 0.5), new THREE.MeshStandardMaterial({ color: '#3a3a44', metalness: 0.6, roughness: 0.4 })); body.position.y = 3; g.add(body);
     const led = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff4b3a' })); led.position.set(0.1, 3.08, 0.25); g.add(led); g.position.set(c.x * U, 0, c.y * U); view.scene.add(g); const cone = W.viewCone('#ffd54a'); view.scene.add(cone); return { g, cone, led }; });
   const ringGeo = new THREE.RingGeometry(0.42, 0.55, 32, 1, 0, Math.PI * 2), ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#7cffb2', side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; ring.position.set(L.till.x * U, 1.6, (L.till.y - 1) * U); view.scene.add(ring);
   const exitGlow = new THREE.Mesh(new THREE.RingGeometry(0.6, 0.8, 32), new THREE.MeshBasicMaterial({ color: '#3cc46a', transparent: true, opacity: 0.8, side: THREE.DoubleSide })); exitGlow.rotation.x = -Math.PI / 2; exitGlow.position.set(L.entry.x * U, 0.05, L.entry.y * U); exitGlow.visible = false; view.scene.add(exitGlow);
   // laser tripwires (two red beams at shin and waist height) and the extra loot on little stands
-  const beamMat = new THREE.MeshBasicMaterial({ color: '#ff2a2a', transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+  const beamMat = new THREE.MeshBasicMaterial({ color: '#ff1414', toneMapped: false }), glowMat = new THREE.MeshBasicMaterial({ color: '#ff0000', transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  const floorMat = new THREE.MeshBasicMaterial({ color: '#ff1a00', transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  const ledOn = new THREE.MeshBasicMaterial({ color: '#ff2020', toneMapped: false }), ledOff = new THREE.MeshBasicMaterial({ color: '#5a1010' }), postMat = new THREE.MeshStandardMaterial({ color: '#23272b', metalness: 0.8, roughness: 0.25 });
   const lasers = (L.lasers || []).map(z => { const g = new THREE.Group(), len = Math.hypot(z.x1 - z.x0, z.y1 - z.y0) * U, mx = (z.x0 + z.x1) / 2 * U, mz = (z.y0 + z.y1) / 2 * U, horiz = z.y0 === z.y1;
-    for (const y of [0.35, 0.9]) { const b = new THREE.Mesh(new THREE.BoxGeometry(horiz ? len : 0.035, 0.035, horiz ? 0.035 : len), beamMat); b.position.set(mx, y, mz); g.add(b); }
-    for (const [ex, ez] of [[z.x0, z.y0], [z.x1, z.y1]]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 0.12), new THREE.MeshStandardMaterial({ color: '#2b2f33', metalness: 0.7, roughness: 0.3 })); post.position.set(ex * U, 0.55, ez * U); view.scene.add(post); }
-    view.scene.add(g); return g; });
+    for (const y of [0.35, 0.9]) { const core = new THREE.Mesh(new THREE.BoxGeometry(horiz ? len : 0.028, 0.028, horiz ? 0.028 : len), beamMat), halo = new THREE.Mesh(new THREE.BoxGeometry(horiz ? len : 0.24, 0.24, horiz ? 0.24 : len), glowMat);
+      core.position.set(mx, y, mz); halo.position.set(mx, y, mz); g.add(core, halo); }
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(horiz ? len : 0.9, horiz ? 0.9 : len), floorMat); pool.rotation.x = -Math.PI / 2; pool.position.set(mx, 0.03, mz); g.add(pool);
+    const leds = []; for (const [ex, ez] of [[z.x0, z.y0], [z.x1, z.y1]]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.15, 0.12), postMat); post.position.set(ex * U, 0.575, ez * U); view.scene.add(post);
+      for (const y of [0.35, 0.9]) { const led = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), ledOff); led.position.set(ex * U, y, ez * U); view.scene.add(led); leds.push(led); } }
+    view.scene.add(g); g.userData.leds = leds; return g; });
   const ITEMC = { jewels: '#7fe3ff', cashbox: '#3cc46a', phones: '#9fb4ff', watches: '#f2c94c' };
   const items = (L.items || []).map(it => { const g = new THREE.Group(); const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.9, 12), new THREE.MeshStandardMaterial({ color: '#f4f1e8', roughness: 0.5 })); stand.position.y = 0.45; g.add(stand);
     const gem = new THREE.Mesh(it.k === 'jewels' ? new THREE.OctahedronGeometry(0.17) : new THREE.BoxGeometry(0.34, 0.14, 0.24), new THREE.MeshStandardMaterial({ color: ITEMC[it.k], emissive: ITEMC[it.k], emissiveIntensity: 0.6, metalness: 0.6, roughness: 0.2 })); gem.position.y = 1.05; g.add(gem);
@@ -202,16 +213,16 @@ async function stealth(root, L, finish) {
     const u = s.done ? 1 : Math.min(1, acc / MG.STEP), px = prev.x + (s.x - prev.x) * u, py = prev.y + (s.y - prev.y) * u, tt = prev.t + (s.t - prev.t) * u;
     const vx = (s.x - prev.x) / MG.STEP * U, vy = (s.y - prev.y) / MG.STEP * U; me.setPos(px * U, py * U); me.animate(dt, vx, vy); bag.visible = s.grabbed;
     const alarm = s.who > 0;
-    L.guards.forEach((g, i) => { const q = MG.guardAt(g, tt), st = staff[i], ox = st.last ? q.x - st.last.x : 0, oy = st.last ? q.y - st.last.y : 0; st.last = q; st.p.setPos(q.x * U, q.y * U); st.p.animate(dt, ox / Math.max(dt, 1e-3) * U, oy / Math.max(dt, 1e-3) * U);
-      st.cone.userData.set(conePts(q, q.dir, MG.STEALTH.guardFov, MG.STEALTH.guardRange + L.diff * 0.2)); st.cone.material.color.set(s.who === 1 ? '#ff4b3a' : '#ffd54a'); });
+    L.guards.forEach((g, i) => { const q = MG.staffAt(L, i, tt, s), st = staff[i], ox = st.last ? q.x - st.last.x : 0, oy = st.last ? q.y - st.last.y : 0; st.last = q; st.p.setPos(q.x * U, q.y * U); st.p.animate(dt, ox / Math.max(dt, 1e-3) * U, oy / Math.max(dt, 1e-3) * U);
+      st.cone.userData.set(conePts(q, q.dir, MG.STEALTH.guardFov, MG.STEALTH.guardRange + L.diff * 0.2)); st.cone.material.color.set(s.who === 1 ? '#ff4b3a' : q.alert ? '#ff9a3c' : '#ffd54a'); st.mark.visible = !!q.alert; if (q.alert) st.mark.position.y = 2.45 + Math.abs(Math.sin(now / 160)) * 0.12; });
     L.cams.forEach((c, i) => { const a = MG.camAt(c, tt); cams[i].g.rotation.y = -a + Math.PI / 2; cams[i].cone.userData.set(conePts(c, a, MG.STEALTH.camFov, MG.STEALTH.camRange)); cams[i].cone.material.color.set(s.who === 2 ? '#ff4b3a' : '#ffd54a'); cams[i].led.visible = (now / 400 | 0) % 2 === 0; });
     ring.visible = !s.grabbed && s.grab > 0; if (ring.visible) { ring.geometry.dispose(); ring.geometry = new THREE.RingGeometry(0.42, 0.55, 32, 1, Math.PI / 2, -Math.PI * 2 * s.grab / MG.STEALTH.grab); }
     exitGlow.visible = s.grabbed; if (s.grabbed) exitGlow.scale.setScalar(1 + Math.sin(now / 200) * 0.1);
-    (L.lasers || []).forEach((z, k) => { const on = MG.laserOn(z, tt); lasers[k].visible = on; if (on) beamMat.opacity = 0.75 + Math.random() * 0.25; });
+    glowMat.opacity = 0.36 + Math.sin(now / 45) * 0.08; (L.lasers || []).forEach((z, k) => { const on = MG.laserOn(z, tt), g = lasers[k]; for (const c of g.children) c.visible = on; for (const led of g.userData.leds) led.material = on ? ledOn : ledOff; });
     items.forEach((g, k) => { const got = (s.items || 0) & (1 << k); g.userData.gem.visible = !got; g.userData.halo.visible = !got; g.userData.gem.rotation.y = now / 500; g.userData.gem.position.y = 1.05 + Math.sin(now / 300 + k) * 0.05;
       if (!got && s.ii === k) g.userData.halo.scale.setScalar(1 + s.ig / MG.STEALTH.itemGrab); else g.userData.halo.scale.setScalar(1); });
     if (items.length) { const n = MG.itemCount(s), it2 = `✨ ${n}/${items.length} extras`; if (itemsB.textContent !== it2) itemsB.textContent = it2; }
-    if (s.zap > (stealth.zap || 0)) { buzz(250); root.classList.add('siren'); setTimeout(() => root.classList.remove('siren'), 600); feedback('large', { view, root, sound: 'zap', color: '255,40,40' }); } stealth.zap = s.zap;
+    if (s.zap > (stealth.zap || 0)) { buzz(250); root.classList.add('siren'); setTimeout(() => root.classList.remove('siren'), 600); feedback('large', { view, root, sound: 'beep', color: '255,40,40' }); setTimeout(() => sfx('zap'), 380); } stealth.zap = s.zap;
     if (s.grabbed && !lastGrab) { lastGrab = true; buzz([20, 30, 20]); feedback('medium', { view, root, sound: 'coin', text: '💰 Till emptied!', at: screenOf(view, px * U, 2, py * U), kind: 'gold', color: '255,214,90', flash: 0.12 }); bump(goal); }
     seen.set(s.seen); seen.classList.toggle('hot', alarm); clock.textContent = `${Math.max(0, Math.ceil(L.limit - s.t))}s`;
     const gtxt = s.grabbed ? '🚪 Out the back door!' : s.grab > 0 ? '💰 Emptying the till… stay close' : '💰 Get to the till'; if (goal.textContent !== gtxt) goal.textContent = gtxt;
@@ -272,12 +283,12 @@ function stealth2d(root, L, finish) {
     const u = s.done ? 1 : Math.min(1, acc / MG.STEP), px = prev.x + (s.x - prev.x) * u, py = prev.y + (s.y - prev.y) * u, tt = prev.t + (s.t - prev.t) * u;
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#1B1612'; g.fillRect(0, 0, W, H); if (bg) g.drawImage(bg, 0, 0, W, H);
     for (const c of L.cams) cone(c, MG.camAt(c, tt), MG.STEALTH.camFov, MG.STEALTH.camRange, s.who === 2 ? 'rgba(255,70,60,.28)' : 'rgba(255,215,80,.3)');
-    for (const gd of L.guards) { const q = MG.guardAt(gd, tt); cone(q, q.dir, MG.STEALTH.guardFov, MG.STEALTH.guardRange + L.diff * 0.2, s.who === 1 ? 'rgba(255,70,60,.3)' : 'rgba(255,215,80,.36)'); }
+    for (let gi = 0; gi < L.guards.length; gi++) { const gd = L.guards[gi], q = MG.staffAt(L, gi, tt, s); cone(q, q.dir, MG.STEALTH.guardFov, MG.STEALTH.guardRange + L.diff * 0.2, s.who === 1 ? 'rgba(255,70,60,.3)' : 'rgba(255,215,80,.36)'); }
     for (const z of L.lasers || []) if (MG.laserOn(z, tt)) { const a2 = P(z.x0, z.y0, 0.3), b2 = P(z.x1, z.y1, 0.3); g.strokeStyle = '#ff2a2a'; g.lineWidth = 3; g.beginPath(); g.moveTo(a2.x, a2.y); g.lineTo(b2.x, b2.y); g.stroke(); }
     (L.items || []).forEach((it, k) => { if ((s.items || 0) & (1 << k)) return; const q = P(it.x, it.y, 0.6); g.font = `${tw * 0.4}px system-ui`; g.textAlign = 'center'; g.fillText(MG.ITEMS[it.k].icon, q.x, q.y); });
     // the till's progress ring
     if (!s.grabbed && s.grab > 0) { const q = P(L.till.x, L.till.y, 1.2); g.strokeStyle = '#7CFFB2'; g.lineWidth = 4; g.beginPath(); g.arc(q.x, q.y, tw * 0.3, -Math.PI / 2, -Math.PI / 2 + s.grab / MG.STEALTH.grab * Math.PI * 2); g.stroke(); }
-    const who = [...L.guards.map(gd => { const q = MG.guardAt(gd, tt); return { x: q.x, y: q.y, k: gd.kind }; }), { x: px, y: py, k: 'me' }].sort((a, b) => a.x + a.y - b.x - b.y);
+    const who = [...L.guards.map((gd, gi) => { const q = MG.staffAt(L, gi, tt, s); return { x: q.x, y: q.y, k: gd.kind }; }), { x: px, y: py, k: 'me' }].sort((a, b) => a.x + a.y - b.x - b.y);
     for (const o of who) { if (o.k === 'me') person(o.x, o.y, '#2E3440', '#C68B59', (p, sz) => { g.fillStyle = '#111'; g.fillRect(p.x - sz * 0.36, p.y - sz * 2.05, sz * 0.72, sz * 0.18); if (s.grabbed) { g.fillStyle = '#E2B13C'; g.beginPath(); g.arc(p.x + sz * 0.55, p.y - sz * 1.1, sz * 0.3, 0, 7); g.fill(); g.stroke(); g.fillStyle = '#2B2621'; g.font = `800 ${sz * 0.4}px system-ui`; g.textAlign = 'center'; g.fillText('$', p.x + sz * 0.55, p.y - sz * 0.97); } });
       else person(o.x, o.y, o.k === 'guard' ? '#2F4A7A' : '#F4F1E8', '#7A4E2D', (p, sz) => { if (o.k === 'keeper') { g.fillStyle = '#C8473D'; g.fillRect(p.x - sz * 0.42, p.y - sz * 1.3, sz * 0.84, sz * 0.5); } else { g.fillStyle = '#1E2A44'; g.fillRect(p.x - sz * 0.38, p.y - sz * 2.4, sz * 0.76, sz * 0.22); } }); }
     for (const c of L.cams) { const q = P(c.x, c.y, 1.3); g.fillStyle = '#3A3A44'; g.fillRect(q.x - 6, q.y - 4, 12, 8); g.fillStyle = (performance.now() / 400 | 0) % 2 ? '#FF4B3A' : '#7A1E18'; g.beginPath(); g.arc(q.x + 4, q.y - 1, 2, 0, 7); g.fill(); }

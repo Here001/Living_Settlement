@@ -671,6 +671,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       await fresh(); const rb = await start('scam', false), bad = await finish(rb.json.id, { picks: [{ o: 9, t: 1 }] });
       ok(bad.status === 200 && bad.json.game.invalid && ['fined', 'jailed'].includes(bad.json.outcome) && bad.json.fine >= 100 && bad.json.fine <= 1000 && (await coins('zara_ng')) === 1000 - bad.json.fine + (bad.json.contracts?.coins || 0), 'a botched job is caught and fined', JSON.stringify(bad.json));
       ok(bad.json.fine === Math.min(1000, (await import('../shared/rules.js')).crimeFine(Number((await pool.query('select loot from crime_runs where id = $1', [rb.json.id])).rows[0].loot))), 'the fine is a quarter of the takings on offer (100 to 3,000)', JSON.stringify(bad.json.fine));
+      ok(bad.json.waitFor === 20000 || bad.json.jailed, 'after a job that went wrong, Go again counts down a full 20 seconds from the end of the game', JSON.stringify(bad.json.waitFor));
       ok(bad.json.xp.gain >= 10 && bad.json.xp.gain - bad.json.contracts.done.reduce((a, d) => a + d.xp, 0) === 10 && bad.json.streak === 0 && bad.json.hotNext === 1, 'even a botched job earns a little XP; the streak is over', JSON.stringify(bad.json.xp));
       { // a fine is never more than you have: no debt from a bad game
         await fresh(); await set('zara_ng', 'coins_base = 60, bank = 0'); const rp = await start('scam', false), bp = await finish(rp.json.id, { picks: [{ o: 9, t: 1 }] });
@@ -699,6 +700,14 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       { let okA = 0, okR = 0; for (let seed = 1; seed <= 30; seed++) { const A = MG.genAtm(seed, 1 + seed % 5), ev = []; let t = 1; A.wires.forEach((w, i) => ev.push(['w', i, A.sockets.indexOf(A.card[i].sym), t += 0.5])); A.pin.forEach(d => ev.push(['k', d, t += 0.3])); if (MG.atmReplay(A, ev, t).money) okA++;
           const Lr = MG.genStealth(seed, 1 + seed % 5); let st = MG.stealthStart(Lr); const path = [[st.x, st.y]]; for (let i = 0; i < 40 && !st.done; i++) { st = MG.stealthStep(Lr, st, 0.7, -0.7); path.push([st.x, st.y]); } if (MG.stealthReplay(Lr, path).ok) okR++; }
         ok(okA === 30 && okR === 30, 'the ATM can always be cracked, and an honest walk around the shop always replays', JSON.stringify({ okA, okR })); }
+      { // tripping a laser brings the nearest member of staff over to look, then back to their round
+        let checked = 0, good = 0;
+        for (let seed = 1; seed < 300 && checked < 5; seed++) { const L = MG.genStealth(seed, 4); if (!L.lasers.length) continue; const z = L.lasers[0], tgt = { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 };
+          let st = MG.stealthStart(L); const path = [[st.x, st.y]]; for (let i = 0; i < 500 && !st.done && !st.al; i++) { const dx = tgt.x - st.x, dy = tgt.y - st.y, n = Math.hypot(dx, dy) || 1; st = MG.stealthStep(L, st, n < 0.1 ? 0 : dx / n, n < 0.1 ? 0 : dy / n); path.push([st.x, st.y]); }
+          if (!st.al) continue; checked++; const gi = st.al.findIndex(Boolean), a = st.al[gi], at = MG.staffAt(L, gi, a.t0 + a.walk + 0.3, st), before = MG.staffAt(L, gi, a.t0 + a.total - 0.01, st), after = MG.staffAt(L, gi, a.t0 + a.total + 0.01, st);
+          const rp = MG.stealthReplay(L, path);
+          if (at.alert === 'look' && Math.hypot(at.x - (Math.floor(st.x) + 0.5), at.y - (Math.floor(st.y) + 0.5)) < 0.01 && Math.hypot(after.x - before.x, after.y - before.y) < 0.1 && rp.ok) good++; }
+        ok(checked >= 3 && good === checked, 'tripping a laser brings the nearest member of staff to the spot; they look around and go back to their round, and the server replays it the same', JSON.stringify({ checked, good })); }
       await fresh(); await call('POST', '/api/admin/treasury', { amount: -100000 }); }
     await set('zara_ng', 'jailed_until = null, visit_id = null, visit_until = null');
     // going out

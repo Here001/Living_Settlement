@@ -451,43 +451,96 @@ export function makeCones() { const g = new THREE.Group(); for (const x of [-1.1
 // ---------------- inside a shop (the robbery) ----------------
 // L: the level from shared/minigames.js (genStealth): a grid of floor, shelves (1) and the counter (2), in units of
 // `s` metres. The back and left walls stand full height; the front and right ones are cut away so you see in.
+// The shop's own textures, painted once: polished floor tiles, a sheet of 64 product packs for the shelves, and the
+// inside of a drinks fridge.
+const shopTex = {
+  floor: () => canvasTex('shopfloor', 512, (g, S) => { const r = rnd(41), T = S / 4;
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { const v = (x + y) % 2 ? 196 : 150, j = r() * 10 | 0; g.fillStyle = `rgb(${v + j},${v + j - 4},${v + j - 12})`; g.fillRect(x * T, y * T, T, T);
+      const gr = g.createLinearGradient(x * T, y * T, x * T + T, y * T + T); gr.addColorStop(0, 'rgba(255,255,255,.10)'); gr.addColorStop(1, 'rgba(0,0,0,.06)'); g.fillStyle = gr; g.fillRect(x * T, y * T, T, T); }
+    noise(g, 1.5, 3500, '60,50,40', 0.10, r); g.strokeStyle = 'rgba(70,60,50,.45)'; g.lineWidth = 2; for (let i = 0; i <= 4; i++) { g.beginPath(); g.moveTo(0, i * T); g.lineTo(S, i * T); g.stroke(); g.beginPath(); g.moveTo(i * T, 0); g.lineTo(i * T, S); g.stroke(); }
+    g.strokeStyle = 'rgba(40,30,20,.08)'; g.lineWidth = 1; for (let i = 0; i < 40; i++) { g.beginPath(); const x = r() * S, y = r() * S; g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 60, y + (r() - 0.5) * 20); g.stroke(); } }),
+  goods: () => canvasTex('goods', 512, (g, S) => { const r = rnd(42), C = S / 8, pal = ['#e4572e', '#f2c94c', '#3cc46a', '#4a7bd9', '#b05fd6', '#f28cb1', '#2ec4b6', '#ff8c42', '#1d3557', '#e63946', '#8ac926', '#ffca3a'];
+    for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) { const x = i * C, y = j * C, c1 = pal[(r() * pal.length) | 0], c2 = pal[(r() * pal.length) | 0], kind = (r() * 4) | 0;
+      g.fillStyle = c1; g.fillRect(x, y, C, C);
+      if (kind === 0) { g.fillStyle = '#fff'; g.fillRect(x + 4, y + C * 0.28, C - 8, C * 0.3); g.fillStyle = c2; g.beginPath(); g.arc(x + C / 2, y + C * 0.43, C * 0.12, 0, 7); g.fill(); } // a cereal box
+      else if (kind === 1) { g.fillStyle = c2; g.fillRect(x, y, C, C * 0.22); g.fillRect(x, y + C * 0.78, C, C * 0.22); g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(x + 6, y + C * 0.42, C - 12, 5); g.fillRect(x + 10, y + C * 0.54, C - 20, 4); } // a tin's label
+      else if (kind === 2) { g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.ellipse(x + C / 2, y + C / 2, C * 0.3, C * 0.22, 0, 0, 7); g.fill(); g.fillStyle = c2; g.fillRect(x + 6, y + 6, C - 12, 8); } // a bag of crisps
+      else { g.fillStyle = c2; g.beginPath(); g.moveTo(x, y + C); g.lineTo(x + C, y + C * 0.35); g.lineTo(x + C, y + C); g.fill(); g.fillStyle = '#fff'; g.font = `800 ${C * 0.22}px system-ui`; g.textAlign = 'center'; g.fillText(['NEW', 'MAX', 'BIO', 'XL', '2×1'][(r() * 5) | 0], x + C / 2, y + C * 0.4); }
+      const sh = g.createLinearGradient(x, y, x + C, y); sh.addColorStop(0, 'rgba(0,0,0,.18)'); sh.addColorStop(0.2, 'rgba(255,255,255,.12)'); sh.addColorStop(1, 'rgba(0,0,0,.2)'); g.fillStyle = sh; g.fillRect(x, y, C, C);
+      g.strokeStyle = 'rgba(0,0,0,.35)'; g.strokeRect(x + 0.5, y + 0.5, C - 1, C - 1); } }, { repeat: false }),
+  fridge: () => canvasTex('fridge', 256, (g, S) => { const r = rnd(43), gr = g.createLinearGradient(0, 0, 0, S); gr.addColorStop(0, '#e9f6ff'); gr.addColorStop(1, '#8fb2c8'); g.fillStyle = gr; g.fillRect(0, 0, S, S);
+    for (let k = 0; k < 4; k++) { const y = 18 + k * 60; g.fillStyle = 'rgba(40,60,80,.55)'; g.fillRect(0, y + 46, S, 5);
+      for (let x = 6; x < S - 10; x += 14) { const c = ['#e63946', '#2ec4b6', '#ffca3a', '#3a86ff', '#8ac926', '#ff8c42', '#f1faee'][(r() * 7) | 0], h = 26 + r() * 16; g.fillStyle = c; g.fillRect(x, y + 46 - h, 10, h); g.fillRect(x + 3, y + 46 - h - 7, 4, 8); g.fillStyle = 'rgba(255,255,255,.45)'; g.fillRect(x + 1, y + 46 - h + 3, 2, h - 6); } }
+    g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.moveTo(0, 0); g.lineTo(S * 0.35, 0); g.lineTo(0, S * 0.7); g.fill(); }),
+  spot: () => canvasTex('shopspot', 128, (g, S) => { const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,244,220,.22)'); gr.addColorStop(1, 'rgba(255,246,226,0)'); g.fillStyle = gr; g.fillRect(0, 0, S, S); }, { repeat: false }),
+};
 export function buildShop(view, L, s = 1.6) {
   const M = materials(view), B = {}; for (const k of Object.keys(M)) B[k] = new Bucket(); const r = rnd(L.seed || 1), W = L.W * s, H = L.H * s, wh = 3.4, w = col('#ffffff');
+  // the shop's own materials: polished floor, packed goods, lit fridges and signs (lit ones ignore the lights, so they glow)
+  const own = (k, m) => { view.mats.push(m); M[k] = m; B[k] = new Bucket(); };
+  own('floor', new THREE.MeshStandardMaterial({ map: shopTex.floor(), vertexColors: true, roughness: 0.32, metalness: 0.05 }));
+  own('goods', new THREE.MeshStandardMaterial({ map: shopTex.goods(), vertexColors: true, roughness: 0.55 }));
+  own('fridge', new THREE.MeshBasicMaterial({ map: shopTex.fridge(), vertexColors: true }));
+  own('lit', new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
   view.center.set(W / 2, 0, H / 2); view.span = Math.max(W, H) * 1.2;
-  // the floor: big tiles, and the street outside
-  B.paving.quad([0, 0.01, H], [W, 0.01, H], [W, 0.01, 0], [0, 0.01, 0], [0, 1, 0], [0, H / 3, W / 3, H / 3, W / 3, 0, 0, 0], col('#d8cfbf'));
+  // the floor: polished tiles inside, the street outside
+  const tw = s * 2; B.floor.quad([0, 0.01, H], [W, 0.01, H], [W, 0.01, 0], [0, 0.01, 0], [0, 1, 0], [0, 0, W / tw, 0, W / tw, H / tw, 0, H / tw], col('#d9cdb8'));
   B.asphalt.quad([-40, 0, H + 40], [W + 40, 0, H + 40], [W + 40, 0, -40], [-40, 0, -40], [0, 1, 0], [0, 10, 10, 10, 10, 0, 0, 0], col('#9a9a9a'));
-  // walls: the back and left in the shop's colours, with windows, posters and the back door; low walls at the front and right
+  B.paving.quad([0, 0.012, H + 1.6], [W + 0.25, 0.012, H + 1.6], [W + 0.25, 0.012, H + 0.25], [0, 0.012, H + 0.25], [0, 1, 0], [0, 0.4, 3, 0.4, 3, 0, 0, 0], col('#d8cfbf'));
+  // walls: the back and left in the shop's colours with a dark skirting, a high strip of windows and posters; low walls at the front and right
   const wallC = col(['#c8473d', '#2f7d63', '#2f4a7a', '#e2b13c', '#8e44ad'][L.seed % 5]);
   B.plaster.box(-0.25, -0.25, W, 0, 0, wh, wallC, { su: 14, sv: 12.8 }); B.plaster.box(-0.25, 0, 0, H, 0, wh, col('#e8dfc9'), { su: 14, sv: 12.8 });
+  B.solid.box(0, -0.02, W, 0.04, 0, 0.18, col('#3a332c')); B.solid.box(-0.02, 0, 0.04, H, 0, 0.18, col('#3a332c'));
   B.solid.box(0, H, W + 0.25, H + 0.25, 0, 0.45, col('#b0a48c')); B.solid.box(W, -0.25, W + 0.25, H, 0, 0.45, col('#9c917b'));
-  for (let x = 1.5; x < W - 2; x += 4.6) { B.glass.box(x, -0.1, x + 2.4, 0.02, 1.2, 2.6, col('#9cc3d9'), { su: 4, sv: 4 }); }
-  for (let z = 1.5; z < H - 3; z += 4) { B.paint.quad([0.03, 1.1, z + 1.6], [0.03, 1.1, z], [0.03, 2.4, z], [0.03, 2.4, z + 1.6], [1, 0, 0], [0, 0, 1, 0, 1, 1, 0, 1], col(['#f2c94c', '#e4572e', '#4a7bd9', '#3cc46a'][Math.floor(r() * 4)])); }
-  const door = (L.H - 1) * s; B.solid.box(-0.1, door + 0.1, 0.06, door + s - 0.1, 0, 2.4, col('#6b4a2b'));
-  bake(B.glow, GEO.box, { x: 0.12, y: 2.7, z: door + s / 2, sx: 0.06, sy: 0.3, sz: 0.9, color: col('#3cc46a') }); // the green EXIT light
-  // shelves full of goods, and the counter with the till
-  const goods = ['#e4572e', '#f2c94c', '#3cc46a', '#4a7bd9', '#b05fd6', '#f28cb1', '#f4f4f0', '#2ec4b6'];
+  for (let x = 1.5; x < W - 2; x += 4.6) B.glass.box(x, -0.1, x + 2.4, 0.02, 2.55, 3.15, col('#9cc3d9'), { su: 4, sv: 4 });
+  for (let z = 1.5; z < H - 3; z += 4) B.paint.quad([0.03, 1.1, z + 1.6], [0.03, 1.1, z], [0.03, 2.4, z], [0.03, 2.4, z + 1.6], [1, 0, 0], [0, 0, 1, 0, 1, 1, 0, 1], col(['#f2c94c', '#e4572e', '#4a7bd9', '#3cc46a'][Math.floor(r() * 4)]));
+  // drinks fridges along the back wall, lit from inside
+  const fEnd = (L.W - 3) * s - 0.3; for (let x = 0.4; x + 1.1 <= fEnd; x += 1.2) { B.solid.box(x, 0, x + 1.15, 0.42, 0, 2.2, col('#2b2f33')); B.solid.box(x, 0, x + 1.15, 0.42, 2.2, 2.4, col('#e4572e'));
+    B.fridge.quad([x + 0.07, 0.15, 0.425], [x + 1.08, 0.15, 0.425], [x + 1.08, 2.1, 0.425], [x + 0.07, 2.1, 0.425], [0, 0, 1], [0, 0, 1, 0, 1, 1, 0, 1], w); B.solid.box(x + 0.92, 0.9, x + 0.97, 1.5, 0.43, 0.47, col('#c0c4c8')); }
+  const door = (L.H - 1) * s; B.solid.box(-0.1, door + 0.1, 0.06, door + s - 0.1, 0, 2.4, col('#6b4a2b')); B.solid.box(0.06, door + 0.15, 0.09, door + 0.35, 1.0, 1.15, col('#c0c4c8'));
+  B.lit.box(0.08, door + s / 2 - 0.45, 0.16, door + s / 2 + 0.45, 2.55, 2.85, col('#2bd96a')); // the green EXIT light
+  B.solid.box(0.1, door + 0.05, 1.3, door + s - 0.05, 0, 0.025, col('#3a3f45')); // the door mat
+  // shelves: a metal unit with four shelves, packed goods on both faces (boxes, tins and bottles), yellow price strips
+  const goodsBox = (x0, z0, x1, z1, y0, y1, face) => { const i = (r() * 8) | 0, j = (r() * 8) | 0, e = 0.004, u0 = i / 8 + e, u1 = (i + 1) / 8 - e, v1 = 1 - j / 8 - e, v0 = 1 - (j + 1) / 8 + e, uv = [u0, v0, u1, v0, u1, v1, u0, v1];
+    if (face > 0) B.goods.quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], uv, w); else B.goods.quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], uv, w);
+    B.goods.quad([x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], [0, 1, 0], [u0, v0, u0 + 0.01, v0, u0 + 0.01, v0 + 0.01, u0, v0 + 0.01], w);
+    B.goods.quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], [u1 - 0.02, v0, u1, v0, u1, v1, u1 - 0.02, v1], w); B.goods.quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], [u0, v0, u0 + 0.02, v0, u0 + 0.02, v1, u0, v1], w); };
+  const can = ['#e63946', '#2ec4b6', '#ffca3a', '#3a86ff', '#8ac926', '#c0c4c8'];
   for (let y = 0; y < L.H; y++) for (let x = 0; x < L.W; x++) { const v = L.wall[y * L.W + x]; if (!v) continue; const x0 = x * s, z0 = y * s, x1 = x0 + s, z1 = z0 + s;
-    if (v === 2) { B.solid.box(x0 + 0.02, z0 + 0.1, x1 - 0.02, z1 - 0.1, 0, 1.0, col('#7c4f2c')); B.solid.box(x0 - 0.04, z0 + 0.05, x1 + 0.04, z1 - 0.05, 1.0, 1.08, col('#d9c7a8')); continue; }
-    B.shiny.box(x0 + 0.08, z0 + 0.2, x1 - 0.08, z1 - 0.2, 0, 0.12, col('#6c6f75')); B.shiny.box(x0 + 0.08, z0 + s / 2 - 0.04, x1 - 0.08, z0 + s / 2 + 0.04, 0.12, 1.75, col('#8a8d93'));
-    for (const hy of [0.12, 0.62, 1.12, 1.62]) B.shiny.box(x0 + 0.08, z0 + 0.2, x1 - 0.08, z1 - 0.2, hy, hy + 0.05, col('#b8bcc0'), { top: true });
-    for (const hy of [0.17, 0.67, 1.17]) for (const side of [-1, 1]) for (let i = 0; i < 4; i++) { const gx = x0 + 0.18 + i * (s - 0.36) / 4, gz = z0 + s / 2 + side * 0.32, gh = 0.2 + r() * 0.22;
-      B.solid.box(gx, gz - 0.16, gx + (s - 0.36) / 4 - 0.04, gz + 0.16, hy, hy + gh, col(goods[Math.floor(r() * goods.length)])); } }
-  const tx = L.till.x * s, tz = (L.till.y - 1) * s; B.shiny.box(tx - 0.3, tz - 0.25, tx + 0.3, tz + 0.25, 1.08, 1.32, col('#2b2621')); bake(B.glow, GEO.box, { x: tx, y: 1.46, z: tz + 0.05, sx: 0.4, sy: 0.22, sz: 0.04, color: col('#7cffb2') });
-  // lights: the ceiling is cut away, so warm strip lights hang over the aisles
+    if (v === 2) { // the checkout: a wooden counter with a black conveyor belt and a card reader
+      B.solid.box(x0 + 0.02, z0 + 0.1, x1 - 0.02, z1 - 0.1, 0, 1.0, col('#7c4f2c')); B.solid.box(x0 - 0.04, z0 + 0.05, x1 + 0.04, z1 - 0.05, 1.0, 1.08, col('#d9c7a8'));
+      B.solid.box(x0 + 0.1, z0 + 0.35, x1 - 0.1, z1 - 0.35, 1.08, 1.11, col('#1d1f22')); continue; }
+    B.shiny.box(x0 + 0.08, z0 + 0.2, x1 - 0.08, z1 - 0.2, 0, 0.12, col('#5c5f65')); B.shiny.box(x0 + 0.08, z0 + s / 2 - 0.04, x1 - 0.08, z0 + s / 2 + 0.04, 0.12, 1.85, col('#8a8d93'));
+    B.solid.box(x0 + 0.06, z0 + s / 2 - 0.05, x1 - 0.06, z0 + s / 2 + 0.05, 1.85, 2.15, col(['#e4572e', '#2f7d63', '#4a7bd9', '#e2b13c'][(x + y) % 4])); // the aisle sign on top
+    for (const hy of [0.12, 0.62, 1.12, 1.62]) { B.shiny.box(x0 + 0.08, z0 + 0.2, x1 - 0.08, z1 - 0.2, hy, hy + 0.05, col('#b8bcc0'), { top: true });
+      if (hy < 1.6) for (const zz of [z0 + 0.2, z1 - 0.2]) B.solid.box(x0 + 0.08, zz - 0.015, x1 - 0.08, zz + 0.015, hy - 0.02, hy + 0.06, col('#f2c94c')); }
+    for (const hy of [0.17, 0.67, 1.17]) for (const side of [-1, 1]) { let gx = x0 + 0.14; const gz = z0 + s / 2 + side * 0.32;
+      while (gx < x1 - 0.2) { const kind = r(), gw = 0.14 + r() * 0.2; if (gx + gw > x1 - 0.12) break;
+        if (kind < 0.6) { const gh = 0.22 + r() * 0.2; goodsBox(gx, gz - 0.15, gx + gw, gz + 0.15, hy, hy + gh, side); }
+        else { const c = col(can[(r() * can.length) | 0]), tall = kind > 0.82, rr = tall ? 0.05 : 0.045; for (let k = 0; k * 0.11 + 0.1 < gw + 0.05; k++) { const cx = gx + 0.06 + k * 0.11;
+            bake(B.shiny, GEO.cyl, { x: cx, y: hy + (tall ? 0.15 : 0.07), z: gz + side * 0.05, sx: rr, sy: tall ? 0.3 : 0.14, sz: rr, color: c }); if (tall) bake(B.shiny, GEO.cyl, { x: cx, y: hy + 0.34, z: gz + side * 0.05, sx: 0.02, sy: 0.08, sz: 0.02, color: c }); } }
+        gx += gw + 0.03; } } }
+  const tx = L.till.x * s, tz = (L.till.y - 1) * s; B.shiny.box(tx - 0.3, tz - 0.25, tx + 0.3, tz + 0.25, 1.08, 1.32, col('#2b2621')); B.lit.box(tx - 0.2, tz + 0.02, tx + 0.2, tz + 0.06, 1.36, 1.58, col('#62e6a0'));
+  B.solid.box(tx + 0.36, tz - 0.08, tx + 0.5, tz + 0.08, 1.08, 1.16, col('#1d1f22'));
+  // pools of ceiling light on the floor (the ceiling itself is cut away so you can see in)
+  const spots = new Bucket(), sw = 1.9; for (let z = s; z < H - 1; z += s * 2.2) for (let x = s; x < W - 1; x += s * 2.4) spots.quad([x - sw, 0.02, z + sw], [x + sw, 0.02, z + sw], [x + sw, 0.02, z - sw], [x - sw, 0.02, z - sw], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], w);
   const group = new THREE.Group();
-  for (const [k, b] of Object.entries(B)) { const g = b.geometry(); if (!g) continue; const m = new THREE.Mesh(g, M[k]); m.castShadow = !['asphalt', 'paint', 'pool', 'ao', 'paving'].includes(k); m.receiveShadow = true; m.matrixAutoUpdate = false; group.add(m); }
+  for (const [k, b] of Object.entries(B)) { const g = b.geometry(); if (!g) continue; const m = new THREE.Mesh(g, M[k]); m.castShadow = !['asphalt', 'paint', 'pool', 'ao', 'paving', 'floor', 'lit', 'fridge'].includes(k); m.receiveShadow = k !== 'lit' && k !== 'fridge'; m.matrixAutoUpdate = false; group.add(m); }
+  const spotMat = new THREE.MeshBasicMaterial({ map: shopTex.spot(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }); view.mats.push(spotMat);
+  const sm = new THREE.Mesh(spots.geometry(), spotMat); sm.matrixAutoUpdate = false; group.add(sm);
   view.scene.add(group);
-  // inside: no sky, a warm fill light, and a soft light from above
-  view.sky.visible = false; view.scene.background = new THREE.Color('#1b1612'); view.scene.fog = null;
-  const fill = new THREE.PointLight('#ffe7c4', 40, 30, 1.5); fill.position.set(W / 2, 6, H / 2); view.scene.add(fill);
+  // inside: no sky, a warm fill from above, a cool bounce from the fridges, and the room's reflections a little brighter
+  view.sky.visible = false; view.scene.background = new THREE.Color('#1b1612'); view.scene.fog = null; view.scene.environmentIntensity = 0.45; view.renderer.toneMappingExposure = 0.92;
+  const fill = new THREE.PointLight('#ffe7c4', 30, 32, 1.5); fill.position.set(W / 2, 6.5, H / 2); view.scene.add(fill);
+  const cool = new THREE.PointLight('#cfe8ff', 10, 9, 1.6); cool.position.set(Math.min(fEnd, W) / 2, 1.6, 1.4); view.scene.add(cool);
   return group;
 }
 // A see-through cone: what a shopkeeper or a camera can see (rebuilt each frame from rays that stop at the shelves).
 export function viewCone(color = '#ffd54a') {
-  const n = 16, geo = new THREE.BufferGeometry(), pos = new Float32Array((n + 2) * 3), idx = []; for (let i = 1; i <= n; i++) idx.push(0, i, i + 1);
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setIndex(idx);
-  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide, blending: THREE.NormalBlending })); m.renderOrder = 3; m.frustumCulled = false;
+  const n = 16, geo = new THREE.BufferGeometry(), pos = new Float32Array((n + 2) * 3), idx = [], fade = new Float32Array((n + 2) * 4); for (let i = 1; i <= n; i++) idx.push(0, i, i + 1);
+  for (let i = 0; i < n + 2; i++) fade.set([1, 1, 1, i ? 0.18 : 1], i * 4); // strong at the eyes, faint at the far edge
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(fade, 4)); geo.setIndex(idx);
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, vertexColors: true, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide, blending: THREE.NormalBlending })); m.renderOrder = 3; m.frustumCulled = false;
   m.userData.set = (pts, y = 0.05) => { for (let i = 0; i < pts.length && i < n + 2; i++) { pos[i * 3] = pts[i][0]; pos[i * 3 + 1] = y; pos[i * 3 + 2] = pts[i][1]; } geo.attributes.position.needsUpdate = true; };
   m.userData.n = n; return m;
 }

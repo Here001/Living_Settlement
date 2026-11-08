@@ -127,9 +127,35 @@ export const camAt = (c, t) => c.base + Math.sin(t / c.period * Math.PI * 2 + c.
 function clear(L, a, b) { const d = Math.hypot(b.x - a.x, b.y - a.y), n = Math.ceil(d / 0.2); for (let i = 1; i < n; i++) { const u = i / n; if (isWall(L, a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u)) return false; } return true; }
 function inCone(from, dir, fov, range, p) { const dx = p.x - from.x, dy = p.y - from.y, d = Math.hypot(dx, dy); if (d > range) return false; if (d < 0.6) return true;
   let da = Math.atan2(dy, dx) - dir; da = Math.atan2(Math.sin(da), Math.cos(da)); return Math.abs(da) <= fov; }
+// Tripping a laser sets off a beep, and the nearest member of staff who isn't already checking one walks over to the spot
+// (along the aisles, a little quicker than their usual pace), looks around for a moment, walks back, and carries on their
+// round from where they left it. Each guard's latest call-out is kept in the game state (s.al), with how far their round
+// has been put back by earlier ones (s.sh), so the phone and the server work out exactly the same moves.
+export const ALERT = { look: 2.4, speed: 1.7, perDiff: 0.18 };
+function alertPlan(L, from, to, t0) {
+  const cells = pathCells(L, cell(from), cell(to)); if (!cells) return null;
+  const pts = [{ x: from.x, y: from.y }, ...cells.slice(1).map(([x, y]) => ({ x: x + 0.5, y: y + 0.5 }))], cum = [0]; let len = 0;
+  for (let i = 1; i < pts.length; i++) { len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); cum.push(len); }
+  const sp = ALERT.speed + L.diff * ALERT.perDiff, walk = len / sp;
+  return { t0, pts, cum, len, walk, total: walk * 2 + ALERT.look };
+}
+function alongPath(a, d) { let i = 1; while (i < a.cum.length - 1 && a.cum[i] < d) i++;
+  const p0 = a.pts[i - 1], p1 = a.pts[i] || p0, seg = Math.max(1e-6, a.cum[i] - a.cum[i - 1]), u = clamp((d - a.cum[i - 1]) / seg, 0, 1);
+  return { x: p0.x + (p1.x - p0.x) * u, y: p0.y + (p1.y - p0.y) * u, dx: p1.x - p0.x, dy: p1.y - p0.y }; }
+// Where staff member i is at time t, given the game state s (their call-outs to tripped lasers).
+export function staffAt(L, i, t, s) {
+  const g = L.guards[i], a = s && s.al ? s.al[i] : null, sh = s && s.sh ? s.sh[i] || 0 : 0;
+  if (!a || t < a.t0) return guardAt(g, t - sh);
+  const k = t - a.t0;
+  if (k >= a.total) return guardAt(g, t - sh - a.total);
+  if (k < a.walk) { const q = alongPath(a, k / a.walk * a.len); return { x: q.x, y: q.y, dir: Math.atan2(q.dy, q.dx), alert: 'go' }; }
+  const end = a.pts[a.pts.length - 1], prev = a.pts[a.pts.length - 2] || end, d0 = Math.atan2(end.y - prev.y, end.x - prev.x);
+  if (k < a.walk + ALERT.look) { const f = (k - a.walk) / ALERT.look; return { x: end.x, y: end.y, dir: d0 + (f < 0.34 ? -1.1 : f < 0.67 ? 1.1 : 0), still: true, alert: 'look' }; }
+  const q = alongPath(a, (1 - (k - a.walk - ALERT.look) / a.walk) * a.len); return { x: q.x, y: q.y, dir: Math.atan2(-q.dy, -q.dx), alert: 'back' };
+}
 // Who can see the point p at time t (0 = nobody).
-export function seenBy(L, t, p) {
-  for (const g of L.guards) { const s = guardAt(g, t); if (inCone(s, s.dir, STEALTH.guardFov, STEALTH.guardRange + L.diff * 0.2, p) && clear(L, s, p)) return 1; }
+export function seenBy(L, t, p, st) {
+  for (let i = 0; i < L.guards.length; i++) { const s = staffAt(L, i, t, st); if (inCone(s, s.dir, STEALTH.guardFov, STEALTH.guardRange + L.diff * 0.2, p) && clear(L, s, p)) return 1; }
   for (const c of L.cams) if (inCone(c, camAt(c, t), STEALTH.camFov, STEALTH.camRange, p) && clear(L, c, p)) return 2;
   return 0;
 }
@@ -142,16 +168,20 @@ export function stealthStep(L, s, vx, vy) {
 }
 // Everything that follows from being at (x, y) after the step: the meter, the till, the door.
 function advance(L, s, x, y) {
-  const t = +(s.t + STEP).toFixed(3), p = { x, y }; let who = seenBy(L, t, p);
+  const t = +(s.t + STEP).toFixed(3), p = { x, y }; let who = seenBy(L, t, p, s);
   let seen = who ? s.seen + STEP * (STEALTH.fill + STEALTH.fillD * L.diff) : Math.max(0, s.seen - STEP * STEALTH.drain);
   // a laser: tripping one (stepping onto it while it's on) sets the alarm half off
-  let zap = s.zap || 0; const onAny = (L.lasers || []).some(z => laserOn(z, t) && onLaser(z, p)); if (onAny && !s.onLaser) { seen += STEALTH.laser; zap++; who = 3; }
+  let zap = s.zap || 0, al = s.al, sh = s.sh; const onAny = (L.lasers || []).some(z => laserOn(z, t) && onLaser(z, p)); if (onAny && !s.onLaser) { seen += STEALTH.laser; zap++; who = 3;
+    // the beep brings the nearest free member of staff over to look
+    let best = -1, bd = 1e9; for (let i = 0; i < L.guards.length; i++) { const a = al ? al[i] : null; if (a && t < a.t0 + a.total) continue; const q = staffAt(L, i, t, s), d = Math.hypot(q.x - x, q.y - y); if (d < bd) { bd = d; best = i; } }
+    if (best >= 0) { const from = staffAt(L, best, t, s), plan = alertPlan(L, from, p, t); if (plan) { const old = al ? al[best] : null; al = (al || L.guards.map(() => null)).slice(); sh = (sh || L.guards.map(() => 0)).slice();
+      if (old) sh[best] += old.total; al[best] = plan; } } }
   // the extra loot: stand next to one long enough to bag it
   let items = s.items || 0, ig = s.ig || 0, ii = -1; (L.items || []).forEach((it, k) => { if (!(items & (1 << k)) && Math.hypot(x - it.x, y - it.y) < STEALTH.itemR) ii = k; });
   if (ii >= 0 && ii === s.ii) { ig += STEP; if (ig >= STEALTH.itemGrab) { items |= 1 << ii; ig = 0; ii = -1; } } else ig = ii >= 0 ? STEP : 0;
   const peak = Math.max(s.peak, seen), near = Math.hypot(x - L.till.x, y - L.till.y) < STEALTH.grabR;
   const grab = s.grabbed ? STEALTH.grab : near ? s.grab + STEP : s.grab, grabbed = grab >= STEALTH.grab;
-  const out = { t, x, y, seen: Math.min(1, seen), peak: Math.min(1, peak), who, grab, grabbed, done: null, onLaser: onAny, zap, items, ig, ii };
+  const out = { t, x, y, seen: Math.min(1, seen), peak: Math.min(1, peak), who, grab, grabbed, done: null, onLaser: onAny, zap, items, ig, ii, al, sh };
   if (seen >= 1) out.done = 'spotted';
   else if (grabbed && Math.hypot(x - L.entry.x, y - L.entry.y) < STEALTH.exitR) out.done = 'escaped';
   else if (!grabbed && s.t > 3 && Math.hypot(x - L.entry.x, y - L.entry.y) < 0.45 && s.left) out.done = 'left';

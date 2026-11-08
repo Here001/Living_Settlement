@@ -305,7 +305,8 @@ export class Actions {
     }
     if (out.key === 'empty') { await ch.event(kind === 'scam' ? '🎭 A con artist tried their luck on a tourist and came away with nothing.' : kind === 'atm' ? `🏧 Someone tampered with the ATM at ${shop?.name || 'the Bank'}, but got nothing.` : `🚨 A thief slipped into ${shop?.name || 'a shop'} and out again, empty-handed.`, 'crime');
       const prog = await noteProgress(ch, this.world, c, { solo: true, kind, won: false, outcome: out.key, total: sc.total, streak: Number(c.crime_streak || 0), state }); await ch.saveCitizen(c);
-      return { money: 0, coins: c.coins_base, streak: Number(c.crime_streak || 0), hotNext: R.hotMult(c.crime_streak), waitFor: Math.max(0, Number(run.started_at) + CRIME_COOLDOWN - Date.now()), ...prog }; }
+      await ch.q('update citizens set crime_at = $2 where id = $1', [c.id, Date.now()]); // lie low from the end of the game, so Go again always counts down from 20
+      return { money: 0, coins: c.coins_base, streak: Number(c.crime_streak || 0), hotNext: R.hotMult(c.crime_streak), waitFor: CRIME_COOLDOWN, ...prog }; }
     // caught: a fine (a quarter of the takings on offer, 100 to 3,000, never more than they have) from cash, then savings; jail for the worst
     const fine = fairFine(c, base), paid = await ch.takeFrom(c, fine); treasuryAdd(ch, fine); track(ch, 'crime:fine', fine, c.id); ch.touch(c); await ch.saveCitizen(c);
     await ch.q('update citizens set crime_streak = 0 where id = $1', [c.id]); // caught: the slate is wiped clean
@@ -315,7 +316,8 @@ export class Actions {
       if (jail) { const until = Date.now() + JAIL_TIME; await ch.q('update citizens set jailed_until = $2 where id = $1', [c.id, until]); await bump(ch, c.id, { jailed: 1 }); await this.setVisit(ch, c, jail, until); jailed = true; } }
     await ch.event(`🚓 @${c.handle} was caught ${where}${jailed ? `, fined ${fmt(fine)} coins and locked up for ${JAIL_TIME / 60000} minutes` : ` and fined ${fmt(fine)} coins`}.`, 'crime');
     c.crime_streak = 0; const prog = await noteProgress(ch, this.world, c, { solo: true, kind, won: false, outcome: out.key, total: sc.total, streak: 0, state }); await ch.saveCitizen(c);
-    return { money: 0, fine, paid, jailed, jailFor: jailed ? JAIL_TIME : 0, coins: c.coins_base, streak: 0, hotNext: 1, waitFor: jailed ? JAIL_TIME : Math.max(0, Number(run.started_at) + CRIME_COOLDOWN - Date.now()), ...prog };
+    await ch.q('update citizens set crime_at = $2 where id = $1', [c.id, Date.now()]);
+    return { money: 0, fine, paid, jailed, jailFor: jailed ? JAIL_TIME : 0, coins: c.coins_base, streak: 0, hotNext: 1, waitFor: jailed ? JAIL_TIME : CRIME_COOLDOWN, ...prog };
   }
 
   // ---------- going somewhere ----------

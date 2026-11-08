@@ -44,6 +44,7 @@ const SFX = {
   hurt: () => { tone(vary(210), 90, 0.2, { type: 'sawtooth', vol: 0.15 }); noise(0.07, { vol: 0.12, lp: 700 }); },
   crash: () => { noise(0.5, { vol: 0.5, lp: 1500, hp: 50 }); tone(95, 35, 0.4, { type: 'square', vol: 0.18 }); noise(0.25, { vol: 0.15, hp: 3000, lp: 9000, at: 0.05 }); },
   zap: () => { tone(1800, 300, 0.25, { type: 'sawtooth', vol: 0.09 }); noise(0.15, { vol: 0.1, hp: 2000, lp: 8000 }); },
+  beep: () => [0, 0.13, 0.26].forEach(at => tone(2350, 2350, 0.07, { type: 'square', vol: 0.07, at })), // a tripwire going off
   alarm: () => { for (let i = 0; i < 4; i++) { tone(900, 650, 0.22, { type: 'square', vol: 0.06, at: i * 0.25 }); } },
   wave: () => { tone(110, 70, 0.7, { type: 'sawtooth', vol: 0.1 }); tone(55, 40, 0.8, { type: 'sine', vol: 0.18 }); },
   whoosh: () => noise(0.22, { vol: 0.1, lp: 1300, hp: 250 }),

@@ -6,7 +6,7 @@ services:
   - type: web
     name: living-settlement
     runtime: docker
-    plan: free
+    plan: starter
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL

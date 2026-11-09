@@ -1232,6 +1232,7 @@ const bspCap = () => Quality.level>=2 ? 6e6 : 9e6; // pixels kept (about 4 bytes
 // Pictures of buildings on screen right now are never thrown away to make room (that made dense districts redraw every
 // building every frame); only ones off screen are, oldest first, unless the total passes this hard limit.
 const bspHard = () => bspCap()*1.75;
+const FAR_STILL=new Set(['pine','bush','fountain','stall','ponds','tanks','winery','dome']);
 function bCacheable(t){ const t0=t.base||t; return !ANIM_STYLES.has(t0.style) && !t0.anim && !(t0.style==='block'&&t0.neon); }
 function bspBucket(){ return Math.min(4, Math.pow(2, Math.ceil(Math.log2(Math.max(0.2, cam.z*dpr))*2)/2)); }
 function bspFree(e){ if(!e) return; BSPR.px-=e.px; e.cv.width=e.cv.height=0; if(e.rim) e.rim.width=e.rim.height=0; } // frees the memory straight away (iOS counts it)
@@ -1263,7 +1264,7 @@ function rimOf(cv){ const W=cv.width, H=cv.height, r=document.createElement('can
   g.drawImage(cv,0,0); g.globalCompositeOperation='destination-out'; g.drawImage(k,0,0); g.globalCompositeOperation='source-in'; g.fillStyle='#BFD6FF'; g.fillRect(0,0,W,H);
   k.width=k.height=0; return r; }
 function drawBCached(b,t){
-  if(!bCacheable(t)){ BSPR.live++; drawB(b,t); return; }
+  if(!bCacheable(t)&&!(cam.z<0.55&&FAR_STILL.has((t.base||t).style))){ BSPR.live++; drawB(b,t); return; } // zoomed out, swaying trees and the like are too small to see move: a picture will do
   if(t.style==='fence') b={...b,mask:fenceMask(b)}; // the picture depends on which neighbours it joins
   const base=`${b.id}|${b.type}|${b.rot||0}|${b.lv||1}|${b.upAt?1:0}|${b.mask??''}|${b.x},${b.y}|${VIEW}|${LAMPS>0?1:0}|${DARK>0.3?1:0}`, sc=bspBucket(), key=base+'|'+sc;
   let e=BSPR.map.get(key);
@@ -2395,12 +2396,21 @@ function drawWaterTiles(list, part){ if(!list.length) return;
   // (and each neighbour looked up back on the real map), the same way roads are.
   const turned=VIEW&&!RAW, at=turned?(a,b)=>{ const w=tileFromView(a,b); return D.water.get(w[0]+','+w[1]); }:(a,b)=>D.water.get(a+','+b);
   const orig=list; if(turned) list=list.map(([x,y,k])=>{ const v=toView(x,y), q=toView(x+1,y+1); return [Math.min(v[0],q[0]), Math.min(v[1],q[1]), k]; });
-  const wet=(a,b)=>!!at(a,b);
-  const deepOf=(a,b)=>{ const k=at(a,b); if(!k||k==='river') return false; for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++) if(!wet(a+i,b+j)) return false; return true; };
-  const sand=new Path2D(), damp=new Path2D(), byKind=new Map(), deep=new Map();
-  for(const [x,y,kind] of list){ tileShape(sand,x,y,wet,BEACH,WATER_R,WATER_FILLET); tileShape(damp,x,y,wet,WETSAND,WATER_R,WATER_FILLET);
-    let p=byKind.get(kind); if(!p) byKind.set(kind,p=new Path2D()); tileShape(p,x,y,wet,0,WATER_R,WATER_FILLET);
-    if(deepOf(x,y)){ let d=deep.get(kind); if(!d) deep.set(kind,d=new Path2D()); tileShape(d,x,y,deepOf,0.05,WATER_R,WATER_FILLET); } }
+  // each tile's neighbours are asked about many times over (shores, corners, deep water), so the answers are remembered
+  const wm=new Map(), dm=new Map(), K=(a,b)=>(a+50000)*100003+(b+50000);
+  const wet=(a,b)=>{ const k=K(a,b); let v=wm.get(k); if(v===undefined){ v=!!at(a,b); wm.set(k,v); } return v; };
+  const deepOf=(a,b)=>{ const kk=K(a,b); let v=dm.get(kk); if(v!==undefined) return v; const k=at(a,b); v=!!k&&k!=='river'; if(v) for(let i=-1;i<=1&&v;i++) for(let j=-1;j<=1;j++) if(!wet(a+i,b+j)){ v=false; break; } dm.set(kk,v); return v; };
+  const sand=new Path2D(), damp=new Path2D(), byKind=new Map(), deep=new Map(), runs=new Map(); // runs: open water, merged into strips along each row
+  const all8=(f,a,b)=>{ for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++) if((i||j)&&!f(a+i,b+j)) return false; return true; };
+  const pathOf=(m,kind)=>{ let p=m.get(kind); if(!p) m.set(kind,p=new Path2D()); return p; }, run=(key,x)=>{ let r=runs.get(key); if(!r) runs.set(key,r=[]); r.push(x); };
+  for(const [x,y,kind] of list){
+    // open water (water all round it) has no shore, sand or rounded corners: it's a plain square, done in strips below.
+    // Only the shore tiles need their shapes worked out, which is what made zooming out over the sea freeze phones.
+    if(all8(wet,x,y)){ run('w|'+kind+'|'+y,x); const dp=deepOf(x,y); if(dp&&all8(deepOf,x,y)) run('d|'+kind+'|'+y,x); else if(dp) tileShape(pathOf(deep,kind),x,y,deepOf,0.05,WATER_R,WATER_FILLET); continue; }
+    tileShape(sand,x,y,wet,BEACH,WATER_R,WATER_FILLET); tileShape(damp,x,y,wet,WETSAND,WATER_R,WATER_FILLET); tileShape(pathOf(byKind,kind),x,y,wet,0,WATER_R,WATER_FILLET);
+    if(deepOf(x,y)) tileShape(pathOf(deep,kind),x,y,deepOf,0.05,WATER_R,WATER_FILLET); }
+  for(const [key,xs] of runs){ const [w,kind,ys]=key.split('|'), y=+ys, p=pathOf(w==='w'?byKind:deep,kind), m=0.02; xs.sort((a,b)=>a-b);
+    for(let i=0;i<xs.length;){ let j=i; while(j+1<xs.length&&xs[j+1]===xs[j]+1) j++; p.rect(xs[i]-m,y-m,xs[j]-xs[i]+1+2*m,1+2*m); i=j+1; } }
   ctx.save(); ctx.transform(HW,HH,-HW,HH,0,0);
   ctx.fillStyle=SAND; ctx.fill(sand); ctx.fillStyle='#CDB57A'; ctx.fill(damp);
   for(const [kind,p] of byKind){ const W=WATER_TYPES[kind]||WATER_TYPES.river; ctx.fillStyle=W.color; ctx.fill(p); }
@@ -2576,7 +2586,7 @@ function drawVehicle(px,py,dx,dy,V,col,siren,scale=1,col2){ if(VIEW&&!RAW){ cons
     if(VSPR.map.size>700){ const k0=VSPR.map.keys().next().value; const o=VSPR.map.get(k0); o.cv.width=o.cv.height=0; VSPR.map.delete(k0); }
     VSPR.map.set(key,e); }
   const o=iso(px,py); ctx.drawImage(e.cv, o.x-e.X, o.y-e.Y0, 2*e.X, e.Y0+e.Y1);
-  for(const q of e.quads) windowQuads.push(q.map(p=>({x:p.x+o.x,y:p.y+o.y}))); for(const l of e.lts) lights.push({...l,x:l.x+o.x,y:l.y+o.y});
+  for(const l of e.lts) lights.push({...l,x:l.x+o.x,y:l.y+o.y}); // (their windows don't light up at night: a moving window would make the night layer be rebuilt every frame)
   if(V.siren && siren){ const h=V.h*scale, sx=o.x, sy=o.y-h-2, on=Math.floor(T_NOW/250)%2; ctx.fillStyle=on?V.siren:'#F4F4F0'; ctx.beginPath(); ctx.arc(sx-2,sy,2,0,7); ctx.fill(); ctx.fillStyle=on?'#F4F4F0':'#4A7BD9'; ctx.beginPath(); ctx.arc(sx+2,sy,2,0,7); ctx.fill(); lights.push({x:sx,y:sy,r:34,col:on?'255,80,70':'90,140,255'}); } }
 function drawVehicle0(px,py,dx,dy,V,col,siren,scale=1,col2){ if(VIEW&&!RAW){ const p=toView(px,py), q=toView(dx,dy); return inView(()=>drawVehicle0(p[0],p[1],q[0],q[1],V,col,siren,scale,col2)); } const len=V.len/2*scale, wid=V.wid/2*scale, h=V.h*scale, sx=-dy, sy=dx;
   const P=(f,s,z)=>{ const q=iso(px+dx*f*len+sx*s*wid, py+dy*f*len+sy*s*wid); return {x:q.x,y:q.y-z}; };
@@ -3340,14 +3350,17 @@ function drawFrame(ts){
   if(cam.z!==Ground.lastZ){ Ground.lastZ=cam.z; Ground.zoomAt=ts; }
   const rz=cam.z*dpr, covered=Ground.cv&&v0.x>=Ground.wx0&&v0.y>=Ground.wy0&&v1.x<=Ground.wx0+Ground.ww&&v1.y<=Ground.wy0+Ground.wh;
   const ratio=Ground.rz?rz/Ground.rz:0;
-  if(!covered||Ground.gen!==tileListGen||Ground.dpr!==dpr||ratio>1.6||ratio<0.6||(Ground.rz!==rz&&ts-Ground.zoomAt>180)){
+  // mid-zoom, the last picture is stretched to fit (grass shows past its edges) and the ground is drawn again only once
+  // the zoom settles: drawing it at every step of a pinch was what froze phones zooming out over a big colony
+  const zooming=ts-Ground.zoomAt<220&&Ground.cv&&Ground.gen===tileListGen&&Ground.dpr===dpr;
+  if(!zooming&&(!covered||Ground.gen!==tileListGen||Ground.dpr!==dpr||ratio>1.6||ratio<0.6||(Ground.rz!==rz&&ts-Ground.zoomAt>180))){
     const mx=(v1.x-v0.x)*0.3, my=(v1.y-v0.y)*0.3; renderGround(v0.x-mx,v0.y-my,v1.x+mx,v1.y+my,rz); }
   ctx.setTransform(dpr,0,0,dpr,0,0);
   if(Ground.direct){ Ground.deco=[]; ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,cw,ch); worldT(); paintGround(ctx, Math.ceil((v1.x-v0.x)*rz), Math.ceil((v1.y-v0.y)*rz), v0.x, v0.y, rz); worldT(); }
   else if(Ground.rz===rz&&!Ground.half){ ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(Ground.cv, Math.round((Ground.wx0-cam.x)*rz+dpr*(cw/2+shake.x)), Math.round((Ground.wy0-cam.y)*rz+dpr*(ch/2+shake.y))); worldT(); }
   else { ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,cw,ch); worldT(); ctx.drawImage(Ground.cv, Ground.wx0, Ground.wy0, Ground.ww, Ground.wh); }
   const items=[];
-  { const wl=[]; for(const w of tileList(D.water)){ const x=w.x, y=w.y; if(x<tminX||x>tmaxX||y<tminY||y>tmaxY||D.roads.has(w.k)) continue; wl.push([x,y,w.v]); } drawWaterTiles(wl,'ripples'); }
+  if(cam.z>=0.45){ const wl=[], thin=cam.z<0.8?3:1; for(const w of tileList(D.water)){ const x=w.x, y=w.y; if(x<tminX||x>tmaxX||y<tminY||y>tmaxY||D.roads.has(w.k)) continue; if(thin>1&&((x*7+y*13)%thin)) continue; wl.push([x,y,w.v]); } drawWaterTiles(wl,'ripples'); } // ripples: too small to see far out, and thinned out a little zoomed out
   drawPlots(tminX,tmaxX,tminY,tmaxY); drawAuctions(tminX,tmaxX,tminY,tmaxY);
   for(const d of Ground.deco) if(d.x>=tminX-1&&d.x<=tmaxX+1&&d.y>=tminY-1&&d.y<=tmaxY+1) items.push(d);
   if(Store.canWrite && draftOn) drawDraftGround(); // blue over drafted roads and water, red over what's being removed
@@ -3384,7 +3397,7 @@ function drawFrame(ts){
   drawDisasters();
   if(Watch.id&&!Watch.other){ const c=S.citizens.get(Watch.id), st=c&&(states.get(Watch.id)||citizenAt(c,gm)); if(st){ const p=iso(st.x,st.y), y=p.y-(st.car?30:46)-Math.abs(Math.sin(T_NOW/260))*4; // "you" marker over your colonist (or their car)
     poly([{x:p.x-7,y:y-12},{x:p.x+7,y:y-12},{x:p.x,y}],'#E4572E',INK,1.4); ctx.font='800 11px system-ui,sans-serif'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.strokeText('You',p.x,y-16); ctx.fillStyle='#2B2621'; ctx.fillText('You',p.x,y-16); } }
-  if(Quality.ghosts){ ctx.globalAlpha=0.38; for(const it of hiddenPeople(items)) drawCitizen(it.c,it.st,false,true); ctx.globalAlpha=1; }
+  if(Quality.ghosts&&cam.z>=0.4){ ctx.globalAlpha=0.38; for(const it of hiddenPeople(items)) drawCitizen(it.c,it.st,false,true); ctx.globalAlpha=1; }
   if(areaSel){ const ax=Math.min(areaSel.a[0],areaSel.b[0]), bx=Math.max(areaSel.a[0],areaSel.b[0])+1, ay=Math.min(areaSel.a[1],areaSel.b[1]), by=Math.max(areaSel.a[1],areaSel.b[1])+1; poly([iso(ax,ay),iso(bx,ay),iso(bx,by),iso(ax,by)],'rgba(184,67,58,.28)','#B8433A',2.5); }
   if(fenceRun) drawFenceDrag(); else if(ghostTool()) drawFootprint();
   if(landSel) drawLandSel();
@@ -3670,9 +3683,14 @@ async function removeBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
 // front. Instead they go on a layer of their own in the same order the buildings were drawn: each building first wipes
 // out (with its exact outline) the windows behind it, then adds its own. Some rooms are dark too, so every block
 // gets its own rhythm of light rather than one solid glow.
-let winLayer=null;
+let winLayer=null, winKey='';
 function drawLitWindows(){ const W=Math.round(cw*dpr), H=Math.round(ch*dpr);
-  if(!winLayer) winLayer=document.createElement('canvas'); if(winLayer.width!==W||winLayer.height!==H){ winLayer.width=W; winLayer.height=H; }
+  if(!winLayer) winLayer=document.createElement('canvas'); if(winLayer.width!==W||winLayer.height!==H){ winLayer.width=W; winLayer.height=H; winKey=''; }
+  // While the view and the buildings in it stay put, last frame's layer is still right: just copy it again (building it
+  // means wiping out every building's outline in turn, the costliest part of a night frame).
+  let sig=windowQuads.length; for(const q of windowQuads){ if(q.occ) sig=(sig*31+q.occ.x0*7+q.occ.y0*13+(q.occ.rim?1:0))%1e9; else sig=(sig*31+q[0].x*3+q[0].y*5+(q.cut?1:0))%1e9; }
+  const key=[cam.x.toFixed(2),cam.y.toFixed(2),cam.z.toFixed(4),VIEW,Math.round(DARK*60),W,H,sig.toFixed(2)].join('|');
+  if(key===winKey){ ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(winLayer,0,0); ctx.restore(); return; } winKey=key;
   const g=winLayer.getContext('2d'); g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,W,H); g.setTransform(ctx.getTransform());
   const hw=cw/2/cam.z+20, hh=ch/2/cam.z+20, warm=`rgba(255,206,120,${0.92*DARK})`, dim=`rgba(255,170,95,${0.55*DARK})`;
   const lit=[], low=[];

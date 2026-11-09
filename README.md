@@ -629,6 +629,10 @@ The map is tuned for low-end Android phones. The main pieces, all in `public/ind
 - **Vehicles are cached pictures** too: one per type, colour and heading (32 headings). Flashing sirens are drawn live.
 - **People are drawn from pre-drawn parts**, packed on 1024×1024 pages. Pages are kept small because adding a part to a page that's also being drawn from makes the browser copy the whole page.
 - **Quality adapts.** If frames run slow, the map drops to a lower resolution and simulates fewer people (1,500 → 1,100 → 700 → 450). Each phone remembers the level it settled on. On a first visit, a phone with little memory or few cores starts two steps down.
+- **Water: only shores are shaped.** Open water is drawn as plain strips along each row; only shore tiles get their rounded edges, beach and wet sand, and each tile's neighbours are looked up once. Ripples are skipped when zoomed far out and thinned when zoomed out. (Zooming out over the sea used to freeze a phone for several seconds.)
+- **The ground waits for the zoom to settle.** Mid-pinch the last ground picture is stretched to fit, and it's drawn again once, after the zoom stops, instead of at every step.
+- **Night windows are reused while the view is still.** The lit-windows layer is rebuilt only when the camera moves, the night deepens or a building changes; vehicles' windows don't light up (their headlights still glow), so passing traffic doesn't force a rebuild every frame.
+- **Far out, swaying trees and similar scenery are still pictures**, and the faint "see-through" people behind buildings aren't drawn.
 - **Fonts never block the first screen.** On a slow or blocked connection the game opens in the phone's own font.
 
 Results on a simulated low-end Android (360×780 screen, CPU slowed 6×, 9,000 colonists):
@@ -637,7 +641,7 @@ Results on a simulated low-end Android (360×780 screen, CPU slowed 6×, 9,000 c
 - jumping from the whole colony into a busy street: freezes went from 2.2 s to under 0.3 s
 - total freezes while loading: 13.5 s → 5.5–7.5 s
 
-At full speed the town centre runs at about 46–60 frames a second (it was 18). A two-minute session of wandering, zooming and opening tabs keeps memory flat at 20–30 MB.
+At full speed the town centre runs at about 46–60 frames a second (it was 18). November 2026, measured on the live colony on a phone-sized screen with the CPU slowed 4×: zoomed out went from 0.5 frames a second with a 5.4 s freeze to 5 frames a second with no frame over 0.23 s; the worst freeze while panning and zooming went from 3.1 s to 0.76 s; the town centre at rest at night went from 43 to 59 frames a second at full speed. A two-minute session of wandering, zooming and opening tabs keeps memory flat at 20–30 MB.
 
 ## 📺 24/7 live stream
 

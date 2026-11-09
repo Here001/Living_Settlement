@@ -657,11 +657,11 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok(rf.json.outcome !== 'clean' || rf.json.mult > 1 || rf.json.score.total === 80, 'a clean getaway pays more than the takings', JSON.stringify(rf.json));
       if (paid) { const w = (await call('GET', '/api/me/crime', undefined, P)).json;
         ok(w.waitFor > 0 && w.waitFor <= 20000 && w.streak === 1, 'a job that comes off: lie low just 20 seconds, but the next one is harder', JSON.stringify({ wait: w.waitFor, streak: w.streak }));
-        ok(w.jobsToday === 1 && w.pay === 1 && rf.json.payNext === 1 && w.free === 5, 'the first 5 jobs each day pay in full', JSON.stringify({ jobs: w.jobsToday, pay: w.pay, next: rf.json.payNext }));
+        ok(w.jobsToday === 1 && w.pay === 1 && rf.json.payNext === 1 && w.free === 8, 'the first 8 jobs each day pay in full', JSON.stringify({ jobs: w.jobsToday, pay: w.pay, next: rf.json.payNext }));
         ok(rf.json.hotNext === 1.15 && w.hot === 1.15, 'a job that comes off heats up the streak: the next pays 15% more', JSON.stringify({ hot: rf.json.hotNext, w: w.hot }));
         ok(rf.json.xp && rf.json.xp.gain >= 30 && rf.json.xp.rank.name && rf.json.contracts.list.length === 3, 'it earns XP towards a criminal rank, and shows the day’s contracts', JSON.stringify({ xp: rf.json.xp, c: rf.json.contracts }).slice(0, 300));
-        await set('zara_ng', `crime_day = '${new Date().toISOString().slice(0, 10)}', crime_today = 5`); ok(Math.abs((await call('GET', '/api/me/crime', undefined, P)).json.pay - 0.92) < 1e-9, 'after 5 jobs in a day, each pays 8% less than the last');
-        await set('zara_ng', `crime_today = 40`); ok(Math.abs((await call('GET', '/api/me/crime', undefined, P)).json.pay - 0.5) < 1e-9, 'but a job never pays less than half');
+        await set('zara_ng', `crime_day = '${new Date().toISOString().slice(0, 10)}', crime_today = 8`); ok(Math.abs((await call('GET', '/api/me/crime', undefined, P)).json.pay - 0.96) < 1e-9, 'after 8 jobs in a day, each pays 4% less than the last');
+        await set('zara_ng', `crime_today = 40`); ok(Math.abs((await call('GET', '/api/me/crime', undefined, P)).json.pay - 0.75) < 1e-9, 'but a job never pays less than three quarters');
         await set('zara_ng', `crime_today = 1`);
         await set('zara_ng', 'crime_at = null'); const r2 = (await start('scam', false)).json;
         ok(r2.pay === 1 && r2.hot === 1.15, '…and the takings on offer for the next job show the hot streak', JSON.stringify(r2));

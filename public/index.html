@@ -999,7 +999,7 @@ import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
-import { paveCost, fullIncome, FINE_MIN, FINE_MAX, nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
+import { paveCost, fullIncome, CRIME_FLOOR, FINE_MIN, FINE_MAX, nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
@@ -4482,7 +4482,7 @@ var Stats={ data:null, days:30, busy:false, at:0,
     const set=async b=>{ try{ await api('/api/admin/economy',{method:'POST',body:b}); toast(b.measure?'Measured.':`Dial set to ${Math.round(b.f*100)}%.`); this.load(); }catch(e){ toast(e.message); } };
     out.push(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'− 10%',onclick:()=>set({f:Math.max(E.dial.min,+(E.f-0.1).toFixed(2))})}), el('button',{class:'btn',text:'Reset to 100%',onclick:()=>set({f:1})}),
       el('button',{class:'btn',text:'+ 10%',onclick:()=>set({f:Math.min(E.dial.max,+(E.f+0.1).toFixed(2))})}), el('button',{class:'linkb',text:'Measure now',onclick:()=>set({measure:true})})),
-      el('p',{class:'hint',text:`The dial scales crime takings, heist loot, daily rewards and savings interest. Setting it by hand is a starting point: the stabiliser keeps nudging it each hour. Also in force: wages lose 20% tax at source, after the first 5 jobs each day, each pays ${Math.round((1-E.decay)*100)}% less than the last, and ${(E.wealthRate*100).toFixed(1)}% a day wealth tax above ${fmt(E.wealthFree)}.`}));
+      el('p',{class:'hint',text:`The dial scales crime takings, heist loot, daily rewards and savings interest. Setting it by hand is a starting point: the stabiliser keeps nudging it each hour. Also in force: wages lose 20% tax at source, after the first 8 solo jobs each day, each pays ${Math.round((1-E.decay)*100)}% less than the last, and ${(E.wealthRate*100).toFixed(1)}% a day wealth tax above ${fmt(E.wealthFree)}.`}));
     return out; },
   async load(){ if(!Store.canWrite||this.busy) return; this.busy=true; try{ this.usage=await api('/api/admin/usage').catch(()=>null); this.data=await api('/api/admin/stats?days='+this.days); this.at=Date.now(); }catch(e){ toast(e.message); } this.busy=false; if(activeTab==='stats') this.renderNow(); },
   renderNow(){ if(activeTab!=='stats') return; const p=$('pane'); if(p){ const keep=$('statsBody')?.scrollTop||0; p.innerHTML=''; this.render(p); const b=$('statsBody'); if(b) b.scrollTop=keep; } },
@@ -4708,7 +4708,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       p.append(body); return; }
     // Heist crews: the invitations to join a job, and the crews you're in (each chat closes once its job is done)
     if(this.view==='heists'){ const gs=this.groups.filter(g=>g.heist), iv=this.invites.filter(i=>i.heist);
-      body.append(el('p',{class:'hint',text:'Crew chats for heists. Join one to be in on the job. Each chat closes a couple of minutes after its job is done or called off. Plan a heist from your card’s Crime tab.'}));
+      body.append(el('p',{class:'hint',text:'Crew chats for heists. Join one to be in on the job. Once a job is done, how it went is posted in its chat, which stays for a day so everyone can read it; a called-off job’s chat closes after a couple of minutes. Plan a heist from your card’s Crime tab.'}));
       if(iv.length){ body.append(el('h3',{text:`Invitations (${iv.length})`})); for(const x of iv) body.append(invRow(x)); }
       body.append(el('h3',{text:`Your crews (${gs.length})`})); if(!gs.length) body.append(el('p',{class:'hint',text:'You’re not in a crew right now.'})); for(const g of gs) body.append(grow(g));
       p.append(body); return; }
@@ -6180,15 +6180,15 @@ function crimePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Cri
   const secs=ms=>ms<60000?`${Math.ceil(ms/1000)}s`:`${mins(ms)} min`, waiting=K.waitFor>0, blocked=waiting?`Lie low ${secs(K.waitFor)}`:null;
   if(waiting){ box.append(el('p',{class:'jobnow',text:`Lie low for ${secs(K.waitFor)} before the next solo job.${K.streak?` 🔥 ${K.streak} in a row: the next one will be harder.`:''}`})); clearTimeout(Acts.wt); Acts.wt=setTimeout(()=>{ if(sel&&Acts.crime){ Acts.at=0; renderCard(true); } },Math.min(K.waitFor+300,20500)); }
   else if(K.streak) box.append(el('p',{class:'jobnow',text:`🔥 ${K.streak} job${K.streak>1?'s':''} in a row! The next pays ×${(K.hot||1).toFixed(2)}, but it's harder. Get caught and the streak starts over.`}));
-  const free=K.free||5; if(K.jobsToday) box.append(el('p',{class:'hint',text:K.jobsToday<free?`💸 ${K.jobsToday} of today's ${free} full-pay jobs used.`:`💸 ${K.jobsToday} jobs pulled today: the next pays ${Math.round((K.pay??1)*100)}% of the usual takings (each one beyond ${free} pays ${Math.round((1-CRIME_DECAY)*100)}% less). Full pay again tomorrow.`}));
+  const free=K.free||8; if(K.jobsToday) box.append(el('p',{class:'hint',text:K.jobsToday<free?`💸 ${K.jobsToday} of today's ${free} full-pay jobs used.`:`💸 ${K.jobsToday} jobs pulled today: the next pays ${Math.round((K.pay??1)*100)}% of the usual takings (each one beyond ${free} pays ${Math.round((1-CRIME_DECAY)*100)}% less, never below ${Math.round(CRIME_FLOOR*100)}%; heists aren't cut). Full pay again tomorrow.`}));
   box.append(el('p',{class:'hint',text:'🎮 Robbing a shop, conning a tourist and hacking an ATM are mini games: play well and you can take up to 1.5× the money. Practice is free.'}));
-  const play=(k,o)=>openCrimeGame(k,{...o,blocked,hot:K.hot,streak:K.streak},crimeCtx());
+  const play=(k,o)=>openCrimeGame(k,{...o,blocked,hot:K.hot,streak:K.streak,lastKind:K.lastKind},crimeCtx());
   if(K.rob) box.append(el('div',{class:'crow'}, el('div',{class:'jt'}, el('b',{text:`🛒 Rob ${K.rob.shop}`}), el('span',{text:'Sneak in the back, empty the till and get out unseen. Usually 5,000–10,000 coins.'}), el('span',{class:'hint',text:oddsText(K.rob)})),
-      el('button',{class:'btn danger',text:'🎮 Play',onclick:()=>play('rob',{...K.rob,at:K.rob.shop})})));
+      el('button',{class:'btn',text:'🎮 Play',onclick:()=>play('rob',{...K.rob,at:K.rob.shop})})));
   else box.append(el('p',{class:'hint',text:'There are no shops to rob.'}));
   for(const [k,S0] of Object.entries(SOLO_CRIMES)){ const o=K.solo&&K.solo[k]; if(!o) continue;
     box.append(el('div',{class:'crow'}, el('div',{class:'jt'}, el('b',{text:`${S0.icon} ${S0.name}`}), el('span',{text:`${S0.blurb} ${fmt(S0.loot[0])}–${fmt(S0.loot[1])} coins.${o.at?` At ${o.at}.`:''}`}), el('span',{class:'hint',text:oddsText(o)})),
-      el('button',{class:'btn danger',text:'🎮 Play',onclick:()=>play(k,o)}))); }
+      el('button',{class:'btn',text:'🎮 Play',onclick:()=>play(k,o)}))); }
   box.append(Heist.box(c));
   return box; }
 // Today's three contracts, in a sheet: it pops up the first time the Crime tab opens each day, and from 📋 Contracts.
@@ -6209,7 +6209,7 @@ const Heist={ data:null, at:0, busy:false, form:null, prompted:new Set(),
     if(!D0){ box.append(el('p',{class:'hint',text:'Asking around…'})); return box; }
     box.append(el('p',{class:'hint',text:'Bigger jobs need a crew. Plan one, invite people: they get a group chat to agree the plan. At the set time (or when you say go) it happens. The loot is shared by everyone who gets away; anyone caught is fined (about a seventh of their share, 50 to 1,500, never more than they have) and jailed. Each extra person adds 4% to the odds.'}));
     // jobs you're in
-    for(const h of D0.mine){ const left=h.at-Date.now(), H=HEISTS[h.kind]||{min:2}, card=el('div',{class:'hcard '+h.status});
+    for(const h of D0.mine.filter(h=>h.status==='planning'||h.status==='live')){ const left=h.at-Date.now(), /* how a job went is told in its crew chat */ H=HEISTS[h.kind]||{min:2}, card=el('div',{class:'hcard '+h.status});
       card.append(el('div',{class:'hhead'}, el('b',{text:`${h.icon} ${h.name}`}), el('span',{class:'hint',text:h.status==='planning'?(left>0?`in ${mins(left)} min`:'any moment'):h.status==='cancelled'?'called off':h.result&&h.result.win?'came off':'went wrong'})),
         el('p',{class:'hint',text:`Target: ${h.target} · planned by ${h.mine?'you':'@'+h.planner} · crew: ${h.crew.map(x=>'@'+x).join(', ')||'nobody yet'}${h.invited.length?` · invited: ${h.invited.map(x=>'@'+x).join(', ')}`:''}`}));
       const RL=k=>MG_ROLES[k]?`${MG_ROLES[k].icon} ${MG_ROLES[k].name}`:k;

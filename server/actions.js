@@ -166,7 +166,8 @@ export class Actions {
     const solo = {}; for (const [k, S] of Object.entries(R.SOLO_CRIMES)) { let x = c.hx, y = c.hy, at = null;
       if (S.needs === 'bank' && c.home_id) { const bk = (await pool.query(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [c.hx, c.hy, BANKS])).rows[0]; if (!bk) continue; x = bk.x; y = bk.y; at = nameOf(bk); }
       if (c.home_id) solo[k] = { ...(await this.odds(k, await this.policeDist(pool, x, y), wave)), at }; }
-    return { streak: Number(c.crime_streak || 0), jobsToday: R.jobsToday(c), pay: R.crimePayMult(c), free: R.CRIME_FREE, ...(await progressOf((s, v) => pool.query(s, v), c)), solo, housed: !!c.home_id, jailedFor: Math.max(0, Number(c.jailed_until || 0) - now), waitFor: Math.max(0, Number(c.crime_at || 0) + CRIME_COOLDOWN - now), wave,
+    const lastKind = (await pool.query('select kind from crime_runs where citizen_id = $1 and not practice and heist_id is null and finished_at is not null order by started_at desc limit 1', [c.id])).rows[0]?.kind || null;
+    return { streak: Number(c.crime_streak || 0), lastKind, jobsToday: R.jobsToday(c), pay: R.crimePayMult(c), free: R.CRIME_FREE, ...(await progressOf((s, v) => pool.query(s, v), c)), solo, housed: !!c.home_id, jailedFor: Math.max(0, Number(c.jailed_until || 0) - now), waitFor: Math.max(0, Number(c.crime_at || 0) + CRIME_COOLDOWN - now), wave,
       rates: R.CRIME_RATES, near: R.CRIME_NEAR, far: R.CRIME_FAR, rob, pick };
   }
   async crime(id, { kind, target }) {
@@ -255,12 +256,16 @@ export class Actions {
       if (!practice) { const why = await this.blockedReason(c); if (why) throw new HttpError(409, why);
         const wait = Number(c.crime_at || 0) + CRIME_COOLDOWN - now; if (wait > 0) throw new HttpError(429, `Lie low for ${waitText(wait)} before the next job. You can practise meanwhile.`); }
       const sc = await this.crimeScene(db, c, kind), wave = await this.waveNow(), odds = await this.odds(MG.ROLES[kind] ? 'armored' : kind, await this.policeDist(db, sc.px, sc.py), wave);
-      const pay = practice ? 1 : payMult(c, this.world.meta), streak = practice ? 0 : Number(c.crime_streak || 0), diff = streakDiff(MG.difficultyOf(kind, odds.band), streak), chance = streakChance(odds.chance, streak), seed = crypto.randomInt(1, 2 ** 31), rid = crypto.randomUUID();
+      // a winning streak keeps paying more, but only makes the game harder while you keep playing the same one: pick
+      // another game and it starts at its usual difficulty
+      const last = practice ? null : (await db.query('select kind from crime_runs where citizen_id = $1 and not practice and heist_id is null and finished_at is not null order by started_at desc limit 1', [id])).rows[0]?.kind;
+      const pay = practice ? 1 : payMult(c, this.world.meta), streak = practice ? 0 : Number(c.crime_streak || 0), same = last === kind ? streak : 0;
+      const diff = streakDiff(MG.difficultyOf(kind, odds.band), same), chance = streakChance(odds.chance, same), seed = crypto.randomInt(1, 2 ** 31), rid = crypto.randomUUID();
       await db.query('insert into crime_runs (id, citizen_id, kind, seed, diff, practice, started_at, chance, band, night, loot, scene) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
-        [rid, id, kind, seed, diff, !!practice, now, chance, odds.band, !!odds.night, sc.loot, JSON.stringify({ ...sc, hard: streak > 0 })]);
+        [rid, id, kind, seed, diff, !!practice, now, chance, odds.band, !!odds.night, sc.loot, JSON.stringify({ ...sc, hard: same > 0 })]);
       if (!practice) await db.query('update citizens set crime_at = $2 where id = $1', [id, now]);
       await db.query('delete from crime_runs where citizen_id = $1 and started_at < $2', [id, now - 7 * 86400000]);
-      return { id: rid, kind, seed, diff, streak, hard: streak > 0, practice: !!practice, chance, band: odds.band, police: odds.dist, night: !!odds.night, wave, at: sc.shop?.name || null, loot: practice ? null : [Math.round(sc.loot * 0.3 * pay), Math.round(sc.loot * 1.5 * pay)], pay: R.crimePayMult(c), hot: practice ? 1 : R.hotMult(streak) };
+      return { id: rid, kind, seed, diff, streak, same, hard: same > 0, practice: !!practice, chance, band: odds.band, police: odds.dist, night: !!odds.night, wave, at: sc.shop?.name || null, loot: practice ? null : [Math.round(sc.loot * 0.3 * pay), Math.round(sc.loot * 1.5 * pay)], pay: R.crimePayMult(c), hot: practice ? 1 : R.hotMult(streak) };
     };
     return practice ? go(pool) : this.world.change(ch => go({ query: (a, v) => ch.q(a, v) }));
   }

@@ -32,7 +32,7 @@ function close() { const r = document.querySelector('.mg'); if (r) { r._stop && 
 
 function intro(root, kind, info) {
   root._stop && root._stop(); root.innerHTML = '';
-  const I = INFO[kind], diff = Math.min(5, MG.difficultyOf(kind, info.band || 'mid') + (info.heist ? 0 : Math.min(4, info.streak || 0))), setting = MG.scoreOf(0, info.chance || 0).setting;
+  const I = INFO[kind], diff = Math.min(5, MG.difficultyOf(kind, info.band || 'mid') + (info.heist || info.lastKind !== kind ? 0 : Math.min(2, Math.ceil((info.streak || 0) / 2)))), setting = MG.scoreOf(0, info.chance || 0).setting;
   const pips = $c('span', { class: 'mgpips', 'aria-label': `Difficulty ${diff} of 5` }); for (let i = 1; i <= 5; i++) pips.append($c('i', { class: i <= diff ? 'on' : '' }));
   const real = !info.blocked && !info.practiceOnly, heist = info.heist;
   root.append($c('div', { class: 'mgcard' },

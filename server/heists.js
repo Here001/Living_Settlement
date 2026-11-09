@@ -16,7 +16,6 @@ import { track, ledger } from './stats.js';
 import { bump } from './achievements.js';
 import * as MG from '../shared/minigames.js';
 import { note as noteProgress } from './crimeprog.js';
-const noteJob = (ch, id) => ch.q('update citizens set crime_today = case when crime_day = $2 then crime_today + 1 else 1 end, crime_day = $2 where id = $1', [id, R.realDayKey()]);
 
 export const LIVE_MS = 150 * 1000; const LIVE_TXT = '2½ minutes'; // how long the crew has to play their parts once the job goes live
 const BOTCHED = 12; // a part played this badly (out of 60) gets that member caught, whatever the rest do
@@ -122,7 +121,7 @@ export class Heists {
       const odds = await this.acts.odds(h.kind, await this.acts.policeDist(ch.db, sc.x, sc.y), await this.acts.waveNow()), chance = Math.min(0.92, odds.chance + R.HEIST_CREW_BONUS * (crew.length - H.min));
       const wants = h.roles || {}, parts = MG.assignRoles(h.kind, crew.map(c => wants[c.id] || null));
       const live = { chance, band: odds.band, night: !!odds.night, sc: { x: sc.x, y: sc.y, label: sc.label }, started: t, until: t + LIVE_MS, absent: out,
-        crew: crew.map((c, i) => ({ id: c.id, h: c.handle, role: parts[i], hard: Number(c.crime_streak || 0) > 0, seed: crypto.randomInt(1, 2 ** 31), diff: Math.min(5, MG.difficultyOf(parts[i], odds.band) + Math.min(2, Math.ceil(Number(c.crime_streak || 0) / 2))) })) };
+        crew: crew.map((c, i) => ({ id: c.id, h: c.handle, role: parts[i], hard: false, seed: crypto.randomInt(1, 2 ** 31), diff: MG.difficultyOf(parts[i], odds.band) })) }; // every heist is a new game: its usual difficulty, whatever anyone's streak
       await ch.q("update heists set status = 'live', live = $2 where id = $1", [h.id, JSON.stringify(live)]);
       for (const c of crew) await ch.q('update citizens set heist_at = $2 where id = $1', [c.id, t]); // the crew lies low from now
       for (const m of live.crew) await this.acts.notify(ch, m.id, 'crime', `🚨 Go time! ${H.icon} ${H.name}: the job is on. Open the Crime tab and play your part (${MG.ROLES[m.role].icon} ${MG.ROLES[m.role].name}) in the next ${LIVE_TXT}.`);
@@ -184,12 +183,12 @@ export class Heists {
         else { p.status = 'got'; got.push(c); } }
       // the money: the takings times the outcome (up to 1.5x), shared by everyone who got away
       let loot = 0; if (out.mult > 0 && got.length) { const cap = mayor ? mayor.coins_base : R.crimeCap(h.kind, R.treasuryOn(ch.meta, ch.today)); loot = Math.max(0, Math.min(cap, Math.round(base * out.mult * (mayor ? 1 : R.econF(ch.meta))))); }
-      // shared equally, then each member's cut follows their own day (15% less per job beyond the first 5), hot streak and
-      // rank; if those would add up to more than the takings, everyone's cut shrinks alike
-      const each0 = got.length ? Math.floor(loot / got.length) : 0, want = got.map(c => each0 * R.crimePayMult(c) * R.hotMult(c.crime_streak) * R.rankMult(c.crime_xp)), sum = want.reduce((a, b) => a + b, 0), fit = sum > loot ? loot / sum : 1;
+      // shared equally, then each member's cut follows their own hot streak and rank (no daily cut on heists); if those
+      // would add up to more than the takings, everyone's cut shrinks alike
+      const each0 = got.length ? Math.floor(loot / got.length) : 0, want = got.map(c => each0 * R.hotMult(c.crime_streak) * R.rankMult(c.crime_xp)), sum = want.reduce((a, b) => a + b, 0), fit = sum > loot ? loot / sum : 1;
       const cuts = new Map(got.map((c, i) => [c.id, Math.floor(want[i] * fit)]));
       const paid = [...cuts.values()].reduce((a, b) => a + b, 0), win = paid > 0, each = each0;
-      for (const c of got) { const mine = cuts.get(c.id); if (mine) { c.coins_base += mine; track(ch, 'heist:loot', mine, c.id); await noteJob(ch, c.id); } ch.touch(c); await ch.saveCitizen(c); await bump(ch, c.id, { crimes: 1, heists: win ? 1 : 0 });
+      for (const c of got) { const mine = cuts.get(c.id); if (mine) { c.coins_base += mine; track(ch, 'heist:loot', mine, c.id); } ch.touch(c); await ch.saveCitizen(c); await bump(ch, c.id, { crimes: 1, heists: win ? 1 : 0 });
         // it came off: lie low just a moment, but the next job will be harder
         if (win) await ch.q('update citizens set heist_at = $2, crime_streak = crime_streak + 1 where id = $1', [c.id, t - R.HEIST_COOLDOWN + 20000]); }
       for (const x of caught) { await ch.q('update citizens set crime_streak = 0 where id = $1', [x.c.id]); x.c.crime_streak = 0; }
@@ -211,12 +210,13 @@ export class Heists {
       await ch.q("update heists set status = 'done', result = $2 where id = $1", [h.id, JSON.stringify(result)]);
       await ch.event(win ? `${H.icon} ${H.name}: a crew of ${parts.length} hit ${L0.sc.label} and got away with ${fmt(paid)} coins!${caught.length ? ` Police caught ${names(caught.map(x => x.c))}.` : ''}`
         : crewCaught ? `🚓 ${H.name} foiled! Police caught ${names(caught.map(x => x.c))}.` : `${H.icon} ${H.name}: a crew tried it and came away with nothing.`, 'crime');
-      const line = p => `@${p.h} ${MG.ROLES[p.role].icon} ${p.played ? `${p.play}/60` : 'didn’t show'}`;
-      const msg = `${win ? `${H.icon} It came off! ${out.title}.` : crewCaught ? '🚓 It went wrong.' : '🫥 Everyone got away, but with nothing.'} Crew score ${total} (play ${play} + setting ${setting}). ${parts.map(line).join(', ')}.`
-        + (win ? ` ${names(got)} got ${fmt(each)} coins each.` : '') + (caught.length ? ` Caught: ${caught.map(x => `@${x.c.handle} (fined ${fmt(x.fine)}${x.jailed ? `, jailed ${H.jail} min` : ''})`).join(', ')}.` : '');
+      // how it went, said plainly in the crew chat (the only place it's told)
+      const msg = (win ? `✅ ${H.name}: it came off! ${parts.filter(p => p.status === 'got').map(p => `@${p.h} got ${fmt(p.each || 0)} coins`).join(', ')}.` : crewCaught ? `🚓 ${H.name}: it went wrong.` : `🫥 ${H.name}: everyone got away, but with nothing.`)
+        + (caught.length ? ` Caught: ${caught.map(x => `@${x.c.handle} (fined ${fmt(x.fine)}${x.jailed ? `, jailed ${H.jail} min` : ''})`).join(', ')}.` : '')
+        + (sat.length ? ` ${names(sat)} didn't play.` : '') + ` Crew score ${total} of 100.`;
       return { h, msg, result };
     });
-    if (res) { await this.chat.system({ id: res.h.group_id }, res.msg).catch(() => {}); await this.chat.close(res.h.group_id, '🔒 The job is done. This crew chat closes in 2 minutes.').catch(() => {}); }
+    if (res) { await this.chat.system({ id: res.h.group_id }, res.msg).catch(() => {}); await this.chat.close(res.h.group_id, '🔒 The job is done. This chat stays for a day so you can look back.', 24 * 3600 * 1000).catch(() => {}); }
     return res ? { ok: true, ...res.result, message: res.msg } : null;
   }
   async sweep() {

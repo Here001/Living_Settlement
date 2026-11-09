@@ -310,9 +310,9 @@ export const BAIL_PER_MIN = 150, BAIL_MIN = 300;
 export const bailCost = msLeft => Math.max(BAIL_MIN, Math.ceil(Math.max(0, msLeft) / 60000) * BAIL_PER_MIN);
 
 // ---------- The economy's dials ----------
-// The first 5 jobs (crimes or heists) that come off each real day pay in full; after that each pays 8% less than the last,
-// but never less than half. It's back to full the next day (midnight UTC).
-export const CRIME_DECAY = 0.92, CRIME_FREE = 5, CRIME_FLOOR = 0.5;
+// The first 8 solo jobs that come off each real day pay in full; after that each pays 4% less than the last, but never
+// less than three quarters. It's back to full the next day (midnight UTC). Heists don't count and aren't cut.
+export const CRIME_DECAY = 0.96, CRIME_FREE = 8, CRIME_FLOOR = 0.75;
 // The most one job can take from the treasury, as a share of what it holds, so one crew can't empty the town.
 export const CRIME_SHARE = { rob: 0.03, scam: 0.01, atm: 0.05, armored: 0.1, jailbreak: 0.04, bank: 0.2 };
 export const realDayKey = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);

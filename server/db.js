@@ -321,6 +321,8 @@ const MIGRATIONS = [
      bonus boolean not null default false, primary key (citizen_id, day));`,
   // v63: daily usage quotas and budgets (posts, messages, offers… per player; the radio's paid AI per colony)
   `create table if not exists usage_daily (subject text not null, day text not null, kind text not null, n int not null default 0, primary key (subject, day, kind));`,
+  // v64: estates: plots side by side with the same owner are one property (estate = the first plot's id; null = on its own)
+  `alter table plots add column if not exists estate text; create index if not exists plots_estate on plots (estate);`,
 ];
 
 export async function migrate() {

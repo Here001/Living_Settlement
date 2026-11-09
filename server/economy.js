@@ -30,7 +30,7 @@ const BUYABLE_CATS = new Set(['housing', 'shops', 'offices', 'industry']);
 export const buyable = type => { const t = BUILDING_TYPES[type]; return !!t && BUYABLE_CATS.has(t.cat) && !!(t.home || t.work); };
 export const priceOf = (type, level = 1) => R.propertyPrice(type) * (level > 1 ? R.levelMul(level) : 1);
 // How many properties a colonist holds: each plot of land (whatever stands on it) and each building bought on its own.
-export async function ownedCount(q, id) { return Number((await q('select (select count(*) from plots where owner_id = $1) + (select count(*) from buildings where owner_id = $1 and plot_id is null) n', [id])).rows[0].n); }
+export async function ownedCount(q, id) { return Number((await q('select (select count(distinct coalesce(estate, id)) from plots where owner_id = $1) + (select count(*) from buildings where owner_id = $1 and plot_id is null) n', [id])).rows[0].n); } // an estate of joined plots is one property
 export async function limitOf(q, id) { return R.propertyLimit((await q('select stars from citizens where id = $1', [id])).rows[0]?.stars || 0); } // see shared/rules.js: about a real month to pay for itself
 // A building's daily income for its owner, after the treasury's cut.
 // `self` is 1 when the owner lives there: they pay no rent, so there's none to collect from them.
@@ -316,8 +316,11 @@ export class Economy {
     const me = (await pool.query('select stars, home_id from citizens where id = $1', [id])).rows[0], max = await limitOf(q, id), stars = me?.stars || 0, inc = b => dailyIncome(b, me?.home_id === b.id ? 1 : 0).net; // you don't pay yourself rent
     const one = b => ({ id: b.id, name: nameOf(b), type: b.type, price: b.price, income: inc(b), sell: Math.floor((b.price || priceOf(b.type, b.level)) * PROPERTY_RESALE), ruin: b.ruin, level: b.level || 1, plot: b.plot_id || null, done: b.done, x: b.x, y: b.y });
     const list = rows.filter(b => !b.plot_id).map(one);
-    const land = plots.map(p => { const on = rows.filter(b => b.plot_id === p.id), worth = Number(p.price) + on.reduce((s, b) => s + Number(b.price || 0), 0);
-      return { id: p.id, name: p.name || `Plot ${p.w}×${p.d}`, x: p.x, y: p.y, w: p.w, d: p.d, price: Number(p.price), income: on.reduce((s, b) => s + inc(b), 0), sell: Math.floor(worth * PROPERTY_RESALE), buildings: on.map(one) }; });
+    // plots joined into an estate are listed as one property, under the first plot's id and name
+    const groups = new Map(); for (const p of plots) { const k = p.estate || p.id; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); }
+    const land = [...groups.entries()].map(([k, ps]) => { const root = ps.find(p => p.id === k) || ps[0], ids = new Set(ps.map(p => p.id)), on = rows.filter(b => ids.has(b.plot_id)), price = ps.reduce((s, p) => s + Number(p.price), 0), worth = price + on.reduce((s, b) => s + Number(b.price || 0), 0);
+      const x0 = Math.min(...ps.map(p => p.x)), y0 = Math.min(...ps.map(p => p.y)), x1 = Math.max(...ps.map(p => p.x + p.w)), y1 = Math.max(...ps.map(p => p.y + p.d)), tiles = ps.reduce((s, p) => s + p.w * p.d, 0);
+      return { id: k, name: root.name || (ps.length > 1 ? `Estate of ${ps.length} plots` : `Plot ${root.w}×${root.d}`), x: x0, y: y0, w: x1 - x0, d: y1 - y0, tiles, plots: ps.length, price, income: on.reduce((s, b) => s + inc(b), 0), sell: Math.floor(worth * PROPERTY_RESALE), buildings: on.map(one) }; });
     return { max, stars, count: list.length + land.length, next: R.propertyLimit(Math.min(12, stars + 1)), cut: TREASURY_CUT, list, plots: land };
   }
   async buy(id, buildingId) {

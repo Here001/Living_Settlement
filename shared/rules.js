@@ -270,16 +270,19 @@ function charges(list, base, skip) {
 // 36 tiles sells for (more for an upgraded one; nearer ones count more), and `weight` how many buildings that is drawn from.
 // A tile costs from 150 coins (bare outskirts) to 3,905 among the dearest buildings, so the biggest plot, 8×8, tops out at
 // about 250,000. The price climbs steeply with what's around: next to cabins land is cheap, next to towers it's dear.
-export const LAND_TILE_MIN = 150, LAND_TILE_MAX = 3905, LAND_RADIUS = 36, LAND_DEAR = 2000000;
+// An 8×8 plot (64 tiles) costs 25,000 coins of land at the least and 1,200,000 at the most, before charges. Where it falls
+// between follows the homes and businesses within 60 tiles.
+export const LAND_TILE_MIN = 25000 / 64, LAND_TILE_MAX = 1200000 / 64, LAND_RADIUS = 60, LAND_DEAR = 2000000;
 export function landTilePrice(value, weight = 1) {
   if (!(value > 0) || !(weight > 0)) return LAND_TILE_MIN;
   const f = Math.min(1, Math.sqrt(value / LAND_DEAR)) * Math.min(1, weight / 3); // one lonely building lifts it less than a street of them
-  return Math.round((LAND_TILE_MIN + (LAND_TILE_MAX - LAND_TILE_MIN) * f) / 5) * 5;
+  if (f >= 1) return LAND_TILE_MAX;
+  return Math.max(LAND_TILE_MIN, Math.round((LAND_TILE_MIN + (LAND_TILE_MAX - LAND_TILE_MIN) * f) / 5) * 5);
 }
 // What one nearby building adds: its sale price if it's a home or business (0 for parks, trees, decorations and the like).
 export function siteValue(type, level = 1) { return earns(type) && BUILDING_TYPES[type]?.cat !== 'nature' ? propertyPrice(type) * levelMul(level) : 0; }
 export function landQuote(w, d, value, weight) {
-  const perTile = landTilePrice(value, weight), land = perTile * w * d, ch = charges(LAND_CHARGES, land);
+  const perTile = landTilePrice(value, weight), land = Math.round(perTile * w * d), ch = charges(LAND_CHARGES, land);
   return { w, d, tiles: w * d, perTile, land, charges: ch.lines, chargesTotal: ch.total, total: land + ch.total };
 }
 

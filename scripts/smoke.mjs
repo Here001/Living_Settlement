@@ -1687,6 +1687,20 @@ r = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x
   for (const c of cars) await call('DELETE', `/api/me/cars/${c.id}`, undefined, A.P);
   const sold = await call('POST', `/api/me/plots/${lp.json.plot.id}/sell`, {}, A.P); ok(sold.status === 200, 'with the planes sold, the hangar and its land can be sold', JSON.stringify(sold.json));
   await pool.query('update citizens set home_id = $2 where id = $1', [A.id, was]); }
+// estates: land touching your own plot joins it (no road needed beside it): one property, built on across both, sold whole
+{ const C = await player('estate_eve', 4_000_000), e1 = await spot(3, 3), b1 = await call('POST', '/api/me/land', { ...e1, name: 'Eve Acres' }, C.P); ok(b1.status === 200, 'a first plot for the estate', JSON.stringify(b1.json).slice(0, 200));
+  const n0 = (await call('GET', '/api/me/properties', undefined, C.P)).json.count;
+  const sides = [[{ x: e1.x + 3, y: e1.y, w: 2, d: 3 }, [e1.x + 2, e1.y]], [{ x: e1.x - 2, y: e1.y, w: 2, d: 3 }, [e1.x - 1, e1.y]], [{ x: e1.x, y: e1.y + 3, w: 3, d: 2 }, [e1.x, e1.y + 2]], [{ x: e1.x, y: e1.y - 2, w: 3, d: 2 }, [e1.x, e1.y - 1]]];
+  let pick = null; for (const [r, at] of sides) { const q = (await call('GET', `/api/land/quote?x=${r.x}&y=${r.y}&w=${r.w}&d=${r.d}`, undefined, C.P)).json; if (!q.problem) { pick = { r, at, q }; break; } }
+  ok(pick && pick.q.joins === 'Eve Acres', 'land touching your own plot can be bought, and the quote says it joins your land', JSON.stringify(pick && pick.q).slice(0, 200));
+  if (pick) { const roadside = (await pool.query('select 1 from roads where ((x = $1::int - 1 or x = $1::int + $3::int) and y >= $2::int and y < $2::int + $4::int) or ((y = $2::int - 1 or y = $2::int + $4::int) and x >= $1::int and x < $1::int + $3::int) limit 1', [pick.r.x, pick.r.y, pick.r.w, pick.r.d])).rowCount;
+    if (!roadside) ok(/road/.test((await call('GET', `/api/land/quote?x=${pick.r.x}&y=${pick.r.y}&w=${pick.r.w}&d=${pick.r.d}`, undefined, A.P)).json.problem || ''), "…while for anyone else it would need a road beside it");
+    const b2 = await call('POST', '/api/me/land', pick.r, C.P), n1 = (await call('GET', '/api/me/properties', undefined, C.P)).json;
+    ok(b2.status === 200 && b2.json.joined && n1.count === n0 && n1.plots.length === 1 && n1.plots[0].plots === 2, 'it joins as one property (an estate), not a second one', JSON.stringify({ b2: b2.json, n1: n1.plots }).slice(0, 300));
+    const info = (await call('GET', `/api/plots/${b2.json.plot.id}`, undefined, C.P)).json; ok(info.plots && info.plots.length === 2 && info.tiles === 9 + 6, 'the plot card shows the whole estate', JSON.stringify(info).slice(0, 200));
+    const across = await call('POST', `/api/me/plots/${info.id}/build`, { type: 'house', x: pick.at[0], y: pick.at[1] }, C.P); ok(across.status === 200, 'a house can stand across both plots of the estate', JSON.stringify(across.json).slice(0, 200));
+    if (across.status === 200) await pool.query('update buildings set done = true where id = $1', [across.json.building.id]);
+    const sold = await call('POST', `/api/me/plots/${info.id}/sell`, {}, C.P); ok(sold.status === 200 && !(await pool.query('select 1 from plots where owner_id = $1', [C.id])).rowCount, 'selling the estate sells all of it', JSON.stringify(sold.json)); } }
 // the builder's Accounts: balances and each player's money history
 { const ac = (await call('GET', '/api/admin/accounts?q=landlady')).json, me = ac.players?.find(p => p.h === 'landlady');
   ok(me && me.total === me.cash + me.bank && ac.count >= 1, 'the builder sees a player\'s cash and savings', JSON.stringify(ac).slice(0, 200));

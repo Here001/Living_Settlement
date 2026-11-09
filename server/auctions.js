@@ -109,9 +109,13 @@ export class Auctions {
       // trees, bushes, rocks and street furniture on it are cleared away, as when land is bought
       for (const b of (await ch.q('select * from buildings where x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int for update', [r.x, r.y, r.w, r.d])).rows) await this.world.demolishIn(ch, b);
       const pid = uid(), price = Number(a.top_bid);
-      await ch.q('insert into plots (id, owner_id, owner_handle, x, y, w, d, cx, cy, price, bought_at, name) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
-        [pid, c.id, c.handle, r.x, r.y, r.w, r.d, a.cx, a.cy, price, Date.now(), a.name || '']);
-      ch.plots.add(pid); treasuryAdd(ch, price); track(ch, 'land:auction', price, c.id);
+      // touching the winner's own land, it joins that estate (one property)
+      const adj = await this.housing.ownAdjacent((s2, v) => ch.q(s2, v), c.id, r), estate = adj.length ? (adj[0].estate || adj[0].id) : null;
+      await ch.q('insert into plots (id, owner_id, owner_handle, x, y, w, d, cx, cy, price, bought_at, name, estate) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
+        [pid, c.id, c.handle, r.x, r.y, r.w, r.d, a.cx, a.cy, price, Date.now(), estate ? '' : (a.name || ''), estate]);
+      ch.plots.add(pid);
+      if (estate) { for (const k of new Set(adj.map(x => x.estate || x.id))) if (k !== estate) await ch.q('update plots set estate = $1 where coalesce(estate, id) = $2', [estate, k]);
+        for (const row of (await ch.q('select id from plots where coalesce(estate, id) = $1', [estate])).rows) ch.plots.add(row.id); } treasuryAdd(ch, price); track(ch, 'land:auction', price, c.id);
       await this.world.actions?.notify(ch, c.id, 'auction', `🔨 You won the auction! ${label(a)[0].toUpperCase() + label(a).slice(1)} ${a.place || ''} is yours for ${fmt(price)} coins. Tap it on the map to build.`);
       await done('sold', `🔨 Sold! @${c.handle} won ${label(a)} ${a.place || ''} for ${fmt(price)} coins (${a.bids} bid${a.bids === 1 ? '' : 's'}).`, pid);
     });

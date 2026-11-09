@@ -23,7 +23,7 @@ export const bRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy
   builtAt: r.built_at, builtDay: r.built_day, rot: r.rot || 0, homeUsed: r.home_used, jobUsed: r.job_used, hangUsed: r.hang_used,
   done: r.done !== false, readyAt: r.ready_at || 0, ruin: !!r.ruin, ruinedAt: r.ruined_at || 0, owner: r.owner_handle || null,
   w: r.w, d: r.d, lv: r.level || 1, plot: r.plot_id || null, upAt: Number(r.up_at || 0) });
-export const pRow = r => ({ id: r.id, x: r.x, y: r.y, w: r.w, d: r.d, cx: r.cx, cy: r.cy, owner: r.owner_handle, name: r.name || '' });
+export const pRow = r => ({ id: r.id, x: r.x, y: r.y, w: r.w, d: r.d, cx: r.cx, cy: r.cy, owner: r.owner_handle, name: r.name || '', estate: r.estate || r.id });
 const vRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, placedAt: r.placed_at, owner: r.owner_handle || null });
 const tileKeys = keys => keys.filter(k => /^-?\d{1,7},-?\d{1,7}$/.test(k));
 const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_cy], [c.hang_cx, c.hang_cy], [c.visit_cx, c.visit_cy]]
@@ -581,7 +581,9 @@ export class World {
   // `level` sets the footprint of an upgraded building; `plot` is the plot it may stand on (anyone else's land is off limits).
   async assertFree(ch, type, x, y, ignoreId = null, rot = 0, { level = 1, plot = null } = {}) {
     const [w, d] = R.footprint(R.levelSize(type, level), R.cleanRot(rot));
-    const land = (await ch.q('select owner_handle from plots where id is distinct from $5::text and x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int limit 1', [x, y, w, d, plot])).rows[0];
+    // the plot it may stand on, and every plot joined to it in the same estate
+    const allowed = plot == null ? [] : (await ch.q('select id from plots where coalesce(estate, id) = (select coalesce(estate, id) from plots where id = $1)', [plot])).rows.map(r => r.id);
+    const land = (await ch.q('select owner_handle from plots where not (id = any($5::text[])) and x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int limit 1', [x, y, w, d, allowed])).rows[0];
     if (land) throw new HttpError(409, `That's @${land.owner_handle}'s land. Pick a spot off their plot.`);
     const hit = await ch.q(`select 1 from buildings where id is distinct from $5::text and x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int limit 1`, [x, y, w, d, ignoreId]);
     const road = await ch.q('select 1 from roads where x >= $1::int and x < $1::int + $3::int and y >= $2::int and y < $2::int + $4::int limit 1', [x, y, w, d]);

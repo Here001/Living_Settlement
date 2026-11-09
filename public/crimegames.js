@@ -30,10 +30,14 @@ export function openCrimeGame(kind, info, ctx) {
 }
 function close() { const r = document.querySelector('.mg'); if (r) { r._stop && r._stop(); r.remove(); } document.body.classList.remove('mg-on'); }
 
-// The page before a game: a banner in the game's colours, the three numbers that matter (how hard, your odds, what it
-// pays), the steps, and how the score turns into a result. Practising is offered the first time you open each game
+// The page before a game, kept short: a banner in the game's colours, three numbers (how hard, your chance, what it
+// pays), a one-line tip, the steps folded away under "How to play", and the buttons. Practising is offered the first time you open each game
 // (practice-only openings always show it); after that it's straight to the real thing.
 const HUE = { rob: ['#E4572E', '#F2994A'], scam: ['#8E5BD9', '#D97BC8'], atm: ['#2F80ED', '#56CCF2'], driver: ['#E2A23B', '#F2C94C'], hacker: ['#219653', '#6FCF97'], safecracker: ['#5E6670', '#A9B0B8'], lookout: ['#2F4A7A', '#4A7BD9'], muscle: ['#A3271F', '#E4572E'] };
+// one line to get going; the full steps sit folded away under "How to play"
+const TIP = { rob: 'Sneak to the till, grab the cash, get out unseen.', scam: 'Answer what the tourist asks, then tap “Say it” in the green.', atm: 'Match each wire to its symbol, then tap back the code.',
+  driver: 'Tap left or right to dodge the traffic.', hacker: 'Match each wire to its symbol, then tap back the code.', safecracker: 'Tap when the pointer is on the green number.',
+  lookout: 'Tap the police. Leave everyone else alone.', muscle: 'Drag to move, hold the red button to fight. Stay alive.' };
 const triedKey = k => 'mg-tried-' + k;
 const tried = k => { try { return !!localStorage.getItem(triedKey(k)); } catch (e) { return false; } };
 const markTried = k => { try { localStorage.setItem(triedKey(k), '1'); } catch (e) {} };
@@ -44,30 +48,22 @@ function intro(root, kind, info) {
   const showPractice = info.practiceOnly || !tried(kind);
   const pips = $c('span', { class: 'mgpips', 'aria-label': `Difficulty ${diff} of 5` }); for (let i = 1; i <= 5; i++) pips.append($c('i', { class: i <= diff ? 'on' : '' }));
   const tile = (label, value, sub) => $c('div', { class: 'mgtile' }, $c('span', { class: 'mgtl', text: label }), value, sub ? $c('small', { text: sub }) : null);
-  const pct = Math.round((info.chance || 0) * 100);
+  const pct = Math.round((info.chance || 0) * 100), police = info.band === 'low' ? '🔴 police close' : info.band === 'mid' ? '🟡 police near' : info.band ? '🟢 no police' : '';
   const tiles = $c('div', { class: 'mgtiles' },
-    tile('Difficulty', pips, ['Easy', 'Easy', 'Fair', 'Tricky', 'Hard', 'Brutal'][diff]),
-    tile('The setting', $c('b', { text: `${setting}/40` }), info.chance ? `${pct}% odds` : 'police, night, crime wave'),
-    heist ? tile('Your part', $c('b', { text: 'of 60' }), 'crew play + setting') : info.usual ? tile('Usually pays', $c('b', { text: `${fmt(info.usual[0] / 1000)}k–${fmt(info.usual[1] / 1000)}k` }), info.hot > 1 ? `×${info.hot.toFixed(2)} hot streak` : 'up to 1.5× if clean') : tile('Score', $c('b', { text: 'out of 60' }), 'free practice'));
-  const chips = $c('div', { class: 'mgchips' }, ...[info.band === 'low' ? '🔴 Police close by' : info.band === 'mid' ? '🟡 Police not far' : info.band ? '🟢 No police nearby' : null, info.night ? '🌙 Dark streets' : null, info.wave ? '🦹 Crime wave' : null, !heist && info.hot > 1 ? `🔥 Hot streak ×${info.hot.toFixed(2)}` : null].filter(Boolean).map(t => $c('span', { text: t })));
-  const steps = $c('ol', { class: 'mgsteps' }, ...I.how.map((t, i) => $c('li', null, $c('b', { text: String(i + 1) }), $c('span', { text: t }))));
-  // how the score turns into a result (solo jobs): one bar, coloured by outcome
-  const scale = !heist && !info.practiceOnly && !ROLE(kind) ? $c('div', { class: 'mgscale', 'aria-label': 'How your score turns into a result' },
-    $c('div', { class: 'mgbar' }, ...[['Jailed', 20, '#7A1F18'], ['Caught', 20, '#C8382E'], ['Nothing', 20, '#8A8178'], ['Some', 20, '#E2A23B'], ['Clean', 20, '#3CA45A']].map(([t, w, c]) => $c('i', { style: `flex:${w};background:${c}`, title: t }, $c('span', { text: t })))),
-    $c('div', { class: 'mgticks' }, ...['0', '20', '40', '60', '80', '100'].map(t => $c('span', { text: t }))),
-    $c('p', { class: 'mghint2', text: 'Your play earns up to 60 points and the setting up to 40. 80+ is a clean getaway (up to 1.5× the takings); below 40 you\'re caught and fined.' })) : null;
-  const note = heist ? $c('p', { class: 'mghint2', text: 'The whole crew plays at the same time. The crew\'s average play plus the setting decides the job: 80+ pays up to 1.5× the loot, below 40 the crew is caught. Botch your own part and you\'re caught whatever the rest do.' })
-    : ROLE(kind) ? $c('p', { class: 'mghint2', text: 'Practice for a heist part: free, and scored out of 60 like the real thing.' }) : null;
+    tile('Difficulty', pips, null),
+    info.chance ? tile('Chance', $c('b', { text: `${pct}%` }), police) : tile('Setting', $c('b', { text: `${setting}/40` }), police || null),
+    heist ? tile('Your part', $c('b', { text: '/60' }), null) : info.usual ? tile('Pays', $c('b', { text: `${fmt(info.usual[0] / 1000)}k–${fmt(info.usual[1] / 1000)}k` }), !heist && info.hot > 1 ? `🔥 ×${info.hot.toFixed(2)}` : null) : tile('Score', $c('b', { text: '/60' }), 'practice'));
+  const more = $c('details', { class: 'mgmore' }, $c('summary', { text: 'How to play' }), $c('ul', null, ...I.how.map(t => $c('li', { text: t }))));
   const go = (practice) => { markTried(kind); root.classList.remove('intro'); begin(root, kind, info, practice); };
   const btns = $c('div', { class: 'mgbtns2' },
     heist ? $c('button', { class: 'mgb hot big', text: '🎯 Play my part now', onclick: () => go(false) })
       : info.practiceOnly ? null : $c('button', { class: 'mgb hot big', text: real ? '🎯 Do it for real' : info.blocked, disabled: real ? null : '', onclick: () => real && go(false) }),
-    showPractice ? $c('button', { class: info.practiceOnly ? 'mgb hot big' : 'mgb soft', text: info.practiceOnly ? '▶ Practise (free)' : '▶ Practise first: free, nothing at stake', onclick: () => go(true) }) : null);
+    showPractice ? $c('button', { class: info.practiceOnly ? 'mgb hot big' : 'mgb soft', text: info.practiceOnly ? '▶ Practise (free)' : '▶ Practise first (free)', onclick: () => go(true) }) : null);
   const left = heist ? $c('p', { class: 'mgleft2', text: '' }) : null;
   root.append($c('div', { class: 'mgcard mgintro inked' },
     $c('button', { class: 'mgx', 'aria-label': 'Close', text: '×', onclick: close }),
     $c('div', { class: 'mghero', style: `--g1:${g1};--g2:${g2}` }, $c('div', { class: 'mgic', text: I.icon }), $c('div', null, $c('h2', { text: I.name }), info.at ? $c('p', { text: `📍 ${info.at}` }) : heist ? $c('p', { text: '🕶️ Heist part' }) : $c('p', { text: info.practiceOnly ? 'Practice' : 'Solo job' }))),
-    tiles, chips.children.length ? chips : null, $c('h3', { class: 'mgh', text: 'How to play' }), steps, scale, note, left, btns));
+    tiles, $c('p', { class: 'mgtip', text: TIP[kind] || '' }), more, left, btns));
   if (heist && info.until) { const lab = root.querySelector('.mgleft2'); const tick = () => { if (!lab.isConnected) return; const l = Math.max(0, info.until - Date.now()); lab.textContent = `⏱️ ${Math.floor(l / 60000)}:${String(Math.floor(l / 1000) % 60).padStart(2, '0')} left for the crew to play`; setTimeout(tick, 500); }; tick(); }
 }
 async function begin(root, kind, info, practice) {

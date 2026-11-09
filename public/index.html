@@ -1103,6 +1103,7 @@ function applyOp(o){
 let newsTimer=null; const newsSoon=()=>{ if(!newsTimer) newsTimer=setTimeout(()=>{ newsTimer=null; updateNews(); },300); }; // a burst of news updates the ticker once
 
 // Which chunks the screen needs: everything visible plus a one-chunk margin, capped when zoomed far out.
+const ZOOM_MIN=0.15; // how far out the map zooms (pinch or mouse wheel); was 0.35
 function viewChunks(){
   const cs=[[0,0],[cw,0],[0,ch],[cw,ch]].map(([sx,sy])=>{ const w=screenToWorld(sx,sy); return worldToTileF(w.x,w.y); });
   let x0=Math.floor(Math.min(...cs.map(c=>c.x))/CHUNK)-1, x1=Math.floor(Math.max(...cs.map(c=>c.x))/CHUNK)+1, y0=Math.floor(Math.min(...cs.map(c=>c.y))/CHUNK)-1, y1=Math.floor(Math.max(...cs.map(c=>c.y))/CHUNK)+1;
@@ -2854,7 +2855,7 @@ function drawRoadTile(x,y,R,has,pushDeco){ const k=TILEKEY||x+','+y;
 /* ---------------- frame ---------------- */
 // Fewer people are simulated on a phone that's struggling (the quality level goes up when frames run slow).
 // Zoomed far out people are only a few pixels tall, so fewer are drawn (and they're picked nearest the middle first).
-const crowdMax = () => Math.round(([1500,1100,700,350][Quality.level]||350)*(cam.z<0.6?0.45:cam.z<0.8?0.7:1)*(Power.saver?0.5:1)); let crowd=[], crowdAt=-1e9, areaSel=null;
+const crowdMax = () => Math.round(([1500,1100,700,350][Quality.level]||350)*(cam.z<0.3?0.2:cam.z<0.6?0.45:cam.z<0.8?0.7:1)*(Power.saver?0.5:1)); let crowd=[], crowdAt=-1e9, areaSel=null;
 const progressOf = b => { const span=Math.max(1,(b.readyAt||0)-(b.builtAt||0)); return Math.max(0.03,Math.min(1,(Date.now()+skew-(b.builtAt||0))/span)); };
 // A building site: dug-out ground, a faint outline of what's coming, and scaffolding that rises as work goes on.
 function drawConstruction(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>drawConstruction(v,T(v))); }
@@ -3579,7 +3580,7 @@ cv.addEventListener('pointermove', e=>{
     // Twisting two fingers by about 40° turns the map a quarter turn that way (then twist on for another).
     const ang=Math.atan2(b.y-a.y,b.x-a.x); let da=ang-gesture.a0; while(da>Math.PI) da-=2*Math.PI; while(da<-Math.PI) da+=2*Math.PI;
     if(Math.abs(da)>0.7){ turnView(da>0?1:-1, (a.x+b.x)/2, (a.y+b.y)/2); gesture.a0=ang; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture.wx=w.x; gesture.wy=w.y; gesture.z0=cam.z; gesture.d0=Math.hypot(a.x-b.x,a.y-b.y); }
-    cam.z=Math.min(4,Math.max(0.35,gesture.z0*Math.hypot(a.x-b.x,a.y-b.y)/gesture.d0)); const mx=(a.x+b.x)/2,my=(a.y+b.y)/2; cam.x=gesture.wx-(mx-cw/2)/cam.z; cam.y=gesture.wy-(my-ch/2)/cam.z; follow=null; }
+    cam.z=Math.min(4,Math.max(ZOOM_MIN,gesture.z0*Math.hypot(a.x-b.x,a.y-b.y)/gesture.d0)); const mx=(a.x+b.x)/2,my=(a.y+b.y)/2; cam.x=gesture.wx-(mx-cw/2)/cam.z; cam.y=gesture.wy-(my-ch/2)/cam.z; follow=null; }
 });
 function endPointer(e){ if(!pointers.has(e.pointerId)) return; pointers.delete(e.pointerId); clearTimeout(holdTimer);
   if(gesture&&gesture.type==='fence'&&pointers.size===0){ gesture=null; if(e.type==='pointercancel'){ fenceRun=null; return; } commitFence(); return; }
@@ -3594,7 +3595,7 @@ function endPointer(e){ if(!pointers.has(e.pointerId)) return; pointers.delete(e
   if(pointers.size===0) gesture=null; }
 cv.addEventListener('pointerup', endPointer); cv.addEventListener('pointercancel', endPointer);
 cv.addEventListener('pointerleave', e=>{ if(e.pointerType==='mouse' && !pointers.size){ hoverTile=null; if(ghost) ghost.tile=null; } });
-cv.addEventListener('wheel', e=>{ e.preventDefault(); const w=screenToWorld(e.clientX,e.clientY); cam.z=Math.min(4,Math.max(0.35,cam.z*Math.exp(-e.deltaY*0.0015))); cam.x=w.x-(e.clientX-cw/2)/cam.z; cam.y=w.y-(e.clientY-ch/2)/cam.z; }, { passive:false });
+cv.addEventListener('wheel', e=>{ e.preventDefault(); const w=screenToWorld(e.clientX,e.clientY); cam.z=Math.min(4,Math.max(ZOOM_MIN,cam.z*Math.exp(-e.deltaY*0.0015))); cam.x=w.x-(e.clientX-cw/2)/cam.z; cam.y=w.y-(e.clientY-ch/2)/cam.z; }, { passive:false });
 
 function paintAt(sx,sy){ const [x,y]=tileAt(sx,sy); const k=x+','+y;
   if(tool.kind==='water'||tool.kind==='drain'){ const n=tool.size||1, r=Math.floor(n/2); for(let i=0;i<n;i++) for(let j=0;j<n;j++){ const kk=(x-r+i)+','+(y-r+j); if(paintBuf.has(kk)) continue;

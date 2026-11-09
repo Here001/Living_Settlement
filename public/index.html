@@ -1040,7 +1040,7 @@ let Me=ls.get('settlement-player'); // { token, handle }
 let auth=null, authPoll=null; // the open "prove it's you" or "log in" panel
 let myMoney=null; // the signed-in colonist's own coins
 async function loadMyMoney(){ if(!(Me&&Me.handle)){ myMoney=null; return; } try{ const d=await api('/api/citizens/'+encodeURIComponent(Me.handle)); myMoney={coins:d.coins,net:d.net}; }catch(e){ myMoney=null; } refreshHUD(); }
-setInterval(loadMyMoney,60000);
+setInterval(()=>{ if(!document.hidden) loadMyMoney(); },60000); // (not while the app is in the background)
 async function checkMe(){ if(!Me||!Me.token) return; try{ const r=await api('/api/me'); Me={...Me,handle:r.handle,genderChosen:!!r.genderChosen}; ls.set('settlement-player',Me); loadMyMoney(); }catch(e){ Me=null; ls.set('settlement-player',null); syncFindChip(); } }
 // Tell the live connection who we are (or that we signed out), so chats arrive and friends see us online.
 function wsAuth(){ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'auth',token:Me&&Me.token||null})); }catch(e){} }
@@ -1531,13 +1531,16 @@ const MOBILE=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)||(navigator
 const Power={ pref:(()=>{ try{ return localStorage.getItem('resurgence-saver')||'auto'; }catch(e){ return 'auto'; } })(), low:false,
   get saver(){ return this.pref==='on'||(this.pref==='auto'&&this.low); },
   set(v){ this.pref=v; try{ localStorage.setItem('resurgence-saver',v); }catch(e){} resize(); },
+  hidden(){ const c=document.body.classList; return c.contains('mg-on')||c.contains('card-max')||c.contains('pane-max'); },
   covered(){ return document.body.classList.contains('mg-on')||document.body.classList.contains('card-max')||document.body.classList.contains('pane-max')||!!document.querySelector('.rsheet-bg:not(.dock)'); },
   // the gap (ms) between redraws right now
-  gap(ts){ if(this.covered()) return this.saver?250:160;
+  gap(ts){ if(this.hidden()) return 1000; // a full-screen game, card or panel hides the map: once a second is plenty
+    if(this.covered()) return this.saver?250:160;
     if(ts-lastInput<1500) return this.saver?33:0; // touching the map: full speed
     if(Watch.id||follow) return this.saver?50:32; // the camera following someone: smooth enough at 30
     const idle=ts-lastInput; if(idle<4000) return this.saver?50:(MOBILE?33:16); // just let go: 30 a second while a fling or zoom settles
-    return this.saver?(MOBILE?100:50):(MOBILE?66:32); } }; // then on a phone, 15 a second (10 on battery saver): people stroll, cars cruise
+    if(idle<20000) return this.saver?(MOBILE?100:50):(MOBILE?66:32); // then on a phone, 15 a second (10 on battery saver): people stroll, cars cruise
+    return this.saver?(MOBILE?125:66):(MOBILE?100:40); } }; // left alone for 20 s: 10 a second on a phone (8 on battery saver), to keep it cool; a touch brings full speed back
 if(navigator.getBattery) navigator.getBattery().then(b=>{ const f=()=>{ const was=Power.saver; Power.low=!b.charging&&b.level<=0.2; if(was!==Power.saver) resize(); }; f(); b.addEventListener('levelchange',f); b.addEventListener('chargingchange',f); }).catch(()=>{});
 function resize(){ dpr=Quality.dpr(); cw=cv.clientWidth||innerWidth; ch=cv.clientHeight||innerHeight; cv.width=Math.round(cw*dpr); cv.height=Math.round(ch*dpr); }
 // Every couple of seconds, take the map's colour along its top and bottom edges and paint the page's edges (and the
@@ -3818,7 +3821,7 @@ function buildToolbar(){ const row=$('toolsRow'); row.innerHTML=''; syncFindChip
   const all = Store.canWrite ? tabs.concat([{id:'reports',name:'Reports'},{id:'stats',name:'Stats'},{id:'money',name:'Accounts'},{id:'stream',name:'Stream'},{sep:true}],CATS) : tabs;
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
     const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(c.id==='me'?myCardOpen():activeTab===c.id),onclick:()=>c.id==='me'?openMyCard():c.id==='build'?BuildHub.open():openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='me') btn.dataset.me='1'; if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); if(c.id==='reports'&&typeof Reports!=='undefined'&&Reports.open) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Reports.open))})); row.append(btn); } }
-function openTab(name){ if(!name) document.body.classList.remove('pane-max');
+function openTab(name){ if(!name) document.body.classList.remove('pane-max'); if(name==='races'){ if(Date.now()-(Race.loadAt||0)>60000){ loadRace(); loadLottery(); } if(Date.now()-(Fight.loadAt||0)>60000) loadFight(); } /* fresh when you open it (it isn't refreshed in the background) */
   if(name && PLAYER_TABS.has(name) && innerWidth<900 && !$('card').hidden) closeCard(); /* on a phone a bottom button replaces the open card */
   activeTab=name; if((PLAYER_TABS.has(name)||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
 function applyPermissions(){ buildToolbar(); refreshHUD(); refreshUndo(); refreshDraftBar(); if(Store.canWrite && !draftLoaded){ draftLoaded=true; loadDraft(); if(typeof Reports!=='undefined') Reports.load(); } $('spawnBoxNote')&&0; if(!Store.canWrite && activeTab && !PLAYER_TABS.has(activeTab)) openTab(null); }
@@ -4853,7 +4856,7 @@ async function loadFight(d){ try{ const r=await api('/api/fight'); Fight.info=r;
   if(d&&d.stage==='bell'&&activeTab!=='races'){ const b=(I.bouts||[]).find(x=>x.i===d.i); if(b&&!Fight.toasted.has('b'+nt.n+':'+b.i)){ Fight.toasted.add('b'+nt.n+':'+b.i); toast(`🔔 ${b.name} is on: @${b.a.handle} vs @${b.b.handle}!`,'Watch',()=>{ Fight.view='fight'; openTab('races'); }); } }
   if(d&&d.stage==='settled'&&Me&&Me.handle) loadMyMoney();
   renderRaces(); }
-setInterval(()=>{ if(!document.hidden && Date.now()-Fight.loadAt>60000 && (Fight.view==='fight'||!Fight.loadAt)) loadFight(); },10000);
+setInterval(()=>{ if(!document.hidden && (activeTab==='races'||STREAM) && Date.now()-Fight.loadAt>60000 && (Fight.view==='fight'||!Fight.loadAt)) loadFight(); },10000); // only while the Races tab is open (live news still arrives)
 const FSTYLE={ boxer:['🥊','Boxer'], kicker:['🦵','Kickboxer'], grappler:['🤼','Wrestler'], brawler:['💥','Brawler'] };
 function fighterBox(f, side, b, pickable){ const av=el('span',{class:'ava fav'}); av.innerHTML=avatarSVG({handle:f.handle,id:f.id,gender:f.gender});
   const st=FSTYLE[f.style]||['🥊',''], on=Fight.pick[b.i]===side, odds=b.odds&&b.odds[side];
@@ -4953,7 +4956,7 @@ async function loadRace(d){ try{ const r=await api('/api/race'+(Race.track?'?tra
     if(!Race.toasted.has(key) && left>0 && left<=I.announce+5000){ Race.toasted.add(key); toast(`🏁 Race #${nx.no}${at(t)} in ${Math.max(1,Math.floor(left/60000))} min. Pick your creature!`,'Races',()=>{ Race.track=t.id; openTab('races'); loadRace(); }); } }
   if(d&&d.stage==='settled'){ const t=(I.tracks||[]).find(x=>x.id===d.track), lr=t&&t.live; if(lr&&lr.result&&activeTab!=='races') toast(`🏆 ${CREATURES[lr.result.order[0]].name} won Race #${lr.no}${at(t)}!`,'Results',()=>{ Race.track=t.id; openTab('races'); loadRace(); }); }
   renderRaces(); }
-setInterval(()=>{ if(!document.hidden && Date.now()-Race.loadAt>60000){ loadRace(); loadLottery(); } },10000);
+setInterval(()=>{ if(!document.hidden && (activeTab==='races'||STREAM) && Date.now()-Race.loadAt>60000){ loadRace(); loadLottery(); } },10000); // only while the Races tab is open
 // Where the race is now: each creature's share of the lap. The order at the line is the server's; how they get there
 // follows each creature's racing style plus this race's luck (same for every viewer), so leads change hands.
 const paceCache=new Map();

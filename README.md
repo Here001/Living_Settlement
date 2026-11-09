@@ -633,6 +633,7 @@ The map is tuned for low-end Android phones. The main pieces, all in `public/ind
 - **The ground waits for the zoom to settle.** Mid-pinch the last ground picture is stretched to fit, and it's drawn again once, after the zoom stops, instead of at every step.
 - **Night windows are reused while the view is still.** The lit-windows layer is rebuilt only when the camera moves, the night deepens or a building changes; vehicles' windows don't light up (their headlights still glow), so passing traffic doesn't force a rebuild every frame.
 - **Far out, swaying trees and similar scenery are still pictures**, and the faint "see-through" people behind buildings aren't drawn.
+- **Keeping phones cool.** Left alone for 20 seconds, the map draws 10 frames a second on a phone (15 while you're looking around, full speed while you touch it); behind a full-screen game, card or panel it draws once a second. Races, the lottery and Fight Night refresh only while the Races tab is open (the 24/7 stream page excepted), and coins aren't refreshed while the app is in the background. Measured idle on the live colony: the main thread went from busy 84% of the time to 44%.
 - **Fonts never block the first screen.** On a slow or blocked connection the game opens in the phone's own font.
 
 Results on a simulated low-end Android (360×780 screen, CPU slowed 6×, 9,000 colonists):

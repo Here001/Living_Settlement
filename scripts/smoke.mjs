@@ -1701,6 +1701,14 @@ r = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x
     const across = await call('POST', `/api/me/plots/${info.id}/build`, { type: 'house', x: pick.at[0], y: pick.at[1] }, C.P); ok(across.status === 200, 'a house can stand across both plots of the estate', JSON.stringify(across.json).slice(0, 200));
     if (across.status === 200) await pool.query('update buildings set done = true where id = $1', [across.json.building.id]);
     const sold = await call('POST', `/api/me/plots/${info.id}/sell`, {}, C.P); ok(sold.status === 200 && !(await pool.query('select 1 from plots where owner_id = $1', [C.id])).rowCount, 'selling the estate sells all of it', JSON.stringify(sold.json)); } }
+// plots that touch but were bought before estates existed are joined up too (here: on the owner's next purchase)
+{ const F = await player('old_land_olu', 3_000_000), g1 = await spot(3, 3), g2 = { x: g1.x + 3, y: g1.y, w: 2, d: 3 };
+  for (const [i, r] of [[1, g1], [2, g2]]) await pool.query('insert into plots (id, owner_id, owner_handle, x, y, w, d, cx, cy, price, bought_at, name) values ($1,$2,$3,$4,$5,$6,$7,0,0,1000,$8,$9)', ['oldplot' + i, F.id, F.handle, r.x, r.y, r.w, r.d, Date.now() - 100000 + i, i === 1 ? 'Old Farm' : '']);
+  const far = await spot(2, 2, [{ x: g1.x - 2, y: g1.y - 2, w: 10, d: 7 }]), nb = await call('POST', '/api/me/land', far, F.P);
+  const rows = (await pool.query('select id, estate from plots where id in ($1, $2)', ['oldplot1', 'oldplot2'])).rows, est = new Set(rows.map(r => r.estate || r.id));
+  ok(nb.status === 200 && est.size === 1 && est.has('oldplot1'), 'touching plots bought before estates existed are joined into one, led by the named one', JSON.stringify({ nb: nb.status, rows }));
+  ok((await call('GET', '/api/me/properties', undefined, F.P)).json.count === 2, '…so the old pair counts as one property (plus the new plot)');
+  await pool.query('delete from plots where owner_id = $1', [F.id]); }
 // the builder's Accounts: balances and each player's money history
 { const ac = (await call('GET', '/api/admin/accounts?q=landlady')).json, me = ac.players?.find(p => p.h === 'landlady');
   ok(me && me.total === me.cash + me.bank && ac.count >= 1, 'the builder sees a player\'s cash and savings', JSON.stringify(ac).slice(0, 200));

@@ -106,6 +106,7 @@ export class Housing {
         [pid, c.id, c.handle, r.x, r.y, r.w, r.d, cx, cy, p.land, Date.now(), estate ? '' : name, estate]);
       ch.plots.add(pid);
       if (estate) for (const k of new Set(adj.map(a => a.estate || a.id))) if (k !== estate) for (const row of (await ch.q('update plots set estate = $1 where coalesce(estate, id) = $2 returning id', [estate, k])).rows) ch.plots.add(row.id);
+      for (const pid2 of await this.mergeEstates(q, c.id)) ch.plots.add(pid2); // every touching plot of yours ends up in one estate
       if (estate) for (const row of (await ch.q('select id from plots where coalesce(estate, id) = $1', [estate])).rows) ch.plots.add(row.id);
       c.coins_base -= p.total; treasuryAdd(ch, p.total); track(ch, 'land:buy', p.land, c.id); track(ch, 'land:charges', p.chargesTotal, c.id); ch.touch(c); await ch.saveCitizen(c);
       await ch.event(`🗺️ @${c.handle} bought a ${r.w}×${r.d} plot of land ${p.where}.`, 'property');
@@ -162,6 +163,23 @@ export class Housing {
   // two rectangles share an edge (touching only at a corner doesn't count)
   touches(a, b) { const xo = a.x < b.x + b.w && b.x < a.x + a.w, yo = a.y < b.y + b.d && b.y < a.y + a.d;
     return (xo && (a.y + a.d === b.y || b.y + b.d === a.y)) || (yo && (a.x + a.w === b.x || b.x + b.w === a.x)); }
+  // Join every group of an owner's plots that touch (edge to edge, through any chain of plots) into one estate, named
+  // after its first plot. Returns the ids of plots whose estate changed. Run after any land changes hands, and once at start.
+  async mergeEstates(q, ownerId) {
+    const ps = (await q('select id, x, y, w, d, estate, name, bought_at from plots where owner_id = $1 order by bought_at, id', [ownerId])).rows; if (ps.length < 2) return [];
+    // which plot leads a merged group: one that already leads an estate (so its name and any offers stay put), then a named one, then the oldest
+    const refs = new Map(); for (const p of ps) if (p.estate && p.estate !== p.id) refs.set(p.estate, (refs.get(p.estate) || 0) + 1);
+    const rank = new Map([...ps].sort((a, b) => (refs.get(b.id) || 0) - (refs.get(a.id) || 0) || (!!b.name - !!a.name) || Number(a.bought_at) - Number(b.bought_at)).map((p, i) => [p.id, i]));
+    const parent = new Map(ps.map(p => [p.id, p.id])), find = a => { while (parent.get(a) !== a) { parent.set(a, parent.get(parent.get(a))); a = parent.get(a); } return a; };
+    const join = (a, b) => { a = find(a); b = find(b); if (a === b) return; if (rank.get(a) <= rank.get(b)) parent.set(b, a); else parent.set(a, b); };
+    for (const p of ps) if (p.estate && p.estate !== p.id && parent.has(p.estate)) join(p.estate, p.id); // estates already formed stay together
+    for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) if (this.touches(ps[i], ps[j])) join(ps[i].id, ps[j].id);
+    const size = new Map(); for (const p of ps) { const r = find(p.id); size.set(r, (size.get(r) || 0) + 1); }
+    const changed = [];
+    for (const p of ps) { const r = find(p.id), want = size.get(r) > 1 && r !== p.id ? r : null, cur = p.estate && p.estate !== p.id ? p.estate : null;
+      if (want !== cur) { await q('update plots set estate = $2 where id = $1', [p.id, want]); changed.push(p.id); } }
+    return changed;
+  }
   async ownAdjacent(q, ownerId, r) { if (!ownerId) return [];
     return (await q('select * from plots where owner_id = $1 and x <= $2::int + $4::int and x + w >= $2::int and y <= $3::int + $5::int and y + d >= $3::int', [ownerId, r.x, r.y, r.w, r.d])).rows.filter(p => this.touches(p, r)); }
   buildQuote(type) { if (!BUILDING_TYPES[type] || type === 'landing') throw new HttpError(400, 'Unknown building type.'); return R.buildQuote(type); }
@@ -447,6 +465,7 @@ export class Housing {
       const ps = (await ch.q('select * from plots where id = any($1) for update', [eIds])).rows, on = (await ch.q('select * from buildings where plot_id = any($1) for update', [eIds])).rows;
       const old = ps.reduce((s, p) => s + Number(p.price), 0) + on.reduce((s, b) => s + Number(b.price || 0), 0), k = old > 0 ? price / old : 1; // what each part is worth now follows what was paid
       for (const p of ps) { await ch.q('update plots set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [p.id, buyer.id, buyer.handle, now, Math.round(Number(p.price) * k)]); ch.plots.add(p.id); }
+      for (const pid2 of await this.mergeEstates(q, buyer.id)) ch.plots.add(pid2); // it joins the buyer's own land if it touches it
       for (const b of on) { await ch.ownerChanged(b.id, seller.id, buyer.id); await ch.q('update buildings set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [b.id, buyer.id, buyer.handle, now, Math.round(Number(b.price || 0) * k)]); ch.buildings.add(b.id); }
     } else { await ch.ownerChanged(t.id, seller.id, buyer.id); await ch.q('update buildings set owner_id = $2, owner_handle = $3, bought_at = $4, price = $5 where id = $1', [t.id, buyer.id, buyer.handle, now, price]); ch.buildings.add(t.id); }
     await ch.q("update offers set status = 'accepted', reply = $2, closed_at = $3 where id = $1", [o.id, reply || o.reply, now]);

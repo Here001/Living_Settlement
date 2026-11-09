@@ -115,7 +115,8 @@ export class Auctions {
         [pid, c.id, c.handle, r.x, r.y, r.w, r.d, a.cx, a.cy, price, Date.now(), estate ? '' : (a.name || ''), estate]);
       ch.plots.add(pid);
       if (estate) { for (const k of new Set(adj.map(x => x.estate || x.id))) if (k !== estate) await ch.q('update plots set estate = $1 where coalesce(estate, id) = $2', [estate, k]);
-        for (const row of (await ch.q('select id from plots where coalesce(estate, id) = $1', [estate])).rows) ch.plots.add(row.id); } treasuryAdd(ch, price); track(ch, 'land:auction', price, c.id);
+        for (const row of (await ch.q('select id from plots where coalesce(estate, id) = $1', [estate])).rows) ch.plots.add(row.id); }
+      for (const pid2 of await this.housing.mergeEstates((s2, v) => ch.q(s2, v), c.id)) ch.plots.add(pid2); treasuryAdd(ch, price); track(ch, 'land:auction', price, c.id);
       await this.world.actions?.notify(ch, c.id, 'auction', `🔨 You won the auction! ${label(a)[0].toUpperCase() + label(a).slice(1)} ${a.place || ''} is yours for ${fmt(price)} coins. Tap it on the map to build.`);
       await done('sold', `🔨 Sold! @${c.handle} won ${label(a)} ${a.place || ''} for ${fmt(price)} coins (${a.bids} bid${a.bids === 1 ? '' : 's'}).`, pid);
     });

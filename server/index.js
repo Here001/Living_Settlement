@@ -435,6 +435,9 @@ const step = async (name, fn) => { const t = Date.now(); const r = await fn(); c
 await step('migrations', migrate);
 await step('Instagram settings', loadIgStatus);
 await step('update bus', () => bus.start());
+// land bought before estates existed (or that only touches other plots of the same owner): join it up, once, before the world loads
+await step('joining touching plots into estates', async () => { const H = new Housing(world), q = (a, v) => pool.query(a, v); let n = 0;
+  for (const r of (await pool.query('select owner_id from plots group by owner_id having count(*) > 1')).rows) n += (await H.mergeEstates(q, r.owner_id)).length; if (n) console.log(`estates: joined ${n} plots`); });
 await step('loading the world', () => world.load());
 await step('leader check', tryLead);
 if (isLeader && await world.reanchor().catch(e => { console.error('reanchor failed:', e.message); return false; })) console.log('Switched the clock to 30 real minutes per game day.');

@@ -555,6 +555,16 @@ export class World {
     });
   }
 
+  // The colony's places for the map legend and travel list: every finished building that isn't a tree, decoration or an
+  // unnamed home, as [id, type, name, x, y]. Worked out from memory and kept for 30 seconds.
+  directory() {
+    if (this.dirCache && Date.now() - this.dirCache.at < 30000) return this.dirCache.out;
+    const places = [];
+    for (const b of this.buildings.values()) { const t = BUILDING_TYPES[b.type]; if (!t || b.done === false || b.ruin || ['nature', 'decor', 'roads', 'terrain'].includes(t.cat) || (t.cat === 'housing' && !b.name)) continue;
+      places.push([b.id, b.type, b.name || '', b.x, b.y]); }
+    const out = { places }; this.dirCache = { at: Date.now(), out }; return out;
+  }
+
   // A line of fence, wall or hedge (any 1×1 thing), laid in one go like a road: every free tile gets one, blocked ones are skipped.
   async buildLine({ type, tiles }) {
     const t = BUILDING_TYPES[type]; if (!t) throw new HttpError(400, 'Unknown building type.');

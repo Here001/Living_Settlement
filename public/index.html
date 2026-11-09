@@ -859,6 +859,10 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .mgpad.shake{animation:mgshake .3s}
 .mgkey{height:62px;border-radius:12px;border:2px solid #2B2621;background:#D9D4C7;color:#2B2621;font-size:24px;font-weight:900;box-shadow:0 3px 0 #111;cursor:pointer}
 .mgkey.lit{background:#F2C94C;box-shadow:0 0 18px #F2C94C}
+.legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin:4px 0 8px}.lgchip{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:12px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);text-align:left;cursor:pointer;font:inherit}
+.lgchip.on{border-color:#E4572E;box-shadow:0 0 0 2px rgba(228,87,46,.25)}.lgchip .lgname{flex:1;font-size:13px;font-weight:600;line-height:1.15}.lgchip b{font-size:12px;opacity:.7}
+.lgic{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:16px;background:#1b1d22;box-shadow:0 0 0 2px var(--c),0 0 10px var(--c)}
+.plist .joblist li{align-items:center}
 .bsearch{width:100%;margin:2px 0 6px}.bfit{display:flex;gap:6px;align-items:center;font-size:13px;margin:0 0 6px;color:var(--ink2,#5a5048)}.bgroups{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.bgroups .pill{flex:0 0 auto}
 .hkhead{position:relative;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px 8px 24px;background:#1b1d20;border:2px solid #2B2621;border-radius:10px;color:#F2C94C;font:800 11px ui-monospace,monospace;letter-spacing:.06em;overflow:hidden}
 .hkhead::before{content:'';position:absolute;left:0;top:0;bottom:0;width:14px;background:repeating-linear-gradient(-45deg,#F2C94C 0 6px,#2B2621 6px 12px)}
@@ -946,6 +950,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 <div class="toast" id="toast" hidden><span id="toastMsg"></span><button id="toastBtn" hidden>Undo</button></div>
 <div class="viewbtns" id="viewBtns">
   <button class="vbtn" id="undoBtn" aria-label="Undo" title="Undo (Ctrl+Z)" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+  <button class="vbtn" id="placesBtn" aria-label="Places and travel" title="Places and travel: the map legend"><span aria-hidden="true" style="font-size:20px;line-height:1">🧭</span></button>
   <button class="vbtn" id="turnBtn" aria-label="Turn the map" title="Turn the map (Q / E, or twist two fingers)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
   <button class="vbtn" id="fsBtn" aria-label="Full screen" title="Full screen (F)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   <button class="vbtn" id="hideBtn" aria-label="Hide the interface" title="Hide the interface (H)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg></button>
@@ -1852,18 +1857,53 @@ function star(x,y,r){ ctx.beginPath(); for(let i=0;i<10;i++){ const a=i*Math.PI/
    zoom); zoomed out only the biggest places keep theirs, and tags never overlap (the dearer building wins). Each tag is drawn
    once into a small picture and reused every frame. */
 const NEON_KIND = [ // [test on the type, icon, colour]
-  [/^(police|policeplaza|commissariat|dispatch)$/,'🚓','#4FA8FF'], [/^(jail|prison)$/,'⛓️','#FF9F43'], [/^(fire|firetower|firehq)$/,'🚒','#FF4B3A'],
-  [/^(clinic|hospital|ambulance|pharmacy)$/,'🏥','#38E58C'], [/^(school|openschool|college|university|kindergarten)$/,'🎓','#FFD53D'], [/^library$/,'📚','#FFD53D'],
-  [/^postoffice$/,'📮','#FF6B6B'], [/^(townhall|cityhall|parliament|courthouse)$/,'🏛️','#C69CFF'], [/^embassy$/,'🏳️','#C69CFF'], [/^busdepot$/,'🚌','#3FD8FF'],
-  [/^colosseum$/,'🥊','#FF4B3A'], [/^trainstation$/,'🚆','#3FD8FF'],
-   [/^coastguard$/,'⚓','#3FD8FF'], [/^baths$/,'♨️','#7FE3FF'], [/casino/,'🎰','#FF3FB4'], [/^(gamehouse|gamearena|arcade)$/,'🎮','#A77BFF'],
-  [/mall|deptstore/,'🛍️','#FF7AD9'], [/^cinema$/,'🎬','#FF5577'], [/^hotel$/,'🏨','#FFB347'], [/^cardealer$/,'🚗','#4FE0D0'], [/^petstore$/,'🐾','#FFB347'],
-  [/^(supermarket|markethall)$/,'🛒','#7CFF6B'], [/bank$/,'🏦','#FFD700'], [/stadium|^football$/,'🏟️','#7CFF6B'], [/racetrack/,'🏁','#FF5A5A'], [/^gym$/,'💪','#FF8A3D'],
-  [/^(cathedral|chapel)$/,'⛪','#FFE08A'], [/^museum$/,'🖼️','#FFC46B'], [/^opera$/,'🎭','#FF7AD9'], [/^observatory$/,'🔭','#9FB8FF'], [/^castle$/,'🏰','#FFC46B'],
-  [/^lighthouse$/,'🗼','#FFE08A'], [/^ferris$/,'🎡','#FF7AD9'], [/^tvtower$/,'📡','#5CE1FF'], [/^(powerplant|chp)$/,'⚡','#FFE53D'], [/^(waterworks|sewageplant)$/,'💧','#5CC8FF'],
+  [/^(police|policeplaza|commissariat|dispatch)$/,'🚓','#4FA8FF','Police'], [/^(jail|prison)$/,'⛓️','#FF9F43','Jail'], [/^(fire|firetower|firehq)$/,'🚒','#FF4B3A','Fire station'],
+  [/^(clinic|hospital|ambulance|pharmacy)$/,'🏥','#38E58C','Health'], [/^(school|openschool|college|university|kindergarten)$/,'🎓','#FFD53D','Schools'], [/^library$/,'📚','#FFD53D','Library'],
+  [/^postoffice$/,'📮','#FF6B6B','Post office'], [/^(townhall|cityhall|parliament|courthouse)$/,'🏛️','#C69CFF','Government'], [/^embassy$/,'🏳️','#C69CFF','Embassy'], [/^busdepot$/,'🚌','#3FD8FF','Bus depot'],
+  [/^colosseum$/,'🥊','#FF4B3A','Colosseum'], [/^trainstation$/,'🚆','#3FD8FF','Train station'],
+   [/^coastguard$/,'⚓','#3FD8FF','Coastguard'], [/^baths$/,'♨️','#7FE3FF','Baths'], [/casino/,'🎰','#FF3FB4','Casinos'], [/^(gamehouse|gamearena|arcade)$/,'🎮','#A77BFF','Game houses'],
+  [/mall|deptstore/,'🛍️','#FF7AD9','Malls'], [/^cinema$/,'🎬','#FF5577','Cinemas'], [/^hotel$/,'🏨','#FFB347','Hotels'], [/^cardealer$/,'🚗','#4FE0D0','Car dealers'], [/^petstore$/,'🐾','#FFB347','Pet shops'],
+  [/^(supermarket|markethall)$/,'🛒','#7CFF6B','Supermarkets'], [/bank$/,'🏦','#FFD700','Banks'], [/stadium|^football$/,'🏟️','#7CFF6B','Stadiums'], [/racetrack/,'🏁','#FF5A5A','Race tracks'], [/^gym$/,'💪','#FF8A3D','Gyms'],
+  [/^(cathedral|chapel)$/,'⛪','#FFE08A','Churches'], [/^museum$/,'🖼️','#FFC46B','Museums'], [/^opera$/,'🎭','#FF7AD9','Opera'], [/^observatory$/,'🔭','#9FB8FF','Observatory'], [/^castle$/,'🏰','#FFC46B','Castles'],
+  [/^lighthouse$/,'🗼','#FFE08A','Lighthouse'], [/^ferris$/,'🎡','#FF7AD9','Ferris wheel'], [/^tvtower$/,'📡','#5CE1FF','TV tower'], [/^(powerplant|chp)$/,'⚡','#FFE53D','Power'], [/^(waterworks|sewageplant)$/,'💧','#5CC8FF','Water'],
+  [/^(planehangar|airport|aerospace)$/,'✈️','#7FD3FF','Airports & hangars'], [/^landing$/,'🚀','#FFB347','Landing station'],
 ];
 const NEON_CAT = { offices:['🏢','#5CE1FF',10000], industry:['🏭','#FFA24C',30000], landmarks:['📍','#FFB347',4000], parks:['🏟️','#7CFF6B',9000], services:['🏛️','#C69CFF',0], shops:['🏪','#FF7AD9',6000], utilities:['⚡','#6BE7FF',8000], housing:['🏙️','#5CE1FF',90000] };
 const neonCache=new Map(), neonList=[];
+// The map legend and travel list (🧭): every kind of place, with its sign and how many there are; pick one to see them
+// all, nearest first, then 👁 View (the map flies there) or 🚶 Go (your colonist travels there, the fare shown first).
+const CAT_LEGEND = { offices:['🏢','#5CE1FF','Offices'], industry:['🏭','#FFA24C','Industry'], landmarks:['📍','#FFB347','Landmarks'], parks:['🌳','#7CFF6B','Parks & sports'], services:['🏛️','#C69CFF','Public services'], shops:['🏪','#FF7AD9','Shops & going out'], utilities:['⚡','#6BE7FF','Utilities'], housing:['🏙️','#5CE1FF','Named homes'] };
+function legendOf(type){ const k=NEON_KIND.find(([re])=>re.test(type)); if(k) return { icon:k[1], col:k[2], label:k[3] }; const c=CAT_LEGEND[(BUILDING_TYPES[type]||{}).cat]; return c?{ icon:c[0], col:c[1], label:c[2] }:null; }
+const Places={ data:null, at:0, busy:null, pick:null, q:'',
+  async load(){ if(this.data&&Date.now()-this.at<60000) return this.data; if(!this.busy) this.busy=api('/api/places').then(d=>{ this.data=d; this.at=Date.now(); return d; }).finally(()=>{ this.busy=null; }); return this.busy; },
+  // where distances are measured from: your colonist if you have one, otherwise the middle of the screen
+  from(){ const me=myCitizen(), st=me&&citizenAt(me,gmNow()); if(st) return [st.x,st.y]; if(me&&me.home) return [me.home[2]+0.5,me.home[3]+0.5]; const w=screenToWorld(cw/2,ch/2), t=worldToTileF(w.x,w.y); return [t.x,t.y]; },
+  async open(){ this.pick=null; this.q=''; const {box,close}=sheetBox('🧭 Places & travel','wide'); this.close=close; this.box=box; const wait=el('p',{class:'hint',text:'Loading the map…'}); box.append(wait);
+    try{ await this.load(); }catch(e){ wait.textContent=e.message; return; } this.render(); },
+  render(){ const box=this.box; if(!box||!box.isConnected) return; const head=box.querySelector('.shhead'); box.innerHTML=''; if(head) box.append(head);
+    const all=this.data.places.map(([id,type,name,x,y])=>({ id, type, name:name||(BUILDING_TYPES[type]||{}).name||type, x, y, L:legendOf(type) })).filter(p=>p.L);
+    const listBox=el('div',{class:'plist'}), search=el('input',{type:'search',class:'bsearch',placeholder:'Search places: bank, casino, hospital, a name…','aria-label':'Search places',value:this.q});
+    search.addEventListener('input',()=>{ this.q=search.value; this.list(listBox,all); });
+    const legend=el('div',{class:'legend'}), counts=new Map(); for(const p of all){ const k=p.L.label, c=counts.get(k)||{L:p.L,n:0}; c.n++; counts.set(k,c); }
+    for(const [label,{L,n}] of [...counts].sort((a,b)=>a[0].localeCompare(b[0]))) legend.append(el('button',{class:'lgchip'+(this.pick===label?' on':''),'aria-pressed':String(this.pick===label),onclick:()=>{ this.pick=this.pick===label?null:label; this.render(); }},
+      el('span',{class:'lgic',style:`--c:${L.col}`,text:L.icon}), el('span',{class:'lgname',text:label}), el('b',{text:String(n)})));
+    box.append(el('p',{class:'hint',text:'The signs you see over places on the map, and how many of each the colony has. Tap one to list them, nearest first: 👁 View flies the map there, Go sends your colonist (on foot for free, or by car or cab for the fare shown).'}), search, legend, listBox);
+    this.list(listBox,all); if(this.pick) setTimeout(()=>listBox.scrollIntoView({block:'nearest',behavior:'smooth'}),30); },
+  list(listBox,all){ listBox.innerHTML=''; const q=this.q.trim().toLowerCase(); if(!this.pick&&!q) return;
+    const [fx,fy]=this.from(), me=myCitizen(), own=me&&hasCar(me);
+    let items=all.filter(p=>(!this.pick||p.L.label===this.pick)&&(!q||p.name.toLowerCase().includes(q)||p.L.label.toLowerCase().includes(q)||((BUILDING_TYPES[p.type]||{}).name||'').toLowerCase().includes(q)));
+    items=items.map(p=>({...p, d:Math.round(Math.abs(p.x-fx)+Math.abs(p.y-fy))})).sort((a,b)=>a.d-b.d).slice(0,60);
+    if(!items.length){ listBox.append(el('p',{class:'hint',text:'No places like that yet.'})); return; }
+    listBox.append(el('h4',{class:'bgroup',text:this.pick?`${this.pick}${q?` matching “${this.q.trim()}”`:''}, nearest first`:`Places matching “${this.q.trim()}”`}));
+    const ul=el('ul',{class:'joblist'}); listBox.append(ul);
+    for(const p of items){ const go=tripFare(p.d,own), how=go.mode==='car'?`🚗 ${fmt(go.fare)}`:go.mode==='cab'?`🚕 ${fmt(go.fare)}`:'🚶 free';
+      ul.append(el('li',null, el('span',{class:'lgic',style:`--c:${p.L.col}`,text:p.L.icon}), el('div',{class:'jt'}, el('b',{text:p.name}), el('span',{text:`${(BUILDING_TYPES[p.type]||{}).name||''} · ${p.d<=1?'right here':miles(p.d)+' away'}`})),
+        el('button',{class:'btn sm',text:'👁 View',onclick:()=>this.view(p)}),
+        Me&&Me.token&&!Store.canWrite&&canGoTo(p.type)?el('button',{class:'btn primary sm',text:`Go · ${how}`,onclick:()=>this.go(p)}):'')); } },
+  view(p){ this.close&&this.close(); if(innerWidth<900) openTab(null); const t=BUILDING_TYPES[p.type]||{size:[1,1]}, [w,d]=t.size, q=iso(p.x+w/2,p.y+d/2); follow=null; cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.2);
+    let n=0; const tryB=()=>{ if(S.buildings.has(p.id)) selectBuilding(p.id); else if(++n<20) setTimeout(tryB,400); }; tryB(); },
+  async go(p){ try{ const r=await api('/api/me/visit',{method:'POST',body:{buildingId:p.id}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
+      this.close&&this.close(); toast(`On your way to ${p.name}.`+(r.fare?` ${r.mode==='cab'?'🚕 Cab fare':'🚗 Fuel'}: ${fmt(r.fare)} coins.`:'')); Watch.start(0,`Going to ${p.name}`,p.id); }catch(e){ toast(e.message); } } };
 function neonOf(type){ if(neonCache.has(type)) return neonCache.get(type); const t=BUILDING_TYPES[type]; let out=null;
   if(t&&t.cat!=='decor'&&t.cat!=='nature'&&t.cat!=='roads'){ const k=NEON_KIND.find(([re])=>re.test(type)), c=NEON_CAT[t.cat];
     if(k) out={icon:k[1],col:k[2],cost:Math.max(40000,t.cost||0)}; else if(c&&(t.cost||0)>=c[2]) out={icon:c[0],col:c[1],cost:t.cost||0}; } /* named places (police, fire, casino…) count as big ones, so they keep their sign zoomed out */
@@ -3960,7 +4000,7 @@ var CEvent={ ev:null, skew:0,
   go(){ const E=this.ev; if(!E) return; if(Me&&Me.token){ if(E.kind==='crimewave') openMyTab('crime'); else openMyTab('earn','.earn'); } else toast(`${E.icon} ${E.name}: ${E.text} Sign in to your colonist to join in.`); } };
 setInterval(()=>CEvent.tick(),1000);
 $('cevent').addEventListener('click',()=>CEvent.go());
-$('turnBtn').addEventListener('click',()=>turnView(1));
+$('turnBtn').addEventListener('click',()=>turnView(1)); $('placesBtn').addEventListener('click',()=>Places.open());
 $('coinChip').addEventListener('click',()=>{ if(Store.canWrite) treasurySheet(); else if(Me&&Me.token) openMyTab('earn','.earn'); });
 // ---- Earn: every way to make coins, with the ones you can do right now ----
 var Earn={ data:null, at:0, loading:false, skew:0, busy:false, msg:null, cast:null,

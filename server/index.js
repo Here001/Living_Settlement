@@ -169,6 +169,7 @@ if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/rollover', 
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/payday', admin, send(() => world.change(ch => economy.day(ch, 1))));
 app.get('/api/lottery', limit, send(async req => lottery.info((await playerFrom(req))?.id)));
 app.post('/api/admin/lottery', admin, send(req => lottery.start(req.body || {})));
+app.get('/api/places', limit, send(() => world.directory()));
 app.get('/api/auctions', limit, send(() => auctions.list()));
 app.get('/api/auctions/:id', limit, send(async req => auctions.info((await playerFrom(req))?.id, req.params.id)));
 app.post('/api/admin/auctions', admin, send(req => auctions.start(req.body || {})));

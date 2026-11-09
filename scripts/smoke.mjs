@@ -1667,6 +1667,8 @@ r = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x
   const al = await call('POST', '/api/admin/buildings/line', { type: 'stonewall', tiles: [[3000, 3000], [3001, 3000], [3002, 3000], [3002, 3000]] });
   ok(al.status === 200 && al.json.built.length === 3 && al.json.built.every(b => b.type === 'stonewall'), 'the builder lays a wall in one stroke', JSON.stringify(al.json).slice(0, 200));
   for (const b of al.json.built || []) await call('DELETE', `/api/admin/buildings/${b.id}`); }
+{ const pl = await call('GET', '/api/places', undefined, { auth: false }), types = new Set((pl.json.places || []).map(p => p[1]));
+  ok(pl.status === 200 && types.has('landing') && !types.has('tree') && (pl.json.places || []).every(p => p.length === 5), "the map legend lists the colony's places (no trees or decorations)", JSON.stringify(pl.json).slice(0, 200)); }
 // planes live in hangars: build one on your land first; each holds a set number
 { const lot = (await pool.query("select id from buildings where type = 'cardealer' and done and not ruin limit 1")).rows[0]?.id || await (async () => { const b = await call('POST', '/api/admin/buildings', { type: 'cardealer', x: 960, y: 940 }); await call('POST', `/api/admin/buildings/${b.json.building?.id}/finish`); return b.json.building?.id; })();
   const was = (await pool.query('select home_id from citizens where id = $1', [A.id])).rows[0].home_id, home = (await pool.query('select id from buildings where home_cap > 0 and done and not ruin limit 1')).rows[0].id;

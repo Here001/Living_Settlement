@@ -129,6 +129,7 @@ export class Housing {
       const p = (await ch.q('select * from plots where id = $1 and owner_id = $2 for update', [String(plotId), c.id])).rows[0]; if (!p) throw new HttpError(404, "You don't own that plot.");
       const on = (await ch.q('select * from buildings where plot_id = $1 for update', [p.id])).rows;
       if (on.some(b => !b.done || Number(b.up_at))) throw new HttpError(409, 'Wait until the builders have finished.');
+      const stuck = await this.world.economy.rehomePlanes(ch, c, on.map(b => b.id)); if (stuck) throw new HttpError(409, stuck);
       const back = Math.floor((Number(p.price) + on.reduce((s, b) => s + Number(b.price || 0), 0)) * PROPERTY_RESALE);
       ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'land:sell', back, c.id); ch.touch(c); await ch.saveCitizen(c);
       for (const b of on) await ch.ownerChanged(b.id, p.owner_id, null); // the seller pays rent again if they live there
@@ -152,6 +153,7 @@ export class Housing {
     return this.world.change(async ch => {
       const c = await this.lockMe(ch, id), p = await this.lockPlot(ch, c, plotId), [w, d] = R.footprint(R.levelSize(type, 1), rot);
       if (!this.inside(p, x, y, w, d)) throw new HttpError(409, `It doesn't fit there: keep it inside your ${p.w}×${p.d} plot.`);
+      await this.unpave(ch, x, y, w, d);
       await this.world.assertFree(ch, type, x, y, null, rot, { plot: p.id });
       ch.coins(c); if (c.coins_base < q.total) throw new HttpError(400, `That costs ${fmt(q.total)} coins with the charges. You have ${fmt(c.coins_base)} on you${Number(c.bank) ? ' (withdraw some at a Bank first)' : ''}.`);
       c.coins_base -= q.total; treasuryAdd(ch, q.total); track(ch, 'build:own', q.cost, c.id); track(ch, 'build:charges', q.chargesTotal, c.id); ch.touch(c); await ch.saveCitizen(c);
@@ -161,12 +163,48 @@ export class Housing {
       return { ok: true, building: bRow(b), paid: q.total, coins: c.coins_base };
     });
   }
+  // ---------- paving your land ----------
+  // Lifting the paving under something about to be built on your own land (it's all inside the plot, so it's yours).
+  async unpave(ch, x, y, w, d) {
+    const gone = (await ch.q('delete from roads where x >= $1::int and x < $1::int + $3::int and y >= $2::int and y < $2::int + $4::int returning x, y', [x, y, w, d])).rows.map(r => `${r.x},${r.y}`);
+    if (gone.length) this.world.roadOps(ch, {}, gone);
+  }
+  // Laying surfaces (brick, marble, decking, stepping stones…) on your own land, tile by tile, or lifting them again.
+  // `set`: tile "x,y" → surface; `remove`: tiles to clear. Only on the plot's open ground, never under a building.
+  // Each tile costs what the price list says (paid to the treasury); lifting it is free.
+  async pave(id, plotId, body) {
+    const set = body?.set && typeof body.set === 'object' ? body.set : {}, remove = Array.isArray(body?.remove) ? body.remove : [];
+    const keys = Object.keys(set).filter(k => /^-?\d+,-?\d+$/.test(k)).slice(0, 64), rm = remove.filter(k => /^-?\d+,-?\d+$/.test(String(k))).slice(0, 64).map(String);
+    for (const k of keys) if (!R.isSurface(set[k])) throw new HttpError(400, 'Pick a surface from the Surfaces list.');
+    if (!keys.length && !rm.length) throw new HttpError(400, 'Tap the tiles to pave.');
+    return this.world.change(async ch => {
+      const c = await this.lockMe(ch, id), p = await this.lockPlot(ch, c, plotId), xy = k => k.split(',').map(Number), on = k => { const [x, y] = xy(k); return this.inside(p, x, y, 1, 1); };
+      if (![...keys, ...rm].every(on)) throw new HttpError(409, `Keep it inside your ${p.w}×${p.d} plot.`);
+      const all = [...keys, ...rm], xs = all.map(k => xy(k)[0]), ys = all.map(k => xy(k)[1]);
+      const under = new Set((await ch.q(`select t.x || ',' || t.y k from unnest($1::int[], $2::int[]) t(x, y) join buildings b on t.x >= b.x and t.x < b.x + b.w and t.y >= b.y and t.y < b.y + b.d`, [xs, ys])).rows.map(r => r.k));
+      const wet = new Set((await ch.q(`select x || ',' || y k from water where (x, y) in (select * from unnest($1::int[], $2::int[]))`, [xs, ys])).rows.map(r => r.k));
+      const now = new Map((await ch.q(`select x || ',' || y k, type from roads where (x, y) in (select * from unnest($1::int[], $2::int[]))`, [xs, ys])).rows.map(r => [r.k, r.type]));
+      const toSet = {}; let cost = 0;
+      for (const k of keys) { if (under.has(k) || wet.has(k) || now.get(k) === set[k]) continue; toSet[k] = set[k]; cost += R.paveCost(set[k]); }
+      const toRm = rm.filter(k => now.has(k) && !toSet[k]);
+      if (!Object.keys(toSet).length && !toRm.length) return { ok: true, changed: 0, laid: 0, lifted: 0, paid: 0, coins: (ch.coins(c), c.coins_base) };
+      ch.coins(c); if (c.coins_base < cost) throw new HttpError(400, `That paving costs ${fmt(cost)} coins. You have ${fmt(c.coins_base)} on you${Number(c.bank) ? ' (withdraw some at a Bank first)' : ''}.`);
+      if (cost) { c.coins_base -= cost; treasuryAdd(ch, cost); track(ch, 'build:pave', cost, c.id); ch.touch(c); await ch.saveCitizen(c); }
+      const ks = Object.keys(toSet);
+      if (ks.length) await ch.q(`insert into roads (x, y, type, cx, cy) select x, y, t, floor(x::float / ${R.CHUNK})::int, floor(y::float / ${R.CHUNK})::int
+          from unnest($1::int[], $2::int[], $3::text[]) u(x, y, t) on conflict (x, y) do update set type = excluded.type`, [ks.map(k => xy(k)[0]), ks.map(k => xy(k)[1]), ks.map(k => toSet[k])]);
+      if (toRm.length) await ch.q('delete from roads where (x, y) in (select * from unnest($1::int[], $2::int[]))', [toRm.map(k => xy(k)[0]), toRm.map(k => xy(k)[1])]);
+      this.world.roadOps(ch, toSet, toRm);
+      return { ok: true, changed: ks.length + toRm.length, laid: ks.length, lifted: toRm.length, paid: cost, coins: c.coins_base };
+    });
+  }
   // Knocking down your own building on your land: the builders give back 30% of what it cost.
   async knockDown(id, buildingId) {
     return this.world.change(async ch => {
       const c = await this.lockMe(ch, id);
       const b = (await ch.q('select * from buildings where id = $1 and owner_id = $2 for update', [String(buildingId), c.id])).rows[0];
       if (!b || !b.plot_id) throw new HttpError(404, "That isn't a building on your land.");
+      const stuck = await this.world.economy.rehomePlanes(ch, c, [b.id]); if (stuck) throw new HttpError(409, stuck);
       const back = Math.floor(Number(b.price || 0) * DEMOLISH_BACK);
       await this.world.demolishIn(ch, { ...b, owner_id: null }); // (no owner, so demolishing doesn't refund the full price)
       if (back) { ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'property:refund', back, c.id); ch.touch(c); await ch.saveCitizen(c); }
@@ -197,6 +235,7 @@ export class Housing {
       if (Number(b.up_at) > 0) throw new HttpError(409, 'Wait until the upgrade is finished.');
       const p = await this.lockPlot(ch, c, b.plot_id), [w, d] = R.footprint(R.levelSize(b.type, b.level || 1), rot ?? b.rot);
       if (!this.inside(p, x, y, w, d)) throw new HttpError(409, `It has to stay inside your ${p.w}×${p.d} plot.`);
+      await this.unpave(ch, x, y, w, d);
       return this.world.moveIn(ch, b, x, y, rot);
     });
   }
@@ -357,6 +396,8 @@ export class Housing {
     const buyer = locked.get(o.from_id), seller = locked.get(o.to_id); if (!buyer || !seller) return fail('one of you has left the colony.');
     if (o.kind === 'plot') { if ((await ch.q('select 1 from buildings where plot_id = $1 and (not done or up_at > 0)', [t.id])).rowCount) throw new HttpError(409, 'Wait until the builders have finished on it.'); }
     else { const b = (await ch.q('select done, up_at from buildings where id = $1', [t.id])).rows[0]; if (!b?.done || Number(b.up_at)) throw new HttpError(409, 'Wait until the builders have finished on it.'); }
+    const lost = o.kind === 'plot' ? (await ch.q('select id from buildings where plot_id = $1', [t.id])).rows.map(b => b.id) : [t.id];
+    const stuck = await this.world.economy.rehomePlanes(ch, seller, lost); if (stuck) return fail(`@${seller.handle}'s planes: ${stuck}`);
     const n = await ownedCount(q, buyer.id), max = R.propertyLimit(buyer.stars);
     if (n >= max) return fail(`@${buyer.handle} already owns ${n} properties, their limit at ${buyer.stars || 0} stars.`);
     ch.coins(buyer); const cash = Math.max(0, buyer.coins_base), bank = Number(buyer.bank || 0);

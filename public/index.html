@@ -986,7 +986,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 <script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js","three/addons/":"/vendor/three-addons/"}}</script>
 <script type="module">
 window.__booted=true; try{ sessionStorage.removeItem('resurgence-reloaded'); const u=new URL(location.href); if(u.searchParams.has('r')){ u.searchParams.delete('r'); history.replaceState(null,'',u.pathname+u.search+u.hash); } }catch(e){} /* the code loaded: no rescue needed */
-import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank, carPaid, kindOf, carKind, ridden } from '/shared/catalog.js';
+import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank, carPaid, kindOf, carKind, ridden, needsHangar } from '/shared/catalog.js';
 import { TABLE_W, TABLE_H, BALL_R, POCKETS } from '/shared/snooker.js';
 import { placeOk, placeAuto, HEAD_X, BAULK_X, D_R } from '/shared/cuegames.js';
 import { TABLE_GAMES, WHOT_SHAPES, LUDO_SAFE, RAKE, MAX_STAKE } from '/shared/boardgames.js';
@@ -998,7 +998,7 @@ import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
-import { FINE_MIN, FINE_MAX, nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
+import { paveCost, FINE_MIN, FINE_MAX, nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
@@ -1732,7 +1732,7 @@ function drawTree0(p,leaf,s,seed){
   parts.forEach(([dx,dy,r,f],i)=>blob(p.x+dx*s,p.y+dy*s,r*s,shade2(leaf,f),seed+i*31)); }
 const shade2Cache=new Map(); function shade2(hex,f){ const k=hex+f; let v=shade2Cache.get(k); if(v===undefined){ v=shade2_(hex,f); if(shade2Cache.size>4000) shade2Cache.clear(); shade2Cache.set(k,v); } return v; }
 function shade2_(hex,f){ const n=parseInt(hex.slice(1),16); const c=v=>Math.max(0,Math.min(255,Math.round(v*f))).toString(16).padStart(2,'0'); return '#'+c((n>>16)&255)+c((n>>8)&255)+c(n&255); }
-const SHADOW_H = { sky:t=>Math.min(170,t.height||200), needle:t=>Math.min(170,t.height||300), arena:()=>70, colosseum:()=>78, resort:()=>170, pyramid:t=>t.size[0]*28, arch:()=>62, column:()=>86, globe:()=>70, xmastree:t=>t.big?100:48, fence:()=>12, mill:()=>70, refinery:()=>96, hangar:()=>52, containers:()=>56, prison:()=>36, bandstand:()=>48, horse:()=>50, racetrack:()=>12, starport:()=>110, house:t=>(t.height||24)+(t.roofH||18)*0.5, block:t=>t.height||40, tower:t=>t.height+20, watertower:t=>t.height, tent:()=>20, stall:()=>24, well:()=>22, statue:()=>30, fountain:()=>10, tree:()=>38, pine:()=>40, lamp:()=>34, bench:()=>4 };
+const SHADOW_H = { sky:t=>Math.min(170,t.height||200), needle:t=>Math.min(170,t.height||300), arena:()=>70, colosseum:()=>78, resort:()=>170, pyramid:t=>t.size[0]*28, arch:()=>62, column:()=>86, globe:()=>70, xmastree:t=>t.big?100:48, fence:()=>12, mill:()=>70, refinery:()=>96, hangar:()=>52, airport:()=>62, containers:()=>56, prison:()=>36, bandstand:()=>48, horse:()=>50, racetrack:()=>12, starport:()=>110, house:t=>(t.height||24)+(t.roofH||18)*0.5, block:t=>t.height||40, tower:t=>t.height+20, watertower:t=>t.height, tent:()=>20, stall:()=>24, well:()=>22, statue:()=>30, fountain:()=>10, tree:()=>38, pine:()=>40, lamp:()=>34, bench:()=>4 };
 function hull(pts){ pts=pts.slice().sort((a,b)=>a.x-b.x||a.y-b.y); const cr=(o,a,b)=>(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x); const lo=[],hi=[]; for(const p of pts){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); } for(const p of pts.slice().reverse()){ while(hi.length>=2&&cr(hi[hi.length-2],hi[hi.length-1],p)<=0) hi.pop(); hi.push(p); } return lo.slice(0,-1).concat(hi.slice(0,-1)); }
 function addShadow(P,b){ if(VIEW&&!RAW){ const v=asView(b); return inView(()=>addShadow(P,v)); } const t=T(b), fn=SHADOW_H[t.style]; if(!fn) return; const h=fn(t); const ox=-0.62*h, oy=0.3*h;
   if(['tree','pine','lamp','statue','well','birch','bush','turbine','pylon','obelisk','windmill','rocks'].includes(t.style)){ const c=iso(b.x+0.5,b.y+0.5); const pts=[]; const rx=t.style==='lamp'?3:12, ry=t.style==='lamp'?2:6; for(let i=0;i<10;i++){ const a=i/10*Math.PI*2; pts.push({x:c.x+Math.cos(a)*rx,y:c.y+Math.sin(a)*ry},{x:c.x+ox+Math.cos(a)*rx*1.1,y:c.y+oy+Math.sin(a)*ry*1.1}); } const hp=hull(pts); P.moveTo(hp[0].x,hp[0].y); hp.slice(1).forEach(p=>P.lineTo(p.x,p.y)); P.closePath(); return; }
@@ -2797,6 +2797,33 @@ function drawMiniRound(x,y,R){ const ox=x+0.5, oy=y+0.5; ctx.save(); ctx.beginPa
 function drawBulb(x,y,R,dx,dy){ const ox=x+0.5, oy=y+0.5; poly(arcPts(ox,oy,0.5,0,Math.PI*2,28),R.walk,false); poly(arcPts(ox,oy,0.36,0,Math.PI*2,28),R.top,false);
   const s=[ox+dx*0.25,oy+dy*0.25], w=dx?[0.5,0.66]:[0.66,0.5], a=dx?[x+(dx>0?0.5:0),y+0.17]:[x+0.17,y+(dy>0?0.5:0)]; poly([iso(a[0],a[1]),iso(a[0]+w[0],a[1]),iso(a[0]+w[0],a[1]+w[1]),iso(a[0],a[1]+w[1])],R.top,false); void s;
   ctx.strokeStyle=INK; ctx.lineWidth=1; ctx.beginPath(); pathPts(arcPts(ox,oy,0.5,0,Math.PI*2,28)); ctx.stroke(); const c=iso(ox,oy); ctx.fillStyle='#7DB656'; ctx.beginPath(); ctx.ellipse(c.x,c.y,6,3,0,0,7); ctx.fill(); }
+// Patterned flooring: each design is drawn inside its tile in tile coordinates (so it turns with the map).
+function drawPattern(x,y,R,k,has){ const P=(u,v)=>iso(x+u,y+v), q=(u0,v0,u1,v1,col,st)=>poly([P(u0,v0),P(u1,v0),P(u1,v1),P(u0,v1)],col,st===undefined?false:st,0.5), hh=hash(k), rnd=i=>((Math.imul(hh^(i*2654435761),2246822519)>>>0)%1000)/1000;
+  const dot=(u,v,r,col)=>{ const p=P(u,v); ctx.fillStyle=col; ctx.beginPath(); ctx.ellipse(p.x,p.y,Math.max(0.6,r*HW*1.4),Math.max(0.4,r*HH*1.4),0,0,7); ctx.fill(); } /* r: a share of the tile */, ln=(u0,v0,u1,v1,col,lw)=>line(P(u0,v0),P(u1,v1),col,lw);
+  ctx.save(); clipTile(x,y);
+  switch(R.pat){
+    case 'herring': for(let i=-2;i<6;i++) for(let j=0;j<4;j++){ const u=i*0.25+j*0.25, v=j*0.25; poly([P(u,v),P(u+0.25,v),P(u+0.25,v+0.125),P(u,v+0.125)],j%2?shade(R.top,1.06):R.top,R.edge,0.5); poly([P(u+0.25,v+0.125),P(u+0.375,v+0.125),P(u+0.375,v+0.375),P(u+0.25,v+0.375)],shade(R.top,0.94),R.edge,0.5); } break;
+    case 'tiles': for(let i=0;i<3;i++) for(let j=0;j<3;j++) q(i/3+0.02,j/3+0.02,(i+1)/3-0.02,(j+1)/3-0.02,(i+j)%2?shade(R.top,1.05):shade(R.top,0.95),R.edge); break;
+    case 'marble': for(let i=0;i<2;i++) for(let j=0;j<2;j++) q(i/2+0.01,j/2+0.01,(i+1)/2-0.01,(j+1)/2-0.01,(i+j)%2?'#F6F4EF':'#E8E4DB',R.edge);
+      for(let n=0;n<3;n++){ let u=rnd(n),v=rnd(n+9); ctx.strokeStyle='rgba(120,120,130,.35)'; ctx.lineWidth=0.6; ctx.beginPath(); let p=P(u,v); ctx.moveTo(p.x,p.y); for(let m=0;m<4;m++){ u+=0.15*(rnd(n*7+m)-0.3); v+=0.12*(rnd(n*5+m+3)-0.5); p=P(u,v); ctx.lineTo(p.x,p.y); } ctx.stroke(); } break;
+    case 'checker': for(let i=0;i<4;i++) for(let j=0;j<4;j++) q(i/4,j/4,(i+1)/4,(j+1)/4,((x*4+i)+(y*4+j))%2?'#2E2A27':'#F2EFE8'); break;
+    case 'mosaic': { const cols=['#3C78B4','#EAF1F5','#7FB2CF','#EAF1F5','#2F4A7A']; for(let i=0;i<6;i++) for(let j=0;j<6;j++){ const ring=Math.max(Math.abs(i-2.5),Math.abs(j-2.5)); q(i/6+0.01,j/6+0.01,(i+1)/6-0.01,(j+1)/6-0.01,cols[Math.floor(ring)%cols.length]); } break; }
+    case 'deck': for(let i=0;i<5;i++){ q(0,i/5,1,(i+1)/5,i%2?shade(R.top,1.06):shade(R.top,0.96),R.edge); const s0=(i*0.37+rnd(i))%1; ln(s0,i/5,s0,(i+1)/5,R.edge,0.6); for(const u of [0.1,0.9]) dot(u,i/5+0.1,0.012,'#5A4024'); } break;
+    case 'flags': { const cut=[0,0.42+rnd(1)*0.16,1], cut2=[0,0.38+rnd(2)*0.2,1]; for(let i=0;i<2;i++) for(let j=0;j<2;j++) q(cut[i]+0.02,cut2[j]+0.02,cut[i+1]-0.02,cut2[j+1]-0.02,shade(R.top,0.92+rnd(i*3+j)*0.16),R.edge); break; }
+    case 'crazy': { const pts=[]; for(let i=0;i<4;i++) for(let j=0;j<4;j++) pts.push([i/3+(i%3?(rnd(i*4+j)-0.5)*0.18:0), j/3+(j%3?(rnd(i*4+j+20)-0.5)*0.18:0)]);
+      for(let i=0;i<3;i++) for(let j=0;j<3;j++){ const a=pts[i*4+j], b=pts[(i+1)*4+j], c2=pts[(i+1)*4+j+1], d=pts[i*4+j+1], g=[a,b,c2,d].map(([u,v])=>[u+(0.5-u)*0.0,v]); const m=[(a[0]+c2[0])/2,(a[1]+c2[1])/2], sh=s=>[m[0]+(s[0]-m[0])*0.88,m[1]+(s[1]-m[1])*0.88];
+        poly(g.map(sh).map(([u,v])=>P(u,v)),shade(R.top,0.9+rnd(i*3+j+40)*0.2),R.edge,0.5); } break; }
+    case 'pebbles': for(let n=0;n<22;n++) dot(0.06+rnd(n)*0.88,0.06+rnd(n+50)*0.88,0.035+rnd(n+90)*0.03,['#BDB5A4','#A39A88','#E8E2D6','#8E8678'][n%4]); break;
+    case 'stepping': for(const [u,v] of [[0.25,0.3],[0.62,0.55],[0.3,0.78]]){ dot(u+0.01,v+0.02,0.16,'rgba(0,0,0,.15)'); dot(u,v,0.16,R.edge); dot(u-0.03,v-0.02,0.1,shade(R.edge,1.1)); } for(let n=0;n<6;n++) dot(rnd(n),rnd(n+30),0.02,'#6E9E4A'); break;
+    case 'hex': { const r=0.13, hw=r*Math.sqrt(3); for(let j=-1;j<6;j++) for(let i=-1;i<6;i++){ const cu=i*hw+(j%2?hw/2:0), cv=j*r*1.5; const hx=[]; for(let a=0;a<6;a++){ const t=Math.PI/6+a*Math.PI/3; hx.push(P(cu+Math.cos(t)*r*0.9,cv+Math.sin(t)*r*0.9)); } poly(hx,(i+j)%3?R.top:shade(R.top,0.93),R.edge,0.5); } break; }
+    case 'terrazzo': for(let n=0;n<40;n++) dot(rnd(n),rnd(n+70),0.012+rnd(n+140)*0.015,['#8A7F6E','#C8553F','#3C78B4','#5E7C5A','#2E2A27','#F2EFE8'][n%6]); break;
+    case 'flowers': for(let n=0;n<10;n++) dot(rnd(n),rnd(n+11),0.02,'#B5A989'); for(const [a,b] of [[0,1],[1,0]]){ const open=a?!has(x,y-1):!has(x-1,y); if(!open) continue; for(let n=0;n<7;n++){ const s0=n/7+0.07; const [u,v]=a?[s0,0.07]:[0.07,s0]; dot(u,v,0.075,'#5E9E45'); dot(u,v-0.015,0.04,['#E88BB0','#F2C94C','#D9544A','#B05FD6'][n%4]); } }
+      for(const [a] of [[0],[1]]){ const open=a?!has(x,y+1):!has(x+1,y); if(!open) continue; for(let n=0;n<7;n++){ const s0=n/7+0.07; const [u,v]=a?[s0,0.93]:[0.93,s0]; dot(u,v,0.075,'#5E9E45'); dot(u,v-0.015,0.04,['#F2C94C','#E88BB0','#B05FD6','#D9544A'][n%4]); } } break;
+    case 'rubber': for(let n=0;n<30;n++) dot(rnd(n),rnd(n+40),0.01,shade(R.top,rnd(n+80)>0.5?1.2:0.8)); if(hh%3===0){ const p=P(0.5,0.5); ctx.strokeStyle='rgba(255,255,255,.75)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.ellipse(p.x,p.y,10,5,0,0,7); ctx.stroke(); } break;
+    case 'gold': for(let i=0;i<3;i++) for(let j=0;j<3;j++){ q(i/3+0.02,j/3+0.02,(i+1)/3-0.02,(j+1)/3-0.02,(i+j)%2?'#F0CB5E':'#D9A93A',R.edge); }
+      { const p=P(0.3+((T_NOW/1500+hh%7/7)%1)*0.4,0.4); ctx.fillStyle='rgba(255,250,220,.7)'; ctx.beginPath(); ctx.arc(p.x,p.y,1.4,0,7); ctx.fill(); } break;
+  }
+  ctx.restore(); }
 function drawRoadTile(x,y,R,has,pushDeco){ const k=TILEKEY||x+','+y;
   if(R.round){ const C=roundCentre(x,y); if(C){ drawRoundTile(x,y,R,has,pushDeco,C); return; } }
   if(R.curve||R.bulb){ const n=has(x,y-1), e=has(x+1,y), s2=has(x,y+1), w=has(x-1,y), cnt=n+e+s2+w;
@@ -2814,7 +2841,8 @@ function drawRoadTile(x,y,R,has,pushDeco){ const k=TILEKEY||x+','+y;
       if(R.deco==='trees'){ const p=lerp(lerp(a,b,0.5),C,0.16); pushDeco(x+y+0.55,()=>drawTreeAt(p,'#6FAE45',0.5,hh+i*7)); }
       else if(R.deco==='cars' && n===0 && hh%4){ n++; pushDeco(x+y+0.5,()=>drawCar(lerp(a,C,0.34),lerp(b,C,0.34),C,CAR_COLORS[hh%CAR_COLORS.length])); } }); }
   } else if(R.kind==='cobble'){
-    ctx.strokeStyle=R.edge; ctx.lineWidth=0.6; ctx.beginPath(); for(let i=1;i<4;i++){ const u=i/4; let a=lerp(N,E,u), b=lerp(Wp,S2,u); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); a=lerp(N,Wp,u); b=lerp(E,S2,u); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); } ctx.stroke();
+    if(R.pat) drawPattern(x,y,R,k,has);
+    else { ctx.strokeStyle=R.edge; ctx.lineWidth=0.6; ctx.beginPath(); for(let i=1;i<4;i++){ const u=i/4; let a=lerp(N,E,u), b=lerp(Wp,S2,u); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); a=lerp(N,Wp,u); b=lerp(E,S2,u); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); } ctx.stroke(); }
     for(const [a,b,open] of sides) if(open) line(a,b,INK,1);
   } else {
     const hh=hash(k); ctx.fillStyle=R.edge; for(let i=0;i<3;i++){ const p=iso(x+0.2+((hh>>(i*3))&7)/10,y+0.2+((hh>>(i*3+12))&7)/10); ctx.fillRect(p.x-1.5,p.y-0.7,3,1.4); }
@@ -2974,7 +3002,31 @@ DRAW.hangar=function(b,t){ const [w,d]=t.size, x=b.x, y=b.y, c=t.colors, h=22, R
   const roof=[]; for(let i=0;i<=16;i++) roof.push(arc(F,i/16)); for(let i=16;i>=0;i--) roof.push(arc(B,i/16)); poly(roof,shade(c.roof,1.05),INK,1);
   const front=[F(0,h)]; for(let i=0;i<=16;i++) front.push(arc(F,i/16)); front.push(F(1,h)); poly(front,c.wall,INK,1); for(let i=1;i<8;i++){ line(arc(F,i/8),arc(B,i/8),shade(c.roof,0.85),0.7); }
   poly([F(0.12,0),F(0.88,0),F(0.88,h+R*0.55),F(0.12,h+R*0.55)],'#3E4C55',INK,1); poly([F(0.38,6),F(0.62,6),F(0.56,26),F(0.44,26)],'#F4F4F0',INK,0.8); poly([F(0.47,26),F(0.53,26),F(0.5,44)],c.trim,INK,0.8);
-  faceText(F,0.5,h+R*0.72,'AERO',9,'#2F4A7A'); if(LAMPS>0) lights.push({x:F(0.5,20).x,y:F(0.5,20).y,r:70,col:'230,240,255'}); void Rr; };
+  faceText(F,0.5,h+R*0.72,t.label||'AERO',9,t.label?c.trim:'#2F4A7A'); if(LAMPS>0) lights.push({x:F(0.5,20).x,y:F(0.5,20).y,r:70,col:'230,240,255'}); void Rr; };
+// A private airport: a runway with its markings and edge lights, a taxiway and apron with planes parked on it, a small
+// terminal, a control tower and a windsock.
+DRAW.airport=function(b,t){ const [w,d]=t.size, x=b.x, y=b.y, c=t.colors, P=(u,v)=>iso(x+u,y+v);
+  poly([P(0,0),P(w,0),P(w,d),P(0,d)],'#8FC463','#6E9E4A',1); // grass
+  const r0=d-1.55, r1=d-0.35; poly([P(0.15,r0),P(w-0.15,r0),P(w-0.15,r1),P(0.15,r1)],'#55585C',INK,1); // the runway
+  for(let u=0.9;u<w-0.9;u+=0.7) line(P(u,(r0+r1)/2),P(u+0.35,(r0+r1)/2),'#F4F4F0',1.4); // centre line
+  for(const e of [0.3,w-0.6]) for(let k=0;k<4;k++){ const v=r0+0.15+k*0.25; poly([P(e,v),P(e+0.3,v),P(e+0.3,v+0.12),P(e,v+0.12)],'#F4F4F0',false); } // threshold stripes
+  for(let u=0.3;u<w-0.2;u+=0.9) for(const v of [r0+0.05,r1-0.05]){ const p=P(u,v); ctx.fillStyle=LAMPS>0?'#FFE9A0':'#C9B66A'; ctx.beginPath(); ctx.arc(p.x,p.y,1.3,0,7); ctx.fill(); if(LAMPS>0&&u<1) lights.push({x:p.x,y:p.y,r:10,col:'255,230,150',a:0.7}); }
+  poly([P(0.2,0.25),P(4.3,0.25),P(4.3,r0-0.15),P(0.2,r0-0.15)],'#C5C1B6',INK,0.8); // the apron
+  poly([P(3.0,r0-0.15),P(3.6,r0-0.15),P(3.6,r0),P(3.0,r0)],'#C5C1B6',false); line(P(3.3,0.6),P(3.3,r0),'#F2C94C',1); // taxiway and its yellow line
+  // planes parked on the apron (a little white plane: fuselage, wings, tail)
+  const plane=(u,v,col)=>{ const a=P(u-0.55,v), b2=P(u+0.55,v), wl=P(u+0.05,v-0.6), wr=P(u+0.05,v+0.6), tl=P(u-0.5,v-0.25), tr=P(u-0.5,v+0.25);
+    const sh=q=>({x:q.x+3,y:q.y+3}); line(sh(a),sh(b2),'rgba(0,0,0,.18)',5); line(sh(wl),sh(wr),'rgba(0,0,0,.18)',3.4);
+    line(up(wl,4),up(wr,4),shade(col,0.9),3.4); line(up(tl,4),up(tr,4),shade(col,0.9),2.2); line(up(a,4),up(b2,4),col,5); line(up(a,4),up(a,9),c.trim,2); const n=up(b2,4); ctx.fillStyle='#2B3A48'; ctx.beginPath(); ctx.arc(n.x,n.y,1.6,0,7); ctx.fill(); };
+  plane(1.1,1.0,'#F4F4F0'); plane(2.4,1.4,'#F4F4F0');
+  // the terminal: a low building with a glass front and a blue roof
+  const T0=boxAt(x+4.6,y+0.3,2.3,1.5,0,14,c.roof,c.wall,shade(c.wall,0.82)); void T0; const F=faceF(P(4.6,1.8),P(6.9,1.8));
+  for(let i=0;i<6;i++) poly([F(0.06+i*0.15,3),F(0.18+i*0.15,3),F(0.18+i*0.15,11),F(0.06+i*0.15,11)],LAMPS>0?'#FFD98A':'#8FB6CF',INK,0.5);
+  faceText(F,0.5,17.5,'AIRPORT',7,c.trim);
+  // the control tower and its glass cab
+  boxAt(x+7.1,y+0.5,0.55,0.55,0,30,'#D9D6CE','#E6E3DC',shade('#E6E3DC',0.8)); boxAt(x+6.95,y+0.35,0.85,0.85,30,8,'#3E4C55',LAMPS>0?'#BFE3F0':'#7FB2CF',shade('#7FB2CF',0.8)); boxAt(x+6.9,y+0.3,0.95,0.95,38,2,'#2F4A7A','#2F4A7A','#25395E');
+  const top=up(P(7.37,0.77),40); line(top,up(top,8),INK,1); if(LAMPS>0||Math.floor(T_NOW/600)%2){ ctx.fillStyle='#FF4B3A'; ctx.beginPath(); ctx.arc(top.x,top.y-8,1.8,0,7); ctx.fill(); }
+  // a windsock by the runway
+  const ws=P(w-0.4,r0-0.35); line(ws,up(ws,16),INK,1); const sw=Math.sin(T_NOW/700)*2; poly([up(ws,16),{x:ws.x+9,y:ws.y-14+sw},{x:ws.x+9,y:ws.y-12+sw},up(ws,13)],'#F28C28',INK,0.6); };
 DRAW.containers=function(b,t){ const [w,d]=t.size, x=b.x, y=b.y; poly([iso(x,y),iso(x+w,y),iso(x+w,y+d),iso(x,y+d)],'#9C9A95','#7C7A76',1);
   const cols=['#C8382E','#2F4A7A','#E2A23B','#3E7A4B','#7C8288','#B5543E'], hh=hash(b.id||'cy');
   for(let i=0;i<4;i++) for(let j=0;j<3;j++){ const n=1+((hh>>((i*3+j)%28))&3); for(let k=0;k<n;k++){ const col=cols[(i*5+j*3+k)%cols.length]; boxAt(x+0.3+i*1.1,y+0.4+j*1.15,0.95,0.5,k*8,8,shade(col,1.1),col,shade(col,0.8)); } }
@@ -3460,7 +3512,7 @@ function drawRoadPreview(){ if(tool.kind!=='road'||roadMode!=='line') return; co
     dot(end,'#D9714A'); const p=iso(end[0]+0.5,end[1]+0.5); label(`${tiles.length} tile${tiles.length===1?'':'s'}${clr?` · clears ${clr}`:''}${bad?` · ${bad} blocked`:''}`, p.x, p.y-30, true); }
   if(roadStart) dot(roadStart,'#3F8A4E');
   else if(end){ poly([iso(end[0],end[1]),iso(end[0]+1,end[1]),iso(end[0]+1,end[1]+1),iso(end[0],end[1]+1)],'rgba(255,255,255,.35)','#fff',2); dot(end,'#3F8A4E'); } }
-const paints = () => (tool.kind==='road'&&roadMode==='free') || tool.kind==='water' || tool.kind==='drain' || (tool.kind==='erase' && (tool.mode==='all'||tool.mode==='roads'));
+const paints = () => tool.kind==='ppave' || (tool.kind==='road'&&roadMode==='free') || tool.kind==='water' || tool.kind==='drain' || (tool.kind==='erase' && (tool.mode==='all'||tool.mode==='roads'));
 // After dragging a box: say what's inside and ask before clearing it.
 function finishArea(){ const a=areaSel; const ax=Math.min(a.a[0],a.b[0]), bx=Math.max(a.a[0],a.b[0]), ay=Math.min(a.a[1],a.b[1]), by=Math.max(a.a[1],a.b[1]);
   let nb=0, nr=0; for(const b of D.buildings.values()){ const [w,d]=T(b).size; if(b.x<=bx&&b.x+w>ax&&b.y<=by&&b.y+d>ay) nb++; } for(const k of S.roads.keys()){ const [x,y]=k.split(',').map(Number); if(x>=ax&&x<=bx&&y>=ay&&y<=by) nr++; }
@@ -3525,9 +3577,15 @@ function paintAt(sx,sy){ const [x,y]=tileAt(sx,sy); const k=x+','+y;
   if(tool.kind==='water'||tool.kind==='drain'){ const n=tool.size||1, r=Math.floor(n/2); for(let i=0;i<n;i++) for(let j=0;j<n;j++){ const kk=(x-r+i)+','+(y-r+j); if(paintBuf.has(kk)) continue;
       if(tool.kind==='water'){ if(D.occ.has(kk)) continue; paintPrev.set(kk,D.water.get(kk)||null); paintBuf.set(kk,tool.water); D.water.set(kk,tool.water), tileListGen++; } else { if(!D.water.has(kk)) continue; paintPrev.set(kk,D.water.get(kk)); paintBuf.set(kk,null); D.water.delete(kk); } } return; }
   if(paintBuf.has(k)) return;
+  if(tool.kind==='ppave'){ if(D.plotOcc.get(k)!==tool.plot||D.occ.has(k)||D.water.has(k)) return; const want=tool.erase?null:tool.road; if((D.roads.get(k)||null)===want) return;
+    paintPrev.set(k,D.roads.get(k)||null); paintBuf.set(k,want); if(want) D.roads.set(k,want); else D.roads.delete(k); tileListGen++; return; }
   if(tool.kind==='road'){ if(!roadOK(x,y)) return; const want=layAs(k,tool.road); if(D.roads.get(k)===want) return; paintPrev.set(k,D.roads.get(k)||null); paintBuf.set(k,want); D.roads.set(k,want); tileListGen++; }
   else { if(!D.roads.has(k)) return; paintPrev.set(k,D.roads.get(k)); paintBuf.set(k,null); D.roads.delete(k); } }
 async function commitPaint(){ const buf=paintBuf, prev=paintPrev; paintBuf=null; paintPrev=new Map(); const mode=tool.kind, erase=tool.kind==='erase'&&tool.mode==='all', g=gesture;
+  if(mode==='ppave'){ if(!buf.size){ if(g) toast(tool.erase?'Tap paving on your plot to lift it.':'Tap open ground on your plot (not under a building).'); return; } const set={}, remove=[]; for(const [k,v] of buf){ if(v) set[k]=v; else remove.push(k); }
+    try{ const r=await api(`/api/me/plots/${encodeURIComponent(tool.plot)}/pave`,{method:'POST',body:{set,remove}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } Plots.drop(tool.plot);
+      toast(r.laid?`Laid ${r.laid} tile${r.laid===1?'':'s'} for ${fmt(r.paid)} coins. Keep going, or tap Done.`:r.lifted?`Lifted ${r.lifted} tile${r.lifted===1?'':'s'}.`:'Nothing to change there.'); }
+    catch(e){ for(const [k,v] of prev){ if(v) D.roads.set(k,v); else D.roads.delete(k); } tileListGen++; changed(); toast(e.message); } return; }
   if(draftOn && buf.size){ const water=mode==='water'||mode==='drain', live=water?S.water:S.roads;
     draftEdit(water?`${buf.size} tiles of water`:`${buf.size} road tiles`,d=>{ const m=water?d.water:d.roads; for(const [k,v] of buf){ if((live.get(k)||null)===(v||null)) delete m[k]; else m[k]=v||null; } }); return; }
   if(draftOn && !buf.size){ if(erase && g){ const id=buildingAt(g.sx,g.sy); if(id) removeBuilding(id); } return; }
@@ -3646,7 +3704,7 @@ async function rotateBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
   catch(e){ toast(e.message); } }
 function setTool(t){ tool=t; ghost=null; roadStart=null; if(t.kind!=='land'){ landSel=null; document.querySelector('.landtip')?.remove(); } setTimeout(refreshTurn); const chip=$('toolchip');
   if(t.kind==='pan'){ chip.hidden=true; setMini(false); }
-  else { chip.hidden=false; $('toolLabel').textContent = t.kind==='land'?(t.mark?'Drag over empty grass beside a road':'Swipe to the spot, then double-tap it') : t.kind==='pbuild'?`${BUILDING_TYPES[t.type].cat==='decor'||BUILDING_TYPES[t.type].cat==='nature'?'Tap or drag to place':'Drag onto your plot:'} ${BUILDING_TYPES[t.type].name}` : t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} ${VEHICLE_TYPES[t.vtype].mode==='water'?'onto water':VEHICLE_TYPES[t.vtype].mode==='air'?'anywhere: it flies above that spot':'onto a road'}` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
+  else { chip.hidden=false; $('toolLabel').textContent = t.kind==='ppave'?(t.erase?'Tap or drag over your paving to lift it':`Tap or drag on your plot: ${ROAD_TYPES[t.road].name}, ${fmt(paveCost(t.road))} a tile`) : t.kind==='land'?(t.mark?'Drag over empty grass beside a road':'Swipe to the spot, then double-tap it') : t.kind==='pbuild'?`${BUILDING_TYPES[t.type].cat==='decor'||BUILDING_TYPES[t.type].cat==='nature'?'Tap or drag to place':'Drag onto your plot:'} ${BUILDING_TYPES[t.type].name}` : t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} ${VEHICLE_TYPES[t.vtype].mode==='water'?'onto water':VEHICLE_TYPES[t.vtype].mode==='air'?'anywhere: it flies above that spot':'onto a road'}` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
   if(activeTab && !PLAYER_TABS.has(activeTab) && activeTab!=='reports' && activeTab!=='stats' && activeTab!=='money' && activeTab!=='stream') renderPane(); }
 $('toolDone').onclick=()=>setTool({kind:'pan'});
 // Minimise: tuck the menus away while keeping the chosen tool, so the whole map is free to build on.
@@ -5740,11 +5798,18 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
     const cats=CATS.filter(c=>c.id!=='roads'&&c.id!=='terrain'&&Object.values(BUILDING_TYPES).some(t=>t.cat===c.id)), tabs=el('div',{class:'ctabs'}), list=el('div',{class:'cards pcards'}), free=p.w*p.d-(p.used||0);
     const fill=()=>{ tabs.innerHTML=''; list.innerHTML='';
       for(const c of cats) tabs.append(el('button',{class:'pill'+(cat===c.id?' on':''),text:c.name,onclick:()=>{ cat=Plots.cat=c.id; fill(); }}));
+      tabs.append(el('button',{class:'pill'+(cat==='surface'?' on':''),text:'Surfaces',onclick:()=>{ cat=Plots.cat='surface'; fill(); }}));
+      // paving and flooring for the open ground on your plot: tap or drag over the tiles
+      if(cat==='surface'){ const go=t=>{ close(); closeCard(); setTool(t); const c=iso(p.x+p.w/2,p.y+p.d/2); cam.x=c.x; cam.y=c.y; cam.z=Math.max(cam.z,1.3); };
+        for(const id of Object.keys(ROAD_TYPES).filter(id=>ROAD_TYPES[id].sub==='surface'&&!ROAD_TYPES[id].hidden).sort((a,b)=>paveCost(a)-paveCost(b))){ const R=ROAD_TYPES[id];
+          list.append(card(roadThumb(id), R.name, `${fmt(paveCost(id))} a tile`, R.note, false, ()=>{ go({kind:'ppave',plot:p.id,road:id}); toast(`Tap or drag over your plot to lay ${R.name.toLowerCase()}: ${fmt(paveCost(id))} coins a tile.`); })); }
+        list.append(card(roadThumb('dirt'), 'Lift paving', 'free', 'back to grass', false, ()=>{ go({kind:'ppave',plot:p.id,erase:true}); toast('Tap or drag over paving on your plot to lift it.'); }));
+        return; }
       const ids=Object.keys(BUILDING_TYPES).filter(id=>BUILDING_TYPES[id].cat===cat&&id!=='landing'&&!BUILDING_TYPES[id].hidden).sort((a,b)=>constructionCost(a)-constructionCost(b));
       for(const id of ids){ const t=BUILDING_TYPES[id], q=buildQuote(id), [w,d]=t.size, fits=(w<=p.w&&d<=p.d)||(d<=p.w&&w<=p.d);
         list.append(card(thumbFor(id), t.name, `${fmt(q.total)} coins`, `${w}×${d} · ${q.minutes?realTime(q.minutes*GAME_MIN_MS):'instant'}${upgradable(id)?' · upgradable':''}`, false, ()=>{ if(!fits){ toast(`${t.name} is ${w}×${d}: too big for this ${p.w}×${p.d} plot.`); return; } close(); closeCard(); Plots.cat=cat; setTool({kind:'pbuild',plot:p.id,type:id,rot:w>p.w||d>p.d?1:0});
           const c=iso(p.x+p.w/2,p.y+p.d/2); cam.x=c.x; cam.y=c.y; cam.z=Math.max(cam.z,1.3); toast(`Drag ${t.name} onto your plot and let go. ${fmt(q.total)} coins with the charges.`); }, !fits)); } };
-    box.append(el('p',{class:'hint',text:`${p.w}×${p.d} plot, ${free} tile${free===1?'':'s'} free. Prices include the building permit and inspection (and the water & power hook-up for homes and businesses).`}), tabs, list); fill(); },
+    box.append(el('p',{class:'hint',text:`${p.w}×${p.d} plot, ${free} tile${free===1?'':'s'} free. Prices include the building permit and inspection (and the water & power hook-up for homes and businesses). Surfaces pave the open ground, tile by tile.`}), tabs, list); fill(); },
   // Decorations, fences and plants (anything under 1,500 coins) go straight down and stay selected, so a plot can be
   // fenced or planted tile after tile; bigger things show their price first.
   async place(x,y){ const type=tool.type, plot=tool.plot, rot=tool.rot||0, q=buildQuote(type), t=BUILDING_TYPES[type];
@@ -5979,7 +6044,7 @@ function myCars(){ if(!(Me&&Me.handle)) return { cars:[], active:null, home:fals
   if(c&&!d&&!myCars.loading){ myCars.loading=true; loadDetail(c.handle).finally(()=>{ myCars.loading=false; if(sel) renderCard(true); }); }
   return { cars:(d&&d.cars)||[], active:d&&d.carActive, home:!!(c&&c.home), c }; }
 function garageList(cars, active){ const ul=el('ul',{class:'joblist'}); for(const car of cars){ const M=CAR_MODELS[car.m]; if(!M) continue; const road=ridden(car.m);
-    const where=M.kind==='water'?' · on the water':M.kind==='air'?' · in the sky':car.id===active?(M.kind==='bike'?' · riding':' · driving'):'';
+    const where=M.kind==='water'?' · on the water':needsHangar(car.m)&&car.hangar?' · in your hangar':M.kind==='air'?' · in the sky':car.id===active?(M.kind==='bike'?' · riding':' · driving'):'';
     const find=()=>{ const v=[...D.vehicles.values()].find(x=>x.owner&&Me&&x.owner.toLowerCase()===Me.handle.toLowerCase()&&x.type===M.vtype); if(!v){ toast('It’s out of sight right now.'); return; } const p=iso(v.x,v.y); cam.x=p.x; cam.y=p.y-(VEHICLE_TYPES[v.type].alt||0); follow=null; sel={kind:'v',id:v.id}; renderCard(true); };
     ul.append(el('li',null, el('img',{src:carThumb(car.m,car.col),alt:'',width:'48',height:'32'}), el('div',{class:'jt'}, el('b',{text:M.name+where}), el('span',{text:`Sells for ${fmt(Math.floor(carPaid(car)*0.6))}`})),
       !road?el('button',{class:'btn',text:'Find it',onclick:find}):car.id===active?'':el('button',{class:'btn',text:M.kind==='bike'?'Ride':'Drive',onclick:()=>meAction('/api/me/cars/active',{id:car.id},`You're ${M.kind==='bike'?'riding':'driving'} the ${M.name.toLowerCase()} now.`,'PUT')}),
@@ -5991,6 +6056,14 @@ function carsPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚗
   const lot=nearestOf('cardealer', c);
   box.append(el('div',{class:'row-actions'}, lot?el('button',{class:'btn primary',text:'🚘 Go to the Car dealership',onclick:()=>goToBuilding(lot)}):el('span',{class:'hint',text:'Cars are bought at a Car dealership. The colony doesn’t have one yet.'})));
   return box; }
+// A hangar's card: how many planes it holds, and the ones parked in it.
+const Hangars={ info:new Map(), busy:new Set() };
+function hangarSection(b,t){ const box=el('div',{class:'authbox'}, el('h3',{text:`✈️ ${t.name}: holds ${t.hangar} plane${t.hangar===1?'':'s'}`})), e=Hangars.info.get(b.id);
+  if((!e||Date.now()-e.at>15000)&&!Hangars.busy.has(b.id)){ Hangars.busy.add(b.id); api('/api/hangars/'+encodeURIComponent(b.id)).then(d=>Hangars.info.set(b.id,{d,at:Date.now()})).catch(()=>{}).finally(()=>{ Hangars.busy.delete(b.id); if(sel&&sel.id===b.id) renderCard(true); }); }
+  const d=e&&e.d; if(!d){ box.append(el('p',{class:'hint',text:'…'})); return box; }
+  if(d.planes.length){ const ul=el('ul',{class:'joblist'}); for(const p of d.planes) ul.append(el('li',null, el('img',{src:carThumb(p.m,p.col),alt:'',width:'48',height:'32'}), el('div',{class:'jt'}, el('b',{text:p.name}), el('span',{text:'Parked here'})))); box.append(el('p',{class:'hint',text:`${d.planes.length} of ${d.cap} spaces taken.`}), ul); }
+  else box.append(el('p',{class:'hint',text:b.owner?`Empty: room for ${d.cap} plane${d.cap===1?'':'s'}. ${isMe(b.owner)?'Buy one at a Car dealership and it’s parked here.':''}`:`Room for ${d.cap} plane${d.cap===1?'':'s'}.`}));
+  return box; }
 // The Car dealership's card: buy a new car, or sell one of yours.
 function dealerSection(b){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚘 Showroom: cars, bikes, boats and aircraft'}));
   if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to buy a car.'})); return box; }
@@ -5998,8 +6071,8 @@ function dealerSection(b){ const box=el('div',{class:'authbox'}, el('h3',{text:'
   else { const M=CAR_MODELS[carPick.m]; if(!carPick.col||!M.colors.includes(carPick.col)) carPick.col=M.colors[0];
     const g=el('div',null); for(const [kind,label] of [['car','🚗 Cars'],['bike','🚲 Bikes'],['water','🚤 Boats & ships'],['air','🚁 Aircraft']]){ const gg=el('div',{class:'petgrid'}); g.append(el('h4',{class:'bgroup',text:label}),gg); for(const [k,m] of Object.entries(CAR_MODELS).filter(([k])=>carKind(k)===kind)) gg.append(el('button',{class:'petb'+(carPick.m===k?' on':''),'aria-pressed':String(carPick.m===k),onclick:()=>{ carPick={m:k,col:null}; renderCard(true); }}, el('img',{src:carThumb(k,k===carPick.m?carPick.col:m.colors[0]),alt:'',width:'54',height:'36'}), el('span',{text:`${m.name}`}), el('span',{class:'hint',text:`${fmt(m.price)}`}))); }
     const sw=el('div',{class:'swatches'}); for(const col of M.colors) sw.append(el('button',{class:'sw'+(carPick.col===col?' on':''),style:`background:${col}`,'aria-label':'Colour','aria-pressed':String(carPick.col===col),onclick:()=>{ carPick.col=col; renderCard(true); }}));
-    const why=M.kind==='water'?'It’s kept on the water nearest your home, where everyone can see it cruise. ':M.kind==='air'?'It flies over the colony from your home, for everyone to see. ':M.kind==='bike'?'You ride it on longer trips. ':'';
-    box.append(g, M.colors.length>1?sw:'', el('p',{class:'hint',text:`${why}Upkeep: ${fmt(M.upkeep)} coins a week. Resale value: 60% of what you paid. You can keep 3 cars and bikes, and 3 boats and aircraft.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy the ${M.name.toLowerCase()} for ${fmt(M.price)}`,onclick:()=>meAction('/api/me/cars',{model:carPick.m,color:carPick.col,buildingId:b.id},r=>`Enjoy your new ${M.name.toLowerCase()}!`)}))); }
+    const why=needsHangar(carPick.m)?`Planes are kept in a hangar on your land and fly over the colony from there. Build a Plane hangar (holds ${BUILDING_TYPES.planehangar.hangar}) or a Private airport (holds ${BUILDING_TYPES.airport.hangar}) first: tap your plot, then Build here → Services → Aviation. `:M.kind==='water'?'It’s kept on the water nearest your home, where everyone can see it cruise. ':M.kind==='air'?'It flies over the colony from your home, for everyone to see. ':M.kind==='bike'?'You ride it on longer trips. ':'';
+    box.append(g, M.colors.length>1?sw:'', el('p',{class:'hint',text:`${why}Upkeep: ${fmt(M.upkeep)} coins a week. Resale value: 60% of what you paid. You can keep 3 cars and bikes, 3 boats and other aircraft, and as many planes as your hangars hold.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy the ${M.name.toLowerCase()} for ${fmt(M.price)}`,onclick:()=>meAction('/api/me/cars',{model:carPick.m,color:carPick.col,buildingId:b.id},r=>`Enjoy your new ${M.name.toLowerCase()}!`)}))); }
   if(my.cars.length) box.append(el('h4',{class:'bgroup',text:'Sell one of yours'}), garageList(my.cars, my.active));
   return box; }
 async function meAction(path, body, ok, method){ try{ const r=await api(path,{method:method||'POST',body}); GuideUI.at=0; if(ok) toast(typeof ok==='function'?ok(r):ok); if(r&&typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
@@ -6253,6 +6326,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       else if(b.owner.toLowerCase()===Me.handle.toLowerCase()&&!b.plot) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
     if(!Store.canWrite&&Me&&Me.token) card.append(el('div',{class:'row-actions'}, Loc.btn(b.name||t.name, b.x, b.y)));
     Plots.buildingBits(card,b,t);
+    if(t.hangar && b.done!==false && !b.ruin) card.append(hangarSection(b,t));
     if(kindOf(b.type)==='colosseum' && b.done!==false && !b.ruin) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🥊 Fight Night',onclick:()=>{ Fight.view='fight'; openTab('races'); loadFight(); }})));
     if(t.home && !Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin) card.append(rentBox(b,t));
     if(t.work && !Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin) card.append(workBox(b,t));

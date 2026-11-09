@@ -1645,6 +1645,37 @@ r = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x
   if (lone) { await pool.query('update buildings set owner_id = $2 where id = $1', [lone.id, A.id]);
     ok((await call('POST', `/api/me/buildings/${lone.id}/move`, { x: 0, y: 0 }, A.P)).status === 409, "a bought building that isn't on your own land can't be moved");
     await pool.query('update buildings set owner_id = null where id = $1', [lone.id]); } }
+// paving your own land: surfaces only, inside your plot, never under a building; building over paving lifts it
+{ const R1 = await import('../shared/rules.js'), k1 = `${s1.x + 3},${s1.y + 3}`, k2 = `${s1.x + 2},${s1.y + 3}`, pave = (body, who = A.P) => call('POST', `/api/me/plots/${plotId}/pave`, body, who);
+  ok((await pave({ set: { [k1]: 'marble' } }, B.P)).status === 403, "you can't pave someone else's land");
+  ok((await pave({ set: { [k1]: 'street' } })).status === 400, 'only surfaces can be laid on your land (no streets or rails)');
+  ok((await pave({ set: { [`${s1.x + 5},${s1.y}`]: 'marble' } })).status === 409, 'paving stays inside your plot');
+  const under = await pave({ set: { [`${s1.x},${s1.y}`]: 'marble' } }); ok(under.status === 200 && under.json.laid === 0, 'no paving under a building', JSON.stringify(under.json));
+  const c0 = Number((await pool.query('select coins_base from citizens where id = $1', [A.id])).rows[0].coins_base), pv = await pave({ set: { [k1]: 'marble', [k2]: 'herringbone' } });
+  const rows = (await pool.query('select x, y, type from roads where (x, y) in (($1::int, $2::int), ($3::int, $2::int))', [s1.x + 3, s1.y + 3, s1.x + 2])).rows;
+  ok(pv.status === 200 && pv.json.laid === 2 && pv.json.paid === R1.paveCost('marble') + R1.paveCost('herringbone') && rows.length === 2 && c0 - pv.json.coins === pv.json.paid, 'lay marble and herringbone brick on your plot, paying per tile', JSON.stringify({ pv: pv.json, rows }));
+  const lift = await pave({ remove: [k2] }); ok(lift.status === 200 && lift.json.lifted === 1 && !(await pool.query('select 1 from roads where x = $1 and y = $2', [s1.x + 2, s1.y + 3])).rowCount, 'lift paving again, for free', JSON.stringify(lift.json));
+  const bn = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x + 3, y: s1.y + 3 }, A.P);
+  ok(bn.status === 200 && !(await pool.query('select 1 from roads where x = $1 and y = $2', [s1.x + 3, s1.y + 3])).rowCount, 'building on your own paving lifts it', JSON.stringify(bn.json).slice(0, 200));
+  if (bn.status === 200) await call('POST', `/api/me/buildings/${bn.json.building.id}/knock`, {}, A.P); }
+// planes live in hangars: build one on your land first; each holds a set number
+{ const lot = (await pool.query("select id from buildings where type = 'cardealer' and done and not ruin limit 1")).rows[0]?.id || await (async () => { const b = await call('POST', '/api/admin/buildings', { type: 'cardealer', x: 960, y: 940 }); await call('POST', `/api/admin/buildings/${b.json.building?.id}/finish`); return b.json.building?.id; })();
+  const was = (await pool.query('select home_id from citizens where id = $1', [A.id])).rows[0].home_id, home = (await pool.query('select id from buildings where home_cap > 0 and done and not ruin limit 1')).rows[0].id;
+  await pool.query('update citizens set home_id = coalesce(home_id, $2), coins_base = 6000000 where id = $1', [A.id, home]);
+  const no = await call('POST', '/api/me/cars', { model: 'jet', buildingId: lot }, A.P); ok(no.status === 409 && /hangar/i.test(no.json.error || ''), 'no plane without a hangar', JSON.stringify(no.json));
+  const s2 = await spot(4, 4); const lp = await call('POST', '/api/me/land', { ...s2 }, A.P); ok(lp.status === 200, 'land for a hangar', JSON.stringify(lp.json).slice(0, 200));
+  const hb = await call('POST', `/api/me/plots/${lp.json.plot.id}/build`, { type: 'planehangar', x: s2.x, y: s2.y }, A.P); ok(hb.status === 200, 'build a plane hangar on it', JSON.stringify(hb.json).slice(0, 200));
+  const hid = hb.json.building.id; await call('POST', `/api/me/buildings/${hid}/rush`, {}, A.P);
+  const j1 = await call('POST', '/api/me/cars', { model: 'jet', buildingId: lot }, A.P); ok(j1.status === 200 && j1.json.hangar === 'Plane hangar', 'with a hangar built, buy a plane: it goes in the hangar', JSON.stringify(j1.json).slice(0, 200));
+  const j2 = await call('POST', '/api/me/cars', { model: 'jet', buildingId: lot }, A.P), cars = (await pool.query('select cars from citizens where id = $1', [A.id])).rows[0].cars.filter(c => c.m === 'jet');
+  const vs = (await pool.query('select x, y from vehicles where owner_id = $1 and type = $2', [A.id, 'plane'])).rows;
+  ok(j2.status === 200 && cars.length === 2 && cars.every(c => c.hangar === hid) && vs.length === 2 && vs.every(v => v.x >= s2.x && v.x < s2.x + 3 && v.y >= s2.y && v.y < s2.y + 3), 'two planes, both parked in the hangar and flying from it', JSON.stringify({ j2: j2.json, cars, vs }));
+  const full = await call('POST', '/api/me/cars', { model: 'jet', buildingId: lot }, A.P); ok(full.status === 409 && /full/.test(full.json.error || ''), 'a plane hangar holds two', JSON.stringify(full.json));
+  const hi = (await call('GET', `/api/hangars/${hid}`, undefined, A.P)).json; ok(hi.cap === 2 && hi.planes.length === 2, 'the hangar lists the planes in it', JSON.stringify(hi));
+  ok((await call('POST', `/api/me/buildings/${hid}/knock`, {}, A.P)).status === 409 && (await call('POST', `/api/me/plots/${lp.json.plot.id}/sell`, {}, A.P)).status === 409, "a hangar with planes in it can't be knocked down or sold until they have somewhere else to go");
+  for (const c of cars) await call('DELETE', `/api/me/cars/${c.id}`, undefined, A.P);
+  const sold = await call('POST', `/api/me/plots/${lp.json.plot.id}/sell`, {}, A.P); ok(sold.status === 200, 'with the planes sold, the hangar and its land can be sold', JSON.stringify(sold.json));
+  await pool.query('update citizens set home_id = $2 where id = $1', [A.id, was]); }
 // the builder's Accounts: balances and each player's money history
 { const ac = (await call('GET', '/api/admin/accounts?q=landlady')).json, me = ac.players?.find(p => p.h === 'landlady');
   ok(me && me.total === me.cash + me.bank && ac.count >= 1, 'the builder sees a player\'s cash and savings', JSON.stringify(ac).slice(0, 200));

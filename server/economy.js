@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { pool } from './db.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
-import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES, carPaid, carKind, ridden } from '../shared/catalog.js';
+import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES, carPaid, carKind, ridden, needsHangar, hangarCap } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
 import { track, snapshot, ledger, econTick } from './stats.js';
 import { bump } from './achievements.js';
@@ -159,6 +159,34 @@ export class Economy {
     });
   }
 
+  // ---------- hangars ----------
+  // Planes are kept in hangars (a Plane hangar or a Private airport) on the owner's land. Each holds a set number.
+  // `without`: hangars about to be lost (sold or knocked down), which no longer count.
+  async hangars(ch, ownerId, cars, without = []) {
+    const rows = (await ch.q('select id, type, name, x, y, w, d from buildings where owner_id = $1 and done and not ruin', [ownerId])).rows.filter(b => hangarCap(b.type) && !without.includes(b.id));
+    const list = rows.map(b => ({ ...b, cap: hangarCap(b.type), used: (cars || []).filter(x => x.hangar === b.id).length }));
+    return { list, cap: list.reduce((n, b) => n + b.cap, 0), used: list.reduce((n, b) => n + b.used, 0), free: list.filter(b => b.used < b.cap).sort((a, b) => (b.cap - b.used) - (a.cap - a.used))[0] || null };
+  }
+  // Where a plane in a hangar flies from: just above the hangar.
+  hangarSpot(b) { return { x: b.x + Math.floor((b.w || 1) / 2), y: b.y + Math.floor((b.d || 1) / 2) }; }
+  // Before a colonist loses hangars (`lostIds`), the planes parked in them move to their other hangars. Returns why it
+  // can't be done (no room left for them), or null once they've moved. `c` is the colonist's row, already locked.
+  async rehomePlanes(ch, c, lostIds) {
+    const cars = Array.isArray(c.cars) ? c.cars : [], moving = cars.filter(x => x.hangar && lostIds.includes(x.hangar)); if (!moving.length) return null;
+    const H = await this.hangars(ch, c.id, cars, lostIds), room = H.list.reduce((n, b) => n + b.cap - b.used, 0);
+    if (room < moving.length) return `${moving.length === 1 ? 'A plane is' : `${moving.length} planes are`} parked there and your other hangars don't have room. Sell ${moving.length === 1 ? 'it' : 'some'} or build another hangar first.`;
+    for (const car of moving) { const b = H.list.find(h => h.used < h.cap); b.used++; car.hangar = b.id; const p = this.hangarSpot(b), [cx, cy] = R.chunkOf(p.x, p.y);
+      const v = (await ch.q('select id, cx, cy from vehicles where car_id = $1 and owner_id = $2', [car.id, c.id])).rows[0];
+      if (v) { await ch.q('update vehicles set x = $2, y = $3, cx = $4, cy = $5 where id = $1', [v.id, p.x, p.y, cx, cy]); const row = (await ch.q('select * from vehicles where id = $1', [v.id])).rows[0];
+        ch.extraOps.push({ op: 'removeVehicle', id: v.id, chunks: [R.chunkKey(v.cx, v.cy)] }, { op: 'vehicle', data: { id: row.id, type: row.type, x: row.x, y: row.y, cx, cy, placedAt: row.placed_at, owner: c.handle }, chunks: [R.chunkKey(cx, cy)] }); } }
+    await ch.q('update citizens set cars = $2 where id = $1', [c.id, JSON.stringify(cars)]); c.cars = cars; return null;
+  }
+  async hangarInfo(buildingId) {
+    const b = (await pool.query('select id, type, owner_id from buildings where id = $1', [String(buildingId)])).rows[0]; if (!b || !hangarCap(b.type)) throw new HttpError(404, 'That isn\'t a hangar.');
+    const o = b.owner_id ? (await pool.query('select cars from citizens where id = $1', [b.owner_id])).rows[0] : null, cars = Array.isArray(o?.cars) ? o.cars : [];
+    return { cap: hangarCap(b.type), planes: cars.filter(x => x.hangar === b.id).map(x => ({ id: x.id, m: x.m, name: CAR_MODELS[x.m]?.name || 'Plane', col: x.col })) };
+  }
+
   // ---------- cars ----------
   // Cars are bought at a Car dealership: tap one on the map.
   async buyCar(id, model, color, buildingId) {
@@ -168,23 +196,29 @@ export class Economy {
       const lot = (await ch.q("select id from buildings where id = $1 and type = 'cardealer' and done and not ruin", [String(buildingId || '')])).rows[0];
       if (!lot) throw new HttpError(409, 'Cars are sold at a Car dealership. Tap one on the map.');
       const c = await this.lockMe(ch, id); if (!c.home_id) throw new HttpError(400, 'You need a home (and a driveway) before you buy a car.');
-      const cars = Array.isArray(c.cars) ? c.cars : [], road = ridden(model), same = cars.filter(x => ridden(x.m) === road).length;
-      // up to 3 cars and bikes in the garage, and up to 3 boats and aircraft
-      if (same >= MAX_CARS) throw new HttpError(409, road ? `Your garage holds ${MAX_CARS} cars and bikes. Sell one first.` : `You can keep ${MAX_CARS} boats and aircraft. Sell one first.`);
+      const cars = Array.isArray(c.cars) ? c.cars : [], road = ridden(model), plane = needsHangar(model), same = cars.filter(x => ridden(x.m) === road && !needsHangar(x.m)).length;
+      // up to 3 cars and bikes in the garage, and up to 3 boats and other aircraft; planes as many as the hangars hold
+      let hangar = null;
+      if (plane) { const H = await this.hangars(ch, c.id, cars);
+        if (!H.cap) throw new HttpError(409, `Planes are kept in a hangar. Build a Plane hangar (holds ${hangarCap('planehangar')}) or a Private airport (holds ${hangarCap('airport')}) on your land first: tap your plot, then Build here → Services → Aviation.`);
+        if (!H.free) throw new HttpError(409, `Your hangars are full (${H.used} of ${H.cap} planes). Build another hangar or an airport, or sell a plane.`);
+        hangar = H.free; }
+      else if (same >= MAX_CARS) throw new HttpError(409, road ? `Your garage holds ${MAX_CARS} cars and bikes. Sell one first.` : `You can keep ${MAX_CARS} boats and aircraft. Sell one first.`);
       ch.coins(c); if (c.coins_base < M.price) throw new HttpError(400, `The ${M.name} costs ${fmt(M.price)} coins. You have ${fmt(c.coins_base)} on you.`);
-      // a boat goes on the water nearest your home; an aircraft takes to the sky over it
+      // a boat goes on the water nearest your home; a plane flies from its hangar; other aircraft take to the sky over your home
       let spot = null; const home = (await ch.q('select x, y from buildings where id = $1', [c.home_id])).rows[0];
-      if (M.kind === 'water') { spot = (await ch.q('select x, y from water order by (x - $1) * (x - $1) + (y - $2) * (y - $2) limit 1', [home.x, home.y])).rows[0];
+      if (hangar) spot = this.hangarSpot(hangar);
+      else if (M.kind === 'water') { spot = (await ch.q('select x, y from water order by (x - $1) * (x - $1) + (y - $2) * (y - $2) limit 1', [home.x, home.y])).rows[0];
         if (!spot) throw new HttpError(409, 'The colony has no water for a boat yet.'); }
       else if (M.kind === 'air') spot = { x: home.x, y: home.y };
       c.coins_base -= M.price; treasuryAdd(ch, M.price); track(ch, 'car:buy', M.price, c.id);
-      const car = { id: crypto.randomUUID().slice(0, 8), m: model, col: color, at: Date.now(), paid: M.price }; cars.push(car); await bump(ch, c.id, { cars_bought: 1 });
+      const car = { id: crypto.randomUUID().slice(0, 8), m: model, col: color, at: Date.now(), paid: M.price, ...(hangar ? { hangar: hangar.id } : {}) }; cars.push(car); await bump(ch, c.id, { cars_bought: 1 });
       await ch.q('update citizens set cars = $2, car_active = coalesce(car_active, $3) where id = $1', [c.id, JSON.stringify(cars), road ? car.id : null]);
       if (spot) { const [cx, cy] = R.chunkOf(spot.x, spot.y), vid = crypto.randomUUID();
         const v = (await ch.q('insert into vehicles (id, type, x, y, cx, cy, placed_at, owner_id, owner_handle, car_id) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *', [vid, M.vtype, spot.x, spot.y, cx, cy, Date.now(), c.id, c.handle, car.id])).rows[0];
         ch.extraOps.push({ op: 'vehicle', data: { id: v.id, type: v.type, x: v.x, y: v.y, cx, cy, placedAt: v.placed_at, owner: c.handle }, chunks: [R.chunkKey(cx, cy)] }); }
       ch.touch(c); await ch.saveCitizen(c);
-      return { ok: true, car, coins: c.coins_base };
+      return { ok: true, car, coins: c.coins_base, hangar: hangar ? (hangar.name || BUILDING_TYPES[hangar.type].name) : null };
     });
   }
   async sellCar(id, carId) {

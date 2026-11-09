@@ -108,6 +108,9 @@ export function canPlace(type, x, y, occ, roads, ignoreId) {
 }
 
 export const roadCost = type => (ROAD_TYPES[type] && ROAD_TYPES[type].cost) || 0;
+// A colonist laying a surface on their own land pays three times what it costs the colony (at least 10 coins a tile).
+export const isSurface = type => !!ROAD_TYPES[type] && !ROAD_TYPES[type].hidden && ROAD_TYPES[type].sub === 'surface';
+export const paveCost = type => Math.max(10, Math.round(roadCost(type) * 3 / 5) * 5);
 export const isRoadType = type => !!ROAD_TYPES[type] && !ROAD_TYPES[type].hidden;
 
 // Weather is worked out from the clock, so every viewer sees the same sky. Each game day is split into

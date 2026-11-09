@@ -45,6 +45,22 @@ export const ROAD_TYPES = {
   sand:       { name:'Sand path', note:'beach and park', sub:'surface', kind:'dirt', top:'#E8D6A6', edge:'#C9B47E', cost:4, speed:1.3, nocars:true },
   gravel:     { name:'Gravel path', note:'cheap and quick', sub:'surface', kind:'dirt', top:'#CDC7B8', edge:'#A39C8C', cost:5, speed:1.4 },
   dirt:       { name:'Dirt path', note:'free', sub:'surface', kind:'dirt', top:'#D6BE8E', edge:'#B09466', cost:0, speed:1.4 },
+  // Flooring in different designs (pat: how the tile is patterned). Colonists can lay any surface on their own land too.
+  herringbone:{ name:'Herringbone brick', note:'zig-zag bricks', sub:'surface', kind:'cobble', pat:'herring', top:'#B9775C', edge:'#8A5340', cost:25, speed:1.6, nocars:true },
+  terracotta: { name:'Terracotta tiles', note:'warm clay squares', sub:'surface', kind:'cobble', pat:'tiles', top:'#D08A5C', edge:'#A5653F', cost:22, speed:1.6, nocars:true },
+  marble:     { name:'Marble paving', note:'polished white', sub:'surface', kind:'cobble', pat:'marble', top:'#EEEBE4', edge:'#C4BEB2', cost:60, speed:1.6, nocars:true },
+  checker:    { name:'Chequered tiles', note:'black and white', sub:'surface', kind:'cobble', pat:'checker', top:'#F2EFE8', edge:'#2E2A27', cost:35, speed:1.6, nocars:true },
+  mosaic:     { name:'Mosaic', note:'blue and white', sub:'surface', kind:'cobble', pat:'mosaic', top:'#EAF1F5', edge:'#3C78B4', cost:45, speed:1.6, nocars:true },
+  deck:       { name:'Wooden decking', note:'warm timber boards', sub:'surface', kind:'cobble', pat:'deck', top:'#B98A5A', edge:'#80592F', cost:28, speed:1.6, nocars:true },
+  slate:      { name:'Slate flagstones', note:'dark and smart', sub:'surface', kind:'cobble', pat:'flags', top:'#6E747A', edge:'#464B50', cost:30, speed:1.6, nocars:true },
+  crazypave:  { name:'Crazy paving', note:'odd-shaped stones', sub:'surface', kind:'cobble', pat:'crazy', top:'#CFC6B2', edge:'#958B78', cost:20, speed:1.5, nocars:true },
+  pebbles:    { name:'Pebble path', note:'smooth river stones', sub:'surface', kind:'cobble', pat:'pebbles', top:'#DCD5C6', edge:'#A39A88', cost:16, speed:1.4, nocars:true },
+  stepping:   { name:'Stepping stones', note:'stones set in grass', sub:'surface', kind:'cobble', pat:'stepping', top:'#8DBE62', edge:'#BDB7A8', cost:10, speed:1.4, nocars:true },
+  hexpave:    { name:'Hexagon pavers', note:'honeycomb pattern', sub:'surface', kind:'cobble', pat:'hex', top:'#C8C2B4', edge:'#958E80', cost:24, speed:1.6, nocars:true },
+  terrazzo:   { name:'Terrazzo', note:'speckled stone', sub:'surface', kind:'cobble', pat:'terrazzo', top:'#E6DED0', edge:'#B8AE9C', cost:40, speed:1.6, nocars:true },
+  flowerpath: { name:'Flower-edged path', note:'gravel with flower borders', sub:'surface', kind:'cobble', pat:'flowers', top:'#E3D9C2', edge:'#B5A989', cost:26, speed:1.4, nocars:true },
+  playmat:    { name:'Play surface', note:'soft red rubber', sub:'surface', kind:'cobble', pat:'rubber', top:'#C8553F', edge:'#963B2A', cost:18, speed:1.5, nocars:true },
+  goldtile:   { name:'Golden tiles', note:'for show-offs', sub:'surface', kind:'cobble', pat:'gold', top:'#E2B84A', edge:'#A07A22', cost:120, speed:1.6, nocars:true },
   rail:       { name:'Railway', note:'trains run on it', sub:'rail', kind:'rail', top:'#A39A8C', edge:'#857C6E', cost:80, speed:1.2, nocars:true, walkCost:5 },
   platform:   { name:'Station platform', note:'trains stop here', sub:'rail', kind:'rail', platform:true, top:'#CFC9BC', edge:'#A39F95', cost:120, speed:1.2, nocars:true, walkCost:3 },
   railcross:  { name:'Level crossing', note:'where a road meets the rails', sub:'rail', kind:'crossing', top:'#7E8185', walk:'#DCD8CE', cost:100, speed:1.6 },
@@ -376,6 +392,9 @@ Object.assign(BUILDING_TYPES, {
   steelmill:   { name:'Steel mill', cat:'industry', sub:'heavy', size:[5,4], style:'mill', work:{title:'Steelworker', slots:340, salary:40}, cost:42000 },
   refinery:    { name:'Oil refinery', cat:'industry', sub:'heavy', size:[5,5], style:'refinery', work:{title:'Refinery operator', slots:380, salary:44}, cost:55000 },
   aerospace:   { name:'Aerospace hangar', cat:'industry', sub:'heavy', size:[6,5], style:'hangar', colors:{wall:'#D8DCDE', roof:'#9EA3A6', trim:'#2F4A7A'}, work:{title:'Aircraft engineer', slots:620, salary:56}, cost:95000 },
+  // A colonist's own aircraft are kept in a hangar on their land (hangar: how many it holds). Planes can only be bought with space for them.
+  planehangar: { name:'Plane hangar', cat:'services', sub:'aviation', size:[3,3], style:'hangar', label:'HANGAR', colors:{wall:'#D8DCDE', roof:'#8E9396', trim:'#C8382E'}, hangar:2, cost:40000 },
+  airport:     { name:'Private airport', cat:'services', sub:'aviation', size:[8,4], style:'airport', colors:{wall:'#ECEAE4', roof:'#5E7C99', trim:'#2F4A7A'}, hangar:6, cost:150000 },
   shipyard:    { name:'Container yard', cat:'industry', sub:'heavy', size:[5,4], style:'containers', work:{title:'Crane operator', slots:300, salary:38}, cost:38000 },
 
   // ---- shops ----
@@ -426,7 +445,7 @@ export const SUBS = {
   industry:  [['workshops','Workshops'],['factories','Factories'],['heavy','Heavy'],['tech','High-tech'],['farms','Farms']],
   offices:   [['offices','Offices'],['towers','Skyscrapers']],
   decor:     [['furniture','Street furniture'],['fences','Fences & walls'],['plants','Plants & festive']],
-  services:  [['safety','Safety'],['health','Health'],['education','Education'],['civic','Civic']],
+  services:  [['safety','Safety'],['health','Health'],['education','Education'],['civic','Civic'],['aviation','Aviation']],
   utilities: [['power','Power'],['water','Water'],['sewage','Sewage'],['garbage','Garbage']],
   parks:     [['squares','Parks & squares'],['sports','Sports']],
   nature:    [['trees','Trees'],['fields','Fields'],['rocks','Rocks & bushes']],
@@ -505,11 +524,13 @@ export const CAR_MODELS = {
   sailboat:  { name:'Sailing boat',    kind:'water', vtype:'sailboat',   price:120000,  upkeep:100,  colors:['#F4F4F0'] },
   ship:      { name:'Ship',            kind:'water', vtype:'ferry',      price:900000,  upkeep:900,  colors:['#F4F4F0'] },
   helicopter:{ name:'Helicopter',      kind:'air',   vtype:'helicopter', price:600000,  upkeep:600,  colors:['#C8382E'] },
-  jet:       { name:'Private plane',   kind:'air',   vtype:'plane',      price:1500000, upkeep:1500, colors:['#F4F4F0'] },
+  jet:       { name:'Private plane',   kind:'air',   vtype:'plane',      price:1500000, upkeep:1500, colors:['#F4F4F0'], hangar:true }, // kept in a hangar: needs space in one
   balloon:   { name:'Hot-air balloon', kind:'air',   vtype:'balloon',    price:250000,  upkeep:200,  colors:['#D9544A'] },
 };
 export const carKind = m => CAR_MODELS[m]?.kind || 'car'; // 'car' | 'bike' (both ridden on trips) | 'water' | 'air'
 export const ridden = m => ['car', 'bike'].includes(carKind(m));
+export const needsHangar = m => !!CAR_MODELS[m]?.hangar;
+export const hangarCap = type => BUILDING_TYPES[type]?.hangar || 0;
 
 export const DISASTER_TYPES = {
   fire:       { name:'Fire', note:'burns a block', radius:2 },

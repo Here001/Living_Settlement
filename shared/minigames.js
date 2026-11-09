@@ -214,67 +214,199 @@ export function stealthReplay(L, path) {
 }
 
 // ======================= Smooth talker (con a tourist) =======================
-// Sell a tourist a "genuine" Gliese moon rock. Every tourist is somebody: a collector, a bargain hunter, honeymooners, a
-// geology professor, an executive in a hurry, a nervous first-timer or an influencer, each with approaches they love and
-// ones they can't stand. Each turn they raise a real worry, worked out from how the talk is going (suspicious tourists want
-// proof or wonder about you; warm ones get to the price, their partner, or the final "I'm tempted…"). You pick one of four
-// lines (eight kinds of approach) and time it on the bar. Answer what they actually asked and trust climbs; dodge it and
-// they ask again, more suspicious; say the same kind of thing twice and it wears thin. They react to what you said, and
-// their face shows how it's going. Trust 100 = sold. Suspicion 100 = they walk. All worked out from the moves alone, so the
-// server replays it exactly.
+// Sell a tourist a "genuine" Gliese moon rock. Every tourist is somebody (thirteen kinds: a collector, a bargain hunter,
+// honeymooners, a geology professor, an executive in a hurry, a nervous first-timer, an influencer, a retired miner, a
+// broke student, a conspiracy theorist, a shuttle pilot, a grandparent after a present, an art dealer), each with
+// approaches they love and ones they can't stand, and their own way of putting things. Each turn they raise a real worry,
+// worked out from how the talk is going (suspicious tourists want proof or wonder about you; warm ones get to the price,
+// their partner, or the final "I'm tempted…"). You pick one of four lines (eight kinds of approach) and time it on the
+// bar. Answer what they actually asked and trust climbs; dodge it and they ask again, more suspicious; say the same kind
+// of thing twice and it wears thin. They react to what you said, and their face shows how it's going. Trust 100 = sold.
+// Suspicion 100 = they walk. All worked out from the moves alone, so the server replays it exactly (the wording varies,
+// but only the kind of approach you picked counts).
 export const CON_TACTICS = {
   facts: { name: 'Facts', icon: '📜' }, show: { name: 'Show it', icon: '🔦' }, story: { name: 'Story', icon: '📖' }, flatter: { name: 'Flattery', icon: '🌹' },
   charm: { name: 'Charm', icon: '😄' }, deal: { name: 'Deal', icon: '🏷️' }, rush: { name: 'Hurry them', icon: '⏳' }, listen: { name: 'Listen', icon: '👂' },
 };
 // What a tourist can be worried about, what they say, and how well each approach answers it (2 just right, 1 fair, 0 beside the point, -1 wrong move).
+// (New worries go at the end: the order is part of how each turn's options are drawn.)
 export const CON_WORRIES = {
-  open: { say: ['What are you selling?', 'What have you got there?', 'Is that… a rock?'], again: ['I asked what you\'re selling.'],
+  open: { say: ['What are you selling?', 'What have you got there?', 'Is that… a rock?', 'Are you talking to me?', 'What\'s in the little box?'], again: ['I asked what you\'re selling.', 'So what is it, then?'],
     fit: { charm: 2, story: 2, show: 1, flatter: 1, facts: 0, listen: 0, deal: -1, rush: -1 } },
-  proof: { say: ['How do I know it\'s really from the moon?', 'It looks like a painted pebble to me.', 'Anyone can say "moon rock". Can you prove it?'], again: ['You still haven\'t shown me it\'s real.', 'Again: how do I know it\'s genuine?'],
+  proof: { say: ['How do I know it\'s really from the moon?', 'It looks like a painted pebble to me.', 'Anyone can say "moon rock". Can you prove it?', 'My cousin bought a "moon rock". It was concrete.', 'Real moon rock is in museums, not in pockets.'], again: ['You still haven\'t shown me it\'s real.', 'Again: how do I know it\'s genuine?', 'Proof. I\'m still waiting.'],
     fit: { facts: 2, show: 2, story: 1, listen: 0, charm: 0, flatter: -1, deal: -1, rush: -1 } },
-  price: { say: ['That\'s a lot of money for a rock.', 'What\'s it going to cost me?', 'I could buy a shuttle ticket for that.'], again: ['You didn\'t answer me. The price?'],
+  price: { say: ['That\'s a lot of money for a rock.', 'What\'s it going to cost me?', 'I could buy a shuttle ticket for that.', 'How much? You\'re joking.', 'And what\'s the catch with the price?'], again: ['You didn\'t answer me. The price?', 'The price. Again.'],
     fit: { deal: 2, flatter: 1, story: 1, listen: 1, facts: 0, charm: 0, show: 0, rush: -1 } },
-  time: { say: ['I\'ve got a shuttle to catch.', 'Make it quick, please.', 'I really don\'t have long.'], again: ['I said I\'m in a hurry!'],
+  time: { say: ['I\'ve got a shuttle to catch.', 'Make it quick, please.', 'I really don\'t have long.', 'My tour group is leaving without me.', 'Thirty seconds. Go.'], again: ['I said I\'m in a hurry!', 'Quicker, please! I said I\'m late!'],
     fit: { rush: 2, deal: 2, show: 1, facts: 0, charm: 0, flatter: 0, story: -1, listen: -1 } },
-  need: { say: ['What would I even do with a moon rock?', 'Why would I want one?', 'Where would I put it?'], again: ['You still haven\'t said why I\'d want it.'],
+  need: { say: ['What would I even do with a moon rock?', 'Why would I want one?', 'Where would I put it?', 'I already have a rock. In my garden.', 'It\'s nice, but what\'s it for?'], again: ['You still haven\'t said why I\'d want it.', 'Again: why would I need it?'],
     fit: { story: 2, flatter: 2, charm: 1, show: 1, listen: 1, facts: 0, deal: 0, rush: -1 } },
-  trust: { say: ['Why should I trust a stranger in the street?', 'You\'re not one of those scammers, are you?', 'Something about this feels off.'], again: ['I\'m still not sure about you.'],
+  trust: { say: ['Why should I trust a stranger in the street?', 'You\'re not one of those scammers, are you?', 'Something about this feels off.', 'The guidebook warned me about people like you.', 'Who are you, exactly?'], again: ['I\'m still not sure about you.', 'I still don\'t know who you are.'],
     fit: { listen: 2, charm: 2, facts: 1, story: 1, show: 0, deal: 0, flatter: -1, rush: -1 } },
-  partner: { say: ['I should ask my partner first.', 'My other half would kill me.', 'Let me think it over with my partner.'], again: ['I really ought to ask my partner.'],
+  partner: { say: ['I should ask my partner first.', 'My other half would kill me.', 'Let me think it over with my partner.', 'We agreed: no souvenirs this trip.', 'My partner does the money.'], again: ['I really ought to ask my partner.', 'My partner, though… I really should ask.'],
     fit: { flatter: 2, rush: 1, deal: 1, story: 1, listen: 1, charm: 0, show: 0, facts: -1 } },
-  close: { say: ['I\'m tempted… really tempted.', 'Okay. Convince me one last time.', 'If I say yes, is that it?'], again: ['Go on, give me a reason to say yes.'],
+  close: { say: ['I\'m tempted… really tempted.', 'Okay. Convince me one last time.', 'If I say yes, is that it?', 'Oh, go on then… or should I?', 'My hand\'s on my wallet. Last chance.'], again: ['Go on, give me a reason to say yes.', 'Nearly. Go on, one more reason.'],
     fit: { rush: 2, deal: 2, flatter: 1, charm: 1, listen: 0, facts: 0, show: 0, story: 0 } },
+  customs: { say: ['Can I even take this off-planet?', 'Won\'t customs take it off me at the spaceport?', 'Is this legal to sell?', 'Do I need a permit for that?'], again: ['You didn\'t say: will customs let it through?', 'The customs thing still bothers me.'],
+    fit: { facts: 2, listen: 2, story: 1, charm: 1, show: 0, deal: 0, flatter: -1, rush: -1 } },
+  gift: { say: ['It\'s for my grandson. Would a child even like it?', 'I need a present for someone special.', 'Would it make a good gift?', 'Will it survive a nine-year-old?'], again: ['Again: would they like it, as a present?', 'You didn\'t say if it\'s a good gift.'],
+    fit: { story: 2, show: 2, charm: 1, listen: 1, flatter: 0, facts: 0, deal: 0, rush: -1 } },
 };
-// What you can say: a line for each approach and each worry.
+// What you can say: lines for each approach and each worry (one of them is picked each turn).
 const CON_LINES = {
-  facts: { open: 'Genuine lunar basalt from Gliese 12 b\'s second moon. Registered.', proof: 'Number 17 of the 40 ever brought back. Here\'s the Geology Office stamp.', price: 'At auction they go for ten times this. Look up lot 17.', time: 'Registered, stamped, boxed. Ten seconds and it\'s yours.', need: 'It\'s an appreciating asset: they\'ve doubled in value in two years.', trust: 'My licence number\'s on the certificate. Check it with the Colony Office.', partner: 'Show them the certificate: it speaks for itself.', close: 'Certificate, stamp, serial number. Everything\'s in order.' },
-  show: { open: 'Hold it to the light. See the blue flecks? Only moon iron does that.', proof: 'Here, scratch it with your key. Moon iron doesn\'t mark.', price: 'Feel the weight of it. That\'s what you\'re paying for.', time: 'Just hold it for one second. Feel that? Done.', need: 'Picture it on your shelf, catching the light every morning.', trust: 'Hold it yourself. I\'m not going anywhere.', partner: 'Take a photo and send it to them right now.', close: 'Look at it glow. That\'s not going to be on any shelf but yours.' },
-  story: { open: 'My grandmother was on the first mining crew. This is the last piece she kept.', proof: 'It came down on the Ardent supply run. I was there when they unloaded it.', price: 'I\'d never sell, but my daughter\'s school fees are due.', time: 'Long story short: it\'s the last one.', need: 'A rock that\'s travelled further than anyone you know. Imagine telling that story.', trust: 'I\'ve had this stall nine years. Everyone here knows me.', partner: 'Imagine their face when you give them a piece of the moon.', close: 'You\'ll tell this story for the rest of your life.' },
-  flatter: { open: 'You look like someone who knows a real treasure.', proof: 'Someone with your eye can see it\'s real.', price: 'For someone of your taste, it\'s a bargain.', time: 'Busy people like you don\'t miss chances like this.', need: 'It suits you. Honestly.', trust: 'I only show this to people I trust. You\'re one of them.', partner: 'They\'ll say you\'ve got the best taste in the colony.', close: 'You were made for this piece.' },
-  charm: { open: 'If it\'s not real, I\'ll eat it. With ketchup.', proof: 'If it\'s fake, come back and I\'ll buy you dinner.', price: 'Cheaper than therapy, and twice as uplifting.', time: 'I\'ll be quicker than your shuttle, promise.', need: 'Everyone needs a moon. This one\'s pocket-sized.', trust: 'Do I look like a criminal? Don\'t answer that.', partner: 'Tell them the moon said hello.', close: 'Come on, say yes. Make a lonely rock happy.' },
-  deal: { open: 'Half price today, just for you.', proof: 'Real or not, at this price you can\'t lose.', price: 'Cash today and I\'ll knock off a third.', time: 'Quick deal: half price if you pay now.', need: 'At this price, it\'s a gift for anyone.', trust: 'Pay half now, half when you\'ve had it checked.', partner: 'I\'ll throw in a second one for them, free.', close: 'Final offer: half price and a certificate frame.' },
-  rush: { open: 'Quick, before the customs officer comes back!', proof: 'No time for tests, another buyer\'s on the way.', price: 'The price doubles when the shuttle docks.', time: 'Then let\'s be quick: take it, it\'s yours.', need: 'Decide now, there\'s one left.', trust: 'Trust me, there\'s no time!', partner: 'Your partner isn\'t here. The rock is, and not for long.', close: 'Last chance. Yes or no?' },
-  listen: { open: 'You look tired. Long trip?', proof: 'That\'s fair. What would convince you?', price: 'I hear you. What were you hoping to spend?', time: 'I understand. Shall I be brief?', need: 'What do you love collecting back home?', trust: 'You\'re right to be careful. Ask me anything.', partner: 'Of course. What do you think they\'d say?', close: 'Take your time. What\'s holding you back?' },
+  facts: {
+    open: ['Genuine lunar basalt from Gliese 12 b\'s second moon. Registered.', 'Lunar basalt, Gliese 12 b, second moon. Serial number on the base.'],
+    proof: ['Number 17 of the 40 ever brought back. Here\'s the Geology Office stamp.', 'Iron spherules, zero water content. Earth rocks can\'t fake that.'],
+    price: ['At auction they go for ten times this. Look up lot 17.', 'The last one sold for 40,000 at Kepler Station. Records are public.'],
+    time: ['Registered, stamped, boxed. Ten seconds and it\'s yours.', 'Paperwork\'s already done. Sign here.'],
+    need: ['It\'s an appreciating asset: they\'ve doubled in value in two years.', 'Only forty exist. In ten years they\'ll be in museums.'],
+    trust: ['My licence number\'s on the certificate. Check it with the Colony Office.', 'Licensed trader, number 4471. It\'s on my badge.'],
+    partner: ['Show them the certificate: it speaks for itself.', 'Tell them it\'s worth more next year than today.'],
+    close: ['Certificate, stamp, serial number. Everything\'s in order.', 'Fully documented. You\'re buying the paperwork as much as the rock.'],
+    customs: ['Export form C-12, already filled in. Customs see these every day.', 'Under 200 grams and registered: completely legal to take off-world.'],
+    gift: ['Educational too: it comes with a card about the moon it\'s from.', 'Safe, sealed and non-toxic. Tested.'],
+  },
+  show: {
+    open: ['Hold it to the light. See the blue flecks? Only moon iron does that.', 'Look closer. It sparkles like nothing down here.'],
+    proof: ['Here, scratch it with your key. Moon iron doesn\'t mark.', 'Put it near your compass. Watch the needle.'],
+    price: ['Feel the weight of it. That\'s what you\'re paying for.', 'Look at the grain. You can\'t fake that for any price.'],
+    time: ['Just hold it for one second. Feel that? Done.', 'One look. That\'s all it takes.'],
+    need: ['Picture it on your shelf, catching the light every morning.', 'Look how it glows in the dark. Bedside lamp and moon in one.'],
+    trust: ['Hold it yourself. I\'m not going anywhere.', 'Take it. Turn it over. Look as long as you like.'],
+    partner: ['Take a photo and send it to them right now.', 'Video-call them. Let them see it sparkle.'],
+    close: ['Look at it glow. That\'s not going to be on any shelf but yours.', 'Hold it one more time. Now try giving it back.'],
+    customs: ['See this seal on the box? That\'s the customs mark.', 'Look, the export tag is already on it.'],
+    gift: ['Look at it in the dark… it glows. Kids go wild for that.', 'Feel it: smooth as a pebble, small enough for a pocket.'],
+  },
+  story: {
+    open: ['My grandmother was on the first mining crew. This is the last piece she kept.', 'This rock has crossed eleven light years. Let me tell you how.'],
+    proof: ['It came down on the Ardent supply run. I was there when they unloaded it.', 'The pilot who brought it back still drinks at the Rusty Moon. Ask him.'],
+    price: ['I\'d never sell, but my daughter\'s school fees are due.', 'My landlord wants the rent by Friday, or I\'d keep it forever.'],
+    time: ['Long story short: it\'s the last one.', 'Short version: one left, and you\'re here.'],
+    need: ['A rock that\'s travelled further than anyone you know. Imagine telling that story.', 'Every dinner party for the rest of your life starts with "this came from a moon".'],
+    trust: ['I\'ve had this stall nine years. Everyone here knows me.', 'Ask the baker over there. She\'s known me since I was ten.'],
+    partner: ['Imagine their face when you give them a piece of the moon.', 'My wife said the same thing once. Now she wears one on a chain.'],
+    close: ['You\'ll tell this story for the rest of your life.', 'One day someone will ask where you got it. And you\'ll smile.'],
+    customs: ['Last week a lady took one through. Customs asked for her autograph.', 'My cousin works at the spaceport. They wave these through.'],
+    gift: ['When I was small my grandad gave me one. I still remember that day.', 'Give it at bedtime with the story of the moon it came from.'],
+  },
+  flatter: {
+    open: ['You look like someone who knows a real treasure.', 'I could tell from across the square you\'ve got an eye for things.'],
+    proof: ['Someone with your eye can see it\'s real.', 'You know quality. Look at it and tell me it\'s fake.'],
+    price: ['For someone of your taste, it\'s a bargain.', 'Clever people buy before the price goes up. Like you.'],
+    time: ['Busy people like you don\'t miss chances like this.', 'Someone important like you decides fast.'],
+    need: ['It suits you. Honestly.', 'It matches your eyes. I\'m serious.'],
+    trust: ['I only show this to people I trust. You\'re one of them.', 'I knew you were the right person the moment I saw you.'],
+    partner: ['They\'ll say you\'ve got the best taste in the colony.', 'Your partner\'s lucky to have someone with your eye.'],
+    close: ['You were made for this piece.', 'Honestly? It\'s been waiting for you.'],
+    customs: ['They never stop someone as respectable as you.', 'One look at you and customs will wave you through.'],
+    gift: ['Any child would love a present from someone like you.', 'With your taste, it\'ll be the best present they ever get.'],
+  },
+  charm: {
+    open: ['If it\'s not real, I\'ll eat it. With ketchup.', 'Good news: you\'ve just met the best salesman on the planet.'],
+    proof: ['If it\'s fake, come back and I\'ll buy you dinner.', 'If it\'s from Earth, I\'m from Mars. And I\'m not.'],
+    price: ['Cheaper than therapy, and twice as uplifting.', 'Cheaper than a moon holiday, and no space sickness.'],
+    time: ['I\'ll be quicker than your shuttle, promise.', 'I talk fast. Faster than light, nearly.'],
+    need: ['Everyone needs a moon. This one\'s pocket-sized.', 'Paperweight, conversation piece, tiny pet that never needs feeding.'],
+    trust: ['Do I look like a criminal? Don\'t answer that.', 'My mother says I\'m honest. She\'s never wrong.'],
+    partner: ['Tell them the moon said hello.', 'Tell them it\'s cheaper than a divorce.'],
+    close: ['Come on, say yes. Make a lonely rock happy.', 'Say yes and I\'ll stop talking. Promise.'],
+    customs: ['Customs? They\'ve got bigger rocks to worry about.', 'If they stop you, tell them it\'s your lucky pebble. Works every time.'],
+    gift: ['Kids love it. Adults love it. My dog loves it.', 'Better than socks. Everything\'s better than socks.'],
+  },
+  deal: {
+    open: ['Half price today, just for you.', 'Special price, today only.'],
+    proof: ['Real or not, at this price you can\'t lose.', 'Cheap enough that it doesn\'t matter.'],
+    price: ['Cash today and I\'ll knock off a third.', 'Tell you what: I\'ll throw in the display case.'],
+    time: ['Quick deal: half price if you pay now.', 'Pay now, skip the haggling: best price.'],
+    need: ['At this price, it\'s a gift for anyone.', 'At this price, buy two and decide later.'],
+    trust: ['Pay half now, half when you\'ve had it checked.', 'Pay when you\'re happy. I\'ll wait right here.'],
+    partner: ['I\'ll throw in a second one for them, free.', 'Two for the price of one: one for each of you.'],
+    close: ['Final offer: half price and a certificate frame.', 'Last price, and I\'m losing money on it.'],
+    customs: ['Customs fee included in the price.', 'I\'ll knock off a bit in case customs charge you.'],
+    gift: ['I\'ll wrap it for free, with a bow.', 'Gift box and card included, no extra charge.'],
+  },
+  rush: {
+    open: ['Quick, before the customs officer comes back!', 'Psst, over here, quick, before anyone sees!'],
+    proof: ['No time for tests, another buyer\'s on the way.', 'You can test it later. Right now, it\'s going.'],
+    price: ['The price doubles when the shuttle docks.', 'Price goes up at noon. It\'s five to.'],
+    time: ['Then let\'s be quick: take it, it\'s yours.', 'Done in one breath: cash, rock, bye.'],
+    need: ['Decide now, there\'s one left.', 'No time to think: it\'s the last one.'],
+    trust: ['Trust me, there\'s no time!', 'Never mind me, look at the queue!'],
+    partner: ['Your partner isn\'t here. The rock is, and not for long.', 'By the time you\'ve asked, it\'s gone.'],
+    close: ['Last chance. Yes or no?', 'Three… two…'],
+    customs: ['Don\'t worry about customs, just be quick!', 'Hide it in your sock, nobody checks socks!'],
+    gift: ['Buy it now, worry about the wrapping later!', 'Presents sell out fast. Quick!'],
+  },
+  listen: {
+    open: ['You look tired. Long trip?', 'First time in the colony? How are you finding it?'],
+    proof: ['That\'s fair. What would convince you?', 'Good question. What would you check, if you could?'],
+    price: ['I hear you. What were you hoping to spend?', 'That\'s fair. What\'s your budget?'],
+    time: ['I understand. Shall I be brief?', 'Of course. How long have you got?'],
+    need: ['What do you love collecting back home?', 'What sort of things do you keep on your shelves?'],
+    trust: ['You\'re right to be careful. Ask me anything.', 'Fair enough. What would make you feel easier?'],
+    partner: ['Of course. What do you think they\'d say?', 'Sensible. What do they like?'],
+    close: ['Take your time. What\'s holding you back?', 'No pressure. What\'s your gut telling you?'],
+    customs: ['Good question. Where are you flying to?', 'Sensible. Which spaceport? I\'ll tell you what they allow.'],
+    gift: ['Tell me about them. What are they into?', 'How old are they? What do they love?'],
+  },
 };
 // How they react to the last thing you said: when it landed, when it fell flat, and when it was the wrong move.
 const CON_REACT = {
-  good: { facts: 'Number 17… with a certificate? Okay.', show: 'Huh. It really does glow.', story: 'Aww. That\'s quite a story.', flatter: 'Well… I do have a good eye.', charm: 'Ha! You\'re funny.', deal: 'Now that\'s more like it.', rush: 'Right, right, quickly then.', listen: 'Finally, someone who listens.' },
-  meh: ['Hmm.', 'Okay…', 'If you say so.', 'Right.'],
-  bad: { facts: 'I didn\'t ask for a lecture.', show: 'Don\'t wave it in my face.', story: 'I don\'t need your life story.', flatter: 'Flattery won\'t work on me.', charm: 'This isn\'t a joke to me.', deal: 'Cheap? Then it\'s fake.', rush: 'Don\'t rush me!', listen: 'I don\'t have time for chit-chat.' },
-  repeat: 'You said that already.',
+  good: { facts: ['Number 17… with a certificate? Okay.', 'Hm. That does sound official.'], show: ['Huh. It really does glow.', 'Ooh. Look at that.'], story: ['Aww. That\'s quite a story.', 'Really? Wow.'],
+    flatter: ['Well… I do have a good eye.', 'Oh, stop it. Go on.'], charm: ['Ha! You\'re funny.', 'Okay, that made me laugh.'], deal: ['Now that\'s more like it.', 'Now we\'re talking.'],
+    rush: ['Right, right, quickly then.', 'Yes, fine, quick.'], listen: ['Finally, someone who listens.', 'Well, since you ask…'] },
+  meh: ['Hmm.', 'Okay…', 'If you say so.', 'Right.', 'I see.', 'Uh-huh.'],
+  bad: { facts: ['I didn\'t ask for a lecture.', 'Numbers, numbers. So what?'], show: ['Don\'t wave it in my face.', 'Put it away, people are looking.'], story: ['I don\'t need your life story.', 'Is this going somewhere?'],
+    flatter: ['Flattery won\'t work on me.', 'Oh please.'], charm: ['This isn\'t a joke to me.', 'Very funny. Not.'], deal: ['Cheap? Then it\'s fake.', 'Why so cheap? What\'s wrong with it?'],
+    rush: ['Don\'t rush me!', 'Whoa, slow down!'], listen: ['I don\'t have time for chit-chat.', 'Why are you asking me questions?'] },
+  repeat: ['You said that already.', 'You keep saying that.', 'Heard it.'],
 };
-// The tourists: who they are, what they love (+), what they can't stand (−), and what's on their mind (how often each worry comes up).
+// The tourists: who they are, what they love (+), what they can't stand (−), what's on their mind (how often each worry
+// comes up), how they say hello, how they say some things in their own words, and what they say at the end.
 export const CON_PERSONAS = {
-  collector: { title: 'Collector', likes: ['facts', 'show', 'flatter'], hates: ['charm', 'deal'], worries: { proof: 3, price: 1, trust: 1, need: 1 }, hi: 'Ooh. I collect rare minerals, you know.' },
-  bargain: { title: 'Bargain hunter', likes: ['deal', 'charm'], hates: ['flatter', 'story'], worries: { price: 3, trust: 1, proof: 1, time: 1 }, hi: 'Whatever it is, it\'s too expensive.' },
-  honeymoon: { title: 'Honeymooner', likes: ['story', 'flatter', 'charm'], hates: ['rush', 'facts'], worries: { need: 2, partner: 3, price: 1 }, hi: 'We\'re on our honeymoon! Isn\'t it beautiful here?' },
-  professor: { title: 'Geology professor', likes: ['show', 'facts'], hates: ['charm', 'flatter', 'rush'], worries: { proof: 4, trust: 1, price: 1 }, hi: 'I teach planetary geology. Show me what you have.' },
-  executive: { title: 'Executive in a hurry', likes: ['rush', 'deal', 'show'], hates: ['story', 'listen'], worries: { time: 3, price: 2, proof: 1 }, hi: 'You\'ve got thirty seconds.' },
-  nervous: { title: 'First-time traveller', likes: ['listen', 'charm', 'story'], hates: ['rush', 'deal'], worries: { trust: 3, need: 1, partner: 1, proof: 1 }, hi: 'Oh! Um. Hello. Is this allowed?' },
-  influencer: { title: 'Influencer', likes: ['show', 'flatter', 'story'], hates: ['facts', 'listen'], worries: { need: 2, price: 1, proof: 1, time: 1 }, hi: 'Wait, is that content? Hold it up for the camera.' },
+  collector: { title: 'Collector', likes: ['facts', 'show', 'flatter'], hates: ['charm', 'deal'], worries: { proof: 3, price: 1, trust: 1, need: 1 },
+    hi: ['Ooh. I collect rare minerals, you know.', 'Is that what I think it is?'], say: { proof: ['I\'ve seen a hundred fakes. Convince me this isn\'t one.'] },
+    yes: 'For my collection. Wrap it carefully!', no: 'Not up to my standards. Good day.' },
+  bargain: { title: 'Bargain hunter', likes: ['deal', 'charm'], hates: ['flatter', 'story'], worries: { price: 3, trust: 1, proof: 1, time: 1 },
+    hi: ['Whatever it is, it\'s too expensive.', 'I never pay the first price. Never.'], say: { price: ['I\'ll give you a quarter of that. Maybe.'] },
+    yes: 'Deal. And I still think I won.', no: 'Too dear. I\'ll find one cheaper.' },
+  honeymoon: { title: 'Honeymooner', likes: ['story', 'flatter', 'charm'], hates: ['rush', 'facts'], worries: { need: 2, partner: 3, price: 1 },
+    hi: ['We\'re on our honeymoon! Isn\'t it beautiful here?', 'Just married! Can you tell?'], say: { partner: ['My husband\'s in the gift shop. Should I ask him?', 'My wife says we have to save for the house.'] },
+    yes: 'A piece of the moon for our honeymoon! Sold!', no: 'Sorry, we\'re saving for the house.' },
+  professor: { title: 'Geology professor', likes: ['show', 'facts'], hates: ['charm', 'flatter', 'rush'], worries: { proof: 4, trust: 1, price: 1 },
+    hi: ['I teach planetary geology. Show me what you have.', 'Basalt? Breccia? Let me see.'], say: { proof: ['What\'s the iron content? Has it been dated?', 'Lunar basalt has no water in it. Does this?'] },
+    yes: 'Remarkable. My students will love this.', no: 'Painted pumice. I\'m reporting you.' },
+  executive: { title: 'Executive in a hurry', likes: ['rush', 'deal', 'show'], hates: ['story', 'listen'], worries: { time: 3, price: 2, proof: 1 },
+    hi: ['You\'ve got thirty seconds.', 'I\'m between meetings. Talk.'], say: { time: ['My car\'s waiting. Bottom line?'] },
+    yes: 'Fine. Send the invoice to my assistant.', no: 'Waste of my time.' },
+  nervous: { title: 'First-time traveller', likes: ['listen', 'charm', 'story'], hates: ['rush', 'deal'], worries: { trust: 3, need: 1, partner: 1, proof: 1 },
+    hi: ['Oh! Um. Hello. Is this allowed?', 'Sorry, am I in the way?'], say: { trust: ['My mum said not to talk to people selling things…'] },
+    yes: 'Okay! My first ever souvenir!', no: 'I… I think I\'d better go. Sorry!' },
+  influencer: { title: 'Influencer', likes: ['show', 'flatter', 'story'], hates: ['facts', 'listen'], worries: { need: 2, price: 1, proof: 1, time: 1 },
+    hi: ['Wait, is that content? Hold it up for the camera.', 'Say hi to my 80,000 followers!'], say: { need: ['Will it look good on camera, though?'] },
+    yes: 'Unboxing video tonight! Tag yourself!', no: 'Not on brand. Bye!' },
+  miner: { title: 'Retired miner', likes: ['story', 'listen', 'show'], hates: ['flatter', 'rush'], worries: { proof: 2, trust: 2, need: 1, price: 1 },
+    hi: ['Forty years down the Gliese pits, I was. I know my rocks.', 'Hah. Moon rock, is it?'], say: { proof: ['I dug rock like that for a living. Let me feel it.'], trust: ['I\'ve met your sort down the pits. Smooth talkers.'] },
+    yes: 'Takes me back. I\'ll have it.', no: 'That\'s off a building site. Nice try, lad.' },
+  student: { title: 'Broke student', likes: ['deal', 'charm', 'story'], hates: ['facts', 'flatter'], worries: { price: 3, need: 1, trust: 1 },
+    hi: ['I\'ve got about eleven coins and a sandwich.', 'Is it free? Please say it\'s free.'], say: { price: ['I literally live on noodles.', 'Do you take student discount?'] },
+    yes: 'Noodles for a month, but worth it!', no: 'Can\'t afford rent, never mind rocks.' },
+  conspiracy: { title: 'Conspiracy theorist', likes: ['story', 'listen', 'show'], hates: ['facts', 'rush'], worries: { trust: 3, proof: 2, customs: 1 },
+    hi: ['They don\'t want you to know about moon rocks. Who sent you?', 'Keep your voice down. They\'re listening.'], say: { proof: ['Certificates? Anyone can print a certificate.'], trust: ['Are you with the Colony Office? Blink twice.'] },
+    yes: 'I knew it! They can\'t hide the truth forever.', no: 'You\'re one of them. I knew it!' },
+  pilot: { title: 'Shuttle pilot', likes: ['facts', 'deal', 'rush'], hates: ['story', 'flatter'], worries: { customs: 3, time: 2, price: 1 },
+    hi: ['I fly the Kepler run. I\'ve seen every trick in the book.', 'Got twenty minutes before pre-flight.'], say: { customs: ['I go through customs twice a day. They\'d have this off me.'] },
+    yes: 'Fine. It can ride up front with me.', no: 'I\'ve flown smuggled rocks before. Not again.' },
+  grandparent: { title: 'Grandparent after a present', likes: ['story', 'charm', 'listen'], hates: ['rush', 'facts'], worries: { gift: 3, price: 1, need: 1 },
+    hi: ['Hello, dear. I\'m looking for a present for my grandson.', 'Oh, how lovely. What is it, dear?'], say: { gift: ['Little Tomasz loves space. Would he like it?'] },
+    yes: 'He\'ll be over the moon! Wrap it nicely, dear.', no: 'I\'ll just get him a book, dear.' },
+  dealer: { title: 'Art dealer', likes: ['facts', 'flatter', 'show'], hates: ['deal', 'charm'], worries: { proof: 2, price: 2, need: 1, customs: 1 },
+    hi: ['I deal in rare objects. Impress me.', 'Provenance, darling. Where did it come from?'], say: { price: ['If it\'s real, it\'s underpriced. Which worries me.'] },
+    yes: 'I\'ll have it valued. You\'d better be right.', no: 'Tat. Goodbye.' },
 };
-const CON_NAMES = { f: ['Amara', 'Lena', 'Sofia', 'Mei', 'Zara', 'Ife', 'Aiko', 'Elsa', 'Ngozi', 'Priya'], m: ['Kofi', 'Ravi', 'Tunde', 'Jonas', 'Diego', 'Noah', 'Mateo', 'Chidi', 'Kenji', 'Emeka'] };
-const CON_FROM = ['Proxima b', 'Kepler Station', 'TRAPPIST-1e', 'Ross 128 b', 'Earth (Lagos)', 'Earth (Lisbon)', 'Wolf 1061 c', 'Earth (Osaka)', 'Teegarden b'];
+const CON_NAMES = { f: ['Amara', 'Lena', 'Sofia', 'Mei', 'Zara', 'Ife', 'Aiko', 'Elsa', 'Ngozi', 'Priya', 'Ingrid', 'Yara', 'Hana', 'Rosa', 'Adaeze'], m: ['Kofi', 'Ravi', 'Tunde', 'Jonas', 'Diego', 'Noah', 'Mateo', 'Chidi', 'Kenji', 'Emeka', 'Lars', 'Omar', 'Bruno', 'Arjun', 'Seun'] };
+const CON_FROM = ['Proxima b', 'Kepler Station', 'TRAPPIST-1e', 'Ross 128 b', 'Earth (Lagos)', 'Earth (Lisbon)', 'Wolf 1061 c', 'Earth (Osaka)', 'Teegarden b', 'Earth (Nairobi)', 'Earth (Oslo)', 'Luyten b', 'Barnard Station', 'Earth (Lima)'];
 export function genCon(seed, diff) {
   const r = rng(seed), ids = Object.keys(CON_PERSONAS), persona = ids[Math.floor(r() * ids.length)];
   const gender = r() < 0.5 ? 'f' : 'm', names = CON_NAMES[gender];
@@ -282,23 +414,28 @@ export function genCon(seed, diff) {
     turns: 7, need: 100, zone: Math.max(0.12, 0.3 - diff * 0.03), limit: 80 };
 }
 const conRng = (L, turn, salt) => rng(((L.seed * 31 + turn * 7919 + salt * 104729) >>> 0) || 1);
+const oneOf = (a, r) => Array.isArray(a) ? a[Math.floor(r() * a.length)] : a;
 export const conStart = L => ({ trust: 0, sus: 0, turn: 0, worry: 'open', again: 0, last: null, q: null, done: null });
 // The four lines on offer: always one that answers the worry just right (not the approach you used last), one wrong move,
-// and two others, in a shuffled order.
+// and two others, in a shuffled order. The wording is drawn separately, so it never changes which approaches are offered.
 export function conOptions(L, st) {
   const W = CON_WORRIES[st.worry], r = conRng(L, st.turn, Object.keys(CON_WORRIES).indexOf(st.worry) + 1), all = Object.keys(CON_TACTICS);
   const best = all.filter(t => W.fit[t] === 2 && t !== st.last), bad = all.filter(t => W.fit[t] === -1), pick = [];
   const take = list => { const ok = list.filter(t => !pick.includes(t)); if (ok.length) pick.push(ok[Math.floor(r() * ok.length)]); };
   take(best.length ? best : all.filter(t => W.fit[t] === 2)); take(bad); while (pick.length < 4) take(all);
   for (let i = pick.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [pick[i], pick[j]] = [pick[j], pick[i]]; }
-  return pick.map(t => ({ tactic: t, line: CON_LINES[t][st.worry] }));
+  const w = conRng(L, st.turn, 50 + st.again);
+  return pick.map(t => ({ tactic: t, line: oneOf(CON_LINES[t][st.worry], w) }));
 }
-// What the tourist says now: their reaction to your last line, then what's on their mind.
+// What the tourist says now: their reaction to your last line, then what's on their mind (in their own words, if they have some).
 export function conSay(L, st) {
-  const P = CON_PERSONAS[L.persona], W = CON_WORRIES[st.worry], r = conRng(L, st.turn, 99), ask = st.again ? W.again[Math.floor(r() * W.again.length)] : W.say[Math.floor(r() * W.say.length)];
-  const react = st.q === 'repeat' ? CON_REACT.repeat : st.q === 'good' ? CON_REACT.good[st.last] : st.q === 'bad' ? CON_REACT.bad[st.last] : st.q === 'meh' ? CON_REACT.meh[Math.floor(r() * CON_REACT.meh.length)] : P.hi;
+  const P = CON_PERSONAS[L.persona], W = CON_WORRIES[st.worry], r = conRng(L, st.turn, 99), own = !st.again && P.say && P.say[st.worry];
+  const ask = st.again ? oneOf(W.again, r) : own && r() < 0.6 ? oneOf(own, r) : oneOf(W.say, r);
+  const react = st.q === 'repeat' ? oneOf(CON_REACT.repeat, r) : st.q === 'good' ? oneOf(CON_REACT.good[st.last], r) : st.q === 'bad' ? oneOf(CON_REACT.bad[st.last], r) : st.q === 'meh' ? oneOf(CON_REACT.meh, r) : oneOf(P.hi, r);
   return `${react} ${ask}`;
 }
+// Their last word, once it's over.
+export function conBye(L, st) { const P = CON_PERSONAS[L.persona]; return st.done === 'sold' ? P.yes : P.no; }
 // Their face: how the talk is going for them.
 export function conMood(L, st) {
   if (st.trust >= 75 && st.sus < 50) return { face: '🤩', name: 'eager' }; if (st.sus >= 70) return { face: '😠', name: 'annoyed' };

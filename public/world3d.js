@@ -407,7 +407,7 @@ export function makePerson(seed, role) {
   // a soft shadow under their feet (cheaper than real shadows for people who keep moving)
   const blob = new THREE.Mesh(new THREE.CircleGeometry(0.45, 16), BLOB); blob.rotation.x = -Math.PI / 2; blob.position.y = 0.03; g.add(blob);
   let phase = 0, heading = 0;
-  const P = { group: g, body, head, torch, role, x: 0, z: 0,
+  const P = { group: g, body, head, torch, role, armL, armR, x: 0, z: 0,
     setPos(x, z) { this.x = x; this.z = z; g.position.set(x, 0, z); },
     // speed in m/s; turns towards where they're going; the knees and elbows bend a little as they walk
     animate(dt, vx, vz) { const sp = Math.hypot(vx, vz); if (sp > 0.3) { const want = Math.atan2(vx, vz); let d = want - heading; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; heading += d * Math.min(1, dt * 12); }

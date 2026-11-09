@@ -859,6 +859,23 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .mgpad.shake{animation:mgshake .3s}
 .mgkey{height:62px;border-radius:12px;border:2px solid #2B2621;background:#D9D4C7;color:#2B2621;font-size:24px;font-weight:900;box-shadow:0 3px 0 #111;cursor:pointer}
 .mgkey.lit{background:#F2C94C;box-shadow:0 0 18px #F2C94C}
+.hkhead{position:relative;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px 8px 24px;background:#1b1d20;border:2px solid #2B2621;border-radius:10px;color:#F2C94C;font:800 11px ui-monospace,monospace;letter-spacing:.06em;overflow:hidden}
+.hkhead::before{content:'';position:absolute;left:0;top:0;bottom:0;width:14px;background:repeating-linear-gradient(-45deg,#F2C94C 0 6px,#2B2621 6px 12px)}
+.hkleds{display:flex;gap:5px}.hkleds i{width:9px;height:9px;border-radius:50%;background:#8a1d14;box-shadow:0 0 6px #ff3b2a;animation:hkblink 1.2s steps(2) infinite}.hkleds i.on{background:#3CC46A;box-shadow:0 0 8px #7CFFB2;animation:none}
+.hkstat{padding:2px 7px;border-radius:6px;background:#5a1410;color:#ffb0a4;animation:hkblink 1s steps(2) infinite}.hkstat.ok{background:#0f3a22;color:#7CFFB2;animation:none}
+.hkterm{background:#07120c repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px);border:2px solid #2B2621;border-radius:10px;padding:8px 10px;font:600 12px/1.5 ui-monospace,monospace;color:#7CFFB2;min-height:80px;box-shadow:inset 0 0 18px rgba(0,255,120,.12);text-shadow:0 0 4px rgba(60,255,138,.5)}
+.hkterm div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hkterm div.bad{color:#ff8a7a;text-shadow:0 0 4px rgba(255,80,60,.5)}.hkterm div.ok{color:#e6fff0}.hkterm div:last-child::after{content:'▌';animation:hkblink 1s steps(2) infinite}
+.mgatm.hack .mgcardsheet{position:relative;background:#f3ecd6 repeating-linear-gradient(0deg,transparent 0 17px,rgba(74,123,217,.18) 17px 18px);transform:rotate(-.8deg);box-shadow:0 3px 0 rgba(0,0,0,.35)}
+.mgatm.hack .mgcardsheet::before{content:'';position:absolute;top:-8px;left:50%;width:56px;height:16px;margin-left:-28px;background:rgba(240,230,190,.75);transform:rotate(2deg)}
+.mgatm.hack .mgboard{background:#0f2a1c;background-image:repeating-linear-gradient(90deg,transparent 0 26px,rgba(124,255,178,.08) 26px 28px),repeating-linear-gradient(0deg,transparent 0 34px,rgba(124,255,178,.06) 34px 36px),radial-gradient(circle at 30% 40%,rgba(242,201,76,.15) 0 3px,transparent 4px),radial-gradient(circle at 70% 70%,rgba(242,201,76,.15) 0 3px,transparent 4px);border:6px solid #70767e;border-radius:12px;box-shadow:inset 0 0 0 2px #2B2621,0 4px 0 #111}
+.mgatm.hack .mgboard::before{content:'';position:absolute;inset:3px;pointer-events:none;background:radial-gradient(circle at 5px 5px,#d5dae1 0 2.5px,#3b4048 3.5px,transparent 4.5px),radial-gradient(circle at calc(100% - 5px) 5px,#d5dae1 0 2.5px,#3b4048 3.5px,transparent 4.5px),radial-gradient(circle at 5px calc(100% - 5px),#d5dae1 0 2.5px,#3b4048 3.5px,transparent 4.5px),radial-gradient(circle at calc(100% - 5px) calc(100% - 5px),#d5dae1 0 2.5px,#3b4048 3.5px,transparent 4.5px)}
+.mgatm.hack .mgwire{position:relative;border-radius:0 6px 6px 0;background:linear-gradient(180deg,rgba(255,255,255,.4),transparent 45%,rgba(0,0,0,.25)),var(--c)}
+.mgatm.hack .mgwire::after{content:'';position:absolute;right:-11px;top:50%;width:10px;height:8px;margin-top:-4px;border-radius:0 3px 3px 0;background:linear-gradient(#f3c98a,#a8661f)}
+.mgatm.hack .mgsock{background:linear-gradient(#2c3035,#141619);border-color:#8a9099;box-shadow:inset 0 0 0 3px #3a3e44,0 2px 0 #000}.mgatm.hack .mgsock.done{background:linear-gradient(#22663f,#123824)}.mgatm.hack .mgsock.spark{background:#FF4B3A}
+.mgatm.hack .mgscreen{background:#07120c repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 1px,transparent 1px 3px);box-shadow:inset 0 0 22px rgba(0,255,120,.2);text-shadow:0 0 6px #3CFF8A}
+.hkdots{margin-top:6px;font-size:18px;letter-spacing:.2em}
+.mgatm.hack .mgpad{background:#2a2d31;border:6px solid #70767e}.mgatm.hack .mgkey{background:linear-gradient(#efece5,#bdb8ad)}
+@keyframes hkblink{50%{opacity:.35}}
 @keyframes mgshake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 .mgbar{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:14px}.mgbar span{width:90px;text-align:left}.mgbar b{width:46px;text-align:right}
 .mgbar .mgtrack{background:var(--soft)}.mgbar i.p{background:#4A7BD9}.mgbar i.s{background:#B05FD6}
@@ -905,7 +922,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .mg.hurt{box-shadow:inset 0 0 80px rgba(220,0,0,.65)}
 .astick{display:none;position:fixed;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.4);pointer-events:none;z-index:3}.astick i{position:absolute;left:50%;top:50%;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 2px 8px rgba(0,0,0,.4)}
 .mg.arena .mgx.aquit{position:absolute;top:auto;bottom:calc(14px + env(safe-area-inset-bottom));right:14px;z-index:3;background:rgba(246,241,230,.9)}
-@media (prefers-reduced-motion:reduce){.mgcount,.mg.siren,.mgpad.shake,.mgsock.spark{animation:none}}
+@media (prefers-reduced-motion:reduce){.mgcount,.mg.siren,.mgpad.shake,.mgsock.spark,.hkleds i,.hkstat,.hkterm div::after{animation:none}}
 </style>
 </head>
 <body>

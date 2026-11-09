@@ -12,7 +12,7 @@ const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (
 
 const INFO = {
   rob: { icon: '🛒', name: 'Rob the shop', how: ['Sneak in the back door, get to the till and stay next to it while you empty it. Then get out the way you came in.', 'Stay out of the staff\'s view (the yellow cones) and away from cameras. They wander and stop to look around, so watch them. If the eye meter fills, you\'re spotted.', 'Red laser tripwires blink on and off: cross while they\'re off. Optional extras (jewels, a cash box, phones, watches) each add 15% to the takings, if you dare.', 'Move: drag anywhere on the screen (or use the arrow keys).'] },
-  scam: { icon: '🎭', name: 'Con a tourist', how: ['Sell a tourist a "genuine" Gliese moon rock. Every tourist is different: a collector, a bargain hunter, honeymooners, a professor, someone in a hurry…', 'Each turn they tell you what\'s on their mind. Pick the line that answers it, and suits who they are, then tap "Say it" with the marker in the green.', 'Dodge the question and they\'ll ask again, more suspicious. Saying the same kind of thing twice wears thin. Trust full: sold. Suspicion full: they walk.'] },
+  scam: { icon: '🎭', name: 'Con a tourist', how: ['Sell a tourist a "genuine" Gliese moon rock. Every tourist is different: a collector, a bargain hunter, a retired miner, a conspiracy theorist, a grandparent after a present… thirteen kinds in all, each with their own likes and dislikes.', 'Each turn they tell you what\'s on their mind. Pick the line that answers it, and suits who they are, then tap "Say it" with the marker in the green.', 'Dodge the question and they\'ll ask again, more suspicious. Saying the same kind of thing twice wears thin. Trust full: sold. Suspicion full: they walk.'] },
   atm: { icon: '🏧', name: 'Hack the ATM', how: ['Rewire the cash machine: tap a wire, then the socket with that colour\'s symbol on the service card.', 'Then watch the keypad flash a code and tap it back.', 'Wrong moves make the alarm jump. If the alarm fills, the bank\'s siren goes off.'] },
   driver: { icon: '🚗', name: 'Driver: the getaway', how: ['Get the crew\'s car to the end of the road.', 'Tap the left or right side of the screen (or swipe, or use the arrow keys) to change lane and dodge the traffic and roadblocks.', 'Each crash slows you right down. Four crashes and the car\'s wrecked.'] },
   hacker: { icon: '💻', name: 'Hacker: the security panel', how: ['Rewire the panel: tap a wire, then the socket with that colour\'s symbol on the service card.', 'Then watch the keypad flash a code and tap it back.', 'Wrong moves make the alarm jump. If the alarm fills, the sirens go off.'] },
@@ -66,7 +66,7 @@ function play(root, kind, L, run, info) {
     if (r.heistId) { heistWait(root, kind, info, r); return; }
     result(root, kind, info, run, r); if (!run.practice) X.done && X.done(r); };
   const g = MG.GAMES[kind];
-  if (g === 'stealth') stealth(root, L, finish); else if (g === 'con') con(root, L, finish); else if (g === 'atm') atm(root, L, finish);
+  if (g === 'stealth') stealth(root, L, finish); else if (g === 'con') con(root, L, finish); else if (g === 'atm') atm(root, L, finish, kind);
   else if (g === 'drive') drive(root, L, finish); else if (g === 'safe') safe(root, L, finish); else if (g === 'lookout') lookout(root, L, finish); else if (g === 'horde') horde(root, L, finish); else muscle(root, L, finish);
 }
 // After your part in a heist: your score, then the crew as they finish, then how the job went.
@@ -308,7 +308,7 @@ function con(root, L, finish) {
   const face = $c('div', { class: 'mgface' }), bubble = $c('div', { class: 'mgbubble' }), opts = $c('div', { class: 'mgopts' }), turnLab = $c('div', { class: 'mgturn' });
   wrap.append($c('div', { class: 'mgwho' }, $c('b', { text: L.name || 'A tourist' }), $c('span', { text: ` · ${P ? P.title : 'Tourist'}${L.from ? ' from ' + L.from : ''}` })), $c('div', { class: 'mgtop' }, av, face), bubble, turnLab, opts);
   const show = () => { trust.set(st.trust / L.need); sus.set(st.sus / 100);
-    if (st.done) { done = true; setTimeout(() => finish({ picks }), 900); bubble.textContent = st.done === 'sold' ? ['Deal! I\'ll take it. 🤑', 'Fine, you\'ve convinced me. Wrap it up!', 'Sold. Don\'t tell my bank.'][L.seed % 3] : ['Hmm… no thanks. I\'m off.', 'Nice try. Goodbye.', 'I think I\'ll pass. Security!'][L.seed % 3];
+    if (st.done) { done = true; setTimeout(() => finish({ picks }), 900); bubble.textContent = MG.conBye(L, st) + (st.done === 'sold' ? ' 🤑' : '');
       face.textContent = st.done === 'sold' ? '🤩' : '😠'; bump(face); sfx(st.done === 'sold' ? 'coin' : 'wrong'); opts.innerHTML = ''; return; }
     const M = MG.conMood(L, st); face.textContent = M.face; bubble.textContent = MG.conSay(L, st); turnLab.textContent = `Turn ${st.turn + 1} of ${L.turns} · they seem ${M.name}`;
     opts.innerHTML = ''; MG.conOptions(L, st).forEach((o, i) => { const T = MG.CON_TACTICS[o.tactic]; opts.append($c('button', { class: 'mgopt', onclick: () => aim(i, o) }, $c('b', { text: `${T.icon} ${T.name}` }), $c('span', { text: o.line }))); }); };
@@ -325,39 +325,50 @@ function con(root, L, finish) {
 }
 
 // ---------------- Wire & code ----------------
-function atm(root, L, finish) {
+// The hacker's version is the bank's security panel: a hazard-striped panel with a light for each wire, a stolen wiring
+// diagram, a circuit board, and a terminal that reports every move. The rules are the same as the ATM's.
+function hackDeco(L) {
+  const leds = L.wires.map(() => $c('i')), stat = $c('span', { class: 'hkstat', text: 'ARMED' }), term = $c('div', { class: 'hkterm', 'aria-live': 'polite' });
+  const head = $c('div', { class: 'hkhead' }, $c('span', { text: '⚠ SECURITY PANEL · ZONE 3' }), $c('span', { class: 'hkleds' }, ...leds), stat);
+  const log = (text, cls = '') => { term.append($c('div', { class: cls, text })); while (term.children.length > 4) term.firstChild.remove(); };
+  log('> panel v3.2 · tamper sensor ON'); log('> match the wires to the diagram');
+  return { head, term, log, led: i => leds[i] && leds[i].classList.add('on'), state: (text, ok) => { stat.textContent = text; stat.className = 'hkstat' + (ok ? ' ok' : ''); } };
+}
+function atm(root, L, finish, kind) {
   const alarm = meter('alarm', '🚨'), clock = $c('b', { class: 'mgclock' }), wrap = $c('div', { class: 'mgatm' }), events = [], t0 = performance.now(); let pen = 0, done = false, stage = 'wires', sel = null;
   const now = () => +((performance.now() - t0) / 1000).toFixed(2);
   root.append(hud(alarm, clock), wrap);
-  const card = $c('div', { class: 'mgcardsheet' }, $c('b', { text: '📋 Service card' })); [...L.card].sort((a, b) => a.sym - b.sym).forEach(c => card.append($c('span', { class: 'mgchip' }, $c('i', { style: `background:${MG.WIRE_COLS[c.col]}` }), `${MG.WIRE_NAMES[c.col]} → ${MG.SYMBOLS[c.sym]}`)));
+  const HK = kind === 'hacker' ? hackDeco(L) : null; if (HK) wrap.classList.add('hack');
+  const card = $c('div', { class: 'mgcardsheet' }, $c('b', { text: HK ? '📋 Wiring diagram (borrowed from the engineer)' : '📋 Service card' })); [...L.card].sort((a, b) => a.sym - b.sym).forEach(c => card.append($c('span', { class: 'mgchip' }, $c('i', { style: `background:${MG.WIRE_COLS[c.col]}` }), `${MG.WIRE_NAMES[c.col]} → ${MG.SYMBOLS[c.sym]}`)));
   const board = $c('div', { class: 'mgboard' }), left = $c('div', { class: 'mgcol' }), right = $c('div', { class: 'mgcol r' }), svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'mgwires');
   board.append(left, svg, right); const linked = new Map(); // wire → the symbol it's plugged into (the plug moves with its socket)
   let lit = 0, ep = 0; const fuseM = L.fuse ? meter('fuse', '🧨') : null; if (fuseM) root.querySelector('.mghud').insertBefore(fuseM, clock);
   const symAt = (k, t) => MG.socketsAt(L, t)[k], sockOf = sym => MG.socketsAt(L, now()).indexOf(sym);
   const wires = L.wires.map((c, i) => { const b = $c('button', { class: 'mgwire', style: `--c:${MG.WIRE_COLS[c]}`, 'aria-label': MG.WIRE_NAMES[c] + ' wire', onclick: () => { if (stage !== 'wires' || linked.has(i)) return; sel = i; wires.forEach((w, k) => w.classList.toggle('on', k === i)); } }); left.append(b); return b; });
   const socks = L.sockets.map((sym0, k) => { const b = $c('button', { class: 'mgsock', text: MG.SYMBOLS[sym0], onclick: () => { if (stage !== 'wires' || sel == null) return; const w = sel, t = now(), sym = symAt(k, t); sel = null; wires.forEach(x => x.classList.remove('on')); events.push(['w', w, k, t]);
-      if (L.card[w].sym === sym) { linked.set(w, sym); lit = t; wires[w].classList.add('done'); b.classList.add('done'); draw(); buzz(15); sfx('ok'); bump(b); if (linked.size === L.wires.length) setTimeout(startPin, 400); }
-      else { pen += L.wrongWire; b.classList.add('spark'); setTimeout(() => b.classList.remove('spark'), 400); buzz(120); feedback('medium', { root, sound: 'zap', color: '255,60,40' }); } } }); right.append(b); return b; });
+      if (L.card[w].sym === sym) { linked.set(w, sym); lit = t; wires[w].classList.add('done'); b.classList.add('done'); draw(); buzz(15); sfx('ok'); bump(b); if (HK) { HK.led(w); HK.log(`> ${MG.WIRE_NAMES[L.wires[w]].toLowerCase()} → ${MG.SYMBOLS[sym]} bypassed (${linked.size}/${L.wires.length})`); } if (linked.size === L.wires.length) setTimeout(startPin, 400); }
+      else { pen += L.wrongWire; HK && HK.log('!! SHORT CIRCUIT · tamper sensor tripped', 'bad'); b.classList.add('spark'); setTimeout(() => b.classList.remove('spark'), 400); buzz(120); feedback('medium', { root, sound: 'zap', color: '255,60,40' }); } } }); right.append(b); return b; });
   const draw = () => { const r0 = board.getBoundingClientRect(); svg.innerHTML = ''; for (const [w, sym] of linked) { const k = sockOf(sym); if (k < 0) continue; const a = wires[w].getBoundingClientRect(), b = socks[k].getBoundingClientRect(), x1 = a.right - r0.left, y1 = a.top + a.height / 2 - r0.top, x2 = b.left - r0.left, y2 = b.top + b.height / 2 - r0.top;
       const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', `M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}`); p.setAttribute('stroke', MG.WIRE_COLS[L.wires[w]]); p.setAttribute('stroke-width', '5'); p.setAttribute('fill', 'none'); p.setAttribute('stroke-linecap', 'round'); svg.append(p); } };
   const status = $c('p', { class: 'mghint', text: L.hard ? 'Hard: the sockets swap places every few seconds, and the fuse 🧨 burns between moves. Each right move relights it.' : 'Tap a wire, then the socket with its symbol.' });
-  wrap.append(card, board, status);
+  wrap.append(...(HK ? [HK.head] : []), card, board, status, ...(HK ? [HK.term] : []));
   // the keypad: watch the code flash, then tap it back
   let at = 0, showing = false; const pad = $c('div', { class: 'mgpad' }), keys = [];
   for (let d = 1; d <= 9; d++) { const b = $c('button', { class: 'mgkey', text: String(d), onclick: () => press(d) }); keys.push(b); pad.append(b); }
   const flash = (d, ms) => { const b = keys[d - 1]; b.classList.add('lit'); setTimeout(() => b.classList.remove('lit'), ms); if (ms > 150) sfx('tick'); };
   const playCode = () => { showing = true; status.textContent = '👀 Watch the code…'; const gap = Math.max(260, 520 - L.diff * 45); L.pin.forEach((d, i) => setTimeout(() => flash(d, gap * 0.7), 400 + i * gap)); setTimeout(() => { showing = false; status.textContent = 'Now tap it back.'; }, 400 + L.pin.length * gap); };
-  const startPin = () => { lit = lit + 0.4 + MG.atmCodeTime(L); stage = 'pin'; /* the fuse waits while the code flashes (same as the server's count) */ wrap.innerHTML = ''; wrap.append($c('div', { class: 'mgscreen', text: 'ENTER SERVICE CODE' }), pad, status); playCode(); };
+  const scr = $c('div', { class: 'mgscreen', text: HK ? 'ENTER OVERRIDE CODE' : 'ENTER SERVICE CODE' }), dots = $c('div', { class: 'hkdots' }), showDots = () => { dots.textContent = L.pin.map((_, i) => i < at ? '●' : '○').join(' '); }; if (HK) scr.append(dots);
+  const startPin = () => { lit = lit + 0.4 + MG.atmCodeTime(L); stage = 'pin'; /* the fuse waits while the code flashes (same as the server's count) */ wrap.innerHTML = ''; showDots(); if (HK) HK.log('> wiring bypassed · override code requested'); wrap.append(...(HK ? [HK.head] : []), scr, pad, status, ...(HK ? [HK.term] : [])); playCode(); };
   const press = d => { if (stage !== 'pin' || showing || done) return; events.push(['k', d, now()]); flash(d, 150);
-    if (d === L.pin[at]) { at++; lit = now(); buzz(10); sfx('click'); if (at === L.pin.length) { stage = 'open'; status.textContent = '💸 Cash coming out!'; sfx('coin'); bump(status); end(); } }
-    else { at = 0; pen += L.wrongKey; feedback('medium', { root, sound: 'wrong', color: '255,60,40' }); lit = Math.max(lit, now() + 0.5 + MG.atmCodeTime(L)); buzz(150); pad.classList.add('shake'); setTimeout(() => pad.classList.remove('shake'), 350); setTimeout(playCode, 500); } };
+    if (d === L.pin[at]) { at++; showDots(); lit = now(); buzz(10); sfx('click'); if (at === L.pin.length) { stage = 'open'; status.textContent = HK ? '🔓 Panel disarmed: the doors are open!' : '💸 Cash coming out!'; if (HK) { HK.state('DISARMED', true); HK.log('> ACCESS GRANTED · doors unlocked', 'ok'); } sfx('coin'); bump(status); end(); } }
+    else { at = 0; showDots(); HK && HK.log('!! WRONG CODE · sequence reset', 'bad'); pen += L.wrongKey; feedback('medium', { root, sound: 'wrong', color: '255,60,40' }); lit = Math.max(lit, now() + 0.5 + MG.atmCodeTime(L)); buzz(150); pad.classList.add('shake'); setTimeout(() => pad.classList.remove('shake'), 350); setTimeout(playCode, 500); } };
   const end = () => { if (done) return; done = true; setTimeout(() => finish({ events, time: now() }), 700); };
   addEventListener('resize', draw);
   loop(root, () => { const t = (performance.now() - t0) / 1000, a = pen + t / L.limit; alarm.set(a); alarm.classList.toggle('hot', a > 0.7); clock.textContent = `${Math.max(0, Math.ceil(L.limit - t))}s`;
     // hard mode: the sockets swap round, and the fuse burns down between right moves
-    if (L.shift && stage === 'wires') { const e2 = Math.floor(t / L.shift); if (e2 !== ep) { ep = e2; const sk = MG.socketsAt(L, t); socks.forEach((b, k) => { b.textContent = MG.SYMBOLS[sk[k]]; b.classList.toggle('done', [...linked.values()].includes(sk[k])); b.classList.add('spark'); setTimeout(() => b.classList.remove('spark'), 250); }); draw(); buzz(30); sfx('whoosh'); } }
+    if (L.shift && stage === 'wires') { const e2 = Math.floor(t / L.shift); if (e2 !== ep) { ep = e2; const sk = MG.socketsAt(L, t); socks.forEach((b, k) => { b.textContent = MG.SYMBOLS[sk[k]]; b.classList.toggle('done', [...linked.values()].includes(sk[k])); b.classList.add('spark'); setTimeout(() => b.classList.remove('spark'), 250); }); draw(); buzz(30); sfx('whoosh'); HK && HK.log('!! panel re-routing the sockets…', 'bad'); } }
     let burnt = false; if (fuseM && stage !== 'open') { const left = 1 - (t - lit) / L.fuse; fuseM.set(left); fuseM.classList.toggle('hot', left < 0.35); burnt = left <= 0; }
-    if (!done && (a >= 1 || burnt)) { stage = 'alarm'; status.textContent = burnt ? '🧨 The fuse burnt down: alarm!' : '🚨 The alarm went off!'; root.classList.add('siren'); buzz(500); feedback('large', { root, sound: 'alarm', color: '255,40,40' }); end(); } });
+    if (!done && (a >= 1 || burnt)) { stage = 'alarm'; status.textContent = burnt ? '🧨 The fuse burnt down: alarm!' : '🚨 The alarm went off!'; if (HK) { HK.state('ALARM'); HK.log('!!! INTRUDER ALERT · police called', 'bad'); } root.classList.add('siren'); buzz(500); feedback('large', { root, sound: 'alarm', color: '255,40,40' }); end(); } });
   const stop = root._stop; root._stop = () => { stop && stop(); removeEventListener('resize', draw); };
 }
 
@@ -460,37 +471,93 @@ function drive2d(root, L, finish) {
 function safe(root, L, finish) {
   const C = canvasFor(root), noise = meter('alarm', '🔊'), clock = $c('b', { class: 'mgclock' }), info = $c('div', { class: 'mggoal' });
   const btn = $c('button', { class: 'mgb hot mgbig', text: '🔓 Click' }); root.append(hud(noise, clock), info, btn);
-  const taps = [], t0 = performance.now(); let st = { stage: 'dial', got: 0, noise: 0 }, from = 0, flash = 0, flashCol = '', ended = false, lastNum = -1;
+  const taps = [], t0 = performance.now(); let st = { stage: 'dial', got: 0, noise: 0 }, from = 0, flash = 0, flashCol = '', ended = false, lastNum = -1, openT = 0;
   const now = () => +((performance.now() - t0) / 1000).toFixed(2);
+  const rings = [], bolts = L.nums.map(() => 0), motes = [...Array(34)].map((_, i) => ({ x: Math.random(), y: Math.random(), s: 0.5 + Math.random() * 1.6, v: 0.004 + Math.random() * 0.01, k: i }));
   const tap = () => { if (ended) return; const t = now(); taps.push(t); const r = MG.safeReplay(L, taps, t); if (!r.ok) return; const was = st.got; st = { ...r.state, stage: r.state.stage === 'gaveup' ? 'dial' : r.state.stage }; // mid-game the dial is still turning (the check calls an unfinished game 'given up')
-    if (st.got > was) { from = t; flash = 0.4; flashCol = '60,196,106'; buzz(30); sfx(st.stage === 'open' ? 'coin' : 'ok'); bump(info); } else { flash = 0.4; flashCol = '255,75,58'; buzz(120); feedback('medium', { root, sound: 'wrong' }); } };
+    if (st.got > was) { from = t; flash = 0.4; flashCol = '60,196,106'; rings.push({ t: 0, ok: true }); buzz(30); sfx(st.stage === 'open' ? 'coin' : 'ok'); bump(info); } else { flash = 0.4; flashCol = '255,75,58'; rings.push({ t: 0, ok: false }); buzz(120); feedback('medium', { root, sound: 'wrong' }); } };
   btn.addEventListener('pointerdown', e => { e.preventDefault(); tap(); }); C.cv.addEventListener('pointerdown', tap); keyHook(root, e => { if (e.key === ' ' || e.key === 'Enter') { tap(); e.preventDefault(); } else return false; });
   const num = a => ((Math.round((((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * 100) % 100) + 100) % 100;
+  const rivet = (g, x, y, r) => { const gr = g.createRadialGradient(x - r * 0.3, y - r * 0.3, 0, x, y, r); gr.addColorStop(0, '#c9ced6'); gr.addColorStop(1, '#3b4048'); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); };
+  // the vault behind the safe: concrete blocks, a floor, and the safe's steel frame (painted once per size)
+  let bg = null, bgKey = '';
+  const backdrop = (W, H, dpr, fx, fy, fw, fh) => { const key = [W, H, dpr].join(); if (key === bgKey) return bg; bgKey = key; bg = document.createElement('canvas'); bg.width = Math.round(W * dpr); bg.height = Math.round(H * dpr); const g = bg.getContext('2d'); g.scale(dpr, dpr);
+    const wall = g.createLinearGradient(0, 0, 0, H); wall.addColorStop(0, '#2a241f'); wall.addColorStop(1, '#1a1512'); g.fillStyle = wall; g.fillRect(0, 0, W, H);
+    for (let y = 0, row = 0; y < fy + fh + 30; y += 34, row++) for (let x = (row % 2) * -40; x < W; x += 80) { g.fillStyle = `rgba(255,255,255,${0.02 + ((x * 7 + y * 13) % 5) * 0.006})`; g.fillRect(x + 2, y + 2, 76, 30); } // concrete blocks
+    const fl = fy + fh + 26, floor = g.createLinearGradient(0, fl, 0, H); floor.addColorStop(0, '#3a3129'); floor.addColorStop(1, '#16120f'); g.fillStyle = floor; g.fillRect(0, fl, W, H - fl);
+    g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 1; for (let x = -W; x < W * 2; x += 46) { g.beginPath(); g.moveTo(W / 2 + (x - W / 2) * 0.35, fl); g.lineTo(x, H); g.stroke(); } // floor tiles running away
+    g.fillStyle = 'rgba(0,0,0,.45)'; g.beginPath(); g.ellipse(W / 2, fl + 6, fw * 0.62, 14, 0, 0, 7); g.fill(); // the safe's shadow
+    // the frame round the door: thick steel, bevelled, riveted
+    const fr = g.createLinearGradient(fx - 14, 0, fx + fw + 14, 0); fr.addColorStop(0, '#5a5f67'); fr.addColorStop(0.5, '#787d86'); fr.addColorStop(1, '#4a4f56'); g.fillStyle = fr; rr(g, fx - 14, fy - 14, fw + 28, fh + 40, 14); g.fill(); g.strokeStyle = '#1d1a17'; g.lineWidth = 3; g.stroke();
+    g.fillStyle = '#121416'; rr(g, fx - 3, fy - 3, fw + 6, fh + 6, 10); g.fill(); // the gap round the door
+    for (let i = 0; i < 6; i++) { rivet(g, fx - 7, fy + 6 + i * (fh - 12) / 5, 3.2); rivet(g, fx + fw + 7, fy + 6 + i * (fh - 12) / 5, 3.2); }
+    g.fillStyle = '#3e434a'; rr(g, fx + 10, fy + fh + 8, fw - 20, 14, 4); g.fill(); // the plinth
+    return bg; };
+  // the inside, once the door swings open: shelves of gold bars and bundles of cash
+  const inside = (g, x, y, w, h) => { g.fillStyle = '#0d0c0b'; rr(g, x, y, w, h, 8); g.fill(); const sh = h / 3;
+    for (let s = 0; s < 3; s++) { const y0 = y + s * sh; g.fillStyle = '#2a2622'; g.fillRect(x + 6, y0 + sh - 8, w - 12, 6);
+      for (let i = 0; i < 6; i++) { const bx = x + 14 + i * (w - 28) / 6, by = y0 + sh - 8;
+        if ((s + i) % 3) { const gr = g.createLinearGradient(0, by - 18, 0, by); gr.addColorStop(0, '#ffe38a'); gr.addColorStop(1, '#b8860b'); g.fillStyle = gr; g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + (w - 28) / 6 - 6, by); g.lineTo(bx + (w - 28) / 6 - 10, by - 16); g.lineTo(bx + 4, by - 16); g.closePath(); g.fill(); }
+        else { g.fillStyle = '#3f7a4a'; g.fillRect(bx, by - 22, (w - 28) / 6 - 6, 22); g.fillStyle = '#e8e0c8'; g.fillRect(bx, by - 13, (w - 28) / 6 - 6, 4); } } }
+    const gl = g.createRadialGradient(x + w / 2, y + h / 2, 4, x + w / 2, y + h / 2, w * 0.7); gl.addColorStop(0, 'rgba(255,215,120,.25)'); gl.addColorStop(1, 'rgba(255,215,120,0)'); g.fillStyle = gl; g.fillRect(x, y, w, h); };
   loop(root, dt => {
-    const t = (performance.now() - t0) / 1000, { g, W, H, dpr } = C; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#1B1612'; g.fillRect(0, 0, W, H);
-    const R0 = Math.min(W * 0.4, H * 0.26), cx = W / 2, cy = H * 0.42, N = L.nums[Math.min(st.got, L.nums.length - 1)];
-    // the safe door and the dial
-    const dw = Math.min(W - 16, R0 * 2.5); g.fillStyle = '#5C6068'; rr(g, cx - dw / 2, cy - R0 * 1.25, dw, R0 * 2.5, 18); g.fill(); g.strokeStyle = '#2B2621'; g.lineWidth = 3; g.stroke();
-    g.fillStyle = '#2E3238'; g.beginPath(); g.arc(cx, cy, R0 * 1.05, 0, 7); g.fill();
-    g.fillStyle = '#D9D4C7'; g.beginPath(); g.arc(cx, cy, R0, 0, 7); g.fill(); g.stroke();
-    if (st.stage === 'dial') { g.fillStyle = 'rgba(60,196,106,.85)'; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R0, N.a - L.tol - Math.PI / 2, N.a + L.tol - Math.PI / 2); g.closePath(); g.fill(); }
+    const t = (performance.now() - t0) / 1000, { g, W, H, dpr } = C; g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const R0 = Math.min(W * 0.36, H * 0.2), cx = W / 2, cy = H * 0.42, N = L.nums[Math.min(st.got, L.nums.length - 1)], n = L.nums.length;
+    const dw = Math.min(W - 40, R0 * 2.75), dh = R0 * 3.05, dx = cx - dw / 2, dy = cy - R0 * 1.32;
+    g.drawImage(backdrop(W, H, dpr, dx, dy, dw, dh), 0, 0, W, H);
+    // the locking bolts: one per number, out into the frame until its number is found, then they slide back
+    for (let i = 0; i < n; i++) { bolts[i] += ((i < st.got ? 1 : 0) - bolts[i]) * Math.min(1, dt * 8); const by = dy + dh * (0.18 + 0.64 * (n > 1 ? i / (n - 1) : 0.5)), out = 16 * (1 - bolts[i]);
+      const bgr = g.createLinearGradient(0, by - 6, 0, by + 6); bgr.addColorStop(0, '#d7dbe0'); bgr.addColorStop(1, '#6d737b'); g.fillStyle = bgr; rr(g, dx + dw - 14, by - 6, 14 + out, 12, 4); g.fill(); }
+    // the door (it swings open on its hinges once the last number's in)
+    if (st.stage === 'open') openT = Math.min(1.6, openT + dt);
+    const swing = Math.max(0, openT - 0.45) / 0.6, sc = Math.cos(Math.min(1, swing) * 1.35);
+    if (swing > 0) inside(g, dx, dy, dw, dh);
+    g.save(); if (swing > 0) { g.translate(dx, 0); g.scale(sc, 1); g.translate(-dx, 0); }
+    const door = g.createLinearGradient(dx, dy, dx + dw, dy + dh); door.addColorStop(0, '#8a9099'); door.addColorStop(0.45, '#6b7179'); door.addColorStop(1, '#4b5058'); g.fillStyle = door; rr(g, dx, dy, dw, dh, 10); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,.05)'; g.lineWidth = 1; for (let y = dy + 3; y < dy + dh - 3; y += 3) { g.beginPath(); g.moveTo(dx + 4, y); g.lineTo(dx + dw - 4, y + ((y * 13) % 3) - 1); g.stroke(); } // brushed steel
+    g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 2; rr(g, dx + 10, dy + 10, dw - 20, dh - 20, 8); g.stroke(); g.strokeStyle = 'rgba(255,255,255,.12)'; rr(g, dx + 12, dy + 12, dw - 24, dh - 24, 7); g.stroke(); // the raised panel
+    for (const [x, y] of [[dx + 18, dy + 18], [dx + dw - 18, dy + 18], [dx + 18, dy + dh - 18], [dx + dw - 18, dy + dh - 18]]) rivet(g, x, y, 4.5);
+    for (const y of [dy + dh * 0.15, dy + dh * 0.8]) { g.fillStyle = '#3a3e44'; rr(g, dx - 8, y, 14, dh * 0.08, 4); g.fill(); g.fillStyle = '#9aa0a8'; g.fillRect(dx - 6, y + 3, 3, dh * 0.08 - 6); } // hinges
+    // the maker's plate
+    const pw = Math.min(dw * 0.5, 150), py = dy + 18; const brass = g.createLinearGradient(0, py, 0, py + 16); brass.addColorStop(0, '#e6c76b'); brass.addColorStop(1, '#9a7a2c'); g.fillStyle = brass; rr(g, cx - pw / 2, py, pw, 16, 3); g.fill();
+    g.fillStyle = '#3a2a10'; g.font = `800 ${Math.max(8, Math.min(10, pw / 15))}px system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('GLIESE VAULT CO. · No. 9', cx, py + 8.5);
+    // the handle: a three-spoke wheel that turns as the door opens
+    const hy = cy + R0 * 1.36, hr = R0 * 0.24, ha = Math.min(openT, 0.45) / 0.45 * 2.2 + 0.4;
+    g.strokeStyle = '#2a2d31'; g.lineWidth = 6; g.lineCap = 'round'; for (let k = 0; k < 3; k++) { const a = ha + k * Math.PI * 2 / 3; g.beginPath(); g.moveTo(cx, hy); g.lineTo(cx + Math.cos(a) * hr, hy + Math.sin(a) * hr); g.stroke(); }
+    g.strokeStyle = '#c4c9d0'; g.lineWidth = 3; for (let k = 0; k < 3; k++) { const a = ha + k * Math.PI * 2 / 3; g.beginPath(); g.moveTo(cx, hy); g.lineTo(cx + Math.cos(a) * hr, hy + Math.sin(a) * hr); g.stroke(); g.fillStyle = '#2a2d31'; g.beginPath(); g.arc(cx + Math.cos(a) * hr, hy + Math.sin(a) * hr, 5, 0, 7); g.fill(); } g.lineCap = 'butt';
+    rivet(g, cx, hy, 7);
+    // the dial: a knurled steel ring, a cream face, the marked number, and the pointer
+    g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = 16; g.shadowOffsetY = 5; g.fillStyle = '#2E3238'; g.beginPath(); g.arc(cx, cy, R0 * 1.1, 0, 7); g.fill(); g.shadowColor = 'transparent'; g.shadowBlur = 0; g.shadowOffsetY = 0;
+    const chrome = g.createLinearGradient(cx - R0, cy - R0, cx + R0, cy + R0); chrome.addColorStop(0, '#dfe3e8'); chrome.addColorStop(0.5, '#7d838b'); chrome.addColorStop(1, '#c3c8cf'); g.fillStyle = chrome; g.beginPath(); g.arc(cx, cy, R0 * 1.07, 0, 7); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,.45)'; g.lineWidth = 1.5; for (let i = 0; i < 90; i++) { const a = i / 90 * Math.PI * 2; g.beginPath(); g.moveTo(cx + Math.cos(a) * R0 * 1.01, cy + Math.sin(a) * R0 * 1.01); g.lineTo(cx + Math.cos(a) * R0 * 1.065, cy + Math.sin(a) * R0 * 1.065); g.stroke(); } // the grip
+    const face = g.createRadialGradient(cx - R0 * 0.3, cy - R0 * 0.3, R0 * 0.1, cx, cy, R0); face.addColorStop(0, '#f4efe3'); face.addColorStop(1, '#c9c1ae'); g.fillStyle = face; g.beginPath(); g.arc(cx, cy, R0, 0, 7); g.fill();
+    const pa = st.stage === 'dial' ? MG.safeAngle(N, t - from) - Math.PI / 2 : -Math.PI / 2, near = st.stage === 'dial' && Math.abs(((((pa + Math.PI / 2 - N.a) % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2)) - Math.PI) <= L.tol;
+    if (st.stage === 'dial') { g.fillStyle = near ? 'rgba(80,230,130,.95)' : 'rgba(60,196,106,.8)'; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R0, N.a - L.tol - Math.PI / 2, N.a + L.tol - Math.PI / 2); g.closePath(); g.fill();
+      if (near) { g.strokeStyle = 'rgba(120,255,170,.6)'; g.lineWidth = 4; g.beginPath(); g.arc(cx, cy, R0 * 1.0, N.a - L.tol - Math.PI / 2, N.a + L.tol - Math.PI / 2); g.stroke(); } } // the tumbler's right there: the wedge lights up
     g.strokeStyle = '#2B2621'; g.fillStyle = '#2B2621'; g.font = `700 ${Math.max(10, R0 * 0.11)}px system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle';
-    for (let i = 0; i < 100; i++) { const a = i / 100 * Math.PI * 2 - Math.PI / 2, l = i % 10 ? 0.06 : 0.12; g.lineWidth = i % 10 ? 1 : 2; g.beginPath(); g.moveTo(cx + Math.cos(a) * R0, cy + Math.sin(a) * R0); g.lineTo(cx + Math.cos(a) * R0 * (1 - l), cy + Math.sin(a) * R0 * (1 - l)); g.stroke();
+    for (let i = 0; i < 100; i++) { const a = i / 100 * Math.PI * 2 - Math.PI / 2, l = i % 10 ? (i % 5 ? 0.05 : 0.08) : 0.12; g.lineWidth = i % 10 ? 1 : 2; g.beginPath(); g.moveTo(cx + Math.cos(a) * R0, cy + Math.sin(a) * R0); g.lineTo(cx + Math.cos(a) * R0 * (1 - l), cy + Math.sin(a) * R0 * (1 - l)); g.stroke();
       if (!(i % 10)) g.fillText(String(i), cx + Math.cos(a) * R0 * 0.78, cy + Math.sin(a) * R0 * 0.78); }
-    const pa = st.stage === 'dial' ? MG.safeAngle(N, t - from) - Math.PI / 2 : -Math.PI / 2, nn = num(pa + Math.PI / 2); if (st.stage === 'dial' && nn !== lastNum) { lastNum = nn; if (nn % 5 === 0) sfx('click'); } // the dial clicks past each number
-    g.strokeStyle = '#C8473D'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(pa) * R0 * 0.92, cy + Math.sin(pa) * R0 * 0.92); g.stroke(); g.lineCap = 'butt';
-    g.fillStyle = '#2B2621'; g.beginPath(); g.arc(cx, cy, R0 * 0.16, 0, 7); g.fill();
-    // the locked numbers
-    const n = L.nums.length, bw = Math.min(46, (W - 40) / n - 6); for (let i = 0; i < n; i++) { const x = cx + (i - (n - 1) / 2) * (bw + 6), y = cy + R0 * 1.25 + 30; g.fillStyle = i < st.got ? '#3CC46A' : i === st.got ? '#F2C94C' : '#3A332B'; rr(g, x - bw / 2, y, bw, 34, 8); g.fill(); g.fillStyle = '#2B2621';
-      g.font = `800 15px system-ui`; g.fillText(i < st.got ? String(num(L.nums[i].a)) : i === st.got ? '?' : '·', x, y + 17); }
+    const nn = num(pa + Math.PI / 2); if (st.stage === 'dial' && nn !== lastNum) { lastNum = nn; if (nn % 5 === 0) sfx('click'); } // the dial clicks past each number
+    g.shadowColor = 'rgba(0,0,0,.4)'; g.shadowBlur = 6; g.shadowOffsetY = 3;
+    g.strokeStyle = '#C8473D'; g.lineWidth = 5; g.lineCap = 'round'; g.beginPath(); g.moveTo(cx - Math.cos(pa) * R0 * 0.22, cy - Math.sin(pa) * R0 * 0.22); g.lineTo(cx + Math.cos(pa) * R0 * 0.92, cy + Math.sin(pa) * R0 * 0.92); g.stroke(); g.lineCap = 'butt';
+    const cap = g.createRadialGradient(cx - R0 * 0.05, cy - R0 * 0.05, 1, cx, cy, R0 * 0.17); cap.addColorStop(0, '#6a6f78'); cap.addColorStop(1, '#1d1f23'); g.fillStyle = cap; g.beginPath(); g.arc(cx, cy, R0 * 0.16, 0, 7); g.fill();
+    g.shadowColor = 'transparent'; g.shadowBlur = 0; g.shadowOffsetY = 0;
+    // each tap sends a ring out from the dial: green when a number locks in, red when it's just noise
+    for (let i = rings.length - 1; i >= 0; i--) { const q = rings[i]; q.t += dt; if (q.t > 0.6) { rings.splice(i, 1); continue; } g.strokeStyle = q.ok ? `rgba(90,230,140,${0.8 * (1 - q.t / 0.6)})` : `rgba(255,80,60,${0.8 * (1 - q.t / 0.6)})`; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, R0 * (1.1 + q.t * 0.9), 0, 7); g.stroke(); }
+    g.restore();
+    // the locked numbers, on a little display under the safe
+    const bw = Math.min(46, (W - 40) / n - 6), ly = dy + dh + 34; for (let i = 0; i < n; i++) { const x = cx + (i - (n - 1) / 2) * (bw + 6); g.fillStyle = '#0f1311'; rr(g, x - bw / 2, ly, bw, 34, 8); g.fill(); g.strokeStyle = i < st.got ? '#3CC46A' : i === st.got ? '#F2C94C' : '#3A332B'; g.lineWidth = 2; g.stroke();
+      g.fillStyle = i < st.got ? '#7CFFB2' : i === st.got ? '#F2C94C' : '#4a443c'; g.font = `800 15px ui-monospace,monospace`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(i < st.got ? String(num(L.nums[i].a)).padStart(2, '0') : i === st.got ? '??' : '--', x, ly + 17); }
+    // the torch: a warm pool of light on the dial, darkness round the edges, and dust drifting through the beam
+    const lx = cx + Math.sin(t * 0.7) * 8, ly2 = cy + Math.cos(t * 0.9) * 6, beam = g.createRadialGradient(lx, ly2, R0 * 0.6, lx, ly2, Math.max(W, H) * 0.75); beam.addColorStop(0, 'rgba(255,230,170,0)'); beam.addColorStop(0.45, 'rgba(0,0,0,.25)'); beam.addColorStop(1, 'rgba(0,0,0,.7)'); g.fillStyle = beam; g.fillRect(0, 0, W, H);
+    for (const m of motes) { m.y -= m.v * dt * 6; m.x += Math.sin(t + m.k) * 0.0006; if (m.y < 0) { m.y = 1; m.x = Math.random(); } const px = m.x * W, py = m.y * H, d = Math.hypot(px - lx, py - ly2) / (R0 * 2.2); if (d > 1) continue; g.fillStyle = `rgba(255,240,200,${0.35 * (1 - d)})`; g.beginPath(); g.arc(px, py, m.s, 0, 7); g.fill(); }
     if (flash > 0) { flash -= dt; g.fillStyle = `rgba(${flashCol},${Math.max(0, flash) * 0.6})`; g.fillRect(0, 0, W, H); }
     const msg = st.stage === 'open' ? '🔓 It\'s open!' : `Stop on ${num(N.a)} · number ${st.got + 1} of ${n}`; if (info.textContent !== msg) info.textContent = msg;
     noise.set(st.noise); noise.classList.toggle('hot', st.noise > 0.55); clock.textContent = `${Math.max(0, Math.ceil(L.limit - t))}s`;
-    if (!ended && (st.stage === 'open' || st.stage === 'alarm' || t >= L.limit)) { ended = true; C.off(); if (st.stage !== 'open') { root.classList.add('siren'); buzz(500); sfx('alarm'); } setTimeout(() => finish({ taps, time: Math.min(+t.toFixed(2), L.limit) }), 700); }
+    if (!ended && (st.stage === 'open' || st.stage === 'alarm' || t >= L.limit)) { ended = true; if (st.stage !== 'open') { root.classList.add('siren'); buzz(500); sfx('alarm'); } setTimeout(() => { C.off(); finish({ taps, time: Math.min(+t.toFixed(2), L.limit) }); }, st.stage === 'open' ? 1500 : 700); }
   });
   const stop = root._stop; root._stop = () => { stop && stop(); C.off(); };
 }
-
 // ---------------- Spot the police ----------------
 const COPS = ['👮', '👮‍♀️', '🕵️', '🕵️‍♀️'], FOLK = ['🧑', '👩', '👨‍🦳', '🧔', '👵', '👷', '🧑‍🍳', '💁', '🧕', '👨‍🦱', '👩‍🦰', '🧑‍🎤'];
 function lookout2d(root, L, finish) {
@@ -633,10 +700,39 @@ async function lookout(root, L, finish) {
   root.append(cv, hud(heat, clock), score, $c('div', { class: 'mgjoyhint', text: 'Tap the police' }));
   const view = W.createView(cv), THREE = W.THREE, yard = MG.genHorde(L.seed, 1); view.resize(); W.buildYard(view, yard, { types: X.townTypes ? X.townTypes() : [], skip: ['W'], fogFar: 160 });
   const ro = new ResizeObserver(() => { view.resize(); frame(); }); ro.observe(root);
-  // six doorways: three on the far side of the yard, three on the near side
-  const spots = [[7, 0.6], [17, 0.6], [27, 0.6], [7, yard.H - 0.6], [17, yard.H - 0.6], [27, yard.H - 0.6]].map(([x, z], i) => ({ x, z, out: i < 3 ? 1 : -1 }));
-  for (const sp of spots) { const d = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.8, 0.3), new THREE.MeshStandardMaterial({ color: '#2a2420', roughness: 0.9 })); d.position.set(sp.x, 1.4, sp.z - sp.out * 0.4); view.scene.add(d);
-    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.2), new THREE.MeshBasicMaterial({ color: '#ffd38a' })); lamp.position.set(sp.x, 3.1, sp.z); view.scene.add(lamp); }
+  // six back doors: three on the far side of the yard, three on the near side. Each is set in a stretch of brick wall, with a
+  // stone frame, a step, an awning, a lamp that throws a pool of light, a window above, and a door that swings open when
+  // somebody steps out (warm light spills from inside).
+  const spots = [[7, 0.6], [17, 0.6], [27, 0.6], [7, yard.H - 0.6], [17, yard.H - 0.6], [27, yard.H - 0.6]].map(([x, z], i) => ({ x, z, out: i < 3 ? 1 : -1, s0: i }));
+  const glowTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,225,160,1)'); gr.addColorStop(0.3, 'rgba(255,190,110,.45)'); gr.addColorStop(1, 'rgba(255,170,80,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+  const std = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }), BOX = new THREE.BoxGeometry(1, 1, 1);
+  const box = (parent, c, w, h, d, x, y, z, mat) => { const m = new THREE.Mesh(BOX, mat || std(c)); m.scale.set(w, h, d); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; parent.add(m); return m; };
+  const brickTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'); g.fillStyle = '#5b3428'; g.fillRect(0, 0, 128, 128);
+    for (let y = 0, row = 0; y < 128; y += 16, row++) for (let x = (row % 2) * -16; x < 128; x += 32) { g.fillStyle = ['#8a4a36', '#7c4232', '#94533c', '#6e3a2c'][(x * 3 + y * 5 >> 4) & 3]; g.fillRect(x + 1, y + 1, 30, 14); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 2); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+  const AWN = ['#2f6b4a', '#8a2f2a', '#2a4a7a', '#7a5a2a', '#4a2f6b', '#2a6b6b'];
+  for (const [i, sp] of spots.entries()) { const g = new THREE.Group(); g.position.set(sp.x, 0, sp.z - sp.out * 0.55); if (sp.out < 0) g.rotation.y = Math.PI; view.scene.add(g); // built facing +z, then turned to face the yard
+    box(g, 0, 5.2, 4.6, 0.5, 0, 2.3, -0.3, new THREE.MeshStandardMaterial({ map: brickTex, roughness: 0.95 })); // the wall
+    box(g, '#1a1410', 1.8, 2.5, 0.1, 0, 1.25, -0.02); // the dark doorway
+    const inside = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 2.4), new THREE.MeshBasicMaterial({ color: '#ffcf8a', transparent: true, opacity: 0 })); inside.position.set(0, 1.25, 0.04); g.add(inside); // light from inside
+    box(g, '#bdb4a2', 0.25, 2.8, 0.2, -1.0, 1.4, 0.05); box(g, '#bdb4a2', 0.25, 2.8, 0.2, 1.0, 1.4, 0.05); box(g, '#c8bfac', 2.3, 0.28, 0.24, 0, 2.86, 0.06); // the stone frame
+    box(g, '#9a948a', 2.4, 0.18, 0.6, 0, 0.09, 0.3); // the step
+    const hinge = new THREE.Group(); hinge.position.set(-0.88, 0, 0.07); g.add(hinge);
+    const leaf = box(hinge, ['#3b4a3e', '#5a3a2a', '#2f3a4a'][i % 3], 1.76, 2.44, 0.07, 0.88, 1.24, 0); box(hinge, '#c9b16a', 0.08, 0.08, 0.1, 1.58, 1.15, 0.05); // the door and its handle
+    box(hinge, '#2a2a2a', 1.3, 0.05, 0.08, 0.88, 0.5, 0.04); box(hinge, '#2a2a2a', 1.3, 0.05, 0.08, 0.88, 2.0, 0.04);
+    const aw = box(g, AWN[i % AWN.length], 2.8, 0.08, 1.1, 0, 3.25, 0.5); aw.rotation.x = 0.28; // the awning
+    for (let k = 0; k < 7; k++) box(g, k % 2 ? '#e9e2d0' : AWN[i % AWN.length], 0.4, 0.22, 0.04, -1.2 + k * 0.4, 3.0, 1.02); // its striped valance
+    box(g, '#2a2622', 0.12, 0.12, 0.35, 1.55, 3.0, 0.15); const bulb = box(g, 0, 0.24, 0.18, 0.2, 1.55, 2.86, 0.32, new THREE.MeshBasicMaterial({ color: '#ffe2a8', toneMapped: false })); // the lamp
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); glow.position.set(1.55, 2.86, 0.45); glow.scale.set(2.2, 2.2, 1); g.add(glow);
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(2.2, 24), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending })); pool.rotation.x = -Math.PI / 2; pool.position.set(0.6, 0.04, 1.4); g.add(pool);
+    const win = box(g, '#1d2630', 1.3, 0.9, 0.06, 0, 4.05, 0.0); box(g, '#bdb4a2', 1.5, 0.1, 0.16, 0, 3.55, 0.06); if ((sp.x + i) % 3) { win.material = new THREE.MeshBasicMaterial({ color: '#ffc979', toneMapped: false }); } // a window above, some lit
+    box(g, '#2c2c2c', 0.5, 0.7, 0.5, 1.7, 0.35, 0.6); box(g, '#3a3a3a', 0.56, 0.06, 0.56, 1.7, 0.72, 0.6); // a bin by the door
+    Object.assign(sp, { hinge, inside, bulb, glow, open: 0, flick: i === 4 }); }
+  // the crew's van, parked up with its hazard lights going
+  let van = null, hz = []; for (let k = 0; k < 40 && !van; k++) { const x = yard.W / 2 + ((k % 7) - 3) * 2.2, z = yard.H / 2 + (Math.floor(k / 7) - 2.5) * 1.8; if (MG.hordeFits(yard, x, z, 3)) { van = W.makeCar('van', '#3d4247'); van.position.set(x, 0, z); van.rotation.y = Math.PI / 2 - 0.15; view.scene.add(van);
+      for (const [hx, hz2] of [[-0.9, 2.66], [0.9, 2.66], [-0.9, -2.66], [0.9, -2.66]]) { const h = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.06), new THREE.MeshBasicMaterial({ color: '#ffa31a', toneMapped: false })); h.position.set(hx, 0.95, hz2); van.add(h); hz.push(h); } } }
+  // police lights round the corner: the hotter it gets, the brighter they flash on the walls
+  const sirens = [new THREE.PointLight('#ff2a2a', 0, 40, 1.4), new THREE.PointLight('#2a5bff', 0, 40, 1.4)]; sirens[0].position.set(-1, 4, yard.H * 0.3); sirens[1].position.set(-1, 4, yard.H * 0.7); sirens.forEach(l => view.scene.add(l));
   // the camera looks across the yard from the open side, so all six doorways are in view (the long way up a tall screen)
   const frame = () => { const asp = view.camera.aspect, tall = asp < 1, span = (tall ? yard.H : yard.W) + 6, hf = Math.atan(Math.tan(view.camera.fov * Math.PI / 360) * asp), dist = Math.max((span / 2) / Math.tan(hf) * 0.9, 18);
     if (tall) view.camera.position.set(yard.W / 2 + dist * 0.5, dist * 0.85, yard.H / 2); else view.camera.position.set(yard.W / 2, dist * 0.85, yard.H / 2 + dist * 0.5); view.camera.lookAt(yard.W / 2, 0, yard.H / 2); };
@@ -644,8 +740,16 @@ async function lookout(root, L, finish) {
   // the people: built as they step out
   const people = new Map(), mark = new Map(), taps = [], t0 = performance.now(); let ended = false, ev = { heat: 0, hits: 0 };
   const COPS = ['hunter', 'detective'];
+  const add = (to, geo, c, x, y, z, sx, sy, sz) => { const m = new THREE.Mesh(geo, c.isMaterial ? c : new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 })); m.position.set(x, y, z); m.scale.set(sx, sy, sz); to.add(m); return m; };
+  const CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 10), SPH = new THREE.SphereGeometry(0.5, 12, 8);
   const personFor = (p, j) => { const role = p.cop ? (p.look % 2 ? 'hunter' : 'civilian') : 'civilian', P = W.makePerson((p.cop ? 'cop' : 'folk') + j + L.seed, role);
-    if (p.cop && role === 'civilian') { for (const c of P.body.children) if (c.material && c.position.y > 1.0 && c.position.y < 1.5 && c.scale.x > 0.4) c.material = new THREE.MeshStandardMaterial({ color: '#22262c' }); const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.05), new THREE.MeshBasicMaterial({ color: '#000' })); glasses.position.set(0, 1.76, 0.17); P.body.add(glasses); }
+    if (p.cop && role === 'civilian') { for (const c of P.body.children) if (c.material && c.position.y > 1.0 && c.position.y < 1.5 && c.scale.x > 0.4) c.material = new THREE.MeshStandardMaterial({ color: '#22262c' }); const glasses = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.05), new THREE.MeshBasicMaterial({ color: '#000' })); glasses.position.set(0, 1.76, 0.17); P.body.add(glasses);
+      add(P.body, SPH, '#e8e4dc', 0.155, 1.75, 0.0, 0.05, 0.06, 0.05); add(P.body, CYL, '#d8d4cc', 0.15, 1.6, -0.03, 0.012, 0.28, 0.012); } // the earpiece and its curly wire
+    else if (!p.cop) { const k = p.look % 5; // ordinary people carry ordinary things
+      if (k === 0) { add(P.armL, BOX, ['#d94a3a', '#e8d9b0', '#3c7ac4'][p.look % 3], 0, -0.82, 0.02, 0.24, 0.3, 0.12); add(P.armL, BOX, '#2b2621', 0, -0.62, 0.02, 0.02, 0.14, 0.02); } // a shopping bag
+      else if (k === 1) add(P.body, BOX, ['#3a5a3a', '#7a3a2a', '#2a3a5a'][p.look % 3], 0, 1.3, -0.2, 0.36, 0.42, 0.16); // a rucksack
+      else if (k === 2) { add(P.body, CYL, ['#e2c04a', '#c8382e', '#3cc46a'][p.look % 3], 0, 1.93, -0.01, 0.34, 0.12, 0.36); add(P.body, SPH, '#f4f1e8', 0, 2.0, -0.01, 0.1, 0.1, 0.1); } // a bobble hat
+      else if (k === 3) add(P.armR, BOX, '#5a3f2a', 0, -0.78, 0.04, 0.32, 0.24, 0.1); } // a briefcase
     const halo = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.7, 24), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, side: THREE.DoubleSide })); halo.rotation.x = -Math.PI / 2; halo.position.y = 0.05; P.group.add(halo);
     view.scene.add(P.group); return P; };
   // tapping: the person nearest your finger (on screen) is the one you mean
@@ -658,6 +762,11 @@ async function lookout(root, L, finish) {
     });
   let lastEval = -1;
   view.start((dt, now) => { const t = (performance.now() - t0) / 1000;
+    // the doors open as somebody's about to step out and close behind them; the lamps hum (one flickers); the van's hazards blink
+    for (const sp of spots) { const busy = L.pops.some((p, j) => p.s === sp.s0 && p.t0 - 0.35 <= t && t <= p.t0 + p.dur + 0.1 && mark.get(j) !== 'hit'); sp.open += ((busy ? 1 : 0) - sp.open) * Math.min(1, dt * 9); sp.hinge.rotation.y = -sp.open * 1.5; sp.inside.material.opacity = sp.open * 0.85;
+      if (sp.flick) { const on = Math.sin(now / 90) + Math.sin(now / 37) > -1.2; sp.glow.visible = on; sp.bulb.visible = on; } }
+    const blink = Math.floor(now / 450) % 2 === 0; for (const h of hz) h.visible = blink;
+    const hot = Math.max(0, ev.heat - 0.15) / 0.85, ph = Math.floor(now / 160) % 2; sirens[0].intensity = hot * (ph ? 60 : 8); sirens[1].intensity = hot * (ph ? 8 : 60);
     L.pops.forEach((p, j) => { const on = p.t0 <= t && t <= p.t0 + p.dur && mark.get(j) !== 'hit', sp = spots[p.s];
       if (on && !people.has(j)) people.set(j, personFor(p, j));
       if (!on && people.has(j)) { view.scene.remove(people.get(j).group); people.delete(j); return; }

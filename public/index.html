@@ -859,6 +859,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .mgpad.shake{animation:mgshake .3s}
 .mgkey{height:62px;border-radius:12px;border:2px solid #2B2621;background:#D9D4C7;color:#2B2621;font-size:24px;font-weight:900;box-shadow:0 3px 0 #111;cursor:pointer}
 .mgkey.lit{background:#F2C94C;box-shadow:0 0 18px #F2C94C}
+.bsearch{width:100%;margin:2px 0 6px}.bfit{display:flex;gap:6px;align-items:center;font-size:13px;margin:0 0 6px;color:var(--ink2,#5a5048)}.bgroups{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.bgroups .pill{flex:0 0 auto}
 .hkhead{position:relative;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px 8px 24px;background:#1b1d20;border:2px solid #2B2621;border-radius:10px;color:#F2C94C;font:800 11px ui-monospace,monospace;letter-spacing:.06em;overflow:hidden}
 .hkhead::before{content:'';position:absolute;left:0;top:0;bottom:0;width:14px;background:repeating-linear-gradient(-45deg,#F2C94C 0 6px,#2B2621 6px 12px)}
 .hkleds{display:flex;gap:5px}.hkleds i{width:9px;height:9px;border-radius:50%;background:#8a1d14;box-shadow:0 0 6px #ff3b2a;animation:hkblink 1.2s steps(2) infinite}.hkleds i.on{background:#3CC46A;box-shadow:0 0 8px #7CFFB2;animation:none}
@@ -998,7 +999,7 @@ import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
-import { paveCost, FINE_MIN, FINE_MAX, nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
+import { paveCost, fullIncome, FINE_MIN, FINE_MAX, nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
 // 1 game minute = 1.25 real seconds, so a full day passes every 30 real minutes (GAME_MIN_MS comes from shared/rules.js).
@@ -3200,8 +3201,9 @@ function drawLevelExtras(b,t){ if(VIEW&&!RAW){ const v=asView(b); return inView(
 // Land colonists own: a tinted patch with a dashed edge and a post at each corner (yours in orange), and the owner's name close up.
 function drawPlots(x0,x1,y0,y1){ if(sel&&sel.kind==='g'){ const {x,y}=sel; poly([iso(x,y),iso(x+1,y),iso(x+1,y+1),iso(x,y+1)],'rgba(255,255,255,.35)','#3F8A4E',2.5); } if(!D.plots.size) return; const me=Me&&Me.handle?Me.handle.toLowerCase():null;
   for(const p of D.plots.values()){ if(p.x+p.w<x0-1||p.x>x1+1||p.y+p.d<y0-1||p.y>y1+1) continue; const mine=me&&p.owner&&p.owner.toLowerCase()===me, on=sel&&sel.kind==='p'&&sel.id===p.id;
-    const q=[iso(p.x,p.y),iso(p.x+p.w,p.y),iso(p.x+p.w,p.y+p.d),iso(p.x,p.y+p.d)]; poly(q, mine?'rgba(228,87,46,.13)':'rgba(255,248,230,.16)', false);
-    ctx.save(); ctx.setLineDash(on?[]:[7,5]); poly(q,false,mine?'#E4572E':'#F4EDE0',on?3:1.6); ctx.restore();
+    const q=[iso(p.x,p.y),iso(p.x+p.w,p.y),iso(p.x+p.w,p.y+p.d),iso(p.x,p.y+p.d)], working=(tool.kind==='pbuild'||tool.kind==='ppave')&&tool.plot===p.id; poly(q, mine?'rgba(228,87,46,.13)':'rgba(255,248,230,.16)', false);
+    if(working){ for(let i=0;i<p.w;i++) for(let j=0;j<p.d;j++){ const k=(p.x+i)+','+(p.y+j); if(D.occ.has(k)) continue; const a=p.x+i, b2=p.y+j; poly([iso(a+0.06,b2+0.06),iso(a+0.94,b2+0.06),iso(a+0.94,b2+0.94),iso(a+0.06,b2+0.94)],'rgba(120,214,120,.22)','rgba(63,138,78,.55)',0.8); } } // while you build: the free tiles
+    ctx.save(); ctx.setLineDash(on||working?[]:[7,5]); poly(q,false,working?'#3F8A4E':mine?'#E4572E':'#F4EDE0',on||working?3:1.6); ctx.restore();
     for(const c of q){ line(c,up(c,9),'#7A5634',2); }
     if(cam.z>=0.9){ const s=iso(p.x+0.5,p.y+0.5), tx=(p.name||'@'+p.owner); ctx.font='700 10px system-ui,sans-serif'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.strokeText(tx,s.x,s.y-4); ctx.fillStyle=mine?'#B23A14':'#3B332B'; ctx.fillText(tx,s.x,s.y-4); } } }
 // Land up for auction: a gold patch with a dashed edge and a sign showing the top bid (or the opening one).
@@ -3343,7 +3345,7 @@ function drawFrame(ts){
     poly([{x:p.x-7,y:y-12},{x:p.x+7,y:y-12},{x:p.x,y}],'#E4572E',INK,1.4); ctx.font='800 11px system-ui,sans-serif'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.strokeText('You',p.x,y-16); ctx.fillStyle='#2B2621'; ctx.fillText('You',p.x,y-16); } }
   if(Quality.ghosts){ ctx.globalAlpha=0.38; for(const it of hiddenPeople(items)) drawCitizen(it.c,it.st,false,true); ctx.globalAlpha=1; }
   if(areaSel){ const ax=Math.min(areaSel.a[0],areaSel.b[0]), bx=Math.max(areaSel.a[0],areaSel.b[0])+1, ay=Math.min(areaSel.a[1],areaSel.b[1]), by=Math.max(areaSel.a[1],areaSel.b[1])+1; poly([iso(ax,ay),iso(bx,ay),iso(bx,by),iso(ax,by)],'rgba(184,67,58,.28)','#B8433A',2.5); }
-  if(ghostTool()) drawFootprint();
+  if(fenceRun) drawFenceDrag(); else if(ghostTool()) drawFootprint();
   if(landSel) drawLandSel();
   else if(tool.kind==='road'&&roadMode==='line') drawRoadPreview();
   else if(hoverTile && tool.kind!=='pan'){ const [hx,hy]=hoverTile; poly([iso(hx,hy),iso(hx+1,hy),iso(hx+1,hy+1),iso(hx,hy+1)], tool.kind==='erase'?'rgba(184,67,58,.35)':'rgba(255,255,255,.35)', tool.kind==='erase'?'#B8433A':'#fff', 2); }
@@ -3403,12 +3405,30 @@ function canPlace(type,x,y,ignore,rot=0){ const [w,d]=sizeOf(type,rot); for(let 
 // What's under each tile of a footprint: null when free, otherwise what's in the way.
 function blockers(type,x,y,ignore,rot=0){ const [w,d]=sizeOf(type,rot), out=[]; for(let i=0;i<w;i++) for(let j=0;j<d;j++){ const k=(x+i)+','+(y+j); const o=D.occ.get(k);
     const pl=D.plotOcc.get(k), own=tool.kind==='pbuild'?tool.plot:(tool.kind==='move'?(D.buildings.get(tool.id)||{}).plot:null);
-    out.push({ x:x+i, y:y+j, why: D.water.has(k)?'water' : (o&&o!==ignore)?'a building' : D.roads.has(k)?'road' : (tool.kind==='pbuild'&&pl!==tool.plot)||(tool.kind==='move'&&tool.mine&&pl!==own)?'outside your plot' : (pl&&pl!==own)?"someone's land" : null }); } return out; }
+    out.push({ x:x+i, y:y+j, why: D.water.has(k)?'water' : (o&&o!==ignore)?'a building' : D.roads.has(k)&&!((tool.kind==='pbuild'&&pl===tool.plot)||(tool.kind==='move'&&tool.mine&&pl&&pl===own))?'road' : /* your own paving is lifted for you */ (tool.kind==='pbuild'&&pl!==tool.plot)||(tool.kind==='move'&&tool.mine&&pl!==own)?'outside your plot' : (pl&&pl!==own)?"someone's land" : null }); } return out; }
 // A building being placed is centred under the pointer; one being moved stays held where it was grabbed.
 function ghostOrigin(type,tx,ty){ if(tool.kind==='pbuild'&&tool.pending) return tool.pending; const [w,d]=sizeOf(type,tool.rot||0); const off=ghost&&ghost.off; return off?[tx-off[0],ty-off[1]]:[tx-Math.floor((w-1)/2), ty-Math.floor((d-1)/2)]; }
 let ghost=null, lastPtr=null, holdTimer=null;
 const ghostTool = () => tool.kind==='place' || tool.kind==='move' || tool.kind==='vehicle' || tool.kind==='pbuild';
 function ghostType(){ return tool.kind==='place'||tool.kind==='pbuild'?tool.type : tool.kind==='move'?(D.buildings.get(tool.id)||{}).type : null; }
+// Fences, walls and hedges are laid like roads: drag along the line you want and let go (blocked tiles are skipped).
+const isFence = type => { const t=BUILDING_TYPES[type]; return !!t && (t.style==='fence'||t.style==='hedge') && t.size[0]===1 && t.size[1]===1; };
+const fenceTool = () => (tool.kind==='place'||tool.kind==='pbuild') && isFence(tool.type);
+let fenceRun=null; // the tiles dragged over so far: "x,y" → [x, y, free?]
+function fenceAdd(t){ const from=fenceRun.last||t; fenceRun.last=t;
+  for(const [x,y] of lineTiles(from,t)){ const k=x+','+y; if(fenceRun.tiles.has(k)) continue; if(fenceRun.tiles.size>=(tool.kind==='pbuild'?64:400)) break; fenceRun.tiles.set(k,[x,y,!blockers(tool.type,x,y,null,0).some(b=>b.why)]); } }
+function drawFenceDrag(){ let n=0, last=null; const t=BUILDING_TYPES[tool.type];
+  for(const [x,y,ok] of fenceRun.tiles.values()){ poly([iso(x,y),iso(x+1,y),iso(x+1,y+1),iso(x,y+1)], ok?'rgba(63,138,78,.38)':'rgba(210,56,46,.42)', ok?'#2F6E3B':'#9E2A22', 1.6); if(ok) n++; last=[x,y]; }
+  if(last){ const p=iso(last[0]+0.5,last[1]+0.5), cost=tool.kind==='pbuild'?buildQuote(tool.type).total*n:0; ctx.font='800 12px system-ui,sans-serif'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.92)';
+    const tx=`${n} × ${t.name}${cost?` · ${fmt(cost)} coins`:''}`; ctx.strokeText(tx,p.x,p.y-26); ctx.fillStyle='#2B2621'; ctx.fillText(tx,p.x,p.y-26); } }
+async function commitFence(){ const run=fenceRun; fenceRun=null; hoverTile=null; ghost=null; if(!run) return; const type=tool.type, t=BUILDING_TYPES[type], tiles=[...run.tiles.values()].filter(v=>v[2]).map(v=>[v[0],v[1]]);
+  if(!tiles.length){ toast(tool.kind==='pbuild'?'Drag along free ground on your plot.':'Those tiles are taken. Drag over free ground.'); return; }
+  if(tool.kind==='pbuild'){ const plot=tool.plot; try{ const r=await api(`/api/me/plots/${encodeURIComponent(plot)}/build-line`,{method:'POST',body:{type,tiles}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } Plots.drop(plot);
+      toast(`${r.built} × ${t.name} for ${fmt(r.paid)} coins. Keep dragging to add more, or tap Done.`); }catch(e){ toast(e.message); } return; }
+  if(draftOn){ draftEdit(`drafting ${tiles.length} × ${t.name}`,d=>{ for(const [x,y] of tiles){ const tid='d:'+Math.random().toString(36).slice(2,10); d.builds.push({ tid, type, x, y, rot:0, name:'', requestedBy:'', instant:true }); d.labels[tid]=t.name; } }); return; }
+  try{ const r=await api('/api/admin/buildings/line',{method:'POST',body:{type,tiles}}); const ids=r.built.map(b=>b.id);
+    remember(`${ids.length} × ${t.name}`,()=>Promise.all(ids.map(id=>api('/api/admin/buildings/'+encodeURIComponent(id),{method:'DELETE'}))));
+    toast(`Built ${ids.length} × ${t.name}${r.skipped?` (${r.skipped} tile${r.skipped===1?'':'s'} blocked)`:''}`); }catch(e){ toast(e.message); } }
 function updateGhost(sx,sy){ const t=tileAt(sx,sy); ghost={ ...(ghost||{}), tile:t }; hoverTile=t; }
 function blockedText(list){ const bad=list.filter(b=>b.why), w=[...new Set(bad.map(b=>b.why))]; return w.length?`Blocked by ${w.join(' and ')}: ${bad.length} tile${bad.length===1?'':'s'}`:''; }
 function dropGhost(){ if(!ghost||!ghost.tile) return; const [tx,ty]=ghost.tile;
@@ -3529,6 +3549,7 @@ document.addEventListener('contextmenu', e=>{ if(!typing(e)) e.preventDefault();
 cv.addEventListener('pointerdown', e=>{ cv.setPointerCapture(e.pointerId); pointers.set(e.pointerId,{x:e.clientX,y:e.clientY}); lastPtr={x:e.clientX,y:e.clientY};
   if(pointers.size===1){ gesture={ type:'one', sx:e.clientX, sy:e.clientY, lx:e.clientX, ly:e.clientY, t:performance.now(), moved:false };
     if(e.pointerType==='mouse' && e.button!==0){ /* right or middle mouse button always moves the map */ }
+    else if(fenceTool()&&!tool.pending){ gesture.type='fence'; fenceRun={tiles:new Map(),last:null}; fenceAdd(tileAt(e.clientX,e.clientY)); }
     else if(ghostTool()){ gesture.type='ghost'; if(tool.pending){ delete tool.pending; document.querySelector('.rsheet-bg.dock')?.remove(); } updateGhost(e.clientX,e.clientY); }
     else if(tool.kind==='pan' && Store.canWrite){ const t=tileAt(e.clientX,e.clientY), id=buildingAt(e.clientX,e.clientY); clearTimeout(holdTimer);
       // Press and hold a building to pick it up, then drag it somewhere else.
@@ -3539,13 +3560,14 @@ cv.addEventListener('pointerdown', e=>{ cv.setPointerCapture(e.pointerId); point
     else if(tool.kind==='road'&&roadMode==='line'){ gesture.type='roadline'; const t=tileAt(e.clientX,e.clientY); hoverTile=t; if(!roadStart){ roadStart=t; gesture.fresh=true; } }
     else if(tool.kind==='erase'&&tool.mode==='area'){ const t=tileAt(e.clientX,e.clientY); areaSel={a:t,b:t}; }
     else if(tool.kind==='land'&&tool.mark){ document.querySelector('.rsheet-bg.dock')?.remove(); const t=tileAt(e.clientX,e.clientY); landSel={a:t,b:t}; } }
-  else if(pointers.size===2){ clearTimeout(holdTimer); const [a,b]=[...pointers.values()]; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture={ type:'pinch', d0:Math.hypot(a.x-b.x,a.y-b.y), z0:cam.z, wx:w.x, wy:w.y, a0:Math.atan2(b.y-a.y,b.x-a.x) }; if(paintBuf){ paintBuf=null; changed(); } areaSel=null; landSel=null; }
+  else if(pointers.size===2){ clearTimeout(holdTimer); const [a,b]=[...pointers.values()]; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture={ type:'pinch', d0:Math.hypot(a.x-b.x,a.y-b.y), z0:cam.z, wx:w.x, wy:w.y, a0:Math.atan2(b.y-a.y,b.x-a.x) }; if(paintBuf){ paintBuf=null; changed(); } fenceRun=null; areaSel=null; landSel=null; }
 });
 cv.addEventListener('pointermove', e=>{
   if(e.pointerType==='mouse') hoverTile=tileAt(e.clientX,e.clientY);
   if(e.pointerType==='mouse' && ghostTool() && !pointers.size) updateGhost(e.clientX,e.clientY);
   if(!pointers.has(e.pointerId)) return; pointers.set(e.pointerId,{x:e.clientX,y:e.clientY}); lastPtr={x:e.clientX,y:e.clientY};
-  if(gesture&&gesture.type==='ghost'){ if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)>6) gesture.moved=true; updateGhost(e.clientX,e.clientY); }
+  if(gesture&&gesture.type==='fence'&&fenceRun){ if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)>6) gesture.moved=true; const t=tileAt(e.clientX,e.clientY); hoverTile=t; fenceAdd(t); }
+  else if(gesture&&gesture.type==='ghost'){ if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)>6) gesture.moved=true; updateGhost(e.clientX,e.clientY); }
   else if(gesture&&gesture.type==='roadline'){ if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)>6) gesture.moved=true; hoverTile=tileAt(e.clientX,e.clientY); }
   else if(gesture&&gesture.type==='one'){ if(Math.hypot(e.clientX-gesture.sx,e.clientY-gesture.sy)>6) gesture.moved=true;
     if(paintBuf){ paintAt(e.clientX,e.clientY); hoverTile=tileAt(e.clientX,e.clientY); }
@@ -3560,6 +3582,7 @@ cv.addEventListener('pointermove', e=>{
     cam.z=Math.min(4,Math.max(0.35,gesture.z0*Math.hypot(a.x-b.x,a.y-b.y)/gesture.d0)); const mx=(a.x+b.x)/2,my=(a.y+b.y)/2; cam.x=gesture.wx-(mx-cw/2)/cam.z; cam.y=gesture.wy-(my-ch/2)/cam.z; follow=null; }
 });
 function endPointer(e){ if(!pointers.has(e.pointerId)) return; pointers.delete(e.pointerId); clearTimeout(holdTimer);
+  if(gesture&&gesture.type==='fence'&&pointers.size===0){ gesture=null; if(e.type==='pointercancel'){ fenceRun=null; return; } commitFence(); return; }
   if(gesture&&gesture.type==='roadline'&&pointers.size===0){ const g=gesture; gesture=null; if(e.type==='pointercancel') return; const t=tileAt(e.clientX,e.clientY);
     // A quick tap that just set the start waits for the end tap; otherwise lay the road and carry on from where it ended.
     if(g.fresh && !g.moved){ toast('Start marked. Now tap where the road ends.'); return; }
@@ -3663,6 +3686,7 @@ async function moveBuilding(id,x,y){ const b=D.buildings.get(id); if(!b){ setToo
 /* ---------------- icons ---------------- */
 const I=(body)=>`<svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="${INK}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${body}</svg>`;
 const ICONS={
+  build: I('<path d="M6 26h20" fill="none"/><rect x="8" y="14" width="10" height="12" fill="#E2B13C"/><path d="M8 14l5-5 5 5z" fill="#D9714A"/><path d="M22 26V8M22 8h-8M22 8l4 4" fill="none"/><rect x="11.5" y="18" width="3" height="4" fill="#F4EDE0"/>'),
   me: I('<rect x="5" y="6" width="22" height="20" rx="3" fill="#F4EDE0"/><circle cx="12" cy="14" r="3.2" fill="#E8A07A"/><path d="M7 22c0-3 2.3-4.6 5-4.6s5 1.6 5 4.6z" fill="#E8A07A"/><path d="M19 13h5M19 17h4M19 21h3" fill="none"/>'),
   feed: I('<path d="M5 7h22v14H14l-6 5v-5H5z" fill="#9CC4E4"/><path d="M10 12h12M10 16h8"/>'),
   top: I('<path d="M10 6h12v6a6 6 0 0 1-12 0z" fill="#E2B13C"/><path d="M10 8H6a4 4 0 0 0 4 5M22 8h4a4 4 0 0 1-4 5M16 18v4M11 26h10M13 22h6v4h-6z" fill="none"/>'),
@@ -3704,7 +3728,7 @@ async function rotateBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
   catch(e){ toast(e.message); } }
 function setTool(t){ tool=t; ghost=null; roadStart=null; if(t.kind!=='land'){ landSel=null; document.querySelector('.landtip')?.remove(); } setTimeout(refreshTurn); const chip=$('toolchip');
   if(t.kind==='pan'){ chip.hidden=true; setMini(false); }
-  else { chip.hidden=false; $('toolLabel').textContent = t.kind==='ppave'?(t.erase?'Tap or drag over your paving to lift it':`Tap or drag on your plot: ${ROAD_TYPES[t.road].name}, ${fmt(paveCost(t.road))} a tile`) : t.kind==='land'?(t.mark?'Drag over empty grass beside a road':'Swipe to the spot, then double-tap it') : t.kind==='pbuild'?`${BUILDING_TYPES[t.type].cat==='decor'||BUILDING_TYPES[t.type].cat==='nature'?'Tap or drag to place':'Drag onto your plot:'} ${BUILDING_TYPES[t.type].name}` : t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} ${VEHICLE_TYPES[t.vtype].mode==='water'?'onto water':VEHICLE_TYPES[t.vtype].mode==='air'?'anywhere: it flies above that spot':'onto a road'}` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build` : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
+  else { chip.hidden=false; $('toolLabel').textContent = t.kind==='ppave'?(t.erase?'Tap or drag over your paving to lift it':`Tap or drag on your plot: ${ROAD_TYPES[t.road].name}, ${fmt(paveCost(t.road))} a tile`) : t.kind==='land'?(t.mark?'Drag over empty grass beside a road':'Swipe to the spot, then double-tap it') : t.kind==='pbuild'?(isFence(t.type)?`Drag along your plot to lay ${BUILDING_TYPES[t.type].name.toLowerCase()}`:`${BUILDING_TYPES[t.type].cat==='decor'||BUILDING_TYPES[t.type].cat==='nature'?'Tap or drag to place':'Drag onto your plot:'} ${BUILDING_TYPES[t.type].name}`) : t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} ${VEHICLE_TYPES[t.vtype].mode==='water'?'onto water':VEHICLE_TYPES[t.vtype].mode==='air'?'anywhere: it flies above that spot':'onto a road'}` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?(isFence(t.type)?`Drag to lay ${BUILDING_TYPES[t.type].name.toLowerCase()}, like a road`:`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build`) : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
   if(activeTab && !PLAYER_TABS.has(activeTab) && activeTab!=='reports' && activeTab!=='stats' && activeTab!=='money' && activeTab!=='stream') renderPane(); }
 $('toolDone').onclick=()=>setTool({kind:'pan'});
 // Minimise: tuck the menus away while keeping the chosen tool, so the whole map is free to build on.
@@ -3730,10 +3754,10 @@ const PLAYER_TABS=new Set(['feed','people','races','top','chats']); // everyone'
 // Find me is for signing in: once you're signed in (you have a password), My card does the same job, so it goes.
 function syncFindChip(){ const b=$('findBtn'); if(b&&b.parentElement) b.parentElement.style.display=(Me&&Me.token&&Me.handle)?'none':''; }
 function buildToolbar(){ const row=$('toolsRow'); row.innerHTML=''; syncFindChip();
-  const tabs=[{id:'feed',name:'Town Square'},{id:'me',name:'My card'},{id:'people',name:'Colonists'},{id:'races',name:'Races'}].concat(Me&&Me.token?[{id:'chats',name:'Chats'}]:[]);
+  const tabs=[{id:'feed',name:'Town Square'},{id:'me',name:'My card'},{id:'people',name:'Colonists'},{id:'races',name:'Races'}].concat(Me&&Me.token?[{id:'chats',name:'Chats'}]:[], Me&&Me.token&&!Store.canWrite?[{id:'build',name:'Build'}]:[]);
   const all = Store.canWrite ? tabs.concat([{id:'reports',name:'Reports'},{id:'stats',name:'Stats'},{id:'money',name:'Accounts'},{id:'stream',name:'Stream'},{sep:true}],CATS) : tabs;
   for(const c of all){ if(c.sep){ row.append(el('span',{class:'sep','aria-hidden':'true'})); continue; }
-    const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(c.id==='me'?myCardOpen():activeTab===c.id),onclick:()=>c.id==='me'?openMyCard():openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='me') btn.dataset.me='1'; if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); if(c.id==='reports'&&typeof Reports!=='undefined'&&Reports.open) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Reports.open))})); row.append(btn); } }
+    const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(c.id==='me'?myCardOpen():activeTab===c.id),onclick:()=>c.id==='me'?openMyCard():c.id==='build'?BuildHub.open():openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='me') btn.dataset.me='1'; if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); if(c.id==='reports'&&typeof Reports!=='undefined'&&Reports.open) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Reports.open))})); row.append(btn); } }
 function openTab(name){ if(!name) document.body.classList.remove('pane-max');
   if(name && PLAYER_TABS.has(name) && innerWidth<900 && !$('card').hidden) closeCard(); /* on a phone a bottom button replaces the open card */
   activeTab=name; if((PLAYER_TABS.has(name)||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
@@ -5754,6 +5778,18 @@ function sheetBox(label, cls){ document.querySelector('.rsheet-bg')?.remove(); c
   box.append(el('div',{class:'shhead'}, el('h3',{text:label}), el('button',{class:'x','aria-label':'Close',text:'×',onclick:close}))); return { box, close, wrap }; }
 const bill=(rows,total)=>{ const t=el('table',{class:'bill'}); for(const [k,v] of rows) t.append(el('tr',null, el('td',{text:k}), el('td',{text:fmt(v)}))); t.append(el('tr',{class:'tot'}, el('td',{text:'Total'}), el('td',{text:`${fmt(total)} coins`}))); return t; };
 const isMe = h => !!(Me&&Me.handle&&h&&h.toLowerCase()===Me.handle.toLowerCase());
+// The Build button: straight into the build menu for your plot (or a choice of plots, or how to get land if you have none).
+const BuildHub={ async open(){ if(!(Me&&Me.token)){ toast('Sign in to your colonist first.'); return; } let pr; try{ pr=await api('/api/me/properties'); }catch(e){ toast(e.message); return; }
+    const plots=pr.plots||[]; if(plots.length===1){ this.go(plots[0]); return; }
+    const {box,close}=sheetBox('🏗️ Build');
+    if(!plots.length){ box.append(el('p',{class:'hint',text:'To build, you first need your own land: a plot of grass beside a road. Once it’s yours you can put up homes, businesses, gardens, fences, floors, a plane hangar and more.'}),
+        el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🗺️ Buy land',onclick:()=>{ close(); Plots.start(); }}))); return; }
+    const ul=el('ul',{class:'joblist'}); box.append(el('p',{class:'hint',text:'Which plot do you want to build on?'}), ul);
+    for(const p of plots) ul.append(el('li',null, el('div',{class:'cthumb plotthumb',text:'🗺️'}), el('div',{class:'jt'}, el('b',{text:p.name}), el('span',{text:`${p.w}×${p.d} · ${p.buildings.length} building${p.buildings.length===1?'':'s'}${p.income?` · earns ~${fmt(p.income)}/day`:''}`})),
+      el('button',{class:'btn primary sm',text:'Build here',onclick:()=>{ close(); this.go(p); }})));
+    box.append(el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'🗺️ Buy more land',onclick:()=>{ close(); Plots.start(); }}))); },
+  async go(pl){ closeCard(); const c=iso(pl.x+pl.w/2,pl.y+pl.d/2); cam.x=c.x; cam.y=c.y; cam.z=Math.max(cam.z,1.3); follow=null;
+    let info; try{ info=await api('/api/plots/'+encodeURIComponent(pl.id)); }catch(e){ toast(e.message); return; } Plots.picker(info); } };
 const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
   drop(id){ this.info.delete(id); },
   get(id){ const e=this.info.get(id); if((!e||Date.now()-e.at>15000)&&!this.busy.has(id)){ this.busy.add(id); api('/api/plots/'+encodeURIComponent(id)).then(d=>this.info.set(id,{d,at:Date.now()})).catch(()=>{}).finally(()=>{ this.busy.delete(id); if(sel&&(sel.id===id||sel.kind==='b')) renderCard(true); }); } return e?e.d:null; },
@@ -5793,23 +5829,49 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
     else if(q.props>=q.max) box.append(el('p',{class:'warnline',text:`You're at your limit of ${q.max} properties. Sell one, or earn more stars.`}));
     else box.append(nm, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(q.total)}`,onclick:async()=>{ const res=await meAction('/api/me/land',{x:q.x,y:q.y,w:q.w,d:q.d,name:nm.value},r=>`The land is yours! Paid ${fmt(r.paid)} coins. Tap it to build.`); if(res){ close(); landSel=null; setTool({kind:'pan'}); Money.at=0; MyHome.at=0;
       setTimeout(()=>{ sel={kind:'p',id:res.plot.id}; renderCard(true); },400); } }}), el('button',{class:'linkb',text:'Pick another spot',onclick:()=>{ close(); landSel=null; setTool({kind:'land',mark:false}); toast('Swipe to where you want land, then double-tap it.'); }}))); },
-  // the build menu for your own plot: every kind of building, decoration and park, with what it costs you
-  picker(p){ const {box,close}=sheetBox(`🏗️ Build on ${p.name||'your plot'}`,'wide'); let cat=Plots.cat||'housing';
-    const cats=CATS.filter(c=>c.id!=='roads'&&c.id!=='terrain'&&Object.values(BUILDING_TYPES).some(t=>t.cat===c.id)), tabs=el('div',{class:'ctabs'}), list=el('div',{class:'cards pcards'}), free=p.w*p.d-(p.used||0);
+  // The build menu for your own plot, in plain groups (homes, businesses, garden, fences, decorations, floors, aviation,
+  // and the rest), with a search box. It shows only what fits on the plot (unless you ask for everything), what each
+  // costs and earns, and what you can't afford yet. Picking a big building puts it straight onto a free spot on your plot
+  // to look at before you pay; small things are tapped (or, for fences, dragged) into place.
+  picker(p){ const {box,close}=sheetBox(`🏗️ Build on ${p.name||'your plot'}`,'wide'); let grp=Plots.grp||'homes', q='', fitsOnly=Plots.fitsOnly!==false;
+    const T0=id=>BUILDING_TYPES[id], coins=()=>myMoney&&typeof myMoney.coins==='number'?myMoney.coins:null, free=p.w*p.d-(p.used||0);
+    const GROUPS=[['homes','🏠 Homes',id=>T0(id).cat==='housing'],['business','💼 Businesses',id=>['shops','offices','industry'].includes(T0(id).cat)],['garden','🌳 Garden',id=>['nature','parks'].includes(T0(id).cat)],
+      ['fences','🧱 Fences',id=>isFence(id)],['decor','🪑 Decorations',id=>T0(id).cat==='decor'&&!isFence(id)],['floors','🟫 Floors',null],['air','✈️ Aviation',id=>!!T0(id).hangar],
+      ['more','✨ More',id=>!['housing','shops','offices','industry','nature','parks','decor','roads','terrain'].includes(T0(id).cat)&&!T0(id).hangar]];
+    const all=Object.keys(BUILDING_TYPES).filter(id=>id!=='landing'&&!T0(id).hidden&&T0(id).cat!=='roads'&&T0(id).cat!=='terrain');
+    const fitsOn=id=>{ const [w,d]=T0(id).size; return (w<=p.w&&d<=p.d)||(d<=p.w&&w<=p.d); };
+    const go=t=>{ close(); closeCard(); setTool(t); const c=iso(p.x+p.w/2,p.y+p.d/2); cam.x=c.x; cam.y=c.y; cam.z=Math.max(cam.z,1.3); follow=null; };
+    const search=el('input',{type:'search',placeholder:'Search: house, café, fence, marble, hangar…','aria-label':'Search the build menu',value:'',class:'bsearch'}), tabs=el('div',{class:'ctabs bgroups'}), list=el('div',{class:'cards pcards'});
+    const fitBox=el('input',{type:'checkbox',checked:fitsOnly?'':null}), fitLab=el('label',{class:'bfit'}, fitBox, ' Only what fits on this plot');
+    search.addEventListener('input',()=>{ q=search.value.trim().toLowerCase(); fill(); }); fitBox.addEventListener('change',()=>{ fitsOnly=Plots.fitsOnly=fitBox.checked; fill(); });
+    const floorCards=()=>{ for(const id of Object.keys(ROAD_TYPES).filter(id=>ROAD_TYPES[id].sub==='surface'&&!ROAD_TYPES[id].hidden&&(!q||ROAD_TYPES[id].name.toLowerCase().includes(q)||(ROAD_TYPES[id].note||'').toLowerCase().includes(q))).sort((a,b)=>paveCost(a)-paveCost(b))){ const R=ROAD_TYPES[id];
+        list.append(card(roadThumb(id), R.name, `${fmt(paveCost(id))} a tile`, `${R.note} · tap or drag`, false, ()=>{ go({kind:'ppave',plot:p.id,road:id}); toast(`Tap or drag over your plot to lay ${R.name.toLowerCase()}: ${fmt(paveCost(id))} coins a tile.`); })); }
+      if(!q||'lift paving grass'.includes(q)) list.append(card(roadThumb('dirt'), 'Lift paving', 'free', 'back to grass', false, ()=>{ go({kind:'ppave',plot:p.id,erase:true}); toast('Tap or drag over paving on your plot to lift it.'); })); };
     const fill=()=>{ tabs.innerHTML=''; list.innerHTML='';
-      for(const c of cats) tabs.append(el('button',{class:'pill'+(cat===c.id?' on':''),text:c.name,onclick:()=>{ cat=Plots.cat=c.id; fill(); }}));
-      tabs.append(el('button',{class:'pill'+(cat==='surface'?' on':''),text:'Surfaces',onclick:()=>{ cat=Plots.cat='surface'; fill(); }}));
-      // paving and flooring for the open ground on your plot: tap or drag over the tiles
-      if(cat==='surface'){ const go=t=>{ close(); closeCard(); setTool(t); const c=iso(p.x+p.w/2,p.y+p.d/2); cam.x=c.x; cam.y=c.y; cam.z=Math.max(cam.z,1.3); };
-        for(const id of Object.keys(ROAD_TYPES).filter(id=>ROAD_TYPES[id].sub==='surface'&&!ROAD_TYPES[id].hidden).sort((a,b)=>paveCost(a)-paveCost(b))){ const R=ROAD_TYPES[id];
-          list.append(card(roadThumb(id), R.name, `${fmt(paveCost(id))} a tile`, R.note, false, ()=>{ go({kind:'ppave',plot:p.id,road:id}); toast(`Tap or drag over your plot to lay ${R.name.toLowerCase()}: ${fmt(paveCost(id))} coins a tile.`); })); }
-        list.append(card(roadThumb('dirt'), 'Lift paving', 'free', 'back to grass', false, ()=>{ go({kind:'ppave',plot:p.id,erase:true}); toast('Tap or drag over paving on your plot to lift it.'); }));
-        return; }
-      const ids=Object.keys(BUILDING_TYPES).filter(id=>BUILDING_TYPES[id].cat===cat&&id!=='landing'&&!BUILDING_TYPES[id].hidden).sort((a,b)=>constructionCost(a)-constructionCost(b));
-      for(const id of ids){ const t=BUILDING_TYPES[id], q=buildQuote(id), [w,d]=t.size, fits=(w<=p.w&&d<=p.d)||(d<=p.w&&w<=p.d);
-        list.append(card(thumbFor(id), t.name, `${fmt(q.total)} coins`, `${w}×${d} · ${q.minutes?realTime(q.minutes*GAME_MIN_MS):'instant'}${upgradable(id)?' · upgradable':''}`, false, ()=>{ if(!fits){ toast(`${t.name} is ${w}×${d}: too big for this ${p.w}×${p.d} plot.`); return; } close(); closeCard(); Plots.cat=cat; setTool({kind:'pbuild',plot:p.id,type:id,rot:w>p.w||d>p.d?1:0});
-          const c=iso(p.x+p.w/2,p.y+p.d/2); cam.x=c.x; cam.y=c.y; cam.z=Math.max(cam.z,1.3); toast(`Drag ${t.name} onto your plot and let go. ${fmt(q.total)} coins with the charges.`); }, !fits)); } };
-    box.append(el('p',{class:'hint',text:`${p.w}×${p.d} plot, ${free} tile${free===1?'':'s'} free. Prices include the building permit and inspection (and the water & power hook-up for homes and businesses). Surfaces pave the open ground, tile by tile.`}), tabs, list); fill(); },
+      if(!q) for(const [g,name] of GROUPS) tabs.append(el('button',{class:'pill'+(grp===g?' on':''),'aria-pressed':String(grp===g),text:name,onclick:()=>{ grp=Plots.grp=g; fill(); }}));
+      else tabs.append(el('span',{class:'hint',text:`Results for “${search.value.trim()}”`}));
+      if(!q&&grp==='floors'){ floorCards(); return; }
+      const G=GROUPS.find(x=>x[0]===grp), have=coins();
+      let ids=all.filter(id=>q?(T0(id).name.toLowerCase().includes(q)||(T0(id).sub||'').includes(q)||(T0(id).cat||'').includes(q)):G[2](id)), hidden=0;
+      if(fitsOnly){ const n=ids.length; ids=ids.filter(fitsOn); hidden=n-ids.length; }
+      ids.sort((a,b)=>buildQuote(a).total-buildQuote(b).total);
+      for(const id of ids){ const t=T0(id), qq=buildQuote(id), [w,d]=t.size, fits=fitsOn(id), inc=fullIncome(id), short=have!=null&&have<qq.total;
+        const stat=!fits?`${w}×${d}: too big for this plot`:short?`Need ${fmt(qq.total-have)} more coins`:[`${w}×${d}`, qq.minutes?`ready in ${realTime(qq.minutes*GAME_MIN_MS)}`:'instant', inc>0?`earns ~${fmt(inc)}/day`:t.home?`${t.home.capacity} home${t.home.capacity===1?'':'s'}`:t.hangar?`holds ${t.hangar} planes`:isFence(id)?'drag to lay':null].filter(Boolean).join(' · ');
+        list.append(card(thumbFor(id), t.name, `${fmt(qq.total)} coins`, stat, false, ()=>this.choose(p,id,go), !fits||short)); }
+      if(q) floorCards();
+      if(!list.children.length) list.append(el('p',{class:'hint',text:q?'Nothing matches that. Try another word.':'Nothing in this group fits on this plot. Untick “Only what fits” to see everything.'}));
+      else if(hidden) list.append(el('p',{class:'hint',text:`${hidden} more ${hidden===1?"doesn't":"don't"} fit on this ${p.w}×${p.d} plot.`})); };
+    box.append(el('p',{class:'hint',text:`${p.w}×${p.d} plot · ${free} tile${free===1?'':'s'} free${coins()!=null?` · you have ${fmt(coins())} coins`:''}. Prices include the permit and inspection.`}), search, fitLab, tabs, list); fill(); setTimeout(()=>{ if(innerWidth>700) search.focus(); },50); },
+  // What happens when you pick something: big buildings appear on the first free spot of your plot, ready to confirm
+  // (drag them elsewhere if you like); fences are dragged out; small things are tapped into place.
+  choose(p,id,go){ const t=BUILDING_TYPES[id], q=buildQuote(id), [w,d]=t.size, have=myMoney&&typeof myMoney.coins==='number'?myMoney.coins:null;
+    if(!((w<=p.w&&d<=p.d)||(d<=p.w&&w<=p.d))){ toast(`${t.name} is ${w}×${d}: too big for this ${p.w}×${p.d} plot.`); return; }
+    if(have!=null&&have<q.total){ toast(`${t.name} costs ${fmt(q.total)} coins. You have ${fmt(have)} on you${myMoney&&myMoney.bank?': withdraw some at a Bank first':''}.`); return; }
+    const rot0=w>p.w||d>p.d?1:0; go({kind:'pbuild',plot:p.id,type:id,rot:rot0});
+    if(isFence(id)){ toast(`Drag along your plot to lay ${t.name.toLowerCase()} (${fmt(q.total)} coins a tile). Lift your finger to build it.`); return; }
+    if(t.cat==='decor'||t.cat==='nature'||q.total<1500){ toast(`Tap your plot to place ${t.name.toLowerCase()} (${fmt(q.total)} coins). Keep tapping to add more, then tap Done.`); return; }
+    for(const rot of [rot0,1-rot0]){ const [ww,dd]=sizeOf(id,rot); for(let j=0;j+dd<=p.d;j++) for(let i=0;i+ww<=p.w;i++){ tool.rot=rot; if(!blockers(id,p.x+i,p.y+j,null,rot).some(b=>b.why)){ refreshTurn(); ghost={tile:[p.x+i,p.y+j]}; this.place(p.x+i,p.y+j); return; } } }
+    tool.rot=rot0; toast(`There's no free spot big enough for ${t.name} on your plot right now. Clear some room, or try a smaller one.`); },
   // Decorations, fences and plants (anything under 1,500 coins) go straight down and stay selected, so a plot can be
   // fenced or planted tile after tile; bigger things show their price first.
   async place(x,y){ const type=tool.type, plot=tool.plot, rot=tool.rot||0, q=buildQuote(type), t=BUILDING_TYPES[type];

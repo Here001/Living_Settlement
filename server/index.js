@@ -215,6 +215,7 @@ app.get('/api/admin/accounts/:handle', admin, send(async req => {
 }));
 app.post('/api/admin/found', admin, send(req => world.found(req.body || {})));
 app.post('/api/admin/buildings', admin, send(req => world.build(req.body || {})));
+app.post('/api/admin/buildings/line', admin, send(req => world.buildLine(req.body || {})));
 app.post('/api/admin/buildings/restore', admin, send(req => world.restore((req.body || {}).building)));
 app.post('/api/admin/buildings/:id/finish', admin, send(req => world.finish(req.params.id)));
 app.post('/api/admin/buildings/:id/repair', admin, send(req => world.repair(req.params.id)));

@@ -1658,6 +1658,15 @@ r = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x
   const bn = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x + 3, y: s1.y + 3 }, A.P);
   ok(bn.status === 200 && !(await pool.query('select 1 from roads where x = $1 and y = $2', [s1.x + 3, s1.y + 3])).rowCount, 'building on your own paving lifts it', JSON.stringify(bn.json).slice(0, 200));
   if (bn.status === 200) await call('POST', `/api/me/buildings/${bn.json.building.id}/knock`, {}, A.P); }
+// fences are laid like roads: drag a line and every free tile on it gets one (for the builder, and on your own plot)
+{ const ln = await call('POST', `/api/me/plots/${plotId}/build-line`, { type: 'fence', tiles: [[s1.x + 2, s1.y + 3], [s1.x + 3, s1.y + 3], [s1.x + 5, s1.y + 3], [s1.x, s1.y]] }, A.P);
+  ok(ln.status === 200 && ln.json.built === 2 && ln.json.skipped === 2, 'a fence line on your plot: free tiles get a fence, ones off the plot or under a building are skipped', JSON.stringify(ln.json));
+  ok((await call('POST', `/api/me/plots/${plotId}/build-line`, { type: 'house', tiles: [[s1.x + 2, s1.y + 2]] }, A.P)).status === 400, 'only small things are laid in a line');
+  ok((await call('POST', `/api/me/plots/${plotId}/build-line`, { type: 'fence', tiles: [[s1.x + 2, s1.y + 3]] }, B.P)).status === 403, "not on someone else's plot");
+  for (const b of (await pool.query("select id from buildings where plot_id = $1 and type = 'fence'", [plotId])).rows) await call('POST', `/api/me/buildings/${b.id}/knock`, {}, A.P);
+  const al = await call('POST', '/api/admin/buildings/line', { type: 'stonewall', tiles: [[3000, 3000], [3001, 3000], [3002, 3000], [3002, 3000]] });
+  ok(al.status === 200 && al.json.built.length === 3 && al.json.built.every(b => b.type === 'stonewall'), 'the builder lays a wall in one stroke', JSON.stringify(al.json).slice(0, 200));
+  for (const b of al.json.built || []) await call('DELETE', `/api/admin/buildings/${b.id}`); }
 // planes live in hangars: build one on your land first; each holds a set number
 { const lot = (await pool.query("select id from buildings where type = 'cardealer' and done and not ruin limit 1")).rows[0]?.id || await (async () => { const b = await call('POST', '/api/admin/buildings', { type: 'cardealer', x: 960, y: 940 }); await call('POST', `/api/admin/buildings/${b.json.building?.id}/finish`); return b.json.building?.id; })();
   const was = (await pool.query('select home_id from citizens where id = $1', [A.id])).rows[0].home_id, home = (await pool.query('select id from buildings where home_cap > 0 and done and not ruin limit 1')).rows[0].id;

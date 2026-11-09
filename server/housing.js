@@ -10,7 +10,7 @@
 // Every coin paid for land, building, charges and rushing goes into the colony treasury.
 import crypto from 'node:crypto';
 import { pool } from './db.js';
-import { HttpError, bRow } from './world.js';
+import { HttpError, bRow, cleanTiles } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES, roadClears } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
@@ -196,6 +196,23 @@ export class Housing {
       if (toRm.length) await ch.q('delete from roads where (x, y) in (select * from unnest($1::int[], $2::int[]))', [toRm.map(k => xy(k)[0]), toRm.map(k => xy(k)[1])]);
       this.world.roadOps(ch, toSet, toRm);
       return { ok: true, changed: ks.length + toRm.length, laid: ks.length, lifted: toRm.length, paid: cost, coins: c.coins_base };
+    });
+  }
+  // A line of fence, wall or hedge on your land, dragged out like a road: one on every free tile of your plot along it.
+  async buildLineOn(id, plotId, body) {
+    const type = String(body?.type || ''), q = this.buildQuote(type), t = BUILDING_TYPES[type];
+    if (t.size[0] !== 1 || t.size[1] !== 1 || q.minutes) throw new HttpError(400, 'Only fences, walls, hedges and other small things can be laid in a line.');
+    const list = cleanTiles(body?.tiles, 64); if (!list.length) throw new HttpError(400, 'Drag along your plot first.');
+    return this.world.change(async ch => {
+      const c = await this.lockMe(ch, id), p = await this.lockPlot(ch, c, plotId), ok = [];
+      for (const [x, y] of list) { if (!this.inside(p, x, y, 1, 1)) continue; if ((await ch.q('select 1 from buildings where x <= $1 and x + w > $1 and y <= $2 and y + d > $2 limit 1', [x, y])).rowCount) continue;
+        if ((await ch.q('select 1 from water where x = $1 and y = $2', [x, y])).rowCount) continue; ok.push([x, y]); }
+      if (!ok.length) throw new HttpError(409, 'Those tiles are taken or off your plot. Drag over free ground on your plot.');
+      const total = q.total * ok.length; ch.coins(c);
+      if (c.coins_base < total) throw new HttpError(400, `${ok.length} × ${t.name} costs ${fmt(total)} coins. You have ${fmt(c.coins_base)} on you${Number(c.bank) ? ' (withdraw some at a Bank first)' : ''}.`);
+      c.coins_base -= total; treasuryAdd(ch, total); track(ch, 'build:own', q.cost * ok.length, c.id); track(ch, 'build:charges', q.chargesTotal * ok.length, c.id); ch.touch(c); await ch.saveCitizen(c);
+      const built = []; for (const [x, y] of ok) { await this.unpave(ch, x, y, 1, 1); built.push(bRow(await this.world.insertBuilding(ch, { type, x, y, plotId: p.id, owner: c, price: q.cost, minutes: 0, instant: false }))); }
+      return { ok: true, built: built.length, skipped: list.length - ok.length, paid: total, coins: c.coins_base };
     });
   }
   // Knocking down your own building on your land: the builders give back 30% of what it cost.

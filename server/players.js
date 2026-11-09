@@ -284,6 +284,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/plots/:id', limit, send(async req => H().plot((await playerFrom(req))?.id || null, req.params.id)));
   r.post('/me/plots/:id/build', limit, send(async req => H().buildOn((await me(req)).id, req.params.id, bd(req))));
   r.post('/me/plots/:id/sell', limit, send(async req => H().sellPlot((await me(req)).id, req.params.id)));
+  r.post('/me/plots/:id/build-line', limit, send(async req => H().buildLineOn((await me(req)).id, req.params.id, bd(req))));
   r.post('/me/plots/:id/pave', limit, send(async req => H().pave((await me(req)).id, req.params.id, bd(req))));
   r.get('/hangars/:id', limit, send(async req => world.economy.hangarInfo(req.params.id)));
   r.post('/me/plots/:id/name', limit, quota('rename'), send(async req => H().renamePlot((await me(req)).id, req.params.id, bd(req).name)));

@@ -12,6 +12,10 @@ const changeScope = new AsyncLocalStorage();
 
 const uid = () => crypto.randomUUID();
 const fmt = n => Math.round(n).toLocaleString('en-US');
+// Tiles sent as [[x, y], …]: whole numbers, no repeats, at most `max`.
+export function cleanTiles(tiles, max) { const out = [], seen = new Set(); if (!Array.isArray(tiles)) return out;
+  for (const p of tiles) { const x = Math.trunc(Number(p?.[0])), y = Math.trunc(Number(p?.[1])), k = x + ',' + y; if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 100000 || Math.abs(y) > 100000 || seen.has(k)) continue; seen.add(k); out.push([x, y]); if (out.length >= max) break; }
+  return out; }
 export class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
 
 // ---------- row shapes ----------
@@ -548,6 +552,18 @@ export class World {
       else { const h = Math.round(R.buildMinutes(type) / 60); await ch.event(`Construction started on ${nm}${by}. Ready in ${h} game hour${h === 1 ? '' : 's'}`, 'build'); }
       await ch.fillVacancies();
       return { building: b };
+    });
+  }
+
+  // A line of fence, wall or hedge (any 1×1 thing), laid in one go like a road: every free tile gets one, blocked ones are skipped.
+  async buildLine({ type, tiles }) {
+    const t = BUILDING_TYPES[type]; if (!t) throw new HttpError(400, 'Unknown building type.');
+    if (t.size[0] !== 1 || t.size[1] !== 1) throw new HttpError(400, 'Only one-tile things (fences, walls, hedges) can be laid in a line.');
+    const list = cleanTiles(tiles, 400); if (!list.length) throw new HttpError(400, 'Drag over the tiles first.');
+    return this.change(async ch => {
+      const built = []; let skipped = 0;
+      for (const [x, y] of list) { try { await this.assertFree(ch, type, x, y); } catch (e) { skipped++; continue; } built.push(bRow(await this.insertBuilding(ch, { type, x, y, instant: true }))); }
+      return { built, skipped };
     });
   }
 

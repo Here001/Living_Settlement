@@ -886,7 +886,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .lgchip.on{border-color:#E4572E;box-shadow:0 0 0 2px rgba(228,87,46,.25)}.lgchip .lgname{flex:1;font-size:13px;font-weight:600;line-height:1.15}.lgchip b{font-size:12px;opacity:.7}
 .lgic{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:16px;background:#1b1d22;box-shadow:0 0 0 2px var(--c),0 0 10px var(--c)}
 .plist .joblist li{align-items:center}
-.coinfly{position:fixed;z-index:9500;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;display:grid;place-items:center;font:900 17px system-ui,sans-serif;color:var(--rim);background:linear-gradient(135deg,var(--c1),var(--c2));border:2px solid var(--rim);box-shadow:0 0 14px rgba(255,215,90,.8);pointer-events:none;animation:coinspin .45s linear 1}
+.coinfly{position:fixed;z-index:9500;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;display:grid;place-items:center;font:900 17px system-ui,sans-serif;color:var(--rim);background:linear-gradient(135deg,var(--c1),var(--c2));border:2px solid var(--rim);box-shadow:0 0 10px 3px var(--c1),0 0 24px 8px rgba(255,215,90,.55);pointer-events:none;animation:coinspin .45s linear 1}
 .coinfly.go{transition:left .65s cubic-bezier(.5,-.3,.7,1),top .65s cubic-bezier(.5,-.3,.7,1),transform .65s ease-in,opacity .65s ease-in;transform:scale(.55);opacity:.85;animation:coinspin .3s linear infinite}
 @keyframes coinspin{0%{transform:rotateY(0)}100%{transform:rotateY(360deg)}}
 @media (prefers-reduced-motion:reduce){.coinfly,.coinfly.go{animation:none}}
@@ -3744,10 +3744,17 @@ const Tills={ map:new Map(), day:-1, busy:false, hits:[], flying:new Set(),
       const T0=T(b), [w,d]=T0.size, top=up(iso(b.x+w/2,b.y+d/2), Math.min(150,SHADOW_H[T0.style]?SHADOW_H[T0.style](T0):30)+16), sx=(top.x-cam.x)*cam.z+cw/2, sy=(top.y-cam.y)*cam.z+ch/2+Math.sin(tt*2.2+b.x)*2.5;
       if(sx<-30||sy<-30||sx>cw+30||sy>ch+30) continue;
       const f=Math.min(1,t.till/Math.max(1,t.cap)), full=f>=1, [c1,c2,rim]=full?['#FFE680','#E2A71E','#9A6A0E']:f>=0.5?['#F4F6F8','#AEB5BD','#6E757C']:['#F0B27A','#B8743A','#7A4A20'];
-      if(full){ const gl=ctx.createRadialGradient(sx,sy,R0*0.6,sx,sy,R0*2.4); gl.addColorStop(0,`rgba(255,215,90,${0.45+0.2*Math.sin(tt*4)})`); gl.addColorStop(1,'rgba(255,215,90,0)'); ctx.fillStyle=gl; ctx.fillRect(sx-R0*2.5,sy-R0*2.5,R0*5,R0*5); }
+      { // every coin glows in its own colour; a full one glows strongest and pulses
+        const gc=full?'255,205,60':f>=0.5?'230,240,255':'255,150,70', a=full?0.85+0.15*Math.sin(tt*4):0.6+0.15*Math.sin(tt*2.5+b.x), rr=R0*(full?3.2:2.5);
+        ctx.globalCompositeOperation='lighter'; // light added to what's behind: the coin shines on the map
+        const gl=ctx.createRadialGradient(sx,sy,R0*0.4,sx,sy,rr); gl.addColorStop(0,`rgba(${gc},${a})`); gl.addColorStop(0.45,`rgba(${gc},${a*0.35})`); gl.addColorStop(1,`rgba(${gc},0)`); ctx.fillStyle=gl; ctx.fillRect(sx-rr,sy-rr,rr*2,rr*2);
+        if(full){ ctx.strokeStyle=`rgba(255,220,110,${0.5+0.3*Math.sin(tt*4)})`; ctx.lineWidth=1.5; for(let i=0;i<8;i++){ const an=i/8*Math.PI*2+tt*0.6, r1=R0*1.35, r2=R0*(1.9+0.25*Math.sin(tt*5+i)); ctx.beginPath(); ctx.moveTo(sx+Math.cos(an)*r1,sy+Math.sin(an)*r1); ctx.lineTo(sx+Math.cos(an)*r2,sy+Math.sin(an)*r2); ctx.stroke(); } } // rays round a full one
+        ctx.globalCompositeOperation='source-over'; }
       ctx.fillStyle='rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(sx+1.5,sy+R0+3,R0*0.8,R0*0.28,0,0,7); ctx.fill(); // a little shadow
       const g=ctx.createLinearGradient(sx-R0,sy-R0,sx+R0,sy+R0); g.addColorStop(0,c1); g.addColorStop(1,c2); ctx.fillStyle=g; ctx.strokeStyle=rim; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(sx,sy,R0,0,7); ctx.fill(); ctx.stroke();
       ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.arc(sx,sy,R0*0.7,0,7); ctx.stroke();
+      { const sh=ctx.createLinearGradient(sx-R0,sy-R0,sx+R0*0.3,sy+R0*0.3); sh.addColorStop(0,'rgba(255,255,255,.55)'); sh.addColorStop(1,'rgba(255,255,255,0)'); ctx.fillStyle=sh; ctx.beginPath(); ctx.arc(sx,sy,R0*0.92,Math.PI*0.9,Math.PI*1.8); ctx.fill(); } // a shine across the top
+      { const gx=sx+Math.cos(tt*1.6+b.y)*R0*0.55, gy=sy-R0*0.45+Math.sin(tt*1.6+b.y)*R0*0.2, tw=0.5+0.5*Math.sin(tt*3+b.x); ctx.fillStyle=`rgba(255,255,255,${0.35+0.55*tw})`; ctx.beginPath(); ctx.moveTo(gx,gy-3.5); ctx.lineTo(gx+1,gy-1); ctx.lineTo(gx+3.5,gy); ctx.lineTo(gx+1,gy+1); ctx.lineTo(gx,gy+3.5); ctx.lineTo(gx-1,gy+1); ctx.lineTo(gx-3.5,gy); ctx.lineTo(gx-1,gy-1); ctx.closePath(); ctx.fill(); } // a twinkle
       ctx.fillStyle=rim; ctx.font=`900 ${Math.round(R0*1.05)}px system-ui,sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('¢',sx,sy+0.5);
       if(cam.z>=0.8){ const lab=t.till>=1000?(t.till/1000).toFixed(t.till>=10000?0:1)+'k':String(t.till); ctx.font='800 10px system-ui,sans-serif'; ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.92)'; ctx.strokeText(lab,sx,sy+R0+9); ctx.fillStyle='#2B2621'; ctx.fillText(lab,sx,sy+R0+9); }
       this.hits.push({id,x:sx,y:sy,r:R0+8,col:[c1,c2,rim]}); }

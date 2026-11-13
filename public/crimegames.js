@@ -190,8 +190,17 @@ async function stealth(root, L, finish) {
   const bag = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), new THREE.MeshStandardMaterial({ color: '#e2b13c', metalness: 0.5, roughness: 0.4 })); bag.position.set(0.38, 0.9, 0); bag.visible = false; me.group.add(bag);
   const staff = L.guards.map((g, i) => { const p = W.makePerson('staff' + L.seed + i, g.kind === 'guard' ? 'hunter' : 'civilian'); view.scene.add(p.group); const cone = W.viewCone('#ffd54a'); view.scene.add(cone);
     const mark = W.nameTag('❗ What was that?', '#ffb4a8'); mark.position.y = 2.45; mark.visible = false; p.group.add(mark); return { p, cone, mark, last: null }; });
-  const cams = L.cams.map(c => { const g = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.25, 0.5), new THREE.MeshStandardMaterial({ color: '#3a3a44', metalness: 0.6, roughness: 0.4 })); body.position.y = 3; g.add(body);
-    const led = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff4b3a' })); led.position.set(0.1, 3.08, 0.25); g.add(led); g.position.set(c.x * U, 0, c.y * U); view.scene.add(g); const cone = W.viewCone('#ffd54a'); view.scene.add(cone); return { g, cone, led }; });
+  // CCTV: a wall bracket, a pale camera housing with a sun hood, a dark lens, and a red light that blinks while it records
+  const cams = L.cams.map(c => { const g = new THREE.Group(), M = (col, o = {}) => new THREE.MeshStandardMaterial({ color: col, roughness: 0.45, metalness: 0.3, ...o });
+    const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.12), M('#5a5e66', { metalness: 0.7 })); bracket.position.set(0, 3.3, -0.3); g.add(bracket);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.4), M('#5a5e66', { metalness: 0.7 })); arm.position.set(0, 3.1, -0.12); g.add(arm);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.34, 0.75), M('#eef0f2')); body.position.set(0, 3, 0.2); g.add(body);
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.9), M('#d8dbdf')); hood.position.set(0, 3.2, 0.26); g.add(hood);
+    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.12, 16), M('#111418', { metalness: 0.9, roughness: 0.15 })); lens.rotation.x = Math.PI / 2; lens.position.set(0, 3, 0.6); g.add(lens);
+    const glass = new THREE.Mesh(new THREE.CircleGeometry(0.1, 16), new THREE.MeshStandardMaterial({ color: '#3b6ea8', metalness: 0.9, roughness: 0.05, emissive: '#10243a' })); glass.position.set(0, 3, 0.665); g.add(glass);
+    const led = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), new THREE.MeshBasicMaterial({ color: '#ff2a1a' })); led.position.set(0.14, 3.12, 0.58); g.add(led);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ color: '#ff3a2a', transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.set(0.45, 0.45, 1); led.add(glow);
+    g.position.set(c.x * U, 0, c.y * U); view.scene.add(g); const cone = W.viewCone('#ffd54a'); view.scene.add(cone); return { g, cone, led }; });
   const ringGeo = new THREE.RingGeometry(0.42, 0.55, 32, 1, 0, Math.PI * 2), ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: '#7cffb2', side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; ring.position.set(L.till.x * U, 1.6, (L.till.y - 1) * U); view.scene.add(ring);
   const exitGlow = new THREE.Mesh(new THREE.RingGeometry(0.6, 0.8, 32), new THREE.MeshBasicMaterial({ color: '#3cc46a', transparent: true, opacity: 0.8, side: THREE.DoubleSide })); exitGlow.rotation.x = -Math.PI / 2; exitGlow.position.set(L.entry.x * U, 0.05, L.entry.y * U); exitGlow.visible = false; view.scene.add(exitGlow);
   // laser tripwires (two red beams at shin and waist height) and the extra loot on little stands

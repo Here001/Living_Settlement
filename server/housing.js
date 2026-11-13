@@ -266,6 +266,18 @@ export class Housing {
       return { ok: true, back };
     });
   }
+  // A business or industry's website: its owner sets it (or clears it); the developer can clear anyone's.
+  async setWebsite(id, buildingId, url, admin = false) {
+    const web = R.cleanWebsite(url); if (web === null) throw new HttpError(400, 'That isn’t a web address. Try something like example.com or https://example.com.');
+    return this.world.change(async ch => {
+      const b = (await ch.q(`select id, type from buildings where id = $1 ${admin ? '' : 'and owner_id = $2'} for update`, admin ? [String(buildingId)] : [String(buildingId), id])).rows[0];
+      if (!b) throw new HttpError(404, "You don't own that building.");
+      if (!BUILDING_TYPES[b.type]?.work) throw new HttpError(409, 'Only businesses and industries can have a website.');
+      if (admin && web) throw new HttpError(400, 'The developer can only remove a link.');
+      await ch.q('update buildings set website = $2 where id = $1', [b.id, web || null]); ch.buildings.add(b.id);
+      return { ok: true, website: web || null };
+    });
+  }
   // Renaming a building you own (on your land or bought): just the sign over the door.
   async renameBuilding(id, buildingId, name) {
     name = String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);

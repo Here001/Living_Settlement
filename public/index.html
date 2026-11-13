@@ -6122,6 +6122,13 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
   renameSheet(b,t){ const {box,close}=sheetBox(`✏️ Rename ${b.name||t.name}`), n=el('input',{type:'text',maxlength:'40',value:b.name||'',placeholder:t.name,'aria-label':'Name'});
     box.append(el('p',{class:'hint',text:`The name over the door, shown on the map and its card. Leave it empty to call it just “${t.name}”.`}), n, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Save',onclick:async()=>{ const r=await meAction(`/api/me/buildings/${encodeURIComponent(b.id)}/name`,{name:n.value},r=>`Renamed to ${r.name}.`); if(r){ close(); if(b.plot) this.drop(b.plot); } }})));
     setTimeout(()=>n.focus(),50); },
+  // a business's website: the owner adds or changes it (empty removes it); everyone else sees "Visit website" on its card
+  websiteSheet(b,t){ const {box,close}=sheetBox(`🌐 Website for ${b.name||t.name}`), n=el('input',{type:'url',inputmode:'url',maxlength:'200',value:b.web||'',placeholder:'example.com','aria-label':'Website address'});
+    const save=async v=>{ try{ const r=await api(`/api/me/buildings/${encodeURIComponent(b.id)}/website`,{method:'POST',body:{url:v}}); const B=D.buildings.get(b.id); if(B){ if(r.website) B.web=r.website; else delete B.web; }
+        close(); toast(r.website?`Saved. Anyone who taps ${b.name||t.name} can now visit ${new URL(r.website).hostname}.`:'Website removed.'); renderCard(true); }catch(e){ toast(e.message); } };
+    box.append(el('p',{class:'hint',text:'Link your real business to its building: anyone who taps it on the map gets a “Visit website” button. Web addresses only (http or https).'}), n,
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Save',onclick:()=>save(n.value)}), b.web?el('button',{class:'linkb',text:'Remove it',onclick:()=>save('')}):''));
+    setTimeout(()=>n.focus(),50); },
   // extra parts of a building's card: who owns it, its level, rushing the builders, upgrading, knocking it down, making an offer
   buildingBits(card,b,t){ if(!(Me&&Me.token&&Me.handle)||Store.canWrite) return; const mine=isMe(b.owner), lv=b.lv||1, now=Date.now()+skew;
     if(b.plot&&!mine) card.append(el('p',{class:'hint',text:`It stands on @${b.owner}'s land.`}));
@@ -6141,6 +6148,7 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
       card.append(box); }
     if(mine&&!b.ruin) card.append(el('div',{class:'row-actions'},
       el('button',{class:'btn sm',text:'✏️ Rename',onclick:()=>this.renameSheet(b,t)}),
+      t.work?el('button',{class:'btn sm',text:b.web?'🌐 Website':'🌐 Add website',onclick:()=>this.websiteSheet(b,t)}):'',
       b.plot&&!b.upAt?el('button',{class:'btn sm',text:'✥ Move',onclick:()=>{ closeCard(); setTool({kind:'move',id:b.id,rot:b.rot||0,mine:true}); toast(`Drag ${b.name||t.name} to another spot on your plot and let go. Tap ⟲ Turn to face it the other way. It can't leave the plot.`); }}):''));
     if(mine&&b.plot&&b.done!==false&&!b.upAt) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn sm',text:'🗺️ Your plot',onclick:()=>{ sel={kind:'p',id:b.plot}; renderCard(true); }}), el('button',{class:'linkb',text:'Knock it down',onclick:()=>toast(`Knock down ${b.name||t.name}? The builders give back 30% of what it cost.`,'Knock down',()=>meAction(`/api/me/buildings/${encodeURIComponent(b.id)}/knock`,{},r=>r.back?`Knocked down. ${fmt(r.back)} coins back.`:'Knocked down.'))})));
     if(b.owner&&!mine&&b.done!==false&&!b.ruin) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'🤝 Make an offer',onclick:()=>b.plot?this.offerSheet('plot',b.plot,`@${b.owner}'s plot with ${b.name||t.name}`,b.owner):this.offerSheet('building',b.id,b.name||t.name,b.owner)})));
@@ -6311,6 +6319,13 @@ function carsPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚗
   const lot=nearestOf('cardealer', c);
   box.append(el('div',{class:'row-actions'}, lot?el('button',{class:'btn primary',text:'🚘 Go to the Car dealership',onclick:()=>goToBuilding(lot)}):el('span',{class:'hint',text:'Cars are bought at a Car dealership. The colony doesn’t have one yet.'})));
   return box; }
+// A business's website on its card: where it goes, and a button that opens it in a new tab (after saying you're leaving
+// the game: links are added by players). The developer can take a link down.
+function websiteRow(b,t){ let host=''; try{ host=new URL(b.web).hostname.replace(/^www\./,''); }catch(e){ return el('span'); }
+  const open=()=>{ try{ const w=window.open(b.web,'_blank','noopener,noreferrer'); if(w) w.opener=null; }catch(e){} };
+  return el('div',{class:'row-actions webrow'}, el('span',{class:'hint',text:`🌐 ${host}`}),
+    el('button',{class:'btn primary sm',text:'Visit website',onclick:()=>toast(`Open ${host} in a new tab? It's ${b.owner?`@${b.owner}'s`:'this business’s'} own website, added by them, not part of Resurgence.`,'Open',open)}),
+    Store.canWrite?el('button',{class:'linkb',text:'Remove link',onclick:()=>toast(`Remove the website link from ${b.name||t.name}?`,'Remove',async()=>{ try{ await api(`/api/admin/buildings/${encodeURIComponent(b.id)}/website`,{method:'DELETE'}); delete b.web; renderCard(true); toast('Link removed.'); }catch(e){ toast(e.message); } })}):''); }
 // A hangar's card: how many planes it holds, and the ones parked in it.
 const Hangars={ info:new Map(), busy:new Set() };
 function hangarSection(b,t){ const box=el('div',{class:'authbox'}, el('h3',{text:`✈️ ${t.name}: holds ${t.hangar} plane${t.hangar===1?'':'s'}`})), e=Hangars.info.get(b.id);
@@ -6579,6 +6594,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       if(!b.owner) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(price)}`,onclick:()=>toast(`Buy ${b.name||t.name} for ${fmt(price)} coins? You'll collect 80% of its rent or profit every game day.`,'Buy',async()=>{ const r=await meAction('/api/me/properties/buy',{buildingId:b.id},r=>`It's yours! About ${fmt(r.income)} coins a day.`); if(r){ b.owner=Me.handle; Money.at=0; renderCard(true); } })})));
       else if(b.owner.toLowerCase()===Me.handle.toLowerCase()&&!b.plot) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
     if(!Store.canWrite&&Me&&Me.token) card.append(el('div',{class:'row-actions'}, Loc.btn(b.name||t.name, b.x, b.y)));
+    if(b.web && t.work && !b.ruin) card.append(websiteRow(b,t)); // up top, where visitors see it first
     Plots.buildingBits(card,b,t);
     if(t.hangar && b.done!==false && !b.ruin) card.append(hangarSection(b,t));
     if(b.owner&&isMe(b.owner)&&!Store.canWrite){ const tl=Tills.map.get(b.id); if(tl){ const f=Math.min(1,tl.till/Math.max(1,tl.cap)), btn=el('button',{class:'btn primary sm',text:`Collect ${fmt(tl.till)}`,disabled:tl.till<1?'':null,onclick:e=>{ const r=e.currentTarget.getBoundingClientRect(); Tills.collect({id:b.id,x:r.left+r.width/2,y:r.top+r.height/2,col:f>=1?['#FFE680','#E2A71E','#9A6A0E']:f>=0.5?['#F4F6F8','#AEB5BD','#6E757C']:['#F0B27A','#B8743A','#7A4A20']}).then(()=>renderCard(true)); }});

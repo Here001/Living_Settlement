@@ -214,6 +214,14 @@ export const propertyPrice = type => nicePrice(Math.max(PROPERTY_MIN, fullIncome
 // building the more it makes (it still pays for itself in about a real month), raised by its level. It builds up in the
 // building's till, which holds TILL_DAYS game days (one real day), and the owner taps the coin over it to collect.
 export const TILL_DAYS = 48;
+// A business's website (set by its owner): an ordinary web address, http or https only (so a link can never run code),
+// with a real host name, no user name or password in it, at most 200 characters. "example.com" becomes https://example.com.
+// Returns the cleaned address, '' to remove it, or null if it isn't a usable link.
+export function cleanWebsite(v) { let s = String(v ?? '').trim(); if (!s) return ''; if (s.length > 200) return null;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(s)) s = 'https://' + s;
+  let u; try { u = new URL(s); } catch (e) { return null; }
+  if (!['http:', 'https:'].includes(u.protocol) || u.username || u.password || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(u.hostname)) return null;
+  const out = u.toString(); return out.length > 200 ? null : out; }
 export const ownerYield = (type, level = 1) => Math.floor(fullIncome(type) * levelPay(level));
 export const tillCap = (type, level = 1) => ownerYield(type, level) * TILL_DAYS;
 // Bills. Each car's upkeep (in CAR_MODELS) every game week (7 game days, so about 7 game weeks a real day). Property

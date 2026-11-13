@@ -325,6 +325,8 @@ const MIGRATIONS = [
   `alter table plots add column if not exists estate text; create index if not exists plots_estate on plots (estate);`,
   // v65: each owned building's till: what it has earned that its owner hasn't collected yet
   `alter table buildings add column if not exists till numeric not null default 0;`,
+  // v66: a business's website, set by its owner and shown to everyone on its card
+  `alter table buildings add column if not exists website text;`,
 ];
 
 export async function migrate() {

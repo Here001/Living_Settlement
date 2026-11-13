@@ -218,6 +218,7 @@ app.post('/api/admin/found', admin, send(req => world.found(req.body || {})));
 app.post('/api/admin/buildings', admin, send(req => world.build(req.body || {})));
 app.post('/api/admin/buildings/line', admin, send(req => world.buildLine(req.body || {})));
 app.post('/api/admin/buildings/restore', admin, send(req => world.restore((req.body || {}).building)));
+app.delete('/api/admin/buildings/:id/website', admin, send(req => world.housing.setWebsite(null, req.params.id, '', true)));
 app.post('/api/admin/buildings/:id/finish', admin, send(req => world.finish(req.params.id)));
 app.post('/api/admin/buildings/:id/repair', admin, send(req => world.repair(req.params.id)));
 app.post('/api/admin/ruins/clear', admin, send(() => world.clearRuins()));

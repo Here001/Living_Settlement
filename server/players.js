@@ -294,6 +294,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/buildings/:id/upgrade', limit, send(async req => H().upgrade((await me(req)).id, req.params.id)));
   r.post('/me/buildings/:id/rush', limit, send(async req => H().rush((await me(req)).id, req.params.id)));
   r.post('/me/buildings/:id/name', limit, quota('rename'), send(async req => H().renameBuilding((await me(req)).id, req.params.id, bd(req).name)));
+  r.post('/me/buildings/:id/website', limit, quota('rename'), send(async req => H().setWebsite((await me(req)).id, req.params.id, bd(req).url)));
   r.post('/me/buildings/:id/move', limit, send(async req => H().moveBuilding((await me(req)).id, req.params.id, bd(req))));
   r.post('/me/buildings/:id/knock', limit, send(async req => H().knockDown((await me(req)).id, req.params.id)));
   r.get('/me/offers', limit, send(async req => H().offers((await me(req)).id)));

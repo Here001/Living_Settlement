@@ -1715,6 +1715,19 @@ r = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x
   ok(nb.status === 200 && est.size === 1 && est.has('oldplot1'), 'touching plots bought before estates existed are joined into one, led by the named one', JSON.stringify({ nb: nb.status, rows }));
   ok((await call('GET', '/api/me/properties', undefined, F.P)).json.count === 2, '…so the old pair counts as one property (plus the new plot)');
   await pool.query('delete from plots where owner_id = $1', [F.id]); }
+// a business's website: its owner sets it, everyone sees it on the map, only web links, the developer can take it down
+{ const Wp = await player('web_wes', 900_000), sp = await spot(2, 2), bk = await call('POST', '/api/admin/buildings', { type: 'bakery', x: sp.x, y: sp.y, instant: true }), bid = bk.json.building?.id;
+  ok((await call('POST', '/api/me/properties/buy', { buildingId: bid }, Wp.P)).status === 200, 'a player buys a bakery');
+  const set = url => call('POST', `/api/me/buildings/${bid}/website`, { url }, Wp.P);
+  ok((await set('javascript:alert(1)')).status === 400 && (await set('not a link')).status === 400 && (await set('ftp://files.example.com')).status === 400, 'only ordinary web links (no scripts, no other kinds of address)');
+  const ok1 = await set('wesbakes.example.com'); ok(ok1.status === 200 && ok1.json.website === 'https://wesbakes.example.com/', 'the owner adds their website (https is added)', JSON.stringify(ok1.json));
+  const ch = await call('GET', `/api/chunks?keys=${Math.floor(sp.x / 32)}_${Math.floor(sp.y / 32)}`, undefined, { auth: false });
+  ok(JSON.stringify(ch.json).includes('"web":"https://wesbakes.example.com/"'), 'everyone sees the link on the building');
+  ok((await call('POST', `/api/me/buildings/${bid}/website`, { url: 'evil.example.com' }, A.P)).status === 404, "nobody else can change it");
+  const home = (await pool.query("select id from buildings where owner_id is null and home_cap > 0 and done limit 1")).rows[0]; if (home) { await pool.query('update buildings set owner_id = $1, owner_handle = $2 where id = $3', [Wp.id, 'web_wes', home.id]);
+    ok((await call('POST', `/api/me/buildings/${home.id}/website`, { url: 'x.example.com' }, Wp.P)).status === 409, 'homes have no website: only businesses and industries'); await pool.query('update buildings set owner_id = null, owner_handle = null where id = $1', [home.id]); }
+  const rm = await call('DELETE', `/api/admin/buildings/${bid}/website`); ok(rm.status === 200 && !(await pool.query('select website from buildings where id = $1', [bid])).rows[0].website, 'the developer can take a link down');
+  await call('DELETE', `/api/admin/buildings/${bid}`); }
 // the builder's Accounts: balances and each player's money history
 { const ac = (await call('GET', '/api/admin/accounts?q=landlady')).json, me = ac.players?.find(p => p.h === 'landlady');
   ok(me && me.total === me.cash + me.bank && ac.count >= 1, 'the builder sees a player\'s cash and savings', JSON.stringify(ac).slice(0, 200));

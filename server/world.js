@@ -22,7 +22,7 @@ export class HttpError extends Error { constructor(status, msg) { super(msg); th
 export const bRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, name: r.name, requestedBy: r.requested_by,
   builtAt: r.built_at, builtDay: r.built_day, rot: r.rot || 0, homeUsed: r.home_used, jobUsed: r.job_used, hangUsed: r.hang_used,
   done: r.done !== false, readyAt: r.ready_at || 0, ruin: !!r.ruin, ruinedAt: r.ruined_at || 0, owner: r.owner_handle || null,
-  w: r.w, d: r.d, lv: r.level || 1, plot: r.plot_id || null, upAt: Number(r.up_at || 0) });
+  w: r.w, d: r.d, lv: r.level || 1, plot: r.plot_id || null, upAt: Number(r.up_at || 0), ...(r.website ? { web: r.website } : {}) });
 export const pRow = r => ({ id: r.id, x: r.x, y: r.y, w: r.w, d: r.d, cx: r.cx, cy: r.cy, owner: r.owner_handle, name: r.name || '', estate: r.estate || r.id });
 const vRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, placedAt: r.placed_at, owner: r.owner_handle || null });
 const tileKeys = keys => keys.filter(k => /^-?\d{1,7},-?\d{1,7}$/.test(k));

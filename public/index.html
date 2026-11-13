@@ -886,6 +886,10 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .lgchip.on{border-color:#E4572E;box-shadow:0 0 0 2px rgba(228,87,46,.25)}.lgchip .lgname{flex:1;font-size:13px;font-weight:600;line-height:1.15}.lgchip b{font-size:12px;opacity:.7}
 .lgic{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:16px;background:#1b1d22;box-shadow:0 0 0 2px var(--c),0 0 10px var(--c)}
 .plist .joblist li{align-items:center}
+.coinfly{position:fixed;z-index:9500;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;display:grid;place-items:center;font:900 17px system-ui,sans-serif;color:var(--rim);background:linear-gradient(135deg,var(--c1),var(--c2));border:2px solid var(--rim);box-shadow:0 0 14px rgba(255,215,90,.8);pointer-events:none;animation:coinspin .45s linear 1}
+.coinfly.go{transition:left .65s cubic-bezier(.5,-.3,.7,1),top .65s cubic-bezier(.5,-.3,.7,1),transform .65s ease-in,opacity .65s ease-in;transform:scale(.55);opacity:.85;animation:coinspin .3s linear infinite}
+@keyframes coinspin{0%{transform:rotateY(0)}100%{transform:rotateY(360deg)}}
+@media (prefers-reduced-motion:reduce){.coinfly,.coinfly.go{animation:none}}
 .bsearch{width:100%;margin:2px 0 6px}.bfit{display:flex;gap:6px;align-items:center;font-size:13px;margin:0 0 6px;color:var(--ink2,#5a5048)}.bgroups{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.bgroups .pill{flex:0 0 auto}
 .hkhead{position:relative;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px 8px 24px;background:#1b1d20;border:2px solid #2B2621;border-radius:10px;color:#F2C94C;font:800 11px ui-monospace,monospace;letter-spacing:.06em;overflow:hidden}
 .hkhead::before{content:'';position:absolute;left:0;top:0;bottom:0;width:14px;background:repeating-linear-gradient(-45deg,#F2C94C 0 6px,#2B2621 6px 12px)}
@@ -3464,6 +3468,7 @@ function drawFrame(ts){
     if(!b.ruin&&neonOf(b.type)){ neonList.push(b); continue; }
     if(!b.name && !(selB&&selB.id===b.id)) continue; if(cam.z<0.8 && !(selB&&selB.id===b.id)) continue; const t=T(b); const [w,d]=t.size; const p=iso(b.x+w/2,b.y+d/2); label(b.name||t.name, p.x, p.y-Math.min(120,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24))-14, selB&&selB.id===b.id); }
   drawNeonTags(selB);
+  Tills.draw();
   if(sel&&sel.kind==='c'){ const st=states.get(sel.id); if(st&&!st.visible&&st.bid){ const c=S.citizens.get(sel.id); const tup=[c.home,c.job,c.hang].find(p=>p&&p[0]===st.bid); const b=D.buildings.get(st.bid)||(tup&&bOf(tup)); if(b){ const t=T(b); const [w,d]=t.size; const p=iso(b.x+w/2,b.y+d/2); const top=p.y-Math.min(140,(SHADOW_H[t.style]?SHADOW_H[t.style](t):24))-16; const bob=Math.sin(T_NOW/300)*2; ctx.fillStyle='#D9714A'; ctx.strokeStyle=INK; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(p.x-6,top-4+bob); ctx.lineTo(p.x+6,top-4+bob); ctx.lineTo(p.x,top+5+bob); ctx.closePath(); ctx.fill(); ctx.stroke(); label(`@${c.handle} is inside`, p.x, top-6+bob, true); } } }
   // Name tags: the selected person and the founder always; others only when zoomed in, nearest the centre first, never overlapping.
   { const placed=[], tags=[]; for(const [id,st] of states){ if(!st.visible||st.car) continue; const c=S.citizens.get(id); const isSel=sel&&sel.kind==='c'&&sel.id===id; const p=iso(st.x,st.y);
@@ -3726,6 +3731,42 @@ async function removeBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
 // out (with its exact outline) the windows behind it, then adds its own. Some rooms are dark too, so every block
 // gets its own rhythm of light rather than one solid glow.
 let winLayer=null, winKey='';
+// Your buildings' earnings: a coin floats over each home or business you own, only on your screen. Bronze while it's
+// filling, silver past half, gold (and glowing) when the till is full and has stopped filling. Tap it: it spins, flies
+// to your coins at the top, and they count up.
+const Tills={ map:new Map(), day:-1, busy:false, hits:[], flying:new Set(),
+  load(){ if(!(Me&&Me.token)||Store.canWrite||this.busy) return; this.busy=true; this.day=today();
+    api('/api/me/tills').then(d=>{ this.map=new Map((d.tills||[]).map(t=>[t.id,t])); refreshHUD(); }).catch(()=>{}).finally(()=>{ this.busy=false; }); },
+  draw(){ this.hits.length=0; if(!(Me&&Me.token)||Store.canWrite) return; if(today()!==this.day) this.load(); if(!this.map.size||cam.z<0.35) return;
+    const me=Me.handle&&Me.handle.toLowerCase(), tt=T_NOW/1000, k=Math.max(0.75,Math.min(1.3,cam.z)), R0=11*k;
+    ctx.save(); ctx.setTransform(dpr,0,0,dpr,0,0);
+    for(const [id,t] of this.map){ if(t.till<1||this.flying.has(id)) continue; const b=D.buildings.get(id); if(!b||!(b.owner&&b.owner.toLowerCase()===me)) continue;
+      const T0=T(b), [w,d]=T0.size, top=up(iso(b.x+w/2,b.y+d/2), Math.min(150,SHADOW_H[T0.style]?SHADOW_H[T0.style](T0):30)+16), sx=(top.x-cam.x)*cam.z+cw/2, sy=(top.y-cam.y)*cam.z+ch/2+Math.sin(tt*2.2+b.x)*2.5;
+      if(sx<-30||sy<-30||sx>cw+30||sy>ch+30) continue;
+      const f=Math.min(1,t.till/Math.max(1,t.cap)), full=f>=1, [c1,c2,rim]=full?['#FFE680','#E2A71E','#9A6A0E']:f>=0.5?['#F4F6F8','#AEB5BD','#6E757C']:['#F0B27A','#B8743A','#7A4A20'];
+      if(full){ const gl=ctx.createRadialGradient(sx,sy,R0*0.6,sx,sy,R0*2.4); gl.addColorStop(0,`rgba(255,215,90,${0.45+0.2*Math.sin(tt*4)})`); gl.addColorStop(1,'rgba(255,215,90,0)'); ctx.fillStyle=gl; ctx.fillRect(sx-R0*2.5,sy-R0*2.5,R0*5,R0*5); }
+      ctx.fillStyle='rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(sx+1.5,sy+R0+3,R0*0.8,R0*0.28,0,0,7); ctx.fill(); // a little shadow
+      const g=ctx.createLinearGradient(sx-R0,sy-R0,sx+R0,sy+R0); g.addColorStop(0,c1); g.addColorStop(1,c2); ctx.fillStyle=g; ctx.strokeStyle=rim; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(sx,sy,R0,0,7); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.arc(sx,sy,R0*0.7,0,7); ctx.stroke();
+      ctx.fillStyle=rim; ctx.font=`900 ${Math.round(R0*1.05)}px system-ui,sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('¢',sx,sy+0.5);
+      if(cam.z>=0.8){ const lab=t.till>=1000?(t.till/1000).toFixed(t.till>=10000?0:1)+'k':String(t.till); ctx.font='800 10px system-ui,sans-serif'; ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.92)'; ctx.strokeText(lab,sx,sy+R0+9); ctx.fillStyle='#2B2621'; ctx.fillText(lab,sx,sy+R0+9); }
+      this.hits.push({id,x:sx,y:sy,r:R0+8,col:[c1,c2,rim]}); }
+    ctx.restore(); worldT(); },
+  tap(sx,sy){ let best=null, bd=1e9; for(const h of this.hits){ const d=Math.hypot(h.x-sx,h.y-sy); if(d<h.r&&d<bd){ bd=d; best=h; } } if(!best) return false; this.collect(best); return true; },
+  // the coin spins where it is, then flies up to your coins; the server pays it as it flies
+  async collect(h){ const t=this.map.get(h.id); if(!t) return; this.flying.add(h.id); sfxCoin();
+    const coin=el('div',{class:'coinfly',style:`left:${h.x}px;top:${h.y}px;--c1:${h.col[0]};--c2:${h.col[1]};--rim:${h.col[2]}`,text:'¢'}); document.body.append(coin);
+    const target=$('coinChip'), tr=target&&!target.hidden?target.querySelector('.coin').getBoundingClientRect():{left:cw/2,top:20,width:0,height:0};
+    let r=null; const pay=api('/api/me/collect',{method:'POST',body:{buildingId:h.id}}).then(x=>{ r=x; }).catch(e=>toast(e.message));
+    await new Promise(z=>setTimeout(z,450)); coin.classList.add('go'); coin.style.left=(tr.left+tr.width/2)+'px'; coin.style.top=(tr.top+tr.height/2)+'px';
+    await new Promise(z=>setTimeout(z,650)); await pay; coin.remove(); this.flying.delete(h.id);
+    if(r&&r.got){ t.till=0; const from=myMoney&&typeof myMoney.coins==='number'?myMoney.coins:r.coins-r.got; countUp(from,r.coins); if(target&&target.animate) target.animate([{transform:'scale(1)'},{transform:'scale(1.14)'},{transform:'scale(1)'}],{duration:380,easing:'ease-out'}); } },
+  async collectAll(){ try{ const r=await api('/api/me/collect',{method:'POST',body:{}}); if(r.got){ for(const t of this.map.values()) t.till=0; const from=myMoney&&typeof myMoney.coins==='number'?myMoney.coins:r.coins-r.got; countUp(from,r.coins); toast(`Collected ${fmt(r.got)} coins from your buildings.`); } else toast('Nothing to collect yet.'); }catch(e){ toast(e.message); } },
+  total(){ let n=0; for(const t of this.map.values()) n+=t.till; return n; } };
+// your coins in the top bar counting up to the new total
+function countUp(from,to){ const v=$('coinVal'), t0=performance.now(), d=700; myMoney={...(myMoney||{}),coins:to};
+  const f=now=>{ const u=Math.min(1,(now-t0)/d), e=1-Math.pow(1-u,3); if(v) v.textContent=fmt(from+(to-from)*e); if(u<1) requestAnimationFrame(f); else refreshHUD(); }; requestAnimationFrame(f); }
+function sfxCoin(){ try{ if(typeof Music!=='undefined'&&Music.ping) Music.ping(); }catch(e){} try{ navigator.vibrate&&navigator.vibrate(12); }catch(e){} }
 // Someone you're watching, following or looking at who is asleep indoors: a drift of Z's rises from their home's roof.
 function drawSleepZ(gm){ const id=follow||(sel&&sel.kind==='c'&&sel.id)||Watch.id; if(!id) return; const c=S.citizens.get(id), st=c&&citizenAt(c,gm);
   if(!st||st.visible||!st.act||!st.act.startsWith('Sleeping')||!st.bid) return; const b=D.buildings.get(st.bid); if(!b) return; const t=T(b), [w,d]=t.size;
@@ -3755,6 +3796,7 @@ function drawLitWindows(){ const W=Math.round(cw*dpr), H=Math.round(ch*dpr);
   function paint(list,col){ if(!list.length) return; g.fillStyle=col; g.beginPath(); let k=0; for(const q of list){ g.moveTo(q[0].x,q[0].y); for(let i=1;i<q.length;i++) g.lineTo(q[i].x,q[i].y); if(++k%64===0){ g.fill(); g.beginPath(); } } g.fill(); list.length=0; }
   ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(winLayer,0,0); ctx.restore(); }
 function tap(sx,sy){
+  if(tool.kind==='pan'&&Tills.tap(sx,sy)) return; // a coin over one of your buildings: collect it
   const [x,y]=tileAt(sx,sy);
   if(tool.kind==='place'){ placeBuilding(tool.type,x,y); return; }
   if(tool.kind==='move'){ moveBuilding(tool.id,x,y); return; }
@@ -6502,6 +6544,8 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(!Store.canWrite&&Me&&Me.token) card.append(el('div',{class:'row-actions'}, Loc.btn(b.name||t.name, b.x, b.y)));
     Plots.buildingBits(card,b,t);
     if(t.hangar && b.done!==false && !b.ruin) card.append(hangarSection(b,t));
+    if(b.owner&&isMe(b.owner)&&!Store.canWrite){ const tl=Tills.map.get(b.id); if(tl){ const f=Math.min(1,tl.till/Math.max(1,tl.cap)), btn=el('button',{class:'btn primary sm',text:`Collect ${fmt(tl.till)}`,disabled:tl.till<1?'':null,onclick:e=>{ const r=e.currentTarget.getBoundingClientRect(); Tills.collect({id:b.id,x:r.left+r.width/2,y:r.top+r.height/2,col:f>=1?['#FFE680','#E2A71E','#9A6A0E']:f>=0.5?['#F4F6F8','#AEB5BD','#6E757C']:['#F0B27A','#B8743A','#7A4A20']}).then(()=>renderCard(true)); }});
+      card.append(el('div',{class:'row-actions'}, el('span',{class:'hint',text:`💰 ${fmt(tl.till)} of ${fmt(tl.cap)} earned${f>=1?' (full: collect it to keep earning)':''} · makes ${fmt(tl.day)} a game day`}), btn)); } }
     if(kindOf(b.type)==='colosseum' && b.done!==false && !b.ruin) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🥊 Fight Night',onclick:()=>{ Fight.view='fight'; openTab('races'); loadFight(); }})));
     if(t.home && !Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin) card.append(rentBox(b,t));
     if(t.work && !Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin) card.append(workBox(b,t));
@@ -7267,7 +7311,7 @@ function refreshHUD(){
     // Money is private: the developer sees the colony treasury; a verified colonist sees only their own coins; everyone else sees none.
     const cc=$('coinChip');
     if(Store.canWrite){ cc.hidden=false; cc.title='Colony treasury (tap to add coins)'; $('coinVal').textContent=fmt(treasury()); $('coinRate').textContent=`+${fmt(S.meta.income||0)}/day`; }
-    else if(Me&&Me.token&&myMoney){ cc.hidden=false; cc.title='Your coins'; $('coinVal').textContent=fmt(myMoney.coins); $('coinRate').textContent=myMoney.net>0?`+${fmt(myMoney.net)}/day`:myMoney.net<0?`${fmt(myMoney.net)}/day`:'no job yet'; }
+    else if(Me&&Me.token&&myMoney){ cc.hidden=false; cc.title='Your coins'; $('coinVal').textContent=fmt(myMoney.coins); const pd=typeof Tills!=='undefined'?[...Tills.map.values()].reduce((n,t)=>n+(t.day||0),0):0, rate=(myMoney.net||0)+pd; $('coinRate').textContent=rate>0?`+${fmt(rate)}/day`:rate<0?`${fmt(rate)}/day`:'no job yet'; } // wages plus what your buildings make
     else cc.hidden=true;
     $('chips').hidden=false; }
   const mb=$('musicBtn'), on=Music.on||!!Radio.st; mb.setAttribute('aria-pressed',String(on)); $('musicIcon').textContent='📻'; $('musicLabel').textContent=Radio.st?STATIONS[Radio.st].name:Music.on?'Ambient':'Radio';

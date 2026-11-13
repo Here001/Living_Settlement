@@ -865,7 +865,12 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     const t0 = await money(), pd = await call('POST', '/api/admin/test/payday', {});
     if (pd.status === 404) console.log('  (payday route only on test servers; start the server with ALLOW_TEST_ROUTES=1 to check paydays)');
     else { const t1 = await money();
-      const inc = props.list[0].income; ok(pd.status === 200 && t1.wallet - t0.wallet === inc - R0.wealthTaxPerGameDay(t0.wallet + inc + t0.bank + 10) && t1.bank - t0.bank === 10, `payday: ${inc} rent to the owner (none from herself: she lives there rent-free), interest on savings, and a little wealth tax (she has over 250,000)`, JSON.stringify({ t0, t1, inc, pd: pd.json })); }
+      const inc = props.list[0].income, till = Number((await pool.query('select till from buildings where id = $1', [spare])).rows[0].till);
+      ok(pd.status === 200 && inc > 0 && till > 0 && till <= inc && t1.wallet - t0.wallet === -R0.wealthTaxPerGameDay(t0.wallet + t0.bank + 10) && t1.bank - t0.bank === 10, `payday: the house earns ${till} into its till (it makes ${inc} a game day whoever lives there), interest on savings, and a little wealth tax (she has over 250,000)`, JSON.stringify({ t0, t1, inc, till, pd: pd.json }));
+      const tl = (await call('GET', '/api/me/tills', undefined, P)).json.tills.find(x => x.id === spare); ok(tl && tl.till === Math.floor(till) && tl.cap === inc * 48, 'the owner sees what each building has earned and how much its till holds (a real day)', JSON.stringify(tl));
+      const w1 = (await money()).wallet, cl = await call('POST', '/api/me/collect', { buildingId: spare }, P), w2 = (await money()).wallet;
+      ok(cl.status === 200 && cl.json.got === Math.floor(till) && w2 - w1 === cl.json.got && !Number((await pool.query('select till from buildings where id = $1', [spare])).rows[0].till), 'tapping the coin collects it into her cash and empties the till', JSON.stringify({ cl: cl.json, w1, w2 }));
+      ok((await call('GET', '/api/me/tills', undefined, { auth: false })).status === 401, "the tills are only shown to their owner (signed in)"); }
     const shop = await build('stall', 965, 900), shopBuy = await call('POST', '/api/me/properties/buy', { buildingId: shop }, P);
     const before = (await money()).wallet; await call('DELETE', `/api/admin/buildings/${shop}`);
     { const after = (await money()).wallet; ok(after === before + 5000, 'if the developer knocks it down, the owner gets their money back', JSON.stringify({ before, after, buy: shopBuy.json })); }

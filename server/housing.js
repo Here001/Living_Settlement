@@ -140,6 +140,7 @@ export class Housing {
       const on = (await ch.q('select * from buildings where plot_id = any($1) for update', [ids])).rows;
       if (on.some(b => !b.done || Number(b.up_at))) throw new HttpError(409, 'Wait until the builders have finished.');
       const stuck = await this.world.economy.rehomePlanes(ch, c, on.map(b => b.id)); if (stuck) throw new HttpError(409, stuck);
+      await this.world.economy.emptyTills(ch, c, on.map(b => b.id)); // what it all had earned is yours first
       const back = Math.floor((Number(p.price) + on.reduce((s, b) => s + Number(b.price || 0), 0)) * PROPERTY_RESALE);
       ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'land:sell', back, c.id); ch.touch(c); await ch.saveCitizen(c);
       for (const b of on) await ch.ownerChanged(b.id, p.owner_id, null); // the seller pays rent again if they live there
@@ -257,6 +258,7 @@ export class Housing {
       const b = (await ch.q('select * from buildings where id = $1 and owner_id = $2 for update', [String(buildingId), c.id])).rows[0];
       if (!b || !b.plot_id) throw new HttpError(404, "That isn't a building on your land.");
       const stuck = await this.world.economy.rehomePlanes(ch, c, [b.id]); if (stuck) throw new HttpError(409, stuck);
+      if (await this.world.economy.emptyTills(ch, c, [b.id])) await ch.saveCitizen(c); // what it had earned is yours first
       const back = Math.floor(Number(b.price || 0) * DEMOLISH_BACK);
       await this.world.demolishIn(ch, { ...b, owner_id: null }); // (no owner, so demolishing doesn't refund the full price)
       if (back) { ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'property:refund', back, c.id); ch.touch(c); await ch.saveCitizen(c); }
@@ -452,6 +454,7 @@ export class Housing {
     else { const b = (await ch.q('select done, up_at from buildings where id = $1', [t.id])).rows[0]; if (!b?.done || Number(b.up_at)) throw new HttpError(409, 'Wait until the builders have finished on it.'); }
     const lost = o.kind === 'plot' ? (await ch.q('select id from buildings where plot_id = any($1)', [eIds])).rows.map(b => b.id) : [t.id];
     const stuck = await this.world.economy.rehomePlanes(ch, seller, lost); if (stuck) return fail(`@${seller.handle}'s planes: ${stuck}`);
+    if (await this.world.economy.emptyTills(ch, seller, lost)) await ch.saveCitizen(seller); // the seller keeps what it had already earned
     const n = await ownedCount(q, buyer.id), max = R.propertyLimit(buyer.stars);
     if (n >= max) return fail(`@${buyer.handle} already owns ${n} properties, their limit at ${buyer.stars || 0} stars.`);
     ch.coins(buyer); const cash = Math.max(0, buyer.coins_base), bank = Number(buyer.bank || 0);

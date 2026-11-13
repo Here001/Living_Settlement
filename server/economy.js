@@ -34,12 +34,9 @@ export async function ownedCount(q, id) { return Number((await q('select (select
 export async function limitOf(q, id) { return R.propertyLimit((await q('select stars from citizens where id = $1', [id])).rows[0]?.stars || 0); } // see shared/rules.js: about a real month to pay for itself
 // A building's daily income for its owner, after the treasury's cut.
 // `self` is 1 when the owner lives there: they pay no rent, so there's none to collect from them.
-export function dailyIncome(b, self = 0) {
-  const t = BUILDING_TYPES[b.type] || {}; let gross = 0;
-  if (t.home) gross += Math.max(0, (b.home_used || 0) - self) * (t.home.rent || 0);
-  if (t.work) gross += (b.job_used || 0) * (t.work.salary || 0) * BUSINESS_SHARE;
-  gross *= R.levelPay(b.level); // upgraded buildings earn more on each tenant or worker
-  return { gross: Math.floor(gross), net: Math.floor(gross * (1 - TREASURY_CUT)) };
+// Every owned home and business earns what it would full (R.ownerYield): the dearer it is, the more it makes.
+export function dailyIncome(b, self = 0) { void self;
+  const net = R.ownerYield(b.type, b.level || b.lv || 1); return { gross: Math.floor(net / (1 - TREASURY_CUT)), net };
 }
 
 export class Economy {
@@ -347,6 +344,7 @@ export class Economy {
       const b = (await ch.q('select * from buildings where id = $1 and owner_id = $2 for update', [String(buildingId), c.id])).rows[0];
       if (!b) throw new HttpError(404, "You don't own that building.");
       if (b.plot_id) throw new HttpError(409, "It stands on your land: sell the whole plot from its card, or knock it down.");
+      await this.emptyTills(ch, c, [b.id]);
       const back = Math.floor((b.price || priceOf(b.type, b.level)) * PROPERTY_RESALE); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'property:sell', back, c.id); ch.touch(c); await ch.saveCitizen(c);
       await ch.ownerChanged(b.id, c.id, null);
       await ch.q('update buildings set owner_id = null, owner_handle = null, bought_at = null, price = null where id = $1', [b.id]); ch.buildings.add(b.id);
@@ -359,6 +357,29 @@ export class Economy {
     const c = (await ch.q('select * from citizens where id = $1 for update', [b.owner_id])).rows[0]; if (!c) return;
     const back = b.price || priceOf(b.type); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'property:refund', back, c.id); ch.touch(c); await ch.saveCitizen(c);
   }
+
+  // ---------- tills: what each owned building has earned, waiting to be collected ----------
+  async tills(id) {
+    const rows = (await pool.query('select id, type, level, till from buildings where owner_id = $1 and done and not ruin', [id])).rows;
+    return { tills: rows.map(b => ({ id: b.id, till: Math.floor(Number(b.till)), cap: R.tillCap(b.type, b.level || 1), day: R.ownerYield(b.type, b.level || 1) })).filter(t => t.day > 0) };
+  }
+  // The owner taps the coin over a building (or "collect all"): its till goes into their cash.
+  async collect(id, buildingId = null) {
+    return this.world.change(async ch => {
+      const c = await this.lockMe(ch, id);
+      const rows = (await ch.q(`select id, till from buildings where owner_id = $1 and till > 0 ${buildingId ? 'and id = $2' : ''} for update`, buildingId ? [c.id, String(buildingId)] : [c.id])).rows;
+      const got = Math.floor(rows.reduce((s, b) => s + Number(b.till), 0));
+      if (!got) return { ok: true, got: 0, coins: (ch.coins(c), c.coins_base) };
+      await ch.q('update buildings set till = 0 where id = any($1)', [rows.map(b => b.id)]);
+      ch.coins(c); c.coins_base += got; ch.touch(c); await ch.saveCitizen(c); track(ch, 'property:income', got, c.id);
+      return { ok: true, got, coins: c.coins_base, ids: rows.map(b => b.id) };
+    });
+  }
+  // Before a building leaves its owner (sold, knocked down, sold on): whatever is in its till is paid to them.
+  async emptyTills(ch, c, ids) { if (!ids || !ids.length) return 0;
+    const rows = (await ch.q('select id, till from buildings where id = any($1) and owner_id = $2 and till > 0 for update', [ids, c.id])).rows, got = Math.floor(rows.reduce((s, b) => s + Number(b.till), 0));
+    if (!got) return 0; await ch.q('update buildings set till = 0 where id = any($1)', [rows.map(b => b.id)]);
+    ch.coins(c); c.coins_base += got; ch.touch(c); track(ch, 'property:income', got, c.id); return got; }
 
   // ---------- bills: cars every game week, property twice a game year ----------
   // Every 7 game days: each car's upkeep. Every 26 game weeks (twice a game year): property upkeep, 0.1% of the price of
@@ -422,13 +443,16 @@ export class Economy {
         join buildings j on j.id = c.job_id where c.pass_hash is not null for update of c`)).rows) {
       const want = R.netOf(R.capacities(c.jtype).salary, 0); if (Number(c.net) === want) continue;
       delete c.jtype; delete c.htype; ch.coins(c); ch.income(Number(c.net) - want); c.net = want; await ch.saveCitizen(c); }
-    const selfIn = new Set((await ch.q('select c.home_id from citizens c join buildings b on b.id = c.home_id and b.owner_id = c.id')).rows.map(r => r.home_id));
-    for (const b of own) { const inc = dailyIncome(b, selfIn.has(b.id) ? 1 : 0).net * days; if (inc > 0) byOwner.set(b.owner_id, (byOwner.get(b.owner_id) || 0) + inc); }
-    // Rents and profits come out of the treasury: if it can't cover them all, every owner gets the same share (never new coins).
-    { const all = [...byOwner.values()].reduce((a, b) => a + b, 0), have = Math.max(0, Math.floor(R.treasuryOn(ch.meta, ch.today)));
-      if (all > have) { const k = have / all; for (const [id, v] of byOwner) { const v2 = Math.floor(v * k); if (v2 > 0) byOwner.set(id, v2); else byOwner.delete(id); } } }
-    // Interest is paid only from what the treasury holds after rents and profits; if it can't cover everyone, everyone gets the same share.
-    const kitty = Math.max(0, R.treasuryOn(ch.meta, ch.today) - [...byOwner.values()].reduce((a, b) => a + b, 0));
+    // Every owned home and business earns into its till (up to a real day's worth), paid from the treasury: what it would
+    // earn full, scaled by the stabiliser; if the treasury can't cover them all, every till gets the same share (never new coins).
+    const ef = R.econF(ch.meta), adds = [];
+    for (const b of own) { const cap = R.tillCap(b.type, b.level || 1), room = Math.max(0, cap - Number(b.till || 0)), add = Math.min(room, Math.floor(R.ownerYield(b.type, b.level || 1) * days * ef)); if (add > 0) adds.push([b.id, add, b.owner_id]); }
+    { const all = adds.reduce((a, x) => a + x[1], 0), have = Math.max(0, Math.floor(R.treasuryOn(ch.meta, ch.today)));
+      if (all > have) { const k = have / all; for (const x of adds) x[1] = Math.floor(x[1] * k); } }
+    const tilled = adds.filter(x => x[1] > 0), tillSum = tilled.reduce((a, x) => a + x[1], 0);
+    if (tilled.length) { await ch.q('update buildings b set till = b.till + u.add from unnest($1::text[], $2::numeric[]) u(id, add) where b.id = u.id', [tilled.map(x => x[0]), tilled.map(x => x[1])]); treasuryAdd(ch, -tillSum); rent = tillSum; owners = new Set(tilled.map(x => x[2])).size; }
+    // Interest is paid only from what the treasury holds after that; if it can't cover everyone, everyone gets the same share.
+    const kitty = Math.max(0, R.treasuryOn(ch.meta, ch.today));
     const want = Number((await ch.q('select coalesce(sum(least($1::numeric, floor(bank * $2::numeric))), 0) w from citizens where bank > 0', [BANK_CAP, BANK_RATE])).rows[0].w) * days * im;
     const share = want > 0 ? Math.min(1, kitty / want) : 0;
     const savers = share > 0 ? (await ch.q('select id from citizens where bank > 0')).rows.map(r => r.id) : [];
@@ -441,12 +465,12 @@ export class Economy {
         const inc = byOwner.get(c.id) || 0, intr = Math.floor(Math.min(BANK_CAP, Math.floor(Number(c.bank || 0) * BANK_RATE)) * days * share * im);
         if (!inc && !intr) continue;
         ch.coins(c); c.coins_base += inc; up.id.push(c.id); up.base.push(c.coins_base); up.add.push(intr);
-        rent += inc; interest += intr; if (inc) { owners++; track(ch, 'property:income', inc, c.id); } if (intr) track(ch, 'bank:interest', intr, c.id);
+        interest += intr; if (intr) track(ch, 'bank:interest', intr, c.id);
       }
       if (up.id.length) await ch.q(`update citizens c set coins_base = u.base, coins_day = $4, bank = c.bank + u.add
         from unnest($1::text[], $2::numeric[], $3::numeric[]) u(id, base, add) where c.id = u.id`, [up.id, up.base, up.add, ch.today]);
     }
-    if (rent || interest) treasuryAdd(ch, -(rent + interest));
+    if (interest) treasuryAdd(ch, -interest);
     // Wealth tax: a small slice of cash plus savings above 250,000 goes back to the treasury (0.5% a real day).
     { let wt = 0; for (const c of (await ch.q(`select * from citizens where pass_hash is not null and coins_base + bank + greatest(0, net) * greatest(0, $1 - coins_day) > $2 for update`, [ch.today, R.WEALTH_FREE])).rows) {
         ch.coins(c); const tax = R.wealthTaxPerGameDay(c.coins_base + Number(c.bank || 0)) * days; if (tax <= 0) continue;
@@ -458,7 +482,7 @@ export class Economy {
     // The mayor's salary, in cash, while the treasury can pay it.
     if (mayor) { const pay = Math.min(MAYOR_PAY * days, Math.floor(R.treasuryOn(ch.meta, ch.today))); const m = pay > 0 && (await ch.q('select * from citizens where id = $1 for update', [mayor.id])).rows[0];
       if (m) { ch.coins(m); m.coins_base += pay; treasuryAdd(ch, -pay); track(ch, 'mayor:pay', pay, m.id); ch.touch(m); await ch.saveCitizen(m); } }
-    if (rent) await ch.event(`🏠 ${owners} building owner${owners === 1 ? '' : 's'} collected ${fmt(rent)} coins in rent and profits (the treasury kept its ${Math.round(TREASURY_CUT * 100)}%).`, 'property');
+    void owners; // (owners collect from their buildings' coins themselves; no headline every game day)
     await econTick(ch).catch(e => console.error('econ:', e.message)); // the stabiliser, once a real hour
     await snapshot(ch.db, ch.meta); // developer stats: how many coins exist, saved through each real day
     return { rent, interest };

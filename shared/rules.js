@@ -210,6 +210,12 @@ export function fullIncome(type) { // what a full building earns its owner each 
   if (t.work) g += (t.work.slots || 0) * (t.work.salary || 0) * BUSINESS_SHARE;
   return g * (1 - TREASURY_CUT); }
 export const propertyPrice = type => nicePrice(Math.max(PROPERTY_MIN, fullIncome(type) * PAYBACK_GAME_DAYS));
+// What an owned home, shop, office or industry earns its owner each game day: what it would earn full, so the dearer the
+// building the more it makes (it still pays for itself in about a real month), raised by its level. It builds up in the
+// building's till, which holds TILL_DAYS game days (one real day), and the owner taps the coin over it to collect.
+export const TILL_DAYS = 48;
+export const ownerYield = (type, level = 1) => Math.floor(fullIncome(type) * levelPay(level));
+export const tillCap = (type, level = 1) => ownerYield(type, level) * TILL_DAYS;
 // Bills. Each car's upkeep (in CAR_MODELS) every game week (7 game days, so about 7 game weeks a real day). Property
 // (buildings and land) twice a game year: a game year is 52 game weeks, so every 26 game weeks (about 3.8 real days),
 // 0.1% of the price for each of those weeks, 2.6% a bill: the same as weekly, in two bigger bills a year.

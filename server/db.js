@@ -323,6 +323,8 @@ const MIGRATIONS = [
   `create table if not exists usage_daily (subject text not null, day text not null, kind text not null, n int not null default 0, primary key (subject, day, kind));`,
   // v64: estates: plots side by side with the same owner are one property (estate = the first plot's id; null = on its own)
   `alter table plots add column if not exists estate text; create index if not exists plots_estate on plots (estate);`,
+  // v65: each owned building's till: what it has earned that its owner hasn't collected yet
+  `alter table buildings add column if not exists till numeric not null default 0;`,
 ];
 
 export async function migrate() {

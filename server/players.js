@@ -267,6 +267,8 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/me/bank', limit, send(async req => world.economy.bankInfo((await me(req)).id)));
   r.post('/me/bank/deposit', limit, send(async req => world.economy.bank((await me(req)).id, 'deposit', (req.body || {}).amount, (req.body || {}).buildingId)));
   r.post('/me/bank/withdraw', limit, send(async req => world.economy.bank((await me(req)).id, 'withdraw', (req.body || {}).amount, (req.body || {}).buildingId)));
+  r.get('/me/tills', limit, send(async req => world.economy.tills((await me(req)).id)));
+  r.post('/me/collect', limit, send(async req => world.economy.collect((await me(req)).id, (req.body || {}).buildingId || null)));
   r.post('/me/cars', limit, send(async req => { const b = req.body || {}; return world.economy.buyCar((await me(req)).id, String(b.model || ''), String(b.color || ''), b.buildingId); }));
   r.delete('/me/cars/:id', limit, send(async req => world.economy.sellCar((await me(req)).id, req.params.id)));
   r.put('/me/cars/active', limit, send(async req => world.economy.driveCar((await me(req)).id, String((req.body || {}).id || ''))));

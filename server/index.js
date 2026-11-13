@@ -170,6 +170,8 @@ if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/payday', ad
 app.get('/api/lottery', limit, send(async req => lottery.info((await playerFrom(req))?.id)));
 app.post('/api/admin/lottery', admin, send(req => lottery.start(req.body || {})));
 app.get('/api/places', limit, send(() => world.directory()));
+// The in-game browser asks whether a business's website can be shown inside the game (see server/web.js).
+app.get('/api/web/check', limit, send(async req => { const { checkSite } = await import('./web.js'); const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim(); return checkSite(String(req.query.url || ''), `${proto}://${req.get('host')}`); }));
 app.get('/api/auctions', limit, send(() => auctions.list()));
 app.get('/api/auctions/:id', limit, send(async req => auctions.info((await playerFrom(req))?.id, req.params.id)));
 app.post('/api/admin/auctions', admin, send(req => auctions.start(req.body || {})));

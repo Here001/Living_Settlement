@@ -1728,6 +1728,13 @@ r = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x
     ok((await call('POST', `/api/me/buildings/${home.id}/website`, { url: 'x.example.com' }, Wp.P)).status === 409, 'homes have no website: only businesses and industries'); await pool.query('update buildings set owner_id = null, owner_handle = null where id = $1', [home.id]); }
   const rm = await call('DELETE', `/api/admin/buildings/${bid}/website`); ok(rm.status === 200 && !(await pool.query('select website from buildings where id = $1', [bid])).rows[0].website, 'the developer can take a link down');
   await call('DELETE', `/api/admin/buildings/${bid}`); }
+// the in-game browser's check: private and local addresses are never fetched; sites that forbid frames open in a new tab
+{ const W = await import('../server/web.js'), H = h => new Headers(h), o = 'https://playresurgence.com';
+  ok(W.frameAllowed(H({}), o) && !W.frameAllowed(H({ 'x-frame-options': 'DENY' }), o) && !W.frameAllowed(H({ 'x-frame-options': 'SAMEORIGIN' }), o) && !W.frameAllowed(H({ 'content-security-policy': "frame-ancestors 'self'" }), o) && W.frameAllowed(H({ 'content-security-policy': 'frame-ancestors *' }), o) && W.frameAllowed(H({ 'content-security-policy': 'frame-ancestors https://playresurgence.com' }), o),
+    'the game reads whether a site lets other apps show it (X-Frame-Options, frame-ancestors)');
+  const priv = await Promise.all(['https://127.0.0.1/', 'https://169.254.169.254/latest', 'https://10.0.0.5/', 'localhost.localhost'].map(u => call('GET', '/api/web/check?url=' + encodeURIComponent(u), undefined, { auth: false })));
+  ok(priv.every(r => r.status === 200 && r.json.ok === false && r.json.frame === false), "the server never fetches private or local addresses for the browser", JSON.stringify(priv.map(r => r.json)));
+  const bad = (await call('GET', '/api/web/check?url=' + encodeURIComponent('javascript:alert(1)'), undefined, { auth: false })).json; ok(bad.ok === false && !bad.frame, "and won't check anything that isn't a web address"); }
 // the builder's Accounts: balances and each player's money history
 { const ac = (await call('GET', '/api/admin/accounts?q=landlady')).json, me = ac.players?.find(p => p.h === 'landlady');
   ok(me && me.total === me.cash + me.bank && ac.count >= 1, 'the builder sees a player\'s cash and savings', JSON.stringify(ac).slice(0, 200));

@@ -886,10 +886,10 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .lgchip.on{border-color:#E4572E;box-shadow:0 0 0 2px rgba(228,87,46,.25)}.lgchip .lgname{flex:1;font-size:13px;font-weight:600;line-height:1.15}.lgchip b{font-size:12px;opacity:.7}
 .lgic{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:16px;background:#1b1d22;box-shadow:0 0 0 2px var(--c),0 0 10px var(--c)}
 .plist .joblist li{align-items:center}
-.coinfly{position:fixed;z-index:9500;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;display:grid;place-items:center;font:900 17px system-ui,sans-serif;color:var(--rim);background:linear-gradient(135deg,var(--c1),var(--c2));border:2px solid var(--rim);box-shadow:0 0 10px 3px var(--c1),0 0 24px 8px rgba(255,215,90,.55);pointer-events:none;animation:coinspin .45s linear 1}
-.coinfly.go{transition:left .65s cubic-bezier(.5,-.3,.7,1),top .65s cubic-bezier(.5,-.3,.7,1),transform .65s ease-in,opacity .65s ease-in;transform:scale(.55);opacity:.85;animation:coinspin .3s linear infinite}
+.coinfly{position:fixed;z-index:9500;width:44px;height:48px;margin:-24px 0 0 -22px;pointer-events:none;perspective:200px;filter:drop-shadow(0 0 6px rgba(var(--neon),1)) drop-shadow(0 0 16px rgba(var(--neon),.85))}
+.coinfly .coinface{width:100%;height:100%;background:center/contain no-repeat;animation:coinspin .32s linear infinite}
 @keyframes coinspin{0%{transform:rotateY(0)}100%{transform:rotateY(360deg)}}
-@media (prefers-reduced-motion:reduce){.coinfly,.coinfly.go{animation:none}}
+@media (prefers-reduced-motion:reduce){.coinfly .coinface{animation:none}}
 .bsearch{width:100%;margin:2px 0 6px}.bfit{display:flex;gap:6px;align-items:center;font-size:13px;margin:0 0 6px;color:var(--ink2,#5a5048)}.bgroups{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.bgroups .pill{flex:0 0 auto}
 .hkhead{position:relative;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px 8px 24px;background:#1b1d20;border:2px solid #2B2621;border-radius:10px;color:#F2C94C;font:800 11px ui-monospace,monospace;letter-spacing:.06em;overflow:hidden}
 .hkhead::before{content:'';position:absolute;left:0;top:0;bottom:0;width:14px;background:repeating-linear-gradient(-45deg,#F2C94C 0 6px,#2B2621 6px 12px)}
@@ -3731,47 +3731,72 @@ async function removeBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
 // out (with its exact outline) the windows behind it, then adds its own. Some rooms are dark too, so every block
 // gets its own rhythm of light rather than one solid glow.
 let winLayer=null, winKey='';
+// A coin, drawn once per colour and size into a small picture: a thick rolled edge, a ridged rim, a ring of beads, a
+// raised star, and a bright shine. Bronze while the till fills, silver past half, gold when full.
+const COIN_TIER={ bronze:{ f:['#FFE0BC','#E8975A','#9C4F1E'], rim:['#F3B27A','#7A3A12'], edge:'#5E2A0B', star:['#FFF1DF','#B5642C'], neon:'255,130,40' },
+  silver:{ f:['#FFFFFF','#D3DCE6','#7D8A99'], rim:['#F4F8FC','#5E6B79'], edge:'#3B4652', star:['#FFFFFF','#8592A1'], neon:'70,220,255' },
+  gold:{ f:['#FFF9D6','#FFD24A','#C08A0E'], rim:['#FFEB9C','#8A5A00'], edge:'#5E3C00', star:['#FFFDF0','#C98F0A'], neon:'255,214,40' } };
+const coinCache=new Map();
+function coinSprite(tier,R){ const key=tier+'|'+R; let c=coinCache.get(key); if(c) return c; const C=COIN_TIER[tier], th=Math.max(2,R*0.2), W=Math.ceil(R*2+4), H=Math.ceil(R*2+th+4);
+  c=document.createElement('canvas'); c.width=W*2; c.height=H*2; const g=c.getContext('2d'); g.scale(2,2); const x=W/2, y=R+2;
+  // the edge: the coin's thickness, with fine ridges
+  g.fillStyle=C.edge; g.beginPath(); g.arc(x,y+th,R,0,Math.PI); g.lineTo(x-R,y); g.arc(x,y,R,Math.PI,0,true); g.closePath(); g.fill();
+  g.strokeStyle='rgba(255,255,255,.18)'; g.lineWidth=0.8; for(let i=1;i<18;i++){ const a=Math.PI*i/18, ex=x-Math.cos(a)*R; g.beginPath(); g.moveTo(ex,y+Math.sin(a)*R*0.05); g.lineTo(ex,y+th+Math.sin(a)*R*0.05); g.stroke(); }
+  // the face: rim, field, beads, star, shine
+  const rg=g.createLinearGradient(x-R,y-R,x+R,y+R); rg.addColorStop(0,C.rim[0]); rg.addColorStop(1,C.rim[1]); g.fillStyle=rg; g.beginPath(); g.arc(x,y,R,0,7); g.fill();
+  g.strokeStyle='rgba(0,0,0,.25)'; g.lineWidth=0.6; for(let i=0;i<48;i++){ const a=i/48*Math.PI*2; g.beginPath(); g.moveTo(x+Math.cos(a)*R*0.86,y+Math.sin(a)*R*0.86); g.lineTo(x+Math.cos(a)*R*0.98,y+Math.sin(a)*R*0.98); g.stroke(); } // reeding
+  const fg=g.createRadialGradient(x-R*0.35,y-R*0.4,R*0.05,x,y,R*0.82); fg.addColorStop(0,C.f[0]); fg.addColorStop(0.55,C.f[1]); fg.addColorStop(1,C.f[2]); g.fillStyle=fg; g.beginPath(); g.arc(x,y,R*0.8,0,7); g.fill();
+  g.strokeStyle='rgba(0,0,0,.28)'; g.lineWidth=1; g.beginPath(); g.arc(x,y,R*0.8,0,7); g.stroke(); g.strokeStyle='rgba(255,255,255,.55)'; g.beginPath(); g.arc(x,y,R*0.8,Math.PI*1.05,Math.PI*1.75); g.stroke();
+  g.fillStyle=C.star[1]; for(let i=0;i<20;i++){ const a=i/20*Math.PI*2; g.beginPath(); g.arc(x+Math.cos(a)*R*0.68,y+Math.sin(a)*R*0.68,Math.max(0.5,R*0.035),0,7); g.fill(); } // beads
+  const star=(cx,cy,r)=>{ g.beginPath(); for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*0.45:r; g.lineTo(cx+Math.cos(a)*rr,cy+Math.sin(a)*rr); } g.closePath(); };
+  g.fillStyle='rgba(0,0,0,.35)'; star(x+0.8,y+1,R*0.46); g.fill(); // its shadow: it's raised
+  const sg=g.createLinearGradient(x-R*0.4,y-R*0.45,x+R*0.4,y+R*0.4); sg.addColorStop(0,C.star[0]); sg.addColorStop(1,C.star[1]); g.fillStyle=sg; star(x,y,R*0.46); g.fill();
+  const sh=g.createLinearGradient(x-R,y-R,x,y); sh.addColorStop(0,'rgba(255,255,255,.75)'); sh.addColorStop(1,'rgba(255,255,255,0)'); g.fillStyle=sh; g.beginPath(); g.ellipse(x-R*0.3,y-R*0.42,R*0.55,R*0.26,-0.6,0,7); g.fill(); // the shine
+  c.R=R; c.W=W; c.H=H; c.cy=y; coinCache.set(key,c); return c; }
+const coinTier = f => f>=1?'gold':f>=0.5?'silver':'bronze';
+// Where a building's coin sits: just above its real top (measured from its drawing), so it rides on a skyscraper's roof.
+function coinAnchor(b){ const T0=T(b), [w,d]=T0.size, bx=bCacheable(T0)||FAR_STILL.has((T0.base||T0).style)?bspBounds(b,T0):null, o=iso(b.x,b.y);
+  if(bx) return { x:o.x+(bx.x0+bx.x1)/2, y:o.y+bx.y0+14 }; const p=iso(b.x+w/2,b.y+d/2); return { x:p.x, y:p.y-(SHADOW_H[T0.style]?SHADOW_H[T0.style](T0):30)-10 }; }
 // Your buildings' earnings: a coin floats over each home or business you own, only on your screen. Bronze while it's
-// filling, silver past half, gold (and glowing) when the till is full and has stopped filling. Tap it: it spins, flies
-// to your coins at the top, and they count up.
-const Tills={ map:new Map(), day:-1, busy:false, hits:[], flying:new Set(),
+// filling, silver past half, gold when the till is full (it stops filling then, and bounces). Each glows with a neon ring
+// in its colour and turns slowly in the light. Tap it: it spins straight up and away to your coins, which count up.
+const Tills={ map:new Map(), day:-1, busy:false, hits:[], flying:new Set(), anchors:new Map(),
   load(){ if(!(Me&&Me.token)||Store.canWrite||this.busy) return; this.busy=true; this.day=today();
-    api('/api/me/tills').then(d=>{ this.map=new Map((d.tills||[]).map(t=>[t.id,t])); refreshHUD(); }).catch(()=>{}).finally(()=>{ this.busy=false; }); },
+    api('/api/me/tills').then(d=>{ this.map=new Map((d.tills||[]).map(t=>[t.id,t])); this.anchors.clear(); refreshHUD(); }).catch(()=>{}).finally(()=>{ this.busy=false; }); },
   draw(){ this.hits.length=0; if(!(Me&&Me.token)||Store.canWrite) return; if(today()!==this.day) this.load(); if(!this.map.size||cam.z<0.35) return;
-    const me=Me.handle&&Me.handle.toLowerCase(), tt=T_NOW/1000, k=Math.max(0.75,Math.min(1.3,cam.z)), R0=11*k;
+    const me=Me.handle&&Me.handle.toLowerCase(), tt=T_NOW/1000, k=Math.max(0.8,Math.min(1.35,cam.z)), R0=Math.round(14*k);
     ctx.save(); ctx.setTransform(dpr,0,0,dpr,0,0);
     for(const [id,t] of this.map){ if(t.till<1||this.flying.has(id)) continue; const b=D.buildings.get(id); if(!b||!(b.owner&&b.owner.toLowerCase()===me)) continue;
-      const T0=T(b), [w,d]=T0.size, top=up(iso(b.x+w/2,b.y+d/2), Math.min(150,SHADOW_H[T0.style]?SHADOW_H[T0.style](T0):30)+16), sx=(top.x-cam.x)*cam.z+cw/2, base=(top.y-cam.y)*cam.z+ch/2;
-      if(sx<-30||base<-30||sx>cw+30||base>ch+30) continue;
-      const f=Math.min(1,t.till/Math.max(1,t.cap)), full=f>=1,
-        // full: it bounces (up, then a quick squash as it lands); filling: a gentle bob
-        ph=(tt*1.6+b.x*0.37)%1, hop=full?Math.sin(Math.min(1,ph/0.8)*Math.PI):0, lift=full?hop*R0*1.1:0, squash=full&&ph>0.8?Math.sin((ph-0.8)/0.2*Math.PI)*0.22:0,
-        sy=full?base-lift:base+Math.sin(tt*2.2+b.x)*2.5, [c1,c2,rim]=full?['#FFE680','#E2A71E','#9A6A0E']:f>=0.5?['#F4F6F8','#AEB5BD','#6E757C']:['#F0B27A','#B8743A','#7A4A20'];
-      { // every coin glows in its own colour; a full one glows strongest and pulses
-        const gc=full?'255,205,60':f>=0.5?'230,240,255':'255,150,70', a=full?0.85+0.15*Math.sin(tt*4):0.6+0.15*Math.sin(tt*2.5+b.x), rr=R0*(full?3.2:2.5);
-        ctx.globalCompositeOperation='lighter'; // light added to what's behind: the coin shines on the map
-        const gl=ctx.createRadialGradient(sx,sy,R0*0.4,sx,sy,rr); gl.addColorStop(0,`rgba(${gc},${a})`); gl.addColorStop(0.45,`rgba(${gc},${a*0.35})`); gl.addColorStop(1,`rgba(${gc},0)`); ctx.fillStyle=gl; ctx.fillRect(sx-rr,sy-rr,rr*2,rr*2);
-        if(full){ ctx.strokeStyle=`rgba(255,220,110,${0.5+0.3*Math.sin(tt*4)})`; ctx.lineWidth=1.5; for(let i=0;i<8;i++){ const an=i/8*Math.PI*2+tt*0.6, r1=R0*1.35, r2=R0*(1.9+0.25*Math.sin(tt*5+i)); ctx.beginPath(); ctx.moveTo(sx+Math.cos(an)*r1,sy+Math.sin(an)*r1); ctx.lineTo(sx+Math.cos(an)*r2,sy+Math.sin(an)*r2); ctx.stroke(); } } // rays round a full one
-        ctx.globalCompositeOperation='source-over'; }
-      { const k0=full?1-hop*0.45:1; ctx.fillStyle=`rgba(0,0,0,${0.25*k0})`; ctx.beginPath(); ctx.ellipse(sx+1.5,(full?base:sy)+R0+3,R0*0.8*k0,R0*0.28*k0,0,0,7); ctx.fill(); } // a little shadow (smaller while it's in the air)
-      ctx.save(); if(squash){ ctx.translate(sx,sy+R0); ctx.scale(1+squash,1-squash); ctx.translate(-sx,-(sy+R0)); } // squashed as it lands
-      const g=ctx.createLinearGradient(sx-R0,sy-R0,sx+R0,sy+R0); g.addColorStop(0,c1); g.addColorStop(1,c2); ctx.fillStyle=g; ctx.strokeStyle=rim; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(sx,sy,R0,0,7); ctx.fill(); ctx.stroke();
-      ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.arc(sx,sy,R0*0.7,0,7); ctx.stroke();
-      { const sh=ctx.createLinearGradient(sx-R0,sy-R0,sx+R0*0.3,sy+R0*0.3); sh.addColorStop(0,'rgba(255,255,255,.55)'); sh.addColorStop(1,'rgba(255,255,255,0)'); ctx.fillStyle=sh; ctx.beginPath(); ctx.arc(sx,sy,R0*0.92,Math.PI*0.9,Math.PI*1.8); ctx.fill(); } // a shine across the top
-      { const gx=sx+Math.cos(tt*1.6+b.y)*R0*0.55, gy=sy-R0*0.45+Math.sin(tt*1.6+b.y)*R0*0.2, tw=0.5+0.5*Math.sin(tt*3+b.x); ctx.fillStyle=`rgba(255,255,255,${0.35+0.55*tw})`; ctx.beginPath(); ctx.moveTo(gx,gy-3.5); ctx.lineTo(gx+1,gy-1); ctx.lineTo(gx+3.5,gy); ctx.lineTo(gx+1,gy+1); ctx.lineTo(gx,gy+3.5); ctx.lineTo(gx-1,gy+1); ctx.lineTo(gx-3.5,gy); ctx.lineTo(gx-1,gy-1); ctx.closePath(); ctx.fill(); } // a twinkle
-      ctx.fillStyle=rim; ctx.font=`900 ${Math.round(R0*1.05)}px system-ui,sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('¢',sx,sy+0.5);
+      const akey=id+'|'+(b.lv||1)+'|'+(b.rot||0)+'|'+VIEW; let A=this.anchors.get(akey); if(!A){ A=coinAnchor(b); this.anchors.set(akey,A); }
+      const sx=(A.x-cam.x)*cam.z+cw/2, base=(A.y-cam.y)*cam.z+ch/2-R0;
+      if(sx<-40||base<-40||sx>cw+40||base>ch+40) continue;
+      const f=Math.min(1,t.till/Math.max(1,t.cap)), full=f>=1, tier=coinTier(f), C=COIN_TIER[tier],
+        ph=(tt*1.6+b.x*0.37)%1, hop=full?Math.sin(Math.min(1,ph/0.8)*Math.PI):0, lift=full?hop*R0*1.1:0, squash=full&&ph>0.8?Math.sin((ph-0.8)/0.2*Math.PI)*0.2:0,
+        sy=full?base-lift:base+Math.sin(tt*2.2+b.x)*2.5, turn=0.72+0.28*Math.cos(tt*1.3+b.y); // it turns slowly, catching the light
+      // the neon: a soft wash of colour, then a bright ring round the coin
+      ctx.globalCompositeOperation='lighter'; const nr=R0*(full?3:2.4), na=full?0.75+0.2*Math.sin(tt*4):0.5+0.12*Math.sin(tt*2.5+b.x);
+      const gl=ctx.createRadialGradient(sx,sy,R0*0.5,sx,sy,nr); gl.addColorStop(0,`rgba(${C.neon},${na})`); gl.addColorStop(0.5,`rgba(${C.neon},${na*0.3})`); gl.addColorStop(1,`rgba(${C.neon},0)`); ctx.fillStyle=gl; ctx.fillRect(sx-nr,sy-nr,nr*2,nr*2);
+      ctx.shadowColor=`rgba(${C.neon},1)`; ctx.shadowBlur=R0*0.9; ctx.strokeStyle=`rgba(${C.neon},${full?0.95:0.75})`; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(sx,sy,R0*1.28*turn,R0*1.28,0,0,7); ctx.stroke();
+      if(full){ ctx.lineWidth=1.6; for(let i=0;i<10;i++){ const an=i/10*Math.PI*2+tt*0.7, r1=R0*1.5, r2=R0*(2.05+0.3*Math.sin(tt*5+i)); ctx.strokeStyle=`rgba(${C.neon},${0.55+0.3*Math.sin(tt*4+i)})`; ctx.beginPath(); ctx.moveTo(sx+Math.cos(an)*r1,sy+Math.sin(an)*r1); ctx.lineTo(sx+Math.cos(an)*r2,sy+Math.sin(an)*r2); ctx.stroke(); } }
+      ctx.shadowBlur=0; ctx.globalCompositeOperation='source-over';
+      { const k0=full?1-hop*0.45:1; ctx.fillStyle=`rgba(0,0,0,${0.22*k0})`; ctx.beginPath(); ctx.ellipse(sx+1.5,base+R0+6,R0*0.85*k0,R0*0.3*k0,0,0,7); ctx.fill(); } // its shadow (smaller while it's up)
+      const S=coinSprite(tier,R0); ctx.save(); ctx.translate(sx,sy); if(squash) { ctx.translate(0,R0); ctx.scale(1+squash,1-squash); ctx.translate(0,-R0); } ctx.scale(turn,1);
+      ctx.shadowColor=`rgba(${C.neon},.9)`; ctx.shadowBlur=R0*0.6; ctx.drawImage(S,-S.W/2,-S.cy,S.W,S.H); ctx.shadowBlur=0;
+      { const tw=0.5+0.5*Math.sin(tt*3+b.x), gx=-R0*0.42+Math.cos(tt*1.6+b.y)*R0*0.12, gy=-R0*0.5; ctx.fillStyle=`rgba(255,255,255,${0.4+0.6*tw})`; ctx.beginPath(); ctx.moveTo(gx,gy-4); ctx.lineTo(gx+1.1,gy-1.1); ctx.lineTo(gx+4,gy); ctx.lineTo(gx+1.1,gy+1.1); ctx.lineTo(gx,gy+4); ctx.lineTo(gx-1.1,gy+1.1); ctx.lineTo(gx-4,gy); ctx.lineTo(gx-1.1,gy-1.1); ctx.closePath(); ctx.fill(); } // a twinkle
       ctx.restore();
-      if(cam.z>=0.8){ const lab=t.till>=1000?(t.till/1000).toFixed(t.till>=10000?0:1)+'k':String(t.till); ctx.font='800 10px system-ui,sans-serif'; ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.92)'; ctx.strokeText(lab,sx,sy+R0+9); ctx.fillStyle='#2B2621'; ctx.fillText(lab,sx,sy+R0+9); }
-      this.hits.push({id,x:sx,y:full?base-R0*0.55:sy,r:full?R0*1.9:R0+8,col:[c1,c2,rim]}); } // a bouncing coin can be tapped anywhere along its hop
+      if(cam.z>=0.8){ const lab=t.till>=1000?(t.till/1000).toFixed(t.till>=10000?0:1)+'k':String(t.till); ctx.font='800 10.5px system-ui,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; const lw=ctx.measureText(lab).width+12, ly=base+R0+16;
+        ctx.fillStyle='rgba(20,18,16,.72)'; ctx.beginPath(); if(ctx.roundRect) ctx.roundRect(sx-lw/2,ly-8,lw,16,8); else ctx.rect(sx-lw/2,ly-8,lw,16); ctx.fill(); ctx.fillStyle=`rgb(${C.neon})`; ctx.fillText(lab,sx,ly+0.5); } // the amount, on a dark pill
+      this.hits.push({id,x:sx,y:full?base-R0*0.55:sy,r:full?R0*1.9:R0+8,tier}); }
     ctx.restore(); worldT(); },
   tap(sx,sy){ let best=null, bd=1e9; for(const h of this.hits){ const d=Math.hypot(h.x-sx,h.y-sy); if(d<h.r&&d<bd){ bd=d; best=h; } } if(!best) return false; this.collect(best); return true; },
-  // the coin spins where it is, then flies up to your coins; the server pays it as it flies
+  // tapped: the coin spins at once and rises, then curves into your coins at the top; the server pays it on the way
   async collect(h){ const t=this.map.get(h.id); if(!t) return; this.flying.add(h.id); sfxCoin();
-    const coin=el('div',{class:'coinfly',style:`left:${h.x}px;top:${h.y}px;--c1:${h.col[0]};--c2:${h.col[1]};--rim:${h.col[2]}`,text:'¢'}); document.body.append(coin);
-    const target=$('coinChip'), tr=target&&!target.hidden?target.querySelector('.coin').getBoundingClientRect():{left:cw/2,top:20,width:0,height:0};
+    const tier=h.tier||coinTier(Math.min(1,t.till/Math.max(1,t.cap))), C=COIN_TIER[tier], S=coinSprite(tier,22);
+    const fly=el('div',{class:'coinfly',style:`left:${h.x}px;top:${h.y}px;--neon:${C.neon}`}), face=el('div',{class:'coinface',style:`background-image:url(${S.toDataURL()})`}); fly.append(face); document.body.append(fly);
+    const target=$('coinChip'), tr=target&&!target.hidden?target.querySelector('.coin').getBoundingClientRect():{left:cw/2,top:20,width:0,height:0}, dx=tr.left+tr.width/2-h.x, dy=tr.top+tr.height/2-h.y;
     let r=null; const pay=api('/api/me/collect',{method:'POST',body:{buildingId:h.id}}).then(x=>{ r=x; }).catch(e=>toast(e.message));
-    await new Promise(z=>setTimeout(z,450)); coin.classList.add('go'); coin.style.left=(tr.left+tr.width/2)+'px'; coin.style.top=(tr.top+tr.height/2)+'px';
-    await new Promise(z=>setTimeout(z,650)); await pay; coin.remove(); this.flying.delete(h.id);
+    const anim=fly.animate([{transform:'translate(0,0) scale(1)'},{transform:`translate(${dx*0.12}px,-80px) scale(1.35)`,offset:0.32},{transform:`translate(${dx}px,${dy}px) scale(.5)`}],{duration:900,easing:'cubic-bezier(.3,.1,.4,1)',fill:'forwards'});
+    await anim.finished.catch(()=>{}); await pay; fly.remove(); this.flying.delete(h.id);
     if(r&&r.got){ t.till=0; const from=myMoney&&typeof myMoney.coins==='number'?myMoney.coins:r.coins-r.got; countUp(from,r.coins); if(target&&target.animate) target.animate([{transform:'scale(1)'},{transform:'scale(1.14)'},{transform:'scale(1)'}],{duration:380,easing:'ease-out'}); } },
   async collectAll(){ try{ const r=await api('/api/me/collect',{method:'POST',body:{}}); if(r.got){ for(const t of this.map.values()) t.till=0; const from=myMoney&&typeof myMoney.coins==='number'?myMoney.coins:r.coins-r.got; countUp(from,r.coins); toast(`Collected ${fmt(r.got)} coins from your buildings.`); } else toast('Nothing to collect yet.'); }catch(e){ toast(e.message); } },
   total(){ let n=0; for(const t of this.map.values()) n+=t.till; return n; } };

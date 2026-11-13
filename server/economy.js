@@ -360,16 +360,19 @@ export class Economy {
     const back = b.price || priceOf(b.type); ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'property:refund', back, c.id); ch.touch(c); await ch.saveCitizen(c);
   }
 
-  // ---------- once a game week: bills ----------
-  // Every 7 game days: each car's upkeep, and 2% of the price of every building a colonist owns. Paid from cash first,
+  // ---------- bills: cars every game week, property twice a game year ----------
+  // Every 7 game days: each car's upkeep. Every 26 game weeks (twice a game year): property upkeep, 0.1% of the price of
+  // every building and plot a colonist owns for each of those weeks (2.6%). Paid from cash first,
   // then savings; anything still owed puts the wallet in the minus (wages pay it back). Everyone billed gets a notice and a phone notification.
   async weeklyBills(ch, force = false) {
     const week = Math.floor(ch.today / 7);
     if (!force) { if (ch.meta.billsWeek == null) { ch.meta.billsWeek = week; return null; } if (ch.meta.billsWeek >= week) return null; }
     ch.meta.billsWeek = week;
-    const props = (await ch.q('select owner_id, type, price from buildings where owner_id is not null')).rows, byOwner = new Map();
-    for (const b of props) byOwner.set(b.owner_id, (byOwner.get(b.owner_id) || 0) + Math.round((b.price || priceOf(b.type)) * R.UPKEEP_RATE));
-    for (const p of (await ch.q('select owner_id, price from plots')).rows) byOwner.set(p.owner_id, (byOwner.get(p.owner_id) || 0) + Math.round(Number(p.price) * R.UPKEEP_RATE)); // land too
+    // property: once each half game year (the first time it's seen, the count just starts; a test run bills it straight away)
+    const half = Math.floor(ch.today / R.PROPERTY_BILL_DAYS), propDue = force || (ch.meta.propHalf != null && ch.meta.propHalf < half); if (ch.meta.propHalf == null || ch.meta.propHalf < half) ch.meta.propHalf = half;
+    const byOwner = new Map(), rate = R.UPKEEP_RATE * R.PROPERTY_BILL_WEEKS;
+    if (propDue) { for (const b of (await ch.q('select owner_id, type, price from buildings where owner_id is not null')).rows) byOwner.set(b.owner_id, (byOwner.get(b.owner_id) || 0) + Math.round((b.price || priceOf(b.type)) * rate));
+      for (const p of (await ch.q('select owner_id, price from plots')).rows) byOwner.set(p.owner_id, (byOwner.get(p.owner_id) || 0) + Math.round(Number(p.price) * rate)); } // land too
     const ids = [...new Set([...byOwner.keys(), ...(await ch.q("select id from citizens where cars is not null and jsonb_array_length(cars) > 0")).rows.map(r => r.id)])];
     let total = 0, billed = 0; const notes = [];
     // In batches of 500: one read, one write and one set of notices each, instead of a few queries per person.
@@ -381,9 +384,9 @@ export class Economy {
         ch.coins(c); const fromCash = Math.min(Math.max(0, c.coins_base), due), fromBank = Math.min(Number(c.bank || 0), due - fromCash), debt = due - fromCash - fromBank, paid = due;
         up.id.push(id); up.base.push(c.coins_base - fromCash - debt); up.bank.push(fromBank); // what cash and savings can't cover puts the wallet in the minus (not touched: coins don't show on the map)
         treasuryAdd(ch, paid); total += paid; billed++; if (carFee) track(ch, 'bills:car', Math.min(paid, carFee), id); if (paid > carFee) track(ch, 'bills:property', paid - carFee, id);
-        const parts = [carFee ? `🚗 car upkeep ${fmt(carFee)}` : '', propFee ? `🏠 property upkeep ${fmt(propFee)}` : ''].filter(Boolean).join(' + ');
+        const parts = [carFee ? `🚗 car upkeep ${fmt(carFee)}` : '', propFee ? `🏠 property upkeep ${fmt(propFee)} (half-yearly)` : ''].filter(Boolean).join(' + ');
         const how = [fromCash ? `${fmt(fromCash)} from your cash` : '', fromBank ? `${fmt(fromBank)} from the bank` : '', debt ? `${fmt(debt)} owed: your wallet is in the minus until your wages pay it back` : ''].filter(Boolean).join(', ');
-        notes.push([id, 'bills', `🧾 Weekly bills: ${parts} = ${fmt(due)} coins: ${how}.`]);
+        notes.push([id, 'bills', `🧾 ${propFee ? 'Bills' : 'Weekly bills'}: ${parts} = ${fmt(due)} coins: ${how}.`]);
       }
       if (up.id.length) await ch.q(`update citizens c set coins_base = u.base, coins_day = $4, bank = c.bank - u.bank
         from unnest($1::text[], $2::numeric[], $3::numeric[]) u(id, base, bank) where c.id = u.id`, [up.id, up.base, up.bank, ch.today]);

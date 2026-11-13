@@ -210,9 +210,10 @@ export function fullIncome(type) { // what a full building earns its owner each 
   if (t.work) g += (t.work.slots || 0) * (t.work.salary || 0) * BUSINESS_SHARE;
   return g * (1 - TREASURY_CUT); }
 export const propertyPrice = type => nicePrice(Math.max(PROPERTY_MIN, fullIncome(type) * PAYBACK_GAME_DAYS));
-// Weekly bills (every 7 game days, so about 7 game weeks a real day): each car's upkeep (in CAR_MODELS), and 0.1% of
-// the price of every building you own. For a full building that's about a fifth of what it earns.
-export const UPKEEP_RATE = 0.001;
+// Bills. Each car's upkeep (in CAR_MODELS) every game week (7 game days, so about 7 game weeks a real day). Property
+// (buildings and land) twice a game year: a game year is 52 game weeks, so every 26 game weeks (about 3.8 real days),
+// 0.1% of the price for each of those weeks, 2.6% a bill: the same as weekly, in two bigger bills a year.
+export const UPKEEP_RATE = 0.001, PROPERTY_BILL_WEEKS = 26, PROPERTY_BILL_DAYS = PROPERTY_BILL_WEEKS * 7;
 export function miles(tiles) { const m = Math.max(0, Number(tiles) || 0) * TILE_MILES;
   return m < 0.1 ? 'under 0.1 mi' : m < 10 ? `${Math.round(m * 10) / 10} mi` : `${Math.round(m)} mi`; }
 

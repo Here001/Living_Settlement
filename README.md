@@ -486,9 +486,9 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
   - Each colonist can send up to 10,000 a real day, so nobody can funnel a stack of accounts into one.
   - Only verified avatars (claimed, with a password) can receive gifts.
   - The Colony Log says who gifted whom, but not the amount.
-- **Weekly bills.** At the start of each game week (every 7 game days, `weeklyBills()` in `server/economy.js`) owners pay upkeep to the treasury, from cash first and then the bank. A 🧾 notice lists what was paid.
-  - **Car maintenance:** 0.1% of each car's price a game week: Hatchback 25, Sedan 45, Pickup 70, SUV 95, Sports car 300. With about 7 game weeks in a real day, a sedan costs about 310 a real day to keep.
-  - **Property upkeep:** 0.1% of what each home or business you own is worth, every game week. For a full building that's about a fifth of what it earns.
+- **Bills** (`weeklyBills()` in `server/economy.js`): owners pay upkeep to the treasury, from cash first and then the bank. A 🧾 notice lists what was paid.
+  - **Car maintenance, every game week** (7 game days): 0.1% of each car's price: Hatchback 25, Sedan 45, Pickup 70, SUV 95, Sports car 300. With about 7 game weeks in a real day, a sedan costs about 310 a real day to keep.
+  - **Property upkeep, twice a game year** (a game year is 52 game weeks, so every 26 game weeks, about every 3.8 real days; `PROPERTY_BILL_WEEKS` in `shared/rules.js`): 2.6% of what each home, business and plot you own is worth (0.1% for each of those weeks), so the yearly cost is the same as before, in two bills. For a full building that's about a fifth of what it earns.
   - If both cash and savings run out, the rest is let go for that week.
 - **New buildings.** A **Gym** and an outdoor **Fitness park**, under Parks → Sports.
 

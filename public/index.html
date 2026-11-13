@@ -3741,23 +3741,28 @@ const Tills={ map:new Map(), day:-1, busy:false, hits:[], flying:new Set(),
     const me=Me.handle&&Me.handle.toLowerCase(), tt=T_NOW/1000, k=Math.max(0.75,Math.min(1.3,cam.z)), R0=11*k;
     ctx.save(); ctx.setTransform(dpr,0,0,dpr,0,0);
     for(const [id,t] of this.map){ if(t.till<1||this.flying.has(id)) continue; const b=D.buildings.get(id); if(!b||!(b.owner&&b.owner.toLowerCase()===me)) continue;
-      const T0=T(b), [w,d]=T0.size, top=up(iso(b.x+w/2,b.y+d/2), Math.min(150,SHADOW_H[T0.style]?SHADOW_H[T0.style](T0):30)+16), sx=(top.x-cam.x)*cam.z+cw/2, sy=(top.y-cam.y)*cam.z+ch/2+Math.sin(tt*2.2+b.x)*2.5;
-      if(sx<-30||sy<-30||sx>cw+30||sy>ch+30) continue;
-      const f=Math.min(1,t.till/Math.max(1,t.cap)), full=f>=1, [c1,c2,rim]=full?['#FFE680','#E2A71E','#9A6A0E']:f>=0.5?['#F4F6F8','#AEB5BD','#6E757C']:['#F0B27A','#B8743A','#7A4A20'];
+      const T0=T(b), [w,d]=T0.size, top=up(iso(b.x+w/2,b.y+d/2), Math.min(150,SHADOW_H[T0.style]?SHADOW_H[T0.style](T0):30)+16), sx=(top.x-cam.x)*cam.z+cw/2, base=(top.y-cam.y)*cam.z+ch/2;
+      if(sx<-30||base<-30||sx>cw+30||base>ch+30) continue;
+      const f=Math.min(1,t.till/Math.max(1,t.cap)), full=f>=1,
+        // full: it bounces (up, then a quick squash as it lands); filling: a gentle bob
+        ph=(tt*1.6+b.x*0.37)%1, hop=full?Math.sin(Math.min(1,ph/0.8)*Math.PI):0, lift=full?hop*R0*1.1:0, squash=full&&ph>0.8?Math.sin((ph-0.8)/0.2*Math.PI)*0.22:0,
+        sy=full?base-lift:base+Math.sin(tt*2.2+b.x)*2.5, [c1,c2,rim]=full?['#FFE680','#E2A71E','#9A6A0E']:f>=0.5?['#F4F6F8','#AEB5BD','#6E757C']:['#F0B27A','#B8743A','#7A4A20'];
       { // every coin glows in its own colour; a full one glows strongest and pulses
         const gc=full?'255,205,60':f>=0.5?'230,240,255':'255,150,70', a=full?0.85+0.15*Math.sin(tt*4):0.6+0.15*Math.sin(tt*2.5+b.x), rr=R0*(full?3.2:2.5);
         ctx.globalCompositeOperation='lighter'; // light added to what's behind: the coin shines on the map
         const gl=ctx.createRadialGradient(sx,sy,R0*0.4,sx,sy,rr); gl.addColorStop(0,`rgba(${gc},${a})`); gl.addColorStop(0.45,`rgba(${gc},${a*0.35})`); gl.addColorStop(1,`rgba(${gc},0)`); ctx.fillStyle=gl; ctx.fillRect(sx-rr,sy-rr,rr*2,rr*2);
         if(full){ ctx.strokeStyle=`rgba(255,220,110,${0.5+0.3*Math.sin(tt*4)})`; ctx.lineWidth=1.5; for(let i=0;i<8;i++){ const an=i/8*Math.PI*2+tt*0.6, r1=R0*1.35, r2=R0*(1.9+0.25*Math.sin(tt*5+i)); ctx.beginPath(); ctx.moveTo(sx+Math.cos(an)*r1,sy+Math.sin(an)*r1); ctx.lineTo(sx+Math.cos(an)*r2,sy+Math.sin(an)*r2); ctx.stroke(); } } // rays round a full one
         ctx.globalCompositeOperation='source-over'; }
-      ctx.fillStyle='rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(sx+1.5,sy+R0+3,R0*0.8,R0*0.28,0,0,7); ctx.fill(); // a little shadow
+      { const k0=full?1-hop*0.45:1; ctx.fillStyle=`rgba(0,0,0,${0.25*k0})`; ctx.beginPath(); ctx.ellipse(sx+1.5,(full?base:sy)+R0+3,R0*0.8*k0,R0*0.28*k0,0,0,7); ctx.fill(); } // a little shadow (smaller while it's in the air)
+      ctx.save(); if(squash){ ctx.translate(sx,sy+R0); ctx.scale(1+squash,1-squash); ctx.translate(-sx,-(sy+R0)); } // squashed as it lands
       const g=ctx.createLinearGradient(sx-R0,sy-R0,sx+R0,sy+R0); g.addColorStop(0,c1); g.addColorStop(1,c2); ctx.fillStyle=g; ctx.strokeStyle=rim; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(sx,sy,R0,0,7); ctx.fill(); ctx.stroke();
       ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.arc(sx,sy,R0*0.7,0,7); ctx.stroke();
       { const sh=ctx.createLinearGradient(sx-R0,sy-R0,sx+R0*0.3,sy+R0*0.3); sh.addColorStop(0,'rgba(255,255,255,.55)'); sh.addColorStop(1,'rgba(255,255,255,0)'); ctx.fillStyle=sh; ctx.beginPath(); ctx.arc(sx,sy,R0*0.92,Math.PI*0.9,Math.PI*1.8); ctx.fill(); } // a shine across the top
       { const gx=sx+Math.cos(tt*1.6+b.y)*R0*0.55, gy=sy-R0*0.45+Math.sin(tt*1.6+b.y)*R0*0.2, tw=0.5+0.5*Math.sin(tt*3+b.x); ctx.fillStyle=`rgba(255,255,255,${0.35+0.55*tw})`; ctx.beginPath(); ctx.moveTo(gx,gy-3.5); ctx.lineTo(gx+1,gy-1); ctx.lineTo(gx+3.5,gy); ctx.lineTo(gx+1,gy+1); ctx.lineTo(gx,gy+3.5); ctx.lineTo(gx-1,gy+1); ctx.lineTo(gx-3.5,gy); ctx.lineTo(gx-1,gy-1); ctx.closePath(); ctx.fill(); } // a twinkle
       ctx.fillStyle=rim; ctx.font=`900 ${Math.round(R0*1.05)}px system-ui,sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('¢',sx,sy+0.5);
+      ctx.restore();
       if(cam.z>=0.8){ const lab=t.till>=1000?(t.till/1000).toFixed(t.till>=10000?0:1)+'k':String(t.till); ctx.font='800 10px system-ui,sans-serif'; ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.92)'; ctx.strokeText(lab,sx,sy+R0+9); ctx.fillStyle='#2B2621'; ctx.fillText(lab,sx,sy+R0+9); }
-      this.hits.push({id,x:sx,y:sy,r:R0+8,col:[c1,c2,rim]}); }
+      this.hits.push({id,x:sx,y:full?base-R0*0.55:sy,r:full?R0*1.9:R0+8,col:[c1,c2,rim]}); } // a bouncing coin can be tapped anywhere along its hop
     ctx.restore(); worldT(); },
   tap(sx,sy){ let best=null, bd=1e9; for(const h of this.hits){ const d=Math.hypot(h.x-sx,h.y-sy); if(d<h.r&&d<bd){ bd=d; best=h; } } if(!best) return false; this.collect(best); return true; },
   // the coin spins where it is, then flies up to your coins; the server pays it as it flies

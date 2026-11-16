@@ -31,3 +31,4 @@ async function r2(method, key, body, type) {
 }
 export async function put(key, buf, type) { await r2('PUT', key, buf, type); return publicUrl(key); }
 export async function del(key) { await r2('DELETE', key); }
+export async function exists(key) { try { await r2('HEAD', key); return true; } catch (e) { return false; } }

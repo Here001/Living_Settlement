@@ -38,6 +38,7 @@ import { Economy } from './economy.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
 import * as R from '../shared/rules.js';
 import fs from 'node:fs';
+import * as store from './storage.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PORT = Number(process.env.PORT || 3000);
@@ -300,7 +301,20 @@ setInterval(() => { if (isLeader) sweepPlayers().catch(e => console.error('sweep
 // The game's code (the page, /shared/*.js, music.js) is always revalidated: the browser asks "still the same?" and gets a
 // tiny 304 if so. With a cache time, a phone could keep an old part next to a new page right after an update, and a
 // mismatched part stops the game from starting. Pictures, video and sound keep their cache times.
-const fresh = (res, file) => { if (/\.(html|js|mjs|css|json|webmanifest)$/i.test(file)) res.setHeader('Cache-Control', 'no-cache'); };
+const fresh = (res, file) => { if (/\.(html|js|mjs|css|json|webmanifest)$/i.test(file)) res.setHeader('Cache-Control', 'no-cache');
+  else if (/\.(png|jpe?g|webp|svg|ico|mp4|mp3)$/i.test(file)) res.setHeader('Cache-Control', 'public, max-age=604800'); }; // pictures and video rarely change: a week saves re-downloads
+// The opening video is the biggest file the game has (about 6.7 MB), and the game server's bandwidth is metered. When
+// Cloudflare R2 is set up, the video and its poster are copied there once (named by their contents, so a new video gets a
+// new name) and players download them from Cloudflare instead, which costs nothing. Without R2 they come from here as before.
+const introSrc = { video: fs.existsSync(path.join(root, 'public', 'intro.mp4')) ? '/intro.mp4' : null, poster: '/intro-poster.jpg' };
+(async () => { if (!store.r2On()) return;
+  for (const [k, file, type] of [['video', 'intro.mp4', 'video/mp4'], ['poster', 'intro-poster.jpg', 'image/jpeg']]) {
+    const buf = await fs.promises.readFile(path.join(root, 'public', file)).catch(() => null); if (!buf) continue;
+    const key = 'site/' + file.replace(/(\.\w+)$/, '-' + crypto.createHash('sha256').update(buf).digest('hex').slice(0, 12) + '$1');
+    if (!(await store.exists(key))) await store.put(key, buf, type);
+    introSrc[k] = store.publicUrl(key); }
+})().catch(e => console.error('copying the intro to R2:', e.message));
+app.get('/api/intro', (req, res) => { res.set('cache-control', 'no-cache'); res.json(introSrc); });
 app.use('/shared', express.static(path.join(root, 'shared'), { maxAge: '5m', setHeaders: fresh }));
 // The 3D engine for the mini games (three.js), loaded only when a game opens.
 app.use('/vendor/three', express.static(path.join(root, 'node_modules', 'three', 'build'), { maxAge: '7d' }));
@@ -325,7 +339,7 @@ app.use(express.static(path.join(root, 'public'), { maxAge: '5m', setHeaders: fr
 // Each viewer subscribes to the map chunks on their screen and only hears about those, plus town-wide news.
 // Updates are grouped and sent every 250 ms, so a burst of a thousand changes is a handful of messages.
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 8192 });
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 8192, perMessageDeflate: { threshold: 512 } }); // map updates are repetitive JSON: compressing them saves most of their bandwidth
 const MAX_BUFFER = 2 * 1024 * 1024;
 wss.on('error', e => console.error('websocket server:', e.message));
 // The client's address behind the host's proxy (the same rule Express uses: the last address the proxy added).

@@ -7234,17 +7234,17 @@ const Join={ cfg:null, step:'start', g:null, busy:false, gender:null,
       el('p',{class:'hint',text:'You’ll arrive aboard the ark like everyone else: you move into the first free home and get a job nearby. Your colonist shows 🌐 because you joined on the website.'})); },
   genderRow(box,C){ return el('div',{class:'cpicks'}, el('span',{text:'Your avatar:'}), ...[['m','Man'],['f','Woman']].map(([k,n])=>el('button',{class:'pill'+(this.gender===k?' on':''),text:n,onclick:e=>{ this.gender=k; e.currentTarget.parentElement.querySelectorAll('.pill').forEach(b=>b.classList.toggle('on',b===e.currentTarget)); }}))); } };
 checkMe().then(resumeClaim).then(openFromNotification).then(()=>PushUI.auto());
-// ---- The opening: plays the narrated intro video (public/intro.mp4) when there is one, otherwise the story as title cards ----
+// ---- The opening: plays the narrated intro video (public/intro.mp4) when there is one; it only downloads once Begin is pressed, otherwise the story as title cards ----
 async function playIntro(force){
   if(document.getElementById('intro')) return; ls.set('resurgence-intro-seen',1);
-  let video=false; try{ const r=await fetch('/intro.mp4',{method:'HEAD'}); video=r.ok && /video/.test(r.headers.get('content-type')||''); }catch(e){}
+  let src=null; try{ src=await (await fetch('/api/intro')).json(); }catch(e){} const video=!!(src&&src.video); /* from Cloudflare R2 when it's set up, so it doesn't use the game server's bandwidth */
   const ov=el('div',{id:'intro',role:'dialog','aria-label':'Resurgence intro'}); const skip=el('button',{class:'skip',text:'Skip ›'}); document.body.append(ov);
   const finish=()=>{ ov.innerHTML=''; ov.classList.add('end');
     ov.append(el('div',{class:'title'}, el('p',{class:'kicker',text:'WELCOME TO GLIESE 12 b'}), el('h1',{text:'RESURGENCE'}), el('p',{text:'One planet. One civilization. Millions of possibilities.'}),
       el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Find my colonist',onclick:()=>{ ov.remove(); findMe(); }}), el('button',{class:'btn',text:'Explore the colony',onclick:()=>ov.remove()})),
       el('p',{class:'hint'}, 'Not here yet? Comment SPAWN on our Instagram, or ', el('button',{class:'linkb',text:'join here',onclick:()=>{ ov.remove(); Join.sheet(); }}), '.'))); };
   skip.onclick=()=>{ const v=ov.querySelector('video'); if(v) v.pause(); finish(); };
-  if(video){ const v=el('video',{src:'/intro.mp4',poster:'/intro-poster.jpg',playsinline:'','webkit-playsinline':'',preload:'auto'}); v.onended=finish;
+  if(video){ const v=el('video',{src:src.video,poster:src.poster||'',playsinline:'','webkit-playsinline':'',preload:'none'}); v.onended=finish;
     const start=el('button',{class:'begin',text:'▶  Begin'}); start.onclick=()=>{ start.remove(); v.play().catch(()=>finish()); };
     ov.append(v, start, skip); return; }
   // Title cards until the video is added

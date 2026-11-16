@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FURNITURE, FLOORS, WALLS, TINTS, WALL_H, WALL_T, EYE, layoutOf, styleOf, placedParts, footOf, roomAt } from '/shared/furniture.js';
+import { BUILDING_TYPES, ROAD_TYPES } from '/shared/catalog.js';
 
 const PHONE = matchMedia('(pointer: coarse)').matches;
 const EXTERIOR = '#D9CBB5', CEILING = '#FBFAF6', TRIM = '#F7F5EF';
@@ -86,12 +87,12 @@ export function createHouse(host, opts) {
   const renderer = new THREE.WebGLRenderer({ antialias: !PHONE, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, PHONE ? 1.5 : 2)); renderer.domElement.className = 'house3d'; host.append(renderer.domElement);
   const scene = new THREE.Scene(); scene.background = col('#BFE3F7');
-  const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 80); camera.rotation.order = 'YXZ';
+  const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 140); camera.rotation.order = 'YXZ';
   scene.add(new THREE.HemisphereLight('#FFFFFF', '#8A7F72', 1.6));
   const sun = new THREE.DirectionalLight('#FFF4E0', 1.3); sun.position.set(S * 0.3 - 6, 9, S * 0.2 - 5); scene.add(sun);
   { const g = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshLambertMaterial({ color: '#7FB069' })); g.rotation.x = -Math.PI / 2; g.position.set(S / 2, -0.02, S / 2); scene.add(g); }
   const shell = new THREE.Group(), walls = new THREE.Group(), ceilings = new THREE.Group(), floors = new THREE.Group(), stuff = new THREE.Group(), wallStuff = new THREE.Group(), ceilStuff = new THREE.Group(), lights = new THREE.Group();
-  shell.add(walls, ceilings, floors); scene.add(shell, stuff, wallStuff, ceilStuff, lights);
+  const around = new THREE.Group(); shell.add(walls, ceilings, floors); scene.add(shell, stuff, wallStuff, ceilStuff, lights, around);
   let room = opts.room, photos = opts.photos || {}, view = 'walk', pick = null, sel = null, ghost = null, marker = null, selBox = null, grid = null, dirty = true;
   const me = { x: 0, y: 0, yaw: 0, pitch: -0.08 }, keys = new Set(), joy = { on: false, x: 0, y: 0 }, above = { yaw: 0.7 };
   const photoTex = new Map();
@@ -136,6 +137,43 @@ export function createHouse(host, opts) {
       const fl = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.d), new THREE.MeshLambertMaterial({ map: t })); fl.rotation.x = -Math.PI / 2; fl.position.set(r.x + r.w / 2, 0, r.y + r.d / 2); fl.userData.floor = i; floors.add(fl);
       const ce = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.d), new THREE.MeshLambertMaterial({ color: CEILING })); ce.rotation.x = Math.PI / 2; ce.position.set(r.x + r.w / 2, H, r.y + r.d / 2); ce.userData.ceil = i; ceilings.add(ce); });
     dirty = true;
+  }
+  // ---- the neighbourhood around the home (seen from above, and through the windows) ----
+  // The map's tiles are scaled so the home's plot holds the house: nearby streets, buildings (walls and roofs in their
+  // own colours and heights), parks, trees and water, all merged into one mesh.
+  function buildAround(A) {
+    for (const c of [...around.children]) { around.remove(c); c.geometry.dispose(); }
+    const h = A && A.home; if (!h || h.x == null) return;
+    const U = (S + 2.5) / Math.max(h.w || 1, h.d || 1), cx = h.x + (h.w || 1) / 2, cy = h.y + (h.d || 1) / 2, X = tx => (tx - cx) * U + S / 2, Y = ty => (ty - cy) * U + S / 2, list = [];
+    const box = (x0, y0, z0, x1, y1, z1, c) => { const g = new THREE.BoxGeometry(Math.max(0.01, x1 - x0), Math.max(0.01, z1 - z0), Math.max(0.01, y1 - y0)); g.translate((x0 + x1) / 2, (z0 + z1) / 2, (y0 + y1) / 2); list.push(paint(g, c)); };
+    const roof = (x0, y0, z0, x1, y1, hh, c) => { const g = new THREE.ConeGeometry(Math.SQRT1_2, 1, 4); g.rotateY(Math.PI / 4); g.scale(x1 - x0, hh, y1 - y0); g.translate((x0 + x1) / 2, z0 + hh / 2, (y0 + y1) / 2); list.push(paint(g, c)); };
+    // the home's own plot, paved round the house
+    box(X(h.x) + 0.1, Y(h.y) + 0.1, -0.03, X(h.x + (h.w || 1)) - 0.1, Y(h.y + (h.d || 1)) - 0.1, 0.005, '#CFC6B4');
+    // streets: tarmac, with a pavement only along the sides that don't carry on into more street
+    const isRoad = new Set((A.roads || []).map(([k]) => k)), kw = U * 0.16;
+    for (const [k, t] of A.roads || []) { const [tx, ty] = k.split(',').map(Number), R = ROAD_TYPES[t] || {}, walk = R.walk || R.edge || '#DCD8CE', x0 = X(tx), y0 = Y(ty), x1 = X(tx + 1), y1 = Y(ty + 1);
+      box(x0, y0, -0.02, x1, y1, 0.012, R.top || '#7E8185');
+      if (!isRoad.has(`${tx},${ty - 1}`)) box(x0, y0, -0.02, x1, y0 + kw, 0.05, walk); if (!isRoad.has(`${tx},${ty + 1}`)) box(x0, y1 - kw, -0.02, x1, y1, 0.05, walk);
+      if (!isRoad.has(`${tx - 1},${ty}`)) box(x0, y0, -0.02, x0 + kw, y1, 0.05, walk); if (!isRoad.has(`${tx + 1},${ty}`)) box(x1 - kw, y0, -0.02, x1, y1, 0.05, walk);
+      if (!R.walk && R.top) continue; const ew = isRoad.has(`${tx - 1},${ty}`) || isRoad.has(`${tx + 1},${ty}`), ns = isRoad.has(`${tx},${ty - 1}`) || isRoad.has(`${tx},${ty + 1}`); /* a dashed centre line on straight stretches */
+      if (ew && !ns) box(x0 + U * 0.2, (y0 + y1) / 2 - 0.03, 0, x0 + U * 0.55, (y0 + y1) / 2 + 0.03, 0.016, '#F2F0E8'); else if (ns && !ew) box((x0 + x1) / 2 - 0.03, y0 + U * 0.2, 0, (x0 + x1) / 2 + 0.03, y0 + U * 0.55, 0.016, '#F2F0E8'); }
+    for (const [k] of A.water || []) { const [tx, ty] = k.split(',').map(Number); box(X(tx), Y(ty), -0.06, X(tx + 1), Y(ty + 1), -0.01, '#4FA3D1'); }
+    for (const b of A.buildings || []) {
+      if (b.id === h.id || b.ruin) continue; const T = BUILDING_TYPES[b.type]; if (!T) continue; const C = T.colors || {}, w = b.w || T.size[0], d = b.d || T.size[1];
+      const x0 = X(b.x), y0 = Y(b.y), x1 = X(b.x + w), y1 = Y(b.y + d);
+      if (T.cat === 'nature') { const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, s = U * 0.32; box(mx - s * 0.12, my - s * 0.12, 0, mx + s * 0.12, my + s * 0.12, s * 1.1, '#6E4B2E');
+        const g = new THREE.SphereGeometry(s, 10, 8); g.translate(mx, s * 1.6, my); list.push(paint(g, (C.leaf || '#3E8E41'))); continue; }
+      if (T.outdoor) { box(x0 + 0.05, y0 + 0.05, -0.02, x1 - 0.05, y1 - 0.05, 0.03, C.ground || C.wall || '#9CC27A'); continue; }
+      const st = T.style || 'block', pitched = ['house', 'gabled', 'tent', 'stall', 'windmill'].includes(st), lvl = 1 + 0.15 * ((b.level || 1) - 1);
+      const H = Math.max(2.4, (T.height || (pitched ? 18 : 26)) * 0.24 * lvl * U / 8) * (b.done === false ? 0.45 : 1), m = Math.min(0.12 * U, 0.6);
+      box(x0 + m, y0 + m, 0, x1 - m, y1 - m, H, C.wall || '#E3DCCF');
+      if (pitched) roof(x0 + m - 0.08, y0 + m - 0.08, H, x1 - m + 0.08, y1 - m + 0.08, Math.max(0.8, (T.roofH || 14) * 0.2 * U / 8 * 1.6), C.roof || '#8C8783');
+      else { box(x0 + m - 0.05, y0 + m - 0.05, H, x1 - m + 0.05, y1 - m + 0.05, H + 0.12, C.roof || '#8C8783'); box(x0 + m + 0.4, y0 + m + 0.4, H + 0.12, x0 + m + 0.4 + Math.min(1, (x1 - x0) * 0.2), y0 + m + 0.4 + Math.min(0.8, (y1 - y0) * 0.2), H + 0.5, '#A9A9A9'); }
+      // a band of windows on each floor, on the two sides facing the camera's usual way
+      for (let z = 1.1; z < H - 0.6; z += 1.6) { box(x0 + m + 0.2, y1 - m, z, x1 - m - 0.2, y1 - m + 0.03, z + 0.55, '#3C5368'); box(x1 - m, y0 + m + 0.2, z, x1 - m + 0.03, y1 - m - 0.2, z + 0.55, '#3C5368'); }
+    }
+    if (list.length) around.add(new THREE.Mesh(mergeGeometries(list), MAT.solid));
+    dirty = true; wake();
   }
   // ---- furniture and lamps ----
   function buildStuff() {
@@ -201,7 +239,7 @@ export function createHouse(host, opts) {
     const up = view === 'above'; ceilings.visible = !up; wallStuff.visible = ceilStuff.visible = !up; walls.scale.y = up ? 0.35 : 1; walls.updateMatrixWorld(true); dirty = true;
   }
   function placeCamera() {
-    if (view === 'above') { const c = S / 2, dist = S * 1.05 + 1.5; camera.position.set(c + Math.sin(above.yaw) * dist * 0.62, dist, c + Math.cos(above.yaw) * dist * 0.62); camera.lookAt(c, 0, c); camera.updateMatrixWorld(); return; }
+    if (view === 'above') { const c = S / 2, dist = S * 1.7 + 5; camera.position.set(c + Math.sin(above.yaw) * dist * 0.62, dist, c + Math.cos(above.yaw) * dist * 0.62); camera.lookAt(c, 0, c); camera.updateMatrixWorld(); return; }
     camera.position.set(me.x, EYE, me.y); camera.rotation.set(me.pitch, me.yaw, 0); camera.updateMatrixWorld();
   }
   // into a room: stand on a free spot near its doorway, looking into the room
@@ -270,6 +308,7 @@ export function createHouse(host, opts) {
     refreshGhost() { showGhost(); },
     setSelected(i) { sel = i; showSel(); wake(); },
     setView(v) { view = v; applyView(); moved(); },
+    setSurroundings(A) { buildAround(A); },
     get view() { return view; },
     goRoom, roomHere: () => roomAt(S, Math.floor(me.x), Math.floor(me.y)),
     dispose() { dead = true; cancelAnimationFrame(raf); ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku);

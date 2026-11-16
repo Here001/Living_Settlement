@@ -34,8 +34,8 @@ export class Rooms {
   constructor(world) { this.world = world; }
   async homeOf(q, c) {
     if (!c.home_id) return null;
-    const b = (await q('select id, type, name from buildings where id = $1', [c.home_id])).rows[0]; if (!b) return null;
-    const size = F.roomSize(b.type); return size ? { id: b.id, type: b.type, name: b.name || BUILDING_TYPES[b.type]?.name || 'Home', size } : null;
+    const b = (await q('select id, type, name, x, y, w, d from buildings where id = $1', [c.home_id])).rows[0]; if (!b) return null;
+    const size = F.roomSize(b.type); return size ? { id: b.id, type: b.type, name: b.name || BUILDING_TYPES[b.type]?.name || 'Home', size, x: b.x, y: b.y, w: b.w, d: b.d } : null;
   }
   // where each photo in the house can be fetched: straight from R2 when it's there (u), or through this server (s)
   async photoUrls(room) {
@@ -45,7 +45,7 @@ export class Rooms {
     return out;
   }
   async out(c, home, room, mine) {
-    return { mine, owner: c.handle, home: { name: home.name, type: home.type }, size: home.size, room, photos: await this.photoUrls(room), coins: mine ? Math.round(Number(c.coins_base)) : undefined };
+    return { mine, owner: c.handle, home: { id: home.id, name: home.name, type: home.type, x: home.x, y: home.y, w: home.w, d: home.d }, size: home.size, room, photos: await this.photoUrls(room), coins: mine ? Math.round(Number(c.coins_base)) : undefined };
   }
   // what you see when you go in: your own home, or someone else's (look only)
   async view(meId, handle) {

@@ -6417,11 +6417,20 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     try{ this.h=H3.createHouse(this.stage,{ size:d.size, room:d.room, photos:d.photos, check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
       onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; [...this.chips.children].forEach((b,j)=>b.classList.toggle('on',j===i)); if(this.edit&&this.cat==='style') this.paintShop(); } }); }
     catch(e){ this.close(); toast('Your phone couldn’t show the 3D view.'); return; }
-    this.stage.append(this.tools,this.cross); this.paintTools();
+    this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false);
     if(d.mine&&!d.room.items.length&&!d.room.box.length) this.toggle(true); },
   close(quiet){ if(!this.el) return; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
   toggle(on){ this.edit=on===undefined?!this.edit:on; this.setPick(null); this.select(null); this.shop.hidden=!this.edit; if(this.editBtn) this.editBtn.textContent=this.edit?'✓ Done':'🛋️ Furnish'; if(this.edit) this.paintShop(); this.paintTools(); },
-  flip(){ if(!this.h) return; const up=this.h.view!=='above'; this.h.setView(up?'above':'walk'); this.viewBtn.textContent=up?'🚶 Walk':'⬆ From above'; this.el.classList.toggle('above',up); this.paintTools(); },
+  // the streets and buildings round the home: from what the map has loaded, or fetched once (only when looking from above)
+  async around(fetch){ const h=this.d&&this.d.home; if(!h||h.x==null||this.aroundDone||!this.h) return; const R=8, x0=h.x-R, y0=h.y-R, x1=h.x+(h.w||1)+R, y1=h.y+(h.d||1)+R;
+    const keys=[]; for(let cx=Math.floor(x0/CHUNK);cx<=Math.floor((x1-1)/CHUNK);cx++) for(let cy=Math.floor(y0/CHUNK);cy<=Math.floor((y1-1)/CHUNK);cy++) keys.push(ck(cx,cy));
+    const inBox=(x,y,w=1,d=1)=>x<x1&&x+w>x0&&y<y1&&y+d>y0, tile=k=>{ const [x,y]=k.split(',').map(Number); return inBox(x,y); };
+    let A; if(keys.every(k=>S.chunks.has(k))) A={ home:h, buildings:[...D.buildings.values()].filter(b=>!b.draft&&inBox(b.x,b.y,b.w||1,b.d||1)), roads:[...D.roads].filter(([k])=>tile(k)), water:[...D.water].filter(([k])=>tile(k)) };
+    else { if(!fetch) return; this.aroundDone=true; try{ const r=await api('/api/chunks?keys='+keys.join(',')); A={home:h,buildings:[],roads:[],water:[]};
+        for(const c of Object.values(r.chunks||{})){ A.buildings.push(...(c.buildings||[]).filter(b=>inBox(b.x,b.y,b.w||1,b.d||1))); A.roads.push(...Object.entries(c.roads||{}).filter(([k])=>tile(k))); A.water.push(...Object.entries(c.water||{}).filter(([k])=>tile(k))); } }
+      catch(e){ this.aroundDone=false; return; } }
+    this.aroundDone=true; if(this.h) this.h.setSurroundings(A); },
+  flip(){ if(!this.h) return; const up=this.h.view!=='above'; if(up) this.around(true); this.h.setView(up?'above':'walk'); this.viewBtn.textContent=up?'🚶 Walk':'⬆ From above'; this.el.classList.toggle('above',up); this.paintTools(); },
   setPick(p){ this.pick=p; this.cross.hidden=!p||(this.h&&this.h.view==='above'); if(this.h) this.h.setPick(p); this.paintTools(); },
   select(i){ this.sel=i?this.d.room.items.find(x=>x.i===i)||null:null; if(this.h) this.h.setSelected(this.sel?this.sel.i:null); this.paintTools(); },
   tap(hit){ const d=this.d; if(!d) return; const it=hit&&d.room.items.find(x=>x.i===hit.i);
@@ -6451,7 +6460,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     catch(e){ toast(e.message); } this.busy=false; if(this.el){ this.select(it.i); } },
   paintTools(){ const t=this.tools; if(!t) return; t.innerHTML=''; const d=this.d; if(!d) return; const up=this.h&&this.h.view==='above';
     if(!d.mine){ const s=this.sel; if(s&&s.ph) t.append(el('span',{class:'tip',text:'A photo'}), el('button',{class:'btn sm',text:'⚑ Report this photo',onclick:()=>reportSheet({kind:'photo',id:s.ph,handle:d.owner})}), el('button',{class:'btn sm',text:'✕',onclick:()=>{ this.sel=null; this.h&&this.h.setSelected(null); this.paintTools(); }}));
-      else t.append(el('span',{class:'tip',text:`Just looking around @${d.owner}’s home. ${PHONE_UI?'Use the joystick to walk and drag to look.':'Walk with WASD or the arrows; drag to look.'}`})); return; }
+      else t.append(el('span',{class:'tip',text:up?'Drag to turn the house around. Tap 🚶 Walk to go back inside.':`Just looking around @${d.owner}’s home. ${PHONE_UI?'Use the joystick to walk and drag to look.':'Walk with WASD or the arrows; drag to look.'}`})); return; }
     if(up&&!this.pick){ t.append(el('span',{class:'tip',text:this.edit?'From above: drag to turn the house. Floor pieces can be placed here; walk in for walls and ceilings.':'Drag to turn the house around. Tap 🚶 Walk to go back inside.'})); if(!this.edit) return; }
     if(!this.edit){ t.append(el('span',{class:'tip',text:d.room.items.length?(PHONE_UI?'Joystick to walk, drag to look around.':'WASD or the arrows to walk, drag to look.'):'An empty home. Tap 🛋️ Furnish to buy furniture.'})); return; }
     const p=this.pick;

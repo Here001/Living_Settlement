@@ -37,10 +37,10 @@ export const WS_PER_IP = env('WS_PER_IP', 20);           // open live connection
 export const QUOTAS = {
   square: env('QUOTA_SQUARE', 50), dm: env('QUOTA_DM', 800), group_msg: env('QUOTA_GROUP_MSG', 1500), group_create: env('QUOTA_GROUP_CREATE', 15),
   group_invite: env('QUOTA_GROUP_INVITE', 150), offer: env('QUOTA_OFFER', 50), report: env('QUOTA_REPORT', 30), rename: env('QUOTA_RENAME', 20),
-  heist: env('QUOTA_HEIST', 40), practice: env('QUOTA_PRACTICE', 400), push: env('QUOTA_PUSH', 20), election: env('QUOTA_ELECTION', 30),
+  heist: env('QUOTA_HEIST', 40), practice: env('QUOTA_PRACTICE', 400), push: env('QUOTA_PUSH', 20), election: env('QUOTA_ELECTION', 30), photo: env('QUOTA_PHOTO', 30),
 };
 export const QUOTA_NAMES = { square: 'Town Square posts', dm: 'private messages', group_msg: 'group messages', group_create: 'new group chats', group_invite: 'group invites',
-  offer: 'offers', report: 'reports', rename: 'renames', heist: 'heists planned', practice: 'practice games', push: 'notification changes', election: 'election actions' };
+  offer: 'offers', report: 'reports', rename: 'renames', heist: 'heists planned', practice: 'practice games', push: 'notification changes', election: 'election actions', photo: 'photo uploads' };
 // Cost caps for paid services, per day (the whole colony)
 export const BUDGETS = { ai_calls: env('BUDGET_AI_CALLS', 300), voice_chars: env('BUDGET_VOICE_CHARS', 150000) };
 

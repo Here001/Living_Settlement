@@ -329,6 +329,9 @@ const MIGRATIONS = [
   `alter table buildings add column if not exists website text;`,
   // v67: the inside of each colonist's home: their furniture, floor and wallpaper (it moves with them)
   `alter table citizens add column if not exists room jsonb;`,
+  // v68: photos in the frames inside homes (in Cloudflare R2 when it's set up, otherwise here)
+  `create table if not exists room_photos (id text primary key, citizen_id text not null, r2key text, data bytea, bytes int not null default 0, t bigint not null);
+   create index if not exists room_photos_citizen on room_photos (citizen_id);`,
 ];
 
 export async function migrate() {

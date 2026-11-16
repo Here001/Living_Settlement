@@ -891,8 +891,20 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 @keyframes coinspin{0%{transform:rotateY(0)}100%{transform:rotateY(360deg)}}
 @media (prefers-reduced-motion:reduce){.coinfly .coinface{animation:none}}
 .roomview .roomstage{flex:1;position:relative;min-height:0;background:radial-gradient(ellipse at 50% 40%,#3A3F4B,#1E2129)}
-.roomcv{display:block;width:100%;height:100%;touch-action:none;cursor:pointer}
-.roomtools{position:absolute;left:8px;right:8px;bottom:8px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;pointer-events:none}
+.roomstage .house3d{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.hchips{position:absolute;top:8px;left:8px;right:132px;display:flex;gap:6px;overflow-x:auto;z-index:2;scrollbar-width:none}
+.hchips .rtab{background:rgba(255,255,255,.9)}
+.hchips .rtab.on{background:#2E86C1;color:#fff}
+.hview{position:absolute;top:8px;right:8px;z-index:2}
+.hjoy{position:absolute;left:18px;bottom:18px;width:116px;height:116px;border-radius:50%;background:rgba(255,255,255,.16);border:2px solid rgba(255,255,255,.5);z-index:2;touch-action:none;box-shadow:0 2px 12px rgba(0,0,0,.25)}
+.hjoy i{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px;border-radius:50%;background:rgba(255,255,255,.9);box-shadow:0 2px 8px rgba(0,0,0,.35);pointer-events:none}
+.roomview.above .hjoy{display:none}
+.hcross{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1.5px rgba(0,0,0,.45);z-index:2;pointer-events:none}
+.roomitem img{width:80px;height:64px;object-fit:contain}
+.roomitem .noimg{display:block;width:80px;height:64px}
+.roomitems .rfor{flex:none;align-self:center;font-weight:800;margin:0}
+body.room-on .toast,body.room-on .rsheet-bg.rreport{z-index:9700}
+.roomtools{position:absolute;left:8px;right:8px;top:52px;z-index:2;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;pointer-events:none}
 .roomtools>*{pointer-events:auto}
 .roomtools .tip{background:rgba(255,255,255,.94);color:#222;border-radius:12px;padding:6px 10px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 .roomtools .tip.bad{background:#FDECEA;color:#B03A2E}
@@ -909,6 +921,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .roomitem{flex:0 0 96px;display:flex;flex-direction:column;align-items:center;gap:2px;border:1.5px solid var(--line);border-radius:14px;background:var(--paper);padding:6px 4px 8px;cursor:pointer;color:inherit;font:inherit}
 .roomitem.on{border-color:#2E86C1;box-shadow:0 0 0 2px rgba(46,134,193,.3)}
 .roomitem canvas{width:80px;height:64px}
+.repphoto{display:block;max-width:100%;max-height:260px;border-radius:10px;margin:6px 0;background:#eee}
 .roomitem b{font-size:12px;line-height:1.15;text-align:center}
 .roomitem span{font-size:12px;opacity:.75;font-weight:700}
 .roomitem.rsw i{flex:none;display:block;width:64px;height:48px;border-radius:10px;border:1px solid rgba(0,0,0,.15);margin:8px 0 6px}
@@ -1062,7 +1075,7 @@ import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
-import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, footOf, partsOf, placeProblem, resaleOf } from '/shared/furniture.js';
+import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, footOf, placeProblem, resaleOf, layoutOf, styleOf, photoAspect } from '/shared/furniture.js';
 import { paveCost, fullIncome, CRIME_FLOOR, FINE_MIN, FINE_MAX, nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
@@ -4418,7 +4431,7 @@ function shownMsg(m){ return m.o || typeof Blocks==='undefined' || !Blocks.has(m
 // ---- Reporting a private message or a Town Square post to the developer ----
 const REPORT_REASONS={ spam:'Spam', abuse:'Abuse or harassment', scam:'Scam or cheating', other:'Something else' };
 function reportSheet({kind,id,handle,text}){ document.querySelector('.rsheet-bg')?.remove(); let reason='';
-  const wrap=el('div',{class:'rsheet-bg'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
+  const wrap=el('div',{class:'rsheet-bg rreport'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
   const send=el('button',{class:'btn danger',text:'Send report',disabled:true}), reasons=el('div',{class:'rreasons'});
   for(const [k,v] of Object.entries(REPORT_REASONS)) reasons.append(el('button',{class:'pill',text:v,onclick:e=>{ reason=k; for(const b of reasons.children) b.classList.toggle('on',b===e.currentTarget); send.disabled=false; }}));
   const cb=el('input',{type:'checkbox'}); cb.checked=kind==='dm';
@@ -4428,9 +4441,9 @@ function reportSheet({kind,id,handle,text}){ document.querySelector('.rsheet-bg'
       if(r.blocked){ await Blocks.load(); Chats.after(r.blocked); } }
     catch(e){ toast(e.message); send.disabled=false; send.textContent='Send report'; } };
   wrap.append(el('div',{class:'rsheet inked',role:'dialog','aria-label':'Report'},
-    el('h3',{text:kind==='dm'?`Report a message from @${handle}`:`Report @${handle}'s post`}),
+    el('h3',{text:kind==='dm'?`Report a message from @${handle}`:kind==='photo'?`Report a photo in @${handle}’s home`:`Report @${handle}'s post`}),
     text?el('blockquote',{text:text.length>200?text.slice(0,200)+'…':text}):'',
-    el('p',{class:'hint',text:`What's wrong with it? The developer sees ${kind==='dm'?'this message and the few before it':'this post'}. @${handle} isn't told who reported it.`}),
+    el('p',{class:'hint',text:`What's wrong with it? The developer sees ${kind==='dm'?'this message and the few before it':kind==='photo'?'this photo':'this post'}. @${handle} isn't told who reported it.`}),
     reasons, el('label',{class:'rblock'}, cb, ` Also block @${handle}`),
     el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Cancel',onclick:()=>wrap.remove()}), send)));
   document.body.append(wrap); }
@@ -4786,13 +4799,14 @@ var Reports={ data:null, view:'open', open:undefined, t:0,
     const DONE={dismiss:'Dismissed',delete:'Message deleted',mute1:'Muted for a day',mute7:'Muted for a week'};
     for(const r of list){ const card=el('article',{class:'rep'});
       card.append(el('div',{class:'ph'}, el('b',{text:'@'+r.who}), el('span',{class:'rtag',text:r.reasonName}), el('time',{text:ago(r.t)})),
-        el('p',{class:'hint',text:`${r.kind==='dm'?'Private message':'Town Square post'}, reported by @${r.by}${r.times>1?` · @${r.who} has been reported ${r.times} times`:''}`}));
+        el('p',{class:'hint',text:`${r.kind==='dm'?'Private message':r.kind==='photo'?'Photo in their home':'Town Square post'}, reported by @${r.by}${r.times>1?` · @${r.who} has been reported ${r.times} times`:''}`}));
       if(r.mutedUntil) card.append(el('p',{class:'rmuted'}, `Muted until ${new Date(r.mutedUntil).toLocaleString([], {weekday:'short',hour:'2-digit',minute:'2-digit'})} `, el('button',{class:'linkb',text:'Lift',onclick:()=>this.act(r,'unmute')})));
       if(r.context&&r.context.length){ const tr=el('div',{class:'rctx'}); for(const m of r.context) tr.append(el('div',{class:m.text===r.text&&m.from===r.who?'hit':''}, el('b',{text:'@'+m.from+': '}), m.text)); card.append(tr); }
+      else if(r.kind==='photo') card.append(el('img',{class:'repphoto',src:'/api/room/photos/'+encodeURIComponent(r.mid||''),alt:'The reported photo (gone if it was taken down)'}));
       else card.append(el('blockquote',{text:r.text}));
       if(this.view==='open') card.append(el('div',{class:'row-actions'},
         el('button',{class:'btn',text:'Dismiss',onclick:()=>this.act(r,'dismiss')}),
-        el('button',{class:'btn',text:'Delete message',onclick:()=>this.act(r,'delete')}),
+        el('button',{class:'btn',text:r.kind==='photo'?'Take the photo down':'Delete message',onclick:()=>this.act(r,'delete')}),
         el('button',{class:'btn danger',text:'Mute 1 day',onclick:()=>this.act(r,'mute1')}),
         el('button',{class:'btn danger',text:'Mute 1 week',onclick:()=>this.act(r,'mute7')})));
       else card.append(el('p',{class:'hint',text:`${DONE[r.action]||r.action}${r.resolvedAt?' · '+ago(r.resolvedAt):''}`}));
@@ -6382,118 +6396,95 @@ const GameWeb={ el:null,
   close(quiet){ if(!this.el) return; this.el.remove(); this.el=null; document.body.classList.remove('web-on'); if(!quiet){ try{ if(history.state&&history.state.gameweb) history.back(); }catch(e){} } } };
 addEventListener('popstate',()=>{ if(GameWeb.el) GameWeb.close(true); });
 addEventListener('keydown',e=>{ if(e.key==='Escape'&&GameWeb.el) GameWeb.close(); });
-// ---- Inside a home: furnish the one you live in (buy furniture, then place, turn, move, store or sell it), or look inside someone else's ----
-// The room is drawn only when something changes (no animation loop), so it costs nothing while you look at it.
-const Room={ el:null, d:null, edit:false, cat:'living', pick:null, sel:null, busy:false, cv:null, g:null, down:null,
+// ---- Inside a home, in 3D (public/house3d.js): walk through your own and furnish it, or look around someone else's ----
+// Furnish: pick a piece from the shop and it follows where you look (the floor, a wall, a window or the ceiling, by
+// kind), or tap where it should go; then Buy. Tap a piece to move, turn, store or sell it, or to give a frame a photo.
+const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:null, sel:null, busy:false, ri:-1,
   async open(handle){ if(handle&&Me&&Me.handle&&handle.toLowerCase()===Me.handle.toLowerCase()) handle=null;
-    let d; try{ d=await api(handle?`/api/citizens/${encodeURIComponent(handle)}/room`:'/api/me/room'); }catch(e){ toast(e.message); return; }
-    this.close(true); this.d=d; this.edit=false; this.pick=null; this.sel=null;
-    const cv=el('canvas',{class:'roomcv'}); this.cv=cv;
-    const title=el('div',{class:'webaddr'}, el('b',{text:d.mine?'🏠 Your home':`🏠 @${d.owner}’s home`}), el('small',{text:`${d.home.name} · ${d.size}×${d.size} room${d.mine?'':' · just looking'}`}));
-    this.editBtn=d.mine?el('button',{class:'btn primary sm',text:'🛋️ Furnish',onclick:()=>this.toggle()}):'';
-    const bar=el('div',{class:'webbar'}, el('button',{class:'webx','aria-label':'Back to the colony',text:'✕',onclick:()=>this.close()}), title, this.editBtn);
-    this.tools=el('div',{class:'roomtools'}); this.shop=el('div',{class:'roomshop'}); this.shop.hidden=true;
-    const root=el('div',{class:'webview roomview',role:'dialog','aria-label':d.mine?'Your home':`@${d.owner}’s home`}, bar, el('div',{class:'roomstage'}, cv, this.tools), this.shop);
+    let d, H3; try{ [d,H3]=await Promise.all([api(handle?`/api/citizens/${encodeURIComponent(handle)}/room`:'/api/me/room'), import('/house3d.js')]); }catch(e){ toast(e.message||'Your phone couldn’t load the 3D view.'); return; }
+    this.close(true); this.d=d; this.H3=H3; this.edit=false; this.pick=null; this.sel=null; this.ri=-1;
+    this.sub=el('small',{text:d.home.name}); this.editBtn=d.mine?el('button',{class:'btn primary sm',text:'🛋️ Furnish',onclick:()=>this.toggle()}):'';
+    const bar=el('div',{class:'webbar'}, el('button',{class:'webx','aria-label':'Back to the colony',text:'✕',onclick:()=>this.close()}),
+      el('div',{class:'webaddr'}, el('b',{text:d.mine?'🏠 Your home':`🏠 @${d.owner}’s home`}), this.sub), this.editBtn);
+    const L=layoutOf(d.size); this.chips=el('div',{class:'hchips'}, ...L.rooms.map((r,i)=>el('button',{class:'rtab',text:r.name,onclick:()=>this.h&&this.h.goRoom(i)})));
+    this.viewBtn=el('button',{class:'btn sm hview',text:'⬆ From above',onclick:()=>this.flip()});
+    this.tools=el('div',{class:'roomtools'}); this.cross=el('div',{class:'hcross',hidden:true}); this.shop=el('div',{class:'roomshop'}); this.shop.hidden=true;
+    this.stage=el('div',{class:'roomstage'}, this.chips, this.viewBtn, this.tools, this.cross);
+    this.file=el('input',{type:'file',accept:'image/*',hidden:true,onchange:()=>this.upload()});
+    const root=el('div',{class:'webview roomview',role:'dialog','aria-label':d.mine?'Your home':`@${d.owner}’s home`}, bar, this.stage, this.shop, this.file);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
     try{ history.pushState({room:1},''); }catch(e){}
-    this.bind(); requestAnimationFrame(()=>{ this.resize(); this.paintTools(); });
+    try{ this.h=H3.createHouse(this.stage,{ size:d.size, room:d.room, photos:d.photos, check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
+      onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; [...this.chips.children].forEach((b,j)=>b.classList.toggle('on',j===i)); if(this.edit&&this.cat==='style') this.paintShop(); } }); }
+    catch(e){ this.close(); toast('Your phone couldn’t show the 3D view.'); return; }
+    this.stage.append(this.tools,this.cross); this.paintTools();
     if(d.mine&&!d.room.items.length&&!d.room.box.length) this.toggle(true); },
-  close(quiet){ if(!this.el) return; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); removeEventListener('resize',this.onResize); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
-  toggle(on){ this.edit=on===undefined?!this.edit:on; this.pick=null; this.sel=null; this.shop.hidden=!this.edit; if(this.editBtn) this.editBtn.textContent=this.edit?'✓ Done':'🛋️ Furnish';
-    if(this.edit) this.paintShop(); this.resize(); this.paintTools(); },
-  bind(){ const cv=this.cv; this.onResize=()=>{ if(this.el) this.resize(); }; addEventListener('resize',this.onResize);
-    cv.addEventListener('pointerdown',e=>{ const f=this.floorAt(e); if(!f) return; cv.setPointerCapture(e.pointerId);
-      if(this.pick){ this.down={ dx:f[0]-this.pick.x, dy:f[1]-this.pick.y }; if(!this.overGhost(f)) { this.down={dx:footOf(this.pick.k,this.pick.r)[0]/2, dy:footOf(this.pick.k,this.pick.r)[1]/2}; this.moveGhost(f); } return; }
-      if(!this.edit) return; const hit=this.hit(e); this.sel=hit||null; this.draw(); this.paintTools(); });
-    cv.addEventListener('pointermove',e=>{ if(!this.pick||!this.down) return; const f=this.floorAt(e); if(f) this.moveGhost(f); });
-    const up=()=>{ this.down=null; }; cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up); },
-  overGhost(f){ const p=this.pick, [w,d]=footOf(p.k,p.r); return f[0]>=p.x&&f[0]<p.x+w&&f[1]>=p.y&&f[1]<p.y+d; },
-  moveGhost(f){ const p=this.pick, [w,d]=footOf(p.k,p.r), S=this.d.size; const x=Math.max(0,Math.min(S-w,Math.floor(f[0]-this.down.dx+0.5))), y=Math.max(0,Math.min(S-d,Math.floor(f[1]-this.down.dy+0.5)));
-    if(x!==p.x||y!==p.y){ p.x=x; p.y=y; this.draw(); this.paintTools(); } },
-  resize(){ const cv=this.cv, r=cv.getBoundingClientRect(), dpr=Math.min(2,devicePixelRatio||1); cv.width=Math.max(1,Math.round(r.width*dpr)); cv.height=Math.max(1,Math.round(r.height*dpr));
-    const S=this.d.size, WH=2.4, W=cv.width, H=cv.height, pad=this.edit?54*dpr:24*dpr; const TW=Math.min(W*0.9/S, (H-pad)*0.94/(S/2+WH*0.55)), ZU=TW*0.55, tot=TW*(S/2)+WH*ZU;
-    this.g={ ctx:cv.getContext('2d'), S, WH, TW, ZU, ox:W/2, oy:(H-pad-tot)/2+WH*ZU+6*dpr, dpr }; this.draw(); },
-  P(g,x,y,z){ return [g.ox+(x-y)*g.TW/2, g.oy+(x+y)*g.TW/4-z*g.ZU]; },
-  floorAt(e){ const g=this.g; if(!g) return null; const r=this.cv.getBoundingClientRect(), sx=(e.clientX-r.left)*g.dpr, sy=(e.clientY-r.top)*g.dpr;
-    const X=(sx-g.ox)/(g.TW/2), Y=(sy-g.oy)/(g.TW/4); return [(Y+X)/2,(Y-X)/2]; },
-  poly(c,pts,fill,stroke){ c.beginPath(); pts.forEach((p,i)=>i?c.lineTo(p[0],p[1]):c.moveTo(p[0],p[1])); c.closePath(); if(fill){ c.fillStyle=fill; c.fill(); } if(stroke){ c.strokeStyle=stroke; c.lineWidth=1; c.stroke(); } },
-  col(hex,f){ return hex[0]==='#'?shade(hex,f):hex; },
-  // one block of a piece: its top and the two sides that face you
-  block(g,[x,y,z,w,d,h,col,sh]){ const c=g.ctx, P=(a,b,cz)=>this.P(g,a,b,cz);
-    if(sh==='o'){ const [cx,cy]=P(x+w/2,y+d/2,z+h/2), rad=Math.max(w,d)*g.TW*0.36; const gr=c.createRadialGradient(cx-rad*0.35,cy-rad*0.4,rad*0.1,cx,cy,rad); gr.addColorStop(0,this.col(col,1.35)); gr.addColorStop(1,this.col(col,0.7)); c.fillStyle=gr; c.beginPath(); c.ellipse(cx,cy,rad,rad*0.9,0,0,Math.PI*2); c.fill(); return; }
-    this.poly(c,[P(x,y+d,z),P(x+w,y+d,z),P(x+w,y+d,z+h),P(x,y+d,z+h)],this.col(col,0.88));
-    this.poly(c,[P(x+w,y,z),P(x+w,y+d,z),P(x+w,y+d,z+h),P(x+w,y,z+h)],this.col(col,0.7));
-    this.poly(c,[P(x,y,z+h),P(x+w,y,z+h),P(x+w,y+d,z+h),P(x,y+d,z+h)],this.col(col,1.12));
-    if(sh==='s'){ c.save(); c.globalAlpha=0.35; this.poly(c,[P(x,y+d,z+h*0.55),P(x+w*0.5,y+d,z+h),P(x,y+d,z+h)],'#9FD3F5'); this.poly(c,[P(x+w,y,z+h*0.55),P(x+w,y+d*0.5,z+h),P(x+w,y,z+h)],'#9FD3F5'); c.restore(); } },
-  piece(g,it,alpha){ const f=FURNITURE[it.k]; if(!f) return; const tint=TINTS[it.c||0]||TINTS[0]; const c=g.ctx; if(alpha!=null){ c.save(); c.globalAlpha=alpha; }
-    const parts=partsOf(it.k,it.r).map(p=>{ const q=p.slice(); q[0]+=it.x; q[1]+=it.y; if(q[6]==='$') q[6]=tint; return q; }).sort((a,b)=>(a[0]+a[3]/2+a[1]+a[4]/2)-(b[0]+b[3]/2+b[1]+b[4]/2)||a[2]-b[2]);
-    if(!f.rug){ const [w,d]=footOf(it.k,it.r); c.save(); c.globalAlpha=(alpha??1)*0.18; this.poly(c,[this.P(g,it.x+0.08,it.y+0.08,0),this.P(g,it.x+w-0.02,it.y+0.08,0),this.P(g,it.x+w-0.02,it.y+d-0.02,0),this.P(g,it.x+0.08,it.y+d-0.02,0)],'#000'); c.restore(); }
-    for(const p of parts) this.block(g,p); if(alpha!=null) c.restore(); },
-  foot(g,x,y,w,d,fill,stroke){ this.poly(g.ctx,[this.P(g,x,y,0),this.P(g,x+w,y,0),this.P(g,x+w,y+d,0),this.P(g,x,y+d,0)],fill,stroke); },
-  draw(){ const g=this.g; if(!g||!this.d) return; const c=g.ctx, {S,WH}=g, R=this.d.room, fl=FLOORS[R.floor]||FLOORS.wood, wl=WALLS[R.wall]||WALLS.cream;
-    c.setTransform(1,0,0,1,0,0); c.clearRect(0,0,this.cv.width,this.cv.height);
-    // the two back walls, a window and the door
-    const P=(x,y,z)=>this.P(g,x,y,z);
-    this.poly(c,[P(0,0,0),P(0,S,0),P(0,S,WH),P(0,0,WH)],this.col(wl.c,0.9)); this.poly(c,[P(0,0,0),P(S,0,0),P(S,0,WH),P(0,0,WH)],wl.c);
-    if(wl.brick){ c.save(); c.strokeStyle='rgba(255,255,255,.18)'; c.lineWidth=1; for(let z=0.25;z<WH;z+=0.25){ c.beginPath(); c.moveTo(...P(0,0,z)); c.lineTo(...P(S,0,z)); c.moveTo(...P(0,0,z)); c.lineTo(...P(0,S,z)); c.stroke(); } c.restore(); }
-    this.poly(c,[P(0,0,0),P(S,0,0),P(S,0,0.12),P(0,0,0.12)],this.col(wl.c,0.75)); this.poly(c,[P(0,0,0),P(0,S,0),P(0,S,0.12),P(0,0,0.12)],this.col(wl.c,0.68));
-    const wx=Math.max(0.6,S*0.5-0.8); { const q=[P(wx,0,1.0),P(wx+1.6,0,1.0),P(wx+1.6,0,2.0),P(wx,0,2.0)]; const gr=c.createLinearGradient(0,q[2][1],0,q[0][1]); gr.addColorStop(0,'#8EC9F2'); gr.addColorStop(1,'#D9EFFA'); this.poly(c,q,gr,'#FFFFFF');
-      c.strokeStyle='#FFFFFF'; c.lineWidth=2*g.dpr; c.beginPath(); c.moveTo(...P(wx+0.8,0,1.0)); c.lineTo(...P(wx+0.8,0,2.0)); c.moveTo(...P(wx,0,1.5)); c.lineTo(...P(wx+1.6,0,1.5)); c.stroke(); this.poly(c,[P(wx-0.1,0,0.95),P(wx+1.7,0,0.95),P(wx+1.7,0,1.0),P(wx-0.1,0,1.0)],'#FFFFFF'); }
-    { const dy=S-1.4; this.poly(c,[P(0,dy,0),P(0,dy+0.9,0),P(0,dy+0.9,1.85),P(0,dy,1.85)],'#8B5E3C','#5E3D24'); c.fillStyle='#E5C07B'; const [hx,hy]=P(0,dy+0.75,0.95); c.beginPath(); c.arc(hx,hy,2.2*g.dpr,0,Math.PI*2); c.fill(); }
-    c.strokeStyle=this.col(wl.c,0.6); c.lineWidth=3*g.dpr; c.beginPath(); c.moveTo(...P(0,S,WH)); c.lineTo(...P(0,0,WH)); c.lineTo(...P(S,0,WH)); c.stroke();
-    // the floor
-    for(let i=0;i<S;i++) for(let j=0;j<S;j++) this.foot(g,i,j,1,1,(i+j)%2?fl.b:fl.a,this.edit?'rgba(0,0,0,.08)':null);
-    if(this.edit&&this.pick){ const p=this.pick, [w,d]=footOf(p.k,p.r); this.foot(g,p.x,p.y,w,d,this.problem()?'rgba(214,48,49,.35)':'rgba(46,204,113,.35)'); }
-    // furniture: rugs first, then the rest from the back to the front
-    const list=R.items.filter(it=>!(this.pick&&this.pick.i===it.i)).map(it=>({it,f:FURNITURE[it.k]})).filter(o=>o.f);
-    const key=o=>{ const [w,d]=footOf(o.it.k,o.it.r); return (o.f.rug?-100:0)+o.it.x+w/2+o.it.y+d/2; };
-    if(this.pick) list.push({it:this.pick,f:FURNITURE[this.pick.k],ghost:true});
-    list.sort((a,b)=>key(a)-key(b)); this.order=list;
-    for(const o of list){ if(this.sel&&this.sel.i===o.it.i){ const [w,d]=footOf(o.it.k,o.it.r); this.foot(g,o.it.x,o.it.y,w,d,'rgba(241,196,15,.35)','#F1C40F'); } this.piece(g,o.it,o.ghost?0.78:null); } },
-  // the piece under a tap: the front-most one whose drawn outline contains it
-  hit(e){ const g=this.g, r=this.cv.getBoundingClientRect(), sx=(e.clientX-r.left)*g.dpr, sy=(e.clientY-r.top)*g.dpr;
-    for(const o of (this.order||[]).slice().reverse()){ if(o.ghost) continue; let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
-      for(const p of partsOf(o.it.k,o.it.r)) for(const [a,b,z] of [[p[0],p[1],p[2]],[p[0]+p[3],p[1]+p[4],p[2]+p[5]],[p[0]+p[3],p[1],p[2]+p[5]],[p[0],p[1]+p[4],p[2]],[p[0],p[1]+p[4],p[2]+p[5]],[p[0]+p[3],p[1]+p[4],p[2]]]){ const [X,Y]=this.P(g,o.it.x+a,o.it.y+b,z); x0=Math.min(x0,X); x1=Math.max(x1,X); y0=Math.min(y0,Y); y1=Math.max(y1,Y); }
-      if(sx>=x0&&sx<=x1&&sy>=y0&&sy<=y1) return o.it; }
-    return null; },
-  problem(){ const p=this.pick; return p?placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null):null; },
-  // where a new piece first appears: the first free spot, scanning from the back
-  spotFor(k,r,skip){ const S=this.d.size, [w,d]=footOf(k,r); for(let s=0;s<=2*S;s++) for(let x=0;x<=S-w;x++){ const y=s-x; if(y<0||y>S-d) continue; if(!placeProblem(this.d.room,S,k,x,y,r,skip)) return [x,y]; } return [0,0]; },
-  start(p){ this.sel=null; const [x,y]=this.spotFor(p.k,p.r||0,p.i||null); this.pick={ r:0, c:0, ...p, x, y }; this.draw(); this.paintTools(); },
-  turn(){ const p=this.pick; if(!p) return; p.r=(p.r+1)%4; const [w,d]=footOf(p.k,p.r), S=this.d.size; p.x=Math.min(p.x,S-w); p.y=Math.min(p.y,S-d); this.draw(); this.paintTools(); },
-  async send(path,body,done){ if(this.busy) return; this.busy=true; try{ const r=await api(path,{method:'POST',body}); if(this.d){ this.d.room=r.room; this.d.coins=r.coins; } if(typeof r.coins==='number'&&myMoney){ myMoney.coins=r.coins; refreshHUD(); } loadMyMoney(); done&&done(r); }
-    catch(e){ toast(e.message); } this.busy=false; if(this.el){ this.draw(); this.paintTools(); if(this.edit) this.paintShop(); } },
-  place(){ const p=this.pick; if(!p||this.problem()) return; const f=FURNITURE[p.k];
-    if(p.i) this.send('/api/me/room/place',{i:p.i,x:p.x,y:p.y,r:p.r},()=>{ this.pick=null; });
-    else this.send('/api/me/room/buy',{k:p.k,x:p.x,y:p.y,r:p.r,c:p.c},()=>{ this.pick=null; toast(`🛋️ ${f.name} bought for ${fmt(f.cost)} coins.`); }); },
-  paintTools(){ const t=this.tools; if(!t) return; t.innerHTML=''; const d=this.d; if(!d) return;
-    if(!d.mine){ t.append(el('span',{class:'tip',text:`Just looking: only @${d.owner} can change things here.`})); return; }
-    if(!this.edit){ if(!d.room.items.length) t.append(el('span',{class:'tip',text:'An empty home. Tap 🛋️ Furnish to buy furniture and set it out.'})); return; }
+  close(quiet){ if(!this.el) return; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
+  toggle(on){ this.edit=on===undefined?!this.edit:on; this.setPick(null); this.select(null); this.shop.hidden=!this.edit; if(this.editBtn) this.editBtn.textContent=this.edit?'✓ Done':'🛋️ Furnish'; if(this.edit) this.paintShop(); this.paintTools(); },
+  flip(){ if(!this.h) return; const up=this.h.view!=='above'; this.h.setView(up?'above':'walk'); this.viewBtn.textContent=up?'🚶 Walk':'⬆ From above'; this.el.classList.toggle('above',up); this.paintTools(); },
+  setPick(p){ this.pick=p; this.cross.hidden=!p||(this.h&&this.h.view==='above'); if(this.h) this.h.setPick(p); this.paintTools(); },
+  select(i){ this.sel=i?this.d.room.items.find(x=>x.i===i)||null:null; if(this.h) this.h.setSelected(this.sel?this.sel.i:null); this.paintTools(); },
+  tap(hit){ const d=this.d; if(!d) return; const it=hit&&d.room.items.find(x=>x.i===hit.i);
+    if(!d.mine){ this.sel=it&&it.ph?it:null; if(this.h) this.h.setSelected(this.sel?this.sel.i:null); this.paintTools(); return; }
+    if(this.edit) this.select(it?it.i:null); },
+  start(p){ this.select(null); const f=FURNITURE[p.k]; if((f.mount==='wall'||f.mount==='window'||f.mount==='ceil')&&this.h&&this.h.view==='above') this.flip(); this.setPick({ r:0, c:0, ...p, x:null, y:null }); },
+  turn(){ const p=this.pick; if(!p||FURNITURE[p.k].mount!=='floor') return; p.r=(p.r+1)%4; const [w,dd]=footOf(p.k,p.r), S=this.d.size; if(p.x!=null){ p.x=Math.min(p.x,S-w); p.y=Math.min(p.y,S-dd); } this.h.refreshGhost(); this.paintTools(); },
+  apply(r,shellToo){ if(!this.d) return; this.d.room=r.room; this.d.photos={...this.d.photos,...(r.photos||{})}; this.d.coins=r.coins; if(typeof r.coins==='number'&&myMoney){ myMoney.coins=r.coins; refreshHUD(); } if(this.h) this.h.setRoom(r.room,r.photos,shellToo); },
+  async send(path,body,done,shellToo){ if(this.busy) return; this.busy=true; this.paintTools(); try{ const r=await api(path,{method:'POST',body}); this.apply(r,shellToo); loadMyMoney(); done&&done(r); }
+    catch(e){ toast(e.message); } this.busy=false; if(this.el){ this.paintTools(); if(this.edit) this.paintShop(); } },
+  place(){ const p=this.pick; if(!p||p.x==null||placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null)) return; const f=FURNITURE[p.k];
+    if(p.i) this.send('/api/me/room/place',{i:p.i,x:p.x,y:p.y,r:p.r},()=>{ this.setPick(null); });
+    else this.send('/api/me/room/buy',{k:p.k,x:p.x,y:p.y,r:p.r,c:p.c},r=>{ this.setPick(null); toast(`🛋️ ${f.name} bought for ${fmt(f.cost)} coins.${f.photo?' Now add a photo to it.':''}`); if(f.photo&&r.item) this.select(r.item.i); }); },
+  // a photo for a frame: cropped to the frame's shape and shrunk to a small JPEG on the phone, then sent
+  choosePhoto(){ if(this.sel) this.file.click(); },
+  async upload(){ const file=this.file.files&&this.file.files[0], it=this.sel; this.file.value=''; if(!file||!it) return;
+    if(!/^image\//.test(file.type)){ toast('That isn’t a picture.'); return; }
+    let img; try{ img=await createImageBitmap(file); }catch(e){ try{ img=await new Promise((ok,no)=>{ const im=new Image(); im.onload=()=>ok(im); im.onerror=no; im.src=URL.createObjectURL(file); }); }catch(e2){ toast('That photo couldn’t be opened.'); return; } }
+    const asp=photoAspect(it.k), sw=img.width, sh=img.height; let cw=sw, ch=sw/asp; if(ch>sh){ ch=sh; cw=sh*asp; }
+    const long=720, W=asp>=1?long:Math.round(long*asp), H=asp>=1?Math.round(long/asp):long, cv=el('canvas',{width:W,height:H});
+    cv.getContext('2d').drawImage(img,(sw-cw)/2,(sh-ch)/2,cw,ch,0,0,W,H);
+    let blob=null; for(const q of [0.85,0.72,0.6]){ blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',q)); if(blob&&blob.size<300*1024) break; }
+    if(!blob){ toast('That photo couldn’t be prepared.'); return; }
+    this.busy=true; this.paintTools(); toast('📷 Putting your photo in the frame…');
+    try{ const res=await fetch('/api/me/room/photo/'+encodeURIComponent(it.i),{method:'POST',headers:{'content-type':'image/jpeg','x-player':Me.token},body:blob}); const j=await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(j.error||'The photo couldn’t be saved.'); this.apply(j); toast('📷 Your photo is up.'); }
+    catch(e){ toast(e.message); } this.busy=false; if(this.el){ this.select(it.i); } },
+  paintTools(){ const t=this.tools; if(!t) return; t.innerHTML=''; const d=this.d; if(!d) return; const up=this.h&&this.h.view==='above';
+    if(!d.mine){ const s=this.sel; if(s&&s.ph) t.append(el('span',{class:'tip',text:'A photo'}), el('button',{class:'btn sm',text:'⚑ Report this photo',onclick:()=>reportSheet({kind:'photo',id:s.ph,handle:d.owner})}), el('button',{class:'btn sm',text:'✕',onclick:()=>{ this.sel=null; this.h&&this.h.setSelected(null); this.paintTools(); }}));
+      else t.append(el('span',{class:'tip',text:`Just looking around @${d.owner}’s home. ${PHONE_UI?'Use the joystick to walk and drag to look.':'Walk with WASD or the arrows; drag to look.'}`})); return; }
+    if(up&&!this.pick){ t.append(el('span',{class:'tip',text:this.edit?'From above: drag to turn the house. Floor pieces can be placed here; walk in for walls and ceilings.':'Drag to turn the house around. Tap 🚶 Walk to go back inside.'})); if(!this.edit) return; }
+    if(!this.edit){ t.append(el('span',{class:'tip',text:d.room.items.length?(PHONE_UI?'Joystick to walk, drag to look around.':'WASD or the arrows to walk, drag to look.'):'An empty home. Tap 🛋️ Furnish to buy furniture.'})); return; }
     const p=this.pick;
-    if(p){ const f=FURNITURE[p.k], bad=this.problem();
-      t.append(el('span',{class:'tip'+(bad?' bad':''),text:bad||`${f.name}: drag it where you want it`}), el('button',{class:'btn sm',text:'↻ Turn',onclick:()=>this.turn()}));
-      if(f.tint&&!p.i) t.append(el('div',{class:'tints'}, ...TINTS.map((c,i)=>el('button',{class:'tint'+(p.c===i?' on':''),style:`background:${c}`,'aria-label':`Colour ${i+1}`,onclick:()=>{ p.c=i; this.draw(); this.paintTools(); }}))));
-      t.append(el('button',{class:'btn primary sm',disabled:!!bad||this.busy,text:p.i?'✓ Put it here':`✓ Buy · ${fmt(f.cost)}`,onclick:()=>this.place()}), el('button',{class:'btn sm',text:'✕',onclick:()=>{ this.pick=null; this.draw(); this.paintTools(); }})); return; }
+    if(p){ const f=FURNITURE[p.k], bad=p.x==null?(f.mount==='floor'?'Look at the floor where it should go.':f.mount==='ceil'?'Look up at the ceiling where it should go.':f.mount==='window'?'Look at a window.':'Look at a wall where it should hang.'):placeProblem(d.room,d.size,p.k,p.x,p.y,p.r,p.i||null);
+      t.append(el('span',{class:'tip'+(bad?' bad':''),text:bad||`${f.name}: ${up?'tap where it goes':'look or tap where it goes'}`}));
+      if(f.mount==='floor') t.append(el('button',{class:'btn sm',text:'↻ Turn',onclick:()=>this.turn()}));
+      if(f.tint&&!p.i) t.append(el('div',{class:'tints'}, ...TINTS.map((c,i)=>el('button',{class:'tint'+(p.c===i?' on':''),style:`background:${c}`,'aria-label':`Colour ${i+1}`,onclick:()=>{ p.c=i; this.h.refreshGhost(); this.paintTools(); }}))));
+      t.append(el('button',{class:'btn primary sm',disabled:!!bad||this.busy,text:p.i?'✓ Put it here':`✓ Buy · ${fmt(f.cost)}`,onclick:()=>this.place()}), el('button',{class:'btn sm',text:'✕',onclick:()=>this.setPick(null)})); return; }
     const s=this.sel; if(s){ const f=FURNITURE[s.k];
-      t.append(el('span',{class:'tip',text:f.name}), el('button',{class:'btn sm',text:'✥ Move',onclick:()=>{ this.pick={i:s.i,k:s.k,c:s.c,r:s.r,x:s.x,y:s.y}; this.sel=null; this.draw(); this.paintTools(); }}),
-        el('button',{class:'btn sm',text:'↻ Turn',onclick:()=>{ const r=(s.r+1)%4, bad=placeProblem(d.room,d.size,s.k,s.x,s.y,r,s.i); if(bad){ this.pick={i:s.i,k:s.k,c:s.c,r,x:s.x,y:s.y}; const [w,dd]=footOf(s.k,r); this.pick.x=Math.min(s.x,d.size-w); this.pick.y=Math.min(s.y,d.size-dd); this.sel=null; this.draw(); this.paintTools(); return; } this.send('/api/me/room/place',{i:s.i,x:s.x,y:s.y,r},()=>{ this.sel=(this.d.room.items.find(x=>x.i===s.i))||null; }); }}),
-        el('button',{class:'btn sm',text:'📦 Store',onclick:()=>this.send('/api/me/room/store',{i:s.i},()=>{ this.sel=null; toast(`📦 ${f.name} put in storage.`); })}),
-        el('button',{class:'btn sm',text:`💰 Sell +${fmt(resaleOf(s.k))}`,onclick:()=>toast(`Sell the ${f.name.toLowerCase()} for ${fmt(resaleOf(s.k))} coins (half what it cost)?`,'Sell',()=>this.send('/api/me/room/sell',{i:s.i},()=>{ this.sel=null; }))}),
-        el('button',{class:'btn sm',text:'✕',onclick:()=>{ this.sel=null; this.draw(); this.paintTools(); }})); return; }
-    t.append(el('span',{class:'tip',text:'Pick something below, or tap a piece in the room to move, turn, store or sell it.'})); },
-  thumb(k,c){ const cv=el('canvas',{width:160,height:128}), f=FURNITURE[k], [w,d]=f.size, top=Math.max(...f.parts.map(p=>p[2]+p[5])); const TW=Math.min(150/(w+d)*2*0.9, 70, 118/((w+d)/4+top*0.55)), g={ ctx:cv.getContext('2d'), TW, ZU:TW*0.55, ox:80-((w-d)*TW/4), oy:118-(w+d)*TW/4, dpr:2 };
-    this.piece(g,{k,x:0,y:0,r:0,c:c||0}); return cv; },
-  paintShop(){ const s=this.shop, d=this.d; if(!s||!d) return; s.innerHTML=''; const R=d.room;
+      t.append(el('span',{class:'tip',text:f.name}));
+      if(f.photo) t.append(el('button',{class:'btn primary sm',disabled:this.busy,text:s.ph?'📷 Change photo':'📷 Add a photo',onclick:()=>this.choosePhoto()}));
+      t.append(el('button',{class:'btn sm',text:'✥ Move',onclick:()=>{ const q={i:s.i,k:s.k,c:s.c,r:s.r,ph:s.ph}; this.select(null); this.setPick({...q,x:null,y:null}); }}));
+      if(f.mount==='floor') t.append(el('button',{class:'btn sm',text:'↻ Turn',onclick:()=>{ const r=(s.r+1)%4, bad=placeProblem(d.room,d.size,s.k,s.x,s.y,r,s.i); if(bad){ toast(bad); return; } this.send('/api/me/room/place',{i:s.i,x:s.x,y:s.y,r},()=>this.select(s.i)); }}));
+      t.append(el('button',{class:'btn sm',text:'📦 Store',onclick:()=>this.send('/api/me/room/store',{i:s.i},()=>{ this.select(null); toast(`📦 ${f.name} put in storage.`); })}),
+        el('button',{class:'btn sm',text:`💰 Sell +${fmt(resaleOf(s.k))}`,onclick:()=>toast(`Sell the ${f.name.toLowerCase()} for ${fmt(resaleOf(s.k))} coins (half what it cost)?${s.ph?' Its photo goes too.':''}`,'Sell',()=>this.send('/api/me/room/sell',{i:s.i},()=>this.select(null)))}),
+        el('button',{class:'btn sm',text:'✕',onclick:()=>this.select(null)})); return; }
+    t.append(el('span',{class:'tip',text:'Pick something below, or tap a piece to move, turn, store or sell it, or to add a photo to a frame.'})); },
+  paintShop(){ const s=this.shop, d=this.d; if(!s||!d) return; s.innerHTML=''; const R=d.room, H3=this.H3;
     const tabs=[...ROOM_CATS,['style','🎨 Floor & walls'],['box',`📦 Stored${R.box.length?` (${R.box.length})`:''}`]];
     s.append(el('div',{class:'roomtabs'}, ...tabs.map(([k,n])=>el('button',{class:'rtab'+(this.cat===k?' on':''),text:n,onclick:()=>{ this.cat=k; this.paintShop(); }})), el('span',{class:'roomcash',text:`💰 ${fmt(d.coins)}`})));
-    const row=el('div',{class:'roomitems'});
-    if(this.cat==='style'){ const sw=(name,cost,on,bg,click)=>el('button',{class:'roomitem rsw'+(on?' on':''),onclick:click}, el('i',{style:`background:${bg}`}), el('b',{text:name}), el('span',{text:on?'Yours':cost?fmt(cost):'Free'}));
-      for(const [k,f] of Object.entries(FLOORS)) row.append(sw(f.name,f.cost,R.floor===k,`repeating-conic-gradient(${f.a} 0 25%, ${f.b} 0 50%) 0 0/16px 16px`,()=>{ if(R.floor!==k) this.send('/api/me/room/style',{floor:k}); }));
-      for(const [k,w] of Object.entries(WALLS)) row.append(sw(`${w.name} walls`,w.cost,R.wall===k,w.c,()=>{ if(R.wall!==k) this.send('/api/me/room/style',{wall:k}); })); }
+    const row=el('div',{class:'roomitems'}), card=(img,name,price,on,click)=>el('button',{class:'roomitem'+(on?' on':''),onclick:click}, img, el('b',{text:name}), el('span',{text:price}));
+    const pic=(k,c)=>{ const u=H3.thumb(k,c||0); return u?el('img',{src:u,alt:'',width:'80',height:'64'}):el('i',{class:'noimg'}); };
+    if(this.cat==='style'){ const ri=this.ri, L=layoutOf(d.size), rm=L.rooms[ri];
+      if(!rm){ row.append(el('p',{class:'hint',text:'Walk into a room to change its floor and walls.'})); s.append(row); return; }
+      const st=styleOf(R,d.size,ri), sw=(name,cost,on,bg,click)=>el('button',{class:'roomitem rsw'+(on?' on':''),onclick:click}, el('i',{style:`background:${bg}`}), el('b',{text:name}), el('span',{text:on?'Yours':cost?fmt(cost):'Free'}));
+      row.append(el('p',{class:'hint rfor',text:`${rm.name}:`}));
+      for(const [k,f] of Object.entries(FLOORS)) row.append(sw(f.name,f.cost,st.f===k,`repeating-conic-gradient(${f.a} 0 25%, ${f.b} 0 50%) 0 0/16px 16px`,()=>{ if(st.f!==k) this.send('/api/me/room/style',{room:ri,floor:k},null,true); }));
+      for(const [k,w] of Object.entries(WALLS)) row.append(sw(`${w.name} walls`,w.cost,st.w===k,w.c,()=>{ if(st.w!==k) this.send('/api/me/room/style',{room:ri,wall:k},null,true); })); }
     else if(this.cat==='box'){ if(!R.box.length) row.append(el('p',{class:'hint',text:'Nothing in storage. Pieces you store, and any that don’t fit after you move house, wait here.'}));
-      for(const it of R.box){ const f=FURNITURE[it.k]; row.append(el('button',{class:'roomitem',onclick:()=>this.start({i:it.i,k:it.k,c:it.c})}, this.thumb(it.k,it.c), el('b',{text:f.name}), el('span',{text:'Set it out'}))); } }
-    else for(const [k,f] of Object.entries(FURNITURE)) if(f.cat===this.cat) row.append(el('button',{class:'roomitem'+(this.pick&&!this.pick.i&&this.pick.k===k?' on':''),onclick:()=>this.start({k})}, this.thumb(k), el('b',{text:f.name}), el('span',{text:fmt(f.cost)})));
+      for(const it of R.box){ const f=FURNITURE[it.k]; row.append(card(pic(it.k,it.c),f.name,'Set it out',false,()=>this.start({i:it.i,k:it.k,c:it.c,ph:it.ph}))); } }
+    else for(const [k,f] of Object.entries(FURNITURE)) if(f.cat===this.cat) row.append(card(pic(k),f.name,fmt(f.cost),this.pick&&!this.pick.i&&this.pick.k===k,()=>this.start({k})));
     s.append(row); } };
+const PHONE_UI=matchMedia('(pointer: coarse)').matches;
 addEventListener('popstate',()=>{ if(Room.el) Room.close(true); });
 addEventListener('keydown',e=>{ if(e.key==='Escape'&&Room.el) Room.close(); });
 // A hangar's card: how many planes it holds, and the ones parked in it.

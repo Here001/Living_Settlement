@@ -297,6 +297,11 @@ export function playersRouter({ limit, send, admin, world }) {
   // the inside of your home: furniture, floor and wallpaper (server/rooms.js); anyone can look inside someone's home
   const RM = () => world.rooms;
   r.get('/me/room', limit, send(async req => RM().view((await me(req)).id)));
+  // a photo for a frame: a small JPEG straight in the request (the phone shrinks it first)
+  r.post('/me/room/photo/:i', limit, quota('photo'), express.raw({ type: 'image/jpeg', limit: '400kb' }), send(async req => RM().photo((await me(req)).id, req.params.i, req.body)));
+  r.get('/room/photos/:id', limit, async (req, res) => { try { const b = await RM().photoFile(req.params.id); if (!b) return res.status(404).end();
+    res.set({ 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=31536000, immutable' }).end(b); } catch (e) { res.status(500).end(); } });
+  r.delete('/admin/room-photos/:id', admin, send(async req => ({ ok: await RM().removePhoto(req.params.id) })));
   r.get('/citizens/:handle/room', limit, send(async req => RM().view((await playerFrom(req))?.id || null, req.params.handle)));
   r.post('/me/room/buy', limit, send(async req => RM().buy((await me(req)).id, bd(req))));
   r.post('/me/room/place', limit, send(async req => RM().place((await me(req)).id, bd(req))));

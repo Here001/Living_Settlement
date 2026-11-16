@@ -166,6 +166,10 @@ export class Chat {
       msg = (await pool.query('select id, citizen_id sender_id, handle, text, t, official from messages where id = $1', [String(id || '')])).rows[0];
       if (!msg || msg.official) throw new HttpError(404, 'That post is gone.');
       if (msg.sender_id === meP.id) throw new HttpError(400, "That's your own post.");
+    } else if (kind === 'photo') {
+      msg = (await pool.query("select p.id, p.citizen_id sender_id, c.handle, '[a photo in their home]' as text from room_photos p join citizens c on c.id = p.citizen_id where p.id = $1", [String(id || '')])).rows[0];
+      if (!msg) throw new HttpError(404, 'That photo is gone.');
+      if (msg.sender_id === meP.id) throw new HttpError(400, "That's your own photo.");
     } else throw new HttpError(400, 'Report a message or a post.');
     const day = (await pool.query('select count(*) n from reports where reporter_id = $1 and t > $2', [meP.id, now - 24 * HOUR])).rows[0];
     if (Number(day.n) >= REPORTS_PER_DAY) throw new HttpError(429, "You've sent a lot of reports today. The developer will look at them soon.");
@@ -180,7 +184,7 @@ export class Chat {
     const rows = (await pool.query(`select r.*, c.muted_until, (select count(*) from reports x where x.target_id = r.target_id) times from reports r left join citizens c on c.id = r.target_id
       where r.status = $1 order by r.t desc limit 100`, [status === 'done' ? 'done' : 'open'])).rows;
     const open = Number((await pool.query("select count(*) n from reports where status = 'open'")).rows[0].n);
-    return { open, reports: rows.map(r => ({ id: r.id, kind: r.kind, by: r.reporter_handle, who: r.target_handle, whoId: r.target_id, text: r.text, context: r.context, reason: r.reason,
+    return { open, reports: rows.map(r => ({ id: r.id, kind: r.kind, mid: r.kind === 'photo' ? r.message_id : undefined, by: r.reporter_handle, who: r.target_handle, whoId: r.target_id, text: r.text, context: r.context, reason: r.reason,
       reasonName: REPORT_REASONS[r.reason] || r.reason, t: Number(r.t), times: Number(r.times), mutedUntil: Number(r.muted_until || 0) > Date.now() ? Number(r.muted_until) : 0, action: r.action, resolvedAt: Number(r.resolved_at || 0) })) };
   }
   // The developer settles a report: dismiss it, delete the message, or mute the colonist (for a day or a week). Muting can be lifted.
@@ -190,9 +194,10 @@ export class Chat {
     const r = (await pool.query('select * from reports where id = $1', [id])).rows[0]; if (!r) throw new HttpError(404, 'That report is gone.');
     const now = Date.now(); let note = 'Dismissed.';
     if (action === 'delete' || action.startsWith('mute')) {
-      if (r.kind === 'square') { const d = await pool.query('delete from messages where id = $1', [r.message_id]); if (d.rowCount) this.bus.publish([{ op: 'chatGone', id: r.message_id }]); }
+      if (r.kind === 'photo') { if (this.removePhoto) await this.removePhoto(r.message_id); }
+      else if (r.kind === 'square') { const d = await pool.query('delete from messages where id = $1', [r.message_id]); if (d.rowCount) this.bus.publish([{ op: 'chatGone', id: r.message_id }]); }
       else { const d = (await pool.query('delete from dms where id = $1 returning sender_id, recipient_id', [r.message_id])).rows[0]; if (d) this.bus.publish([{ op: 'dmGone', private: true, to: [d.sender_id, d.recipient_id], id: r.message_id }]); }
-      note = 'Message deleted.';
+      note = r.kind === 'photo' ? 'Photo taken down.' : 'Message deleted.';
     }
     if (action.startsWith('mute')) { await pool.query('update citizens set muted_until = greatest(coalesce(muted_until, 0), $2) where id = $1', [r.target_id, now + ACTIONS[action]]); note = `Message deleted and @${r.target_handle} muted for ${action === 'mute1' ? 'a day' : 'a week'}.`; }
     if (action === 'unmute') { await pool.query('update citizens set muted_until = null where id = $1', [r.target_id]); return { ok: true, note: `@${r.target_handle} can chat again.` }; }

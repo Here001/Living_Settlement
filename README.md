@@ -500,14 +500,18 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
 
 ## 🛋️ Inside your home
 
-Every colonist can go inside the home they live in, owned or rented, and furnish it: **🛋️ Go inside** on the Home tab or on their home's card.
+Every colonist can go inside the home they live in, owned or rented, walk around it in 3D and furnish it: **🛋️ Go inside** on the Home tab or on their home's card. Others can walk through it too (**🏠 Look inside** on someone's card), look only.
 
-- **The room** is drawn in the map's style: two walls with a window and a door, and a floor of tiles. Its size depends on the home: a tent is 4×4, a flat in a block 5×5, a house 6×6, a big house 8×8.
-- **🛋️ Furnish** opens the shop at the bottom: 36 pieces in Living, Bedroom, Kitchen, Bathroom, Fun, Plants and Luxury (from a 350-coin flower pot to a 150,000-coin gold statue). Pick one, drag it into place, turn it, choose a colour for sofas, beds and the like, then **Buy**. Rugs can go under other furniture; nothing else can overlap.
-- **Tap a piece** to move it, turn it, put it in storage, or sell it back for half what it cost. **🎨 Floor & walls** changes the floor (oak is free, marble 6,000) and the wallpaper.
-- **Furniture belongs to the colonist, not the building**, so it moves house with them. Anything that doesn't fit the new home waits in **📦 Stored**, nothing is lost.
-- **Others can look in**: **🏠 Look inside** on someone's card shows their home, view only. Furniture is for looks; it doesn't change pay or anything else.
-- How it works: the catalogue, room sizes and placing rules are in `shared/furniture.js` (the page and the server use the same rules); the server side is `server/rooms.js`; each colonist's room is kept in `citizens.room` (migration 67). Money spent shows in the Wallet as **Furniture and decorating**, and goes to the colony treasury.
+- **A real house.** Each home has a floor plan with rooms, inside walls, doorways, windows, a front door and ceilings (`layoutOf()` in `shared/furniture.js`): a tent is one room; a flat has a bedroom, a bathroom and a living room with kitchen; a house has a bedroom, bathroom, living room and kitchen; a big house adds a second bedroom.
+- **Walking.** First person: the joystick moves you and dragging looks around (WASD or the arrow keys and the mouse on a computer). The room chips at the top jump to a room; **⬆ From above** shows the whole house like a dollhouse (drag to turn it). You can't walk through walls or furniture. The picture is only redrawn while something moves, so standing still costs no battery.
+- **Furnish** opens the shop: about 100 pieces in Living, Bedroom, Kitchen, Bathroom, **Walls & photos**, **Ceiling**, Fun, Plants and Luxury. Floor pieces stand on the floor, wall pieces hang on a wall (frames, clocks, mirrors, shelves, a wall TV, kitchen cupboards, a cooker hood, radiators…), curtains and blinds go on windows, and lights, fans, a chandelier and a disco ball go on the ceiling. Pick one and it follows where you look (or tap where it goes); pick a colour for anything with one, then **Buy**. Lamps really light the room.
+- **The rules** (checked on the phone and again on the server): furniture can't stand across a wall or in a doorway; rugs can go under things; one thing per bit of wall and per spot on the ceiling; frames only on plain walls, curtains only on windows.
+- **Tap a piece** to move it, turn it, put it in storage, or sell it back for half what it cost. **🎨 Floor & walls** changes the floor and wallpaper of the room you're standing in (each room has its own).
+- **Photos.** Tap a frame, then **📷 Add a photo**: the phone crops the picture to the frame and shrinks it to a small JPEG (under 300 KB) before sending it. The server checks it really is a JPEG and keeps it in Cloudflare R2 when that's set up (otherwise in the database, table `room_photos`); up to 40 photos each and 30 uploads a day. A photo is deleted when it's replaced or its frame is sold.
+  - Photos load straight from R2 when the bucket allows other sites to read it (CORS); otherwise they come through `/api/room/photos/<id>` on the game server. To save the server's bandwidth, add a CORS rule to the R2 bucket allowing GET from the game's address.
+- **Reports.** A visitor who taps a photo can **⚑ Report this photo**; it shows in the developer's Reports tab with the picture, and **Take the photo down** removes it (the frame stays, empty).
+- **Furniture belongs to the colonist, not the building**, so it moves house with them; anything that doesn't fit the new home waits in **📦 Stored**. Furniture is for looks; it doesn't change pay or anything else. Money spent shows in the Wallet as **Furniture and decorating** and goes to the colony treasury.
+- Code: `shared/furniture.js` (plans, catalogue, rules), `public/house3d.js` (the 3D house, walking, placing), `server/rooms.js` (buying, placing, styles, photos), kept in `citizens.room` (migrations 67 and 68).
 
 ## Chats and who's online
 

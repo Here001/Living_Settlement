@@ -62,6 +62,7 @@ const economy = new Economy(world); world.economy = economy;
 world.housing = new Housing(world);
 world.rooms = new Rooms(world);
 const chat = new Chat(bus); world.chat = chat; chat.world = world;
+world.chat.removePhoto = id => world.rooms.removePhoto(id); // a reported photo the developer takes down
 const push = new Push(); world.push = push; chat.push = push;
 const achievements = new Achievements(world, bus); world.achievements = achievements;
 const leaderboards = new Leaderboards(world); world.leaderboards = leaderboards;

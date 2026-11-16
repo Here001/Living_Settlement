@@ -47,11 +47,11 @@ export const STEALTH = { speed: 3.2, grab: 1.5, grabR: 0.95, exitR: 0.8, fill: 1
   guardFov: 0.62, guardRange: 3.4, camFov: 0.4, camRange: 4.6, laser: 0.55, itemR: 0.8, itemGrab: 0.8, itemBonus: 0.15 };
 export const ITEMS = { jewels: { name: 'Jewellery case', icon: '💎' }, cashbox: { name: 'Cash box', icon: '🗃️' }, phones: { name: 'Phones on display', icon: '📱' }, watches: { name: 'Watches', icon: '⌚' } };
 
-export function genStealth(seed, diff) {
-  for (let k = 0; k < 40; k++) { const L = tryStealth(seed + k * 7919, diff); if (L) return L; }
+export function genStealth(seed, diff, cctv = false) {
+  for (let k = 0; k < 40; k++) { const L = tryStealth(seed + k * 7919, diff, false, cctv); if (L) return L; }
   return tryStealth(1, 1, true);
 }
-function tryStealth(seed, diff, plain) {
+function tryStealth(seed, diff, plain, cctv) {
   const r = rng(seed), W = 9 + Math.min(3, diff), H = 8 + Math.min(2, Math.floor(diff / 2)), wall = new Uint8Array(W * H);
   const at = (x, y) => x < 0 || y < 0 || x >= W || y >= H || wall[y * W + x] === 1;
   const entry = { x: 0.5, y: H - 0.5 }, till = { x: W - 2.5, y: 1.5 };
@@ -97,7 +97,7 @@ function tryStealth(seed, diff, plain) {
     if (!far(f) || Math.hypot(x - till.x, y - till.y) < 2.5 || L.items.some(i => Math.hypot(i.x - x, i.y - y) < 3)) continue;
     let wallNear = false; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (at(f[0] + dx, f[1] + dy)) wallNear = true; if (!wallNear) continue;
     if (!pathCells(L, cell(entry), f)) continue; L.items.push({ x, y, k: kinds[(k + io) % kinds.length] }); k++; }
-  const nC = plain ? 0 : 1 + Math.max(0, diff - 3); // there's always CCTV: one camera, then one more for each step past 3
+  const nC = plain || !cctv ? 0 : 1 + Math.max(0, diff - 3); // CCTV only from the 6th robbery in a row: one camera, then one more for each step past 3
   const spots = [[W - 0.5, H / 2, Math.PI], [W / 2, 0.15, Math.PI / 2], [0.15, H / 2 - 1, 0], [W / 2 + 2, H - 0.15, -Math.PI / 2]];
   for (let i = 0; i < nC; i++) { const [x, y, a] = spots[i % spots.length]; L.cams.push({ x, y, base: a, sweep: 0.75, period: 5 + r() * 3, ph: r() * 6.28 }); }
   return L;
@@ -761,9 +761,10 @@ export function minTime(kind, L, st) {
   if (kind === 'safecracker') return (st?.got || 0) * 0.4;
   return 0;
 }
-export function levelOf(kind, seed, diff, hard = false) {
+export const CCTV_FROM = 5; // robberies in a row before this one: the 6th robbery in a row and on have CCTV
+export function levelOf(kind, seed, diff, hard = false, cctv = false) {
   const g = GAMES[kind];
-  return g === 'stealth' ? genStealth(seed, diff) : g === 'con' ? genCon(seed, diff) : g === 'atm' ? genAtm(seed, diff, hard) : g === 'drive' ? genDrive(seed, diff) : g === 'safe' ? genSafe(seed, diff) : g === 'lookout' ? genLook(seed, diff) : g === 'horde' ? genHorde(seed, diff) : genMuscle(seed, diff);
+  return g === 'stealth' ? genStealth(seed, diff, cctv) : g === 'con' ? genCon(seed, diff) : g === 'atm' ? genAtm(seed, diff, hard) : g === 'drive' ? genDrive(seed, diff) : g === 'safe' ? genSafe(seed, diff) : g === 'lookout' ? genLook(seed, diff) : g === 'horde' ? genHorde(seed, diff) : genMuscle(seed, diff);
 }
 export function replay(kind, L, log) {
   const g = GAMES[kind], x = log || {};

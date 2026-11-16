@@ -1028,7 +1028,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 <script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js","three/addons/":"/vendor/three-addons/"}}</script>
 <script type="module">
 window.__booted=true; try{ sessionStorage.removeItem('resurgence-reloaded'); const u=new URL(location.href); if(u.searchParams.has('r')){ u.searchParams.delete('r'); history.replaceState(null,'',u.pathname+u.search+u.hash); } }catch(e){} /* the code loaded: no rescue needed */
-import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, isBank, carPaid, kindOf, carKind, ridden, needsHangar } from '/shared/catalog.js';
+import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, landKeeps, isBank, carPaid, kindOf, carKind, ridden, needsHangar } from '/shared/catalog.js';
 import { TABLE_W, TABLE_H, BALL_R, POCKETS } from '/shared/snooker.js';
 import { placeOk, placeAuto, HEAD_X, BAULK_X, D_R } from '/shared/cuegames.js';
 import { TABLE_GAMES, WHOT_SHAPES, LUDO_SAFE, RAKE, MAX_STAKE } from '/shared/boardgames.js';
@@ -3568,7 +3568,9 @@ function landRect(a,b){ let x0=Math.min(a[0],b[0]), x1=Math.max(a[0],b[0]), y0=M
 // What's wrong with a patch, judged from what this screen knows (the server checks again).
 function landProblem(r){ if(r.w<PLOT_MIN||r.d<PLOT_MIN) return `At least ${PLOT_MIN}×${PLOT_MIN} tiles`;
   let road=false; for(let i=0;i<r.w;i++) for(let j=0;j<r.d;j++){ const k=(r.x+i)+','+(r.y+j); if(D.water.has(k)) return 'Water in the way'; if(D.roads.has(k)) return 'A road crosses it'; if(D.plotOcc.has(k)) return "Someone's land"; if(Auction.occ.has(k)) return 'Up for auction';
-    const id=D.occ.get(k), b=id&&D.buildings.get(id); if(b&&!roadClears(b.type)) return 'Buildings in the way'; }
+    const id=D.occ.get(k), b=id&&D.buildings.get(id); if(b){ if(!landKeeps(b.type)) return 'Buildings in the way'; /* trees, plants and decorations come with the land */
+      if(b.owner&&!(Me&&Me.handle&&b.owner.toLowerCase()===Me.handle.toLowerCase())) return "Someone's decoration";
+      if(!roadClears(b.type)&&(b.x<r.x||b.y<r.y||b.x+(b.w||1)>r.x+r.w||b.y+(b.d||1)>r.y+r.d)) return 'A decoration sticks out'; } }
   for(let i=0;i<r.w&&!road;i++) road=D.roads.has((r.x+i)+','+(r.y-1))||D.roads.has((r.x+i)+','+(r.y+r.d));
   for(let j=0;j<r.d&&!road;j++) road=D.roads.has((r.x-1)+','+(r.y+j))||D.roads.has((r.x+r.w)+','+(r.y+j));
   if(!road&&Me&&Me.handle){ const me=Me.handle.toLowerCase(); for(const p of D.plots.values()){ if(!(p.owner&&p.owner.toLowerCase()===me)) continue; // or touching your own land: it joins your estate
@@ -6025,6 +6027,7 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
     box.append(el('p',{class:'hint',text:`${q.w}×${q.d} tiles (${q.tiles}) ${q.where||''}.`}),
       bill([[`Land: ${q.tiles} tiles × ${fmt(q.perTile)}`,q.land], ...q.charges.map(c=>[c.name,c.amount])], q.total),
       el('p',{class:'hint',text:`${q.homes?`Buildings around here are worth about ${fmt(q.homeValue)} coins each, and land follows them: the dearer the neighbourhood, the dearer the land (up to ${fmt(LAND_TILE_MAX*PLOT_MAX*PLOT_MAX)} for an ${PLOT_MAX}×${PLOT_MAX} plot).`:'No homes or businesses nearby yet, so the land is cheap. It gets dearer as buildings go up around it.'} Charges go to the colony treasury. You'll pay ${fmt(Math.round(q.land*0.001))} a week in land tax. You own ${q.props} of ${q.max} properties.`}));
+    if(q.keeps&&!q.problem) box.append(el('p',{class:'jobnow',text:`🌳 The ${q.keeps===1?'tree or decoration':`${q.keeps} trees and decorations`} on it come${q.keeps===1?'s':''} with the land: ${q.keeps===1?'it’s':'they’re'} yours once you buy it.`}));
     if(q.joins&&!q.problem) box.append(el('p',{class:'jobnow',text:`🧩 It touches ${q.joins==='your land'?'your land':`“${q.joins}”`}, so it joins it: one bigger property, with one outline and one card. Buildings can stand across both.`}));
     if(q.problem) box.append(el('p',{class:'warnline',text:q.problem}));
     else if(q.props>=q.max&&!q.joins) box.append(el('p',{class:'warnline',text:`You're at your limit of ${q.max} properties. Sell one, or earn more stars.`}));

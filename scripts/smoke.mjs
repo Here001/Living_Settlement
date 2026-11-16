@@ -702,7 +702,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
           const Lr = MG.genStealth(seed, 1 + seed % 5); let st = MG.stealthStart(Lr); const path = [[st.x, st.y]]; for (let i = 0; i < 40 && !st.done; i++) { st = MG.stealthStep(Lr, st, 0.7, -0.7); path.push([st.x, st.y]); } if (MG.stealthReplay(Lr, path).ok) okR++; }
         ok(okA === 30 && okR === 30, 'the ATM can always be cracked, and an honest walk around the shop always replays', JSON.stringify({ okA, okR })); }
       { const A0 = await import('../server/actions.js').catch(() => null); if (A0 && A0.streakDiff) ok([0, 1, 2, 3, 4, 9].map(k => A0.streakDiff(2, k)).join() === '2,3,3,4,4,4', 'a winning streak raises the difficulty gently: one step for every two wins, two at most', [0, 1, 2, 3, 4, 9].map(k => A0.streakDiff(2, k)).join());
-        ok(MG.genStealth(7, 4).guards.length === 1 && MG.genStealth(7, 5).guards.length === 2 && MG.genStealth(7, 4).cams.length === 2 && [1, 2, 3].every(d => MG.genStealth(11, d).cams.length === 1), 'the shop adds a second member of staff only at the hardest level; there is always a CCTV camera, and more come gradually'); }
+        ok(MG.genStealth(7, 4).guards.length === 1 && MG.genStealth(7, 5).guards.length === 2 && MG.genStealth(7, 4, true).cams.length === 2 && [1, 2, 3].every(d => MG.genStealth(11, d, true).cams.length === 1) && [1, 3, 5].every(d => MG.genStealth(11, d).cams.length === 0) && MG.levelOf('rob', 11, 3, true, true).cams.length === 1 && MG.levelOf('rob', 11, 3, true).cams.length === 0, 'the shop adds a second member of staff only at the hardest level; CCTV only from the 6th robbery in a row, and more cameras come gradually'); }
       { // the con: a real conversation with somebody, who reacts to what you say
         const fitOf = (st, t) => MG.CON_WORRIES[st.worry].fit[t.tactic] ?? 0, run = (L, choose) => { let st = MG.conStart(L); const picks = []; while (!st.done) { const i = choose(MG.conOptions(L, st), st); picks.push({ o: i, t: 0.9 }); st = MG.conStep(L, st, picks[picks.length - 1]); } return MG.conReplay(L, picks); };
         let good = 0, bad = 0; for (let seed = 1; seed <= 60; seed++) { const L = MG.genCon(seed, 3);
@@ -1835,6 +1835,16 @@ for (let i = 0; i < 5; i++) { const s = (await spot(2, 2)) || { x: 900 + i * 5, 
 // public card
 const card = (await call('GET', '/api/citizens/buyer_bob', undefined, { auth: false })).json; ok(card.props === 5 && card.propMax === 5, 'the card shows how many properties they own', `${card.props} ${card.propMax}`);
 const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props === 5 && hm.max === 5, 'the Home tab knows the count and the limit', JSON.stringify(hm).slice(0, 300));
+{ // trees and decorations on land don't stop it being bought: they come with it
+  const set = {}; for (let i = 0; i < 8; i++) set[`${1200 + i},1205`] = 'street'; await call('POST', '/api/admin/roads', { set }); // a quiet street of its own, with room beside it
+  const K = await player('deco_dan', 4_000_000), k1 = { x: 1201, y: 1206, w: 4, d: 4 };
+  const pk = await call('POST', '/api/admin/buildings', { type: 'parkinglot', x: k1.x + 1, y: k1.y + 1 }), tr = await call('POST', '/api/admin/buildings', { type: 'tree', x: k1.x + 3, y: k1.y + 3 });
+  ok(pk.status === 200 && tr.status === 200, 'a parking lot and a tree on the grass', JSON.stringify([pk.json, tr.json]).slice(0, 200));
+  const kq = (await call('GET', `/api/land/quote?x=${k1.x}&y=${k1.y}&w=4&d=4`, undefined, K.P)).json; ok(!kq.problem && kq.keeps === 2, 'the quote says the two come with the land', JSON.stringify(kq).slice(0, 300));
+  const edge = (await call('GET', `/api/land/quote?x=${k1.x + 2}&y=${k1.y}&w=2&d=4`, undefined, K.P)).json; ok(/sticks out/.test(edge.problem || ''), 'a big decoration half on the land must be taken in whole', edge.problem);
+  const kb = await call('POST', '/api/me/land', k1, K.P); ok(kb.status === 200 && kb.json.kept === 2, 'land with decorations on it can be bought', JSON.stringify(kb.json).slice(0, 200));
+  const got = (await pool.query('select type, owner_id, plot_id from buildings where id = any($1)', [[pk.json.building?.id || pk.json.id, tr.json.building?.id || tr.json.id]])).rows;
+  ok(got.length === 2 && got.every(b => b.owner_id === K.id && b.plot_id), '…and the buyer owns them, on their plot', JSON.stringify(got)); }
 // bills include land
 const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 'weekly bills run with plots', JSON.stringify(bl2.json));
 { // land auctions: the developer puts prime land up, players bid with held cash, the top bid wins it as a plot

@@ -546,5 +546,7 @@ export const WEATHER_TYPES = {
 
 // A new road clears small things in its way (trees, bushes, rocks, benches, lamps and other 1×1 street furniture).
 // Anything bigger, like a park, farm, or solid building, stops the road instead.
+// Trees, plants, rocks and decorations of any size: land can be bought with them on it, and the buyer gets them.
+export function landKeeps(type) { const t = BUILDING_TYPES[type]; return !!t && (t.cat === 'nature' || t.cat === 'decor'); }
 export function roadClears(type) { const t = BUILDING_TYPES[type]; if (!t) return false; const [w, d] = t.size;
   return t.cat === 'nature' || (t.cat === 'decor' && w === 1 && d === 1); }

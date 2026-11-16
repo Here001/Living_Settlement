@@ -262,10 +262,10 @@ export class Actions {
       const pay = practice ? 1 : payMult(c, this.world.meta), streak = practice ? 0 : Number(c.crime_streak || 0), same = last === kind ? streak : 0;
       const diff = streakDiff(MG.difficultyOf(kind, odds.band), same), chance = streakChance(odds.chance, same), seed = crypto.randomInt(1, 2 ** 31), rid = crypto.randomUUID();
       await db.query('insert into crime_runs (id, citizen_id, kind, seed, diff, practice, started_at, chance, band, night, loot, scene) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
-        [rid, id, kind, seed, diff, !!practice, now, chance, odds.band, !!odds.night, sc.loot, JSON.stringify({ ...sc, hard: same > 0 })]);
+        [rid, id, kind, seed, diff, !!practice, now, chance, odds.band, !!odds.night, sc.loot, JSON.stringify({ ...sc, hard: same > 0, cctv: same >= MG.CCTV_FROM })]);
       if (!practice) await db.query('update citizens set crime_at = $2 where id = $1', [id, now]);
       await db.query('delete from crime_runs where citizen_id = $1 and started_at < $2', [id, now - 7 * 86400000]);
-      return { id: rid, kind, seed, diff, streak, same, hard: same > 0, practice: !!practice, chance, band: odds.band, police: odds.dist, night: !!odds.night, wave, at: sc.shop?.name || null, loot: practice ? null : [Math.round(sc.loot * 0.3 * pay), Math.round(sc.loot * 1.5 * pay)], pay: R.crimePayMult(c), hot: practice ? 1 : R.hotMult(streak) };
+      return { id: rid, kind, seed, diff, streak, same, hard: same > 0, cctv: same >= MG.CCTV_FROM, practice: !!practice, chance, band: odds.band, police: odds.dist, night: !!odds.night, wave, at: sc.shop?.name || null, loot: practice ? null : [Math.round(sc.loot * 0.3 * pay), Math.round(sc.loot * 1.5 * pay)], pay: R.crimePayMult(c), hot: practice ? 1 : R.hotMult(streak) };
     };
     return practice ? go(pool) : this.world.change(ch => go({ query: (a, v) => ch.q(a, v) }));
   }
@@ -281,7 +281,7 @@ export class Actions {
     return this.world.change(async ch => {
       const run = (await ch.q('select * from crime_runs where id = $1 for update', [String(runId || '')])).rows[0];
       if (!run || run.citizen_id !== id) throw new HttpError(404, 'No such game.'); if (run.finished_at) throw new HttpError(409, 'That game is already over.');
-      const now = Date.now(), L = MG.levelOf(run.kind, Number(run.seed), run.diff, !!(run.scene && run.scene.hard)), took = (now - Number(run.started_at)) / 1000;
+      const now = Date.now(), L = MG.levelOf(run.kind, Number(run.seed), run.diff, !!(run.scene && run.scene.hard), !!(run.scene && run.scene.cctv)), took = (now - Number(run.started_at)) / 1000;
       let rp = MG.replay(run.kind, L, log || {});
       // a result faster than the game can be played, or one that breaks the game's rules, counts as a botched job
       if (rp.ok && took + 4 < MG.minTime(run.kind, L, rp.state)) rp = { ok: false, why: 'too quick' };

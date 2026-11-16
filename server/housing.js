@@ -12,7 +12,7 @@ import crypto from 'node:crypto';
 import { pool } from './db.js';
 import { HttpError, bRow, cleanTiles } from './world.js';
 import * as R from '../shared/rules.js';
-import { BUILDING_TYPES, roadClears } from '../shared/catalog.js';
+import { BUILDING_TYPES, roadClears, landKeeps } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
 import { track } from './stats.js';
 import { dailyIncome, ownedCount, PROPERTY_RESALE } from './economy.js';
@@ -69,14 +69,24 @@ export class Housing {
   }
   // What's in the way of buying this patch: water, roads, buildings (trees, rocks and benches are cleared), others' land,
   // land up for auction (except the auction asking, `auctionId`, when it hands the land to its winner), and no road beside it.
+  wholeOn(b, r) { return b.x >= r.x && b.y >= r.y && b.x + b.w <= r.x + r.w && b.y + b.d <= r.y + r.d; }
+  // On land just bought: the trees, plants and decorations wholly on it become the buyer's; small ones sticking out are cleared.
+  async takeOver(ch, c, plotId, r) { let n = 0;
+    for (const b of (await ch.q('select * from buildings where x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int for update', [r.x, r.y, r.w, r.d])).rows) {
+      if (landKeeps(b.type) && this.wholeOn(b, r)) { await ch.q('update buildings set plot_id = $2, owner_id = $3, owner_handle = $4, bought_at = $5, price = 0 where id = $1', [b.id, plotId, c.id, c.handle, Date.now()]); ch.buildings.add(b.id); n++; }
+      else await this.world.demolishIn(ch, b); }
+    return n; }
   async landProblems(q, { x, y, w, d }, auctionId = null, ownerId = null) {
     const box = [x, y, w, d];
     if ((await q("select 1 from auctions where status = 'open' and id is distinct from $5::text and x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int limit 1", [...box, auctionId])).rowCount) return 'This land is up for auction. Tap it on the map to bid.';
     if ((await q('select 1 from plots where x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int limit 1', box)).rowCount) return "Part of it is someone's land already.";
     if ((await q('select 1 from roads where x >= $1::int and x < $1::int + $3::int and y >= $2::int and y < $2::int + $4::int limit 1', box)).rowCount) return 'There’s a road across it. Mark grass beside the road instead.';
     if ((await q('select 1 from water where x >= $1::int and x < $1::int + $3::int and y >= $2::int and y < $2::int + $4::int limit 1', box)).rowCount) return 'Part of it is water.';
-    const under = (await q('select type from buildings where x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int', box)).rows;
-    if (under.some(b => !roadClears(b.type))) return 'There are buildings on it. Pick empty grass.';
+    const under = (await q('select type, x, y, w, d, owner_id from buildings where x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int', box)).rows;
+    if (under.some(b => !landKeeps(b.type))) return 'There are buildings on it. Pick empty grass.';
+    // trees, plants and decorations are fine: the buyer gets them (small ones sticking out past the edge are cleared away)
+    if (under.some(b => b.owner_id && b.owner_id !== ownerId)) return 'Someone owns a decoration on it.';
+    if (under.some(b => !roadClears(b.type) && !this.wholeOn(b, { x, y, w, d }))) return 'A decoration sticks out past the edge. Make the plot a little bigger to take it in.';
     const road = await q(`select 1 from roads where ((x = $1::int - 1 or x = $1::int + $3::int) and y >= $2::int and y < $2::int + $4::int)
       or ((y = $2::int - 1 or y = $2::int + $4::int) and x >= $1::int and x < $1::int + $3::int) limit 1`, box);
     if (!road.rowCount && !(await this.ownAdjacent(q, ownerId, { x, y, w, d })).length) return 'It needs a road along one side (or to touch land you already own), so people can get to it.';
@@ -86,7 +96,8 @@ export class Housing {
     const r = this.rect(body || {}), q = (a, v) => pool.query(a, v), problem = await this.landProblems(q, r, null, id);
     const props = id ? await ownedCount(q, id) : 0, stars = id ? (await pool.query('select stars from citizens where id = $1', [id])).rows[0]?.stars || 0 : 0;
     const adj = await this.ownAdjacent(q, id, r), joins = adj.length ? (await this.estateOf(q, adj[0])).find(p => p.id === (adj[0].estate || adj[0].id)) : null;
-    return { ...r, ...this.price(r), problem, props, max: R.propertyLimit(stars), joins: joins ? (joins.name || 'your land') : null };
+    const keeps = problem ? 0 : (await q('select type, x, y, w, d from buildings where x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int', [r.x, r.y, r.w, r.d])).rows.filter(b => landKeeps(b.type) && this.wholeOn(b, r)).length;
+    return { ...r, ...this.price(r), problem, props, max: R.propertyLimit(stars), joins: joins ? (joins.name || 'your land') : null, keeps };
   }
   async buyLand(id, body) {
     const r = this.rect(body || {}), name = String(body?.name || '').trim().slice(0, 30);
@@ -97,20 +108,18 @@ export class Housing {
       const problem = await this.landProblems(q, r, null, c.id); if (problem) throw new HttpError(409, problem);
       const p = this.price(r); ch.coins(c);
       if (c.coins_base < p.total) throw new HttpError(400, `This land costs ${fmt(p.total)} coins with the charges. You have ${fmt(c.coins_base)} on you${Number(c.bank) ? ' (withdraw some at a Bank first)' : ''}.`);
-      // trees, bushes, rocks and street furniture on it are cleared away
-      for (const b of (await ch.q('select * from buildings where x < $1::int + $3::int and x + w > $1::int and y < $2::int + $4::int and y + d > $2::int for update', [r.x, r.y, r.w, r.d])).rows) await this.world.demolishIn(ch, b);
       const pid = uid(), [cx, cy] = R.chunkOf(r.x, r.y);
       // touching your own land: it joins that estate (and any other estate of yours it touches joins too)
       const estate = adj.length ? (adj[0].estate || adj[0].id) : null;
       await ch.q('insert into plots (id, owner_id, owner_handle, x, y, w, d, cx, cy, price, bought_at, name, estate) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
         [pid, c.id, c.handle, r.x, r.y, r.w, r.d, cx, cy, p.land, Date.now(), estate ? '' : name, estate]);
-      ch.plots.add(pid);
+      ch.plots.add(pid); const kept = await this.takeOver(ch, c, pid, r); // the trees and decorations on it are now yours
       if (estate) for (const k of new Set(adj.map(a => a.estate || a.id))) if (k !== estate) for (const row of (await ch.q('update plots set estate = $1 where coalesce(estate, id) = $2 returning id', [estate, k])).rows) ch.plots.add(row.id);
       for (const pid2 of await this.mergeEstates(q, c.id)) ch.plots.add(pid2); // every touching plot of yours ends up in one estate
       if (estate) for (const row of (await ch.q('select id from plots where coalesce(estate, id) = $1', [estate])).rows) ch.plots.add(row.id);
       c.coins_base -= p.total; treasuryAdd(ch, p.total); track(ch, 'land:buy', p.land, c.id); track(ch, 'land:charges', p.chargesTotal, c.id); ch.touch(c); await ch.saveCitizen(c);
       await ch.event(`🗺️ @${c.handle} bought a ${r.w}×${r.d} plot of land ${p.where}.`, 'property');
-      return { ok: true, plot: { id: estate || pid, ...r }, joined: !!estate, paid: p.total, coins: c.coins_base };
+      return { ok: true, plot: { id: estate || pid, ...r }, joined: !!estate, kept, paid: p.total, coins: c.coins_base };
     });
   }
   async plot(id, plotId) {

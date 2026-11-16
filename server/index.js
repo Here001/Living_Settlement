@@ -301,7 +301,14 @@ setInterval(() => { if (isLeader) sweepPlayers().catch(e => console.error('sweep
 // The game's code (the page, /shared/*.js, music.js) is always revalidated: the browser asks "still the same?" and gets a
 // tiny 304 if so. With a cache time, a phone could keep an old part next to a new page right after an update, and a
 // mismatched part stops the game from starting. Pictures, video and sound keep their cache times.
-const fresh = (res, file) => { if (/\.(html|js|mjs|css|json|webmanifest)$/i.test(file)) res.setHeader('Cache-Control', 'no-cache');
+// Each file is tagged by its contents, not its date: a new deploy gives every file a new date, so date-based tags made
+// every player download the whole game again after each update even when only one file had changed. Now an unchanged
+// file still answers "same as before" (a tiny 304) across deploys.
+const tags = new Map();
+const contentTag = (file, stat) => { const k = `${file}:${stat.size}:${stat.mtimeMs}`; let t = tags.get(k);
+  if (!t) { try { t = '"' + crypto.createHash('sha1').update(fs.readFileSync(file)).digest('base64url').slice(0, 16) + '"'; } catch (e) { return null; } if (tags.size > 5000) tags.clear(); tags.set(k, t); } return t; };
+const fresh = (res, file, stat) => { const t = stat && contentTag(file, stat); if (t) res.setHeader('ETag', t);
+  if (/\.(html|js|mjs|css|json|webmanifest)$/i.test(file)) res.setHeader('Cache-Control', 'no-cache');
   else if (/\.(png|jpe?g|webp|svg|ico|mp4|mp3)$/i.test(file)) res.setHeader('Cache-Control', 'public, max-age=604800'); }; // pictures and video rarely change: a week saves re-downloads
 // The opening video is the biggest file the game has (about 6.7 MB), and the game server's bandwidth is metered. When
 // Cloudflare R2 is set up, the video and its poster are copied there once (named by their contents, so a new video gets a
@@ -315,7 +322,7 @@ const introSrc = { video: fs.existsSync(path.join(root, 'public', 'intro.mp4')) 
     introSrc[k] = store.publicUrl(key); }
 })().catch(e => console.error('copying the intro to R2:', e.message));
 app.get('/api/intro', (req, res) => { res.set('cache-control', 'no-cache'); res.json(introSrc); });
-app.use('/shared', express.static(path.join(root, 'shared'), { maxAge: '5m', setHeaders: fresh }));
+app.use('/shared', express.static(path.join(root, 'shared'), { maxAge: '5m', lastModified: false, setHeaders: fresh }));
 // The 3D engine for the mini games (three.js), loaded only when a game opens.
 app.use('/vendor/three', express.static(path.join(root, 'node_modules', 'three', 'build'), { maxAge: '7d' }));
 app.use('/vendor/three-addons', express.static(path.join(root, 'node_modules', 'three', 'examples', 'jsm'), { maxAge: '7d' }));
@@ -333,7 +340,7 @@ app.get('/', async (req, res, next) => {
     res.set('cache-control', 'no-cache').type('html').send(html);
   } catch (e) { next(); }
 });
-app.use(express.static(path.join(root, 'public'), { maxAge: '5m', setHeaders: fresh }));
+app.use(express.static(path.join(root, 'public'), { maxAge: '5m', lastModified: false, setHeaders: fresh }));
 
 // ---------- live updates ----------
 // Each viewer subscribes to the map chunks on their screen and only hears about those, plus town-wide news.

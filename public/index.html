@@ -4978,7 +4978,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     else for(const m of T.messages) body.append(this.bubble(m));
     if(T&&G&&G.closed){ p.append(body, el('div',{class:'dmbar dmshut'}, el('span',{class:'hint',text:`🔒 This chat has closed${G.closesAt&&G.closesAt>Date.now()?`; it leaves your list in ${Math.max(1,Math.ceil((G.closesAt-Date.now())/60000))} min`:''}.`}))); requestAnimationFrame(()=>{ body.scrollTop=body.scrollHeight; }); return; }
     p.append(body); if(T){ const f=this.feeNote(T); if(f) p.append(f); if(this.reply) p.append(this.replyBar()); } p.append(this.composer(T)); requestAnimationFrame(()=>{ body.scrollTop=body.scrollHeight; }); } };
-setInterval(()=>{ if(!document.hidden && Me&&Me.token && Date.now()-Chats.loadedAt>45000) Chats.load(); },15000);
+setInterval(()=>{ if(document.hidden||!(Me&&Me.token)) return; const gap=(activeTab==='chats'||!(ws&&ws.readyState===1))?45000:300000; if(Date.now()-Chats.loadedAt>gap) Chats.load(); },15000); /* new messages arrive over the live connection; this is only the backup, so it's slow unless chat is open or the connection is down */
 
 // ---- Fight Night at the Colosseum: sign up, bet on each bout, and watch it live (everyone sees the same fight) ----
 const Fight={ info:null, skew:0, loadAt:0, view:'races', pick:{}, amount:{}, busy:false, toasted:new Set(), ringKey:'',
@@ -6438,7 +6438,7 @@ const Heist={ data:null, at:0, busy:false, form:null, prompted:new Set(),
   playPart(h){ const L0=h.live; openCrimeGame(L0.myRole,{heist:h.id,until:L0.until,band:L0.band,chance:L0.chance,night:L0.night,at:L0.at},crimeCtx()); },
   // while you're on a job, keep an eye on it: when it goes live, say so wherever you are in the game
   watch(){ if(!(Me&&Me.token)) return; const D0=this.data, on=D0&&D0.mine.some(h=>h.status==='planning'&&h.me==='member'||h.status==='live');
-    if(Date.now()-this.at>(on?10000:60000)) this.load(true); const live=D0&&D0.mine.find(h=>h.status==='live'&&h.live&&h.live.myRole&&!h.live.iPlayed&&!h.live.iStarted&&!this.prompted.has(h.id));
+    if(Date.now()-this.at>(on?10000:(actTab==='crime'?60000:180000))) this.load(true); const live=D0&&D0.mine.find(h=>h.status==='live'&&h.live&&h.live.myRole&&!h.live.iPlayed&&!h.live.iStarted&&!this.prompted.has(h.id));
     if(live&&!document.body.classList.contains('mg-on')){ this.prompted.add(live.id); toast(`🚨 Go time! ${live.icon} ${live.name}: the job is on. Play your part: ${MG_ROLES[live.live.myRole].icon} ${MG_ROLES[live.live.myRole].name}.`,'Play',()=>this.playPart(live)); } },
   load(force){ if(this.busy||(!force&&this.data&&Date.now()-this.at<10000)) return; this.busy=true; api('/api/me/heists').then(d=>{ this.data=d; this.at=Date.now(); }).catch(()=>{}).finally(()=>{ this.busy=false; if(actTab==='crime'&&sel&&sel.kind==='c') renderCard(true); }); },
   async act(path, body, ok){ try{ const r=await api(path,{method:'POST',body:body||{}}); if(ok) toast(typeof ok==='function'?ok(r):ok); this.form=null; this.load(true); Chats.load(); return r; }catch(e){ toast(e.message); return null; } },

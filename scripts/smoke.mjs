@@ -1845,6 +1845,28 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   const kb = await call('POST', '/api/me/land', k1, K.P); ok(kb.status === 200 && kb.json.kept === 2, 'land with decorations on it can be bought', JSON.stringify(kb.json).slice(0, 200));
   const got = (await pool.query('select type, owner_id, plot_id from buildings where id = any($1)', [[pk.json.building?.id || pk.json.id, tr.json.building?.id || tr.json.id]])).rows;
   ok(got.length === 2 && got.every(b => b.owner_id === K.id && b.plot_id), '…and the buyer owns them, on their plot', JSON.stringify(got)); }
+{ // inside your home: furniture you buy, place, turn, store and sell; others can look but not touch
+  const M = await player('homey_hal', 200_000), V = await player('visitor_vi', 1000);
+  await pool.query('update citizens set home_id = (select id from buildings where type = $2 limit 1) where id = $1', [M.id, 'house']);
+  const v0 = await call('GET', '/api/me/room', undefined, M.P); ok(v0.status === 200 && v0.json.mine && v0.json.size === 6 && v0.json.room.items.length === 0, 'an empty home to furnish (a house has a 6×6 room)', JSON.stringify(v0.json).slice(0, 200));
+  const b1 = await call('POST', '/api/me/room/buy', { k: 'sofa', x: 0, y: 0, r: 0, c: 2 }, M.P); const it = b1.json.room?.items?.[0];
+  ok(b1.status === 200 && it && it.k === 'sofa' && it.c === 2 && b1.json.coins === 200_000 - 4000, 'buy a green sofa against the wall', JSON.stringify(b1.json).slice(0, 200));
+  ok((await call('POST', '/api/me/room/buy', { k: 'armchair', x: 1, y: 0, r: 0 }, M.P)).status === 409, 'two pieces can’t stand in the same spot');
+  ok((await call('POST', '/api/me/room/buy', { k: 'rug', x: 0, y: 0, r: 0 }, M.P)).status === 200, '…but a rug can go under the sofa');
+  ok((await call('POST', '/api/me/room/buy', { k: 'bed', x: 5, y: 5, r: 0 }, M.P)).status === 409, 'furniture must fit inside the room');
+  const tr = await call('POST', '/api/me/room/place', { i: it.i, x: 4, y: 0, r: 1 }, M.P), t2 = tr.json.room?.items?.find(x => x.i === it.i);
+  ok(tr.status === 200 && t2.x === 4 && t2.r === 1, 'move the sofa and turn it', JSON.stringify(t2));
+  const st = await call('POST', '/api/me/room/store', { i: it.i }, M.P); ok(st.status === 200 && st.json.room.box.length === 1 && !st.json.room.items.some(x => x.i === it.i), 'put it in storage');
+  ok((await call('POST', '/api/me/room/place', { i: it.i, x: 2, y: 3, r: 0 }, M.P)).json.room?.items?.some(x => x.i === it.i), '…and set it out again');
+  const sl = await call('POST', '/api/me/room/sell', { i: it.i }, M.P); ok(sl.status === 200 && sl.json.coins === 200_000 - 4000 - 1500 + 2000, 'sell it back for half what it cost', sl.json.coins);
+  const sy = await call('POST', '/api/me/room/style', { floor: 'marble', wall: 'sage' }, M.P); ok(sy.status === 200 && sy.json.room.floor === 'marble' && sy.json.room.wall === 'sage' && sy.json.coins === sl.json.coins - 6800, 'marble floor and sage walls', JSON.stringify(sy.json.room).slice(0, 120));
+  const look = await call('GET', '/api/citizens/homey_hal/room', undefined, V.P); ok(look.status === 200 && !look.json.mine && look.json.room.floor === 'marble' && look.json.coins === undefined, 'a visitor can look inside (but not see their coins)');
+  await pool.query('update citizens set home_id = (select id from buildings where type = $2 limit 1) where id = $1', [V.id, 'tent']);
+  const poor = await call('POST', '/api/me/room/buy', { k: 'statue', x: 0, y: 0, r: 0 }, V.P); ok(poor.status === 400 && /costs 150,000/.test(poor.json.error || ''), 'without the coins, you can’t buy a gold statue', JSON.stringify(poor.json));
+  ok((await call('GET', '/api/citizens/visitor_vi/room', undefined, M.P)).json.room.items.length === 0, '…and nothing was taken or placed');
+  await pool.query('update citizens set home_id = (select id from buildings where type = $2 limit 1) where id = $1', [M.id, 'tent']);
+  await call('POST', '/api/me/room/buy', { k: 'plant', x: 0, y: 0, r: 0 }, M.P).catch(() => {});
+  const moved = (await call('GET', '/api/me/room', undefined, M.P)).json; ok(moved.size === 4 && moved.room.items.every(x => x.x < 4 && x.y < 4), 'moving somewhere smaller packs away what no longer fits', JSON.stringify(moved).slice(0, 200)); }
 // bills include land
 const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 'weekly bills run with plots', JSON.stringify(bl2.json));
 { // land auctions: the developer puts prime land up, players bid with held cash, the top bid wins it as a plot

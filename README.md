@@ -498,6 +498,17 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
   - If both cash and savings run out, the rest is let go for that week.
 - **New buildings.** A **Gym** and an outdoor **Fitness park**, under Parks → Sports.
 
+## 🛋️ Inside your home
+
+Every colonist can go inside the home they live in, owned or rented, and furnish it: **🛋️ Go inside** on the Home tab or on their home's card.
+
+- **The room** is drawn in the map's style: two walls with a window and a door, and a floor of tiles. Its size depends on the home: a tent is 4×4, a flat in a block 5×5, a house 6×6, a big house 8×8.
+- **🛋️ Furnish** opens the shop at the bottom: 36 pieces in Living, Bedroom, Kitchen, Bathroom, Fun, Plants and Luxury (from a 350-coin flower pot to a 150,000-coin gold statue). Pick one, drag it into place, turn it, choose a colour for sofas, beds and the like, then **Buy**. Rugs can go under other furniture; nothing else can overlap.
+- **Tap a piece** to move it, turn it, put it in storage, or sell it back for half what it cost. **🎨 Floor & walls** changes the floor (oak is free, marble 6,000) and the wallpaper.
+- **Furniture belongs to the colonist, not the building**, so it moves house with them. Anything that doesn't fit the new home waits in **📦 Stored**, nothing is lost.
+- **Others can look in**: **🏠 Look inside** on someone's card shows their home, view only. Furniture is for looks; it doesn't change pay or anything else.
+- How it works: the catalogue, room sizes and placing rules are in `shared/furniture.js` (the page and the server use the same rules); the server side is `server/rooms.js`; each colonist's room is kept in `citizens.room` (migration 67). Money spent shows in the Wallet as **Furniture and decorating**, and goes to the colony treasury.
+
 ## Chats and who's online
 
 - **Who can chat.** Verified colonists (claimed, signed in) can message each other privately.

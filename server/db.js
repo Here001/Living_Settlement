@@ -327,6 +327,8 @@ const MIGRATIONS = [
   `alter table buildings add column if not exists till numeric not null default 0;`,
   // v66: a business's website, set by its owner and shown to everyone on its card
   `alter table buildings add column if not exists website text;`,
+  // v67: the inside of each colonist's home: their furniture, floor and wallpaper (it moves with them)
+  `alter table citizens add column if not exists room jsonb;`,
 ];
 
 export async function migrate() {

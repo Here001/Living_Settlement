@@ -52,7 +52,6 @@ export async function openCreator({ api, toast = msg => alert(msg), required = f
   const ward = new Set(d.wardrobe || []); let coins = d.coins || 0;
   // a first character starts as the mannequin; changing it later starts from what they wear now
   let L = d.set ? AV.fixLook(d.look) : AV.fixLook({ ...AV.mannequin(d.gender), g: d.gender || 'm' });
-  const genderFixed = !!d.genderLocked;
 
   // ---- the page ----
   const coinsChip = el('span', { class: 'cre-coins', text: `🪙 ${fmt(coins)}` });
@@ -106,7 +105,8 @@ export async function openCreator({ api, toast = msg => alert(msg), required = f
     tabs.replaceChildren(...TABS.map(([k, n]) => el('button', { class: k === tab ? 'on' : '', text: n, onclick: () => { tab = k; paint(); panel.scrollTop = 0; if (k === 'face' || k === 'hair') { if (!face) zoom(true); } else if (k !== 'photo' && face) zoom(false); } })));
     const P = [];
     if (tab === 'body') {
-      if (!genderFixed) P.push(el('h4', { text: 'You are' }), chips(['A man', 'A woman'], L.g === 'f' ? 1 : 0, i => { const g = i ? 'f' : 'm'; if (g === L.g) return; const m = AV.mannequin(g); set({ g, hs: d.set ? L.hs : m.hs, bdr: g === 'f' ? 0 : L.bdr }); }));
+      // man or woman: chosen once, while making the character for the first time (the hair and beard follow sensibly)
+      if (!d.set) P.push(el('h4', { text: 'You are' }), chips(['👨 A man', '👩 A woman'], L.g === 'f' ? 1 : 0, i => { const g = i ? 'f' : 'm'; if (g === L.g) return; const m = AV.mannequin(g), wasDefault = L.hs === AV.mannequin(L.g).hs; set({ g, hs: wasDefault ? m.hs : L.hs, bdr: g === 'f' ? 0 : L.bdr }); }));
       P.push(el('h4', { text: 'Skin' }), swatches(AV.SKINS, L.sk, c => set({ sk: c })),
         el('h4', { text: 'Height' }), chips(AV.HEIGHTS, L.ht, i => set({ ht: i })), el('h4', { text: 'Build' }), chips(AV.BUILDS, L.bd, i => set({ bd: i })));
     } else if (tab === 'face') {

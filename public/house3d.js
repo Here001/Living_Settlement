@@ -40,7 +40,7 @@ const READBACK_OK = (() => { try { const c = document.createElement('canvas'); c
 let NORMALS = READBACK_OK, TEXTURES = true;
 // Does this phone get painted pictures to the graphics chip intact? (see safe3d.js) If not even as raw pixels,
 // walls, floors and fabrics are drawn in their own solid colours instead.
-const useMap = t => (TEXTURES ? t : null);
+const useMap = t => (TEXTURES ? t : null), nm = t => (NORMALS ? t : null);
 // a normal map from a greyscale height canvas (light = raised), so grout, plank joints and weave catch the light
 function normalOf(hc, strength = 2) {
   if (!NORMALS) return null;
@@ -130,8 +130,8 @@ let MATS = null;
 function mats() {
   if (MATS) return MATS; const fab = detail('fabric'), wood = detail('wood');
   for (const t of [fab.map, fab.normalMap]) if (t) t.repeat.set(4, 4); for (const t of [wood.map, wood.normalMap]) if (t) t.repeat.set(2, 2);
-  MATS = { plain: std({ vertexColors: true, roughness: 0.62 }), fabric: std({ vertexColors: true, roughness: 0.95, map: useMap(fab.map), normalMap: fab.normalMap, normalScale: new THREE.Vector2(0.7, 0.7) }),
-    wood: std({ vertexColors: true, roughness: 0.48, map: useMap(wood.map), normalMap: wood.normalMap, normalScale: new THREE.Vector2(0.5, 0.5) }),
+  MATS = { plain: std({ vertexColors: true, roughness: 0.62 }), fabric: std({ vertexColors: true, roughness: 0.95, map: useMap(fab.map), normalMap: nm(fab.normalMap), normalScale: new THREE.Vector2(0.7, 0.7) }),
+    wood: std({ vertexColors: true, roughness: 0.48, map: useMap(wood.map), normalMap: nm(wood.normalMap), normalScale: new THREE.Vector2(0.5, 0.5) }),
     metal: std({ vertexColors: true, roughness: 0.3, metalness: 0.85 }), gold: std({ vertexColors: true, roughness: 0.26, metalness: 1 }), gloss: std({ vertexColors: true, roughness: 0.16 }),
     leaf: std({ vertexColors: true, roughness: 0.78 }), glass: std({ color: '#DCEFFA', transparent: true, opacity: 0.22, roughness: 0.04, metalness: 0.1, depthWrite: false }),
     screen: std({ color: '#0B1220', roughness: 0.12, metalness: 0.2, emissive: '#101A2C' }) };
@@ -170,6 +170,15 @@ function pieceGroup(it, photoTex) {
 }
 
 // ---------------- the house ----------------
+// Before a home opens: paint the floor, wall and fabric textures it needs, one at a time with a breath between each,
+// so the page never locks up (the entrance animation keeps moving). onStep(done, total) reports progress.
+const breathe = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+export async function prepare(room, S, plan, onStep) {
+  const L = layoutOf(S, plan || 'home'), jobs = new Map();
+  L.rooms.forEach((r, i) => { const st = styleOf(room, S, i); jobs.set('floor-' + st.f, () => floorSet(st.f)); jobs.set('wall-' + st.w, () => wallSet(st.w)); });
+  jobs.set('wall-cream', () => wallSet('cream')); jobs.set('d-fabric', () => detail('fabric')); jobs.set('d-wood', () => detail('wood'));
+  let n = 0; for (const [, job] of jobs) { job(); onStep && onStep(++n, jobs.size); await breathe(); }
+}
 export function createHouse(host, opts) {
   const S = opts.size, PLAN = opts.plan || 'home', L = layoutOf(S, PLAN), H = WALL_H;
   // Film-like colour (ACES), sunlight through the windows with real shadows (worked out only when the house changes,
@@ -232,12 +241,12 @@ export function createHouse(host, opts) {
     }
     const trimMat = std({ vertexColors: true, roughness: 0.32 });
     for (const [c, list] of plain) { const m = new THREE.Mesh(mergeGeometries(list), trimMat); m.castShadow = m.receiveShadow = true; walls.add(m); }
-    for (const [key, list] of textured) { const k = key.startsWith('T:') ? key.slice(2).split('|')[0] : 'cream', ws = wallSet(k), m = new THREE.Mesh(mergeGeometries(list), std({ vertexColors: true, map: useMap(ws.map), normalMap: ws.normalMap, roughness: ws.roughness }));
+    for (const [key, list] of textured) { const k = key.startsWith('T:') ? key.slice(2).split('|')[0] : 'cream', ws = wallSet(k), m = new THREE.Mesh(mergeGeometries(list), std({ vertexColors: true, map: useMap(ws.map), normalMap: nm(ws.normalMap), roughness: ws.roughness }));
       m.castShadow = m.receiveShadow = true; walls.add(m); }
     if (glass.length) { const gm = new THREE.Mesh(mergeGeometries(glass), MAT.glass); gm.userData.glass = true; walls.add(gm); }
     walls.traverse(o => { o.userData.wall = true; });
-    const plaster = wallSet('cream'), ceilMat = std({ color: CEILING, map: useMap(plaster.map), normalMap: plaster.normalMap, roughness: 0.95 }), ao = [];
-    L.rooms.forEach((r, i) => { const st = styleOf(room, S, i), fs = floorSet(st.f), m = std({ ...(TEXTURES ? {} : { color: FLOORS[st.f]?.a || '#C8A273' }), map: TEXTURES ? fs.map.clone() : null, normalMap: fs.normalMap ? fs.normalMap.clone() : null, roughness: fs.roughness, normalScale: new THREE.Vector2(0.8, 0.8) });
+    const plaster = wallSet('cream'), ceilMat = std({ color: CEILING, map: useMap(plaster.map), normalMap: nm(plaster.normalMap), roughness: 0.95 }), ao = [];
+    L.rooms.forEach((r, i) => { const st = styleOf(room, S, i), fs = floorSet(st.f), m = std({ ...(TEXTURES ? {} : { color: FLOORS[st.f]?.a || '#C8A273' }), map: TEXTURES ? fs.map.clone() : null, normalMap: NORMALS && fs.normalMap ? fs.normalMap.clone() : null, roughness: fs.roughness, normalScale: new THREE.Vector2(0.8, 0.8) });
       for (const t of [m.map, m.normalMap]) { if (!t) continue; t.needsUpdate = true; t.repeat.set(r.w / 2, r.d / 2); t.offset.set(r.x / 2, r.y / 2); }
       const fl = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.d), m); fl.rotation.x = -Math.PI / 2; fl.position.set(r.x + r.w / 2, 0, r.y + r.d / 2); fl.userData.floor = i; fl.receiveShadow = true; floors.add(fl);
       const cg = new THREE.PlaneGeometry(r.w, r.d); const cu = cg.attributes.uv; for (let q = 0; q < cu.count; q++) cu.setXY(q, cu.getX(q) * r.w / 1.3, cu.getY(q) * r.d / 1.3);
@@ -302,18 +311,19 @@ export function createHouse(host, opts) {
   function figure(name, look, own = false, g = 'm') {
     const av = buildAvatar(look || defaultLook(name, g), { own }), w = new THREE.Group(); av.group.rotation.y = Math.PI; w.add(av.group); w.userData.av = av; return w; }
   const dropFigure = w => { w.userData.av && w.userData.av.dispose(); w.traverse(o => { if (o.isSprite) { o.material.map && o.material.map.dispose(); o.material.dispose(); } }); };
-  let crowdKey = '';
+  let crowdKey = '', crowdRun = 0;
   function buildPeople(list) {
     const key = (list || []).slice(0, 14).map(p => p.name + ':' + (p.look ? JSON.stringify(p.look) : p.g || '')).join('|'); if (key === crowdKey) return; crowdKey = key; /* the same people: nothing to rebuild */
-    for (const c of [...people.children]) { people.remove(c); dropFigure(c); }
+    crowdRun++; for (const c of [...people.children]) { people.remove(c); dropFigure(c); }
     crowd = (list || []).slice(0, 14); if (!crowd.length) { dirty = true; wake(); return; }
     const rooms = PLAN === 'home' ? L.rooms : L.rooms.filter(r => r.kind === 'main'), spots = [];
     for (const r of rooms) for (let x = r.x; x < r.x + r.w; x++) for (let y = r.y; y < r.y + r.d; y++) if (!blocked(x + 0.5, y + 0.5) && !L.keep.has(`${x},${y}`)) spots.push([x + 0.5, y + 0.5]);
-    const used = new Set();
-    for (const p of crowd) { if (!spots.length) break; let k = hashS(p.name) % spots.length; for (let n = 0; n < spots.length && used.has(k); n++) k = (k + 1) % spots.length; if (used.has(k)) break; used.add(k);
-      const [x, y] = spots[k], g = figure(p.name, p.look, false, p.g);
-      const tag = nameTag(p.label || p.name); tag.position.set(0, 2.0, 0); g.add(tag);
-      g.position.set(x, 0, y); g.rotation.y = (hashS(p.name + 'r') % 628) / 100; people.add(g); }
+    const used = new Set(), run = ++crowdRun, places = [];
+    for (const p of crowd) { if (!spots.length) break; let k = hashS(p.name) % spots.length; for (let n = 0; n < spots.length && used.has(k); n++) k = (k + 1) % spots.length; if (used.has(k)) break; used.add(k); places.push([p, spots[k]]); }
+    // one person at a time, a breath apart, so a full room never freezes the screen
+    (async () => { for (const [p, [x, y]] of places) { if (run !== crowdRun || dead) return;
+      const g = figure(p.name, p.look, false, p.g), tag = nameTag(p.label || p.name); tag.position.set(0, 2.0, 0); g.add(tag);
+      g.position.set(x, 0, y); g.rotation.y = (hashS(p.name + 'r') % 628) / 100; people.add(g); dirty = true; wake(); await breathe(); } })();
     dirty = true; wake();
   }
   // ---- other players inside right now (from the live connection) ----
@@ -492,11 +502,11 @@ export function createHouse(host, opts) {
   function resize() { const r = host.getBoundingClientRect(); renderer.setSize(Math.max(1, r.width), Math.max(1, r.height), false); camera.aspect = r.width / Math.max(1, r.height); camera.fov = Math.min(95, Math.max(62, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(37)) / camera.aspect)))); camera.updateProjectionMatrix(); /* about 74° across, even on a tall phone */ dirty = true; wake(); }
   function wake() { if (!raf && !dead && !inTick) { last = null; raf = requestAnimationFrame(tick); } }
   function tick(t) {
-    raf = 0; if (dead) return; inTick = true; let again = false;
+    raf = 0; if (dead || held) return; /* waiting for ready() */ inTick = true; let again = false;
     try { again = step(t); } finally { inTick = false; } /* even if a frame fails, the next one can still be asked for */
     if (again || (dirty && shown())) raf = requestAnimationFrame(tick); else last = null; /* hidden behind the map: nothing to draw, so it waits */
   }
-  let lastDraw = 0, othersMoving = false, meStill = true;
+  let lastDraw = 0, othersMoving = false, meStill = true, held = !!opts.defer, firstDrawn = null;
   function step(t) {
     if (!shown()) { for (const o of others.values()) { o.g.position.x = o.tx; o.g.position.z = o.ty; o.g.rotation.y = o.ta; } dirty = true; return false; } /* hidden: jump to where people are, draw later */
     const dt = last == null ? 1 / 60 : Math.max(0, Math.min(0.05, (t - last) / 1000)); last = t; let moving = false; /* time since the last frame: never below 0 or above 1/20 s */
@@ -509,7 +519,7 @@ export function createHouse(host, opts) {
     // at most 60 frames a second (a 120 Hz screen would otherwise draw twice as many)
     const now = performance.now(), active = moving || joy.on || keys.size > 0 || now - lastInput < 160;
     const gap = active ? 15.5 : othersMoving ? 32 : 0; /* you moving: up to 60 a second; only other people moving: 30 (still smooth); nothing moving: just the one frame */
-    if (dirty && shown() && now - lastDraw >= gap) { placeCamera(); renderer.render(scene, camera); dirty = false; lastDraw = now; if (guard.after()) dirty = true; } /* not while the map is showing */
+    if (dirty && shown() && now - lastDraw >= gap) { placeCamera(); renderer.render(scene, camera); dirty = false; lastDraw = now; if (guard.after()) dirty = true; if (firstDrawn) { const f = firstDrawn; firstDrawn = null; requestAnimationFrame(() => f()); } } /* not while the map is showing */
     // other players: glide towards where they last said they were
     let gliding = false; for (const o of others.values()) if (o.g.visible) { const dx = o.tx - o.g.position.x, dz = o.ty - o.g.position.z; let da = o.ta - o.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       if (Math.abs(dx) + Math.abs(dz) + Math.abs(da) > 0.01) { const k = Math.min(1, dt * 8); o.g.position.x += dx * k; o.g.position.z += dz * k; o.g.rotation.y += da * k; gliding = true; dirty = true; o.g.userData.av.animate(dt, 0, Math.min(3, Math.hypot(dx, dz) * k / Math.max(dt, 1e-3)), false); o.posed = false; }
@@ -543,6 +553,18 @@ export function createHouse(host, opts) {
     setView(v) { view = v; applyView(); moved(); },
     setSurroundings(A) { buildAround(A); },
     setPeople(list) { buildPeople(list); },
+    // With opts.defer: build the shaders and send the textures to the graphics chip in the background, a few at a time,
+    // then draw the first picture. Resolves once it's on screen. onStep(done, total) reports progress.
+    async ready(onStep) {
+      if (!held) return; placeCamera(); const tex = new Set();
+      scene.traverse(o => { const ms = o.material ? [].concat(o.material) : []; for (const m of ms) for (const k of ['map', 'normalMap', 'emissiveMap']) if (m[k] && m[k].isTexture) tex.add(m[k]); });
+      const list = [...tex], total = list.length + 2; let n = 0;
+      // shaders: one kind of surface at a time (the room's lights decide how each is built), a breath apart
+      const seen = new Set(), batch = []; scene.traverse(o => { if (!o.material) return; for (const m of [].concat(o.material)) { const k = m.uuid + (o.isSkinnedMesh ? 's' : '') + (o.isInstancedMesh ? 'i' : ''); if (!seen.has(k)) { seen.add(k); batch.push(o); } } });
+      for (let i = 0; i < batch.length; i++) { try { renderer.compile(batch[i], camera, scene); } catch (e) { /* the first draw builds it instead */ } if (i % 2 === 1) await breathe(); if (dead) return; }
+      onStep && onStep(++n, total); await breathe();
+      for (let i = 0; i < list.length; i++) { try { renderer.initTexture(list[i]); } catch (e) {} if (i % 3 === 2 || i === list.length - 1) { onStep && onStep(n + i + 1, total); await breathe(); } }
+      if (dead) return; held = false; dirty = true; await new Promise(r => { firstDrawn = r; wake(); }); onStep && onStep(total, total); },
     setMyLook(look) { const vis = me3.visible; if (meBubble) me3.remove(meBubble); scene.remove(me3); dropFigure(me3); me3 = figure(opts.me || 'you', look, true); me3.visible = vis; scene.add(me3); if (meBubble) me3.add(meBubble); placeCamera(); dirty = true; wake(); },
     upsertOther, removeOther, clearOthers() { for (const id of [...others.keys()]) removeOther(id); }, say, get me() { return { x: me.x, y: me.y, a: me.yaw }; },
     get stats() { const r = renderer.info.render; return { frame: r.frame, pr: prNow, people: others.size, shown: [...others.values()].filter(o => o.g.visible).length, canvas: renderer.domElement.width + 'x' + renderer.domElement.height, calls: r.calls, triangles: r.triangles, textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries, programs: renderer.info.programs?.length }; },

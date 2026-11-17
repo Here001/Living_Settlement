@@ -161,9 +161,12 @@ export function createHouse(host, opts) {
   // not every frame), a soft reflection of a bright room on every surface, and a fixed set of lamps that follows you
   // from room to room (a fixed number, so a phone never has to rebuild its shaders while you walk).
   const renderer = new THREE.WebGLRenderer({ antialias: !PHONE || (devicePixelRatio || 1) < 2.5, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, PHONE ? (HQ ? 1.5 : 1.25) : 2)); renderer.domElement.className = 'house3d'; host.append(renderer.domElement);
+  // Resolution: sharp when you stand still; while you move or look around, lower (motion hides it) and lowered further
+  // by itself if frames start coming slowly. The moment you stop, one sharp frame is drawn. This is what keeps a phone cool.
+  const DPR = devicePixelRatio || 1, PR_HI = Math.min(DPR, PHONE ? (HQ ? 1.5 : 1.25) : 2); let prLo = PHONE ? Math.min(DPR, 1) : Math.min(DPR, 1.5), prNow = PR_HI;
+  renderer.setPixelRatio(PR_HI); renderer.domElement.className = 'house3d'; host.append(renderer.domElement);
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
-  renderer.shadowMap.enabled = HQ; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.enabled = HQ; renderer.shadowMap.type = PHONE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap; /* phones: the cheaper filter (the shadows are still soft-edged) */ renderer.shadowMap.autoUpdate = false;
   const scene = new THREE.Scene(); scene.background = col('#BFE3F7');
   { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); scene.environmentIntensity = 0.42; }
   const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 140); camera.rotation.order = 'YXZ';
@@ -317,7 +320,7 @@ export function createHouse(host, opts) {
     else { if (meBubble) { me3.remove(meBubble); meBubble.material.map.dispose(); } meBubble = sp; meBubbleUntil = performance.now() + 7000; }
     on.add(sp); dirty = true; wake(); }
   // ---- the lights: a fixed number of real lights (so phones never rebuild shaders), given to the nearest sources ----
-  let sources = [], blobs = null; const NL = PHONE ? (HQ ? 5 : 4) : 8, pool = [];
+  let sources = [], blobs = null; const NL = PHONE ? 3 : 8, pool = []; /* phones: the room's light and the two nearest lamps */
   for (let n = 0; n < NL; n++) { const pl = new THREE.PointLight('#FFEBD0', 0, 5, 1.6); lights.add(pl); pool.push(pl); }
   let litFor = null;
   function placeLights(force) {
@@ -441,7 +444,8 @@ export function createHouse(host, opts) {
     return false;
   }
   let lastRoom = -1;
-  function moved() { opts.onMove && opts.onMove(me.x, me.y, me.yaw); placeCamera(); if (pick && !tapAim) aim(); const ri = roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN); placeLights(false); if (ri !== lastRoom) { lastRoom = ri; opts.onRoom && opts.onRoom(ri); } dirty = true; wake(); }
+  let lastInput = 0;
+  function moved() { lastInput = performance.now(); opts.onMove && opts.onMove(me.x, me.y, me.yaw); placeCamera(); if (pick && !tapAim) aim(); const ri = roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN); placeLights(false); if (ri !== lastRoom) { lastRoom = ri; opts.onRoom && opts.onRoom(ri); } dirty = true; wake(); }
   let tapAim = false;
 
   // ---- input ----
@@ -474,6 +478,7 @@ export function createHouse(host, opts) {
     try { again = step(t); } finally { inTick = false; } /* even if a frame fails, the next one can still be asked for */
     if (again || (dirty && shown())) raf = requestAnimationFrame(tick); else last = null; /* hidden behind the map: nothing to draw, so it waits */
   }
+  let lastDraw = 0, frameMs = 16, lastDrop = 0;
   function step(t) {
     if (!shown()) { for (const o of others.values()) { o.g.position.x = o.tx; o.g.position.z = o.ty; o.g.rotation.y = o.ta; } dirty = true; return false; } /* hidden: jump to where people are, draw later */
     const dt = last == null ? 1 / 60 : Math.max(0, Math.min(0.05, (t - last) / 1000)); last = t; let moving = false; /* time since the last frame: never below 0 or above 1/20 s */
@@ -482,13 +487,18 @@ export function createHouse(host, opts) {
     if (view === 'walk' && (fw || st)) { const sp = 2.3 * dt, sx = -Math.sin(me.yaw), sy = -Math.cos(me.yaw), dx = (sx * fw + -sy * st) * sp, dy = (sy * fw + sx * st) * sp;
       if (!blocked(me.x + dx, me.y)) me.x += dx; if (!blocked(me.x, me.y + dy)) me.y += dy; moving = true; tapAim = false; }
     if (moving) moved();
-    if (dirty && shown()) { placeCamera(); renderer.render(scene, camera); dirty = false; } /* not while the map is showing */
+    // while anything moves: the lower resolution, at most 60 frames a second; when it all stops, back to sharp
+    const now = performance.now(), active = moving || joy.on || keys.size > 0 || now - lastInput < 160;
+    if (active && prNow !== prLo) { prNow = prLo; renderer.setPixelRatio(prNow); renderer.setSize(host.clientWidth || 1, host.clientHeight || 1, false); dirty = true; }
+    if (!active && prNow !== PR_HI && now - lastInput > 220) { prNow = PR_HI; renderer.setPixelRatio(prNow); renderer.setSize(host.clientWidth || 1, host.clientHeight || 1, false); dirty = true; }
+    if (active && lastDraw && now - lastDraw > 0) { frameMs = frameMs * 0.92 + (now - lastDraw) * 0.08; if (frameMs > 24 && prLo > 0.72 && now - lastDrop > 1200) { prLo = Math.max(0.72, prLo - 0.1); lastDrop = now; prNow = 0; } }
+    if (dirty && shown() && (!active || now - lastDraw >= 15.5)) { placeCamera(); renderer.render(scene, camera); dirty = false; lastDraw = now; } /* not while the map is showing */
     // other players: glide towards where they last said they were
     let gliding = false; for (const o of others.values()) { const dx = o.tx - o.g.position.x, dz = o.ty - o.g.position.z; let da = o.ta - o.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       if (Math.abs(dx) + Math.abs(dz) + Math.abs(da) > 0.01) { const k = Math.min(1, dt * 8); o.g.position.x += dx * k; o.g.position.z += dz * k; o.g.rotation.y += da * k; gliding = true; dirty = true; }
       if (o.bubble && performance.now() > o.bubbleUntil) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); o.bubble = null; dirty = true; } }
     if (meBubble && performance.now() > meBubbleUntil) { me3.remove(meBubble); meBubble.material.map.dispose(); meBubble = null; dirty = true; }
-    return moving || joy.on || keys.size > 0 || gliding || [...others.values()].some(o => o.bubble) || !!meBubble;
+    return moving || joy.on || keys.size > 0 || dirty || prNow !== PR_HI || gliding || [...others.values()].some(o => o.bubble) || !!meBubble;
   }
   const ro = new ResizeObserver(resize); ro.observe(host);
   buildShell(); buildStuff(); resize(); moved();
@@ -511,7 +521,7 @@ export function createHouse(host, opts) {
     setSurroundings(A) { buildAround(A); },
     setPeople(list) { buildPeople(list); },
     upsertOther, removeOther, clearOthers() { for (const id of [...others.keys()]) removeOther(id); }, say, get me() { return { x: me.x, y: me.y, a: me.yaw }; },
-    get stats() { const r = renderer.info.render; return { calls: r.calls, triangles: r.triangles, textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries, programs: renderer.info.programs?.length }; },
+    get stats() { const r = renderer.info.render; return { frame: r.frame, pr: prNow, canvas: renderer.domElement.width + 'x' + renderer.domElement.height, calls: r.calls, triangles: r.triangles, textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries, programs: renderer.info.programs?.length }; },
     setPerspective(p) { persp = p === 'third' ? 'third' : 'first'; stepIn(); moved(); },
     get perspective() { return persp; },
     get view() { return view; },

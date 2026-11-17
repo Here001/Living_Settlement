@@ -104,6 +104,8 @@ app.use(throttle('all'));
 const limit = (req, res, next) => next();
 app.use('/webhooks', throttle('hook'));
 app.use('/api', apiThrottle);
+// the first time the game is opened at an address, let that address read photos straight from R2 (see ensureCors)
+app.use((req, res, next) => { const h = String(req.headers.host || ''); if (h && !/^(localhost|127\.|\[::1\])/.test(h)) store.ensureCors('https://' + h.toLowerCase()); next(); });
 
 const safeEq = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
 // The builder's password: ten wrong guesses from one address and it's locked out for 15 minutes (then it can try again).
@@ -189,7 +191,7 @@ const APP_VERSION = (() => { const h = crypto.createHash('sha1'); try { h.update
   for (const f of fs.readdirSync(path.join(root, 'public')).filter(f => f.endsWith('.js')).sort()) h.update(fs.readFileSync(path.join(root, 'public', f))); } catch (e) { h.update(String(Date.now())); }
   return h.digest('hex').slice(0, 12); })();
 app.get('/api/version', (req, res) => { res.set('cache-control', 'no-store'); res.json({ v: APP_VERSION }); });
-app.get('/health', (req, res) => ready ? res.json({ ok: true, founded: !!world.meta, population: world.meta?.population || 0, viewers: wss?.clients.size || 0, bus: bus.kind, leader: isLeader }) : res.status(503).json({ ok: false, starting: true }));
+app.get('/health', (req, res) => ready ? res.json({ ok: true, founded: !!world.meta, population: world.meta?.population || 0, viewers: wss?.clients.size || 0, bus: bus.kind, leader: isLeader, photosCors: store.corsStatus() }) : res.status(503).json({ ok: false, starting: true }));
 
 // Point a free pinger (cron-job.org, UptimeRobot) here every few minutes.
 // It keeps sleepy hosts awake and runs the clock's catch-up work.

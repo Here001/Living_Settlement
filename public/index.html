@@ -6430,6 +6430,19 @@ function carsPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚗
   return box; }
 // A business's website on its card: where it goes, and a button that opens it in a new tab (after saying you're leaving
 // the game: links are added by players). The developer can take a link down.
+// A night club's DJ mix (developer only): which one it plays, upload a new one (straight to Cloudflare, with progress), or take it off
+function mixBox(b,t){ const box=el('div',{class:'authbox mixbox'}), info=el('p',{class:'hint',text:'Checking…'}), bar=el('div',{class:'lovebar',hidden:true}, el('b',{style:'width:0%'}));
+  const file=el('input',{type:'file',accept:'audio/mpeg,.mp3',hidden:true}), pick=el('button',{class:'btn primary sm',text:'⬆️ Upload a mix (MP3)',onclick:()=>file.click()}), off=el('button',{class:'btn sm',text:'Take it off',hidden:true});
+  const show=m=>{ info.textContent=m?`🎵 Playing: ${m.name||'a mix'} (${(m.bytes/1048576).toFixed(1)} MB, added ${new Date(m.t).toLocaleDateString()})`:'🎵 No mix yet: the club plays Gbedu FM.'; off.hidden=!m; };
+  api(`/api/admin/club-mix/${encodeURIComponent(b.id)}`).then(r=>show(r.mix)).catch(e=>{ info.textContent=e.message; });
+  file.onchange=()=>{ const f=file.files[0]; file.value=''; if(!f) return; if(f.size>90*1048576){ toast('That file is over 90 MB. Export it at 128 kbps to make it smaller.'); return; }
+    const x=new XMLHttpRequest(); x.open('POST',`/api/admin/club-mix/${encodeURIComponent(b.id)}`); x.setRequestHeader('content-type','audio/mpeg'); x.setRequestHeader('x-file-name',f.name); if(Store.token) x.setRequestHeader('authorization','Bearer '+Store.token);
+    bar.hidden=false; pick.disabled=true; info.textContent=`Uploading ${f.name}…`;
+    x.upload.onprogress=e=>{ if(e.lengthComputable){ bar.firstChild.style.width=Math.round(100*e.loaded/e.total)+'%'; info.textContent=`Uploading ${f.name}: ${Math.round(100*e.loaded/e.total)}%`; } };
+    x.onload=()=>{ pick.disabled=false; bar.hidden=true; let j={}; try{ j=JSON.parse(x.responseText); }catch(e){} if(x.status>=200&&x.status<300){ show(j.mix); toast(`🎵 ${b.name||t.name} now plays ${f.name}.`); } else { info.textContent=j.error||`The upload didn’t work (${x.status}).`; } };
+    x.onerror=()=>{ pick.disabled=false; bar.hidden=true; info.textContent='The upload didn’t work. Check your connection and try again.'; }; x.send(f); };
+  off.onclick=()=>toast(`Take the mix off ${b.name||t.name}? It will play Gbedu FM.`,'Take it off',async()=>{ try{ await api(`/api/admin/club-mix/${encodeURIComponent(b.id)}`,{method:'DELETE'}); show(null); }catch(e){ toast(e.message); } });
+  box.append(el('h3',{text:'🎧 DJ mix'}), info, bar, el('div',{class:'row-actions'}, pick, off), file); return box; }
 function websiteRow(b,t){ let host=''; try{ host=new URL(b.web).hostname.replace(/^www\./,''); }catch(e){ return el('span'); }
   return el('div',{class:'row-actions webrow'}, el('span',{class:'hint',text:`🌐 ${host}`}),
     el('button',{class:'btn primary sm',text:'Visit website',onclick:()=>GameWeb.open(b.web,{ by:b.owner, name:b.name||t.name })}),
@@ -6509,14 +6522,14 @@ const Club={ R:null, info:null, audio:null, radio:undefined, got:0, rainT:null, 
     this.btn=el('button',{class:'btn sm hspray',text:'💸 Spray',title:'Spray money on someone, or on the whole club',onclick:()=>this.sheet()});
     this.banner=el('div',{class:'djbanner',hidden:true}); this.rainEl=el('div',{class:'moneyrain',hidden:true}); this.tally=el('div',{class:'raintally',hidden:true});
     R.stage.append(this.btn, this.banner, this.rainEl, this.tally);
-    try{ this.info=await api('/api/clubs/spray'); }catch(e){ this.info={person:[200,1000,5000,20000],club:[10000,50000,200000,1000000],mix:null}; }
+    try{ this.info=await api('/api/clubs/spray?place='+encodeURIComponent(R.spot)); }catch(e){ this.info={person:[200,1000,5000,20000],club:[10000,50000,200000,1000000],mix:null}; }
     if(this.R===R) this.music(); },
   leave(){ clearInterval(this.rainT); this.rainT=null; if(this.audio){ try{ this.audio.pause(); }catch(e){} this.audio=null; }
     if(this.radio!==undefined){ const was=this.radio; this.radio=undefined; try{ if(was) Radio.tune(was); else if(Radio.st){ Radio.off(true); ls.set('resurgence-radio',this.saved??''); } }catch(e){} }
     try{ speechSynthesis.cancel(); }catch(e){} this.R=null; },
-  // the club's own mix (uploaded by the developer to Cloudflare, or CLUB_MIX_URL, or /club-mix.mp3) starts as you walk in; until there is one, Gbedu FM
+  // this club's own DJ mix (the developer uploads one for each club, from its card) starts as you walk in; a club without one plays Gbedu FM
   async music(){ this.radio=Radio.st||''; this.saved=ls.get('resurgence-radio');
-    let url=this.info&&this.info.mix; if(!url){ try{ const r=await fetch('/club-mix.mp3',{method:'HEAD'}); if(r.ok&&/audio|mpeg|octet/.test(r.headers.get('content-type')||'')) url='/club-mix.mp3'; }catch(e){} }
+    const url=this.info&&this.info.mix;
     if(!this.R) return;
     if(url){ const a=new Audio(url); a.loop=true; a.volume=0.85; this.audio=a; if(Radio.st) Radio.off(true); a.play().catch(()=>{ const go=()=>{ removeEventListener('pointerdown',go,true); if(this.audio===a) a.play().catch(()=>{}); }; addEventListener('pointerdown',go,true); }); }
     else if(STATIONS.pidgin&&Radio.st!=='pidgin') Radio.tune('pidgin').catch(()=>{}); }, /* Gbedu FM */
@@ -7085,6 +7098,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(!Store.canWrite&&Me&&Me.token) card.append(el('div',{class:'row-actions'}, Loc.btn(b.name||t.name, b.x, b.y)));
     if((canEnter(b.type)||(t.home&&!(MyHome.data&&MyHome.data.home&&MyHome.data.home.id===b.id)))&&b.done!==false&&!b.ruin&&!Store.canWrite) card.append(el('div',{class:'row-actions'}, b.owner&&isMe(b.owner)&&!t.home?el('button',{class:'btn primary',text:'🛋️ Design the inside',onclick:()=>Room.openBuilding(b.id,true)}):'', el('button',{class:'btn',text:'🚪 Go inside',onclick:()=>Room.openBuilding(b.id)}))); /* anyone can walk into a business */
     if(b.web && t.work && !b.ruin) card.append(websiteRow(b,t)); // up top, where visitors see it first
+    if(Store.canWrite && t.guests && b.done!==false && !b.ruin) card.append(mixBox(b,t)); /* a night club: its DJ mix */
     Plots.buildingBits(card,b,t);
     if(t.hangar && b.done!==false && !b.ruin) card.append(hangarSection(b,t));
     if(b.owner&&isMe(b.owner)&&!Store.canWrite){ const tl=Tills.map.get(b.id); if(tl){ const f=Math.min(1,tl.till/Math.max(1,tl.cap)), btn=el('button',{class:'btn primary sm',text:`Collect ${fmt(tl.till)}`,disabled:tl.till<1?'':null,onclick:e=>{ const r=e.currentTarget.getBoundingClientRect(); Tills.collect({id:b.id,x:r.left+r.width/2,y:r.top+r.height/2,col:f>=1?['#FFE680','#E2A71E','#9A6A0E']:f>=0.5?['#F4F6F8','#AEB5BD','#6E757C']:['#F0B27A','#B8743A','#7A4A20']}).then(()=>renderCard(true)); }});

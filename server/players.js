@@ -337,19 +337,23 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/love/propose', limit, send(async req => world.love.propose(await me(req))));
   r.post('/me/love/proposal', limit, send(async req => world.love.answerProposal(await me(req), !!bd(req).accept)));
   // night clubs: spray someone, or the whole club, and grab the money that rains down (server/clubs.js)
-  r.get('/clubs/spray', limit, send(async () => { const C = await import('./clubs.js'), m = (await pool.query("select value from settings where key = 'club_mix'")).rows[0]?.value;
-    return { person: C.SPRAY_PERSON, club: C.SPRAY_CLUB, ms: C.RAIN_MS, mix: m?.url || process.env.CLUB_MIX_URL || null }; }));
-  // the clubs' own DJ mix: the developer uploads an MP3, it goes to Cloudflare R2, and every club plays it as you walk in
-  r.post('/admin/club-mix', admin, express.raw({ type: ['audio/mpeg', 'audio/mp3', 'application/octet-stream'], limit: '90mb' }), send(async req => {
-    const buf = req.body; if (!Buffer.isBuffer(buf) || buf.length < 10000) throw new HttpError(400, 'Send the MP3 file as the body.');
+  // each club's own DJ mix: the developer uploads an MP3 for a club (from its card), it goes to Cloudflare R2, and that
+  // club plays it as people walk in (a club without one plays Gbedu FM)
+  const mixOf = async bid => (await pool.query('select value from settings where key = $1', ['club_mix:' + bid])).rows[0]?.value || null;
+  const clubId = async id => { const b = (await pool.query('select id, type from buildings where id = $1', [String(id)])).rows[0]; if (!b) throw new HttpError(404, 'That building is gone.'); const { BUILDING_TYPES: BT } = await import('../shared/catalog.js'); if (!BT[b.type]?.guests) throw new HttpError(400, 'Only night clubs have a DJ mix.'); return b.id; };
+  r.get('/clubs/spray', limit, send(async req => { const C = await import('./clubs.js'), m = /^b:([A-Za-z0-9_.-]{1,64})$/.exec(String(req.query.place || '')), mix = m ? await mixOf(m[1]) : null;
+    return { person: C.SPRAY_PERSON, club: C.SPRAY_CLUB, ms: C.RAIN_MS, mix: mix?.url || null }; }));
+  r.get('/admin/club-mix/:id', admin, send(async req => ({ mix: await mixOf(await clubId(req.params.id)) })));
+  r.post('/admin/club-mix/:id', admin, express.raw({ type: ['audio/mpeg', 'audio/mp3', 'application/octet-stream'], limit: '90mb' }), send(async req => {
+    const bid = await clubId(req.params.id), buf = req.body; if (!Buffer.isBuffer(buf) || buf.length < 10000) throw new HttpError(400, 'Send the MP3 file.');
     const mp3 = (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) || (buf[0] === 0xFF && (buf[1] & 0xE0) === 0xE0); if (!mp3) throw new HttpError(400, 'That isn’t an MP3 file.');
     const S = await import('./storage.js'); if (!S.r2On()) throw new HttpError(503, 'Cloudflare R2 isn’t set up on this server.');
-    const key = `club/mix-${Date.now().toString(36)}.mp3`, url = await S.put(key, buf, 'audio/mpeg');
-    const old = (await pool.query("select value from settings where key = 'club_mix'")).rows[0]?.value;
-    await pool.query("insert into settings (key, value) values ('club_mix', $1) on conflict (key) do update set value = $1", [JSON.stringify({ url, key, bytes: buf.length, t: Date.now() })]);
-    if (old?.key && old.key !== key) S.del(old.key).catch(() => {}); /* the previous mix */
-    return { ok: true, url, bytes: buf.length }; }));
-  r.delete('/admin/club-mix', admin, send(async () => { await pool.query("delete from settings where key = 'club_mix'"); return { ok: true }; }));
+    const key = `club/${bid}/mix-${Date.now().toString(36)}.mp3`, url = await S.put(key, buf, 'audio/mpeg'), old = await mixOf(bid), name = String(req.get('x-file-name') || '').replace(/[^\w .()-]/g, '').slice(0, 80);
+    const v = { url, key, bytes: buf.length, name, t: Date.now() }; await pool.query('insert into settings (key, value) values ($1, $2) on conflict (key) do update set value = $2', ['club_mix:' + bid, JSON.stringify(v)]);
+    if (old?.key && old.key !== key) S.del(old.key).catch(() => {}); /* the mix it had before */
+    return { ok: true, mix: v }; }));
+  r.delete('/admin/club-mix/:id', admin, send(async req => { const bid = await clubId(req.params.id), old = await mixOf(bid); await pool.query('delete from settings where key = $1', ['club_mix:' + bid]);
+    if (old?.key) import('./storage.js').then(S => S.r2On() && S.del(old.key)).catch(() => {}); return { ok: true }; }));
   r.post('/clubs/spray', limit, send(async req => { const p = await me(req), b = bd(req); await assertNotMuted(p.id); return b.to ? world.clubs.sprayPerson(p, b.place, b.to, b.amount) : world.clubs.sprayClub(p, b.place, b.amount); }));
   r.post('/clubs/grab/:id', send(async req => world.clubs.grab(await me(req), req.params.id)));
   r.post('/me/love/privacy', limit, send(async req => world.love.privacy((await me(req)).id, !!bd(req).hidden)));

@@ -62,6 +62,7 @@ const economy = new Economy(world); world.economy = economy;
 world.housing = new Housing(world);
 world.rooms = new Rooms(world);
 const chat = new Chat(bus); world.chat = chat; chat.world = world;
+world.bus = bus; /* inside chat passes through it to every server */
 world.chat.removePhoto = id => world.rooms.removePhoto(id); // a reported photo the developer takes down
 const push = new Push(); world.push = push; chat.push = push;
 const achievements = new Achievements(world, bus); world.achievements = achievements;
@@ -376,6 +377,17 @@ wss.on('connection', (ws, req) => {
     if (m?.type === 'arena' && ws.playerId) { const now = Date.now(); if (now - (ws.arenaAt || 0) > 1000) { ws.arenaAt = now; ws.arenaN = 0; } if (++ws.arenaN > 30) return;
       const a = String(m.a || ''); if (!['join', 'leave', 'go', 'pos', 'state'].includes(a)) return;
       bus.publish([{ arena: true, k: 'in', pid: ws.playerId, handle: ws.playerHandle, m: { a, mode: String(m.mode || ''), id: String(m.id || ''), x: Number(m.x), y: Number(m.y) } }]); return; }
+    // Inside a building or home: where you stand, so everyone else in there sees you walk about (see Rooms.seen)
+    if (m?.type === 'in') { const place = String(m.place || ''), x = Number(m.x), y = Number(m.y), a = Number(m.a);
+      if (!/^(b|h):[A-Za-z0-9_.-]{1,64}$/.test(place) || ![x, y, a].every(Number.isFinite) || x < 0 || y < 0 || x > 16 || y > 16) return;
+      if (ws.inside && ws.inside !== place) insideLeave(ws);
+      const first = ws.inside !== place; ws.inside = place; const who = ws.playerId ? 'p:' + ws.playerId : wsKey;
+      if (ws.insideWho && ws.insideWho !== who) bus.publish([{ inside: true, place, skip: who, k: 'gone', id: ws.insideWho }]); /* signed in since: the anonymous figure goes */ ws.insideWho = who;
+      try { world.rooms.seen(place, who, ws.playerHandle || null); } catch {}
+      const p = { id: who, h: ws.playerHandle || null, x: +x.toFixed(2), y: +y.toFixed(2), a: +a.toFixed(2) };
+      if (first) { const list = []; for (const w of wss.clients) if (w !== ws && w.inside === place && w.insidePos) list.push(w.insidePos); try { ws.send(JSON.stringify({ type: 'inside', k: 'all', place, list })); } catch {} }
+      ws.insidePos = p; bus.publish([{ inside: true, place, skip: who, k: 'pos', p }]); return; }
+    if (m?.type === 'out') { insideLeave(ws); return; }
     if (m?.type === 'auth' && take('wsAuth', wsKey).ok) playerByToken(m.token).then(p => {
       const was = ws.playerId; ws.playerId = p ? p.id : null; ws.playerHandle = p ? p.handle : null;
       if (was && was !== ws.playerId && !localOnline(was)) chat.gone(was).catch(() => {});
@@ -383,9 +395,12 @@ wss.on('connection', (ws, req) => {
       ws.send(JSON.stringify({ type: 'authed', ok: !!p }));
     }).catch(() => {});
   });
-  ws.on('close', () => { if (ws.playerId && !localOnline(ws.playerId)) { chat.gone(ws.playerId).catch(() => {}); bus.publish([{ arena: true, k: 'in', pid: ws.playerId, m: { a: 'gone' } }]); } });
+  ws.on('close', () => { insideLeave(ws); if (ws.playerId && !localOnline(ws.playerId)) { chat.gone(ws.playerId).catch(() => {}); bus.publish([{ arena: true, k: 'in', pid: ws.playerId, m: { a: 'gone' } }]); } });
   ws.send(JSON.stringify({ type: 'hello', meta: world.publicMeta(), serverNow: Date.now() }));
 });
+function insideLeave(ws) { if (!ws.inside) return; const place = ws.inside, who = ws.insideWho; ws.inside = null; ws.insidePos = null;
+  const m = world.rooms?.here.get(place); if (m && who && ![...wss.clients].some(w => w !== ws && w.inside === place && w.insideWho === who)) m.delete(who);
+  bus.publish([{ inside: true, place, skip: who, k: 'gone', id: who }]); }
 const localOnline = id => [...wss.clients].some(w => w.readyState === 1 && w.playerId === id);
 // Every minute, everyone with the colony open is marked as seen (that's what "online" means).
 setInterval(() => { const ids = [...new Set([...wss.clients].filter(w => w.readyState === 1 && w.playerId).map(w => w.playerId))]; chat.seen(ids).catch(e => console.error('presence:', e.message)); achievements.checkMany(ids).catch(() => {}); }, 60000).unref();
@@ -397,6 +412,10 @@ bus.on(ops => {
       else if (o.k === 'out') { const by = new Map(); for (const ws of wss.clients) if (ws.readyState === 1 && ws.playerId) { const l = by.get(ws.playerId) || []; l.push(ws); by.set(ws.playerId, l); }
         for (const [to, json] of o.msgs) for (const ws of by.get(to) || []) { if (ws.bufferedAmount > MAX_BUFFER) continue; try { ws.send(json); } catch {} } } }
     if (!ops.length) return; }
+  // Inside a place: positions, leaving and chat go to everyone with that place open (on every server)
+  if (ops.some(o => o.inside)) { for (const o of ops.filter(o => o.inside)) { const json = JSON.stringify({ type: 'inside', k: o.k, place: o.place, p: o.p, id: o.id, chat: o.chat });
+      for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.inside !== o.place || (o.skip && ws.insideWho === o.skip) || ws.bufferedAmount > MAX_BUFFER) continue; try { ws.send(json); } catch {} } }
+    ops = ops.filter(o => !o.inside); if (!ops.length) return; }
   // Private chat messages go only to the two people's own connections.
   const priv = ops.filter(o => o.private); if (priv.length) ops = ops.filter(o => !o.private);
   for (const o of priv) { const msg = JSON.stringify({ type: o.op, data: o.data, id: o.id }); for (const ws of wss.clients) if (ws.readyState === 1 && o.to.includes(ws.playerId)) { try { ws.send(msg); } catch {} } }

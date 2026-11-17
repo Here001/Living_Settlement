@@ -896,6 +896,22 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .hchips .rtab{background:rgba(255,255,255,.9)}
 .hchips .rtab.on{background:#2E86C1;color:#fff}
 .hview{position:absolute;top:8px;right:8px;z-index:2}
+.phsheet{max-width:380px}
+.phwrap{display:flex;justify-content:center;margin:8px 0}
+.phedit{border-radius:6px;touch-action:none;cursor:grab;box-shadow:0 0 0 6px #3a2a1a,0 4px 14px rgba(0,0,0,.35)}
+.phz{display:flex;align-items:center;gap:8px;margin:6px 0}
+.phz input{flex:1}
+.hchatbtn{position:absolute;right:14px;bottom:72px;z-index:2;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.hchatbtn.new::after{content:'';position:absolute;top:-3px;right:-3px;width:11px;height:11px;border-radius:50%;background:#E74C3C;box-shadow:0 0 0 2px #fff}
+.hchat{position:absolute;right:10px;bottom:118px;z-index:3;width:min(340px,calc(100% - 150px));min-width:220px;background:rgba(255,255,255,.96);border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.3);padding:8px;display:flex;flex-direction:column;gap:6px;color:#222}
+.hchatlog{max-height:180px;min-height:60px;overflow-y:auto;font-size:13.5px;line-height:1.35;display:flex;flex-direction:column;gap:4px}
+.hchatlog:empty::before{content:'Nobody has said anything yet.';opacity:.55}
+.hcl.me b{color:#2E86C1}
+.hchatrow{display:flex;gap:6px}
+.hchatrow input{flex:1;min-width:0;border:1.5px solid #ccc;border-radius:999px;padding:6px 12px;font:inherit;font-size:14px}
+.hback{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);z-index:9650;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.rchoose{display:flex;flex-direction:column;gap:8px;margin:10px 0;max-height:50vh;overflow:auto}
+@media (max-width:520px){ .hhere .wide{display:none} }
 .hhere{flex:none;border:1.5px solid var(--line);background:var(--paper);border-radius:999px;padding:5px 10px;font-size:12.5px;font-weight:800;cursor:pointer;color:inherit;white-space:nowrap}
 .hjoy{position:absolute;left:18px;bottom:18px;width:116px;height:116px;border-radius:50%;background:rgba(255,255,255,.16);border:2px solid rgba(255,255,255,.5);z-index:2;touch-action:none;box-shadow:0 2px 12px rgba(0,0,0,.25)}
 .hjoy i{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px;border-radius:50%;background:rgba(255,255,255,.9);box-shadow:0 2px 8px rgba(0,0,0,.35);pointer-events:none}
@@ -1077,7 +1093,7 @@ import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
-import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, BIZ_CATS, canEnter, footOf, placeProblem, resaleOf, layoutOf, styleOf, photoAspect } from '/shared/furniture.js';
+import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, BIZ_CATS, canEnter, canTurnOnWall, footOf, placeProblem, resaleOf, layoutOf, styleOf, photoAspect } from '/shared/furniture.js';
 import { paveCost, fullIncome, CRIME_FLOOR, FINE_MIN, FINE_MAX, nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
@@ -1220,7 +1236,7 @@ function connect(){
   if(ws){ ws.onclose=ws.onmessage=ws.onerror=null; try{ ws.close(); }catch(e){} }
   try{ ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`); }catch(e){ reconnectSoon(); return; }
   lastMsgAt=Date.now(); connectAt=Date.now(); const me=ws;
-  ws.onopen=()=>{ Store.online=true; subKey=''; retryN=0; wsAuth(); };
+  ws.onopen=()=>{ Store.online=true; subKey=''; retryN=0; wsAuth(); if(typeof Room!=='undefined') Room.rejoin(); };
   ws.onerror=()=>{ try{ me.close(); }catch(e){} };
   ws.onmessage=e=>{ lastMsgAt=Date.now(); let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
     if(m.type==='hello'){ S.meta=m.meta; skew=m.serverNow-Date.now();
@@ -1228,7 +1244,8 @@ function connect(){
     else if(m.type==='ops'){ opBatch++; try{ for(const o of m.ops){ try{ applyOp(o); }catch(err){ console.error('Skipped an update:', err); } } } finally { opBatch--; } if(!opBatch&&batchChanged){ batchChanged=false; changed(); } }
     else if(m.type==='resync') reloadAll();
     else if(m.type==='arena') arenaMsg(m);
-    else if(m.type==='authed'){ if(m.ok) resumeArena(arenaCtx()); }
+    else if(m.type==='authed'){ if(m.ok) resumeArena(arenaCtx()); if(typeof Room!=='undefined') Room.rejoin(); }
+    else if(m.type==='inside'){ if(typeof Room!=='undefined') Room.insideMsg(m); }
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
     else if(m.type==='gm' && m.data) Chats.gincoming(m.data);
@@ -6403,44 +6420,81 @@ addEventListener('keydown',e=>{ if(e.key==='Escape'&&GameWeb.el) GameWeb.close()
 // kind), or tap where it should go; then Buy. Tap a piece to move, turn, store or sell it, or to give a frame a photo.
 const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:null, sel:null, busy:false, ri:-1,
   // a business (or public building) anyone can walk into; its owner designs it
-  async openBuilding(id,design){ await this.open(null,id); if(design&&this.d&&this.d.mine&&!this.edit) this.toggle(true); },
+  async openBuilding(id,design){
+    // a home where people live: pick whose home to look into
+    let d; try{ d=await api(`/api/buildings/${encodeURIComponent(id)}/inside`); }catch(e){ toast(e.message); return; }
+    if(d.choose){ document.querySelector('.rsheet-bg')?.remove(); const wrap=el('div',{class:'rsheet-bg rreport'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
+      const list=el('div',{class:'rchoose'}, ...d.choose.map(c=>el('button',{class:'btn',disabled:c.locked,text:c.locked?`🔒 @${c.handle} (locked)`:`🏠 @${c.handle}’s home`,onclick:()=>{ wrap.remove(); this.open(c.handle); }})));
+      wrap.append(el('div',{class:'rsheet inked',role:'dialog','aria-label':'Who lives here'}, el('h3',{text:`🚪 ${d.home.name}`}), el('p',{class:'hint',text:`${d.choose.length===1?'One colonist lives':`${d.choose.length} colonists live`} here. Whose home would you like to look into?`}), list, el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Cancel',onclick:()=>wrap.remove()}))));
+      document.body.append(wrap); return; }
+    await this.open(null,id,d); if(design&&this.d&&this.d.mine&&!this.edit) this.toggle(true); },
   get biz(){ return this.d&&this.d.place==='business'; },
-  get base(){ return this.biz?`/api/me/buildings/${encodeURIComponent(this.d.home.id)}/inside/`:'/api/me/room/'; },
+  get bld(){ return this.d&&(this.d.place==='business'||this.d.place==='building'); }, /* the building's own inside (a business, or a home nobody lives in) */
+  get base(){ return this.bld?`/api/me/buildings/${encodeURIComponent(this.d.home.id)}/inside/`:'/api/me/room/'; },
   get editWord(){ return this.biz?'🛋️ Design':'🛋️ Furnish'; },
-  async open(handle,bid){ if(handle&&Me&&Me.handle&&handle.toLowerCase()===Me.handle.toLowerCase()) handle=null;
-    let d, H3; try{ [d,H3]=await Promise.all([api(bid?`/api/buildings/${encodeURIComponent(bid)}/inside`:handle?`/api/citizens/${encodeURIComponent(handle)}/room`:'/api/me/room'), import('/house3d.js')]); }catch(e){ toast(e.message||'Your phone couldn’t load the 3D view.'); return; }
+  async open(handle,bid,pre){ if(handle&&Me&&Me.handle&&handle.toLowerCase()===Me.handle.toLowerCase()) handle=null;
+    let d, H3; try{ [d,H3]=await Promise.all([pre?Promise.resolve(pre):api(bid?`/api/buildings/${encodeURIComponent(bid)}/inside`:handle?`/api/citizens/${encodeURIComponent(handle)}/room`:'/api/me/room'), import('/house3d.js')]); }catch(e){ toast(e.message||'Your phone couldn’t load the 3D view.'); return; }
     this.close(true); this.d=d; this.H3=H3; this.edit=false; this.pick=null; this.sel=null; this.ri=-1; this.cat=this.biz?BIZ_CATS[{shop:0,food:1,office:2,industry:3}[d.room.plan]||0][0]:'living';
     this.sub=el('small',{text:d.home.name}); this.editBtn=d.mine?el('button',{class:'btn primary sm',text:this.editWord,onclick:()=>this.toggle()}):'';
+    this.mapBtn=el('button',{class:'hhere',title:'Look at the colony map; come back inside any time',onclick:()=>this.toMap()}, '🗺️', el('span',{class:'wide',text:' Map'}));
     this.hereChip=el('button',{class:'hhere',text:'👥 …',onclick:()=>{ const n=this.hereNames||[]; toast(n.length>1?`Here now: ${n.slice(0,12).join(', ')}${n.length>12?'…':''}`:'Nobody else is here right now, just you.'); }});
-    const title=this.biz?(d.mine?`🏪 Your ${d.home.name.toLowerCase()}`:`🏪 ${d.home.name}${d.owner?` · @${d.owner}`:''}`):(d.mine?'🏠 Your home':`🏠 @${d.owner}’s home`);
+    const title=this.biz?(d.mine?`🏪 Your ${d.home.name.toLowerCase()}`:`🏪 ${d.home.name}${d.owner?` · @${d.owner}`:''}`):d.place==='building'?(d.mine?`🏠 Your ${d.home.name.toLowerCase()} (nobody lives here)`:`🏠 ${d.home.name} · empty${d.owner?` · @${d.owner}’s`:''}`):(d.mine?'🏠 Your home':`🏠 @${d.owner}’s home`);
     const bar=el('div',{class:'webbar'}, el('button',{class:'webx','aria-label':'Back to the colony',text:'✕',onclick:()=>this.close()}),
-      el('div',{class:'webaddr'}, el('b',{text:title}), this.sub), this.hereChip, this.editBtn);
+      el('div',{class:'webaddr'}, el('b',{text:title}), this.sub), this.mapBtn, this.hereChip, this.editBtn);
     const L=layoutOf(d.size,d.room.plan||'home'); this.chips=el('div',{class:'hchips'}, ...L.rooms.map((r,i)=>el('button',{class:'rtab',text:r.name,onclick:()=>this.h&&this.h.goRoom(i)})));
     this.viewBtn=el('button',{class:'btn sm hview',text:'⬆ From above',onclick:()=>this.flip()});
     let persp='first'; try{ persp=localStorage.getItem('resurgence-persp')==='third'?'third':'first'; }catch(e){}
     this.perspBtn=el('button',{class:'btn sm hpersp',text:persp==='third'?'👁️ First person':'👤 Third person',title:'Switch between seeing through your own eyes and seeing yourself from behind',onclick:()=>{ if(!this.h) return; const p=this.h.perspective==='third'?'first':'third'; this.h.setPerspective(p); this.perspBtn.textContent=p==='third'?'👁️ First person':'👤 Third person'; try{ localStorage.setItem('resurgence-persp',p); }catch(e){} }});
     this.tools=el('div',{class:'roomtools'}); this.cross=el('div',{class:'hcross',hidden:true}); this.shop=el('div',{class:'roomshop'}); this.shop.hidden=true;
-    this.stage=el('div',{class:'roomstage'}, this.chips, this.viewBtn, this.perspBtn, this.tools, this.cross);
+    this.chatLog=el('div',{class:'hchatlog'}); this.chatIn=el('input',{type:'text',maxlength:'200',placeholder:Me&&Me.token?'Say something to everyone here…':'Sign in to chat',disabled:!(Me&&Me.token),enterkeyhint:'send'});
+    this.chatIn.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter') this.sendChat(); }); this.chatIn.addEventListener('keyup',e=>e.stopPropagation());
+    this.chatBox=el('div',{class:'hchat',hidden:true}, this.chatLog, el('div',{class:'hchatrow'}, this.chatIn, el('button',{class:'btn primary sm',text:'Send',disabled:!(Me&&Me.token),onclick:()=>this.sendChat()})));
+    this.chatBtn=el('button',{class:'btn sm hchatbtn',text:'💬 Chat',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden) setTimeout(()=>this.chatIn.focus(),50); }});
+    this.stage=el('div',{class:'roomstage'}, this.chips, this.viewBtn, this.perspBtn, this.chatBtn, this.chatBox, this.tools, this.cross);
     this.file=el('input',{type:'file',accept:'image/*',hidden:true,onchange:()=>this.upload()});
     const root=el('div',{class:'webview roomview',role:'dialog','aria-label':title}, bar, this.stage, this.shop, this.file);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
     try{ history.pushState({room:1},''); }catch(e){}
     try{ this.h=H3.createHouse(this.stage,{ size:d.size, plan:d.room.plan||'home', persp, me:(Me&&Me.handle)||'visitor', room:d.room, photos:d.photos, check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
-      onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; [...this.chips.children].forEach((b,j)=>b.classList.toggle('on',j===i)); if(this.edit&&this.cat==='style') this.paintShop(); } }); }
+      onMove:(x,y,a)=>this.moveSoon(x,y,a), onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; [...this.chips.children].forEach((b,j)=>b.classList.toggle('on',j===i)); if(this.edit&&this.cat==='style') this.paintShop(); } }); }
     catch(e){ this.close(); toast('Your phone couldn’t show the 3D view.'); return; }
-    this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false); this.hereTick(true);
+    this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false); this.hereTick(true); this.join();
     clearInterval(this.hereTimer); this.hereTimer=setInterval(()=>this.hereTick(),25000);
     if(d.mine&&!d.room.items.length&&!d.room.box.length) this.toggle(true); },
+  // ---- live: where you stand goes to everyone else in here, and theirs comes to you; and the chat ----
+  get spot(){ return this.d?(this.bld?'b:'+this.d.home.id:'h:'+(this.d.owner||'').toLowerCase()):null; }, /* which place we're in, for the live connection (not place(), which places furniture) */
+  join(){ this.others=new Map(); this.sendPos(true); },
+  rejoin(){ if(this.el&&this.d){ this.h&&this.h.clearOthers(); this.others=new Map(); this.sendPos(true); } },
+  leave(){ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'out'})); }catch(e){} this.others=new Map(); },
+  sendPos(force){ if(!this.h||!this.d) return; const m=this.h.me, now=Date.now(); if(!force&&now-(this.posAt||0)<200){ clearTimeout(this.posT); this.posT=setTimeout(()=>this.sendPos(true),200); return; } this.posAt=now;
+    try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'in',place:this.spot,x:m.x,y:m.y,a:m.a})); }catch(e){} },
+  moveSoon(){ this.sendPos(false); },
+  insideMsg(m){ if(!this.el||!this.d||m.place!==this.spot||!this.h) return; this.others||=new Map();
+    const blocked=h=>h&&typeof Blocks!=='undefined'&&Blocks.has(h);
+    if(m.k==='all'){ for(const p of m.list||[]) if(!blocked(p.h)){ this.others.set(p.id,p); this.h.upsertOther(p.id,p); } }
+    else if(m.k==='pos'&&m.p){ if(blocked(m.p.h)) return; this.others.set(m.p.id,m.p); this.h.upsertOther(m.p.id,m.p); }
+    else if(m.k==='gone'){ this.others.delete(m.id); this.h.removeOther(m.id); }
+    else if(m.k==='chat'&&m.chat){ if(blocked(m.chat.from)) return; this.addChat(m.chat); }
+    this.hereTick(); },
+  addChat(c){ const mine=Me&&Me.handle&&c.from.toLowerCase()===Me.handle.toLowerCase(); if(c.t&&this.lastChatT===c.t+c.from) return; this.lastChatT=c.t+c.from;
+    this.chatLog.append(el('div',{class:'hcl'+(mine?' me':'')}, el('b',{text:'@'+c.from+': '}), c.text)); while(this.chatLog.children.length>40) this.chatLog.firstChild.remove(); this.chatLog.scrollTop=this.chatLog.scrollHeight;
+    if(this.chatBox.hidden&&!mine) this.chatBtn.classList.add('new');
+    if(mine) this.h.say('me',c.text); else { const o=[...(this.others||new Map()).entries()].find(([,p])=>p.h&&p.h.toLowerCase()===c.from.toLowerCase()); if(o) this.h.say(o[0],c.text); } },
+  async sendChat(){ const t=this.chatIn.value.trim(); if(!t) return; this.chatIn.value=''; try{ const r=await api('/api/inside/chat',{method:'POST',body:{place:this.spot,text:t}}); this.addChat(r.chat); }catch(e){ toast(e.message); this.chatIn.value=t; } },
+  // the colony map, from inside: the house waits; the pill at the top brings you back in
+  toMap(){ if(!this.el) return; this.el.hidden=true; document.body.classList.remove('room-on'); this.mapPill=el('button',{class:'btn primary hback',text:`🏠 Back inside · ${this.d.home.name}`,onclick:()=>this.fromMap()}); document.body.append(this.mapPill); },
+  fromMap(){ if(!this.el) return; this.el.hidden=false; document.body.classList.add('room-on'); this.mapPill&&this.mapPill.remove(); this.mapPill=null; this.h&&this.h.refreshGhost(); },
   // ---- who's here now: colonists the game has at this place (working, visiting, at home), plus players looking round it ----
   people(){ const d=this.d; if(!d) return []; const gm=gmNow(), out=[]; const bid=d.home.id, owner=(d.owner||'').toLowerCase();
-    const me=((Me&&Me.handle)||'').toLowerCase(); /* you're counted as "you", not twice */
-    for(const c of S.citizens.values()){ const st=citizenAt(c,gm); if(!st||st.bid!==bid) continue; const h=c.handle.toLowerCase(); if(h===me||(!this.biz&&h!==owner)) continue; out.push({name:c.handle,label:'@'+c.handle}); }
+    const me=((Me&&Me.handle)||'').toLowerCase(), live=new Set([...(this.others||new Map()).values()].map(p=>(p.h||'').toLowerCase()).filter(Boolean)); /* you're "you", and players walking round in here show as themselves, not twice */
+    for(const c of S.citizens.values()){ const st=citizenAt(c,gm); if(!st||st.bid!==bid) continue; const h=c.handle.toLowerCase(); if(h===me||live.has(h)||(this.d.place==='home'&&h!==owner)) continue; out.push({name:c.handle,label:'@'+c.handle}); }
     return out; },
-  async hereTick(first){ if(!this.d||(document.hidden&&!first)) return; const place=this.biz?'b:'+this.d.home.id:'h:'+(this.d.owner||'').toLowerCase(); let live={viewers:0,names:[]};
+  async hereTick(first){ if(!this.d||(document.hidden&&!first)) return; const place=this.bld?'b:'+this.d.home.id:'h:'+(this.d.owner||'').toLowerCase(); let live={viewers:0,names:[]};
     try{ live=await api('/api/inside/here',{method:'POST',body:{place}}); }catch(e){} if(!this.d) return;
-    const sim=this.people(); this.hereNames=[...sim.map(p=>p.label), ...live.names.map(n=>'@'+n+' (looking round)'), ...(live.viewers>live.names.length?[`${live.viewers-live.names.length} other${live.viewers-live.names.length===1?'':'s'} looking round`]:[])];
-    this.hereNames.unshift('you'); const n=sim.length+live.viewers+1; if(this.hereChip) this.hereChip.textContent=n===1?'👥 Just you here':`👥 ${fmt(n)} here now`; if(this.h) this.h.setPeople(sim); },
-  close(quiet){ if(!this.el) return; clearInterval(this.hereTimer); try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
+    const sim=this.people(), lv=[...(this.others||new Map()).values()], named=lv.filter(p=>p.h).map(p=>'@'+p.h+' (walking round)'), anon=Math.max(lv.length,live.viewers)-named.length; live.viewers=Math.max(lv.length,live.viewers);
+    this.hereNames=[...sim.map(p=>p.label), ...named, ...(anon>0?[`${anon} visitor${anon===1?'':'s'} looking round`]:[])];
+    this.hereNames.unshift('you'); const n=sim.length+live.viewers+1; if(this.hereChip){ this.hereChip.textContent=`👥 ${fmt(n)}`; this.hereChip.append(el('span',{class:'wide',text:n===1?' (just you)':' here now'})); this.hereChip.title=n===1?'Just you here':`${fmt(n)} here now`; } if(this.h) this.h.setPeople(sim); },
+  close(quiet){ if(!this.el) return; clearInterval(this.hereTimer); this.leave(); this.mapPill&&this.mapPill.remove(); this.mapPill=null; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
   toggle(on){ this.edit=on===undefined?!this.edit:on; this.setPick(null); this.select(null); this.shop.hidden=!this.edit; if(this.editBtn) this.editBtn.textContent=this.edit?'✓ Done':this.editWord; if(this.edit) this.paintShop(); this.paintTools(); },
   // the streets and buildings round the home: from what the map has loaded, or fetched once (only when looking from above)
   async around(fetch){ const h=this.d&&this.d.home; if(!h||h.x==null||this.aroundDone||!this.h) return; const R=8, x0=h.x-R, y0=h.y-R, x1=h.x+(h.w||1)+R, y1=h.y+(h.d||1)+R;
@@ -6463,22 +6517,43 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
   async send(path,body,done,shellToo){ if(this.busy) return; this.busy=true; this.paintTools(); try{ const r=await api(path,{method:'POST',body}); this.apply(r,shellToo); loadMyMoney(); done&&done(r); }
     catch(e){ toast(e.message); } this.busy=false; if(this.el){ this.paintTools(); if(this.edit) this.paintShop(); } },
   place(){ const p=this.pick; if(!p||p.x==null||placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null)) return; const f=FURNITURE[p.k];
-    if(p.i) this.send(this.base+'place',{i:p.i,x:p.x,y:p.y,r:p.r},()=>{ this.setPick(null); });
-    else this.send(this.base+'buy',{k:p.k,x:p.x,y:p.y,r:p.r,c:p.c},r=>{ this.setPick(null); toast(`🛋️ ${f.name} bought for ${fmt(f.cost)} coins.${f.photo?' Now add a photo to it.':''}`); if(f.photo&&r.item) this.select(r.item.i); }); },
+    if(p.i) this.send(this.base+'place',{i:p.i,x:p.x,y:p.y,r:p.r,o:p.o?1:0},()=>{ this.setPick(null); });
+    else this.send(this.base+'buy',{k:p.k,x:p.x,y:p.y,r:p.r,c:p.c,o:p.o?1:0},r=>{ this.setPick(null); toast(`🛋️ ${f.name} bought for ${fmt(f.cost)} coins.${f.photo?' Now add a photo to it.':''}`); if(f.photo&&r.item) this.select(r.item.i); }); },
   // a photo for a frame: cropped to the frame's shape and shrunk to a small JPEG on the phone, then sent
   choosePhoto(){ if(this.sel) this.file.click(); },
   async upload(){ const file=this.file.files&&this.file.files[0], it=this.sel; this.file.value=''; if(!file||!it) return;
     if(!/^image\//.test(file.type)){ toast('That isn’t a picture.'); return; }
     let img; try{ img=await createImageBitmap(file); }catch(e){ try{ img=await new Promise((ok,no)=>{ const im=new Image(); im.onload=()=>ok(im); im.onerror=no; im.src=URL.createObjectURL(file); }); }catch(e2){ toast('That photo couldn’t be opened.'); return; } }
-    const asp=photoAspect(it.k), sw=img.width, sh=img.height; let cw=sw, ch=sw/asp; if(ch>sh){ ch=sh; cw=sh*asp; }
+    const asp=photoAspect(it.k,it.o), crop=await this.photoEditor(img,asp,FURNITURE[it.k].name); if(!crop) return;
     const long=720, W=asp>=1?long:Math.round(long*asp), H=asp>=1?Math.round(long/asp):long, cv=el('canvas',{width:W,height:H});
-    cv.getContext('2d').drawImage(img,(sw-cw)/2,(sh-ch)/2,cw,ch,0,0,W,H);
+    cv.getContext('2d').drawImage(img,crop.x,crop.y,crop.w,crop.h,0,0,W,H);
     let blob=null; for(const q of [0.85,0.72,0.6]){ blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',q)); if(blob&&blob.size<300*1024) break; }
     if(!blob){ toast('That photo couldn’t be prepared.'); return; }
     this.busy=true; this.paintTools(); toast('📷 Putting your photo in the frame…');
     try{ const res=await fetch(this.base+'photo/'+encodeURIComponent(it.i),{method:'POST',headers:{'content-type':'image/jpeg','x-player':Me.token},body:blob}); const j=await res.json().catch(()=>({}));
       if(!res.ok) throw new Error(j.error||'The photo couldn’t be saved.'); this.apply(j); toast('📷 Your photo is up.'); }
     catch(e){ toast(e.message); } this.busy=false; if(this.el){ this.select(it.i); } },
+  // Before the photo goes up: drag it to place it in the frame, and zoom (pinch, the slider, or the mouse wheel) to size it.
+  // Resolves with the part of the picture to use, or null if cancelled.
+  photoEditor(img,asp,name){ return new Promise(done=>{ document.querySelector('.rsheet-bg')?.remove();
+    const VW=Math.min(320,innerWidth-64), VH=Math.round(VW/asp)>Math.min(360,innerHeight*0.5)?Math.min(360,innerHeight*0.5):Math.round(VW/asp), vw=asp>=1?VW:Math.round(VH*asp), vh=asp>=1?Math.round(VW/asp):VH, dpr=Math.min(2,devicePixelRatio||1);
+    const cv=el('canvas',{class:'phedit',width:Math.round(vw*dpr),height:Math.round(vh*dpr),style:`width:${vw}px;height:${vh}px`}), g=cv.getContext('2d');
+    const fit=Math.max(vw/img.width,vh/img.height); let z=1, ox=0, oy=0; /* z: zoom over "just fills the frame"; ox, oy: how far the picture is moved, in screen pixels */
+    const clamp=()=>{ const s=fit*z, mx=Math.max(0,(img.width*s-vw)/2), my=Math.max(0,(img.height*s-vh)/2); ox=Math.max(-mx,Math.min(mx,ox)); oy=Math.max(-my,Math.min(my,oy)); };
+    const draw=()=>{ clamp(); const s=fit*z; g.setTransform(dpr,0,0,dpr,0,0); g.fillStyle='#222'; g.fillRect(0,0,vw,vh); g.drawImage(img,vw/2-img.width*s/2+ox,vh/2-img.height*s/2+oy,img.width*s,img.height*s);
+      g.strokeStyle='rgba(255,255,255,.35)'; g.lineWidth=1; for(const f of [1/3,2/3]){ g.beginPath(); g.moveTo(vw*f,0); g.lineTo(vw*f,vh); g.moveTo(0,vh*f); g.lineTo(vw,vh*f); g.stroke(); } };
+    const zoom=el('input',{type:'range',min:'1',max:'4',step:'0.01',value:'1',class:'phzoom','aria-label':'Zoom'}); zoom.oninput=()=>{ z=+zoom.value; draw(); };
+    const pts=new Map(); let pinch=null;
+    cv.addEventListener('pointerdown',e=>{ cv.setPointerCapture(e.pointerId); pts.set(e.pointerId,[e.clientX,e.clientY]); if(pts.size===2){ const [a,b]=[...pts.values()]; pinch={d:Math.hypot(a[0]-b[0],a[1]-b[1]),z}; } });
+    cv.addEventListener('pointermove',e=>{ const p=pts.get(e.pointerId); if(!p) return; const dx=e.clientX-p[0], dy=e.clientY-p[1]; pts.set(e.pointerId,[e.clientX,e.clientY]);
+      if(pts.size===2&&pinch){ const [a,b]=[...pts.values()]; z=Math.max(1,Math.min(4,pinch.z*Math.hypot(a[0]-b[0],a[1]-b[1])/Math.max(1,pinch.d))); zoom.value=z; } else if(pts.size===1){ ox+=dx; oy+=dy; } draw(); });
+    const up=e=>{ pts.delete(e.pointerId); if(pts.size<2) pinch=null; }; cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
+    cv.addEventListener('wheel',e=>{ e.preventDefault(); z=Math.max(1,Math.min(4,z*(e.deltaY<0?1.08:1/1.08))); zoom.value=z; draw(); },{passive:false});
+    const wrap=el('div',{class:'rsheet-bg rreport'}), finish=v=>{ wrap.remove(); done(v); };
+    wrap.append(el('div',{class:'rsheet inked phsheet',role:'dialog','aria-label':'Place your photo'}, el('h3',{text:`📷 Your photo in the ${name.toLowerCase()}`}), el('p',{class:'hint',text:'Drag to move it, pinch or slide to zoom. The whole box is what shows in the frame.'}),
+      el('div',{class:'phwrap'},cv), el('label',{class:'phz'}, '🔍', zoom),
+      el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Cancel',onclick:()=>finish(null)}), el('button',{class:'btn primary',text:'✓ Use this photo',onclick:()=>{ clamp(); const s=fit*z, w=vw/s, h=vh/s; finish({ x:img.width/2-ox/s-w/2, y:img.height/2-oy/s-h/2, w, h }); }}))));
+    document.body.append(wrap); draw(); }); },
   paintTools(){ const t=this.tools; if(!t) return; t.innerHTML=''; const d=this.d; if(!d) return; const up=this.h&&this.h.view==='above';
     if(!d.mine){ const s=this.sel; if(s&&s.ph) t.append(el('span',{class:'tip',text:'A photo'}), el('button',{class:'btn sm',text:'⚑ Report this photo',onclick:()=>reportSheet({kind:'photo',id:s.ph,handle:d.owner})}), el('button',{class:'btn sm',text:'✕',onclick:()=>{ this.sel=null; this.h&&this.h.setSelected(null); this.paintTools(); }}));
       else t.append(el('span',{class:'tip',text:up?'Drag to turn the house around. Tap 🚶 Walk to go back inside.':`${this.biz?`Welcome to ${d.home.name}.`:`Just looking around @${d.owner}’s home.`} ${PHONE_UI?'Use the joystick to walk and drag to look.':'Walk with WASD or the arrows; drag to look.'}`})); return; }
@@ -6489,12 +6564,14 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     if(p){ const f=FURNITURE[p.k], bad=p.x==null?(f.mount==='floor'?'Look at the floor where it should go.':f.mount==='ceil'?'Look up at the ceiling where it should go.':f.mount==='window'?'Look at a window.':'Look at a wall where it should hang.'):placeProblem(d.room,d.size,p.k,p.x,p.y,p.r,p.i||null);
       t.append(el('span',{class:'tip'+(bad?' bad':''),text:bad||`${f.name}: ${up?'tap where it goes':'look or tap where it goes'}`}));
       if(f.mount==='floor') t.append(el('button',{class:'btn sm',text:'↻ Turn',onclick:()=>this.turn()}));
+      if(canTurnOnWall(p.k)) t.append(el('button',{class:'btn sm',text:p.o?'▭ Landscape':'▯ Portrait',onclick:()=>{ p.o=p.o?0:1; this.h.refreshGhost(); this.paintTools(); }}));
       if(f.tint&&!p.i) t.append(el('div',{class:'tints'}, ...TINTS.map((c,i)=>el('button',{class:'tint'+(p.c===i?' on':''),style:`background:${c}`,'aria-label':`Colour ${i+1}`,onclick:()=>{ p.c=i; this.h.refreshGhost(); this.paintTools(); }}))));
       t.append(el('button',{class:'btn primary sm',disabled:!!bad||this.busy,text:p.i?'✓ Put it here':`✓ Buy · ${fmt(f.cost)}`,onclick:()=>this.place()}), el('button',{class:'btn sm',text:'✕',onclick:()=>this.setPick(null)})); return; }
     const s=this.sel; if(s){ const f=FURNITURE[s.k];
       t.append(el('span',{class:'tip',text:f.name}));
       if(f.photo) t.append(el('button',{class:'btn primary sm',disabled:this.busy,text:s.ph?'📷 Change photo':'📷 Add a photo',onclick:()=>this.choosePhoto()}));
-      t.append(el('button',{class:'btn sm',text:'✥ Move',onclick:()=>{ const q={i:s.i,k:s.k,c:s.c,r:s.r,ph:s.ph}; this.select(null); this.setPick({...q,x:null,y:null}); }}));
+      t.append(el('button',{class:'btn sm',text:'✥ Move',onclick:()=>{ const q={i:s.i,k:s.k,c:s.c,r:s.r,ph:s.ph,o:s.o}; this.select(null); this.setPick({...q,x:null,y:null}); }}));
+      if(canTurnOnWall(s.k)) t.append(el('button',{class:'btn sm',text:s.o?'▭ Landscape':'▯ Portrait',title:s.ph?'Turning it keeps the photo, which is then cropped to the new shape: choose it again to set it nicely':'Turn it on the wall',onclick:()=>this.send(this.base+'place',{i:s.i,x:s.x,y:s.y,r:s.r,o:s.o?0:1},()=>{ this.select(s.i); if(s.ph) toast('Turned. Tap 📷 Change photo to fit your picture to the new shape.'); })}));
       if(f.mount==='floor') t.append(el('button',{class:'btn sm',text:'↻ Turn',onclick:()=>{ const r=(s.r+1)%4, bad=placeProblem(d.room,d.size,s.k,s.x,s.y,r,s.i); if(bad){ toast(bad); return; } this.send(this.base+'place',{i:s.i,x:s.x,y:s.y,r},()=>this.select(s.i)); }}));
       t.append(el('button',{class:'btn sm',text:'📦 Store',onclick:()=>this.send(this.base+'store',{i:s.i},()=>{ this.select(null); toast(`📦 ${f.name} put in storage.`); })}),
         s.std?el('button',{class:'btn sm',text:'🗑️ Remove',onclick:()=>toast(`Take out the ${f.name.toLowerCase()}? It came with the building, so there’s nothing back for it.`,'Remove',()=>this.send(this.base+'sell',{i:s.i},()=>this.select(null)))})
@@ -6504,7 +6581,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
   paintShop(){ const s=this.shop, d=this.d; if(!s||!d) return; s.innerHTML=''; const R=d.room, H3=this.H3;
     const tabs=[...(this.biz?BIZ_CATS:[]),...ROOM_CATS,['style','🎨 Floor & walls'],['box',`📦 Stored${R.box.length?` (${R.box.length})`:''}`]];
     s.append(el('div',{class:'roomtabs'}, ...tabs.map(([k,n])=>el('button',{class:'rtab'+(this.cat===k?' on':''),text:n,onclick:()=>{ this.cat=k; this.paintShop(); }})),
-      this.biz?'':el('button',{class:'rtab'+(R.locked?' on':''),text:R.locked?'🔒 Locked':'🔓 Open to visitors',title:'Whether other players can walk into your home',onclick:()=>this.send('/api/me/room/lock',{locked:!R.locked},r=>toast(r.room.locked?'🔒 Your home is locked: others can’t come in.':'🔓 Your home is open: others can look around.'))}),
+      this.bld?'':el('button',{class:'rtab'+(R.locked?' on':''),text:R.locked?'🔒 Locked':'🔓 Open to visitors',title:'Whether other players can walk into your home',onclick:()=>this.send('/api/me/room/lock',{locked:!R.locked},r=>toast(r.room.locked?'🔒 Your home is locked: others can’t come in.':'🔓 Your home is open: others can look around.'))}),
       el('span',{class:'roomcash',text:`💰 ${fmt(d.coins)}`})));
     const row=el('div',{class:'roomitems'}), card=(img,name,price,on,click)=>el('button',{class:'roomitem'+(on?' on':''),onclick:click}, img, el('b',{text:name}), el('span',{text:price}));
     const pic=(k,c)=>{ const u=H3.thumb(k,c||0); return u?el('img',{src:u,alt:'',width:'80',height:'64'}):el('i',{class:'noimg'}); };
@@ -6789,7 +6866,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       if(!b.owner) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(price)}`,onclick:()=>toast(`Buy ${b.name||t.name} for ${fmt(price)} coins? You'll collect 80% of its rent or profit every game day.`,'Buy',async()=>{ const r=await meAction('/api/me/properties/buy',{buildingId:b.id},r=>`It's yours! About ${fmt(r.income)} coins a day.`); if(r){ b.owner=Me.handle; Money.at=0; renderCard(true); } })})));
       else if(b.owner.toLowerCase()===Me.handle.toLowerCase()&&!b.plot) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
     if(!Store.canWrite&&Me&&Me.token) card.append(el('div',{class:'row-actions'}, Loc.btn(b.name||t.name, b.x, b.y)));
-    if(canEnter(b.type)&&b.done!==false&&!b.ruin&&!Store.canWrite) card.append(el('div',{class:'row-actions'}, b.owner&&isMe(b.owner)?el('button',{class:'btn primary',text:'🛋️ Design the inside',onclick:()=>Room.openBuilding(b.id,true)}):'', el('button',{class:'btn',text:'🚪 Go inside',onclick:()=>Room.openBuilding(b.id)}))); /* anyone can walk into a business */
+    if((canEnter(b.type)||(t.home&&!(MyHome.data&&MyHome.data.home&&MyHome.data.home.id===b.id)))&&b.done!==false&&!b.ruin&&!Store.canWrite) card.append(el('div',{class:'row-actions'}, b.owner&&isMe(b.owner)&&!t.home?el('button',{class:'btn primary',text:'🛋️ Design the inside',onclick:()=>Room.openBuilding(b.id,true)}):'', el('button',{class:'btn',text:'🚪 Go inside',onclick:()=>Room.openBuilding(b.id)}))); /* anyone can walk into a business */
     if(b.web && t.work && !b.ruin) card.append(websiteRow(b,t)); // up top, where visitors see it first
     Plots.buildingBits(card,b,t);
     if(t.hangar && b.done!==false && !b.ruin) card.append(hangarSection(b,t));

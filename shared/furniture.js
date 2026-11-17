@@ -186,16 +186,60 @@ export const WALLS = { cream: { name: 'Cream', c: '#EFE6D2', cost: 0 }, white: {
   navy: { name: 'Navy', c: '#34495E', cost: 1500 }, charcoal: { name: 'Charcoal', c: '#4A4E54', cost: 1500 }, brick: { name: 'Brick', c: '#B0634A', cost: 2000, brick: true }, wood: { name: 'Wood panels', c: '#A47551', cost: 2500, panels: true } };
 export const RESALE = 0.5, MAX_ITEMS = 150, MAX_STORED = 80, MAX_PHOTOS = 40, PHOTO_BYTES = 350 * 1024;
 
-// How big the house is, by the kind of home: a tent is cosy, a big house roomy.
+const hashStr = s => { let h = 2166136261 >>> 0; for (const ch of String(s)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; };
+const rngOf = seed => { let a = seed >>> 0 || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+// How big the inside is, by the home: the better the home (its rent) and the taller the building, the more room.
+// A tent is 4×4; cottages 5–6; houses 7–8; flats in blocks 8–10; towers 10–11; the sky residences and luxury towers 12–14.
 export function roomSize(type) {
   const t = BUILDING_TYPES[type]; if (!t || !t.home) return 0;
   if (t.style === 'tent' || type === 'tent') return 4;
-  const [w, d] = t.size, cap = t.home.capacity || 1, area = w * d;
-  if (cap >= 6) return 5; // a flat in a block
-  if (area >= 9) return 8; return area >= 4 ? 6 : 5;
+  const rent = t.home.rent || 0, base = rent <= 3 ? 5 : rent <= 5 ? 6 : rent <= 9 ? 7 : rent <= 12 ? 8 : rent <= 15 ? 9 : rent <= 20 ? 10 : rent <= 45 ? 12 : 13;
+  return Math.min(14, base + (rent > 3 ? hashStr(type) % 2 : 0) + ((t.height || 0) >= 100 ? 1 : 0));
 }
+export const homePlan = type => 'h:' + type;
 
 // ---------------- the floor plan ----------------
+// A home's own plan, the same every time for the same kind of home: the living room across the front (with the front
+// door), a kitchen beside it (and a dining room in bigger homes), and behind, bedrooms and bathrooms side by side, some
+// with an ensuite, a study or a dressing room behind them. Every room has a door to the next, and windows on the outside.
+function homeLayout(S, type, set, addRoom, win) {
+  const r = rngOf(hashStr(type + ':' + S)), pick = a => a[Math.floor(r() * a.length)], cells = Array.from({ length: S }, () => Array(S).fill(-1)), rooms = [];
+  const room = (name, kind, x, y, w, d) => { const i = rooms.length; rooms.push({ name, kind, x, y, w, d }); for (let a = x; a < x + w; a++) for (let b = y; b < y + d; b++) cells[a][b] = i; return i; };
+  const doors = new Set(), door = k => doors.add(k);
+  if (S <= 4) { room('Main room', 'living', 0, 0, S, S); set(`h${Math.floor(S / 2) - 1},${S}`, 'front'); }
+  else {
+    // the front: living room, with the kitchen (and dining room) to one side
+    const fd = Math.max(2, Math.min(S - 2, Math.round(S * (0.4 + r() * 0.12)))), y0 = S - fd, left = r() < 0.5;
+    const kw = S >= 6 ? Math.max(2, Math.min(4, Math.round(S * (0.26 + r() * 0.08)))) : 0, dw = S >= 10 ? Math.max(2, Math.min(4, Math.round(S * 0.22))) : 0, lw = S - kw - dw;
+    let x = 0; const parts = left ? [['k', kw], ['d', dw], ['l', lw]] : [['l', lw], ['d', dw], ['k', kw]], ids = {};
+    for (const [k, w] of parts) { if (!w) continue; ids[k] = room(k === 'l' ? 'Living room' : k === 'k' ? 'Kitchen' : 'Dining room', k === 'l' ? 'living' : k === 'k' ? 'kitchen' : 'dining', x, y0, w, fd); x += w; }
+    const L = rooms[ids.l], my = y0 + Math.floor(fd / 2);
+    if (ids.d != null) { const D = rooms[ids.d]; door(left ? `v${D.x + D.w},${my}` : `v${D.x},${my}`); const K = rooms[ids.k]; door(left ? `v${K.x + K.w},${y0 + fd - 1}` : `v${K.x},${y0 + fd - 1}`); }
+    else if (ids.k != null) { const K = rooms[ids.k]; door(left ? `v${K.x + K.w},${my}` : `v${K.x},${my}`); }
+    set(`h${L.x + Math.floor(r() * L.w)},${S}`, 'front');
+    // the back: columns of rooms, each opening onto the front rooms; the deep ones have a second room behind
+    const bh = y0, widths = []; let left2 = S - 2; /* a 2-wide bathroom, and the rest in bedroom columns */
+    while (left2 > 0) { const w = left2 <= 5 ? left2 : Math.max(3, Math.min(left2 - 3, 3 + Math.floor(r() * (S >= 10 ? 3 : 2)))); widths.push(w); left2 -= w; }
+    const narrowest = Math.floor(r() * (widths.length + 1)); widths.splice(narrowest, 0, 2); let bx = 0, beds = 0, baths = 0;
+    widths.forEach((w, i) => {
+      const isBath = i === narrowest || (S >= 11 && baths < 2 && w === 2 && r() < 0.4), stack = bh >= 4 && w >= 2 && r() < 0.75, fh = stack ? Math.min(bh - 2, Math.max(2, Math.ceil(bh / 2) + (r() < 0.5 ? 0 : 1))) : bh; /* a room behind is at least 2 deep */
+      const kind = isBath ? 'bath' : 'bed', name = isBath ? (baths++ ? 'Second bathroom' : 'Bathroom') : (beds++ ? (beds === 2 ? 'Second bedroom' : 'Bedroom ' + beds) : 'Main bedroom');
+      const front = room(name, kind, bx, bh - fh, w, fh);
+      const under = []; for (let a = bx; a < bx + w; a++) if (cells[a][bh] >= 0) under.push(a);
+      const nearL = under.filter(a => cells[a][bh] === ids.l), dx = (nearL.length ? nearL : under)[Math.floor((nearL.length ? nearL : under).length / 2)]; door(`h${dx},${bh}`);
+      if (stack) { const names = (S >= 9 ? ['Ensuite', 'Study', 'Dressing room', 'Guest room', 'Playroom'] : ['Ensuite', 'Study', 'Guest room']).filter(n => !rooms.some(q => q.name === n)), back = room(isBath ? 'Storeroom' : pick(names.length ? names : ['Box room']), isBath ? 'store' : 'extra', bx, 0, w, bh - fh);
+        const R = rooms[back]; if (R.name === 'Ensuite') R.kind = 'bath'; else if (R.name === 'Study') R.kind = 'study'; else if (R.name === 'Dressing room') R.kind = 'closet'; else if (R.kind === 'extra') R.kind = 'bed';
+        door(`h${bx + Math.floor(w / 2)},${bh - fh}`); }
+      bx += w; });
+  }
+  // walls between rooms (doorways where a door was chosen), and the rooms in order
+  for (let a = 0; a < S; a++) for (let b = 0; b < S; b++) { if (a + 1 < S && cells[a][b] !== cells[a + 1][b]) set(`v${a + 1},${b}`, doors.has(`v${a + 1},${b}`) ? 'door' : 'wall'); if (b + 1 < S && cells[a][b] !== cells[a][b + 1]) set(`h${a},${b + 1}`, doors.has(`h${a},${b + 1}`) ? 'door' : 'wall'); }
+  for (const R of rooms) addRoom(R.name, R.kind, R.x, R.y, R.w, R.d);
+  // windows: every other tile of outside wall, so every room facing out gets daylight
+  for (let a = 0; a < S; a += 2) win(`h${a},0`);
+  for (let a = 0; a < S; a += 2) { win(`v0,${a}`); win(`v${S},${a}`); }
+  for (let a = 1; a < S; a += 2) win(`h${a},${S}`);
+}
 const PLANS = new Map();
 export function layoutOf(S, plan = 'home') {
   const key = S + ':' + plan; if (PLANS.has(key)) return PLANS.get(key);
@@ -203,8 +247,9 @@ export function layoutOf(S, plan = 'home') {
   for (let i = 0; i < S; i++) { set(`h${i},0`, 'wall'); set(`h${i},${S}`, 'wall'); set(`v0,${i}`, 'wall'); set(`v${S},${i}`, 'wall'); }
   const hline = (y, x0, x1, doors = []) => { for (let x = x0; x < x1; x++) set(`h${x},${y}`, doors.includes(x) ? 'door' : 'wall'); };
   const vline = (x, y0, y1, doors = []) => { for (let y = y0; y < y1; y++) set(`v${x},${y}`, doors.includes(y) ? 'door' : 'wall'); };
-  const win = (...ks) => ks.forEach(k => set(k, 'window')), room = (name, kind, x, y, w, d) => rooms.push({ name, kind, x, y, w, d });
-  if (plan !== 'home') {
+  const win = (...ks) => ks.forEach(k => { if (E.get(k) !== 'front') set(k, 'window'); }), room = (name, kind, x, y, w, d) => rooms.push({ name, kind, x, y, w, d });
+  if (plan.startsWith('h:')) homeLayout(S, plan.slice(2), set, room, win);
+  else if (plan !== 'home') {
     // a business: the main floor at the front, and along the back an office, a storeroom and a staff toilet
     const back = S >= 10 ? 3 : 2, mid = Math.max(2, Math.floor((S - 2) / 2)), main = { shop: 'Shop floor', food: 'Dining room', office: 'Office floor', industry: 'Factory floor' }[plan] || 'Main hall';
     room('Office', 'office', 0, 0, mid, back); room('Storeroom', 'store', mid, 0, S - 2 - mid, back); room('Staff toilet', 'toilet', S - 2, 0, 2, back); room(main, 'main', 0, back, S, S - back);
@@ -229,7 +274,7 @@ export function layoutOf(S, plan = 'home') {
   const L = { S, plan, rooms, edges: E, keep }; PLANS.set(key, L); return L;
 }
 export const roomAt = (S, x, y, plan = 'home') => layoutOf(S, plan).rooms.findIndex(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.d);
-const DEFAULT_STYLE = { living: ['wood', 'cream'], bed: ['cream', 'sky'], bath: ['tiles', 'white'], kitchen: ['tiles', 'cream'], main: ['tiles', 'white'], office: ['carpet', 'white'], store: ['slate', 'white'], toilet: ['tiles', 'white'] };
+const DEFAULT_STYLE = { living: ['wood', 'cream'], bed: ['cream', 'sky'], bath: ['tiles', 'white'], kitchen: ['tiles', 'cream'], dining: ['walnut', 'sage'], study: ['carpet', 'navy'], closet: ['cream', 'blush'], main: ['tiles', 'white'], office: ['carpet', 'white'], store: ['slate', 'white'], toilet: ['tiles', 'white'] };
 export function styleOf(room, S, i) {
   const r = layoutOf(S, room?.plan || 'home').rooms[i], d = DEFAULT_STYLE[r?.kind] || DEFAULT_STYLE.living, s = (room?.styles || {})[i] || {};
   return { f: FLOORS[s.f] ? s.f : d[0], w: WALLS[s.w] ? s.w : d[1] };
@@ -258,13 +303,22 @@ export function placedParts(it, tint) {
   if (f.mount === 'wall' || f.mount === 'window') {
     const n = footOf(it.k, it.r)[0], r = it.r, T = WALL_T, o = r === 0 ? [0, 1] : r === 1 ? [-1, 0] : r === 2 ? [0, -1] : [1, 0];
     const ox = r === 0 ? it.x : r === 1 ? it.x + 1 : r === 2 ? it.x + n : it.x, oy = r === 0 ? it.y : r === 1 ? it.y : r === 2 ? it.y + 1 : it.y + n;
-    return f.parts.map(([px, py, z, pw, pd, h, c, s]) => { const q = py + T;
+    return wallParts(it).map(([px, py, z, pw, pd, h, c, s]) => { const q = py + T;
       const b = r === 0 ? [ox + px, oy + q, pw, pd] : r === 2 ? [ox - (px + pw), oy - (q + pd), pw, pd] : r === 1 ? [ox - (q + pd), oy + px, pd, pw] : [ox + q, oy - (px + pw), pd, pw];
       return { x: b[0], y: b[1], z, w: b[2], d: b[3], h, c: col(c), s, out: o }; });
   }
   return partsOf(it.k, it.r).map(([px, py, z, pw, pd, h, c, s]) => ({ x: it.x + px, y: it.y + py, z, w: pw, d: pd, h, c: col(c), s }));
 }
-export function photoAspect(k) { const p = (FURNITURE[k]?.parts || []).find(p => p[7] === 'p'); return p ? p[3] / p[5] : 4 / 3; }
+// Frames, paintings and mirrors can be turned on the wall (landscape ↔ portrait): `o` 1 turns the whole piece a quarter
+// turn about its middle, in the plane of the wall.
+export const canTurnOnWall = k => { const f = FURNITURE[k]; return !!f && f.mount === 'wall' && (!!f.photo || ['painting', 'wallmirror', 'whiteboard'].includes(k)); };
+function wallParts(it) {
+  const f = FURNITURE[it.k]; if (!(it.o && canTurnOnWall(it.k))) return f.parts;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const [px, , z, pw, , h] of f.parts) { x0 = Math.min(x0, px); x1 = Math.max(x1, px + pw); z0 = Math.min(z0, z); z1 = Math.max(z1, z + h); }
+  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  return f.parts.map(([px, py, z, pw, pd, h, c, s]) => [cx - (z + h - cz), py, cz + (px - cx), h, pd, pw, c, s]);
+}
+export function photoAspect(k, o = 0) { const p = (FURNITURE[k]?.parts || []).find(p => p[7] === 'p'), a = p ? p[3] / p[5] : 4 / 3; return o && canTurnOnWall(k) ? 1 / a : a; }
 
 // Is there room for piece k at (x, y), turned (or on wall) r, in a house of `size`, leaving out the piece `skip`?
 export function placeProblem(room, size, k, x, y, r, skip = null) {
@@ -301,7 +355,7 @@ export function fitRoom(raw, size, plan = 'home') {
   const toBox = p => { changed = true; if (room.box.length < MAX_STORED) room.box.push({ i: p.i, k: p.k, c: p.c, ...(p.ph ? { ph: p.ph } : {}), ...(p.std ? { std: true } : {}) }); };
   for (const it of Array.isArray(raw?.box) ? raw.box : []) if (FURNITURE[it?.k] && room.box.length < MAX_STORED) room.box.push({ i: String(it.i), k: it.k, c: tintOf(it), ...(keepPhoto(it.k, it.ph) ? { ph: keepPhoto(it.k, it.ph) } : {}), ...(it.std ? { std: true } : {}) });
   for (const it of Array.isArray(raw?.items) ? raw.items : []) { if (!FURNITURE[it?.k]) { changed = true; continue; }
-    const p = { i: String(it.i), k: it.k, x: it.x, y: it.y, r: it.r || 0, c: tintOf(it), ...(it.std ? { std: true } : {}) }, ph = keepPhoto(it.k, it.ph); if (ph) p.ph = ph;
+    const p = { i: String(it.i), k: it.k, x: it.x, y: it.y, r: it.r || 0, c: tintOf(it), ...(it.std ? { std: true } : {}), ...(it.o && canTurnOnWall(it.k) ? { o: 1 } : {}) }, ph = keepPhoto(it.k, it.ph); if (ph) p.ph = ph;
     if (room.items.length < MAX_ITEMS && !placeProblem(room, size, p.k, p.x, p.y, p.r)) room.items.push(p); else toBox(p); }
   return { room, changed };
 }

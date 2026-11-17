@@ -310,6 +310,10 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/buildings/:id/inside/photo/:i', limit, quota('photo'), express.raw({ type: 'image/jpeg', limit: '400kb' }), send(async req => RM().photo((await me(req)).id, req.params.i, req.body, req.params.id)));
   r.post('/me/buildings/:id/inside/:op', limit, send(async req => { const op = req.params.op, M = RM(); if (!['buy', 'place', 'store', 'sell', 'style'].includes(op)) throw new HttpError(404, 'No such thing to do.'); return M[op]((await me(req)).id, bd(req), req.params.id); }));
   // "here now": a view of a place says it's still open every 25 s, and hears who else is looking around
+  // chatting with everyone inside the same building or home (signed in; muted players can't)
+  r.post('/inside/chat', limit, quota('group_msg'), send(async req => { const p = await me(req); await assertNotMuted(p.id); const b = bd(req), place = String(b.place || ''), text = String(b.text || '').replace(/\s+/g, ' ').trim();
+    if (!/^(b|h):[A-Za-z0-9_.-]{1,64}$/.test(place)) throw new HttpError(400, 'Which place?'); if (!text) throw new HttpError(400, 'Write something first.'); if (text.length > 200) throw new HttpError(400, 'Keep it under 200 characters.');
+    const chat = { from: p.handle, text, t: Date.now() }; world.bus.publish([{ inside: true, place, k: 'chat', chat }]); return { ok: true, chat }; }));
   r.post('/inside/here', limit, send(async req => { const p = await playerFrom(req); return RM().seen(bd(req).place, p ? 'p:' + p.id : 'ip:' + clientIp(req), p ? p.handle : null); }));
   r.post('/me/room/place', limit, send(async req => RM().place((await me(req)).id, bd(req))));
   r.post('/me/room/store', limit, send(async req => RM().store((await me(req)).id, bd(req))));

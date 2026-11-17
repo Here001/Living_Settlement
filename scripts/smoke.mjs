@@ -1848,24 +1848,24 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
 { // inside your home: a house with rooms; furniture on the floor, the walls, the windows and the ceiling; photos in frames
   const M = await player('homey_hal', 300_000), V = await player('visitor_vi', 1000);
   await pool.query('update citizens set home_id = (select id from buildings where type = $2 limit 1) where id = $1', [M.id, 'house']);
-  const v0 = await call('GET', '/api/me/room', undefined, M.P); ok(v0.status === 200 && v0.json.mine && v0.json.size === 6 && v0.json.room.items.length === 0, 'an empty house to furnish (a house is 6×6, in four rooms)', JSON.stringify(v0.json).slice(0, 200));
-  const b1 = await call('POST', '/api/me/room/buy', { k: 'sofa', x: 0, y: 0, r: 0, c: 2 }, M.P); const it = b1.json.room?.items?.[0];
+  const v0 = await call('GET', '/api/me/room', undefined, M.P); ok(v0.status === 200 && v0.json.mine && v0.json.size === 8 && v0.json.room.plan === 'h:house' && v0.json.room.items.length === 0, 'an empty house to furnish (a house is 8×8, with its own plan)', JSON.stringify(v0.json).slice(0, 200));
+  const b1 = await call('POST', '/api/me/room/buy', { k: 'sofa', x: 0, y: 3, r: 0, c: 2 }, M.P); const it = b1.json.room?.items?.[0];
   ok(b1.status === 200 && it && it.k === 'sofa' && it.c === 2 && b1.json.coins === 300_000 - 4000, 'buy a green sofa for the bedroom', JSON.stringify(b1.json).slice(0, 200));
-  ok((await call('POST', '/api/me/room/buy', { k: 'armchair', x: 1, y: 0, r: 0 }, M.P)).status === 409, 'two pieces can’t stand in the same spot');
-  ok((await call('POST', '/api/me/room/buy', { k: 'rug', x: 0, y: 0, r: 0 }, M.P)).status === 200, '…but a rug can go under the sofa');
-  ok(/wall/i.test((await call('POST', '/api/me/room/buy', { k: 'sofa', x: 3, y: 1, r: 0 }, M.P)).json.error || ''), 'furniture can’t stand across a wall between rooms');
-  ok(/doorway/i.test((await call('POST', '/api/me/room/buy', { k: 'plant', x: 1, y: 2, r: 0 }, M.P)).json.error || ''), 'doorways are kept clear');
-  ok((await call('POST', '/api/me/room/buy', { k: 'bed', x: 5, y: 5, r: 0 }, M.P)).status === 409, 'furniture must fit inside the house');
-  const fr = await call('POST', '/api/me/room/buy', { k: 'frame', x: 0, y: 1, r: 3 }, M.P); ok(fr.status === 200, 'hang a photo frame on a wall', JSON.stringify(fr.json).slice(0, 160)); const frame = fr.json.item;
-  ok(/window/i.test((await call('POST', '/api/me/room/buy', { k: 'frame', x: 1, y: 0, r: 0 }, M.P)).json.error || ''), 'a frame can’t hang over a window');
-  ok((await call('POST', '/api/me/room/buy', { k: 'curtains', x: 1, y: 0, r: 0, c: 4 }, M.P)).status === 200, '…but curtains go on the window');
-  ok((await call('POST', '/api/me/room/buy', { k: 'clock', x: 0, y: 1, r: 3 }, M.P)).status === 409, 'only one thing hangs on each bit of wall');
-  ok((await call('POST', '/api/me/room/buy', { k: 'chandelier', x: 2, y: 1, r: 0 }, M.P)).status === 200 && (await call('POST', '/api/me/room/buy', { k: 'fan', x: 2, y: 1, r: 0 }, M.P)).status === 409, 'a chandelier on the ceiling, and only one thing per spot up there');
-  ok((await call('POST', '/api/me/room/buy', { k: 'pendant', x: 1, y: 1, r: 0 }, M.P)).status === 200, '…a light above the sofa is fine (the ceiling is separate from the floor)');
-  const tr = await call('POST', '/api/me/room/place', { i: it.i, x: 4, y: 0, r: 1 }, M.P), t2 = tr.json.room?.items?.find(x => x.i === it.i);
-  ok(tr.status === 200 && t2.x === 4 && t2.r === 1, 'move the sofa into the bathroom and turn it', JSON.stringify(t2));
+  ok((await call('POST', '/api/me/room/buy', { k: 'armchair', x: 1, y: 3, r: 0 }, M.P)).status === 409, 'two pieces can’t stand in the same spot');
+  ok((await call('POST', '/api/me/room/buy', { k: 'rug', x: 0, y: 3, r: 0 }, M.P)).status === 200, '…but a rug can go under the sofa');
+  ok(/wall/i.test((await call('POST', '/api/me/room/buy', { k: 'sofa', x: 2, y: 3, r: 0 }, M.P)).json.error || ''), 'furniture can’t stand across a wall between rooms');
+  ok(/doorway/i.test((await call('POST', '/api/me/room/buy', { k: 'plant', x: 1, y: 4, r: 0 }, M.P)).json.error || ''), 'doorways are kept clear');
+  ok((await call('POST', '/api/me/room/buy', { k: 'bed', x: 7, y: 7, r: 0 }, M.P)).status === 409, 'furniture must fit inside the house');
+  const fr = await call('POST', '/api/me/room/buy', { k: 'frame', x: 0, y: 3, r: 3 }, M.P); ok(fr.status === 200, 'hang a photo frame on a wall', JSON.stringify(fr.json).slice(0, 160)); const frame = fr.json.item;
+  ok(/window/i.test((await call('POST', '/api/me/room/buy', { k: 'frame', x: 0, y: 2, r: 3 }, M.P)).json.error || ''), 'a frame can’t hang over a window');
+  ok((await call('POST', '/api/me/room/buy', { k: 'curtains', x: 0, y: 2, r: 3, c: 4 }, M.P)).status === 200, '…but curtains go on the window');
+  ok((await call('POST', '/api/me/room/buy', { k: 'clock', x: 0, y: 3, r: 3 }, M.P)).status === 409, 'only one thing hangs on each bit of wall');
+  ok((await call('POST', '/api/me/room/buy', { k: 'chandelier', x: 2, y: 3, r: 0 }, M.P)).status === 200 && (await call('POST', '/api/me/room/buy', { k: 'fan', x: 2, y: 3, r: 0 }, M.P)).status === 409, 'a chandelier on the ceiling, and only one thing per spot up there');
+  ok((await call('POST', '/api/me/room/buy', { k: 'pendant', x: 1, y: 3, r: 0 }, M.P)).status === 200, '…a light above the sofa is fine (the ceiling is separate from the floor)');
+  const tr = await call('POST', '/api/me/room/place', { i: it.i, x: 6, y: 3, r: 1 }, M.P), t2 = tr.json.room?.items?.find(x => x.i === it.i);
+  ok(tr.status === 200 && t2.x === 6 && t2.r === 1, 'move the sofa into the bathroom and turn it', JSON.stringify(t2));
   const st = await call('POST', '/api/me/room/store', { i: it.i }, M.P); ok(st.status === 200 && st.json.room.box.length === 1 && !st.json.room.items.some(x => x.i === it.i), 'put it in storage');
-  ok((await call('POST', '/api/me/room/place', { i: it.i, x: 2, y: 3, r: 0 }, M.P)).json.room?.items?.some(x => x.i === it.i), '…and set it out again in the living room');
+  ok((await call('POST', '/api/me/room/place', { i: it.i, x: 2, y: 6, r: 0 }, M.P)).json.room?.items?.some(x => x.i === it.i), '…and set it out again in the living room');
   const sl = await call('POST', '/api/me/room/sell', { i: it.i }, M.P); ok(sl.status === 200 && sl.json.coins === 300_000 - 4000 - 1500 - 300 - 600 - 25000 - 900 + 2000, 'sell it back for half what it cost', sl.json.coins);
   const sy = await call('POST', '/api/me/room/style', { room: 0, floor: 'marble', wall: 'sage' }, M.P); ok(sy.status === 200 && sy.json.room.styles[0].f === 'marble' && sy.json.room.styles[0].w === 'sage' && sy.json.coins === sl.json.coins - 6800, 'marble floor and sage walls in the bedroom', JSON.stringify(sy.json.room.styles));
   ok((await call('POST', '/api/me/room/style', { room: 9, floor: 'wood' }, M.P)).status === 400, 'only rooms the house has');
@@ -1911,7 +1911,15 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   const st = await call('POST', `/api/me/buildings/${bk.id}/inside/style`, { room: 3, floor: 'terracotta', wall: 'sun' }, O.P); ok(st.status === 200 && st.json.room.styles[3].f === 'terracotta', 'the dining room gets a terracotta floor and sunny walls');
   ok((await call('POST', `/api/me/buildings/${bk.id}/inside/explode`, {}, O.P)).status === 404, 'only real actions');
   const hs = (await call('POST', '/api/admin/buildings', { type: 'house', x: 1310, y: 1300, instant: true })).json.building;
-  ok((await call('GET', `/api/buildings/${hs.id}/inside`, undefined, { auth: false })).status === 403, 'homes are visited through their people, not as buildings');
+  const eh = await call('GET', `/api/buildings/${hs.id}/inside`, undefined, O.P); ok(eh.status === 200 && eh.json.place === 'building' && eh.json.room.items.length === 0 && eh.json.room.plan === 'h:house', 'a home nobody lives in can be walked into (empty)', JSON.stringify(eh.json).slice(0, 160));
+  await pool.query('update buildings set owner_id = $2, owner_handle = $3 where id = $1', [hs.id, O.id, 'baker_bo']);
+  let shown = null; for (let y = 0; y < 8 && !shown; y++) for (let x = 0; x < 8 && !shown; x++) { const q = await call('POST', `/api/me/buildings/${hs.id}/inside/buy`, { k: 'armchair', x, y, r: 0 }, O.P); if (q.status === 200) shown = q; }
+  ok(shown && shown.json.place === 'building', 'its owner can furnish a home they own but don’t live in');
+  ok((await call('POST', `/api/me/buildings/${hs.id}/inside/buy`, { k: 'plant', x: 0, y: 0, r: 0 }, Vz.P)).status === 403, '…and nobody else can');
+  await pool.query('update citizens set home_id = $2 where id = $1', [Vz.id, hs.id]);
+  const ch = (await call('GET', `/api/buildings/${hs.id}/inside`, undefined, O.P)).json; ok(Array.isArray(ch.choose) && ch.choose.some(c => c.handle === 'walker_wu'), 'with someone living there, you choose whose home to look into', JSON.stringify(ch).slice(0, 160));
+  ok((await call('GET', `/api/buildings/${hs.id}/inside`, undefined, Vz.P)).json.place === 'home', '…and someone who lives there walks straight into their own');
+  await pool.query('update citizens set home_id = null where id = $1', [Vz.id]);
   const un = (await call('POST', '/api/admin/buildings', { type: 'bakery', x: 1320, y: 1300, instant: false })).json.building;
   ok((await call('GET', `/api/buildings/${un.id}/inside`, undefined, { auth: false })).status === 409, 'a building still going up can’t be entered yet');
   // homes can be locked
@@ -1923,6 +1931,36 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   const h1 = await call('POST', '/api/inside/here', { place: 'b:' + bk.id }, O.P), h2 = await call('POST', '/api/inside/here', { place: 'b:' + bk.id }, Vz.P);
   ok(h1.status === 200 && h2.json.viewers === 1 && h2.json.names.includes('baker_bo'), 'someone walking in sees who else is looking round', JSON.stringify(h2.json));
   ok((await call('POST', '/api/inside/here', { place: 'nonsense here' }, O.P)).status === 400, 'only real places'); }
+{ // inside, live: everyone in the same place sees the others walk about and can chat; frames turn on the wall; homes differ by type
+  const A = await player('live_amy', 50_000), Bq = await player('live_ben', 50_000), place = 'b:live-test-' + Date.now();
+  const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'inside' || m.type === 'authed') got.push(m); });
+    await new Promise(r => w.once('open', r)); w.send(JSON.stringify({ type: 'auth', token: P.headers['x-player'] })); for (let i = 0; i < 40 && !got.some(m => m.type === 'authed'); i++) await sleep(50); return { w, got }; };
+  const a = await sock(A.P), b = await sock(Bq.P);
+  a.w.send(JSON.stringify({ type: 'in', place, x: 2, y: 3, a: 0 })); await sleep(200);
+  b.w.send(JSON.stringify({ type: 'in', place, x: 4, y: 5, a: 1 })); await sleep(300);
+  const ball = b.got.find(m => m.k === 'all'), apos = a.got.find(m => m.k === 'pos');
+  ok(ball && ball.list.some(p => p.h === 'live_amy' && p.x === 2), 'walking in, you see who is already there', JSON.stringify(ball));
+  ok(apos && apos.p.h === 'live_ben' && apos.p.x === 4, '…and they see you come in', JSON.stringify(apos));
+  b.w.send(JSON.stringify({ type: 'in', place, x: 4.5, y: 5, a: 1 })); await sleep(300); ok(a.got.filter(m => m.k === 'pos' && m.p.h === 'live_ben').some(m => m.p.x === 4.5), '…and see you move');
+  ok(!b.got.some(m => m.k === 'pos' && m.p.h === 'live_ben'), 'your own moves aren’t sent back to you');
+  const c1 = await call('POST', '/api/inside/chat', { place, text: '  hello   in here  ' }, A.P); await sleep(300);
+  ok(c1.status === 200 && b.got.some(m => m.k === 'chat' && m.chat.from === 'live_amy' && m.chat.text === 'hello in here'), 'chat reaches everyone inside', JSON.stringify(c1.json));
+  ok((await call('POST', '/api/inside/chat', { place, text: 'x'.repeat(201) }, A.P)).status === 400 && (await call('POST', '/api/inside/chat', { place, text: 'hi' }, { auth: false })).status === 401, 'chat needs a sign-in and a short message');
+  await pool.query('update citizens set muted_until = $2 where id = $1', [A.id, Date.now() + 60000]); ok((await call('POST', '/api/inside/chat', { place, text: 'hi' }, A.P)).status === 403, 'muted players can’t chat inside'); await pool.query('update citizens set muted_until = null where id = $1', [A.id]);
+  const other = await sock(A.P); other.w.send(JSON.stringify({ type: 'in', place: 'b:elsewhere', x: 1, y: 1, a: 0 })); await sleep(200);
+  await call('POST', '/api/inside/chat', { place, text: 'only here' }, Bq.P); await sleep(300); ok(!other.got.some(m => m.k === 'chat'), 'chat stays in its own place'); other.w.close();
+  b.w.send(JSON.stringify({ type: 'out' })); await sleep(300); ok(a.got.some(m => m.k === 'gone'), 'leaving: the others see you go');
+  a.w.close(); b.w.close();
+  // frames turn on the wall: portrait/landscape
+  await pool.query('update citizens set home_id = (select id from buildings where type = $2 limit 1) where id = $1', [A.id, 'house']);
+  const fr = await call('POST', '/api/me/room/buy', { k: 'bigframe', x: 2, y: 3, r: 1, o: 1 }, A.P); const it = fr.json.item;
+  ok(fr.status === 200 && it && it.o === 1, 'a large frame hung in portrait', JSON.stringify(fr.json).slice(0, 160));
+  const tf = it ? await call('POST', '/api/me/room/place', { i: it.i, x: it.x, y: it.y, r: it.r, o: 0 }, A.P) : { json: { room: { items: [{}] } } }; ok(tf.status === 200 && !tf.json.room.items.find(x => x.i === it.i).o, '…and turned to landscape');
+  ok((await call('POST', '/api/me/room/buy', { k: 'sofa', x: 0, y: 3, r: 0, o: 1 }, A.P)).json.item?.o === undefined, 'only frames, paintings and mirrors turn on the wall');
+  // every kind of home its own size and plan
+  const F = await import('../shared/furniture.js');
+  ok(F.roomSize('tent') === 4 && F.roomSize('luxurytower') >= 13 && F.roomSize('aptower') > F.roomSize('cottage'), 'bigger, better homes are bigger inside (a tent 4×4, a luxury tower 14×14)');
+  ok(F.layoutOf(F.roomSize('villa'), F.homePlan('villa')).rooms.map(r => r.name).join() !== F.layoutOf(F.roomSize('slab50s'), F.homePlan('slab50s')).rooms.map(r => r.name).join() || F.roomSize('villa') !== F.roomSize('slab50s'), 'different kinds of home have different plans'); }
 // bills include land
 const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 'weekly bills run with plots', JSON.stringify(bl2.json));
 { // land auctions: the developer puts prime land up, players bid with held cash, the top bid wins it as a plot

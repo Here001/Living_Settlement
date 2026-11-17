@@ -203,6 +203,21 @@ export function createHouse(host, opts) {
       g.position.set(x, 0, y); g.rotation.y = (hashS(p.name + 'r') % 628) / 100; people.add(g); }
     dirty = true; wake();
   }
+  // ---- other players inside right now (from the live connection) ----
+  const others = new Map(); let meBubble = null, meBubbleUntil = 0;
+  function bubbleSprite(text) { const c = document.createElement('canvas'), g = c.getContext('2d'); c.width = 512; c.height = 160; g.font = '600 34px sans-serif';
+    const words = String(text).split(' '), lines = []; let line = ''; for (const w of words) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > 460 && line) { lines.push(line); line = w; } else line = t; } if (line) lines.push(line);
+    const shown = lines.slice(0, 3); if (lines.length > 3) shown[2] = shown[2].replace(/.{0,2}$/, '…'); const w = Math.min(500, Math.max(...shown.map(l => g.measureText(l).width)) + 36), h = shown.length * 40 + 24;
+    g.fillStyle = 'rgba(255,255,255,.96)'; g.beginPath(); g.roundRect((512 - w) / 2, 4, w, h, 20); g.fill(); g.fillStyle = '#1C1C1E'; g.textAlign = 'center'; g.textBaseline = 'top'; shown.forEach((l, i) => g.fillText(l, 256, 16 + i * 40));
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); sp.scale.set(1.9, 0.6, 1); sp.position.set(0, 2.45, 0); sp.renderOrder = 6; return sp; }
+  function upsertOther(id, p) { let o = others.get(id);
+    if (!o) { const g = figure(p.h || id); const tag = nameTag(p.h ? '@' + p.h : 'a visitor'); tag.position.set(0, 2.0, 0); g.add(tag); g.position.set(p.x, 0, p.y); g.rotation.y = p.a; scene.add(g); o = { g, tx: p.x, ty: p.y, ta: p.a }; others.set(id, o); }
+    o.tx = p.x; o.ty = p.y; o.ta = p.a; dirty = true; wake(); }
+  function removeOther(id) { const o = others.get(id); if (!o) return; scene.remove(o.g); o.g.traverse(m => { m.geometry && m.geometry.dispose(); m.material?.map && m.material.map.dispose(); }); others.delete(id); dirty = true; wake(); }
+  function say(id, text) { const o = id === 'me' ? null : others.get(id), on = o ? o.g : me3; if (!on) return; const sp = bubbleSprite(text);
+    if (o) { if (o.bubble) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); } o.bubble = sp; o.bubbleUntil = performance.now() + 7000; }
+    else { if (meBubble) { me3.remove(meBubble); meBubble.material.map.dispose(); } meBubble = sp; meBubbleUntil = performance.now() + 7000; }
+    on.add(sp); dirty = true; wake(); }
   // ---- furniture and lamps ----
   function buildStuff() {
     for (const g of [stuff, wallStuff, ceilStuff]) for (const c of [...g.children]) { g.remove(c); c.traverse(o => o.geometry && o.geometry.dispose()); }
@@ -312,7 +327,7 @@ export function createHouse(host, opts) {
     return false;
   }
   let lastRoom = -1;
-  function moved() { placeCamera(); if (pick && !tapAim) aim(); const ri = roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN); if (ri !== lastRoom) { lastRoom = ri; opts.onRoom && opts.onRoom(ri); } dirty = true; wake(); }
+  function moved() { opts.onMove && opts.onMove(me.x, me.y, me.yaw); placeCamera(); if (pick && !tapAim) aim(); const ri = roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN); if (ri !== lastRoom) { lastRoom = ri; opts.onRoom && opts.onRoom(ri); } dirty = true; wake(); }
   let tapAim = false;
 
   // ---- input ----
@@ -330,7 +345,7 @@ export function createHouse(host, opts) {
     if (Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < 8 && performance.now() - p.t < 450) { const r = el.getBoundingClientRect(), nx = (e.clientX - r.left) / r.width * 2 - 1, ny = -((e.clientY - r.top) / r.height) * 2 + 1;
       if (pick) { tapAim = true; aim(nx, ny); } else { ray.setFromCamera(v2.set(nx, ny), camera); ray.near = camera.near; const hit = ray.intersectObjects([stuff, wallStuff, ceilStuff].filter(g => g.visible), true)[0]; opts.onTap && opts.onTap(hit ? { i: hit.object.userData.i, photo: !!hit.object.userData.photo } : null); } } });
   el.addEventListener('pointercancel', e => ptrs.delete(e.pointerId));
-  const kd = e => { if (e.target.closest && e.target.closest('input,textarea')) return; const k = e.key.toLowerCase(); if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keys.add(k); e.preventDefault(); wake(); } };
+  const kd = e => { if ((e.target.closest && e.target.closest('input,textarea')) || host.offsetParent === null) return; const k = e.key.toLowerCase(); if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keys.add(k); e.preventDefault(); wake(); } };
   const ku = e => keys.delete(e.key.toLowerCase()); addEventListener('keydown', kd); addEventListener('keyup', ku);
   el.addEventListener('wheel', e => { if (view === 'walk') { me.pitch = Math.max(-1.2, Math.min(1.1, me.pitch - e.deltaY * 0.001)); moved(); } }, { passive: true });
 
@@ -342,22 +357,33 @@ export function createHouse(host, opts) {
   function tick(t) {
     raf = 0; if (dead) return; inTick = true; let again = false;
     try { again = step(t); } finally { inTick = false; } /* even if a frame fails, the next one can still be asked for */
-    if (again || dirty) raf = requestAnimationFrame(tick); else last = null;
+    if (again || (dirty && host.offsetParent !== null)) raf = requestAnimationFrame(tick); else last = null; /* hidden behind the map: nothing to draw, so it waits */
   }
   function step(t) {
+    if (host.offsetParent === null) { for (const o of others.values()) { o.g.position.x = o.tx; o.g.position.z = o.ty; o.g.rotation.y = o.ta; } dirty = true; return false; } /* hidden: jump to where people are, draw later */
     const dt = last == null ? 1 / 60 : Math.max(0, Math.min(0.05, (t - last) / 1000)); last = t; let moving = false; /* time since the last frame: never below 0 or above 1/20 s */
     let fw = -joy.y, st = joy.x; if (keys.has('w') || keys.has('arrowup')) fw += 1; if (keys.has('s') || keys.has('arrowdown')) fw -= 1; if (keys.has('a')) st -= 1; if (keys.has('d')) st += 1;
     if (keys.has('arrowleft')) { me.yaw += 1.8 * dt; moving = true; } if (keys.has('arrowright')) { me.yaw -= 1.8 * dt; moving = true; }
     if (view === 'walk' && (fw || st)) { const sp = 2.3 * dt, sx = -Math.sin(me.yaw), sy = -Math.cos(me.yaw), dx = (sx * fw + -sy * st) * sp, dy = (sy * fw + sx * st) * sp;
       if (!blocked(me.x + dx, me.y)) me.x += dx; if (!blocked(me.x, me.y + dy)) me.y += dy; moving = true; tapAim = false; }
     if (moving) moved();
-    if (dirty) { placeCamera(); renderer.render(scene, camera); dirty = false; }
-    return moving || joy.on || keys.size > 0;
+    if (dirty && host.offsetParent !== null) { placeCamera(); renderer.render(scene, camera); dirty = false; } /* not while the map is showing */
+    // other players: glide towards where they last said they were
+    let gliding = false; for (const o of others.values()) { const dx = o.tx - o.g.position.x, dz = o.ty - o.g.position.z; let da = o.ta - o.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
+      if (Math.abs(dx) + Math.abs(dz) + Math.abs(da) > 0.01) { const k = Math.min(1, dt * 8); o.g.position.x += dx * k; o.g.position.z += dz * k; o.g.rotation.y += da * k; gliding = true; dirty = true; }
+      if (o.bubble && performance.now() > o.bubbleUntil) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); o.bubble = null; dirty = true; } }
+    if (meBubble && performance.now() > meBubbleUntil) { me3.remove(meBubble); meBubble.material.map.dispose(); meBubble = null; dirty = true; }
+    return moving || joy.on || keys.size > 0 || gliding || [...others.values()].some(o => o.bubble) || !!meBubble;
   }
   const ro = new ResizeObserver(resize); ro.observe(host);
   buildShell(); buildStuff(); resize(); moved();
   { const i = roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN), r = L.rooms[i]; /* in through the front door, looking into the room */
-    if (r && !blocked(me.x, me.y)) { const dx = r.x + r.w / 2 - me.x, dy = r.y + r.d / 2 - me.y; if (Math.hypot(dx, dy) > 0.3) me.yaw = Math.atan2(-dx, -dy); stepIn(); moved(); } else if (i >= 0) goRoom(i); }
+    if (r && !blocked(me.x, me.y)) { const dx = r.x + r.w / 2 - me.x, dy = r.y + r.d / 2 - me.y; if (Math.hypot(dx, dy) > 0.3) me.yaw = Math.atan2(-dx, -dy); stepIn(); moved(); } else if (i >= 0) goRoom(i);
+    /* a small step to one side, so two people coming in together don't stand inside each other */
+    const rx = Math.cos(me.yaw), ry = -Math.sin(me.yaw), fx = -Math.sin(me.yaw), fy = -Math.cos(me.yaw), tries = [];
+    for (const side of [0.5, 0.8, 1.1, 1.4]) for (const fwd of [0, 0.4, 0.8]) for (const sg of [-1, 1]) tries.push([sg * side, fwd]);
+    tries.sort(() => Math.random() - 0.5);
+    for (const [sd, fw] of tries) { const nx = me.x + rx * sd + fx * fw, ny = me.y + ry * sd + fy * fw; if (!blocked(nx, ny)) { me.x = nx; me.y = ny; moved(); break; } } }
 
   return {
     setRoom(r, ph, shellToo) { room = r; photos = { ...photos, ...(ph || {}) }; if (shellToo) buildShell(); buildStuff(); wake(); },
@@ -369,6 +395,7 @@ export function createHouse(host, opts) {
     setView(v) { view = v; applyView(); moved(); },
     setSurroundings(A) { buildAround(A); },
     setPeople(list) { buildPeople(list); },
+    upsertOther, removeOther, clearOthers() { for (const id of [...others.keys()]) removeOther(id); }, say, get me() { return { x: me.x, y: me.y, a: me.yaw }; },
     setPerspective(p) { persp = p === 'third' ? 'third' : 'first'; stepIn(); moved(); },
     get perspective() { return persp; },
     get view() { return view; },

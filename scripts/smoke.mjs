@@ -2101,6 +2101,18 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   const full = await call('GET', `/api/buildings/${cb.id}/inside`, undefined, E.P); ok(full.status === 409 && /full/.test(full.json.error || ''), 'a full club turns people away', JSON.stringify(full.json));
   ok((await call('GET', `/api/buildings/${cb.id}/inside`, undefined, O.P)).status === 200, '…but its owner can always get in');
 }
+{ // the developer can walk into any building (even one the public can't, or a locked home) and furnish it, for nothing
+  const pol = (await call('POST', '/api/admin/buildings', { type: 'police', x: 1460, y: 1300, instant: true })).json.building, bak = (await call('POST', '/api/admin/buildings', { type: 'bakery', x: 1480, y: 1300, instant: true })).json.building;
+  const H1 = await player('dev_home_hal', 1000), hs = (await call('POST', '/api/admin/buildings', { type: 'house', x: 1500, y: 1320, instant: true })).json.building;
+  await pool.query(`update citizens set home_id = $2, home_unit = null, home_unit_bid = null, room = '{"items":[],"box":[],"styles":{},"locked":true}' where id = $1`, [H1.id, hs.id]);
+  ok((await call('GET', `/api/buildings/${pol.id}/inside`, undefined, { auth: false })).status === 403, 'nobody else can go into a police station');
+  const pv = (await call('GET', `/api/buildings/${pol.id}/inside`)).json; ok(pv.dev === true && pv.mine === true && pv.room, '…but the developer can, and furnish it', JSON.stringify({ dev: pv.dev, mine: pv.mine }));
+  let put = null; for (let y = 2; y < 8 && !put; y++) for (let x = 0; x < 8 && !put; x++) { const r = await call('POST', `/api/admin/inside/b/${bak.id}/buy`, { k: 'grandpiano', x, y, r: 0 }); if (r.status === 200) put = r; }
+  ok(put && put.json.dev && (await call('GET', `/api/buildings/${bak.id}/inside`, undefined, { auth: false })).json.room.items.some(i => i.k === 'grandpiano'), 'the developer furnishes a bakery, free', JSON.stringify(put?.json?.error || ''));
+  ok((await call('POST', `/api/admin/inside/b/${bak.id}/buy`, { k: 'plant', x: 0, y: 0, r: 0 }, { auth: false })).status === 401, '…and only the developer');
+  ok((await call('GET', '/api/citizens/dev_home_hal/room', undefined, { auth: false })).status === 403 && (await call('GET', '/api/citizens/dev_home_hal/room')).json.dev === true, 'a locked home keeps others out, but not the developer');
+  let hp = null; for (let y = 0; y < 8 && !hp; y++) for (let x = 0; x < 8 && !hp; x++) { const r = await call('POST', '/api/admin/inside/h/dev_home_hal/buy', { k: 'plant', x, y, r: 0 }); if (r.status === 200) hp = r; }
+  ok(hp && (await call('GET', '/api/me/room', undefined, H1.P)).json.room.items.some(i => i.k === 'plant') && Number((await pool.query('select coins_base from citizens where id = $1', [H1.id])).rows[0].coins_base) === 1000, '…who can furnish it too (it stays theirs, and costs them nothing)'); }
 { // inside, live: everyone in the same place sees the others walk about and can chat; frames turn on the wall; homes differ by type
   const A = await player('live_amy', 50_000), Bq = await player('live_ben', 50_000), place = 'b:live-test-' + Date.now();
   const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'inside' || m.type === 'authed') got.push(m); });

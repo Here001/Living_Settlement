@@ -1129,7 +1129,7 @@ import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
-import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, BIZ_CATS, bizTab, canEnter, canTurnOnWall, footOf, placeProblem, resaleOf, layoutOf, styleOf, photoAspect } from '/shared/furniture.js';
+import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, BIZ_CATS, bizTab, bizSize, roomSize, canEnter, canTurnOnWall, footOf, placeProblem, resaleOf, layoutOf, styleOf, photoAspect } from '/shared/furniture.js';
 import { paveCost, fullIncome, CRIME_FLOOR, FINE_MIN, FINE_MAX, nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
@@ -6569,7 +6569,7 @@ const Club={ R:null, info:null, audio:null, radio:undefined, got:0, rainT:null, 
 const Visit={
   // tapping 🔒 Look inside: go in if you've been let in, otherwise ask
   async open(handle){ let st; try{ st=await api('/api/citizens/'+encodeURIComponent(handle)+'/visit'); }catch(e){ toast(e.message); return; }
-    if(!st.locked||st.mine||st.status==='accepted'){ Room.open(handle); return; }
+    if(!st.locked||st.mine||st.status==='accepted'||Store.canWrite){ Room.open(handle); return; } /* (the developer walks into any home) */
     const {box,close}=sheetBox(`🔒 @${handle}’s home is locked`);
     if(!(Me&&Me.token)){ box.append(el('p',{class:'hint',text:'Sign in to ask to visit.'})); return; }
     if(st.status==='pending'){ box.append(el('p',{class:'hint',text:`You’ve asked @${handle} to let you in. You’ll get a notice when they answer.`})); return; }
@@ -6630,7 +6630,8 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     await this.open(null,id,d); if(design&&this.d&&this.d.mine&&!this.edit) this.toggle(true); },
   get biz(){ return this.d&&this.d.place==='business'; },
   get bld(){ return this.d&&(this.d.place==='business'||this.d.place==='building'); }, /* the building's own inside (a business, or a home nobody lives in) */
-  get base(){ return this.bld?`/api/me/buildings/${encodeURIComponent(this.d.home.id)}/inside/`:this.d&&this.d.partner?'/api/me/partner/room/':'/api/me/room/'; }, /* (married: your husband's or wife's home) */
+  get base(){ if(this.d&&this.d.dev) return this.bld?`/api/admin/inside/b/${encodeURIComponent(this.d.home.id)}/`:`/api/admin/inside/h/${encodeURIComponent(this.d.owner)}/`; /* the developer: any building, anyone's home */
+    return this.bld?`/api/me/buildings/${encodeURIComponent(this.d.home.id)}/inside/`:this.d&&this.d.partner?'/api/me/partner/room/':'/api/me/room/'; }, /* (married: your husband's or wife's home) */
   get editWord(){ return this.biz?'🛋️ Design':'🛋️ Furnish'; },
   async open(handle,bid,pre){ if(handle&&Me&&Me.handle&&handle.toLowerCase()===Me.handle.toLowerCase()) handle=null; const ent=Entrance.show(handle?`@${handle}’s home`:pre&&pre.home?pre.home.name:'');
     let d, H3, myLook=null; try{ [d,H3,[myLook]]=await Promise.all([pre?Promise.resolve(pre):api(bid?`/api/buildings/${encodeURIComponent(bid)}/inside`:handle?`/api/citizens/${encodeURIComponent(handle)}/room`:'/api/me/room'), import('/house3d.js'), Looks.want([Me&&Me.handle])]); }catch(e){ ent.cancel(); if(handle&&/locked/i.test(e.message||'')){ Visit.open(handle); return; } toast(e.message||'Your phone couldn’t load the 3D view.'); return; }
@@ -6750,7 +6751,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     let blob=null; for(const q of [0.85,0.72,0.6]){ blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',q)); if(blob&&blob.size<300*1024) break; }
     if(!blob){ toast('That photo couldn’t be prepared.'); return; }
     this.busy=true; this.paintTools(); toast('📷 Putting your photo in the frame…');
-    try{ const res=await fetch(this.base+'photo/'+encodeURIComponent(it.i),{method:'POST',headers:{'content-type':'image/jpeg','x-player':Me.token},body:blob}); const j=await res.json().catch(()=>({}));
+    try{ const res=await fetch(this.base+'photo/'+encodeURIComponent(it.i),{method:'POST',headers:{'content-type':'image/jpeg',...(Me&&Me.token?{'x-player':Me.token}:{}),...(this.d&&this.d.dev&&Store.token?{authorization:'Bearer '+Store.token}:{})},body:blob}); const j=await res.json().catch(()=>({}));
       if(!res.ok) throw new Error(j.error||'The photo couldn’t be saved.'); this.apply(j); toast('📷 Your photo is up.'); }
     catch(e){ toast(e.message); } this.busy=false; if(this.el){ this.select(it.i); } },
   // Before the photo goes up: drag it to place it in the frame, and zoom (pinch, the slider, or the mouse wheel) to size it.
@@ -6804,7 +6805,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     s.innerHTML=''; const R=d.room, H3=this.H3; const keep=()=>{ const t=s.querySelector('.roomtabs'), r=s.querySelector('.roomitems'); if(t) t.scrollLeft=was.tabs; if(r&&was.cat===this.cat){ r.scrollLeft=was.x; r.scrollTop=was.y; } };
     const tabs=[...(this.biz?BIZ_CATS:[]),...ROOM_CATS,['style','🎨 Floor & walls'],['box',`📦 Stored${R.box.length?` (${R.box.length})`:''}`]];
     s.append(el('div',{class:'roomtabs'}, ...tabs.map(([k,n])=>el('button',{class:'rtab'+(this.cat===k?' on':''),text:n,onclick:()=>{ this.cat=k; this.paintShop(); }})),
-      this.bld||this.d.partner?'':el('button',{class:'rtab'+(R.locked?' on':''),text:R.locked?'🔒 Locked':'🔓 Open to visitors',title:'Whether other players can walk into your home',onclick:()=>this.send('/api/me/room/lock',{locked:!R.locked},r=>toast(r.room.locked?'🔒 Your home is locked: others can’t come in.':'🔓 Your home is open: others can look around.'))}),
+      this.bld||this.d.partner||this.d.dev?'':el('button',{class:'rtab'+(R.locked?' on':''),text:R.locked?'🔒 Locked':'🔓 Open to visitors',title:'Whether other players can walk into your home',onclick:()=>this.send('/api/me/room/lock',{locked:!R.locked},r=>toast(r.room.locked?'🔒 Your home is locked: others can’t come in.':'🔓 Your home is open: others can look around.'))}),
       el('span',{class:'roomcash',text:`💰 ${fmt(d.coins)}`})));
     const row=el('div',{class:'roomitems'}), card=(img,name,price,on,click)=>el('button',{class:'roomitem'+(on?' on':''),onclick:click}, img, el('b',{text:name}), el('span',{text:price}));
     const pic=(k,c)=>{ const u=H3.thumb(k,c||0); return u?el('img',{src:u,alt:'',width:'80',height:'64'}):el('i',{class:'noimg'}); };
@@ -7098,6 +7099,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(!Store.canWrite&&Me&&Me.token) card.append(el('div',{class:'row-actions'}, Loc.btn(b.name||t.name, b.x, b.y)));
     if((canEnter(b.type)||(t.home&&!(MyHome.data&&MyHome.data.home&&MyHome.data.home.id===b.id)))&&b.done!==false&&!b.ruin&&!Store.canWrite) card.append(el('div',{class:'row-actions'}, b.owner&&isMe(b.owner)&&!t.home?el('button',{class:'btn primary',text:'🛋️ Design the inside',onclick:()=>Room.openBuilding(b.id,true)}):'', el('button',{class:'btn',text:'🚪 Go inside',onclick:()=>Room.openBuilding(b.id)}))); /* anyone can walk into a business */
     if(b.web && t.work && !b.ruin) card.append(websiteRow(b,t)); // up top, where visitors see it first
+    if(Store.canWrite && (t.home?roomSize(b.type):bizSize(b.type))) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🛠️ Go inside and furnish',title:'Developer: walk into this building and change its inside (free)',onclick:()=>Room.openBuilding(b.id,true)}))); /* the developer: into any building */
     if(Store.canWrite && t.guests && b.done!==false && !b.ruin) card.append(mixBox(b,t)); /* a night club: its DJ mix */
     Plots.buildingBits(card,b,t);
     if(t.hangar && b.done!==false && !b.ruin) card.append(hangarSection(b,t));

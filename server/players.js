@@ -304,11 +304,15 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/room/photos/:id', limit, async (req, res) => { try { const b = await RM().photoFile(req.params.id); if (!b) return res.status(404).end();
     res.set({ 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=31536000, immutable' }).end(b); } catch (e) { res.status(500).end(); } });
   r.delete('/admin/room-photos/:id', admin, send(async req => ({ ok: await RM().removePhoto(req.params.id) })));
-  r.get('/citizens/:handle/room', limit, send(async req => RM().view((await playerFrom(req))?.id || null, req.params.handle)));
+  r.get('/citizens/:handle/room', limit, send(async req => RM().view((await playerFrom(req))?.id || null, req.params.handle, !!admin.check?.(req))));
   r.post('/me/room/buy', limit, send(async req => RM().buy((await me(req)).id, bd(req))));
   r.post('/me/room/lock', limit, send(async req => RM().lock((await me(req)).id, bd(req))));
   // businesses: anyone can walk in; the owner designs the inside
-  r.get('/buildings/:id/inside', limit, send(async req => RM().viewBuilding((await playerFrom(req))?.id || null, req.params.id)));
+  r.get('/buildings/:id/inside', limit, send(async req => RM().viewBuilding((await playerFrom(req))?.id || null, req.params.id, !!admin.check?.(req))));
+  // the developer furnishes any building (b) or anyone's home (h), for nothing
+  const devTarget = req => req.params.kind === 'b' ? { dev: 'b', id: req.params.id } : req.params.kind === 'h' ? { dev: 'h', handle: req.params.id } : null;
+  r.post('/admin/inside/:kind/:id/photo/:i', admin, express.raw({ type: 'image/jpeg', limit: '400kb' }), send(async req => { const t = devTarget(req); if (!t) throw new HttpError(404, 'Which place?'); return RM().photo('developer', req.params.i, req.body, t); }));
+  r.post('/admin/inside/:kind/:id/:op', admin, send(async req => { const op = req.params.op, M = RM(), t = devTarget(req); if (!t || !['buy', 'place', 'store', 'sell', 'style'].includes(op)) throw new HttpError(404, 'No such thing to do.'); return M[op]('developer', bd(req), t); }));
   r.post('/me/buildings/:id/inside/photo/:i', limit, quota('photo'), express.raw({ type: 'image/jpeg', limit: '400kb' }), send(async req => RM().photo((await me(req)).id, req.params.i, req.body, req.params.id)));
   r.post('/me/buildings/:id/inside/:op', limit, send(async req => { const op = req.params.op, M = RM(); if (!['buy', 'place', 'store', 'sell', 'style'].includes(op)) throw new HttpError(404, 'No such thing to do.'); return M[op]((await me(req)).id, bd(req), req.params.id); }));
   // "here now": a view of a place says it's still open every 25 s, and hears who else is looking around

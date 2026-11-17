@@ -40,9 +40,9 @@ export const SLOTS = [['top', 'Tops'], ['bot', 'Bottoms'], ['shoe', 'Shoes'], ['
 export const ITEMS = {
   top: { tee: ['T-shirt', 0, ''], tank: ['Vest top', 0, ''], longtee: ['Long-sleeve top', 0, '', { long: 1 }], shirt: ['Shirt', 0, '', { long: 1, collar: 1 }], blouse: ['Blouse', 0, 'f', { collar: 1 }],
     polo: ['Polo shirt', 300, '', { collar: 1 }], crop: ['Crop top', 400, 'f', { crop: 1 }], hoodie: ['Hoodie', 600, '', { long: 1, hood: 1 }], sweater: ['Jumper', 800, '', { long: 1 }],
-    jersey: ['Football shirt', 900, '', { stripe: 1 }], dress: ['Dress', 0, 'f', { full: 1 }], sundress: ['Sundress', 700, 'f', { full: 1, straps: 1 }],
+    jersey: ['Football shirt', 900, '', { stripe: 1 }], bikini: ['Bikini top', 0, 'f', { bikini: 1 }], swimsuit: ['Swimsuit', 0, 'f', { swim: 1 }], dress: ['Dress', 0, 'f', { full: 1 }], sundress: ['Sundress', 700, 'f', { full: 1, straps: 1 }],
     gown: ['Evening gown', 5000, 'f', { full: 1, long: 1, floor: 1 }], kaftan: ['Kaftan', 1500, '', { full: 1, long: 1, floor: 1 }] },
-  bot: { jeans: ['Jeans', 0, ''], trousers: ['Trousers', 0, ''], shorts: ['Shorts', 0, '', { short: 1 }], skirt: ['Skirt', 0, 'f', { skirt: 1 }], longskirt: ['Long skirt', 500, 'f', { skirt: 1, floor: 1 }],
+  bot: { jeans: ['Jeans', 0, ''], trousers: ['Trousers', 0, ''], shorts: ['Shorts', 0, '', { short: 1 }], trunks: ['Swim shorts', 0, '', { short: 1, swim: 1 }], briefs: ['Swim briefs', 0, '', { briefs: 1 }], skirt: ['Skirt', 0, 'f', { skirt: 1 }], longskirt: ['Long skirt', 500, 'f', { skirt: 1, floor: 1 }],
     joggers: ['Joggers', 400, ''], cargo: ['Cargo trousers', 700, '', { pockets: 1 }], leggings: ['Leggings', 300, 'f', { tight: 1 }] },
   shoe: { sneakers: ['Trainers', 0, ''], sandals: ['Sandals', 0, ''], boots: ['Boots', 600, '', { high: 1 }], loafers: ['Loafers', 800, ''], heels: ['Heels', 900, 'f', { heel: 1 }], hightops: ['High-tops', 1200, '', { high: 1 }] },
   out: { cardigan: ['Cardigan', 1200, ''], denim: ['Denim jacket', 1500, ''], puffer: ['Puffer jacket', 2500, '', { puffy: 1 }], blazer: ['Blazer', 3000, ''], coat: ['Long coat', 3500, '', { long: 1 }], leather: ['Leather jacket', 4000, '', { shiny: 1 }] },
@@ -86,8 +86,9 @@ export function fixLook(raw, base) {
   if (out.w.top && itemOf('top', out.w.top[0])[3]?.full) delete out.w.bot; // a dress covers the legs
   return out;
 }
-// Is it decent enough to go out in? (a top, and bottoms or a dress)
-export function dressed(look) { const t = look.w.top; return !!t && (!!look.w.bot || !!itemOf('top', t[0])[3]?.full); }
+// Anyone can go out in whatever they like, beachwear and underwear included. Nobody is ever naked: wherever nothing
+// is worn, underwear is drawn (see public/avatar3d.js), so every look is fine to go out in.
+export function dressed() { return true; }
 // The paid things a look uses that aren't in the wardrobe yet: [[slot, key, price], ...]
 export function unpaid(look, wardrobe) {
   const have = new Set(wardrobe || []), out = [];

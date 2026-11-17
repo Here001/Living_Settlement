@@ -208,10 +208,15 @@ function wearParts(L, add, B, hd) {
   const w = L.w, C = s => CLOTH[w[s][1]], X = s => (itemOf(s, w[s][0]) || [])[3] || {}, k = s => w[s][0];
   const { torso, arm, leg, f } = B, top = w.top, bot = w.bot, full = top && X('top').full;
   // ---- underwear, where nothing covers it ----
-  if (!top || X('top').crop) { if (f) add('body', 'cloth', shellT(1.2, 1.345, 0.006), UNDER); }
-  if (!bot && !full) { add('body', 'cloth', shellT(0.835, 0.98, 0.006), UNDER); for (const s of ['legL', 'legR']) add(s, 'cloth', shell(leg, -0.11, 0.02, 0.005), UNDER); }
+  // (never naked: underwear is always there under whatever isn't worn; swimwear takes its place)
+  const swimTop = top && (X('top').bikini || X('top').swim), onePiece = top && X('top').swim;
+  if ((!top || X('top').crop) && f) add('body', 'cloth', shellT(1.2, 1.345, 0.006), UNDER);
+  if (!bot && !full && !onePiece) { add('body', 'cloth', shellT(0.835, 0.98, 0.006), UNDER); for (const s of ['legL', 'legR']) add(s, 'cloth', shell(leg, -0.11, 0.02, 0.005), UNDER); }
   // ---- top ----
-  if (top) { const x = X('top'), c = C('top'), y0 = x.crop ? 1.17 : full ? 0.86 : 0.9, sleeve = k('top') === 'tank' || x.straps ? 0 : x.long ? -0.55 : -0.2;
+  if (swimTop) { const c = C('top');
+    if (onePiece) { add('body', 'cloth', shellT(0.835, 1.4, 0.007), c); for (const s of ['legL', 'legR']) add(s, 'cloth', shell(leg, -0.09, 0.02, 0.006), c); }
+    else add('body', 'cloth', shellT(1.2, 1.345, 0.007), c); }
+  else if (top) { const x = X('top'), c = C('top'), y0 = x.crop ? 1.17 : full ? 0.86 : 0.9, sleeve = k('top') === 'tank' || x.straps ? 0 : x.long ? -0.55 : -0.2;
     const stripe = x.stripe ? (yy => (Math.floor(yy * 22) % 2 ? c : '#F4F1EA')) : c;
     add('body', 'cloth', shellT(y0, k('top') === 'tank' || x.straps ? 1.44 : 1.52, 0.012), stripe);
     if (sleeve) for (const s of ['armL', 'armR']) add(s, 'cloth', shell(arm, sleeve, 0.059, 0.01, { flare: x.long ? 0.004 : 0.012, closeTop: true }), c);
@@ -220,11 +225,12 @@ function wearParts(L, add, B, hd) {
     if (full) { const len = x.floor ? 0.78 : 0.42; add('skirt', 'cloth', skirtGeo(1.0, 0.24 + (x.floor ? 0.06 : 0), 0.96 - len, 0.013), c); } }
   // ---- bottoms ----
   if (bot) { const x = X('bot'), c = C('bot');
-    add('body', 'cloth', shellT(x.skirt ? 0.835 : 0.875, x.skirt ? 1.02 : 1.0, 0.013), c); /* trousers: the legs close the seat, so no dark point between them */
+    if (x.briefs) { add('body', 'cloth', shellT(0.835, 0.98, 0.008), c); for (const s of ['legL', 'legR']) add(s, 'cloth', shell(leg, -0.1, 0.02, 0.007), c); }
+    else add('body', 'cloth', shellT(x.skirt ? 0.835 : 0.852, x.skirt ? 1.02 : 1.0, 0.013), c); /* trousers: the legs close the seat, so no dark point between them */
     if (x.skirt) { const len = x.floor ? 0.8 : 0.4; add('skirt', 'cloth', skirtGeo(1.02, 0.22 + (x.floor ? 0.07 : 0), 1.0 - len, 0.015), c); }
-    else for (const s of ['legL', 'legR']) { const to = x.short ? -0.32 : -0.84, pad = x.tight ? 0.004 : 0.012; add(s, 'cloth', shell(leg, to, 0.03, pad, { flare: x.tight || x.short ? 0.004 : k('bot') === 'joggers' ? -0.004 : 0.008 }), c);
+    else if (!x.briefs) for (const s of ['legL', 'legR']) { const to = x.swim ? -0.24 : x.short ? -0.32 : -0.84, pad = x.tight ? 0.004 : 0.012; add(s, 'cloth', shell(leg, to, 0.06, pad, { flare: x.tight || x.short ? 0.004 : k('bot') === 'joggers' ? -0.004 : 0.008 }), c);
       if (x.pockets) add(s, 'cloth', at(rbox(0.05, 0.09, 0.03), (s === 'legL' ? -1 : 1) * 0.07, -0.3, 0.01), new THREE.Color(c).multiplyScalar(0.85)); }
-    add('body', 'skin', shellT(0.985, 1.0, 0.016), '#2a2522'); } // a belt line
+    if (!x.swim && !x.briefs && !x.tight) add('body', 'skin', shellT(0.985, 1.0, 0.016), '#2a2522'); } // a belt line
   // ---- jacket / coat ----
   if (w.out) { const x = X('out'), c = C('out'), pad = x.puffy ? 0.04 : 0.024, mat = x.shiny ? 'skin' : 'cloth';
     add('body', mat, shellT(x.long ? 0.86 : 0.92, 1.51, pad), c); for (const s of ['armL', 'armR']) add(s, mat, shell(arm, -0.53, 0.059, pad * 0.7, { flare: 0.006, closeTop: true }), c);
@@ -279,7 +285,7 @@ export function buildAvatar(rawLook, opts = {}) {
   const add = (grp, a, b, c) => { if (grp === 'hair') { parts.push(['hairM', skinTo(paint(a, b, true), 'head', B)]); return; } parts.push([a, skinTo(paint(b, c, a !== 'cloth'), grp, B)]); };
   // skin: body, neck, arms, hands, legs. Skin that clothes cover all over isn't drawn (they bend together, so nothing shows through).
   const W = L.w, xt = W.top ? (itemOf('top', W.top[0])?.[3] || {}) : {}, xb = W.bot ? (itemOf('bot', W.bot[0])?.[3] || {}) : {};
-  const cover = { torso: !!W.top && !xt.crop && !xt.straps && W.top[0] !== 'tank' && (!!W.bot || !!xt.full), arms: (!!W.top && !!xt.long) || !!W.out, legs: !!W.bot && !xb.short && !xb.skirt };
+  const cover = { torso: !!W.top && !xt.crop && !xt.straps && !xt.bikini && !xt.swim && W.top[0] !== 'tank' && (!!W.bot || !!xt.full), arms: (!!W.top && !!xt.long) || !!W.out, legs: !!W.bot && !xb.short && !xb.skirt && !xb.briefs };
   add('body', 'skin', B.shape(lathe(dense(cover.torso ? B.torso.filter(([, y]) => y >= 1.44) : B.torso), 32)), L.sk); /* under a top and trousers only the neck and collarbone can show */
   add('body', 'skin', at(new THREE.CylinderGeometry(0.048, 0.056, 0.12, 14), 0, 1.58, -0.005), L.sk);
   for (const s of ['armL', 'armR']) { if (!cover.arms) add(s, 'skin', lathe(dense(B.arm), 14), L.sk); add(s, 'skin', at(sphere(1, 18, 14), 0, -0.6, 0.005, 0.034, 0.058, 0.024), L.sk);

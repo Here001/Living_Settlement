@@ -434,7 +434,6 @@ export function playersRouter({ limit, send, admin, world }) {
       const c = (await ch.q('select * from citizens where id = $1 for update', [p.id])).rows[0]; if (!c) throw new HttpError(404, 'No such colonist.');
       const L = AV.fixLook(b.look, lookOf(c));
       if (c.look_set && L.g !== c.gender) throw new HttpError(409, 'You chose to be a ' + (c.gender === 'f' ? 'woman' : 'man') + ' when you made your character. Ask the developer if it needs changing.'); /* chosen once, the first time */
-      if (!AV.dressed(L)) throw new HttpError(400, 'Put on a top and some bottoms (or a dress) before you go out.');
       const owed = AV.unpaid(L, c.wardrobe), total = owed.reduce((n, x) => n + x[2], 0), ward = [...(c.wardrobe || [])];
       if (total) { ch.coins(c);
         if (!b.buy) throw new HttpError(409, `That look has ${owed.length === 1 ? 'one thing' : owed.length + ' things'} you haven't bought yet (${total.toLocaleString('en-US')} coins).`);

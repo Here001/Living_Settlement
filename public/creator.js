@@ -128,7 +128,7 @@ export async function openCreator({ api, toast = msg => alert(msg), required = f
     panel.replaceChildren(...P);
     // what saving costs, and whether they're dressed
     const owed = AV.unpaid(L, [...ward]), total = owed.reduce((n, x) => n + x[2], 0), ok = AV.dressed(L);
-    note.textContent = !ok ? 'Pick a top and bottoms (or a dress) to go out in.' : total ? `${owed.length === 1 ? '1 new thing' : owed.length + ' new things'} to buy: 🪙 ${fmt(total)}${total > coins ? ` (you have ${fmt(coins)})` : ''}` : 'Everything here is yours.';
+    note.textContent = total ? `${owed.length === 1 ? '1 new thing' : owed.length + ' new things'} to buy: 🪙 ${fmt(total)}${total > coins ? ` (you have ${fmt(coins)})` : ''}` : 'Everything here is yours.';
     go.textContent = total ? `Buy & wear · 🪙 ${fmt(total)}` : required ? 'Done ✓' : 'Save my look';
     go.disabled = !ok || busy;
   }

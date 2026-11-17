@@ -1850,7 +1850,8 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   const g0 = await call('GET', '/api/me/look', undefined, A.P); ok(g0.status === 200 && g0.json.set === false && g0.json.look && Array.isArray(g0.json.wardrobe), 'a new player has no character yet', JSON.stringify(g0.json).slice(0, 200));
   ok((await call('GET', '/api/me', undefined, A.P)).json.lookSet === false, '…so the game asks them to make one');
   const base = { g: 'f', ht: 3, bd: 0, sk: '#8D5524', fc: 1, br: 3, ns: 0, ey: '#3F6E8C', bdr: 0, mk: 1, lc: 2, hs: 'long', hc: '#120D0A', w: {} };
-  ok(/top/i.test((await call('POST', '/api/me/look', { look: base }, A.P)).json.error || ''), 'they can’t go out in their underwear');
+  { const u = await call('POST', '/api/me/look', { look: base }, A.P); ok(u.status === 200 && u.json.spent === 0, 'they can go out in just their underwear (it’s always drawn, so nobody is ever naked)', JSON.stringify(u.json).slice(0, 120)); }
+  { const sw = await call('POST', '/api/me/look', { look: { ...base, w: { top: ['bikini', 13], bot: ['trunks', 7], shoe: ['sandals', 0] } } }, A.P); ok(sw.status === 200 && sw.json.look.w.top[0] === 'bikini' && sw.json.spent === 0, '…or in free beachwear', JSON.stringify(sw.json).slice(0, 120)); }
   const free = { ...base, w: { top: ['tee', 3], bot: ['jeans', 6], shoe: ['sneakers', 0] } };
   const s1 = await call('POST', '/api/me/look', { look: free }, A.P); ok(s1.status === 200 && s1.json.spent === 0 && s1.json.look.sk === '#8D5524', 'free clothes cost nothing', JSON.stringify(s1.json).slice(0, 200));
   ok((await call('GET', '/api/me', undefined, A.P)).json.lookSet === true, 'once made, the game stops asking');

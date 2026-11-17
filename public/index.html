@@ -6514,12 +6514,12 @@ const Club={ R:null, info:null, audio:null, radio:undefined, got:0, rainT:null, 
   leave(){ clearInterval(this.rainT); this.rainT=null; if(this.audio){ try{ this.audio.pause(); }catch(e){} this.audio=null; }
     if(this.radio!==undefined){ const was=this.radio; this.radio=undefined; try{ if(was) Radio.tune(was); else if(Radio.st){ Radio.off(true); ls.set('resurgence-radio',this.saved??''); } }catch(e){} }
     try{ speechSynthesis.cancel(); }catch(e){} this.R=null; },
-  // the club's own mix (CLUB_MIX_URL, or /club-mix.mp3 on this server) starts as you walk in; until there is one, Colony 101
+  // the club's own mix (uploaded by the developer to Cloudflare, or CLUB_MIX_URL, or /club-mix.mp3) starts as you walk in; until there is one, Gbedu FM
   async music(){ this.radio=Radio.st||''; this.saved=ls.get('resurgence-radio');
     let url=this.info&&this.info.mix; if(!url){ try{ const r=await fetch('/club-mix.mp3',{method:'HEAD'}); if(r.ok&&/audio|mpeg|octet/.test(r.headers.get('content-type')||'')) url='/club-mix.mp3'; }catch(e){} }
     if(!this.R) return;
     if(url){ const a=new Audio(url); a.loop=true; a.volume=0.85; this.audio=a; if(Radio.st) Radio.off(true); a.play().catch(()=>{ const go=()=>{ removeEventListener('pointerdown',go,true); if(this.audio===a) a.play().catch(()=>{}); }; addEventListener('pointerdown',go,true); }); }
-    else if(STATIONS.english&&Radio.st!=='english') Radio.tune('english').catch(()=>{}); },
+    else if(STATIONS.pidgin&&Radio.st!=='pidgin') Radio.tune('pidgin').catch(()=>{}); }, /* Gbedu FM */
   who(){ const R=this.R, seen=new Set(), out=[]; for(const p of (R&&R.others?R.others.values():[])) if(p.h&&!seen.has(p.h.toLowerCase())&&(!Me||p.h.toLowerCase()!==String(Me.handle||'').toLowerCase())){ seen.add(p.h.toLowerCase()); out.push(p.h); } return out; },
   sheet(){ if(!(Me&&Me.token)){ toast('Sign in to spray money.'); return; } const {box,close}=sheetBox('💸 Spray money','spraysheet'), I=this.info||{};
     const people=this.who(), sel=el('select',{'aria-label':'Who to spray'}, ...people.map(h=>el('option',{value:h,text:'@'+h})));

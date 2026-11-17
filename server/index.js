@@ -37,6 +37,7 @@ import { Housing } from './housing.js';
 import { Rooms } from './rooms.js';
 import { Visits } from './visits.js';
 import { Love } from './love.js';
+import { Clubs } from './clubs.js';
 import { Economy } from './economy.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
 import * as R from '../shared/rules.js';
@@ -62,7 +63,7 @@ const lottery = new Lottery(world); world.lottery = lottery;
 const auctions = new Auctions(world); world.auctions = auctions;
 const economy = new Economy(world); world.economy = economy;
 world.housing = new Housing(world);
-world.rooms = new Rooms(world); world.visits = new Visits(world); world.love = new Love(world);
+world.rooms = new Rooms(world); world.visits = new Visits(world); world.love = new Love(world); world.clubs = new Clubs(world);
 const chat = new Chat(bus); world.chat = chat; chat.world = world;
 world.bus = bus; /* inside chat passes through it to every server */
 world.chat.removePhoto = id => world.rooms.removePhoto(id); // a reported photo the developer takes down
@@ -77,6 +78,7 @@ world.arena = new Arena(world, bus); world.arena.leader = () => isLeader;
 world.radio = new Radio(world, bus);
 setInterval(() => { if (isLeader && world.meta) world.radio.tick().catch(e => console.error('radio:', e.message)); }, 15000).unref(); // DJ talk breaks
 world.stars = new Stars(world, bus);
+setInterval(() => world.clubs.sweep().catch(e => console.error('clubs:', e.message)), 3000).unref(); // money that has stopped raining in the clubs
 // couples spending time together in the same home or business: a little love each minute (each server counts the people connected to it)
 setInterval(() => { const places = new Map(); for (const w of wss.clients) if (w.inside && w.playerId) (places.get(w.inside) || places.set(w.inside, []).get(w.inside)).push(w.playerId);
   for (const [k, v] of places) if (v.length < 2) places.delete(k); if (places.size) world.love.together(places).catch(e => console.error('love:', e.message)); }, 60000).unref();
@@ -390,7 +392,7 @@ wss.on('connection', (ws, req) => {
       if (ws.insideWho && ws.insideWho !== who) bus.publish([{ inside: true, place, skip: who, k: 'gone', id: ws.insideWho }]); /* signed in since: the anonymous figure goes */ ws.insideWho = who;
       try { world.rooms.seen(place, who, ws.playerHandle || null); } catch {}
       const p = { id: who, h: ws.playerHandle || null, x: +x.toFixed(2), y: +y.toFixed(2), a: +a.toFixed(2) };
-      { const pose = String(m.pose || ''), ph = Number(m.ph); if (/^[sulpr]$/.test(pose)) { p.pose = pose; p.ph = Number.isFinite(ph) ? +Math.max(-1.5, Math.min(1.5, ph)).toFixed(2) : 0; } } /* sitting, lying, using, playing, running */
+      { const pose = String(m.pose || ''), ph = Number(m.ph); if (/^[sulprdo]$/.test(pose)) { p.pose = pose; p.ph = Number.isFinite(ph) ? +Math.max(-1.5, Math.min(1.5, ph)).toFixed(2) : 0; } } /* sitting, lying, using, playing, running */
       if (first) { const list = []; for (const w of wss.clients) if (w !== ws && w.inside === place && w.insidePos) list.push(w.insidePos); try { ws.send(JSON.stringify({ type: 'inside', k: 'all', place, list })); } catch {} }
       ws.insidePos = p; bus.publish([{ inside: true, place, skip: who, k: 'pos', p }]); return; }
     if (m?.type === 'out') { insideLeave(ws); return; }
@@ -419,7 +421,7 @@ bus.on(ops => {
         for (const [to, json] of o.msgs) for (const ws of by.get(to) || []) { if (ws.bufferedAmount > MAX_BUFFER) continue; try { ws.send(json); } catch {} } } }
     if (!ops.length) return; }
   // Inside a place: positions, leaving and chat go to everyone with that place open (on every server)
-  if (ops.some(o => o.inside)) { for (const o of ops.filter(o => o.inside)) { const json = JSON.stringify({ type: 'inside', k: o.k, place: o.place, p: o.p, id: o.id, chat: o.chat });
+  if (ops.some(o => o.inside)) { for (const o of ops.filter(o => o.inside)) { const json = JSON.stringify({ type: 'inside', k: o.k, place: o.place, p: o.p, id: o.id, chat: o.chat, club: o.club }); /* club: money sprayed, money raining, the DJ */
       for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.inside !== o.place || (o.skip && ws.insideWho === o.skip) || ws.bufferedAmount > MAX_BUFFER) continue; if (o.only && !(ws.playerHandle && o.only.includes(ws.playerHandle.toLowerCase()))) continue; /* a private message: just the two of them */ try { ws.send(json); } catch {} } }
     ops = ops.filter(o => !o.inside); if (!ops.length) return; }
   // Private chat messages go only to the two people's own connections.

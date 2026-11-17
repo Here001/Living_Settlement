@@ -116,6 +116,7 @@ const linearTex = () => { if (TEX.has('ao-lin')) return TEX.get('ao-lin'); const
 function partGeo(p) {
   const { x, y, z, w, d, h, s } = p; let g;
   if (s === 'o') g = new THREE.SphereGeometry(0.5, 18, 12);
+  else if (s === 'm') { g = new THREE.IcosahedronGeometry(0.5, 3).toNonIndexed(); g.computeVertexNormals(); } /* a mirror ball: flat little mirrors that each catch the light */
   else if (s === 'c') g = new THREE.CylinderGeometry(0.5, 0.5, 1, 24);
   else if (s === 'd') { g = new THREE.CylinderGeometry(0.5, 0.5, 1, 24); if (d <= w) g.rotateX(Math.PI / 2); else g.rotateZ(Math.PI / 2); }
   else { // blocks get softly rounded edges that catch the light, like real furniture (the smallest bits stay sharp)
@@ -138,11 +139,17 @@ function mats() {
   return MATS;
 }
 const MAT = { get solid() { return mats().plain; }, get glass() { return mats().glass; }, get screen() { return mats().screen; } };
+// a night club's lights: '@0'…'@5' glow in colours that keep changing; 'b' parts are beams of light that sweep about
+export const PARTY = ['#FF2D95', '#3FE0FF', '#B04BFF', '#FFD23F', '#39FF88', '#FF6B2D'];
+const partyAt = (t, n, out) => { const u = t * 0.55 + n, i = Math.floor(u), f = Math.max(0, (u - i - 0.72) / 0.28), s = f * f * (3 - 2 * f); /* holds a colour, then changes quickly */ return out.set(PARTY[((i % 6) + 6) % 6]).lerp(new THREE.Color(PARTY[(((i + 1) % 6) + 6) % 6]), s); };
+function beamMesh(p, c) { const r = Math.max(0.006, p.w < 0.1 ? 0.012 : p.w / 2), g = new THREE.ConeGeometry(r, p.h, p.w < 0.1 ? 5 : 28, 1, true); g.translate(0, -p.h / 2, 0); /* the tip at the top */
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: p.w < 0.1 ? 0.32 : 0.13, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+  const pv = new THREE.Group(); pv.position.set(p.x + p.w / 2, p.z + p.h, p.y + p.d / 2); pv.add(m); m.renderOrder = 4; return { pv, m }; }
 const glow = new Map(); const glowMat = c => { if (!glow.has(c)) glow.set(c, new THREE.MeshBasicMaterial({ color: col(c).multiplyScalar(1.15) })); return glow.get(c); };
 const glassMat = new Map(); const tintedGlass = c => { if (!glassMat.has(c)) glassMat.set(c, std({ color: col(c), transparent: true, opacity: 0.35, roughness: 0.05, metalness: 0.1, depthWrite: false })); return glassMat.get(c); };
 const haloMat = new Map(); const halo = c => { if (!haloMat.has(c)) haloMat.set(c, new THREE.SpriteMaterial({ map: radialTex('halo', [[0, 'rgba(255,255,255,.9)'], [0.25, 'rgba(255,255,255,.35)'], [1, 'rgba(255,255,255,0)']]), color: col(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); return haloMat.get(c); };
 // which material a part is: upholstery and bedding are fabric, browns are wood, steel greys are metal, golds gold, whites and lacquer gloss, leaves leafy
-const UPHOLSTERED = new Set(['sofa', 'cornersofa', 'armchair', 'beanbag', 'rug', 'roundrug', 'bigrug', 'bed', 'doublebed', 'bunkbed', 'cot', 'chair', 'officechair', 'catbed', 'booth', 'waiting', 'tablefour', 'cafetable', 'barstool', 'curtains', 'blinds', 'drapes', 'doorcurtain', 'towelrail', 'coathooks', 'hamper', 'bathmat', 'throne', 'meeting', 'mannequin', 'clothesrack']);
+const UPHOLSTERED = new Set(['vipbooth', 'clubsofa', 'velvetsofa', 'chaise', 'sofa', 'cornersofa', 'armchair', 'beanbag', 'rug', 'roundrug', 'bigrug', 'bed', 'doublebed', 'bunkbed', 'cot', 'chair', 'officechair', 'catbed', 'booth', 'waiting', 'tablefour', 'cafetable', 'barstool', 'curtains', 'blinds', 'drapes', 'doorcurtain', 'towelrail', 'coathooks', 'hamper', 'bathmat', 'throne', 'meeting', 'mannequin', 'clothesrack']);
 const METAL = new Set(['#3B3B40', '#BDC3C7', '#95A5A6', '#7F8C8D', '#A6ACAF']), GOLD = new Set(['#D4AC0D', '#C9A227', '#F1C40F', '#F4D03F']), GLOSS = new Set(['#F4F6F8', '#E5E8E8', '#DADDE2', '#D5D8DC', '#E8E4DC', '#1D1B1E', '#1C1C1E', '#4A4A4E', '#F5F5F0', '#2C2A2E']);
 const hsl = {}; function matKind(k, c, tint, s) {
   if (c === tint && UPHOLSTERED.has(k)) return 'fabric'; if (UPHOLSTERED.has(k) && /^#(F4F1EA|FFFFFF|F2E8D5)$/i.test(c)) return 'fabric';
@@ -168,8 +175,9 @@ ACT.piano = ACT.grandpiano = { kind: 'play', icon: '🎹', label: 'Play' }; ACT.
 ACT.treadmill = { kind: 'run', icon: '🏃', label: 'Run' };
 ACT.stove = { kind: 'use', icon: '🍳', label: 'Cook' }; ACT.sink = ACT.basin = ACT.vanity = { kind: 'use', icon: '🚰', label: 'Wash your hands' }; ACT.arcade = { kind: 'use', icon: '🕹️', label: 'Play' };
 ACT.mirror = { kind: 'use', icon: '🪞', label: 'Look in the mirror' }; ACT.fridge = { kind: 'use', icon: '🧊', label: 'Get a drink' }; ACT.gaming = { kind: 'use', icon: '🎮', label: 'Play' };
+ACT.dancefloor = ACT.bigdancefloor = { kind: 'dance', icon: '💃', label: 'Dance' }; ACT.dancepole = ACT.polestage = ACT.dancercage = { kind: 'pole', icon: '🕺', label: 'Dance on the pole' };
 ACT.tv = ACT.walltv = { kind: 'tv', icon: '📺', label: 'Turn on', labelOn: 'Turn off' };
-const POSE = { s: 'sit', l: 'lie', u: 'use', p: 'play', r: 'stand' }, CODE = { sit: 's', lie: 'l', use: 'u', play: 'p', run: 'r' };
+const POSE = { s: 'sit', l: 'lie', u: 'use', p: 'play', r: 'stand', d: 'dance', o: 'pole' }, CODE = { sit: 's', lie: 'l', use: 'u', play: 'p', run: 'r', dance: 'd', pole: 'o' };
 export const actOf = k => ACT[k] || (FURNITURE[k]?.light ? { kind: 'light', icon: '💡', label: 'Switch off', labelOff: 'Switch on' } : null);
 function pieceGroup(it, photoTex, st = {}) { /* st.off: a lamp switched off; st.on: a TV switched on */
   const f = FURNITURE[it.k]; if (!f) return null; const tint = TINTS[it.c || 0] || TINTS[0], grp = new THREE.Group(), byKind = new Map(), M = mats();
@@ -188,6 +196,9 @@ function pieceGroup(it, photoTex, st = {}) { /* st.off: a lamp switched off; st.
       pl.rotateY(o[1] === 1 ? 0 : o[1] === -1 ? Math.PI : o[0] === 1 ? Math.PI / 2 : -Math.PI / 2);
       pl.translate(p.x + p.w / 2 + o[0] * (Math.min(p.w, p.d) / 2 + 0.004), p.z + p.h / 2, p.y + p.d / 2 + o[1] * (Math.min(p.w, p.d) / 2 + 0.004));
       const m = new THREE.Mesh(pl, std({ ...(photoTex || TEXTURES ? { map: photoTex || placeholderTex() } : { color: '#BFD9EA' }), roughness: 0.35 })); m.userData.photo = true; grp.add(m); continue; }
+    if (p.s === 'b') { const party = /^@\d/.test(p.c), { pv, m } = beamMesh(p, party ? PARTY[+p.c[1]] : p.c); if (party) m.userData.party = { n: +p.c[1] }; pv.userData.beam = { n: (all.indexOf(p) * 1.7) % 6 }; m.userData.beam = true; grp.add(pv); continue; }
+    if (p.s && p.s[0] === 'l' && /^@\d/.test(p.c)) { const m = new THREE.Mesh(partGeo({ ...p, s: p.s[1] }), new THREE.MeshBasicMaterial({ color: PARTY[+p.c[1]], toneMapped: false })); m.userData.party = { n: +p.c[1], strobe: f.party === 'strobe' }; grp.add(m); continue; } /* a party light: its colour keeps changing */
+    if (p.s === 'lc' || p.s === 'lo') { grp.add(new THREE.Mesh(partGeo({ ...p, s: p.s[1] }), glowMat(p.c === tint ? tint : p.c))); continue; }
     if (p.s === 'l') { const lc = p.c === tint ? tint : p.c; if (st.off) { grp.add(new THREE.Mesh(paint(partGeo(p), shadeOff(lc)), M.plain)); continue; } grp.add(new THREE.Mesh(partGeo(p), glowMat(lc)));
       if (f.light) { const sp = new THREE.Sprite(halo(lc)), s2 = Math.min(1.6, Math.max(p.w, p.d, p.h) * 2.4 + 0.3); /* (a long strip of light gets a soft glow, not a huge one) */ sp.scale.set(s2, s2, 1); sp.position.set(p.x + p.w / 2, p.z + p.h / 2, p.y + p.d / 2); sp.renderOrder = 3; sp.userData.halo = true; grp.add(sp); } continue; }
     if (p.s === 's') { grp.add(new THREE.Mesh(partGeo(p), st.on ? tvOnMat() : M.screen)); continue; }
@@ -209,7 +220,7 @@ export async function prepare(room, S, plan, onStep) {
   let n = 0; for (const [, job] of jobs) { job(); onStep && onStep(++n, jobs.size); await breathe(); }
 }
 export function createHouse(host, opts) {
-  const S = opts.size, PLAN = opts.plan || 'home', L = layoutOf(S, PLAN), H = WALL_H;
+  const S = opts.size, PLAN = opts.plan || 'home', L = layoutOf(S, PLAN), H = WALL_H, PLAN_CLUB = PLAN === 'club';
   // Film-like colour (ACES), sunlight through the windows with real shadows (worked out only when the house changes,
   // not every frame), a soft reflection of a bright room on every surface, and a fixed set of lamps that follows you
   // from room to room (a fixed number, so a phone never has to rebuild its shaders while you walk).
@@ -220,11 +231,11 @@ export function createHouse(host, opts) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.92; /* a little softer than daylight outside */
   renderer.shadowMap.enabled = HQ; renderer.shadowMap.type = PHONE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap; /* phones: the cheaper filter (the shadows are still soft-edged) */ renderer.shadowMap.autoUpdate = false;
   const scene = new THREE.Scene(); scene.background = col('#BFE3F7');
-  const reflections = () => { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); scene.environmentIntensity = 0.38; };
+  const reflections = () => { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); scene.environmentIntensity = PLAN_CLUB ? 0.1 : 0.38; }; /* a night club is dark, lit by its own lights */
   reflections();
   const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 140); camera.rotation.order = 'YXZ';
-  scene.add(new THREE.HemisphereLight('#FFF8EE', '#7A6E62', 0.5));
-  const sun = new THREE.DirectionalLight('#FFE9C8', 2.35); sun.position.set(S / 2 - S * 0.9, 7.5, S / 2 + S * 0.7); sun.target.position.set(S / 2, 0, S / 2); scene.add(sun, sun.target);
+  scene.add(new THREE.HemisphereLight('#FFF8EE', '#7A6E62', PLAN_CLUB ? 0.13 : 0.5));
+  const sun = new THREE.DirectionalLight('#FFE9C8', PLAN_CLUB ? 0.28 : 2.35); if (PLAN_CLUB) { renderer.toneMappingExposure = 0.9; scene.add(new THREE.AmbientLight('#C8B8FF', 0.6)); } /* a soft violet fill so people show up in the dark */ sun.position.set(S / 2 - S * 0.9, 7.5, S / 2 + S * 0.7); sun.target.position.set(S / 2, 0, S / 2); scene.add(sun, sun.target);
   if (HQ) { sun.castShadow = true; const sc = sun.shadow.camera, R = S * 0.85 + 1; sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 0.5; sc.far = 30; sun.shadow.mapSize.set(PHONE ? 1024 : 2048, PHONE ? 1024 : 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.025; sun.shadow.radius = 3; }
   const reshadow = () => { if (HQ) renderer.shadowMap.needsUpdate = true; };
   { const g = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), std({ color: '#7FB069', roughness: 1 })); g.rotation.x = -Math.PI / 2; g.position.set(S / 2, -0.02, S / 2); g.receiveShadow = true; scene.add(g); }
@@ -379,14 +390,14 @@ export function createHouse(host, opts) {
     else { if (meBubble) { me3.remove(meBubble); meBubble.material.map.dispose(); } meBubble = sp; meBubbleUntil = performance.now() + 7000; }
     on.add(sp); dirty = true; wake(); }
   // ---- the lights: a fixed number of real lights (so phones never rebuild shaders), given to the nearest sources ----
-  let sources = [], blobs = null; const NL = PHONE ? 3 : 8, pool = []; /* phones: the room's light and the two nearest lamps */
+  let party = [], sources = [], blobs = null; const NL = PHONE ? 3 : 8, pool = []; /* phones: the room's light and the two nearest lamps */
   for (let n = 0; n < NL; n++) { const pl = new THREE.PointLight('#FFEBD0', 0, 5, 1.6); lights.add(pl); pool.push(pl); }
   let litFor = null;
   function placeLights(force) {
     const at = view === 'above' ? { x: S / 2, y: S / 2 } : { x: me.x, y: me.y }, key = view === 'above' ? 'above' : roomAt(S, Math.floor(at.x), Math.floor(at.y), PLAN) + ':' + Math.round(at.x / 2) + ',' + Math.round(at.y / 2);
     if (!force && key === litFor) return; litFor = key;
     const near = sources.map(s2 => ({ s2, dd: Math.hypot(s2.x - at.x, s2.y - at.y) - s2.i })).sort((a, b) => a.dd - b.dd).slice(0, NL);
-    pool.forEach((pl, n) => { const o = near[n]; if (!o) { pl.intensity = 0; return; } pl.color.set(o.s2.c); pl.intensity = o.s2.i; pl.distance = o.s2.d; pl.position.set(o.s2.x, o.s2.z, o.s2.y); });
+    pool.forEach((pl, n) => { const o = near[n]; if (!o) { pl.intensity = 0; return; } pl.color.set(o.s2.c); pl.userData.party = o.s2.party ? n + 0.5 : 0; pl.intensity = o.s2.i; pl.distance = o.s2.d; pl.position.set(o.s2.x, o.s2.z, o.s2.y); });
     dirty = true;
   }
   const blobMat = () => new THREE.MeshBasicMaterial({ color: '#000000', alphaMap: radialTex('blob', [[0, '#9a9a9a'], [0.55, '#4a4a4a'], [1, '#000000']]), transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
@@ -396,18 +407,20 @@ export function createHouse(host, opts) {
     const lamps = [];
     for (const it of room.items) { if (pick && pick.i === it.i) continue; const f = FURNITURE[it.k], g = pieceGroup(it, photoTexture(it.ph), { off: offLights.has(it.i), on: tvOn.has(it.i) }); if (!g) continue;
       (f.mount === 'ceil' ? ceilStuff : f.mount === 'floor' ? stuff : wallStuff).add(g);
-      if (f.light && !offLights.has(it.i)) { const ps = placedParts(it, TINTS[it.c || 0]).filter(p => p.s === 'l'), p = ps[0]; if (p) lamps.push({ f, it, x: p.x + p.w / 2, y: p.y + p.d / 2, z: p.z + p.h / 2 - 0.15 }); } }
+      if (f.light && !offLights.has(it.i)) { const ps = placedParts(it, TINTS[it.c || 0]).filter(p => p.s && p.s[0] === 'l'), p = ps[0]; if (p) lamps.push({ f, it, x: p.x + p.w / 2, y: p.y + p.d / 2, z: p.z + p.h / 2 - 0.15 }); } }
     // every light source in the house: a soft ceiling light in each room (dimmer where the room has its own ceiling
     // lamp), and every lamp; the nearest few get the fixed set of real lights (placeLights)
     const roomLamp = L.rooms.map(r => !lamps.some(l => l.x >= r.x && l.x < r.x + r.w && l.y >= r.y && l.y < r.y + r.d && l.f.mount === 'ceil'));
-    sources = L.rooms.map((r, i) => ({ x: r.x + r.w / 2, y: r.y + r.d / 2, z: H - 0.35, c: '#FFEBD0', i: roomLamp[i] ? 1.4 : 0.55, d: Math.max(r.w, r.d) * 1.5 + 2.5 }));
-    for (const l of lamps) sources.push({ x: l.x, y: l.y, z: l.z, c: l.f.light.c === '$' ? TINTS[l.it.c || 0] : l.f.light.c, i: l.f.light.i * 1.6, d: l.f.light.d + 0.5 }); /* lamps light the room without bleaching the floor */
+    sources = L.rooms.map((r, i) => PLAN_CLUB ? { x: r.x + r.w / 2, y: r.y + r.d / 2, z: H - 0.35, c: '#8E5CFF', i: r.kind === 'main' ? 1.3 : 0.7, d: Math.max(r.w, r.d) * 1.5 + 2.5, party: r.kind === 'main' } /* a club: coloured light, changing on the dance floor */
+      : { x: r.x + r.w / 2, y: r.y + r.d / 2, z: H - 0.35, c: '#FFEBD0', i: roomLamp[i] ? 1.4 : 0.55, d: Math.max(r.w, r.d) * 1.5 + 2.5 });
+    for (const l of lamps) sources.push({ x: l.x, y: l.y, z: l.z, c: l.f.light.c === '$' ? TINTS[l.it.c || 0] : l.f.light.c, i: l.f.light.i * 1.6, d: l.f.light.d + 0.5, party: !!l.f.party }); /* lamps light the room without bleaching the floor */
     placeLights(true);
     // a soft shadow on the floor under every floor piece (one mesh for the lot)
     const sh = []; for (const it of room.items) { const f = FURNITURE[it.k]; if (!f || f.mount !== 'floor' || f.rug || (pick && pick.i === it.i)) continue; const [w, d] = footOf(it.k, it.r), m = 0.12, g = new THREE.PlaneGeometry(w + m * 2, d + m * 2); g.rotateX(-Math.PI / 2); g.translate(it.x + w / 2, 0.006, it.y + d / 2); sh.push(g); }
     if (blobs) { scene.remove(blobs); blobs.geometry.dispose(); blobs = null; }
     if (sh.length) { blobs = new THREE.Mesh(mergeGeometries(sh), blobMat()); blobs.renderOrder = 1; scene.add(blobs); }
-    applyView(); showSel(); if (crowd.length) buildPeople(crowd); reshadow(); dirty = true;
+    party = []; for (const g of [stuff, wallStuff, ceilStuff]) g.traverse(o => { if (o.userData.beam && o.isGroup) party.push({ pv: o, n: o.userData.beam.n }); if (o.isMesh && o.userData.party) party.push({ m: o, n: o.userData.party.n, strobe: o.userData.party.strobe }); }); /* club lights to keep moving */
+    applyView(); showSel(); if (crowd.length) buildPeople(crowd); reshadow(); dirty = true; wake();
   }
   // ---- placing: the ghost piece and where it would go ----
   function showGhost() {
@@ -486,7 +499,7 @@ export function createHouse(host, opts) {
       // you fill the lower half of the screen (your head about the middle, your feet at the bottom edge)
       // A wall behind you doesn't push the camera in: whatever lies between the camera and you (that wall) is simply not
       // drawn, by moving the camera's near cut-off to just past it.
-      const flip = !!act && act.kind === 'sit'; if (flip) me.yaw += Math.PI; /* sitting: the camera comes round to the front, so you see yourself sit (not the back of the sofa) */
+      const flip = !!act && (act.kind === 'sit' || act.kind === 'dance' || act.kind === 'pole'); if (flip) me.yaw += Math.PI; /* sitting: the camera comes round to the front, so you see yourself sit (not the back of the sofa) */
       const fx = -Math.sin(me.yaw), fy = -Math.cos(me.yaw), M = 0.2, from = new THREE.Vector3(me.x, 1.85, me.y);
       // but it stays inside the house: never out through an outside wall (from outside you'd see the house's outer walls)
       const D = Math.max(0.3, roomBehind());
@@ -498,7 +511,7 @@ export function createHouse(host, opts) {
       meFade(D < 0.7 ? 0.55 + 0.45 * Math.max(0, (D - 0.3) / 0.4) : 1);
       camera.rotation.set(me.pitch + 0.1 - tilt, me.yaw, 0); camera.updateMatrixWorld(); if (flip) me.yaw -= Math.PI; return; } /* (looking up or down still works on top) */
     setNear(0.05);
-    const eye = !act ? EYE : act.kind === 'lie' ? act.wy + 0.32 : act.kind === 'sit' || act.kind === 'play' ? act.wy + me3.userData.av.hipY + 0.66 : act.kind === 'run' ? EYE + 0.14 : EYE; /* lower when you sit or lie */
+    const eye = !act ? EYE : act.kind === 'lie' ? act.wy + 0.32 : act.kind === 'sit' || act.kind === 'play' ? act.wy + me3.userData.av.hipY + 0.66 : act.kind === 'run' ? EYE + 0.14 : EYE + Math.max(0, act.wy); /* lower when you sit or lie; higher up on a podium */
     camera.position.set(me.x, eye, me.y); camera.rotation.set(act && act.kind === 'lie' ? 0.85 : me.pitch, me.yaw, 0); camera.updateMatrixWorld();
   }
   // into a room: stand on a free spot near its doorway, looking into the room
@@ -537,7 +550,7 @@ export function createHouse(host, opts) {
       const vx = b.cx - me.x, vy = b.cy - me.y, vl = Math.hypot(vx, vy) || 1, sc = d - 0.3 * Math.max(0, (vx * fx + vy * fy) / vl); if (sc < bs) { bs = sc; best = { it, A, b }; } }
     return best; }
   function prompt() { let info = null;
-    if (act) info = { icon: '🧍', label: act.kind === 'lie' ? 'Get up' : act.kind === 'run' ? 'Stop' : act.kind === 'use' ? 'Step away' : 'Stand up' };
+    if (act) info = { icon: '🧍', label: act.kind === 'lie' ? 'Get up' : act.kind === 'run' ? 'Stop' : act.kind === 'dance' || act.kind === 'pole' ? 'Stop dancing' : act.kind === 'use' ? 'Step away' : 'Stand up' };
     else { nearAct = findNear(); if (nearAct) { const A = nearAct.A, i = nearAct.it.i; info = { icon: A.icon, label: A.kind === 'tv' ? (tvOn.has(i) ? A.labelOn : A.label) : A.kind === 'light' ? (offLights.has(i) ? A.labelOff : A.label) : A.label }; } }
     const k = info ? info.icon + info.label : ''; if (k !== actKey) { actKey = k; opts.onAction && opts.onAction(info); } }
   function doAct() {
@@ -551,6 +564,10 @@ export function createHouse(host, opts) {
     else if (A.kind === 'lie') { let H = F ? { x: -F.x, y: -F.y } : null; if (!H) H = b.x1 - b.x0 > b.y1 - b.y0 ? { x: 1, y: 0 } : { x: 0, y: 1 }; /* head towards the headboard */
       const px = H.y, py = -H.x, hw = Math.abs(px) * (b.x1 - b.x0) / 2 + Math.abs(py) * (b.y1 - b.y0) / 2, t = hw > 0.6 ? Math.sign((me.x - b.cx) * px + (me.y - b.cy) * py || 1) * hw * 0.45 : 0; /* a double bed: your side */
       x = b.cx + px * t; y = b.cy + py * t; wy = (b.seat || 0.55) - (A.sink || 0); wyaw = Math.atan2(H.x, H.y); yaw = Math.atan2(-H.x, -H.y); }
+    else if (A.kind === 'dance') { /* on the dance floor: right where you are (or the middle if you're beside it) */ const inF = me.x > b.x0 + 0.2 && me.x < b.x1 - 0.2 && me.y > b.y0 + 0.2 && me.y < b.y1 - 0.2;
+      x = inF ? me.x : b.cx; y = inF ? me.y : b.cy; wy = 0.05; yaw = me.yaw; wyaw = yaw; }
+    else if (A.kind === 'pole') { /* by the pole, facing it, on its podium */ const px = b.tx, py = b.ty; let vx = me.x - px, vy = me.y - py; const vl = Math.hypot(vx, vy) || 1; vx /= vl; vy /= vl;
+      x = px + vx * 0.3; y = py + vy * 0.3; wy = b.seat || 0.2; yaw = Math.atan2(vx, vy); wyaw = yaw; }
     else if (A.kind === 'run') { const f = F ? { x: -F.x, y: -F.y } : toMe; x = b.cx; y = b.cy; wy = 0.14; yaw = Math.atan2(-f.x, -f.y); wyaw = yaw; }
     else { const ex = Math.max(b.x0, Math.min(b.x1, me.x)), ey = Math.max(b.y0, Math.min(b.y1, me.y)); let ox = me.x - ex, oy = me.y - ey, ol = Math.hypot(ox, oy); if (ol < 0.01) { ox = toMe.x; oy = toMe.y; ol = 1; } /* play or use: on your side of it, facing it */
       const gap = A.kind === 'play' ? 0.42 : 0.3; x = ex + ox / ol * gap; y = ey + oy / ol * gap; yaw = Math.atan2(ox / ol, oy / ol); wy = A.kind === 'play' ? 0.5 + 0.06 - av.hipY : 0; wyaw = yaw; }
@@ -614,18 +631,24 @@ export function createHouse(host, opts) {
     if (me3.visible) { const mv = (fw || st) && view === 'walk'; if (mv) { me3.userData.av.animate(dt, 0, 2.3 * Math.min(1, Math.hypot(fw, st)), false); meStill = false; } else if (!meStill && !act) { me3.userData.av.pose(); meStill = true; dirty = true; } } /* your legs move as you walk */
     // at most 60 frames a second (a 120 Hz screen would otherwise draw twice as many)
     const now = performance.now(), active = moving || joy.on || keys.size > 0 || now - lastInput < 160;
-    const gap = active ? 15.5 : othersMoving ? 32 : 0; /* you moving: up to 60 a second; only other people moving: 30 (still smooth); nothing moving: just the one frame */
+    const gap = active ? 15.5 : othersMoving || party.length ? 32 : 0; /* you moving: up to 60 a second; only other people moving: 30 (still smooth); nothing moving: just the one frame */
     if (dirty && shown() && now - lastDraw >= gap) { placeCamera(); renderer.render(scene, camera); dirty = false; lastDraw = now; if (guard.after()) dirty = true; if (firstDrawn) { const f = firstDrawn; firstDrawn = null; requestAnimationFrame(() => f()); } } /* not while the map is showing */
     // other players: glide towards where they last said they were
     let gliding = false; for (const o of others.values()) if (o.g.visible) { const dx = o.tx - o.g.position.x, dz = o.ty - o.g.position.z; let da = o.ta - o.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       if (Math.abs(dx) + Math.abs(dz) + Math.abs(da) > 0.01) { const k = Math.min(1, dt * 8); o.g.position.x += dx * k; o.g.position.z += dz * k; o.g.rotation.y += da * k; gliding = true; dirty = true; if (!o.pose) o.g.userData.av.animate(dt, 0, Math.min(3, Math.hypot(dx, dz) * k / Math.max(dt, 1e-3)), false); o.posed = false; }
       else if (o.pose === 'r') { o.g.userData.av.animate(dt, 0, 3, false); gliding = true; dirty = true; } /* on a treadmill */
+      else if (o.pose === 'd' || o.pose === 'o') { o.g.userData.av.dance(dt, o.pose === 'o' ? 'pole' : 'floor'); gliding = true; dirty = true; } /* dancing */
       else if (!o.posed) { o.g.userData.av.pose(POSE[o.pose] || 'stand'); o.posed = true; dirty = true; }
       if (o.bubble && performance.now() > o.bubbleUntil) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); o.bubble = null; dirty = true; } }
     othersMoving = gliding;
     if (meBubble && performance.now() > meBubbleUntil) { me3.remove(meBubble); meBubble.material.map.dispose(); meBubble = null; dirty = true; }
     if (act && act.kind === 'run' && me3.visible) { me3.userData.av.animate(dt, 0, 3, false); dirty = true; }
-    return moving || doorsMoving || (act && act.kind === 'run') || joy.on || keys.size > 0 || dirty || gliding || [...others.values()].some(o => o.bubble) || !!meBubble;
+    if (act && (act.kind === 'dance' || act.kind === 'pole') && me3.visible) { me3.userData.av.dance(dt, act.kind === 'pole' ? 'pole' : 'floor'); dirty = true; } /* dancing */
+    // the club's lights: colours changing, beams sweeping, strobes flashing (30 frames a second while they're on)
+    if (party.length && shown()) { const t = performance.now() / 1000;
+      for (const q of party) { if (q.pv) { q.pv.rotation.x = Math.sin(t * 0.8 + q.n) * 0.38; q.pv.rotation.z = Math.cos(t * 0.63 + q.n * 1.3) * 0.38; } else if (q.strobe) q.m.material.color.set(Math.floor(t * 9) % 4 === 0 ? '#FFFFFF' : '#1A1A1A'); else partyAt(t, q.n, q.m.material.color); }
+      for (const pl of pool) if (pl.userData.party) partyAt(t * 0.7, pl.userData.party, pl.color); dirty = true; }
+    return moving || doorsMoving || (act && (act.kind === 'run' || act.kind === 'dance' || act.kind === 'pole')) || (party.length > 0 && shown()) || joy.on || keys.size > 0 || dirty || gliding || [...others.values()].some(o => o.bubble) || !!meBubble;
   }
   const ro = new ResizeObserver(resize); ro.observe(host);
   // never a dark screen: a black picture steps the lighting down; a view the phone threw away is rebuilt (see safe3d.js)
@@ -685,7 +708,7 @@ export function thumb(k, c = 0) {
       const pm = new THREE.PMREMGenerator(thumbR); thumbEnv = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
     const sc = new THREE.Scene(); sc.environment = thumbEnv; sc.environmentIntensity = 0.7; sc.add(new THREE.HemisphereLight('#FFFFFF', '#9A8F82', 1.1)); const dl = new THREE.DirectionalLight('#FFF4E4', 2.2); dl.position.set(3, 5, 4); sc.add(dl);
     const g = pieceGroup({ i: 't', k, x: 0, y: 0, r: 0, c }, null); sc.add(g);
-    const box = new THREE.Box3(); g.traverse(o => { if (o.isMesh) box.expandByObject(o); }); /* the glow round a light isn't part of the piece */ const ctr = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3()), R = Math.max(sz.x, sz.y, sz.z) * 0.62 + 0.05;
+    const box = new THREE.Box3(); g.traverse(o => { if (o.isMesh && !o.userData.beam) box.expandByObject(o); }); /* the glow round a light isn't part of the piece */ const ctr = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3()), R = Math.max(sz.x, sz.y, sz.z) * 0.62 + 0.05;
     const cam = new THREE.PerspectiveCamera(32, 160 / 128, 0.01, 50), dir = f.mount === 'floor' || f.mount === 'ceil' ? new THREE.Vector3(1, 0.85, 1.3) : new THREE.Vector3(0.45, 0.25, 1.4);
     cam.position.copy(ctr).addScaledVector(dir.normalize(), R / Math.sin(THREE.MathUtils.degToRad(16))); cam.lookAt(ctr);
     thumbR.render(sc, cam); const url = thumbR.domElement.toDataURL('image/png'); sc.traverse(o => o.geometry && o.geometry.dispose()); thumbs.set(key, url); return url;

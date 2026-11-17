@@ -2067,6 +2067,40 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   ok((await call('GET', '/api/citizens/love_amy/love', undefined, C.P)).json.theirs?.with === 'love_ben', '(Amy didn’t hide it, so her card still shows it)');
   ok((await call('POST', '/api/me/love/end', {}, B.P)).json.ended === 'married', 'either of them can end it');
   ok((await call('GET', '/api/citizens/love_ben/room', undefined, A.P)).json.mine === false, '…and then it’s his home again, not hers to change'); }
+{ // night clubs: a club floor plan and fit-out, a guest limit, spraying someone, spraying the whole club (money rains, people grab it, the rest goes to the club), the DJ's shout-out
+  const O = await player('club_owner', 0), A = await player('club_amy', 2_000_000), B = await player('club_ben', 1000), C = await player('club_cat', 1000), E = await player('club_eve', 1000);
+  const cb = (await call('POST', '/api/admin/buildings', { type: 'nightclub', x: 1440, y: 1300, instant: true })).json.building, place = 'b:' + cb.id;
+  await pool.query('update buildings set owner_id = $2, owner_handle = $3 where id = $1', [cb.id, O.id, 'club_owner']);
+  const inside = (await call('GET', `/api/buildings/${cb.id}/inside`, undefined, A.P)).json, ks = (inside.room?.items || []).map(i => i.k);
+  ok(inside.room?.plan === 'club' && inside.guests === 40 && ['djbooth', 'dancefloor', 'dancepole', 'clubbar', 'movinghead'].every(k => ks.includes(k)), 'a night club: a club floor plan, room for 40, a DJ booth, a dance floor, poles, a bar and lights', JSON.stringify({ plan: inside.room?.plan, guests: inside.guests, ks }));
+  const here = P => call('POST', '/inside/here'.replace(/^/, '/api'), { place }, P.P); for (const P of [A, B, C]) await here(P);
+  const coins = async P => Number((await pool.query('select coins_base from citizens where id = $1', [P.id])).rows[0].coins_base);
+  ok((await call('POST', '/api/clubs/spray', { place, to: 'club_ben', amount: 999 }, A.P)).status === 400, 'only the set amounts');
+  ok((await call('POST', '/api/clubs/spray', { place, to: 'club_ben', amount: 1000 }, E.P)).status === 409, 'you have to be in the club to spray');
+  ok((await call('POST', '/api/clubs/spray', { place, to: 'club_eve', amount: 1000 }, A.P)).status === 409, '…and so does the person you spray');
+  const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'inside' || m.type === 'authed') got.push(m); });
+    await new Promise(r => w.once('open', r)); w.send(JSON.stringify({ type: 'auth', token: P.P.headers['x-player'] })); for (let i = 0; i < 40 && !got.some(m => m.type === 'authed'); i++) await sleep(50); w.send(JSON.stringify({ type: 'in', place, x: 3, y: 5, a: 0, pose: 'd', ph: 0.05 })); await sleep(200); return { w, got }; };
+  const bs = await sock(B);
+  const sp = await call('POST', '/api/clubs/spray', { place, to: 'club_ben', amount: 1000 }, A.P); await sleep(300);
+  ok(sp.status === 200 && await coins(B) === 2000 && await coins(A) === 1_999_000, 'Amy sprays Ben 1,000: it’s his', JSON.stringify(sp.json));
+  ok(bs.got.some(m => m.k === 'club' && m.club?.kind === 'spray' && m.club.to === 'club_ben'), '…and everyone in the club sees it');
+  const rn = await call('POST', '/api/clubs/spray', { place, amount: 10000 }, A.P); await sleep(300);
+  ok(rn.status === 200 && rn.json.id && await coins(A) === 1_989_000, 'Amy sprays the whole club with 10,000', JSON.stringify(rn.json));
+  ok(bs.got.some(m => m.club?.kind === 'rain' && m.club.amount === 10000) && bs.got.some(m => m.club?.kind === 'dj' && /club_amy/.test(m.club.text)), '…money rains on everyone, and the DJ gives her a shout-out');
+  ok((await call('POST', '/api/clubs/spray', { place, amount: 10000 }, A.P)).status === 409, 'one rain at a time');
+  ok((await call('POST', `/api/clubs/grab/${rn.json.id}`, {}, A.P)).json.own === true, 'you can’t grab your own money back');
+  let bGot = 0, cGot = 0; for (let i = 0; i < 6; i++) { bGot += (await call('POST', `/api/clubs/grab/${rn.json.id}`, {}, B.P)).json.got || 0; cGot += (await call('POST', `/api/clubs/grab/${rn.json.id}`, {}, C.P)).json.got || 0; await sleep(200); }
+  ok(bGot > 0 && cGot > 0 && bGot + cGot <= 10000 && await coins(B) === 2000 + bGot, 'Ben and Cat grab some of it', JSON.stringify({ bGot, cGot }));
+  ok((await call('POST', `/api/clubs/grab/${rn.json.id}`, {}, E.P)).status === 409, 'someone outside the club can’t grab any');
+  await pool.query('update club_rains set until = $2 where id = $1', [rn.json.id, Date.now() - 1]); await sleep(3800);
+  const left = 10000 - bGot - cGot; ok(await coins(O) === left && (await pool.query('select done from club_rains where id = $1', [rn.json.id])).rows[0]?.done, 'when it stops, what nobody grabbed goes to the club’s owner', JSON.stringify({ owner: await coins(O), left }));
+  ok(bs.got.some(m => m.club?.kind === 'rainEnd' && m.club.top?.length), '…and everyone hears who grabbed most');
+  bs.w.close();
+  // full: 40 people already inside, so the next one is turned away (but not the owner)
+  for (let i = 0; i < 41; i++) await call('POST', '/api/inside/here', { place }, { auth: false, headers: { 'cf-connecting-ip': `10.9.${i >> 8}.${i & 255}` } }); /* 41 visitors from 41 addresses */
+  const full = await call('GET', `/api/buildings/${cb.id}/inside`, undefined, E.P); ok(full.status === 409 && /full/.test(full.json.error || ''), 'a full club turns people away', JSON.stringify(full.json));
+  ok((await call('GET', `/api/buildings/${cb.id}/inside`, undefined, O.P)).status === 200, '…but its owner can always get in');
+}
 { // inside, live: everyone in the same place sees the others walk about and can chat; frames turn on the wall; homes differ by type
   const A = await player('live_amy', 50_000), Bq = await player('live_ben', 50_000), place = 'b:live-test-' + Date.now();
   const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'inside' || m.type === 'authed') got.push(m); });

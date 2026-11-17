@@ -929,6 +929,14 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .phedit{border-radius:6px;touch-action:none;cursor:grab;box-shadow:0 0 0 6px #3a2a1a,0 4px 14px rgba(0,0,0,.35)}
 .phz{display:flex;align-items:center;gap:8px;margin:6px 0}
 .phz input{flex:1}
+.hspray{position:absolute;right:120px;bottom:72px;z-index:2;background:#2A1B3D;color:#FFE27A;border-color:#FF3FA4;box-shadow:0 0 14px rgba(255,63,164,.55)}
+.djbanner{position:absolute;left:50%;top:64px;transform:translateX(-50%);z-index:6;width:min(92vw,520px);display:flex;gap:10px;align-items:flex-start;background:linear-gradient(135deg,#2A1B3D,#4A1640);color:#fff;border:2px solid #FF3FA4;border-radius:16px;padding:12px 14px;font-weight:700;font-size:15px;line-height:1.35;box-shadow:0 0 24px rgba(255,63,164,.6);animation:djin .35s ease-out}
+.djbanner b{flex:none;color:#FFE27A}@keyframes djin{from{transform:translate(-50%,-14px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+.moneyrain{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:hidden}.mnote{position:absolute;top:-60px;border:0;background:none;padding:6px;line-height:1;pointer-events:none;animation:mfall linear forwards;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+.mnote.grab{pointer-events:auto;cursor:pointer}.mnote.got{transform:scale(1.6);opacity:0;transition:.2s}@keyframes mfall{0%{transform:translateY(0) rotate(-20deg)}50%{transform:translate(18px,55vh) rotate(25deg)}100%{transform:translate(-10px,112vh) rotate(-15deg)}}
+.raintally{position:absolute;left:50%;bottom:130px;transform:translateX(-50%);z-index:6;background:rgba(20,12,30,.85);color:#FFE27A;font-weight:800;border-radius:999px;padding:8px 16px;white-space:nowrap;border:1px solid #F2C94C}
+.grabplus{position:fixed;z-index:9999;transform:translate(-50%,-50%);color:#2ECC71;font-weight:900;font-size:22px;text-shadow:0 2px 0 #145A32;pointer-events:none;animation:gplus .9s ease-out forwards}@keyframes gplus{to{transform:translate(-50%,-160%);opacity:0}}
+.spraysheet select{width:100%;margin:4px 0 8px}.spraysheet h4{margin:14px 0 6px}
 .hchatbtn{position:absolute;right:14px;bottom:72px;z-index:2;box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .hchatbtn.new::after{content:'';position:absolute;top:-3px;right:-3px;width:11px;height:11px;border-radius:50%;background:#E74C3C;box-shadow:0 0 0 2px #fff}
 .hchat{position:absolute;right:10px;bottom:118px;z-index:3;width:min(340px,calc(100% - 150px));min-width:220px;background:rgba(255,255,255,.96);border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.3);padding:8px;display:flex;flex-direction:column;gap:6px;color:#222}
@@ -6494,6 +6502,57 @@ const Love={
     go.onclick=async()=>{ go.disabled=true; try{ await api('/api/citizens/'+encodeURIComponent(handle)+'/love/ask',{method:'POST',body:{message:msg.value}}); close(); toast(`💘 You asked @${handle} out. You’ll get a notice when they answer.`); if(sel) renderCard(true); }catch(e){ go.disabled=false; toast(e.message); } };
     box.append(el('p',{class:'hint',text:`If @${handle} says yes, you’re dating: spend time together and message each other to fill your hearts. With full hearts you can propose.`}), msg, el('div',{class:'row-actions'}, go)); },
 };
+// ---- Night clubs: the club's music, spraying money (on someone, or the whole club), money raining down to grab, the DJ ----
+const Club={ R:null, info:null, audio:null, radio:undefined, got:0, rainT:null, notes:[],
+  is(d){ const t=d&&d.home&&BUILDING_TYPES[d.home.type]; return !!(t&&t.guests); },
+  async enter(R){ this.leave(); this.R=R; this.got=0;
+    this.btn=el('button',{class:'btn sm hspray',text:'💸 Spray',title:'Spray money on someone, or on the whole club',onclick:()=>this.sheet()});
+    this.banner=el('div',{class:'djbanner',hidden:true}); this.rainEl=el('div',{class:'moneyrain',hidden:true}); this.tally=el('div',{class:'raintally',hidden:true});
+    R.stage.append(this.btn, this.banner, this.rainEl, this.tally);
+    try{ this.info=await api('/api/clubs/spray'); }catch(e){ this.info={person:[200,1000,5000,20000],club:[10000,50000,200000,1000000],mix:null}; }
+    if(this.R===R) this.music(); },
+  leave(){ clearInterval(this.rainT); this.rainT=null; if(this.audio){ try{ this.audio.pause(); }catch(e){} this.audio=null; }
+    if(this.radio!==undefined){ const was=this.radio; this.radio=undefined; try{ if(was) Radio.tune(was); else if(Radio.st){ Radio.off(true); ls.set('resurgence-radio',this.saved??''); } }catch(e){} }
+    try{ speechSynthesis.cancel(); }catch(e){} this.R=null; },
+  // the club's own mix (CLUB_MIX_URL, or /club-mix.mp3 on this server) starts as you walk in; until there is one, Colony 101
+  async music(){ this.radio=Radio.st||''; this.saved=ls.get('resurgence-radio');
+    let url=this.info&&this.info.mix; if(!url){ try{ const r=await fetch('/club-mix.mp3',{method:'HEAD'}); if(r.ok&&/audio|mpeg|octet/.test(r.headers.get('content-type')||'')) url='/club-mix.mp3'; }catch(e){} }
+    if(!this.R) return;
+    if(url){ const a=new Audio(url); a.loop=true; a.volume=0.85; this.audio=a; if(Radio.st) Radio.off(true); a.play().catch(()=>{ const go=()=>{ removeEventListener('pointerdown',go,true); if(this.audio===a) a.play().catch(()=>{}); }; addEventListener('pointerdown',go,true); }); }
+    else if(STATIONS.english&&Radio.st!=='english') Radio.tune('english').catch(()=>{}); },
+  who(){ const R=this.R, seen=new Set(), out=[]; for(const p of (R&&R.others?R.others.values():[])) if(p.h&&!seen.has(p.h.toLowerCase())&&(!Me||p.h.toLowerCase()!==String(Me.handle||'').toLowerCase())){ seen.add(p.h.toLowerCase()); out.push(p.h); } return out; },
+  sheet(){ if(!(Me&&Me.token)){ toast('Sign in to spray money.'); return; } const {box,close}=sheetBox('💸 Spray money','spraysheet'), I=this.info||{};
+    const people=this.who(), sel=el('select',{'aria-label':'Who to spray'}, ...people.map(h=>el('option',{value:h,text:'@'+h})));
+    const one=el('div',{class:'row-actions'}, ...(I.person||[]).map(a=>el('button',{class:'btn sm',text:`💵 ${fmt(a)}`,onclick:()=>this.spray({to:sel.value,amount:a},close)})));
+    box.append(el('h4',{text:'Spray someone'}), people.length?el('div',null, sel, one):el('p',{class:'hint',text:'Nobody else is here yet.'}),
+      el('h4',{text:'🌧️ Spray the whole club'}), el('p',{class:'hint',text:'Money rains from the ceiling on everyone here for 20 seconds; they tap the notes to grab it. The DJ gives you a shout-out!'}),
+      el('div',{class:'row-actions'}, ...(I.club||[]).map(a=>el('button',{class:'btn sm primary',text:`💸 ${fmt(a)}`,onclick:()=>toast(`Spray the whole club with ${fmt(a)} coins?`,'Spray it!',()=>this.spray({amount:a},close))}))));
+  },
+  async spray(body,close){ if(!this.R) return; try{ const r=await api('/api/clubs/spray',{method:'POST',body:{...body,place:this.R.spot}}); close&&close(); if(myMoney&&typeof r.coins==='number'){ myMoney.coins=r.coins; refreshHUD(); } }catch(e){ toast(e.message); } },
+  idOf(h){ if(Me&&h&&h.toLowerCase()===String(Me.handle||'').toLowerCase()) return 'me'; for(const p of (this.R&&this.R.others?this.R.others.values():[])) if(p.h&&p.h.toLowerCase()===h.toLowerCase()) return p.id; return null; },
+  msg(c){ const R=this.R; if(!R) return;
+    if(c.kind==='spray'){ const id=this.idOf(c.to); if(id&&R.h) R.h.say(id,`💸💸 +${fmt(c.amount)}`); this.burst(); R.addChat({from:c.from,text:`💸 sprayed @${c.to} ${fmt(c.amount)} coins`,t:Date.now()}); }
+    else if(c.kind==='rain') this.rain(c);
+    else if(c.kind==='dj') this.dj(c.text);
+    else if(c.kind==='rainEnd'){ this.stopRain(); const top=(c.top||[]).map(t=>`@${t.h} ${fmt(t.got)}`).join(' · '); toast(`💸 The money's stopped falling.${top?' Most grabbed: '+top:''}${this.got?` You grabbed ${fmt(this.got)}.`:''}`); this.got=0; } },
+  // a few notes fluttering down the screen (someone was sprayed)
+  burst(){ for(let i=0;i<14;i++) this.note(false); },
+  note(grab,id){ const n=el('button',{class:'mnote'+(grab?' grab':''),text:Math.random()<0.5?'💵':'💸','aria-label':'Grab the money'}); const x=4+Math.random()*88, d=(grab?2.6:1.8)+Math.random()*1.6;
+    n.style.left=x+'%'; n.style.animationDuration=d+'s'; n.style.fontSize=(grab?34:26)+Math.random()*12+'px';
+    if(grab) n.onpointerdown=e=>{ e.preventDefault(); e.stopPropagation(); this.grab(id,n,e); };
+    this.rainEl.hidden=false; this.rainEl.append(n); setTimeout(()=>n.remove(),d*1000+100); },
+  rain(c){ const mine=Me&&c.from&&c.from.toLowerCase()===String(Me.handle||'').toLowerCase(); this.got=0; clearInterval(this.rainT);
+    this.tally.hidden=false; this.tally.textContent=mine?`💸 Your ${fmt(c.amount)} coins are raining on the club!`:`💸 @${c.from} is making it rain! Tap the money to grab it`;
+    const end=Date.now()+(c.ms||20000); this.rainT=setInterval(()=>{ if(Date.now()>end){ this.stopRain(); return; } for(let i=0;i<2;i++) this.note(!mine,c.id); },160); },
+  stopRain(){ clearInterval(this.rainT); this.rainT=null; if(this.tally) setTimeout(()=>{ if(!this.rainT&&this.tally) this.tally.hidden=true; },2500); },
+  async grab(id,n,e){ n.classList.add('got'); n.style.pointerEvents='none'; try{ const r=await api('/api/clubs/grab/'+encodeURIComponent(id),{method:'POST',body:{}}); if(r.got>0){ this.got+=r.got; this.tally.textContent=`💰 You grabbed ${fmt(this.got)} coins!`;
+      const f=el('div',{class:'grabplus',text:'+'+fmt(r.got)}); f.style.left=e.clientX+'px'; f.style.top=e.clientY+'px'; document.body.append(f); setTimeout(()=>f.remove(),900); if(myMoney&&typeof r.coins==='number'){ myMoney.coins=r.coins; refreshHUD(); } } }catch(err){} n.remove(); },
+  // the DJ's shout-out: on screen, and read out over the music (the phone's own voice)
+  dj(text){ if(!this.banner) return; this.banner.replaceChildren(el('b',{text:'🎧 DJ'}), el('span',{text:text})); this.banner.hidden=false; clearTimeout(this.bT); this.bT=setTimeout(()=>{ if(this.banner) this.banner.hidden=true; },9000);
+    try{ const u=new SpeechSynthesisUtterance(text.replace(/@/g,'').replace(/[💸🎧]/gu,'')), vs=speechSynthesis.getVoices(), v=vs.find(v=>/en-NG/i.test(v.lang))||vs.find(v=>/en-(GB|ZA|US)/i.test(v.lang)); if(v) u.voice=v; u.rate=1.05; u.pitch=0.9;
+      const a=this.audio, P=Radio.player; if(a) a.volume=0.25; else if(P&&P.setVolume) P.setVolume(Radio.vol*0.3); u.onend=()=>{ if(this.audio) this.audio.volume=0.85; else if(Radio.player&&Radio.player.setVolume) Radio.player.setVolume(Radio.vol); };
+      speechSynthesis.cancel(); speechSynthesis.speak(u); }catch(e){} },
+};
 const Visit={
   // tapping 🔒 Look inside: go in if you've been let in, otherwise ask
   async open(handle){ let st; try{ st=await api('/api/citizens/'+encodeURIComponent(handle)+'/visit'); }catch(e){ toast(e.message); return; }
@@ -6566,7 +6625,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     try{ await H3.prepare(d.room,d.size,d.room.plan||'home',(n,t)=>ent.step(n/t<0.5?'Laying the floors…':'Painting the walls…',0.12+0.43*n/t)); }catch(e){} /* the textures, a breath apart */
     ent.step('Arranging the furniture…',0.58); await new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0)));
     this.close(true); this.d=d; this.H3=H3; this.edit=false; this.pick=null; this.sel=null; this.ri=-1; this.cat=this.biz?(BIZ_CATS.find(c=>c[0]===bizTab(d.home.type))||BIZ_CATS[0])[0]:'living'; /* a hospital opens on 🏥 Health, a casino on 🎰 Leisure… */
-    this.sub=el('small',{text:d.home.name}); this.editBtn=d.mine?el('button',{class:'btn primary sm',text:this.editWord,onclick:()=>this.toggle()}):'';
+    this.sub=el('small',{text:d.home.name+(d.guests?` · 🪩 ${d.inside||1}/${d.guests} inside`:'')}); this.editBtn=d.mine?el('button',{class:'btn primary sm',text:this.editWord,onclick:()=>this.toggle()}):'';
     this.mapBtn=el('button',{class:'hhere',title:'Look at the colony map; come back inside any time',onclick:()=>this.toMap()}, '🗺️', el('span',{class:'wide',text:' Map'}));
     this.hereChip=el('button',{class:'hhere',text:'👥 …',onclick:()=>{ const n=this.hereNames||[]; toast(n.length>1?`Here now: ${n.slice(0,12).join(', ')}${n.length>12?'…':''}`:'Nobody else is here right now, just you.'); }});
     const apt=d.home&&d.home.unit?` · Apt ${d.home.unit}`:''; /* their own apartment in the building */
@@ -6589,6 +6648,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     this.file=el('input',{type:'file',accept:'image/*',hidden:true,onchange:()=>this.upload()});
     const root=el('div',{class:'webview roomview',role:'dialog','aria-label':title}, bar, this.stage, this.shop, this.file);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
+    if(Club.is(d)) Club.enter(this); /* a night club: its music, and the 💸 Spray button */
     try{ if(!(history.state&&history.state.room)) history.pushState({room:1},''); }catch(e){}
     try{ this.h=H3.createHouse(this.stage,{ defer:true, size:d.size, plan:d.room.plan||'home', persp, me:(Me&&Me.handle)||'visitor', look:myLook||null, room:d.room, photos:d.photos, at:this.reAt||null, onLost:at=>this.reopen(at), check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
       onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.close(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onAction:a=>{ const b=this.actBtn; if(!b) return; b.hidden=!a; if(a){ b.replaceChildren(el('b',{text:a.icon}),el('span',{text:a.label})); b.title=a.label; } }, onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
@@ -6616,6 +6676,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     else if(m.k==='pos'&&m.p){ if(blocked(m.p.h)) return; this.others.set(m.p.id,m.p); show(m.p); }
     else if(m.k==='gone'){ this.others.delete(m.id); this.h.removeOther(m.id); }
     else if(m.k==='chat'&&m.chat){ if(blocked(m.chat.from)) return; this.addChat(m.chat); }
+    else if(m.k==='club'&&m.club) Club.msg(m.club); /* money sprayed, money raining, the DJ */
     this.hereTick(); },
   addChat(c){ const mine=Me&&Me.handle&&c.from.toLowerCase()===Me.handle.toLowerCase(); if(c.t&&this.lastChatT===c.t+c.from) return; this.lastChatT=c.t+c.from;
     const other=mine?c.to:c.from, who=c.private?el('b',{text:mine?`🔒 to @${c.to}: `:`🔒 @${c.from} (just you): `,title:'Private: only the two of you see this'}):el('b',{text:'@'+c.from+': ',title:mine?'':`Tap to message @${c.from} privately`});
@@ -6640,7 +6701,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     const sim=this.people(), lv=[...(this.others||new Map()).values()], named=lv.filter(p=>p.h).map(p=>'@'+p.h+' (walking round)'), anon=Math.max(lv.length,live.viewers)-named.length; live.viewers=Math.max(lv.length,live.viewers);
     this.hereNames=[...sim.map(p=>p.label), ...named, ...(anon>0?[`${anon} visitor${anon===1?'':'s'} looking round`]:[])];
     this.hereNames.unshift('you'); const n=sim.length+live.viewers+1; if(this.hereChip){ this.hereChip.textContent=`👥 ${fmt(n)}`; this.hereChip.append(el('span',{class:'wide',text:n===1?' (just you)':' here now'})); this.hereChip.title=n===1?'Just you here':`${fmt(n)} here now`; } if(this.h){ const own=sim.filter(p=>p.own).map(p=>p.name); const put=()=>this.h&&this.h.setPeople(sim.map(p=>({...p,look:p.own?Looks.m.get(p.name.toLowerCase())||null:null}))); put(); if(own.some(h=>!Looks.m.has(h.toLowerCase()))) Looks.want(own).then(put); } },
-  close(quiet){ if(!this.el) return; setTimeout(mapResume,0); clearInterval(this.hereTimer); this.leave(); this.mapPill&&this.mapPill.remove(); this.mapPill=null; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
+  close(quiet){ if(!this.el) return; setTimeout(mapResume,0); clearInterval(this.hereTimer); Club.leave(); this.leave(); this.mapPill&&this.mapPill.remove(); this.mapPill=null; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
   toggle(on){ this.edit=on===undefined?!this.edit:on; this.setPick(null); this.select(null); this.shop.hidden=!this.edit; if(this.editBtn) this.editBtn.textContent=this.edit?'✓ Done':this.editWord; if(this.edit) this.paintShop(); this.paintTools(); },
   // the streets and buildings round the home: from what the map has loaded, or fetched once (only when looking from above)
   async around(fetch){ const h=this.d&&this.d.home; if(!h||h.x==null||this.aroundDone||!this.h) return; const R=8, x0=h.x-R, y0=h.y-R, x1=h.x+(h.w||1)+R, y1=h.y+(h.d||1)+R;

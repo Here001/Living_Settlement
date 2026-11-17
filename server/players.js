@@ -336,6 +336,10 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/citizens/:handle/love/cancel', limit, send(async req => world.love.cancelAsk(await me(req), req.params.handle)));
   r.post('/me/love/propose', limit, send(async req => world.love.propose(await me(req))));
   r.post('/me/love/proposal', limit, send(async req => world.love.answerProposal(await me(req), !!bd(req).accept)));
+  // night clubs: spray someone, or the whole club, and grab the money that rains down (server/clubs.js)
+  r.get('/clubs/spray', limit, send(async () => { const C = await import('./clubs.js'); return { person: C.SPRAY_PERSON, club: C.SPRAY_CLUB, ms: C.RAIN_MS, mix: process.env.CLUB_MIX_URL || null }; }));
+  r.post('/clubs/spray', limit, send(async req => { const p = await me(req), b = bd(req); await assertNotMuted(p.id); return b.to ? world.clubs.sprayPerson(p, b.place, b.to, b.amount) : world.clubs.sprayClub(p, b.place, b.amount); }));
+  r.post('/clubs/grab/:id', send(async req => world.clubs.grab(await me(req), req.params.id)));
   r.post('/me/love/privacy', limit, send(async req => world.love.privacy((await me(req)).id, !!bd(req).hidden)));
   r.post('/me/love/end', limit, send(async req => world.love.end(await me(req))));
   r.get('/me/visits', limit, send(async req => world.visits.incoming((await me(req)).id)));

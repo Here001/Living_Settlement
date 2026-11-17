@@ -368,7 +368,26 @@ export function buildAvatar(rawLook, opts = {}) {
       if (kind === 'sit' || kind === 'play') { both(thighL, thighR, -1.5); both(shinL, shinR, 1.45); both(footL, footR, 0.05); spine.rotation.x = -0.05; head.rotation.x = 0.05;
         if (kind === 'sit') { both(upperArmL, upperArmR, -0.32); both(forearmL, forearmR, -0.95); } else { both(upperArmL, upperArmR, -0.85); both(forearmL, forearmR, -0.8); } }
       else if (kind === 'use') { both(upperArmL, upperArmR, -0.95); both(forearmL, forearmR, -0.7); upperArmL.rotation.z = -0.02; upperArmR.rotation.z = 0.02; }
-      else if (kind === 'lie') { body.rotation.x = -Math.PI / 2; body.position.set(0, 0.13 * B.scale, P.height / 2); upperArmL.rotation.z = -0.14; upperArmR.rotation.z = 0.14; head.rotation.x = -0.15; }
+      else if (kind === 'dance' || kind === 'pole') this.dance(0, kind === 'pole' ? 'pole' : 'floor');
+        else if (kind === 'lie') { body.rotation.x = -Math.PI / 2; body.position.set(0, 0.13 * B.scale, P.height / 2); upperArmL.rotation.z = -0.14; upperArmR.rotation.z = 0.14; head.rotation.x = -0.15; }
+    },
+    // dancing to the club's beat (about 105 a minute): 'floor' changes move every few beats (hands in the air, pumping
+    // arms, a side step); 'pole' holds the pole with one hand while the hips circle and the knees dip
+    dance(dt, kind = 'floor') { dt = Math.min(0.1, Math.max(0, dt)); t += dt; wk = 0; rn = 0; const b = t * Math.PI * 2 * 1.75, h = b / 2, S = Math.sin, C = Math.cos, up = v => Math.max(0, v);
+      body.rotation.set(0, 0, 0); body.position.set(0, 0, 0);
+      if (kind === 'pole') { const c = S(h);
+        hips.position.set(0.05 * c, 0.86 - 0.05 * up(S(b)), 0.03 * C(h)); hips.rotation.set(0.05, 0.35 * S(h * 0.5), 0.1 * c);
+        spine.rotation.set(-0.12 - 0.08 * up(C(h)), -0.2 * c, 0.08 * c); chest.rotation.set(-0.05, -0.15 * c, 0); neck.rotation.set(0, 0.1 * c, 0); head.rotation.set(-0.15, 0.25 * c, 0.05);
+        upperArmR.rotation.set(-2.75, 0, 0.12); forearmR.rotation.x = -0.25; upperArmL.rotation.set(-0.6 - 0.4 * up(S(h)), 0, -0.5 - 0.2 * c); forearmL.rotation.x = -0.6;
+        for (const [th, sh, ft, ph] of [[thighL, shinL, footL, 0], [thighR, shinR, footR, Math.PI]]) { const k = up(S(h + ph)); th.rotation.set(-0.2 - 0.35 * k, 0, 0); sh.rotation.x = 0.35 + 0.55 * k; ft.rotation.x = -(th.rotation.x + sh.rotation.x) * 0.85; }
+        return; }
+      const move = Math.floor(t / 4.6) % 3, bounce = up(S(b)); /* a new move every 8 beats */
+      hips.position.set(0.05 * S(h) * (move === 2 ? 2 : 1), 0.9 - 0.045 * bounce, 0); hips.rotation.set(0, 0.22 * S(h), 0.08 * S(h));
+      spine.rotation.set(0.06 + 0.05 * bounce, -0.14 * S(h), 0.05 * S(h)); chest.rotation.set(0.02 * bounce, -0.22 * S(h), 0); neck.rotation.set(0, 0.08 * S(h), 0); head.rotation.set(0.14 * bounce - 0.06, 0.18 * S(h / 2), 0);
+      for (const [th, sh, ft, ph] of [[thighL, shinL, footL, 0], [thighR, shinR, footR, Math.PI]]) { const k = up(S(h + ph)); th.rotation.set(-0.12 - (move === 2 ? 0.45 : 0.28) * k, 0, 0); sh.rotation.x = 0.2 + (move === 2 ? 0.7 : 0.45) * k; ft.rotation.x = -(th.rotation.x + sh.rotation.x) * 0.85; }
+      if (move === 0) { /* hands in the air */ upperArmL.rotation.set(-2.6 - 0.25 * S(b), 0, -0.25 - 0.1 * S(h)); upperArmR.rotation.set(-2.6 - 0.25 * S(b + 1), 0, 0.25 + 0.1 * S(h)); forearmL.rotation.x = -0.35 - 0.3 * bounce; forearmR.rotation.x = -0.35 - 0.3 * up(S(b + 1)); }
+      else if (move === 1) { /* pumping arms, elbows bent */ const a = up(S(h)), c = up(-S(h)); upperArmL.rotation.set(-0.7 - 0.9 * a, 0, -0.35); upperArmR.rotation.set(-0.7 - 0.9 * c, 0, 0.35); forearmL.rotation.x = -1.5 + 0.3 * a; forearmR.rotation.x = -1.5 + 0.3 * c; }
+      else { /* a side step, arms swinging low */ upperArmL.rotation.set(-0.35 * S(h), 0, -0.3 - 0.25 * up(S(h))); upperArmR.rotation.set(0.35 * S(h), 0, 0.3 + 0.25 * up(-S(h))); forearmL.rotation.x = -0.9; forearmR.rotation.x = -0.9; }
     },
     hipY: 0.9 * B.scale, /* how high the hips are standing: a seated person's hips go at the seat */
     // for still pictures: a moment in a walk (0-1 through the stride) at a given speed

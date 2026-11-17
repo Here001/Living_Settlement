@@ -34,6 +34,8 @@ export class Rooms {
   constructor(world) { this.world = world; this.here = new Map(); }
   // ---- who's looking around a place right now (players whose screen shows it), for the "here now" count ----
   // Each open view says it's still there every 25 seconds; anyone not heard from for 70 seconds has left.
+  // how many people are in a place right now (seen in the last 70 s), not counting `who` (by id, as 'p:<id>')
+  inside(place, meId) { const m = this.here.get(place); if (!m) return 0; const now = Date.now(), me = meId ? 'p:' + meId : null; let n = 0; for (const [w, e] of m) if (w !== me && now - e.at < 70000) n++; return n; }
   seen(place, who, name) {
     const now = Date.now(); place = String(place || '').slice(0, 80); if (!/^(b|h):[A-Za-z0-9_.-]+$/.test(place)) throw new HttpError(400, 'Which place?');
     let m = this.here.get(place); if (!m) this.here.set(place, m = new Map()); m.set(who, { name, at: now });
@@ -56,8 +58,11 @@ export class Rooms {
       const live = (await pool.query('select handle, room, case when home_unit_bid = $1 then home_unit end unit from citizens where home_id = $1 order by home_unit nulls last, lower(handle) limit 60', [b.id])).rows;
       if (live.length) return { choose: live.map(r => ({ handle: r.handle, locked: !!r.room?.locked, unit: r.unit || 0 })), home: { id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Home', type: b.type }, owner: b.owner_handle || null, mine: !!meId && b.owner_id === meId };
     }
+    // a night club lets in so many people at once (its owner, and their husband or wife, always get in)
+    const cap = BUILDING_TYPES[b.type]?.guests || 0, inside = cap ? this.inside('b:' + b.id, meId) : 0;
+    if (cap && inside >= cap && !(meId && (b.owner_id === meId || (b.owner_id && (await this.world.love?.spouseOf(meId)) === b.owner_id)))) throw new HttpError(409, `🪩 ${b.name || BUILDING_TYPES[b.type].name} is full (${cap} guests). Try again in a little while.`);
     const { size, room } = this.bizRoom(b), mine = !!meId && !!b.owner_id && (b.owner_id === meId || (await this.world.love?.spouseOf(meId)) === b.owner_id), c = mine ? (await pool.query('select coins_base from citizens where id = $1', [meId])).rows[0] : null;
-    return { mine, place: BUILDING_TYPES[b.type]?.home ? 'building' : 'business', owner: b.owner_handle || null, designed: !!b.interior, home: { id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Building', type: b.type, x: b.x, y: b.y, w: b.w, d: b.d }, size, room, photos: await this.photoUrls(room), coins: c ? Math.round(Number(c.coins_base)) : undefined };
+    return { ...(cap ? { guests: cap, inside: inside + 1 } : {}), mine, place: BUILDING_TYPES[b.type]?.home ? 'building' : 'business', owner: b.owner_handle || null, designed: !!b.interior, home: { id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Building', type: b.type, x: b.x, y: b.y, w: b.w, d: b.d }, size, room, photos: await this.photoUrls(room), coins: c ? Math.round(Number(c.coins_base)) : undefined };
   }
   async homeOf(q, c) {
     if (!c.home_id) return null;

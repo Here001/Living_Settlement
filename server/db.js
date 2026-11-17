@@ -353,6 +353,9 @@ const MIGRATIONS = [
    create index if not exists relationships_a on relationships (a_id, status); create index if not exists relationships_b on relationships (b_id, status);`,
   // v75: whether others can see who you're dating or married to (on your card)
   `alter table citizens add column if not exists love_hidden boolean not null default false;`,
+  // v76: money sprayed over a whole night club (server/clubs.js) and who grabbed how much of it
+  `create table if not exists club_rains (id text primary key, place text not null, building_id text not null, from_id text not null, from_handle text, total bigint not null, left_amt bigint not null, t bigint not null, until bigint not null, done boolean not null default false);
+   create index if not exists club_rains_due on club_rains (done, until); create table if not exists club_grabs (rain_id text not null, citizen_id text not null, handle text, got bigint not null default 0, primary key (rain_id, citizen_id));`,
 ];
 
 export async function migrate() {

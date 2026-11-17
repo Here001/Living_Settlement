@@ -309,10 +309,15 @@ export function createHouse(host, opts) {
     const shown = lines.slice(0, 3); if (lines.length > 3) shown[2] = shown[2].replace(/.{0,2}$/, '…'); const w = Math.min(500, Math.max(...shown.map(l => g.measureText(l).width)) + 36), h = shown.length * 40 + 24;
     g.fillStyle = 'rgba(255,255,255,.96)'; g.beginPath(); g.roundRect((512 - w) / 2, 4, w, h, 20); g.fill(); g.fillStyle = '#1C1C1E'; g.textAlign = 'center'; g.textBaseline = 'top'; shown.forEach((l, i) => g.fillText(l, 256, 16 + i * 40));
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); sp.scale.set(1.9, 0.6, 1); sp.position.set(0, 2.45, 0); sp.renderOrder = 6; return sp; }
+  // in a packed room, only the nearest MAX_SHOWN people are drawn (the rest are still counted and can chat)
+  const MAX_SHOWN = 20; let nearAt = 0;
+  function nearest(force) { const now = performance.now(); if (!force && now - nearAt < 500) return; nearAt = now; if (others.size <= MAX_SHOWN) { for (const o of others.values()) if (!o.g.visible) { o.g.visible = true; dirty = true; } return; }
+    const list = [...others.values()].sort((a, b) => Math.hypot(a.tx - me.x, a.ty - me.y) - Math.hypot(b.tx - me.x, b.ty - me.y));
+    list.forEach((o, i) => { const v = i < MAX_SHOWN; if (o.g.visible !== v) { o.g.visible = v; if (v) { o.g.position.x = o.tx; o.g.position.z = o.ty; } dirty = true; } }); }
   function upsertOther(id, p) { let o = others.get(id);
     if (!o) { const g = figure(p.h || id); const tag = nameTag(p.h ? '@' + p.h : 'a visitor'); tag.position.set(0, 2.0, 0); g.add(tag); g.position.set(p.x, 0, p.y); g.rotation.y = p.a; scene.add(g); o = { g, tx: p.x, ty: p.y, ta: p.a }; others.set(id, o); }
-    o.tx = p.x; o.ty = p.y; o.ta = p.a; dirty = true; wake(); }
-  function removeOther(id) { const o = others.get(id); if (!o) return; scene.remove(o.g); o.g.traverse(m => { m.geometry && m.geometry.dispose(); m.material?.map && m.material.map.dispose(); }); others.delete(id); dirty = true; wake(); }
+    o.tx = p.x; o.ty = p.y; o.ta = p.a; nearest(false); if (o.g.visible) { dirty = true; wake(); } }
+  function removeOther(id) { const o = others.get(id); if (!o) return; scene.remove(o.g); o.g.traverse(m => { m.geometry && m.geometry.dispose(); m.material?.map && m.material.map.dispose(); }); others.delete(id); nearest(true); dirty = true; wake(); }
   function say(id, text) { const o = id === 'me' ? null : others.get(id), on = o ? o.g : me3; if (!on) return; const sp = bubbleSprite(text);
     if (o) { if (o.bubble) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); } o.bubble = sp; o.bubbleUntil = performance.now() + 7000; }
     else { if (meBubble) { me3.remove(meBubble); meBubble.material.map.dispose(); } meBubble = sp; meBubbleUntil = performance.now() + 7000; }
@@ -443,7 +448,7 @@ export function createHouse(host, opts) {
   }
   let lastRoom = -1;
   let lastInput = 0;
-  function moved() { lastInput = performance.now(); opts.onMove && opts.onMove(me.x, me.y, me.yaw); placeCamera(); if (pick && !tapAim) aim(); const ri = roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN); placeLights(false); if (ri !== lastRoom) { lastRoom = ri; opts.onRoom && opts.onRoom(ri); } dirty = true; wake(); }
+  function moved() { lastInput = performance.now(); if (others.size > MAX_SHOWN) nearest(false); opts.onMove && opts.onMove(me.x, me.y, me.yaw); placeCamera(); if (pick && !tapAim) aim(); const ri = roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN); placeLights(false); if (ri !== lastRoom) { lastRoom = ri; opts.onRoom && opts.onRoom(ri); } dirty = true; wake(); }
   let tapAim = false;
 
   // ---- input ----
@@ -476,7 +481,7 @@ export function createHouse(host, opts) {
     try { again = step(t); } finally { inTick = false; } /* even if a frame fails, the next one can still be asked for */
     if (again || (dirty && shown())) raf = requestAnimationFrame(tick); else last = null; /* hidden behind the map: nothing to draw, so it waits */
   }
-  let lastDraw = 0;
+  let lastDraw = 0, othersMoving = false;
   function step(t) {
     if (!shown()) { for (const o of others.values()) { o.g.position.x = o.tx; o.g.position.z = o.ty; o.g.rotation.y = o.ta; } dirty = true; return false; } /* hidden: jump to where people are, draw later */
     const dt = last == null ? 1 / 60 : Math.max(0, Math.min(0.05, (t - last) / 1000)); last = t; let moving = false; /* time since the last frame: never below 0 or above 1/20 s */
@@ -487,11 +492,13 @@ export function createHouse(host, opts) {
     if (moving) moved();
     // at most 60 frames a second (a 120 Hz screen would otherwise draw twice as many)
     const now = performance.now(), active = moving || joy.on || keys.size > 0 || now - lastInput < 160;
-    if (dirty && shown() && (!active || now - lastDraw >= 15.5)) { placeCamera(); renderer.render(scene, camera); dirty = false; lastDraw = now; } /* not while the map is showing */
+    const gap = active ? 15.5 : othersMoving ? 32 : 0; /* you moving: up to 60 a second; only other people moving: 30 (still smooth); nothing moving: just the one frame */
+    if (dirty && shown() && now - lastDraw >= gap) { placeCamera(); renderer.render(scene, camera); dirty = false; lastDraw = now; } /* not while the map is showing */
     // other players: glide towards where they last said they were
-    let gliding = false; for (const o of others.values()) { const dx = o.tx - o.g.position.x, dz = o.ty - o.g.position.z; let da = o.ta - o.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
+    let gliding = false; for (const o of others.values()) if (o.g.visible) { const dx = o.tx - o.g.position.x, dz = o.ty - o.g.position.z; let da = o.ta - o.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       if (Math.abs(dx) + Math.abs(dz) + Math.abs(da) > 0.01) { const k = Math.min(1, dt * 8); o.g.position.x += dx * k; o.g.position.z += dz * k; o.g.rotation.y += da * k; gliding = true; dirty = true; }
       if (o.bubble && performance.now() > o.bubbleUntil) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); o.bubble = null; dirty = true; } }
+    othersMoving = gliding;
     if (meBubble && performance.now() > meBubbleUntil) { me3.remove(meBubble); meBubble.material.map.dispose(); meBubble = null; dirty = true; }
     return moving || joy.on || keys.size > 0 || dirty || gliding || [...others.values()].some(o => o.bubble) || !!meBubble;
   }
@@ -516,7 +523,7 @@ export function createHouse(host, opts) {
     setSurroundings(A) { buildAround(A); },
     setPeople(list) { buildPeople(list); },
     upsertOther, removeOther, clearOthers() { for (const id of [...others.keys()]) removeOther(id); }, say, get me() { return { x: me.x, y: me.y, a: me.yaw }; },
-    get stats() { const r = renderer.info.render; return { frame: r.frame, pr: prNow, canvas: renderer.domElement.width + 'x' + renderer.domElement.height, calls: r.calls, triangles: r.triangles, textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries, programs: renderer.info.programs?.length }; },
+    get stats() { const r = renderer.info.render; return { frame: r.frame, pr: prNow, people: others.size, shown: [...others.values()].filter(o => o.g.visible).length, canvas: renderer.domElement.width + 'x' + renderer.domElement.height, calls: r.calls, triangles: r.triangles, textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries, programs: renderer.info.programs?.length }; },
     setPerspective(p) { persp = p === 'third' ? 'third' : 'first'; stepIn(); moved(); },
     get perspective() { return persp; },
     get view() { return view; },

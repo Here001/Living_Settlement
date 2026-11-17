@@ -6464,10 +6464,12 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     if(d.mine&&!d.room.items.length&&!d.room.box.length) this.toggle(true); },
   // ---- live: where you stand goes to everyone else in here, and theirs comes to you; and the chat ----
   get spot(){ return this.d?(this.bld?'b:'+this.d.home.id:'h:'+(this.d.owner||'').toLowerCase()):null; }, /* which place we're in, for the live connection (not place(), which places furniture) */
-  join(){ this.others=new Map(); this.sendPos(true); },
-  rejoin(){ if(this.el&&this.d){ this.h&&this.h.clearOthers(); this.others=new Map(); this.sendPos(true); } },
+  join(){ this.others=new Map(); this.lastSent=null; this.sendPos(true,true); },
+  rejoin(){ if(this.el&&this.d){ this.h&&this.h.clearOthers(); this.others=new Map(); this.lastSent=null; this.sendPos(true,true); } },
   leave(){ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'out'})); }catch(e){} this.others=new Map(); },
-  sendPos(force){ if(!this.h||!this.d) return; const m=this.h.me, now=Date.now(); if(!force&&now-(this.posAt||0)<200){ clearTimeout(this.posT); this.posT=setTimeout(()=>this.sendPos(true),200); return; } this.posAt=now;
+  sendPos(force,always){ if(!this.h||!this.d) return; const m=this.h.me, now=Date.now(), L=this.lastSent; /* only when you've moved a step (15 cm) or turned a little: shuffling on the spot sends nothing */
+    if(!always&&L&&Math.hypot(m.x-L.x,m.y-L.y)<0.15&&Math.abs(Math.atan2(Math.sin(m.a-L.a),Math.cos(m.a-L.a)))<0.2) return;
+    if(!force&&now-(this.posAt||0)<200){ clearTimeout(this.posT); this.posT=setTimeout(()=>this.sendPos(true),200); return; } this.posAt=now; this.lastSent={x:m.x,y:m.y,a:m.a};
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'in',place:this.spot,x:m.x,y:m.y,a:m.a})); }catch(e){} },
   moveSoon(){ this.sendPos(false); },
   insideMsg(m){ if(!this.el||!this.d||m.place!==this.spot||!this.h) return; this.others||=new Map();

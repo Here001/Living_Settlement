@@ -1342,7 +1342,7 @@ function drawB(b,t){ if(t.style==='fence'&&b.mask==null&&!RAW) b={...b,mask:fenc
 // building is drawn once into its own small picture (at the current zoom, in steps of about 41%) and that picture is
 // copied each frame. Night lights and chimney smoke from the drawing are remembered and replayed on top, so they still
 // glow and drift. Buildings that animate (clocks, windmills, neon, ferris wheels…) are always drawn live.
-const ANIM_STYLES=new Set(['stall','tower','fountain','pine','windmill','dome','bush','tanks','cooling','ponds','atom','lighthouse','ferris','winery','xmastree','refinery','resort']);
+const ANIM_STYLES=new Set(['stall','tower','fountain','pine','windmill','dome','bush','tanks','cooling','ponds','atom','lighthouse','ferris','winery','xmastree','refinery','resort','starport']); /* starport: its pad lights blink */
 const BSPR={ map:new Map(), last:new Map(), px:0, budgetEnd:0, hits:0, made:0, live:0, frame:0 };
 let SPR_REC=null, SPR_MIRROR=false; // while a building picture is being drawn: animated bits to replay each frame
 const bspCap = () => Quality.level>=2 ? 6e6 : 9e6; // pixels kept (about 4 bytes each)
@@ -2555,10 +2555,11 @@ const lampSpr={ step:0, map:new Map() };
 function drawStreetLamp(p){ const st=SPR.step||1; if(st>5) return drawLamp0(p);
   if(lampSpr.step!==st){ lampSpr.map.clear(); lampSpr.step=st; } const key=lampGlass(); let e=lampSpr.map.get(key);
   if(!e){ const W=Math.ceil(12*st)+2, H=Math.ceil(40*st)+2, cv=document.createElement('canvas'); cv.width=W; cv.height=H; const g=cv.getContext('2d'); if(!g) return drawLamp0(p);
-    g.setTransform(st,0,0,st,6*st+1,37*st+1); const keep=ctx; ctx=g; try{ drawLamp0({x:0,y:0}); } finally{ ctx=keep; } e={cv,W,H}; lampSpr.map.set(key,e); }
-  ctx.drawImage(e.cv, p.x-(6*st+1)/st, p.y-(37*st+1)/st, e.W/st, e.H/st); }
-function drawLamp0(p){ line(p,up(p,26),INK,2.4); line(p,up(p,26),'#3E5148',1.2); const q=up(p,26); poly([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}],lampGlass()); poly([{x:q.x-3.5,y:q.y-6},{x:q.x+3.5,y:q.y-6},{x:q.x,y:q.y-9}],'#3E5148');
-  if(LAMPS>0){ windowQuads.push([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}]); lights.push({x:q.x,y:q.y-2,r:19,col:'255,218,150',a:1.15},{x:p.x,y:p.y,r:34,col:'255,214,140',a:0.55}); } }
+    g.setTransform(st,0,0,st,6*st+1,37*st+1); const keep=ctx; ctx=g; try{ drawLamp0({x:0,y:0},true); } finally{ ctx=keep; } e={cv,W,H}; lampSpr.map.set(key,e); }
+  ctx.drawImage(e.cv, p.x-(6*st+1)/st, p.y-(37*st+1)/st, e.W/st, e.H/st); lampLights(p); } /* the picture is only the post and glass: its glow goes on every frame, where the lamp is */
+function drawLamp0(p,noGlow){ line(p,up(p,26),INK,2.4); line(p,up(p,26),'#3E5148',1.2); const q=up(p,26); poly([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}],lampGlass()); poly([{x:q.x-3.5,y:q.y-6},{x:q.x+3.5,y:q.y-6},{x:q.x,y:q.y-9}],'#3E5148');
+  if(!noGlow) lampLights(p); }
+function lampLights(p){ if(LAMPS<=0) return; const q=up(p,26); windowQuads.push([{x:q.x-3,y:q.y},{x:q.x+3,y:q.y},{x:q.x+2,y:q.y-6},{x:q.x-2,y:q.y-6}]); lights.push({x:q.x,y:q.y-2,r:19,col:'255,218,150',a:1.15},{x:p.x,y:p.y,r:34,col:'255,214,140',a:0.55}); }
 function drawAnyRoad(x,y,R,has,hasR,pushDeco,bridge,thumb){
   if(R.kind==='rail'){ drawRailTile(x,y,R,hasR,pushDeco); if(bridge) drawBridge(x,y,R,hasR); return; }
   if(R.kind==='highway') drawHighwayTile(x,y,R,has); else drawRoadTile(x,y,R.kind==='crossing'?{...R,kind:'street'}:R,has,pushDeco);

@@ -910,6 +910,10 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .enter.open{opacity:0;pointer-events:none}.enter.open .enscene{transform:scale(4.2) translateY(6%)}.enter.open .endoor{animation:none;transform:rotateY(-108deg);transition:transform .6s ease-in}
 .enter.open .entitle,.enter.open .enstep,.enter.open .enbar,.enter.open .entip{opacity:0;transition:opacity .25s}
 @media (prefers-reduced-motion:reduce){.endoor,.englow,.enlight{animation:none}.enscene,.enter .endoor{transition:none}}
+.hact{position:absolute;right:14px;bottom:calc(150px + env(safe-area-inset-bottom));z-index:4;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:none;padding:0;cursor:pointer}
+.hact b{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;background:#fff;border:2px solid #2B2621;font-size:30px;box-shadow:0 4px 0 #2B2621}
+.hact:active b{transform:translateY(3px);box-shadow:0 1px 0 #2B2621}
+.hact span{font-size:12px;font-weight:800;color:#fff;background:rgba(43,38,33,.82);border-radius:999px;padding:3px 9px;white-space:nowrap}
 .hexit{position:absolute;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:4;border:2px solid #2B2621;background:#E4572E;color:#fff;font-weight:800;font-size:17px;border-radius:999px;padding:12px 26px;box-shadow:0 4px 0 #2B2621,0 8px 20px rgba(0,0,0,.25);animation:hexit .35s ease-out}.hexit[hidden]{display:none}@keyframes hexit{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
 .visitbox h4{margin:12px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}.vreq{padding:8px 0;border-top:1px solid var(--soft)}.vreq p{margin:0 0 6px}.vreq .row-actions{flex-wrap:wrap;align-items:center}
 .hchatto{max-width:38%;flex:0 0 auto;border:1.5px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:inherit;font-size:13px;padding:5px 4px}.hcl.pm{background:rgba(110,80,160,.13);border-radius:8px;padding:2px 6px}.hcl.pm b{color:#6D4FA0}.hcl b{cursor:pointer} /* the same sky as the 3D view, so it's never dark while it loads */
@@ -6531,13 +6535,14 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     this.chatBox=el('div',{class:'hchat',hidden:true}, this.chatLog, el('div',{class:'hchatrow'}, this.chatTo, this.chatIn, el('button',{class:'btn primary sm',text:'Send',disabled:!(Me&&Me.token),onclick:()=>this.sendChat()})));
     this.chatBtn=el('button',{class:'btn sm hchatbtn',text:'💬 Chat',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden){ this.whoOpts(); setTimeout(()=>this.chatIn.focus(),50); } }});
     this.exitBtn=el('button',{class:'hexit',hidden:true,text:'🚪 Exit',title:'Leave the house and go back to the map',onclick:()=>this.close()}); /* shown by the front door */
-    this.stage=el('div',{class:'roomstage'}, this.viewBtn, this.perspBtn, this.chatBtn, this.chatBox, this.tools, this.cross, this.exitBtn);
+    this.actBtn=el('button',{class:'hact',hidden:true,onclick:()=>{ this.h&&this.h.act(); this.sendPos(true,true); }}); /* sit, lie down, use: shown next to things you can use */
+    this.stage=el('div',{class:'roomstage'}, this.viewBtn, this.perspBtn, this.chatBtn, this.chatBox, this.tools, this.cross, this.exitBtn, this.actBtn);
     this.file=el('input',{type:'file',accept:'image/*',hidden:true,onchange:()=>this.upload()});
     const root=el('div',{class:'webview roomview',role:'dialog','aria-label':title}, bar, this.stage, this.shop, this.file);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
     try{ if(!(history.state&&history.state.room)) history.pushState({room:1},''); }catch(e){}
     try{ this.h=H3.createHouse(this.stage,{ defer:true, size:d.size, plan:d.room.plan||'home', persp, me:(Me&&Me.handle)||'visitor', look:myLook||null, room:d.room, photos:d.photos, at:this.reAt||null, onLost:at=>this.reopen(at), check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
-      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.close(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
+      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.close(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onAction:a=>{ const b=this.actBtn; if(!b) return; b.hidden=!a; if(a){ b.replaceChildren(el('b',{text:a.icon}),el('span',{text:a.label})); b.title=a.label; } }, onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
     catch(e){ ent.cancel(); this.close(); toast('Your phone couldn’t show the 3D view.'); return; }
     this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false); this.hereTick(true); this.join();
     ent.step('Switching on the lights…',0.66); const h=this.h; try{ await h.ready((n,t)=>ent.step(n/t<0.6?'Switching on the lights…':'Saying hello to who’s here…',0.66+0.32*n/t)); }catch(e){} if(this.h===h) ent.done(); else ent.cancel(); /* the first picture is on screen: step through */
@@ -6551,9 +6556,9 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
   rejoin(){ if(this.el&&this.d){ this.h&&this.h.clearOthers(); this.others=new Map(); this.lastSent=null; this.sendPos(true,true); } },
   leave(){ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'out'})); }catch(e){} this.others=new Map(); },
   sendPos(force,always){ if(!this.h||!this.d) return; const m=this.h.me, now=Date.now(), L=this.lastSent; /* only when you've moved a step (15 cm) or turned a little: shuffling on the spot sends nothing */
-    if(!always&&L&&Math.hypot(m.x-L.x,m.y-L.y)<0.15&&Math.abs(Math.atan2(Math.sin(m.a-L.a),Math.cos(m.a-L.a)))<0.2) return;
-    if(!force&&now-(this.posAt||0)<200){ clearTimeout(this.posT); this.posT=setTimeout(()=>this.sendPos(true),200); return; } this.posAt=now; this.lastSent={x:m.x,y:m.y,a:m.a};
-    try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'in',place:this.spot,x:m.x,y:m.y,a:m.a})); }catch(e){} },
+    if(!always&&L&&(m.pose||'')===(L.pose||'')&&Math.hypot(m.x-L.x,m.y-L.y)<0.15&&Math.abs(Math.atan2(Math.sin(m.a-L.a),Math.cos(m.a-L.a)))<0.2) return;
+    if(!force&&now-(this.posAt||0)<200){ clearTimeout(this.posT); this.posT=setTimeout(()=>this.sendPos(true),200); return; } this.posAt=now; this.lastSent={x:m.x,y:m.y,a:m.a,pose:m.pose};
+    try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'in',place:this.spot,x:m.x,y:m.y,a:m.a,...(m.pose?{pose:m.pose,ph:m.ph}:{})})); }catch(e){} },
   moveSoon(){ this.sendPos(false); },
   insideMsg(m){ if(!this.el||!this.d||m.place!==this.spot||!this.h) return; this.others||=new Map();
     const blocked=h=>h&&typeof Blocks!=='undefined'&&Blocks.has(h);

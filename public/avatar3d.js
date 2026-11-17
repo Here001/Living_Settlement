@@ -361,7 +361,16 @@ export function buildAvatar(rawLook, opts = {}) {
       wk += (ramp01(sp / 1.1) - wk) * Math.min(1, dt * 7); rn += (ramp01((sp - 2.8) / 1.8) - rn) * Math.min(1, dt * 4);
       const f = sp < 0.05 ? 0.9 : sp <= 1.6 ? Math.max(0.75, sp / 1.45) : 1.1 + (sp - 1.6) * 0.3; /* strides a second: longer strides, not just faster ones, as they speed up */
       if (wk > 0.003) ph = (ph + TAU * f * dt) % TAU; gait(); },
-    pose() { wk = 0; rn = 0; gait(); },
+    // still poses: 'stand', 'sit' (hands on the lap), 'play' (sitting, hands out to an instrument), 'use' (standing,
+    // hands out to something), 'lie' (on the back, the body centred on where they stand, head towards their -z)
+    pose(kind = 'stand') { wk = 0; rn = 0; gait(); body.rotation.set(0, 0, 0); body.position.set(0, 0, 0);
+      const both = (a, b, v) => { a.rotation.x = v; b.rotation.x = v; };
+      if (kind === 'sit' || kind === 'play') { both(thighL, thighR, -1.5); both(shinL, shinR, 1.45); both(footL, footR, 0.05); spine.rotation.x = -0.05; head.rotation.x = 0.05;
+        if (kind === 'sit') { both(upperArmL, upperArmR, -0.32); both(forearmL, forearmR, -0.95); } else { both(upperArmL, upperArmR, -0.85); both(forearmL, forearmR, -0.8); } }
+      else if (kind === 'use') { both(upperArmL, upperArmR, -0.95); both(forearmL, forearmR, -0.7); upperArmL.rotation.z = -0.02; upperArmR.rotation.z = 0.02; }
+      else if (kind === 'lie') { body.rotation.x = -Math.PI / 2; body.position.set(0, 0.13 * B.scale, P.height / 2); upperArmL.rotation.z = -0.14; upperArmR.rotation.z = 0.14; head.rotation.x = -0.15; }
+    },
+    hipY: 0.9 * B.scale, /* how high the hips are standing: a seated person's hips go at the seat */
     // for still pictures: a moment in a walk (0-1 through the stride) at a given speed
     stride(at, sp = 1.4) { wk = ramp01(sp / 1.1); rn = ramp01((sp - 2.8) / 1.8); ph = at * TAU; gait(); },
     setOpacity(o) { for (const m of own ? owned : [faceMat]) { m.transparent = o < 0.999; m.opacity = o; m.depthWrite = o >= 0.999; } },

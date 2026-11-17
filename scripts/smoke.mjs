@@ -2012,6 +2012,9 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   ok(ball && ball.list.some(p => p.h === 'live_amy' && p.x === 2), 'walking in, you see who is already there', JSON.stringify(ball));
   ok(apos && apos.p.h === 'live_ben' && apos.p.x === 4, '…and they see you come in', JSON.stringify(apos));
   b.w.send(JSON.stringify({ type: 'in', place, x: 4.5, y: 5, a: 1 })); await sleep(300); ok(a.got.filter(m => m.k === 'pos' && m.p.h === 'live_ben').some(m => m.p.x === 4.5), '…and see you move');
+  b.w.send(JSON.stringify({ type: 'in', place, x: 4.5, y: 5.2, a: 1, pose: 's', ph: -0.32 })); await sleep(300); ok(a.got.filter(m => m.k === 'pos' && m.p.h === 'live_ben').some(m => m.p.pose === 's' && m.p.ph === -0.32), '…and see you sit down');
+  b.w.send(JSON.stringify({ type: 'in', place, x: 4.5, y: 5.4, a: 1, pose: 'zz', ph: 99 })); await sleep(300); { const last = a.got.filter(m => m.k === 'pos' && m.p.h === 'live_ben').pop(); ok(last && last.p.y === 5.4 && !('pose' in last.p), 'a made-up pose is dropped'); }
+  b.w.send(JSON.stringify({ type: 'in', place, x: 4.5, y: 5.6, a: 1, pose: 'l', ph: 40 })); await sleep(300); { const last = a.got.filter(m => m.k === 'pos' && m.p.h === 'live_ben').pop(); ok(last && last.p.pose === 'l' && last.p.ph === 1.5, 'lying down, the height is kept sensible'); }
   ok(!b.got.some(m => m.k === 'pos' && m.p.h === 'live_ben'), 'your own moves aren’t sent back to you');
   const c1 = await call('POST', '/api/inside/chat', { place, text: '  hello   in here  ' }, A.P); await sleep(300);
   ok(c1.status === 200 && b.got.some(m => m.k === 'chat' && m.chat.from === 'live_amy' && m.chat.text === 'hello in here'), 'chat reaches everyone inside', JSON.stringify(c1.json));

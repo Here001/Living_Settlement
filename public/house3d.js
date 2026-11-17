@@ -189,7 +189,7 @@ function pieceGroup(it, photoTex, st = {}) { /* st.off: a lamp switched off; st.
       pl.translate(p.x + p.w / 2 + o[0] * (Math.min(p.w, p.d) / 2 + 0.004), p.z + p.h / 2, p.y + p.d / 2 + o[1] * (Math.min(p.w, p.d) / 2 + 0.004));
       const m = new THREE.Mesh(pl, std({ ...(photoTex || TEXTURES ? { map: photoTex || placeholderTex() } : { color: '#BFD9EA' }), roughness: 0.35 })); m.userData.photo = true; grp.add(m); continue; }
     if (p.s === 'l') { const lc = p.c === tint ? tint : p.c; if (st.off) { grp.add(new THREE.Mesh(paint(partGeo(p), shadeOff(lc)), M.plain)); continue; } grp.add(new THREE.Mesh(partGeo(p), glowMat(lc)));
-      if (f.light) { const sp = new THREE.Sprite(halo(lc)), s2 = Math.max(p.w, p.d, p.h) * 2.4 + 0.3; sp.scale.set(s2, s2, 1); sp.position.set(p.x + p.w / 2, p.z + p.h / 2, p.y + p.d / 2); sp.renderOrder = 3; sp.userData.halo = true; grp.add(sp); } continue; }
+      if (f.light) { const sp = new THREE.Sprite(halo(lc)), s2 = Math.min(1.6, Math.max(p.w, p.d, p.h) * 2.4 + 0.3); /* (a long strip of light gets a soft glow, not a huge one) */ sp.scale.set(s2, s2, 1); sp.position.set(p.x + p.w / 2, p.z + p.h / 2, p.y + p.d / 2); sp.renderOrder = 3; sp.userData.halo = true; grp.add(sp); } continue; }
     if (p.s === 's') { grp.add(new THREE.Mesh(partGeo(p), st.on ? tvOnMat() : M.screen)); continue; }
     if (p.s === 'g' || isGlass(p.c)) { grp.add(new THREE.Mesh(partGeo(p), isGlass(p.c) ? M.glass : tintedGlass(p.c))); continue; }
     const kind = matKind(it.k, p.c, tint, p.s); (byKind.get(kind) || byKind.set(kind, []).get(kind)).push(paint(partGeo(p), p.c));
@@ -685,7 +685,7 @@ export function thumb(k, c = 0) {
       const pm = new THREE.PMREMGenerator(thumbR); thumbEnv = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
     const sc = new THREE.Scene(); sc.environment = thumbEnv; sc.environmentIntensity = 0.7; sc.add(new THREE.HemisphereLight('#FFFFFF', '#9A8F82', 1.1)); const dl = new THREE.DirectionalLight('#FFF4E4', 2.2); dl.position.set(3, 5, 4); sc.add(dl);
     const g = pieceGroup({ i: 't', k, x: 0, y: 0, r: 0, c }, null); sc.add(g);
-    const box = new THREE.Box3().setFromObject(g), ctr = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3()), R = Math.max(sz.x, sz.y, sz.z) * 0.62 + 0.05;
+    const box = new THREE.Box3(); g.traverse(o => { if (o.isMesh) box.expandByObject(o); }); /* the glow round a light isn't part of the piece */ const ctr = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3()), R = Math.max(sz.x, sz.y, sz.z) * 0.62 + 0.05;
     const cam = new THREE.PerspectiveCamera(32, 160 / 128, 0.01, 50), dir = f.mount === 'floor' || f.mount === 'ceil' ? new THREE.Vector3(1, 0.85, 1.3) : new THREE.Vector3(0.45, 0.25, 1.4);
     cam.position.copy(ctr).addScaledVector(dir.normalize(), R / Math.sin(THREE.MathUtils.degToRad(16))); cam.lookAt(ctr);
     thumbR.render(sc, cam); const url = thumbR.domElement.toDataURL('image/png'); sc.traverse(o => o.geometry && o.geometry.dispose()); thumbs.set(key, url); return url;

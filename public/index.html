@@ -1121,7 +1121,7 @@ import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
-import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, BIZ_CATS, canEnter, canTurnOnWall, footOf, placeProblem, resaleOf, layoutOf, styleOf, photoAspect } from '/shared/furniture.js';
+import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, BIZ_CATS, bizTab, canEnter, canTurnOnWall, footOf, placeProblem, resaleOf, layoutOf, styleOf, photoAspect } from '/shared/furniture.js';
 import { paveCost, fullIncome, CRIME_FLOOR, FINE_MIN, FINE_MAX, nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
@@ -6563,7 +6563,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     ent.title(d.mine&&!d.bld&&d.place!=='business'&&d.place!=='building'?'🏠 Your home':d.place==='business'?`🏪 ${d.home.name}`:d.owner?`🏠 @${d.owner}’s home`:`🏠 ${d.home.name}`); ent.step('Laying the floors…',0.12);
     try{ await H3.prepare(d.room,d.size,d.room.plan||'home',(n,t)=>ent.step(n/t<0.5?'Laying the floors…':'Painting the walls…',0.12+0.43*n/t)); }catch(e){} /* the textures, a breath apart */
     ent.step('Arranging the furniture…',0.58); await new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0)));
-    this.close(true); this.d=d; this.H3=H3; this.edit=false; this.pick=null; this.sel=null; this.ri=-1; this.cat=this.biz?BIZ_CATS[{shop:0,food:1,office:2,industry:3}[d.room.plan]||0][0]:'living';
+    this.close(true); this.d=d; this.H3=H3; this.edit=false; this.pick=null; this.sel=null; this.ri=-1; this.cat=this.biz?(BIZ_CATS.find(c=>c[0]===bizTab(d.home.type))||BIZ_CATS[0])[0]:'living'; /* a hospital opens on 🏥 Health, a casino on 🎰 Leisure… */
     this.sub=el('small',{text:d.home.name}); this.editBtn=d.mine?el('button',{class:'btn primary sm',text:this.editWord,onclick:()=>this.toggle()}):'';
     this.mapBtn=el('button',{class:'hhere',title:'Look at the colony map; come back inside any time',onclick:()=>this.toMap()}, '🗺️', el('span',{class:'wide',text:' Map'}));
     this.hereChip=el('button',{class:'hhere',text:'👥 …',onclick:()=>{ const n=this.hereNames||[]; toast(n.length>1?`Here now: ${n.slice(0,12).join(', ')}${n.length>12?'…':''}`:'Nobody else is here right now, just you.'); }});

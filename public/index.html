@@ -890,7 +890,8 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .coinfly .coinface{width:100%;height:100%;background:center/contain no-repeat;animation:coinspin .32s linear infinite}
 @keyframes coinspin{0%{transform:rotateY(0)}100%{transform:rotateY(360deg)}}
 @media (prefers-reduced-motion:reduce){.coinfly .coinface{animation:none}}
-.roomview .roomstage{flex:1;position:relative;min-height:0;background:#BFE3F7} /* the same sky as the 3D view, so it's never dark while it loads */
+.roomview .roomstage{flex:1;position:relative;min-height:0;background:#BFE3F7}
+.hchatto{max-width:38%;flex:0 0 auto;border:1.5px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:inherit;font-size:13px;padding:5px 4px}.hcl.pm{background:rgba(110,80,160,.13);border-radius:8px;padding:2px 6px}.hcl.pm b{color:#6D4FA0}.hcl b{cursor:pointer} /* the same sky as the 3D view, so it's never dark while it loads */
 .gl-card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;max-width:min(80%,320px);padding:12px 16px;border-radius:14px;background:rgba(255,255,255,.94);color:#2B2621;font-weight:700;font-size:14px;line-height:1.35;text-align:center;box-shadow:0 4px 18px rgba(0,0,0,.18);pointer-events:none}
 .roomstage .house3d{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 .hchips{position:absolute;top:8px;left:8px;right:132px;display:flex;gap:6px;overflow-x:auto;z-index:2;scrollbar-width:none}
@@ -6464,8 +6465,9 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     this.tools=el('div',{class:'roomtools'}); this.cross=el('div',{class:'hcross',hidden:true}); this.shop=el('div',{class:'roomshop'}); this.shop.hidden=true;
     this.chatLog=el('div',{class:'hchatlog'}); this.chatIn=el('input',{type:'text',maxlength:'200',placeholder:Me&&Me.token?'Say something to everyone here…':'Sign in to chat',disabled:!(Me&&Me.token),enterkeyhint:'send'});
     this.chatIn.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter') this.sendChat(); }); this.chatIn.addEventListener('keyup',e=>e.stopPropagation());
-    this.chatBox=el('div',{class:'hchat',hidden:true}, this.chatLog, el('div',{class:'hchatrow'}, this.chatIn, el('button',{class:'btn primary sm',text:'Send',disabled:!(Me&&Me.token),onclick:()=>this.sendChat()})));
-    this.chatBtn=el('button',{class:'btn sm hchatbtn',text:'💬 Chat',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden) setTimeout(()=>this.chatIn.focus(),50); }});
+    this.chatTo=el('select',{class:'hchatto','aria-label':'Who to send it to',title:'Everyone here, or one person privately (only the two of you see it)',onfocus:()=>this.whoOpts(),onchange:()=>this.chatIn.placeholder=this.chatTo.value?`Only @${this.chatTo.value} will see this…`:'Say something to everyone here…'}); this.whoOpts();
+    this.chatBox=el('div',{class:'hchat',hidden:true}, this.chatLog, el('div',{class:'hchatrow'}, this.chatTo, this.chatIn, el('button',{class:'btn primary sm',text:'Send',disabled:!(Me&&Me.token),onclick:()=>this.sendChat()})));
+    this.chatBtn=el('button',{class:'btn sm hchatbtn',text:'💬 Chat',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden){ this.whoOpts(); setTimeout(()=>this.chatIn.focus(),50); } }});
     this.stage=el('div',{class:'roomstage'}, this.chips, this.viewBtn, this.perspBtn, this.chatBtn, this.chatBox, this.tools, this.cross);
     this.file=el('input',{type:'file',accept:'image/*',hidden:true,onchange:()=>this.upload()});
     const root=el('div',{class:'webview roomview',role:'dialog','aria-label':title}, bar, this.stage, this.shop, this.file);
@@ -6498,10 +6500,15 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     else if(m.k==='chat'&&m.chat){ if(blocked(m.chat.from)) return; this.addChat(m.chat); }
     this.hereTick(); },
   addChat(c){ const mine=Me&&Me.handle&&c.from.toLowerCase()===Me.handle.toLowerCase(); if(c.t&&this.lastChatT===c.t+c.from) return; this.lastChatT=c.t+c.from;
-    this.chatLog.append(el('div',{class:'hcl'+(mine?' me':'')}, el('b',{text:'@'+c.from+': '}), c.text)); while(this.chatLog.children.length>40) this.chatLog.firstChild.remove(); this.chatLog.scrollTop=this.chatLog.scrollHeight;
+    const other=mine?c.to:c.from, who=c.private?el('b',{text:mine?`🔒 to @${c.to}: `:`🔒 @${c.from} (just you): `,title:'Private: only the two of you see this'}):el('b',{text:'@'+c.from+': ',title:mine?'':`Tap to message @${c.from} privately`});
+    if(!mine||c.private) who.addEventListener('click',()=>{ this.whoOpts(other); this.chatIn.focus(); });
+    this.chatLog.append(el('div',{class:'hcl'+(mine?' me':'')+(c.private?' pm':'')}, who, c.text)); while(this.chatLog.children.length>40) this.chatLog.firstChild.remove(); this.chatLog.scrollTop=this.chatLog.scrollHeight;
     if(this.chatBox.hidden&&!mine) this.chatBtn.classList.add('new');
-    if(mine) this.h.say('me',c.text); else { const o=[...(this.others||new Map()).entries()].find(([,p])=>p.h&&p.h.toLowerCase()===c.from.toLowerCase()); if(o) this.h.say(o[0],c.text); } },
-  async sendChat(){ const t=this.chatIn.value.trim(); if(!t) return; this.chatIn.value=''; try{ const r=await api('/api/inside/chat',{method:'POST',body:{place:this.spot,text:t}}); this.addChat(r.chat); }catch(e){ toast(e.message); this.chatIn.value=t; } },
+    const said=c.private?'🔒 '+c.text:c.text; if(mine) this.h.say('me',said); else { const o=[...(this.others||new Map()).entries()].find(([,p])=>p.h&&p.h.toLowerCase()===c.from.toLowerCase()); if(o) this.h.say(o[0],said); } },
+  /* who's here to message privately (the people walking round in here who are signed in) */
+  whoOpts(pick){ const sel=this.chatTo; if(!sel) return; const me=((Me&&Me.handle)||'').toLowerCase(), cur=pick!==undefined?pick:sel.value, hs=[...new Set([...(this.others||new Map()).values()].map(p=>p.h).filter(h=>h&&h.toLowerCase()!==me))].sort();
+    sel.replaceChildren(el('option',{value:'',text:'👥 All'}), ...hs.map(h=>el('option',{value:h,text:'🔒 @'+h}))); if(cur&&!hs.includes(cur)) sel.append(el('option',{value:cur,text:'🔒 @'+cur})); sel.value=cur||''; sel.hidden=!hs.length&&!cur; sel.onchange&&sel.onchange(); },
+  async sendChat(){ const t=this.chatIn.value.trim(); if(!t) return; this.chatIn.value=''; try{ const to=this.chatTo&&this.chatTo.value; const r=await api('/api/inside/chat',{method:'POST',body:{place:this.spot,text:t,...(to?{to}:{})}}); this.addChat(r.chat); }catch(e){ toast(e.message); this.chatIn.value=t; } },
   // the colony map, from inside: the house waits; the pill at the top brings you back in
   toMap(){ if(!this.el) return; this.el.hidden=true; document.body.classList.remove('room-on'); mapResume(); this.mapPill=el('button',{class:'btn primary hback',text:`🏠 Back inside · ${this.d.home.name}`,onclick:()=>this.fromMap()}); document.body.append(this.mapPill); },
   fromMap(){ if(!this.el) return; this.el.hidden=false; document.body.classList.add('room-on'); this.mapPill&&this.mapPill.remove(); this.mapPill=null; this.h&&this.h.refreshGhost(); },
@@ -6599,7 +6606,8 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
           :el('button',{class:'btn sm',text:`💰 Sell +${fmt(resaleOf(s.k))}`,onclick:()=>toast(`Sell the ${f.name.toLowerCase()} for ${fmt(resaleOf(s.k))} coins (half what it cost)?${s.ph?' Its photo goes too.':''}`,'Sell',()=>this.send(this.base+'sell',{i:s.i},()=>this.select(null)))}),
         el('button',{class:'btn sm',text:'✕',onclick:()=>this.select(null)})); return; }
     t.append(el('span',{class:'tip',text:'Pick something below, or tap a piece to move, turn, store or sell it, or to add a photo to a frame.'})); },
-  paintShop(){ const s=this.shop, d=this.d; if(!s||!d) return; s.innerHTML=''; const R=d.room, H3=this.H3;
+  paintShop(){ const s=this.shop, d=this.d; if(!s||!d) return; const was={ tabs:s.querySelector('.roomtabs')?.scrollLeft||0, x:s.querySelector('.roomitems')?.scrollLeft||0, y:s.querySelector('.roomitems')?.scrollTop||0, cat:this.shopCat }; this.shopCat=this.cat; /* where the lists were scrolled to: kept after a tap, so picking the last floor doesn't jump back to the first */
+    s.innerHTML=''; const R=d.room, H3=this.H3; const keep=()=>{ const t=s.querySelector('.roomtabs'), r=s.querySelector('.roomitems'); if(t) t.scrollLeft=was.tabs; if(r&&was.cat===this.cat){ r.scrollLeft=was.x; r.scrollTop=was.y; } };
     const tabs=[...(this.biz?BIZ_CATS:[]),...ROOM_CATS,['style','🎨 Floor & walls'],['box',`📦 Stored${R.box.length?` (${R.box.length})`:''}`]];
     s.append(el('div',{class:'roomtabs'}, ...tabs.map(([k,n])=>el('button',{class:'rtab'+(this.cat===k?' on':''),text:n,onclick:()=>{ this.cat=k; this.paintShop(); }})),
       this.bld?'':el('button',{class:'rtab'+(R.locked?' on':''),text:R.locked?'🔒 Locked':'🔓 Open to visitors',title:'Whether other players can walk into your home',onclick:()=>this.send('/api/me/room/lock',{locked:!R.locked},r=>toast(r.room.locked?'🔒 Your home is locked: others can’t come in.':'🔓 Your home is open: others can look around.'))}),
@@ -6607,7 +6615,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     const row=el('div',{class:'roomitems'}), card=(img,name,price,on,click)=>el('button',{class:'roomitem'+(on?' on':''),onclick:click}, img, el('b',{text:name}), el('span',{text:price}));
     const pic=(k,c)=>{ const u=H3.thumb(k,c||0); return u?el('img',{src:u,alt:'',width:'80',height:'64'}):el('i',{class:'noimg'}); };
     if(this.cat==='style'){ const ri=this.ri, L=layoutOf(d.size,R.plan||'home'), rm=L.rooms[ri];
-      if(!rm){ row.append(el('p',{class:'hint',text:'Walk into a room to change its floor and walls.'})); s.append(row); return; }
+      if(!rm){ row.append(el('p',{class:'hint',text:'Walk into a room to change its floor and walls.'})); s.append(row); keep(); return; }
       const st=styleOf(R,d.size,ri), sw=(name,cost,on,bg,click)=>el('button',{class:'roomitem rsw'+(on?' on':''),onclick:click}, el('i',{style:`background:${bg}`}), el('b',{text:name}), el('span',{text:on?'Yours':cost?fmt(cost):'Free'}));
       row.append(el('p',{class:'hint rfor',text:`${rm.name}:`}));
       for(const [k,f] of Object.entries(FLOORS)) row.append(sw(f.name,f.cost,st.f===k,`repeating-conic-gradient(${f.a} 0 25%, ${f.b} 0 50%) 0 0/16px 16px`,()=>{ if(st.f!==k) this.send(this.base+'style',{room:ri,floor:k},null,true); }));
@@ -6615,7 +6623,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     else if(this.cat==='box'){ if(!R.box.length) row.append(el('p',{class:'hint',text:'Nothing in storage. Pieces you store, and any that don’t fit after you move house, wait here.'}));
       for(const it of R.box){ const f=FURNITURE[it.k]; row.append(card(pic(it.k,it.c),f.name,'Set it out',false,()=>this.start({i:it.i,k:it.k,c:it.c,ph:it.ph}))); } }
     else for(const [k,f] of Object.entries(FURNITURE)) if(f.cat===this.cat) row.append(card(pic(k),f.name,fmt(f.cost),this.pick&&!this.pick.i&&this.pick.k===k,()=>this.start({k})));
-    s.append(row); } };
+    s.append(row); keep(); } };
 const PHONE_UI=matchMedia('(pointer: coarse)').matches;
 addEventListener('popstate',()=>{ if(Room.el) Room.close(true); });
 addEventListener('keydown',e=>{ if(e.key==='Escape'&&Room.el) Room.close(); });

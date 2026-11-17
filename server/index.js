@@ -414,7 +414,7 @@ bus.on(ops => {
     if (!ops.length) return; }
   // Inside a place: positions, leaving and chat go to everyone with that place open (on every server)
   if (ops.some(o => o.inside)) { for (const o of ops.filter(o => o.inside)) { const json = JSON.stringify({ type: 'inside', k: o.k, place: o.place, p: o.p, id: o.id, chat: o.chat });
-      for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.inside !== o.place || (o.skip && ws.insideWho === o.skip) || ws.bufferedAmount > MAX_BUFFER) continue; try { ws.send(json); } catch {} } }
+      for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.inside !== o.place || (o.skip && ws.insideWho === o.skip) || ws.bufferedAmount > MAX_BUFFER) continue; if (o.only && !(ws.playerHandle && o.only.includes(ws.playerHandle.toLowerCase()))) continue; /* a private message: just the two of them */ try { ws.send(json); } catch {} } }
     ops = ops.filter(o => !o.inside); if (!ops.length) return; }
   // Private chat messages go only to the two people's own connections.
   const priv = ops.filter(o => o.private); if (priv.length) ops = ops.filter(o => !o.private);

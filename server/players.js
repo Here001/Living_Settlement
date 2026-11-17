@@ -315,6 +315,14 @@ export function playersRouter({ limit, send, admin, world }) {
   // chatting with everyone inside the same building or home (signed in; muted players can't)
   r.post('/inside/chat', limit, quota('group_msg'), send(async req => { const p = await me(req); await assertNotMuted(p.id); const b = bd(req), place = String(b.place || ''), text = String(b.text || '').replace(/\s+/g, ' ').trim();
     if (!/^(b|h):[A-Za-z0-9_.-]{1,64}$/.test(place)) throw new HttpError(400, 'Which place?'); if (!text) throw new HttpError(400, 'Write something first.'); if (text.length > 200) throw new HttpError(400, 'Keep it under 200 characters.');
+    // a private message: only the two of you see it (it goes to their phone and yours, and isn't kept anywhere)
+    if (b.to) { const to = String(b.to).replace(/^@/, '').trim(); if (!/^[A-Za-z0-9_.]{1,40}$/.test(to)) throw new HttpError(400, 'Who is it for?');
+      if (to.toLowerCase() === p.handle.toLowerCase()) throw new HttpError(400, 'That’s you.');
+      const now = Date.now(), here = [...(RM().here.get(place) || new Map()).values()].some(e => e.name && e.name.toLowerCase() === to.toLowerCase() && now - e.at < 70000);
+      if (!here) throw new HttpError(409, `@${to} isn’t here any more.`);
+      const t = (await pool.query('select id, handle from citizens where lower(handle) = lower($1)', [to])).rows[0]; if (!t) throw new HttpError(404, 'No colonist with that name.');
+      const bs = await world.chat.blockState(p.id, t.id); if (bs.iBlocked || bs.blockedMe) throw new HttpError(403, bs.iBlocked ? `You’ve blocked @${t.handle}.` : `@${t.handle} isn’t taking messages from you.`);
+      const pm = { from: p.handle, to: t.handle, text, t: Date.now(), private: true }; world.bus.publish([{ inside: true, place, k: 'chat', chat: pm, only: [p.handle.toLowerCase(), t.handle.toLowerCase()] }]); return { ok: true, chat: pm }; }
     const chat = { from: p.handle, text, t: Date.now() }; world.bus.publish([{ inside: true, place, k: 'chat', chat }]); return { ok: true, chat }; }));
   r.post('/inside/here', limit, send(async req => { const p = await playerFrom(req); return RM().seen(bd(req).place, p ? 'p:' + p.id : 'ip:' + clientIp(req), p ? p.handle : null); }));
   r.post('/me/room/place', limit, send(async req => RM().place((await me(req)).id, bd(req))));

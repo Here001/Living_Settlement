@@ -1972,6 +1972,18 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   await pool.query('update citizens set muted_until = $2 where id = $1', [A.id, Date.now() + 60000]); ok((await call('POST', '/api/inside/chat', { place, text: 'hi' }, A.P)).status === 403, 'muted players can’t chat inside'); await pool.query('update citizens set muted_until = null where id = $1', [A.id]);
   const other = await sock(A.P); other.w.send(JSON.stringify({ type: 'in', place: 'b:elsewhere', x: 1, y: 1, a: 0 })); await sleep(200);
   await call('POST', '/api/inside/chat', { place, text: 'only here' }, Bq.P); await sleep(300); ok(!other.got.some(m => m.k === 'chat'), 'chat stays in its own place'); other.w.close();
+  { // a private message to one person here: only the two of them see it
+    const C = await player('live_cat', 1000), c = await sock(C.P); c.w.send(JSON.stringify({ type: 'in', place, x: 1, y: 1, a: 0 })); await sleep(300);
+    for (const x of [a, b, c]) x.got.length = 0;
+    const pm = await call('POST', '/api/inside/chat', { place, text: 'just between us', to: 'live_ben' }, A.P); await sleep(300);
+    ok(pm.status === 200 && pm.json.chat.private && pm.json.chat.to === 'live_ben', 'send a private message to someone in the same place', JSON.stringify(pm.json));
+    ok(b.got.some(m => m.k === 'chat' && m.chat.private && m.chat.text === 'just between us' && m.chat.from === 'live_amy'), '…they get it, marked private');
+    ok(!c.got.some(m => m.k === 'chat'), '…and nobody else in the room sees it', JSON.stringify(c.got));
+    ok((await call('POST', '/api/inside/chat', { place, text: 'hi', to: 'nobody_here_x' }, A.P)).status === 409, 'only to someone who is here');
+    ok((await call('POST', '/api/inside/chat', { place, text: 'hi', to: 'live_amy' }, A.P)).status === 400, 'not to yourself');
+    await pool.query('insert into blocks (blocker_id, blocked_id, t) values ($1, $2, $3) on conflict do nothing', [C.id, A.id, Date.now()]).catch(() => {});
+    ok((await call('POST', '/api/inside/chat', { place, text: 'hi', to: 'live_cat' }, A.P)).status === 403, 'not to someone who has blocked you');
+    c.w.close(); }
   b.w.send(JSON.stringify({ type: 'out' })); await sleep(300); ok(a.got.some(m => m.k === 'gone'), 'leaving: the others see you go');
   a.w.close(); b.w.close();
   // frames turn on the wall: portrait/landscape

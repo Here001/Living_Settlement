@@ -179,14 +179,14 @@ export function createHouse(host, opts) {
   const DPR = devicePixelRatio || 1, PR_HI = Math.min(DPR, PHONE ? (HQ ? 1.5 : 1.25) : 2), prNow = PR_HI;
   renderer.setPixelRatio(PR_HI); renderer.domElement.className = 'house3d'; host.append(renderer.domElement);
   if (pictureMode(renderer) === 'plain') { TEXTURES = false; NORMALS = false; } if (renderer.capabilities.precision !== 'highp') NORMALS = false; /* a GPU without full precision can also turn surface detail black */
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.92; /* a little softer than daylight outside */
   renderer.shadowMap.enabled = HQ; renderer.shadowMap.type = PHONE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap; /* phones: the cheaper filter (the shadows are still soft-edged) */ renderer.shadowMap.autoUpdate = false;
   const scene = new THREE.Scene(); scene.background = col('#BFE3F7');
-  const reflections = () => { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); scene.environmentIntensity = 0.42; };
+  const reflections = () => { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); scene.environmentIntensity = 0.38; };
   reflections();
   const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 140); camera.rotation.order = 'YXZ';
-  scene.add(new THREE.HemisphereLight('#FFF8EE', '#7A6E62', 0.55));
-  const sun = new THREE.DirectionalLight('#FFE9C8', 2.6); sun.position.set(S / 2 - S * 0.9, 7.5, S / 2 + S * 0.7); sun.target.position.set(S / 2, 0, S / 2); scene.add(sun, sun.target);
+  scene.add(new THREE.HemisphereLight('#FFF8EE', '#7A6E62', 0.5));
+  const sun = new THREE.DirectionalLight('#FFE9C8', 2.35); sun.position.set(S / 2 - S * 0.9, 7.5, S / 2 + S * 0.7); sun.target.position.set(S / 2, 0, S / 2); scene.add(sun, sun.target);
   if (HQ) { sun.castShadow = true; const sc = sun.shadow.camera, R = S * 0.85 + 1; sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 0.5; sc.far = 30; sun.shadow.mapSize.set(PHONE ? 1024 : 2048, PHONE ? 1024 : 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.025; sun.shadow.radius = 3; }
   const reshadow = () => { if (HQ) renderer.shadowMap.needsUpdate = true; };
   { const g = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), std({ color: '#7FB069', roughness: 1 })); g.rotation.x = -Math.PI / 2; g.position.set(S / 2, -0.02, S / 2); g.receiveShadow = true; scene.add(g); }
@@ -264,7 +264,7 @@ export function createHouse(host, opts) {
     const box = (x0, y0, z0, x1, y1, z1, c) => { const g = new THREE.BoxGeometry(Math.max(0.01, x1 - x0), Math.max(0.01, z1 - z0), Math.max(0.01, y1 - y0)); g.translate((x0 + x1) / 2, (z0 + z1) / 2, (y0 + y1) / 2); list.push(paint(g, c)); };
     const roof = (x0, y0, z0, x1, y1, hh, c) => { const g = new THREE.ConeGeometry(Math.SQRT1_2, 1, 4); g.rotateY(Math.PI / 4); g.scale(x1 - x0, hh, y1 - y0); g.translate((x0 + x1) / 2, z0 + hh / 2, (y0 + y1) / 2); list.push(paint(g, c)); };
     // the home's own plot, paved round the house
-    box(X(h.x) + 0.1, Y(h.y) + 0.1, -0.03, X(h.x + (h.w || 1)) - 0.1, Y(h.y + (h.d || 1)) - 0.1, 0.005, '#CFC6B4');
+    box(X(h.x) + 0.1, Y(h.y) + 0.1, -0.035, X(h.x + (h.w || 1)) - 0.1, Y(h.y + (h.d || 1)) - 0.1, -0.012, '#CFC6B4'); /* below the floors (it used to sit just above them and hid them) */
     // streets: tarmac, with a pavement only along the sides that don't carry on into more street
     const isRoad = new Set((A.roads || []).map(([k]) => k)), kw = U * 0.16;
     for (const [k, t] of A.roads || []) { const [tx, ty] = k.split(',').map(Number), R = ROAD_TYPES[t] || {}, walk = R.walk || R.edge || '#DCD8CE', x0 = X(tx), y0 = Y(ty), x1 = X(tx + 1), y1 = Y(ty + 1);
@@ -359,8 +359,8 @@ export function createHouse(host, opts) {
     // every light source in the house: a soft ceiling light in each room (dimmer where the room has its own ceiling
     // lamp), and every lamp; the nearest few get the fixed set of real lights (placeLights)
     const roomLamp = L.rooms.map(r => !lamps.some(l => l.x >= r.x && l.x < r.x + r.w && l.y >= r.y && l.y < r.y + r.d && l.f.mount === 'ceil'));
-    sources = L.rooms.map((r, i) => ({ x: r.x + r.w / 2, y: r.y + r.d / 2, z: H - 0.35, c: '#FFEBD0', i: roomLamp[i] ? 1.9 : 0.7, d: Math.max(r.w, r.d) * 1.5 + 2.5 }));
-    for (const l of lamps) sources.push({ x: l.x, y: l.y, z: l.z, c: l.f.light.c === '$' ? TINTS[l.it.c || 0] : l.f.light.c, i: l.f.light.i * 2.2, d: l.f.light.d + 0.5 });
+    sources = L.rooms.map((r, i) => ({ x: r.x + r.w / 2, y: r.y + r.d / 2, z: H - 0.35, c: '#FFEBD0', i: roomLamp[i] ? 1.4 : 0.55, d: Math.max(r.w, r.d) * 1.5 + 2.5 }));
+    for (const l of lamps) sources.push({ x: l.x, y: l.y, z: l.z, c: l.f.light.c === '$' ? TINTS[l.it.c || 0] : l.f.light.c, i: l.f.light.i * 1.6, d: l.f.light.d + 0.5 }); /* lamps light the room without bleaching the floor */
     placeLights(true);
     // a soft shadow on the floor under every floor piece (one mesh for the lot)
     const sh = []; for (const it of room.items) { const f = FURNITURE[it.k]; if (!f || f.mount !== 'floor' || f.rug || (pick && pick.i === it.i)) continue; const [w, d] = footOf(it.k, it.r), m = 0.12, g = new THREE.PlaneGeometry(w + m * 2, d + m * 2); g.rotateX(-Math.PI / 2); g.translate(it.x + w / 2, 0.006, it.y + d / 2); sh.push(g); }

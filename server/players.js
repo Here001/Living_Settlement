@@ -360,6 +360,16 @@ export function playersRouter({ limit, send, admin, world }) {
     if (old?.key) import('./storage.js').then(S => S.r2On() && S.del(old.key)).catch(() => {}); return { ok: true }; }));
   r.post('/clubs/spray', limit, send(async req => { const p = await me(req), b = bd(req); await assertNotMuted(p.id); return b.to ? world.clubs.sprayPerson(p, b.place, b.to, b.amount) : world.clubs.sprayClub(p, b.place, b.amount); }));
   r.post('/clubs/grab/:id', send(async req => world.clubs.grab(await me(req), req.params.id)));
+  // voice chat inside a place (server/voice.js): hear everyone there, talk with an open mic, choose who hears you
+  const V = () => world.voice;
+  r.get('/voice/config', limit, send(async () => V().config()));
+  r.post('/voice/session', limit, send(async req => V().session(await me(req), bd(req).place)));
+  r.post('/voice/publish', limit, send(async req => { const p = await me(req); await assertNotMuted(p.id); return V().publish(p, bd(req).place, bd(req)); }));
+  r.post('/voice/list', limit, send(async req => V().list(await me(req), bd(req).place)));
+  r.post('/voice/pull', limit, send(async req => V().pull(await me(req), bd(req).place, bd(req))));
+  r.post('/voice/answer', limit, send(async req => V().answer(await me(req), bd(req).place, bd(req))));
+  r.post('/voice/audience', limit, send(async req => V().audience(await me(req), bd(req).place, bd(req).to)));
+  r.post('/voice/leave', limit, send(async req => V().leave(await me(req), bd(req).place)));
   r.post('/me/love/privacy', limit, send(async req => world.love.privacy((await me(req)).id, !!bd(req).hidden)));
   r.post('/me/love/end', limit, send(async req => world.love.end(await me(req))));
   r.get('/me/visits', limit, send(async req => world.visits.incoming((await me(req)).id)));

@@ -929,6 +929,10 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .phedit{border-radius:6px;touch-action:none;cursor:grab;box-shadow:0 0 0 6px #3a2a1a,0 4px 14px rgba(0,0,0,.35)}
 .phz{display:flex;align-items:center;gap:8px;margin:6px 0}
 .phz input{flex:1}
+.vbtn{position:absolute;left:18px;bottom:196px;z-index:4;width:54px;height:54px;border-radius:50%;border:2px solid #2B2621;background:#fff;font-size:24px;box-shadow:0 3px 0 #2B2621;display:grid;place-items:center;padding:0}
+.vpeople{left:82px;font-size:22px}.vmic.live{background:#2ECC71;border-color:#1E8449;box-shadow:0 0 0 4px rgba(46,204,113,.35),0 3px 0 #1E8449}.vmic.off{background:#F4D6D6}
+.voicepanel{position:absolute;left:12px;right:12px;bottom:262px;z-index:7;max-height:46vh;overflow:auto;background:rgba(255,255,255,.97);color:#2B2621;border:2px solid #2B2621;border-radius:18px;padding:12px 14px;max-width:460px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.voicepanel .spchip{background:#F2EDE4;color:#2B2621;border-color:#CFC6B8}.voicepanel .spchip.on{background:#2ECC71;border-color:#1E8449;color:#fff}.vrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid #EEE7DC}
 .spraypanel{position:absolute;left:12px;right:12px;bottom:118px;z-index:7;max-height:52vh;overflow:auto;background:rgba(24,14,36,.94);color:#fff;border:2px solid #FF3FA4;border-radius:18px;padding:12px 14px;box-shadow:0 0 22px rgba(255,63,164,.45);max-width:520px;margin:0 auto}
 .spraypanel .hint{color:#E8D9FF}.spraypanel .row-actions{flex-wrap:wrap;gap:6px;margin:6px 0}.spraypanel input{width:120px;flex:1;min-width:90px}.sphead{display:flex;align-items:center;gap:10px;margin-bottom:6px}.sphead b{font-size:16px}.sphead .x{margin-left:auto;position:static}
 .spchips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px}.spchip{flex:none;border:1px solid #6B4D8A;background:#2E1F45;color:#fff;border-radius:999px;padding:6px 12px;font-weight:700}.spchip.on{background:#FF3FA4;border-color:#FF3FA4}
@@ -6593,6 +6597,60 @@ const Club={ R:null, info:null, audio:null, radio:undefined, got:0, rainT:null, 
       const a=this.audio, P=Radio.player; if(a) a.volume=0.25; else if(P&&P.setVolume) P.setVolume(Radio.vol*0.3); u.onend=()=>{ if(this.audio) this.audio.volume=0.85; else if(Radio.player&&Radio.player.setVolume) Radio.player.setVolume(Radio.vol); };
       speechSynthesis.cancel(); speechSynthesis.speak(u); }catch(e){} },
 };
+// ---- Voice chat inside a place: you hear everyone there; your open mic (with a mute button) reaches everyone, or just
+// the people you pick; mute anyone for yourself; a 🔊 shows over whoever's talking. The voice goes through Cloudflare
+// Realtime; the server (server/voice.js) decides who hears whom.
+const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null, byMid:new Map(), els:new Map(), meters:new Map(), lit:new Map(), q:Promise.resolve(), ac:null,
+  muted:new Set((()=>{ try{ return ls.get('resurgence-voice-muted')||[]; }catch(e){ return []; } })()),
+  async enter(R){ this.leave(); if(!(Me&&Me.token)||typeof RTCPeerConnection==='undefined') return; this.R=R;
+    try{ this.cfg=await api('/api/voice/config'); }catch(e){ return; } if(!this.cfg.on||this.R!==R) return;
+    this.micBtn=el('button',{class:'vbtn vmic',title:'Your microphone',onclick:()=>this.talk()}); this.peopleBtn=el('button',{class:'vbtn vpeople',title:'Who hears you, and who you hear',onclick:()=>this.panel()});
+    R.stage.append(this.micBtn,this.peopleBtn); this.paint();
+    try{ const s=await api('/api/voice/session',{method:'POST',body:{place:R.spot}}); if(this.R!==R) return; this.sid=s.sessionId; }catch(e){ return; }
+    this.pc=new RTCPeerConnection({iceServers:this.cfg.ice,bundlePolicy:'max-bundle'}); this.pc.ontrack=e=>this.track(e);
+    this.serial(()=>this.sync()); this.timer=setInterval(()=>this.levels(),150); },
+  leave(){ const R=this.R; clearInterval(this.timer); this.timer=null;
+    if(this.mic){ for(const t of this.mic.getTracks()) t.stop(); this.mic=null; } if(this.pc){ try{ this.pc.close(); }catch(e){} this.pc=null; }
+    for(const e of this.els.values()){ try{ e.a.srcObject=null; }catch(x){} } this.els.clear(); this.byMid.clear(); this.meters.clear();
+    if(R&&R.h) for(const id of this.lit.keys()) R.h.talking(id,false); this.lit.clear();
+    if(R&&this.sid) api('/api/voice/leave',{method:'POST',body:{place:R.spot}}).catch(()=>{});
+    this.sid=null; this.live=false; this.R=null; this.vp&&this.vp.remove(); this.vp=null; },
+  serial(fn){ return this.q=this.q.then(fn).catch(e=>console.warn('voice:',e&&e.message||e)); },
+  // everyone talking here that I may hear: start hearing the new ones, stop hearing anyone I no longer may
+  async sync(){ if(!this.pc||!this.R) return; const r=await api('/api/voice/list',{method:'POST',body:{place:this.R.spot}}), ok=new Set(r.speakers.map(s=>s.id));
+    for(const [mid,v] of [...this.byMid]) if(!ok.has(v.id)) this.dropMid(mid);
+    const have=new Set([...this.byMid.values()].map(v=>v.id)), ids=r.speakers.map(s=>s.id).filter(id=>!have.has(id)); if(!ids.length) return;
+    const p=await api('/api/voice/pull',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,ids}}); for(const t of p.tracks) this.byMid.set(t.mid,{id:t.id,h:t.h});
+    if(p.offer){ await this.pc.setRemoteDescription(p.offer); await this.pc.setLocalDescription(await this.pc.createAnswer()); await api('/api/voice/answer',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,answer:{type:'answer',sdp:this.pc.localDescription.sdp}}}); } },
+  track(e){ const mid=e.transceiver&&e.transceiver.mid, v=this.byMid.get(mid); if(!v) return; const st=new MediaStream([e.track]), a=new Audio(); a.autoplay=true; a.playsInline=true; a.srcObject=st; a.muted=this.muted.has(v.h.toLowerCase()); a.play().catch(()=>{ const go=()=>{ removeEventListener('pointerdown',go,true); a.play().catch(()=>{}); }; addEventListener('pointerdown',go,true); });
+    this.els.set(mid,{a,...v}); this.meter(mid,st); },
+  dropMid(mid){ const e=this.els.get(mid); if(e){ try{ e.a.srcObject=null; }catch(x){} this.els.delete(mid); this.light(e.id,false); } this.byMid.delete(mid); this.meters.delete(mid); },
+  msg(v){ if(!this.pc||!v) return; if(v.kind==='on'||v.kind==='audience') this.serial(()=>this.sync()); else if(v.kind==='off'){ for(const [mid,e] of [...this.byMid]) if(e.id===v.id) this.dropMid(mid); } },
+  // the mic: the first tap asks the phone for it and goes live; after that it mutes and unmutes
+  async talk(){ if(!this.pc) return; if(this.mic){ this.live=!this.live; for(const t of this.mic.getAudioTracks()) t.enabled=this.live; this.paint(); return; }
+    try{ this.mic=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}}); }catch(e){ toast('Allow the microphone to talk (in your browser’s settings for this site).'); return; }
+    const tr=this.mic.getAudioTracks()[0], tx=this.pc.addTransceiver(tr,{direction:'sendonly'}); this.live=true; this.paint();
+    await this.serial(async()=>{ await this.pc.setLocalDescription(await this.pc.createOffer()); const r=await api('/api/voice/publish',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,offer:{type:'offer',sdp:this.pc.localDescription.sdp},mid:tx.mid}}); await this.pc.setRemoteDescription(r.answer); });
+    this.meter('me',this.mic); toast(this.to?'🎙️ You’re live, to the people you picked.':'🎙️ You’re live: everyone here can hear you. Tap 🎙️ to mute.'); },
+  paint(){ if(!this.micBtn) return; this.micBtn.textContent=!this.mic?'🎙️':this.live?'🎙️':'🔇'; this.micBtn.classList.toggle('live',!!this.mic&&this.live); this.micBtn.classList.toggle('off',!!this.mic&&!this.live);
+    this.micBtn.title=!this.mic?'Tap to talk (everyone here hears you)':this.live?'You’re live: tap to mute':'Muted: tap to talk'; this.peopleBtn.textContent=this.to?'👤':'👥'; },
+  // who hears you, and muting anyone for yourself
+  panel(){ if(this.vp&&this.vp.isConnected){ this.vp.remove(); this.vp=null; return; } const R=this.R; if(!R) return; const P=el('div',{class:'voicepanel'}); this.vp=P; R.stage.append(P); this.fillPanel(); },
+  fillPanel(){ const P=this.vp, R=this.R; if(!P||!R) return; const people=[...(R.others?R.others.values():[])].map(p=>p.h).filter(h=>h&&(!Me||h.toLowerCase()!==String(Me.handle||'').toLowerCase())).filter((h,i,a)=>a.indexOf(h)===i);
+    const sel=new Set(this.to||[]), setTo=async to=>{ try{ const r=await api('/api/voice/audience',{method:'POST',body:{place:R.spot,to}}); this.to=r.to; this.paint(); this.fillPanel(); }catch(e){ toast(e.message); } };
+    P.replaceChildren(el('div',{class:'sphead'}, el('b',{text:'🎙️ Voice'}), el('button',{class:'x',text:'✕','aria-label':'Close',onclick:()=>this.panel()})),
+      el('p',{class:'hint',text:this.to?`Only ${this.to.map(h=>'@'+h).join(', ')||'nobody'} can hear you.`:'Everyone here can hear you.'}),
+      el('div',{class:'spchips'}, el('button',{class:'spchip'+(this.to?'':' on'),text:'Everyone',onclick:()=>setTo(null)}),
+        ...people.map(h=>el('button',{class:'spchip'+(sel.has(h.toLowerCase())?' on':''),text:'@'+h,onclick:()=>{ const s2=new Set(this.to||[]); s2.has(h.toLowerCase())?s2.delete(h.toLowerCase()):s2.add(h.toLowerCase()); setTo([...s2]); }}))),
+      el('div',{class:'sphr'}), el('b',{text:'People you hear'}),
+      people.length?el('div',{class:'vlistv'}, ...people.map(h=>{ const m=this.muted.has(h.toLowerCase()); return el('div',{class:'vrow'}, el('span',{text:'@'+h}), el('button',{class:'btn sm'+(m?' primary':''),text:m?'🔇 Muted':'🔊 Hearing',onclick:()=>{ m?this.muted.delete(h.toLowerCase()):this.muted.add(h.toLowerCase()); try{ ls.set('resurgence-voice-muted',[...this.muted]); }catch(e){} for(const e of this.els.values()) e.a.muted=this.muted.has(e.h.toLowerCase()); this.fillPanel(); }})); })):el('p',{class:'hint',text:'Nobody else is here yet.'})); },
+  // who's talking: a quick level meter on each voice (yours too), lighting the 🔊 over them
+  meter(key,stream){ try{ this.ac=this.ac||new (window.AudioContext||window.webkitAudioContext)(); const s=this.ac.createMediaStreamSource(stream), an=this.ac.createAnalyser(); an.fftSize=512; s.connect(an); this.meters.set(key,{an,buf:new Float32Array(an.fftSize)}); }catch(e){} },
+  levels(){ const now=performance.now(); for(const [key,m] of this.meters){ m.an.getFloatTimeDomainData(m.buf); let sum=0; for(const v of m.buf) sum+=v*v; const rms=Math.sqrt(sum/m.buf.length);
+      const id=key==='me'?'me':(this.byMid.get(key)||{}).id, loud=rms>0.035&&(key!=='me'||this.live)&&!(key!=='me'&&this.muted.has(((this.byMid.get(key)||{}).h||'').toLowerCase())); if(!id) continue;
+      if(loud) this.lit.set(id,now+450); } for(const [id,t] of [...this.lit]) this.light(id,t>now); },
+  light(id,on){ const R=this.R; if(!R||!R.h) return; if(on) R.h.talking(id,true); else { R.h.talking(id,false); this.lit.delete(id); } },
+};
 const Visit={
   // tapping 🔒 Look inside: go in if you've been let in, otherwise ask
   async open(handle){ let st; try{ st=await api('/api/citizens/'+encodeURIComponent(handle)+'/visit'); }catch(e){ toast(e.message); return; }
@@ -6690,6 +6748,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     const root=el('div',{class:'webview roomview',role:'dialog','aria-label':title}, bar, this.stage, this.shop, this.file);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
     if(Club.is(d)) Club.enter(this); /* a night club: its music, and the 💸 Spray button */
+    setTimeout(()=>{ if(this.d===d) Voice.enter(this); },1500); /* voice chat (once we've said we're here) */
     try{ if(!(history.state&&history.state.room)) history.pushState({room:1},''); }catch(e){}
     try{ this.h=H3.createHouse(this.stage,{ defer:true, size:d.size, plan:d.room.plan||'home', persp, me:(Me&&Me.handle)||'visitor', look:myLook||null, room:d.room, photos:d.photos, at:this.reAt||null, onLost:at=>this.reopen(at), check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
       onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.close(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onAction:a=>{ const b=this.actBtn; if(!b) return; b.hidden=!a; if(a){ b.replaceChildren(el('b',{text:a.icon}),el('span',{text:a.label})); b.title=a.label; } }, onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
@@ -6718,6 +6777,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     else if(m.k==='gone'){ this.others.delete(m.id); this.h.removeOther(m.id); }
     else if(m.k==='chat'&&m.chat){ if(blocked(m.chat.from)) return; this.addChat(m.chat); }
     else if(m.k==='club'&&m.club) Club.msg(m.club); /* money sprayed, money raining, the DJ */
+    else if(m.k==='voice'&&m.club) Voice.msg(m.club); /* someone started or stopped talking, or changed who hears them */
     this.hereTick(); },
   addChat(c){ const mine=Me&&Me.handle&&c.from.toLowerCase()===Me.handle.toLowerCase(); if(c.t&&this.lastChatT===c.t+c.from) return; this.lastChatT=c.t+c.from;
     const other=mine?c.to:c.from, who=c.private?el('b',{text:mine?`🔒 to @${c.to}: `:`🔒 @${c.from} (just you): `,title:'Private: only the two of you see this'}):el('b',{text:'@'+c.from+': ',title:mine?'':`Tap to message @${c.from} privately`});
@@ -6742,7 +6802,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     const sim=this.people(), lv=[...(this.others||new Map()).values()], named=lv.filter(p=>p.h).map(p=>'@'+p.h+' (walking round)'), anon=Math.max(lv.length,live.viewers)-named.length; live.viewers=Math.max(lv.length,live.viewers);
     this.hereNames=[...sim.map(p=>p.label), ...named, ...(anon>0?[`${anon} visitor${anon===1?'':'s'} looking round`]:[])];
     this.hereNames.unshift('you'); const n=sim.length+live.viewers+1; if(this.hereChip){ this.hereChip.textContent=`👥 ${fmt(n)}`; this.hereChip.append(el('span',{class:'wide',text:n===1?' (just you)':' here now'})); this.hereChip.title=n===1?'Just you here':`${fmt(n)} here now`; } if(this.h){ const own=sim.filter(p=>p.own).map(p=>p.name); const put=()=>this.h&&this.h.setPeople(sim.map(p=>({...p,look:p.own?Looks.m.get(p.name.toLowerCase())||null:null}))); put(); if(own.some(h=>!Looks.m.has(h.toLowerCase()))) Looks.want(own).then(put); } },
-  close(quiet){ if(!this.el) return; setTimeout(mapResume,0); clearInterval(this.hereTimer); Club.leave(); this.leave(); this.mapPill&&this.mapPill.remove(); this.mapPill=null; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
+  close(quiet){ if(!this.el) return; setTimeout(mapResume,0); clearInterval(this.hereTimer); Club.leave(); Voice.leave(); this.leave(); this.mapPill&&this.mapPill.remove(); this.mapPill=null; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
   toggle(on){ this.edit=on===undefined?!this.edit:on; this.setPick(null); this.select(null); this.shop.hidden=!this.edit; if(this.editBtn) this.editBtn.textContent=this.edit?'✓ Done':this.editWord; if(this.edit) this.paintShop(); this.paintTools(); },
   // the streets and buildings round the home: from what the map has loaded, or fetched once (only when looking from above)
   async around(fetch){ const h=this.d&&this.d.home; if(!h||h.x==null||this.aroundDone||!this.h) return; const R=8, x0=h.x-R, y0=h.y-R, x1=h.x+(h.w||1)+R, y1=h.y+(h.d||1)+R;

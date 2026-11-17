@@ -38,6 +38,7 @@ import { Rooms } from './rooms.js';
 import { Visits } from './visits.js';
 import { Love } from './love.js';
 import { Clubs } from './clubs.js';
+import { Voice } from './voice.js';
 import { Economy } from './economy.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
 import * as R from '../shared/rules.js';
@@ -63,7 +64,7 @@ const lottery = new Lottery(world); world.lottery = lottery;
 const auctions = new Auctions(world); world.auctions = auctions;
 const economy = new Economy(world); world.economy = economy;
 world.housing = new Housing(world);
-world.rooms = new Rooms(world); world.visits = new Visits(world); world.love = new Love(world); world.clubs = new Clubs(world);
+world.rooms = new Rooms(world); world.visits = new Visits(world); world.love = new Love(world); world.clubs = new Clubs(world); world.voice = new Voice(world);
 const chat = new Chat(bus); world.chat = chat; chat.world = world;
 world.bus = bus; /* inside chat passes through it to every server */
 world.chat.removePhoto = id => world.rooms.removePhoto(id); // a reported photo the developer takes down
@@ -414,7 +415,8 @@ wss.on('connection', (ws, req) => {
 });
 function insideLeave(ws) { if (!ws.inside) return; const place = ws.inside, who = ws.insideWho; ws.inside = null; ws.insidePos = null;
   const m = world.rooms?.here.get(place); if (m && who && ![...wss.clients].some(w => w !== ws && w.inside === place && w.insideWho === who)) m.delete(who);
-  bus.publish([{ inside: true, place, skip: who, k: 'gone', id: who }]); }
+  bus.publish([{ inside: true, place, skip: who, k: 'gone', id: who }]);
+  if (who && who.startsWith('p:') && ![...wss.clients].some(w => w !== ws && w.inside === place && w.insideWho === who)) world.voice?.drop(who.slice(2), place); } /* their voice goes with them */
 const localOnline = id => [...wss.clients].some(w => w.readyState === 1 && w.playerId === id);
 // Every minute, everyone with the colony open is marked as seen (that's what "online" means).
 setInterval(() => { const ids = [...new Set([...wss.clients].filter(w => w.readyState === 1 && w.playerId).map(w => w.playerId))]; chat.seen(ids).catch(e => console.error('presence:', e.message)); achievements.checkMany(ids).catch(() => {}); }, 60000).unref();

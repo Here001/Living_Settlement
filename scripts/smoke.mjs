@@ -2131,6 +2131,35 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   const b2 = await call('POST', '/api/me/properties/buy', { buildingId: h2.id }, P2.P), want = Math.max(1, Math.round(RR.propertyPrice('house') * 50 / 100));
   ok(b2.status === 200 && b2.json.price === want, '…so another house sells for half its usual price', JSON.stringify({ got: b2.json.price, want }));
   await call('PUT', '/api/admin/property-prices', { pct: 100 }); }
+if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat: a stand-in for Cloudflare Realtime on port 3999 checks who hears whom
+  const http = await import('node:http'); let n = 0; const calls = [];
+  const sfu = http.createServer((req, res) => { let body = ''; req.on('data', d => body += d); req.on('end', () => { const j = body ? JSON.parse(body) : {}; calls.push({ m: req.method, u: req.url, j, auth: req.headers.authorization });
+    const out = /sessions\/new$/.test(req.url) ? { sessionId: 'sess' + (++n) } : /tracks\/new$/.test(req.url) ? (j.tracks?.[0]?.location === 'local' ? { sessionDescription: { type: 'answer', sdp: 'v=0 answer' }, tracks: j.tracks }
+      : { requiresImmediateRenegotiation: true, sessionDescription: { type: 'offer', sdp: 'v=0 offer' }, tracks: j.tracks.map(t => ({ ...t, mid: String(++n) })) }) : {};
+    res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(out)); }); });
+  await new Promise(r => sfu.listen(3999, '127.0.0.1', r));
+  const VA = await player('voice_ava', 100), VB = await player('voice_bo', 100), VC = await player('voice_cy', 100), VD = await player('voice_di', 100), place = 'b:voice-test-' + Date.now();
+  for (const P of [VA, VB, VC, VD]) await call('POST', '/api/inside/here', { place }, P.P);
+  ok((await call('GET', '/api/voice/config', undefined, VA.P)).json.on === true, 'voice chat is on when the server has Cloudflare Realtime');
+  const sess = async P => (await call('POST', '/api/voice/session', { place }, P.P)).json.sessionId;
+  const sa = await sess(VA), sb = await sess(VB), sc = await sess(VC), sd = await sess(VD); ok(sa && sb && sa !== sb, 'each player gets their own voice connection');
+  ok(calls.every(c => c.auth === 'Bearer test-token-not-secret'), '…every call to Cloudflare carries the app’s token (the phone never sees it)');
+  const pub = await call('POST', '/api/voice/publish', { place, sessionId: sa, mid: '0', offer: { type: 'offer', sdp: 'v=0 mic' } }, VA.P);
+  ok(pub.json.answer?.type === 'answer' && calls.some(c => /tracks\/new$/.test(c.u) && c.j.tracks?.[0]?.location === 'local' && c.j.tracks[0].trackName === 'mic-' + VA.id), 'Ava goes live: her mic goes up as a track', JSON.stringify(pub.json));
+  ok((await call('POST', '/api/voice/publish', { place, sessionId: sb, mid: '0', offer: { type: 'offer', sdp: 'x' } }, VA.P)).status === 409, 'you can only use your own voice connection');
+  const lb = (await call('POST', '/api/voice/list', { place }, VB.P)).json.speakers || []; ok(lb.length === 1 && lb[0].h === 'voice_ava', 'Bo can hear her', JSON.stringify(lb));
+  const pb = (await call('POST', '/api/voice/pull', { place, sessionId: sb, ids: lb.map(x => x.id) }, VB.P)).json; ok(pb.tracks?.[0]?.h === 'voice_ava' && pb.offer?.type === 'offer', '…and starts hearing her', JSON.stringify(pb));
+  ok((await call('POST', '/api/voice/answer', { place, sessionId: sb, answer: { type: 'answer', sdp: 'v=0 a' } }, VB.P)).status === 200, '…answering the service');
+  await call('POST', '/api/blocks/voice_ava', {}, VD.P);
+  ok(((await call('POST', '/api/voice/list', { place }, VD.P)).json.speakers || []).length === 0, 'someone who blocked her never hears her');
+  ok((await call('POST', '/api/voice/audience', { place, to: ['voice_cy'] }, VA.P)).json.to?.[0] === 'voice_cy', 'Ava picks who hears her: just Cy');
+  ok(((await call('POST', '/api/voice/list', { place }, VB.P)).json.speakers || []).length === 0 && ((await call('POST', '/api/voice/list', { place }, VC.P)).json.speakers || []).length === 1, '…so Bo can’t hear her any more, Cy can');
+  ok(calls.some(c => /tracks\/close$/.test(c.u) && c.u.includes(sb) && c.j.force === true), '…and Bo is cut off from her there and then');
+  ok((await call('POST', '/api/voice/pull', { place, sessionId: sb, ids: ['p:' + VA.id] }, VB.P)).json.tracks.length === 0, '…and can’t start hearing her again');
+  await call('POST', '/api/voice/audience', { place, to: null }, VA.P); ok(((await call('POST', '/api/voice/list', { place }, VB.P)).json.speakers || []).length === 1, 'back to everyone: Bo hears her again');
+  ok((await call('POST', '/api/voice/session', { place: 'b:somewhere-else' }, VA.P)).status === 409, 'you can only use voice where you are');
+  await call('POST', '/api/voice/leave', { place }, VA.P); ok(((await call('POST', '/api/voice/list', { place }, VB.P)).json.speakers || []).length === 0, 'when Ava leaves, nobody hears her');
+  sfu.close(); }
 { // inside, live: everyone in the same place sees the others walk about and can chat; frames turn on the wall; homes differ by type
   const A = await player('live_amy', 50_000), Bq = await player('live_ben', 50_000), place = 'b:live-test-' + Date.now();
   const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'inside' || m.type === 'authed') got.push(m); });

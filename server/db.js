@@ -339,6 +339,9 @@ const MIGRATIONS = [
   // wearables they've bought
   `alter table citizens add column if not exists look jsonb; alter table citizens add column if not exists look_set boolean not null default false;
    alter table citizens add column if not exists wardrobe text[] not null default '{}';`,
+  // v71: asking to visit a locked home (server/visits.js): pending, accepted until a time, declined or ended
+  `create table if not exists visit_requests (id text primary key, owner_id text not null, visitor_id text not null, status text not null, message text, t bigint not null, until bigint);
+   create index if not exists visit_requests_owner on visit_requests (owner_id, status); create index if not exists visit_requests_visitor on visit_requests (visitor_id, owner_id, t desc);`,
 ];
 
 export async function migrate() {

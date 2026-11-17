@@ -425,7 +425,7 @@ export class World {
     out.online = Number(r.last_seen || 0) > Date.now() - 90000; out.seen = Number(r.last_seen || 0);
     out.bank = Number(r.bank || 0); out.cars = Array.isArray(r.cars) ? r.cars : []; out.carActive = r.car_active || null;
     out.badges = r.has_pw ? (await pool.query('select id from achievements where citizen_id = $1 order by t', [r.id])).rows.map(x => x.id) : [];
-    const lh = (await pool.query('select left_home, acts, stars from citizens where id = $1', [r.id])).rows[0]; out.stars = Number(lh?.stars || 0);
+    const lh = (await pool.query("select left_home, acts, stars, coalesce((room->>'locked')::boolean, false) locked from citizens where id = $1", [r.id])).rows[0]; out.stars = Number(lh?.stars || 0); out.locked = !!lh?.locked; /* their home is locked to visitors */
     if (!r.hid && lh?.left_home) out.leftHome = true;
     else if (!r.hid) out.queue = Number((await pool.query('select count(*) n from citizens where home_id is null and seq < $1', [r.seq])).rows[0].n) + 1;
     out.props = Number((await pool.query('select (select count(*) from plots where owner_id = $1) + (select count(*) from buildings where owner_id = $1 and plot_id is null) n', [r.id])).rows[0].n);

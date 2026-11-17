@@ -324,6 +324,11 @@ export function playersRouter({ limit, send, admin, world }) {
       const bs = await world.chat.blockState(p.id, t.id); if (bs.iBlocked || bs.blockedMe) throw new HttpError(403, bs.iBlocked ? `You’ve blocked @${t.handle}.` : `@${t.handle} isn’t taking messages from you.`);
       const pm = { from: p.handle, to: t.handle, text, t: Date.now(), private: true }; world.bus.publish([{ inside: true, place, k: 'chat', chat: pm, only: [p.handle.toLowerCase(), t.handle.toLowerCase()] }]); return { ok: true, chat: pm }; }
     const chat = { from: p.handle, text, t: Date.now() }; world.bus.publish([{ inside: true, place, k: 'chat', chat }]); return { ok: true, chat }; }));
+  // locked homes: ask to visit; the owner answers (let in for a while, or not), and can end a visit early
+  r.get('/citizens/:handle/visit', limit, send(async req => world.visits.state((await playerFrom(req))?.id || null, req.params.handle)));
+  r.post('/citizens/:handle/visit', limit, send(async req => { const p = await me(req); await assertNotMuted(p.id); return world.visits.request(p.id, p.handle, req.params.handle, bd(req).message); }));
+  r.get('/me/visits', limit, send(async req => world.visits.incoming((await me(req)).id)));
+  r.post('/me/visits/:id', limit, send(async req => { const p = await me(req); return world.visits.answer(p.id, p.handle, req.params.id, bd(req)); }));
   r.post('/inside/here', limit, send(async req => { const p = await playerFrom(req); return RM().seen(bd(req).place, p ? 'p:' + p.id : 'ip:' + clientIp(req), p ? p.handle : null); }));
   r.post('/me/room/place', limit, send(async req => RM().place((await me(req)).id, bd(req))));
   r.post('/me/room/store', limit, send(async req => RM().store((await me(req)).id, bd(req))));

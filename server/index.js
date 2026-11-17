@@ -35,6 +35,7 @@ import { Auctions } from './auctions.js';
 import { throttle, apiThrottle, take, ipOf, locked, failed, usageReport, WS_PER_IP } from './limits.js';
 import { Housing } from './housing.js';
 import { Rooms } from './rooms.js';
+import { Visits } from './visits.js';
 import { Economy } from './economy.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
 import * as R from '../shared/rules.js';
@@ -60,7 +61,7 @@ const lottery = new Lottery(world); world.lottery = lottery;
 const auctions = new Auctions(world); world.auctions = auctions;
 const economy = new Economy(world); world.economy = economy;
 world.housing = new Housing(world);
-world.rooms = new Rooms(world);
+world.rooms = new Rooms(world); world.visits = new Visits(world);
 const chat = new Chat(bus); world.chat = chat; chat.world = world;
 world.bus = bus; /* inside chat passes through it to every server */
 world.chat.removePhoto = id => world.rooms.removePhoto(id); // a reported photo the developer takes down

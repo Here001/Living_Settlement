@@ -1962,7 +1962,25 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   await pool.query('update citizens set home_id = $2 where id = $1', [O.id, hs.id]);
   ok((await call('POST', '/api/me/room/lock', { locked: true }, O.P)).json.room?.locked === true && (await call('GET', '/api/citizens/baker_bo/room', undefined, Vz.P)).status === 403, 'a home can be locked, and then others can’t come in');
   ok((await call('GET', '/api/me/room', undefined, O.P)).status === 200, '…but its owner still can');
+  { // asking to visit a locked home: the owner lets you in for a while, or doesn't
+    const st0 = (await call('GET', '/api/citizens/baker_bo/visit', undefined, Vz.P)).json; ok(st0.locked === true && st0.status === 'none', 'a visitor sees the home is locked', JSON.stringify(st0));
+    ok((await call('GET', '/api/citizens/baker_bo', undefined, { auth: false })).json.locked === true, 'the card knows it’s locked');
+    const rq = await call('POST', '/api/citizens/baker_bo/visit', { message: 'Can I see your kitchen?' }, Vz.P); ok(rq.status === 200 && rq.json.status === 'pending', 'ask to visit', JSON.stringify(rq.json));
+    ok((await call('POST', '/api/citizens/baker_bo/visit', {}, Vz.P)).status === 409, '…once, until they answer');
+    const inc = (await call('GET', '/api/me/visits', undefined, O.P)).json; const q = inc.requests?.find(x => x.handle === Vz.handle);
+    ok(q && q.status === 'pending' && q.message === 'Can I see your kitchen?' && inc.times.includes(15), 'the owner sees the request', JSON.stringify(inc));
+    ok((await pool.query("select count(*) n from notices where citizen_id = $1 and kind = 'visit'", [O.id])).rows[0].n > 0, '…and gets a notice');
+    ok((await call('POST', `/api/me/visits/${q.id}`, { accept: true, minutes: 7 }, O.P)).status === 400, 'only the offered lengths of time');
+    const ac = await call('POST', `/api/me/visits/${q.id}`, { accept: true, minutes: 15 }, O.P); ok(ac.status === 200 && ac.json.until > Date.now() + 14 * 60000, 'let them in for 15 minutes', JSON.stringify(ac.json));
+    ok((await call('GET', '/api/citizens/baker_bo/room', undefined, Vz.P)).status === 200 && (await call('GET', '/api/citizens/baker_bo/visit', undefined, Vz.P)).json.status === 'accepted', '…and now they can go in');
+    ok((await call('GET', '/api/citizens/baker_bo/room', undefined, { auth: false })).status === 403, '…but nobody else');
+    ok((await call('POST', `/api/me/visits/${q.id}`, { end: true }, O.P)).status === 200 && (await call('GET', '/api/citizens/baker_bo/room', undefined, Vz.P)).status === 403, 'the owner can end the visit early');
+    const rq2 = await call('POST', '/api/citizens/baker_bo/visit', {}, Vz.P), q2 = (await call('GET', '/api/me/visits', undefined, O.P)).json.requests.find(x => x.status === 'pending');
+    ok(rq2.status === 200 && (await call('POST', `/api/me/visits/${q2.id}`, { accept: false }, O.P)).json.status === 'declined', 'or say no');
+    ok((await call('GET', '/api/citizens/baker_bo/visit', undefined, Vz.P)).json.status === 'declined' && (await call('POST', '/api/citizens/baker_bo/visit', {}, Vz.P)).status === 429, '…and they can’t ask again straight away');
+    ok((await call('POST', `/api/me/visits/${q2.id}`, { accept: true, minutes: 15 }, Vz.P)).status === 404, 'only the owner answers'); }
   ok((await call('POST', '/api/me/room/lock', { locked: false }, O.P)).json.room?.locked === undefined && (await call('GET', '/api/citizens/baker_bo/room', undefined, Vz.P)).status === 200, '…and unlocked again');
+  ok(/open/i.test((await call('POST', '/api/citizens/baker_bo/visit', {}, Vz.P)).json.error || ''), 'an open home doesn’t need asking');
   // who's here now
   const h1 = await call('POST', '/api/inside/here', { place: 'b:' + bk.id }, O.P), h2 = await call('POST', '/api/inside/here', { place: 'b:' + bk.id }, Vz.P);
   ok(h1.status === 200 && h2.json.viewers === 1 && h2.json.names.includes('baker_bo'), 'someone walking in sees who else is looking round', JSON.stringify(h2.json));

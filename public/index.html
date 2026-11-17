@@ -911,6 +911,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .enter.open .entitle,.enter.open .enstep,.enter.open .enbar,.enter.open .entip{opacity:0;transition:opacity .25s}
 @media (prefers-reduced-motion:reduce){.endoor,.englow,.enlight{animation:none}.enscene,.enter .endoor{transition:none}}
 .hexit{position:absolute;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:4;border:2px solid #2B2621;background:#E4572E;color:#fff;font-weight:800;font-size:17px;border-radius:999px;padding:12px 26px;box-shadow:0 4px 0 #2B2621,0 8px 20px rgba(0,0,0,.25);animation:hexit .35s ease-out}.hexit[hidden]{display:none}@keyframes hexit{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+.visitbox h4{margin:12px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}.vreq{padding:8px 0;border-top:1px solid var(--soft)}.vreq p{margin:0 0 6px}.vreq .row-actions{flex-wrap:wrap;align-items:center}
 .hchatto{max-width:38%;flex:0 0 auto;border:1.5px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:inherit;font-size:13px;padding:5px 4px}.hcl.pm{background:rgba(110,80,160,.13);border-radius:8px;padding:2px 6px}.hcl.pm b{color:#6D4FA0}.hcl b{cursor:pointer} /* the same sky as the 3D view, so it's never dark while it loads */
 .gl-card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;max-width:min(80%,320px);padding:12px 16px;border-radius:14px;background:rgba(255,255,255,.94);color:#2B2621;font-weight:700;font-size:14px;line-height:1.35;text-align:center;box-shadow:0 4px 18px rgba(0,0,0,.18);pointer-events:none}
 .roomstage .house3d{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
@@ -1271,7 +1272,7 @@ function connect(){
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
     else if(m.type==='gm' && m.data) Chats.gincoming(m.data);
     else if(m.type==='chatInvite' && m.data) Chats.invited(m.data);
-    else if(m.type==='notice' && m.data) Notices.incoming(m.data);
+    else if(m.type==='notice' && m.data){ Notices.incoming(m.data); if(m.data.kind==='visit'&&sel) setTimeout(()=>renderCard(true),300); } /* a visit asked for or answered: the open card shows it */
     else if(m.type==='dmGone' && m.id) Chats.gone(m.id);
     else if(m.type==='badge' && m.data) {} // badges were replaced by stars
     else if(m.type==='stars' && m.data) Stars.got(m.data.stars); };
@@ -6438,6 +6439,33 @@ const GameWeb={ el:null,
   close(quiet){ if(!this.el) return; this.el.remove(); this.el=null; document.body.classList.remove('web-on'); if(!quiet){ try{ if(history.state&&history.state.gameweb) history.back(); }catch(e){} } } };
 addEventListener('popstate',()=>{ if(GameWeb.el) GameWeb.close(true); });
 addEventListener('keydown',e=>{ if(e.key==='Escape'&&GameWeb.el) GameWeb.close(); });
+// ---- Locked homes: ask to visit; the owner lets you in for a while (server/visits.js) ----
+const VISIT_TIME={15:'15 min',60:'1 hour',180:'3 hours',1440:'A day'};
+const Visit={
+  // tapping 🔒 Look inside: go in if you've been let in, otherwise ask
+  async open(handle){ let st; try{ st=await api('/api/citizens/'+encodeURIComponent(handle)+'/visit'); }catch(e){ toast(e.message); return; }
+    if(!st.locked||st.mine||st.status==='accepted'){ Room.open(handle); return; }
+    const {box,close}=sheetBox(`🔒 @${handle}’s home is locked`);
+    if(!(Me&&Me.token)){ box.append(el('p',{class:'hint',text:'Sign in to ask to visit.'})); return; }
+    if(st.status==='pending'){ box.append(el('p',{class:'hint',text:`You’ve asked @${handle} to let you in. You’ll get a notice when they answer.`})); return; }
+    if(st.status==='declined'){ box.append(el('p',{class:'hint',text:`@${handle} can’t have visitors right now. You can ask again a little later.`})); return; }
+    const msg=el('input',{type:'text',maxlength:'140',placeholder:'Add a short note (optional)','aria-label':'Note'}), go=el('button',{class:'btn primary',text:'🚪 Request a visit'});
+    go.onclick=async()=>{ go.disabled=true; try{ await api('/api/citizens/'+encodeURIComponent(handle)+'/visit',{method:'POST',body:{message:msg.value}}); close(); toast(`🚪 Request sent. You’ll get a notice when @${handle} answers.`); }catch(e){ go.disabled=false; toast(e.message); } };
+    box.append(el('p',{class:'hint',text:`Ask @${handle} to let you in. They choose how long you can stay.`}), msg, el('div',{class:'row-actions'}, go)); },
+  // the owner's box on their own card: lock or open the home, and answer requests
+  box(locked){ const wrap=el('div',{class:'authbox visitbox'}), list=el('div',{class:'vlist'});
+    const lockBtn=el('button',{class:'btn'+(locked?' primary':''),text:locked?'🔒 Locked: tap to open it':'🔓 Open to visitors: tap to lock',onclick:async()=>{ lockBtn.disabled=true; try{ const r=await api('/api/me/room/lock',{method:'POST',body:{locked:!locked}}); toast(r.room&&r.room.locked?'🔒 Your home is locked. Others can ask to visit.':'🔓 Your home is open to visitors.'); const me=myCitizen(); if(me) detail.delete(me.id); renderCard(true); }catch(e){ lockBtn.disabled=false; toast(e.message); } }});
+    wrap.append(el('h3',{text:'🚪 Your home'}), el('p',{class:'hint',text:locked?'Only people you let in can come inside.':'Anyone can walk in and look around.'}), lockBtn, list);
+    api('/api/me/visits').then(r=>this.fill(list,r)).catch(()=>{}); return wrap; },
+  fill(list,r){ list.replaceChildren(); const reqs=(r&&r.requests)||[]; if(!reqs.length) return;
+    list.append(el('h4',{text:'Visit requests'}));
+    for(const q of reqs){ const row=el('div',{class:'vreq'});
+      if(q.status==='pending'){ row.append(el('p',null, el('b',{text:'@'+q.handle}), q.message?` would like to visit: “${q.message}”`:' would like to visit.'),
+          el('div',{class:'row-actions'}, el('span',{class:'hint',text:'Let them in for'}), ...(r.times||[15,60,180,1440]).map(m=>el('button',{class:'btn sm primary',text:VISIT_TIME[m]||m+' min',onclick:()=>this.answer(q,{accept:true,minutes:m},list)})),
+            el('button',{class:'btn sm',text:'Decline',onclick:()=>this.answer(q,{accept:false},list)}))); }
+      else row.append(el('p',null, el('b',{text:'@'+q.handle}), ` can visit until ${new Date(q.until).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}${q.until-Date.now()>86000000?' tomorrow':''}.`), el('button',{class:'btn sm',text:'End visit',onclick:()=>this.answer(q,{end:true},list)}));
+      list.append(row); } },
+  async answer(q,body,list){ try{ const r=await api('/api/me/visits/'+encodeURIComponent(q.id),{method:'POST',body}); toast(r.status==='accepted'?`🏠 @${q.handle} can come in now.`:r.status==='declined'?`You said no to @${q.handle}.`:`Visit ended. @${q.handle} can’t come in any more.`); this.fill(list,await api('/api/me/visits')); }catch(e){ toast(e.message); } } };
 // ---- Walking into a home: a door swings open while the home gets ready behind it ----
 // Shown the instant you tap. Its door, light and progress bar move on the graphics chip (transform and opacity only),
 // so they keep moving even while the phone is busy building the room; the steps say what's happening. When the room's
@@ -6471,7 +6499,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     // a home where people live: pick whose home to look into
     Entrance.show(); let d; try{ d=await api(`/api/buildings/${encodeURIComponent(id)}/inside`); }catch(e){ Entrance.cancel(); toast(e.message); return; }
     if(d.choose){ Entrance.cancel(); document.querySelector('.rsheet-bg')?.remove(); const wrap=el('div',{class:'rsheet-bg rreport'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
-      const list=el('div',{class:'rchoose'}, ...d.choose.map(c=>el('button',{class:'btn',disabled:c.locked,text:c.locked?`🔒 @${c.handle} (locked)`:`🏠 @${c.handle}’s home`,onclick:()=>{ wrap.remove(); this.open(c.handle); }})));
+      const list=el('div',{class:'rchoose'}, ...d.choose.map(c=>el('button',{class:'btn',text:c.locked?`🔒 @${c.handle}’s home`:`🏠 @${c.handle}’s home`,onclick:()=>{ wrap.remove(); if(c.locked) Visit.open(c.handle); else this.open(c.handle); }})));
       wrap.append(el('div',{class:'rsheet inked',role:'dialog','aria-label':'Who lives here'}, el('h3',{text:`🚪 ${d.home.name}`}), el('p',{class:'hint',text:`${d.choose.length===1?'One colonist lives':`${d.choose.length} colonists live`} here. Whose home would you like to look into?`}), list, el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Cancel',onclick:()=>wrap.remove()}))));
       document.body.append(wrap); return; }
     await this.open(null,id,d); if(design&&this.d&&this.d.mine&&!this.edit) this.toggle(true); },
@@ -6480,7 +6508,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
   get base(){ return this.bld?`/api/me/buildings/${encodeURIComponent(this.d.home.id)}/inside/`:'/api/me/room/'; },
   get editWord(){ return this.biz?'🛋️ Design':'🛋️ Furnish'; },
   async open(handle,bid,pre){ if(handle&&Me&&Me.handle&&handle.toLowerCase()===Me.handle.toLowerCase()) handle=null; const ent=Entrance.show(handle?`@${handle}’s home`:pre&&pre.home?pre.home.name:'');
-    let d, H3, myLook=null; try{ [d,H3,[myLook]]=await Promise.all([pre?Promise.resolve(pre):api(bid?`/api/buildings/${encodeURIComponent(bid)}/inside`:handle?`/api/citizens/${encodeURIComponent(handle)}/room`:'/api/me/room'), import('/house3d.js'), Looks.want([Me&&Me.handle])]); }catch(e){ ent.cancel(); toast(e.message||'Your phone couldn’t load the 3D view.'); return; }
+    let d, H3, myLook=null; try{ [d,H3,[myLook]]=await Promise.all([pre?Promise.resolve(pre):api(bid?`/api/buildings/${encodeURIComponent(bid)}/inside`:handle?`/api/citizens/${encodeURIComponent(handle)}/room`:'/api/me/room'), import('/house3d.js'), Looks.want([Me&&Me.handle])]); }catch(e){ ent.cancel(); if(handle&&/locked/i.test(e.message||'')){ Visit.open(handle); return; } toast(e.message||'Your phone couldn’t load the 3D view.'); return; }
     ent.title(d.mine&&!d.bld&&d.place!=='business'&&d.place!=='building'?'🏠 Your home':d.place==='business'?`🏪 ${d.home.name}`:d.owner?`🏠 @${d.owner}’s home`:`🏠 ${d.home.name}`); ent.step('Laying the floors…',0.12);
     try{ await H3.prepare(d.room,d.size,d.room.plan||'home',(n,t)=>ent.step(n/t<0.5?'Laying the floors…':'Painting the walls…',0.12+0.43*n/t)); }catch(e){} /* the textures, a breath apart */
     ent.step('Arranging the furniture…',0.58); await new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0)));
@@ -6893,13 +6921,16 @@ function renderCard(force){ if(!force && cardBusy()) return;
         card.append(el('div',{class:'authbox'}, el('h3',{text:'Choose your colonist'}), el('p',{class:'hint',text:'Pick once. After this, only the developer can change it.'}), el('div',{class:'row-actions'}, mk('m'), mk('f')))); }
 
       if(mine) card.append(actionTabs(c));
+      if(mine&&c.home) card.append(Visit.box(!!(d&&d.locked)));
       if(mine) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'👗 Change my look',title:'Your character: body, face, hair, clothes and what you wear',onclick:()=>Look.show(false)})));
       if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; myMoney=null; ls.set('settlement-player',null); wsAuth(); Chats.reset(); buildToolbar(); refreshHUD(); toast('Logged out.'); renderCard(true); }})));
       else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
       // Already signed in as someone else: one person, one colonist, so no "This is me" on other cards.
       else if(Me&&Me.token&&Me.handle){ card.append(el('div',{class:'row-actions'}, el('span',{class:'hint',text:`You're signed in as @${Me.handle}.`}), el('button',{class:'linkb',text:'Go to my colonist',onclick:()=>findMe()})));
-        if(c.home) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'🏠 Look inside',title:'See inside their home',onclick:()=>Room.open(c.handle)}), el('button',{class:'btn',text:'👀 Watch',title:'Keep the camera on them and see what they do',onclick:()=>Watch.start(0,`Watching @${c.handle}`,null,c.handle)}), el('button',{class:'btn',text:'Visit their home',onclick:()=>meAction('/api/me/visit',{friend:c.handle},r=>`You're on your way to ${r.place}.`)}),
-          pocketBtn(c)));
+        if(c.home){ const look=el('button',{class:'btn',text:d&&d.locked?'🔒 Look inside':'🏠 Look inside',title:d&&d.locked?'Their home is locked: ask to visit':'See inside their home',onclick:()=>d&&d.locked?Visit.open(c.handle):Room.open(c.handle)});
+          if(d&&d.locked&&Me&&Me.token) api('/api/citizens/'+encodeURIComponent(c.handle)+'/visit').then(v=>{ if(v.status==='accepted'){ look.textContent='🏠 Look inside · you’re invited'; look.title='You can visit until '+new Date(v.until).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}); } else if(v.status==='pending') look.textContent='🔒 Look inside · asked'; }).catch(()=>{}); /* how your request stands */
+          card.append(el('div',{class:'row-actions'}, look, el('button',{class:'btn',text:'👀 Watch',title:'Keep the camera on them and see what they do',onclick:()=>Watch.start(0,`Watching @${c.handle}`,null,c.handle)}), el('button',{class:'btn',text:'Visit their home',onclick:()=>meAction('/api/me/visit',{friend:c.handle},r=>`You're on your way to ${r.place}.`)}),
+          pocketBtn(c))); }
         if(c.claimed) card.append(el('div',{class:'row-actions'}, Blocks.has(c.handle)?'':el('button',{class:'btn primary',text:'💬 Message',onclick:()=>Chats.open(c.handle)}),
           Blocks.has(c.handle)?el('button',{class:'btn',text:'Unblock',onclick:()=>Blocks.unblock(c.handle)}):el('button',{class:'btn',text:'🚫 Block',onclick:()=>Blocks.ask(c.handle)})));
         if(c.claimed) card.append(giftBox(c.handle)); else card.append(el('p',{class:'hint',text:`@${c.handle} hasn't verified their avatar yet, so they can't receive gifts.`})); }

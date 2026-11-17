@@ -80,7 +80,7 @@ export class Rooms {
     const c = handle ? (await pq('select id, handle, home_id, room, coins_base from citizens where lower(handle) = lower($1)', [String(handle)])).rows[0] : (await pq('select id, handle, home_id, room, coins_base from citizens where id = $1', [meId])).rows[0];
     if (!c) throw new HttpError(404, 'No colonist with that name.');
     const home = await this.homeOf(pq, c); if (!home) throw new HttpError(404, c.id === meId ? 'You don’t have a home yet. Rent one first, then you can furnish it.' : `@${c.handle} doesn’t have a home right now.`);
-    const room = F.fitRoom(c.room, home.size, home.plan).room; if (room.locked && c.id !== meId) throw new HttpError(403, `@${c.handle} keeps their home locked.`);
+    const room = F.fitRoom(c.room, home.size, home.plan).room; if (room.locked && c.id !== meId && !(await this.world.visits?.allowed(c.id, meId))) throw new HttpError(403, `@${c.handle} keeps their home locked. Ask to visit from their card.`); /* unless they've let you in */
     return this.out(c, home, room, c.id === meId);
   }
   // Every change: lock the colonist, fit their home to the house they live in, apply fn, save. fn returns { spend, refund, gone }.

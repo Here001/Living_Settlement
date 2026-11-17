@@ -181,19 +181,25 @@ export function createHouse(host, opts) {
     g.fillStyle = 'rgba(20,24,30,.72)'; g.beginPath(); g.roundRect((256 - w) / 2, 10, w, 44, 22); g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, 128, 33);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); sp.scale.set(1.2, 0.3, 1); sp.renderOrder = 5; return sp; }
   let crowd = [];
+  // a person: legs, a shirt in their own colour, arms, a head and hair (the same person always looks the same); facing -z
+  function figure(name) {
+    const SKIN = ['#F5D0B5', '#E0AC86', '#C68B59', '#8D5524', '#5C3A21'], h = hashS(name + 'c'), shirt = `hsl(${h % 360},55%,${40 + (h >> 9) % 20}%)`, g = new THREE.Group(), parts = [];
+    const add = (geo, c, px, py, pz) => { geo.translate(px, py, pz); parts.push(paint(geo, c)); };
+    add(new THREE.BoxGeometry(0.14, 0.8, 0.16), '#2C3E50', -0.09, 0.4, 0); add(new THREE.BoxGeometry(0.14, 0.8, 0.16), '#2C3E50', 0.09, 0.4, 0);
+    add(new THREE.BoxGeometry(0.42, 0.6, 0.24), shirt, 0, 1.1, 0); add(new THREE.BoxGeometry(0.1, 0.55, 0.12), shirt, -0.27, 1.08, 0); add(new THREE.BoxGeometry(0.1, 0.55, 0.12), shirt, 0.27, 1.08, 0);
+    add(new THREE.SphereGeometry(0.16, 12, 10), SKIN[h % SKIN.length], 0, 1.58, 0); add(new THREE.SphereGeometry(0.165, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2.2), ['#2B1B10', '#5A3A1A', '#C9A227', '#1C1C1C', '#8E2C1C'][(h >> 4) % 5], 0, 1.62, 0.02);
+    add(new THREE.BoxGeometry(0.05, 0.05, 0.05), SKIN[h % SKIN.length], 0, 1.56, -0.17); // a nose, so you can tell which way they face
+    g.add(new THREE.Mesh(mergeGeometries(parts), MAT.solid)); return g;
+  }
   function buildPeople(list) {
     for (const c of [...people.children]) { people.remove(c); c.traverse(o => { o.geometry && o.geometry.dispose(); o.material?.map && o.material.map.dispose(); }); }
     crowd = (list || []).slice(0, 14); if (!crowd.length) { dirty = true; wake(); return; }
     const rooms = PLAN === 'home' ? L.rooms : L.rooms.filter(r => r.kind === 'main'), spots = [];
     for (const r of rooms) for (let x = r.x; x < r.x + r.w; x++) for (let y = r.y; y < r.y + r.d; y++) if (!blocked(x + 0.5, y + 0.5) && !L.keep.has(`${x},${y}`)) spots.push([x + 0.5, y + 0.5]);
-    const used = new Set(), SKIN = ['#F5D0B5', '#E0AC86', '#C68B59', '#8D5524', '#5C3A21'];
+    const used = new Set();
     for (const p of crowd) { if (!spots.length) break; let k = hashS(p.name) % spots.length; for (let n = 0; n < spots.length && used.has(k); n++) k = (k + 1) % spots.length; if (used.has(k)) break; used.add(k);
-      const [x, y] = spots[k], h = hashS(p.name + 'c'), shirt = `hsl(${h % 360},55%,${40 + (h >> 9) % 20}%)`, g = new THREE.Group(), parts = [];
-      const add = (geo, c, px, py, pz) => { geo.translate(px, py, pz); parts.push(paint(geo, c)); };
-      add(new THREE.BoxGeometry(0.14, 0.8, 0.16), '#2C3E50', -0.09, 0.4, 0); add(new THREE.BoxGeometry(0.14, 0.8, 0.16), '#2C3E50', 0.09, 0.4, 0);
-      add(new THREE.BoxGeometry(0.42, 0.6, 0.24), shirt, 0, 1.1, 0); add(new THREE.BoxGeometry(0.1, 0.55, 0.12), shirt, -0.27, 1.08, 0); add(new THREE.BoxGeometry(0.1, 0.55, 0.12), shirt, 0.27, 1.08, 0);
-      add(new THREE.SphereGeometry(0.16, 12, 10), SKIN[h % SKIN.length], 0, 1.58, 0); add(new THREE.SphereGeometry(0.165, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2.2), ['#2B1B10', '#5A3A1A', '#C9A227', '#1C1C1C', '#8E2C1C'][(h >> 4) % 5], 0, 1.62, 0);
-      const body = new THREE.Mesh(mergeGeometries(parts), MAT.solid); g.add(body); const tag = nameTag(p.label || p.name); tag.position.set(0, 2.0, 0); g.add(tag);
+      const [x, y] = spots[k], g = figure(p.name);
+      const tag = nameTag(p.label || p.name); tag.position.set(0, 2.0, 0); g.add(tag);
       g.position.set(x, 0, y); g.rotation.y = (hashS(p.name + 'r') % 628) / 100; people.add(g); }
     dirty = true; wake();
   }
@@ -260,8 +266,20 @@ export function createHouse(host, opts) {
   function applyView() {
     const up = view === 'above'; ceilings.visible = !up; wallStuff.visible = ceilStuff.visible = !up; walls.scale.y = up ? 0.35 : 1; walls.updateMatrixWorld(true); dirty = true;
   }
+  // you: seen from behind in third person (and from above); hidden in first person
+  const me3 = figure(opts.me || 'you'), meMat = MAT.solid.clone(); meMat.transparent = true; me3.children[0].material = meMat; me3.visible = false; scene.add(me3); let persp = opts.persp === 'third' ? 'third' : 'first';
+  const backRay = new THREE.Raycaster();
   function placeCamera() {
+    me3.position.set(me.x, 0, me.y); me3.rotation.y = me.yaw; me3.visible = view === 'above' || persp === 'third'; meMat.opacity = 1; meMat.depthWrite = true;
     if (view === 'above') { const c = S / 2, dist = S * 1.7 + 5; camera.position.set(c + Math.sin(above.yaw) * dist * 0.62, dist, c + Math.cos(above.yaw) * dist * 0.62); camera.lookAt(c, 0, c); camera.updateMatrixWorld(); return; }
+    if (persp === 'third') { // behind you and above: with a wall close behind, the camera rises and looks down over your head instead of going through it
+      const fx = -Math.sin(me.yaw), fy = -Math.cos(me.yaw), head = new THREE.Vector3(me.x, 1.45, me.y);
+      // try the usual spot, then closer ones, until nothing stands between the camera and your head
+      let d = 0.15, up = 0.6; const v = new THREE.Vector3(); /* never higher than the tops of the doorways (2.05), so it can't sit inside a wall above a door */
+      for (let t = 2.1; t >= 0.15; t -= 0.25) { const u = Math.min(0.6, 0.45 + (2.1 - t) * 0.1); v.set(-fx * t, u, -fy * t); const len = v.length(); backRay.set(head, v.clone().normalize()); backRay.far = len + 0.2;
+        if (!backRay.intersectObjects(walls.children, false).length) { d = t; up = u; break; } }
+      camera.position.set(me.x - fx * d, 1.45 + up, me.y - fy * d); meMat.opacity = d < 1.1 ? 0.25 + 0.6 * Math.max(0, d - 0.15) : 1; meMat.depthWrite = meMat.opacity > 0.99; /* a wall close behind: fade yourself so the room shows */
+      const ahead = 1.6 + (2.1 - d) * 0.5; camera.lookAt(me.x + fx * ahead, 1.15 + Math.tan(me.pitch) * (ahead + d) - (2.1 - d) * 0.35, me.y + fy * ahead); camera.updateMatrixWorld(); return; }
     camera.position.set(me.x, EYE, me.y); camera.rotation.set(me.pitch, me.yaw, 0); camera.updateMatrixWorld();
   }
   // into a room: stand on a free spot near its doorway, looking into the room
@@ -332,6 +350,8 @@ export function createHouse(host, opts) {
     setView(v) { view = v; applyView(); moved(); },
     setSurroundings(A) { buildAround(A); },
     setPeople(list) { buildPeople(list); },
+    setPerspective(p) { persp = p === 'third' ? 'third' : 'first'; moved(); },
+    get perspective() { return persp; },
     get view() { return view; },
     goRoom, roomHere: () => roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN),
     dispose() { dead = true; cancelAnimationFrame(raf); ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku);

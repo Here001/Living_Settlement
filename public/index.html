@@ -899,7 +899,8 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .hhere{flex:none;border:1.5px solid var(--line);background:var(--paper);border-radius:999px;padding:5px 10px;font-size:12.5px;font-weight:800;cursor:pointer;color:inherit;white-space:nowrap}
 .hjoy{position:absolute;left:18px;bottom:18px;width:116px;height:116px;border-radius:50%;background:rgba(255,255,255,.16);border:2px solid rgba(255,255,255,.5);z-index:2;touch-action:none;box-shadow:0 2px 12px rgba(0,0,0,.25)}
 .hjoy i{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px;border-radius:50%;background:rgba(255,255,255,.9);box-shadow:0 2px 8px rgba(0,0,0,.35);pointer-events:none}
-.roomview.above .hjoy{display:none}
+.roomview.above .hjoy,.roomview.above .hpersp{display:none}
+.hpersp{position:absolute;right:14px;bottom:22px;z-index:2;box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .hcross{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1.5px rgba(0,0,0,.45);z-index:2;pointer-events:none}
 .roomitem img{width:80px;height:64px;object-fit:contain}
 .roomitem .noimg{display:block;width:80px;height:64px}
@@ -6416,13 +6417,15 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
       el('div',{class:'webaddr'}, el('b',{text:title}), this.sub), this.hereChip, this.editBtn);
     const L=layoutOf(d.size,d.room.plan||'home'); this.chips=el('div',{class:'hchips'}, ...L.rooms.map((r,i)=>el('button',{class:'rtab',text:r.name,onclick:()=>this.h&&this.h.goRoom(i)})));
     this.viewBtn=el('button',{class:'btn sm hview',text:'⬆ From above',onclick:()=>this.flip()});
+    let persp='first'; try{ persp=localStorage.getItem('resurgence-persp')==='third'?'third':'first'; }catch(e){}
+    this.perspBtn=el('button',{class:'btn sm hpersp',text:persp==='third'?'👁️ First person':'👤 Third person',title:'Switch between seeing through your own eyes and seeing yourself from behind',onclick:()=>{ if(!this.h) return; const p=this.h.perspective==='third'?'first':'third'; this.h.setPerspective(p); this.perspBtn.textContent=p==='third'?'👁️ First person':'👤 Third person'; try{ localStorage.setItem('resurgence-persp',p); }catch(e){} }});
     this.tools=el('div',{class:'roomtools'}); this.cross=el('div',{class:'hcross',hidden:true}); this.shop=el('div',{class:'roomshop'}); this.shop.hidden=true;
-    this.stage=el('div',{class:'roomstage'}, this.chips, this.viewBtn, this.tools, this.cross);
+    this.stage=el('div',{class:'roomstage'}, this.chips, this.viewBtn, this.perspBtn, this.tools, this.cross);
     this.file=el('input',{type:'file',accept:'image/*',hidden:true,onchange:()=>this.upload()});
     const root=el('div',{class:'webview roomview',role:'dialog','aria-label':title}, bar, this.stage, this.shop, this.file);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
     try{ history.pushState({room:1},''); }catch(e){}
-    try{ this.h=H3.createHouse(this.stage,{ size:d.size, plan:d.room.plan||'home', room:d.room, photos:d.photos, check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
+    try{ this.h=H3.createHouse(this.stage,{ size:d.size, plan:d.room.plan||'home', persp, me:(Me&&Me.handle)||'visitor', room:d.room, photos:d.photos, check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
       onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; [...this.chips.children].forEach((b,j)=>b.classList.toggle('on',j===i)); if(this.edit&&this.cat==='style') this.paintShop(); } }); }
     catch(e){ this.close(); toast('Your phone couldn’t show the 3D view.'); return; }
     this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false); this.hereTick(true);
@@ -6430,7 +6433,8 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     if(d.mine&&!d.room.items.length&&!d.room.box.length) this.toggle(true); },
   // ---- who's here now: colonists the game has at this place (working, visiting, at home), plus players looking round it ----
   people(){ const d=this.d; if(!d) return []; const gm=gmNow(), out=[]; const bid=d.home.id, owner=(d.owner||'').toLowerCase();
-    for(const c of S.citizens.values()){ const st=citizenAt(c,gm); if(!st||st.bid!==bid) continue; if(!this.biz&&c.handle.toLowerCase()!==owner) continue; out.push({name:c.handle,label:'@'+c.handle}); }
+    const me=((Me&&Me.handle)||'').toLowerCase(); /* you're counted as "you", not twice */
+    for(const c of S.citizens.values()){ const st=citizenAt(c,gm); if(!st||st.bid!==bid) continue; const h=c.handle.toLowerCase(); if(h===me||(!this.biz&&h!==owner)) continue; out.push({name:c.handle,label:'@'+c.handle}); }
     return out; },
   async hereTick(first){ if(!this.d||(document.hidden&&!first)) return; const place=this.biz?'b:'+this.d.home.id:'h:'+(this.d.owner||'').toLowerCase(); let live={viewers:0,names:[]};
     try{ live=await api('/api/inside/here',{method:'POST',body:{place}}); }catch(e){} if(!this.d) return;

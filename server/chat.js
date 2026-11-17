@@ -150,6 +150,7 @@ export class Chat {
     this.bus.publish([{ op: 'dm', private: true, to: [meP.id, o.id], data: { id: m.id, from: { id: meP.id, h: meP.handle, n: meP.name || '', g: meP.gender || 'm' }, to: { id: o.id, h: o.handle }, text, t: now, reply: rq, first } }]);
     if (this.push && !isOnline(o.last_seen)) this.push.send([o.id], { kind: 'chat', title: `💬 ${meP.name || '@' + meP.handle}`, body: (t => t.length > 120 ? t.slice(0, 120) + '…' : t)(plain(text)), tag: 'dm-' + meP.id, url: '/?chat=' + encodeURIComponent(meP.handle) }).catch(() => {});
     await pool.query('delete from dms where pair = $1 and t < (select t from dms where pair = $1 order by t desc offset 500 limit 1)', [m.pair]); // keep the last 500 per chat
+    this.world?.love?.add(meP.id, o.id, 'text', R.LOVE.TEXT).catch(() => {}); /* a couple texting: a little love */
     return { ok: true, id: m.id, t: now, fee: cost.fee };
   }
   // ---- Reports: a colonist flags a private message they received, or someone's Town Square post, for the developer. ----

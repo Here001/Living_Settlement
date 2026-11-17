@@ -915,6 +915,10 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .hact:active b{transform:translateY(3px);box-shadow:0 1px 0 #2B2621}
 .hact span{font-size:12px;font-weight:800;color:#fff;background:rgba(43,38,33,.82);border-radius:999px;padding:3px 9px;white-space:nowrap}
 .hexit{position:absolute;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:4;border:2px solid #2B2621;background:#E4572E;color:#fff;font-weight:800;font-size:17px;border-radius:999px;padding:12px 26px;box-shadow:0 4px 0 #2B2621,0 8px 20px rgba(0,0,0,.25);animation:hexit .35s ease-out}.hexit[hidden]{display:none}@keyframes hexit{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+.btn.love{background:#FCE4EB;border-color:#D9346A;color:#B23A5E}.lovechip{align-items:center;flex-wrap:wrap}.lovechip .hearts{font-size:18px}
+.lovebox{border-color:#E8A0B4}.lovebox h3{color:#B23A5E}.hearts{font-size:22px;letter-spacing:2px;color:#E0496E;line-height:1}.hearts i{font-style:normal;color:#E7C9D2}
+.lovebar{height:10px;border-radius:999px;background:#F4DDE4;overflow:hidden;margin:8px 0 4px}.lovebar b{display:block;height:100%;background:linear-gradient(90deg,#F28AA5,#D9346A);border-radius:999px;transition:width .4s}
+.lovebox .row-actions{flex-wrap:wrap;align-items:center}.lovebox .vreq{padding:8px 0;border-top:1px solid var(--soft)}.lovebox .vreq p{margin:0 0 6px}
 .visitbox h4{margin:12px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}.vreq{padding:8px 0;border-top:1px solid var(--soft)}.vreq p{margin:0 0 6px}.vreq .row-actions{flex-wrap:wrap;align-items:center}
 .hchatto{max-width:38%;flex:0 0 auto;border:1.5px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:inherit;font-size:13px;padding:5px 4px}.hcl.pm{background:rgba(110,80,160,.13);border-radius:8px;padding:2px 6px}.hcl.pm b{color:#6D4FA0}.hcl b{cursor:pointer} /* the same sky as the 3D view, so it's never dark while it loads */
 .gl-card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;max-width:min(80%,320px);padding:12px 16px;border-radius:14px;background:rgba(255,255,255,.94);color:#2B2621;font-weight:700;font-size:14px;line-height:1.35;text-align:center;box-shadow:0 4px 18px rgba(0,0,0,.18);pointer-events:none}
@@ -1276,7 +1280,7 @@ function connect(){
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
     else if(m.type==='gm' && m.data) Chats.gincoming(m.data);
     else if(m.type==='chatInvite' && m.data) Chats.invited(m.data);
-    else if(m.type==='notice' && m.data){ Notices.incoming(m.data); if(m.data.kind==='visit'&&sel) setTimeout(()=>renderCard(true),300); } /* a visit asked for or answered: the open card shows it */
+    else if(m.type==='notice' && m.data){ Notices.incoming(m.data); if((m.data.kind==='visit'||m.data.kind==='love')&&sel) setTimeout(()=>renderCard(true),300); } /* a visit asked for or answered: the open card shows it */
     else if(m.type==='dmGone' && m.id) Chats.gone(m.id);
     else if(m.type==='badge' && m.data) {} // badges were replaced by stars
     else if(m.type==='stars' && m.data) Stars.got(m.data.stars); };
@@ -6446,6 +6450,48 @@ addEventListener('popstate',()=>{ if(GameWeb.el) GameWeb.close(true); });
 addEventListener('keydown',e=>{ if(e.key==='Escape'&&GameWeb.el) GameWeb.close(); });
 // ---- Locked homes: ask to visit; the owner lets you in for a while (server/visits.js) ----
 const VISIT_TIME={15:'15 min',60:'1 hour',180:'3 hours',1440:'A day'};
+// ---- Relationships: ask someone out, a love meter that fills with time together and messages, marriage ----
+const Love={
+  hearts(n){ return el('span',{class:'hearts','aria-label':`${n} of 5 hearts`}, '♥'.repeat(n), el('i',{text:'♥'.repeat(5-n)})); },
+  label(c){ return c.status==='married'?'💍 Married':'💞 Dating'; },
+  // your own card: who you're with, the meter, proposals, and who's asked you out
+  box(){ const wrap=el('div',{class:'authbox visitbox lovebox'}); wrap.append(el('h3',{text:'💘 Love'}), el('p',{class:'hint',text:'Loading…'}));
+    api('/api/me/love').then(r=>this.fill(wrap,r)).catch(()=>wrap.remove()); return wrap; },
+  fill(wrap,r){ wrap.replaceChildren(el('h3',{text:'💘 Love'})); const c=r.current;
+    if(c){ wrap.append(el('p',null, el('b',{text:this.label(c)}), ' to ', el('button',{class:'linkb',text:'@'+c.with,onclick:()=>openCitizen(c.with)})), this.hearts(c.hearts),
+        el('div',{class:'lovebar'}, el('b',{style:`width:${Math.round(100*c.points/c.max)}%`})),
+        el('p',{class:'hint',text:c.status==='married'?`Married since ${new Date(c.married).toLocaleDateString()}. You can design and furnish each other’s homes and businesses.`:c.ripe?'Your hearts are full: you’re ready to get married!':`${c.points} of ${c.max}. Spend time together in the same home or business and message each other to fill your hearts. Today: ${c.today.together}/${c.caps.together} from time together, ${c.today.texts}/${c.caps.texts} from messages.`}));
+      const acts=el('div',{class:'row-actions'});
+      if(c.proposedBy==='them') wrap.append(el('div',{class:'vreq'}, el('p',null, el('b',{text:'@'+c.with}), ' has asked you to marry them! 💍'), el('div',{class:'row-actions'},
+        el('button',{class:'btn primary',text:'💒 Yes, let’s get married',onclick:()=>this.act('/api/me/love/proposal',{accept:true},'💒 You’re married! Congratulations.',wrap)}),
+        el('button',{class:'btn',text:'Not yet',onclick:()=>this.act('/api/me/love/proposal',{accept:false},'You said not yet.',wrap)}))));
+      else if(c.proposedBy==='me') wrap.append(el('p',{class:'hint',text:`💍 You’ve proposed. Waiting for @${c.with}’s answer.`}));
+      else if(c.ripe) acts.append(el('button',{class:'btn primary',text:'💍 Propose',onclick:()=>toast(`Ask @${c.with} to marry you?`,'Propose',()=>this.act('/api/me/love/propose',{},`💍 You’ve proposed to @${c.with}. Fingers crossed!`,wrap))}));
+      acts.append(el('button',{class:'btn sm',text:c.status==='married'?'Divorce':'Break up',onclick:()=>toast(c.status==='married'?`Divorce @${c.with}? Your hearts start again from nothing if you get back together.`:`Break up with @${c.with}?`,c.status==='married'?'Divorce':'Break up',()=>this.act('/api/me/love/end',{},c.status==='married'?'You’re divorced.':'You’ve broken up.',wrap))}));
+      wrap.append(acts); }
+    else wrap.append(el('p',{class:'hint',text:'You’re single. Open someone’s card and tap 💘 Ask out.'}));
+    for(const a of r.asks||[]) wrap.append(el('div',{class:'vreq'}, el('p',null, el('b',{text:'@'+a.from}), a.message?` asked you out: “${a.message}”`:' asked you out!'), el('div',{class:'row-actions'},
+      el('button',{class:'btn sm primary',text:'💞 Yes',onclick:()=>this.act(`/api/citizens/${encodeURIComponent(a.from)}/love/answer`,{accept:true},`💞 You’re dating @${a.from} now!`,wrap)}),
+      el('button',{class:'btn sm',text:'No thanks',onclick:()=>this.act(`/api/citizens/${encodeURIComponent(a.from)}/love/answer`,{accept:false},`You said no to @${a.from}.`,wrap)}))));
+    for(const h of r.asked||[]) wrap.append(el('p',{class:'hint',text:`💘 You asked @${h} out. Waiting for their answer.`})); },
+  async act(url,body,msg,wrap){ try{ await api(url,{method:'POST',body}); toast(msg); if(wrap&&wrap.isConnected) this.fill(wrap,await api('/api/me/love')); else if(sel) renderCard(true); }catch(e){ toast(e.message); } },
+  // someone else's card: ask them out, or see where you stand
+  row(handle){ const wrap=el('div',{class:'row-actions lovechip'});
+    api('/api/citizens/'+encodeURIComponent(handle)+'/love').then(r=>{ wrap.replaceChildren(); const H=encodeURIComponent(handle), redo=()=>sel&&renderCard(true);
+      if(r.status==='dating'||r.status==='married'){ wrap.append(el('span',{class:'badge ok',text:this.label(r)}), this.hearts(r.hearts));
+        if(r.status==='married') wrap.append(el('button',{class:'btn sm',text:'🛋️ Furnish their home',title:'Married couples can design and furnish each other’s homes',onclick:()=>Room.open(handle)})); return; }
+      if(r.status==='askedMe') { wrap.append(el('span',{class:'hint',text:`💘 @${handle} asked you out${r.message?`: “${r.message}”`:''}`}),
+        el('button',{class:'btn sm primary',text:'💞 Yes',onclick:async()=>{ try{ await api(`/api/citizens/${H}/love/answer`,{method:'POST',body:{accept:true}}); toast(`💞 You’re dating @${handle} now!`); redo(); }catch(e){ toast(e.message); } }}),
+        el('button',{class:'btn sm',text:'No thanks',onclick:async()=>{ try{ await api(`/api/citizens/${H}/love/answer`,{method:'POST',body:{accept:false}}); redo(); }catch(e){ toast(e.message); } }})); return; }
+      if(r.status==='asked'){ wrap.append(el('span',{class:'hint',text:`💘 You asked @${handle} out. Waiting…`}), el('button',{class:'linkb',text:'Take it back',onclick:async()=>{ try{ await api(`/api/citizens/${H}/love/cancel`,{method:'POST',body:{}}); redo(); }catch(e){ toast(e.message); } }})); return; }
+      if(r.theyTaken){ wrap.append(el('span',{class:'hint',text:`💞 @${handle} is with someone.`})); return; }
+      if(r.iTaken||r.status==='declined') return;
+      wrap.append(el('button',{class:'btn love',text:'💘 Ask out',onclick:()=>this.ask(handle)})); }).catch(()=>{});
+    return wrap; },
+  ask(handle){ const {box,close}=sheetBox(`💘 Ask @${handle} out`); const msg=el('input',{type:'text',maxlength:'140',placeholder:'Say something sweet (optional)','aria-label':'Note'}), go=el('button',{class:'btn primary',text:'💘 Ask them out'});
+    go.onclick=async()=>{ go.disabled=true; try{ await api('/api/citizens/'+encodeURIComponent(handle)+'/love/ask',{method:'POST',body:{message:msg.value}}); close(); toast(`💘 You asked @${handle} out. You’ll get a notice when they answer.`); if(sel) renderCard(true); }catch(e){ go.disabled=false; toast(e.message); } };
+    box.append(el('p',{class:'hint',text:`If @${handle} says yes, you’re dating: spend time together and message each other to fill your hearts. With full hearts you can propose.`}), msg, el('div',{class:'row-actions'}, go)); },
+};
 const Visit={
   // tapping 🔒 Look inside: go in if you've been let in, otherwise ask
   async open(handle){ let st; try{ st=await api('/api/citizens/'+encodeURIComponent(handle)+'/visit'); }catch(e){ toast(e.message); return; }
@@ -6510,7 +6556,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     await this.open(null,id,d); if(design&&this.d&&this.d.mine&&!this.edit) this.toggle(true); },
   get biz(){ return this.d&&this.d.place==='business'; },
   get bld(){ return this.d&&(this.d.place==='business'||this.d.place==='building'); }, /* the building's own inside (a business, or a home nobody lives in) */
-  get base(){ return this.bld?`/api/me/buildings/${encodeURIComponent(this.d.home.id)}/inside/`:'/api/me/room/'; },
+  get base(){ return this.bld?`/api/me/buildings/${encodeURIComponent(this.d.home.id)}/inside/`:this.d&&this.d.partner?'/api/me/partner/room/':'/api/me/room/'; }, /* (married: your husband's or wife's home) */
   get editWord(){ return this.biz?'🛋️ Design':'🛋️ Furnish'; },
   async open(handle,bid,pre){ if(handle&&Me&&Me.handle&&handle.toLowerCase()===Me.handle.toLowerCase()) handle=null; const ent=Entrance.show(handle?`@${handle}’s home`:pre&&pre.home?pre.home.name:'');
     let d, H3, myLook=null; try{ [d,H3,[myLook]]=await Promise.all([pre?Promise.resolve(pre):api(bid?`/api/buildings/${encodeURIComponent(bid)}/inside`:handle?`/api/citizens/${encodeURIComponent(handle)}/room`:'/api/me/room'), import('/house3d.js'), Looks.want([Me&&Me.handle])]); }catch(e){ ent.cancel(); if(handle&&/locked/i.test(e.message||'')){ Visit.open(handle); return; } toast(e.message||'Your phone couldn’t load the 3D view.'); return; }
@@ -6682,7 +6728,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     s.innerHTML=''; const R=d.room, H3=this.H3; const keep=()=>{ const t=s.querySelector('.roomtabs'), r=s.querySelector('.roomitems'); if(t) t.scrollLeft=was.tabs; if(r&&was.cat===this.cat){ r.scrollLeft=was.x; r.scrollTop=was.y; } };
     const tabs=[...(this.biz?BIZ_CATS:[]),...ROOM_CATS,['style','🎨 Floor & walls'],['box',`📦 Stored${R.box.length?` (${R.box.length})`:''}`]];
     s.append(el('div',{class:'roomtabs'}, ...tabs.map(([k,n])=>el('button',{class:'rtab'+(this.cat===k?' on':''),text:n,onclick:()=>{ this.cat=k; this.paintShop(); }})),
-      this.bld?'':el('button',{class:'rtab'+(R.locked?' on':''),text:R.locked?'🔒 Locked':'🔓 Open to visitors',title:'Whether other players can walk into your home',onclick:()=>this.send('/api/me/room/lock',{locked:!R.locked},r=>toast(r.room.locked?'🔒 Your home is locked: others can’t come in.':'🔓 Your home is open: others can look around.'))}),
+      this.bld||this.d.partner?'':el('button',{class:'rtab'+(R.locked?' on':''),text:R.locked?'🔒 Locked':'🔓 Open to visitors',title:'Whether other players can walk into your home',onclick:()=>this.send('/api/me/room/lock',{locked:!R.locked},r=>toast(r.room.locked?'🔒 Your home is locked: others can’t come in.':'🔓 Your home is open: others can look around.'))}),
       el('span',{class:'roomcash',text:`💰 ${fmt(d.coins)}`})));
     const row=el('div',{class:'roomitems'}), card=(img,name,price,on,click)=>el('button',{class:'roomitem'+(on?' on':''),onclick:click}, img, el('b',{text:name}), el('span',{text:price}));
     const pic=(k,c)=>{ const u=H3.thumb(k,c||0); return u?el('img',{src:u,alt:'',width:'80',height:'64'}):el('i',{class:'noimg'}); };
@@ -6929,6 +6975,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
 
       if(mine) card.append(actionTabs(c));
       if(mine&&c.home) card.append(Visit.box(!!(d&&d.locked)));
+      if(mine&&Me&&Me.token) card.append(Love.box());
       if(mine) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'👗 Change my look',title:'Your character: body, face, hair, clothes and what you wear',onclick:()=>Look.show(false)})));
       if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; myMoney=null; ls.set('settlement-player',null); wsAuth(); Chats.reset(); buildToolbar(); refreshHUD(); toast('Logged out.'); renderCard(true); }})));
       else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
@@ -6940,6 +6987,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
           pocketBtn(c))); }
         if(c.claimed) card.append(el('div',{class:'row-actions'}, Blocks.has(c.handle)?'':el('button',{class:'btn primary',text:'💬 Message',onclick:()=>Chats.open(c.handle)}),
           Blocks.has(c.handle)?el('button',{class:'btn',text:'Unblock',onclick:()=>Blocks.unblock(c.handle)}):el('button',{class:'btn',text:'🚫 Block',onclick:()=>Blocks.ask(c.handle)})));
+        if(c.claimed&&!Blocks.has(c.handle)) card.append(Love.row(c.handle));
         if(c.claimed) card.append(giftBox(c.handle)); else card.append(el('p',{class:'hint',text:`@${c.handle} hasn't verified their avatar yet, so they can't receive gifts.`})); }
       else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}), c.home?el('button',{class:'btn',text:'👀 Watch',onclick:()=>Watch.start(0,`Watching @${c.handle}`,null,c.handle)}):'')); }
   } else if(sel.kind==='p'){ Plots.card(card, close);

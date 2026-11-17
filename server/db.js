@@ -347,6 +347,10 @@ const MIGRATIONS = [
   // v73: an owner's own apartment in a building they own, kept furnished (and its number kept) while they live elsewhere
   `create table if not exists kept_homes (citizen_id text not null, building_id text not null, unit int not null, room jsonb, t bigint not null, primary key (citizen_id, building_id));
    create index if not exists kept_homes_building on kept_homes (building_id);`,
+  // v74: relationships (server/love.js): asked out, dating or married, and the love meter; one row per pair of colonists
+  `create table if not exists relationships (pair text primary key, a_id text not null, b_id text not null, status text not null, asked_by text, message text, t bigint not null,
+     points real not null default 0, started bigint, married_at bigint, proposed_by text, last_active bigint, faded_at bigint, day_key text, day_together real not null default 0, day_texts real not null default 0);
+   create index if not exists relationships_a on relationships (a_id, status); create index if not exists relationships_b on relationships (b_id, status);`,
 ];
 
 export async function migrate() {

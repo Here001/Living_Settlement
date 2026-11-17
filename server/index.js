@@ -36,6 +36,7 @@ import { throttle, apiThrottle, take, ipOf, locked, failed, usageReport, WS_PER_
 import { Housing } from './housing.js';
 import { Rooms } from './rooms.js';
 import { Visits } from './visits.js';
+import { Love } from './love.js';
 import { Economy } from './economy.js';
 import { GAME_MIN_MS } from '../shared/rules.js';
 import * as R from '../shared/rules.js';
@@ -61,7 +62,7 @@ const lottery = new Lottery(world); world.lottery = lottery;
 const auctions = new Auctions(world); world.auctions = auctions;
 const economy = new Economy(world); world.economy = economy;
 world.housing = new Housing(world);
-world.rooms = new Rooms(world); world.visits = new Visits(world);
+world.rooms = new Rooms(world); world.visits = new Visits(world); world.love = new Love(world);
 const chat = new Chat(bus); world.chat = chat; chat.world = world;
 world.bus = bus; /* inside chat passes through it to every server */
 world.chat.removePhoto = id => world.rooms.removePhoto(id); // a reported photo the developer takes down
@@ -76,6 +77,9 @@ world.arena = new Arena(world, bus); world.arena.leader = () => isLeader;
 world.radio = new Radio(world, bus);
 setInterval(() => { if (isLeader && world.meta) world.radio.tick().catch(e => console.error('radio:', e.message)); }, 15000).unref(); // DJ talk breaks
 world.stars = new Stars(world, bus);
+// couples spending time together in the same home or business: a little love each minute (each server counts the people connected to it)
+setInterval(() => { const places = new Map(); for (const w of wss.clients) if (w.inside && w.playerId) (places.get(w.inside) || places.set(w.inside, []).get(w.inside)).push(w.playerId);
+  for (const [k, v] of places) if (v.length < 2) places.delete(k); if (places.size) world.love.together(places).catch(e => console.error('love:', e.message)); }, 60000).unref();
 setInterval(() => world.gametables.sweep().catch(e => console.error('tables:', e.message)), 10000).unref(); // slow turns and unfilled tables
 setInterval(() => world.heists.sweep().catch(e => console.error('heists:', e.message)), 15000).unref(); // planned group crimes that are due
 world.earn = new Earn(world); world.guide = new Guide(world); world.elections = new Elections(world);

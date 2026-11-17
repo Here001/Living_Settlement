@@ -417,3 +417,8 @@ export const statusOf = tier => tier > 0 ? STATUS[Math.min(STATUS.length, tier) 
 // growth). Faster than that and crime takings, daily rewards and interest are trimmed; slower and they're loosened.
 export const ECON = { target: 0.02, band: 0.01, step: 0.04, min: 0.5, max: 1.5 };
 export const econF = meta => Math.max(ECON.min, Math.min(ECON.max, Number(meta?.econ?.f ?? 1)));
+// Relationships (server/love.js): the love meter goes 0 to MAX (five hearts). It starts a little filled when someone says
+// yes; a minute together in the same home or business adds PER_MINUTE (up to TOGETHER_CAP a day), a message to each
+// other TEXT (up to TEXT_CAP a day): a few days of real effort fills it. After FADE_AFTER days apart it drops FADE_PER_DAY
+// a day. Full hearts: you can propose. A "no" to being asked out: wait RETRY_MS before asking the same person again.
+export const LOVE = { MAX: 100, START: 5, PER_MINUTE: 1, TOGETHER_CAP: 20, TEXT: 1, TEXT_CAP: 8, FADE_AFTER: 3, FADE_PER_DAY: 4, RETRY_MS: 60 * 60 * 1000 };

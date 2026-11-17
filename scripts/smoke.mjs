@@ -1586,6 +1586,7 @@ ok(r.status === 200 && r.json.removed > 0 && (await meta()).population === 1, 'r
   ok(typeof st.json.money.playerCash === 'number' && st.json.money.treasury >= 0 && st.json.funnel.length === 11 && st.json.funnel.every(f => typeof f[2] === 'number'), 'stats: coins in circulation and the sign-up funnel', JSON.stringify(st.json.money)); }
 // ---- Land, building on it, upgrades and offers between colonists (server/housing.js) ----
 {
+async function world_love_add(a, b, kind, n) { const { Love } = await import('../server/love.js'); return new Love({}).add(a, b, kind, n); }
 async function player(handle, coins) {
   await call('POST', '/api/admin/citizens', { handle });
   const id = (await pool.query('select id from citizens where handle = $1', [handle])).rows[0].id;
@@ -2024,6 +2025,42 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   await moveTo(O, hs.id); ok((await call('POST', '/api/me/properties/sell', { buildingId: ap.id }, O.P)).status === 200, 'they sell the building while living elsewhere');
   const after = (await call('GET', '/api/me/room', undefined, O.P)).json.room;
   ok(after.box.some(i => i.i === 'k1') && after.box.some(i => i.i === 'k2') && !(await pool.query('select 1 from kept_homes where citizen_id = $1', [O.id])).rowCount, '…and the apartment’s furniture comes to them, in storage', JSON.stringify(after.box)); }
+{ // relationships: ask out, a love meter that fills with time together and messages (capped each day), propose, marry; married couples furnish each other's places
+  const A = await player('love_amy', 200_000), B = await player('love_ben', 200_000), C = await player('love_cat', 50_000);
+  const home = (await call('POST', '/api/admin/buildings', { type: 'house', x: 1400, y: 1300, instant: true })).json.building, shop = (await call('POST', '/api/admin/buildings', { type: 'bakery', x: 1420, y: 1300, instant: true })).json.building;
+  await pool.query('update citizens set home_id = $2, room = null, home_unit = null, home_unit_bid = null where id = $1', [B.id, home.id]);
+  await pool.query('update buildings set owner_id = $2, owner_handle = $3 where id = $1', [shop.id, B.id, 'love_ben']);
+  ok((await call('POST', '/api/citizens/love_amy/love/ask', {}, A.P)).status === 400, 'you can’t ask yourself out');
+  ok((await call('POST', '/api/citizens/love_ben/love/ask', { message: 'Coffee?' }, A.P)).status === 200, 'Amy asks Ben out');
+  ok((await call('POST', '/api/citizens/love_cat/love/ask', {}, A.P)).status === 409, '…one question at a time');
+  ok((await call('GET', '/api/me/love', undefined, B.P)).json.asks?.[0]?.from === 'love_amy', 'Ben sees who asked him out');
+  ok((await call('POST', '/api/citizens/love_amy/love/answer', { accept: false }, B.P)).json.status === 'declined', 'Ben can say no');
+  ok((await call('POST', '/api/citizens/love_ben/love/ask', {}, A.P)).status === 429, '…and Amy has to wait before asking again');
+  await pool.query("update relationships set t = 0 where pair like '%' || $1 || '%'", [A.id]);
+  ok((await call('POST', '/api/citizens/love_ben/love/ask', {}, A.P)).status === 200, 'later, she asks again');
+  await call('POST', '/api/citizens/love_ben/love/ask', {}, C.P); /* Cat asks Ben too */
+  ok((await call('POST', '/api/citizens/love_amy/love/answer', { accept: true }, B.P)).json.status === 'dating', 'Ben says yes: they’re dating');
+  ok(!(await pool.query("select 1 from relationships where status = 'asked' and asked_by = $1", [C.id])).rowCount, '…and Cat’s question is off');
+  ok((await call('POST', '/api/citizens/love_cat/love/ask', {}, A.P)).status === 409, 'you can only be with one person at a time');
+  const s0 = (await call('GET', '/api/citizens/love_ben/love', undefined, A.P)).json; ok(s0.status === 'dating' && s0.points === 5 && s0.hearts === 0, 'the meter starts low', JSON.stringify(s0));
+  ok((await call('POST', '/api/me/love/propose', {}, A.P)).status === 409, 'you can’t propose before your hearts are full');
+  for (let i = 0; i < 12; i++) await world_love_add(A.id, B.id, 'text', 1);
+  for (let i = 0; i < 30; i++) await world_love_add(A.id, B.id, 'together', 1);
+  const s1 = (await call('GET', '/api/me/love', undefined, A.P)).json.current; ok(s1.points === 33 && s1.today.texts === 8 && s1.today.together === 20 && s1.hearts === 1, 'time together and messages fill it, up to a limit each day', JSON.stringify(s1));
+  await pool.query("update relationships set points = 100, day_key = null where status = 'dating' and (a_id = $1 or b_id = $1)", [A.id]);
+  ok((await call('GET', '/api/me/love', undefined, B.P)).json.current.ripe === true, 'full hearts: ready to marry');
+  ok((await call('POST', '/api/me/love/propose', {}, A.P)).status === 200, 'Amy proposes');
+  ok((await call('GET', '/api/me/love', undefined, B.P)).json.current.proposedBy === 'them', '…Ben sees the proposal');
+  ok((await call('POST', '/api/me/love/proposal', { accept: true }, B.P)).json.status === 'married', '…and says yes: they’re married');
+  const ph = (await call('GET', '/api/citizens/love_ben/room', undefined, A.P)).json; ok(ph.mine === true && ph.partner === true, 'married: Amy can furnish Ben’s home', JSON.stringify({ mine: ph.mine, partner: ph.partner }));
+  let put = null; for (let y = 0; y < 8 && !put; y++) for (let x = 0; x < 8 && !put; x++) { const r = await call('POST', '/api/me/partner/room/buy', { k: 'plant', x, y, r: 0 }, A.P); if (r.status === 200) put = r; }
+  ok(put && put.json.partner && (await call('GET', '/api/me/room', undefined, B.P)).json.room.items.some(i => i.k === 'plant'), '…what she buys goes into his home', JSON.stringify(put?.json?.error || ''));
+  ok(Number((await pool.query('select coins_base from citizens where id = $1', [A.id])).rows[0].coins_base) < 200_000 && Number((await pool.query('select coins_base from citizens where id = $1', [B.id])).rows[0].coins_base) === 200_000, '…paid from her own coins');
+  ok((await call('GET', `/api/buildings/${shop.id}/inside`, undefined, A.P)).json.mine === true, '…and she can design his business too');
+  ok((await call('POST', `/api/me/buildings/${shop.id}/inside/buy`, { k: 'plant', x: 0, y: 0, r: 0 }, C.P)).status === 403, '…but nobody else can');
+  ok((await call('POST', '/api/me/partner/room/buy', { k: 'plant', x: 1, y: 1, r: 0 }, C.P)).status === 403, 'someone single has no partner’s home to furnish');
+  ok((await call('POST', '/api/me/love/end', {}, B.P)).json.ended === 'married', 'either of them can end it');
+  ok((await call('GET', '/api/citizens/love_ben/room', undefined, A.P)).json.mine === false, '…and then it’s his home again, not hers to change'); }
 { // inside, live: everyone in the same place sees the others walk about and can chat; frames turn on the wall; homes differ by type
   const A = await player('live_amy', 50_000), Bq = await player('live_ben', 50_000), place = 'b:live-test-' + Date.now();
   const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'inside' || m.type === 'authed') got.push(m); });

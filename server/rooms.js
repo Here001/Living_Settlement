@@ -56,7 +56,7 @@ export class Rooms {
       const live = (await pool.query('select handle, room, case when home_unit_bid = $1 then home_unit end unit from citizens where home_id = $1 order by home_unit nulls last, lower(handle) limit 60', [b.id])).rows;
       if (live.length) return { choose: live.map(r => ({ handle: r.handle, locked: !!r.room?.locked, unit: r.unit || 0 })), home: { id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Home', type: b.type }, owner: b.owner_handle || null, mine: !!meId && b.owner_id === meId };
     }
-    const { size, room } = this.bizRoom(b), mine = !!meId && b.owner_id === meId, c = mine ? (await pool.query('select coins_base from citizens where id = $1', [meId])).rows[0] : null;
+    const { size, room } = this.bizRoom(b), mine = !!meId && !!b.owner_id && (b.owner_id === meId || (await this.world.love?.spouseOf(meId)) === b.owner_id), c = mine ? (await pool.query('select coins_base from citizens where id = $1', [meId])).rows[0] : null;
     return { mine, place: BUILDING_TYPES[b.type]?.home ? 'building' : 'business', owner: b.owner_handle || null, designed: !!b.interior, home: { id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Building', type: b.type, x: b.x, y: b.y, w: b.w, d: b.d }, size, room, photos: await this.photoUrls(room), coins: c ? Math.round(Number(c.coins_base)) : undefined };
   }
   async homeOf(q, c) {
@@ -89,8 +89,11 @@ export class Rooms {
     const c = handle ? (await pq('select id, handle, home_id, room, coins_base, home_unit, home_unit_bid from citizens where lower(handle) = lower($1)', [String(handle)])).rows[0] : (await pq('select id, handle, home_id, room, coins_base, home_unit, home_unit_bid from citizens where id = $1', [meId])).rows[0];
     if (!c) throw new HttpError(404, 'No colonist with that name.');
     const home = await this.homeOf(pq, c); if (!home) throw new HttpError(404, c.id === meId ? 'You don’t have a home yet. Rent one first, then you can furnish it.' : `@${c.handle} doesn’t have a home right now.`);
-    const room = F.fitRoom(c.room, home.size, home.plan).room; if (room.locked && c.id !== meId && !(await this.world.visits?.allowed(c.id, meId))) throw new HttpError(403, `@${c.handle} keeps their home locked. Ask to visit from their card.`); /* unless they've let you in */
-    return this.out(c, home, room, c.id === meId);
+    const partner = !!meId && c.id !== meId && (await this.world.love?.spouseOf(meId)) === c.id; /* married: your spouse's home is yours to furnish too */
+    const room = F.fitRoom(c.room, home.size, home.plan).room; if (room.locked && c.id !== meId && !partner && !(await this.world.visits?.allowed(c.id, meId))) throw new HttpError(403, `@${c.handle} keeps their home locked. Ask to visit from their card.`); /* unless they've let you in */
+    const o = await this.out(c, home, room, c.id === meId || partner);
+    if (partner) { o.partner = true; o.coins = Math.round(Number((await pq('select coins_base from citizens where id = $1', [meId])).rows[0]?.coins_base || 0)); }
+    return o;
   }
   // Every change: lock the colonist, fit their home to the house they live in, apply fn, save. fn returns { spend, refund, gone }.
   // `bid`: a business the colonist owns, instead of their home.
@@ -98,9 +101,11 @@ export class Rooms {
     let gone = [];
     const res = await this.world.personal(async ch => {
       const q = (a, v) => ch.q(a, v), c = (await q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such colonist.');
-      let home, room, b = null;
-      if (bid) { b = (await q('select * from buildings where id = $1 for update', [String(bid)])).rows[0]; if (!b) throw new HttpError(404, 'That building is gone.');
-        if (b.owner_id !== c.id) throw new HttpError(403, 'Only its owner can design the inside.'); if (!this.enterable(b.type) || !b.done) throw new HttpError(409, 'This building has no inside to design.');
+      let home, room, b = null, t = c; /* t: whose home it is (you, or your husband or wife); c pays */
+      if (bid === '@partner') { const sid = await this.world.love?.spouseOf(c.id, q); if (!sid) throw new HttpError(403, 'Only married couples can furnish each other’s homes.');
+        t = (await q('select * from citizens where id = $1 for update', [sid])).rows[0]; home = t && await this.homeOf(q, t); if (!home) throw new HttpError(409, 'Your husband or wife doesn’t have a home right now.'); room = F.fitRoom(t.room, home.size, home.plan).room; bid = null; }
+      else if (bid) { b = (await q('select * from buildings where id = $1 for update', [String(bid)])).rows[0]; if (!b) throw new HttpError(404, 'That building is gone.');
+        if (b.owner_id !== c.id && !(b.owner_id && (await this.world.love?.spouseOf(c.id, q)) === b.owner_id)) throw new HttpError(403, 'Only its owner (or their husband or wife) can design the inside.'); if (!this.enterable(b.type) || !b.done) throw new HttpError(409, 'This building has no inside to design.');
         const z = this.bizRoom(b); room = z.room; home = { plan: z.plan, id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Building', type: b.type, x: b.x, y: b.y, w: b.w, d: b.d, size: z.size }; }
       else { home = await this.homeOf(q, c); if (!home) throw new HttpError(409, 'You don’t have a home yet. Rent one first, then you can furnish it.'); room = F.fitRoom(c.room, home.size, home.plan).room; }
       const r = await fn(room, home, c, q, b) || {};
@@ -110,11 +115,12 @@ export class Rooms {
         if (r.refund) { c.coins_base = Number(c.coins_base) + r.refund; track(ch, 'home:resale', r.refund, c.id); }
         ch.touch(c); await ch.saveCitizen(c); }
       if (r.gone?.length) { gone = (await q('delete from room_photos where id = any($1) returning r2key', [r.gone])).rows; }
-      if (b) await q('update buildings set interior = $2 where id = $1', [b.id, JSON.stringify(room)]); else await q('update citizens set room = $2 where id = $1', [c.id, JSON.stringify(room)]);
-      return { c, home, room, item: r.item, b };
+      if (b) await q('update buildings set interior = $2 where id = $1', [b.id, JSON.stringify(room)]); else await q('update citizens set room = $2 where id = $1', [t.id, JSON.stringify(room)]);
+      return { c, t, home, room, item: r.item, b };
     });
     for (const g of gone) if (g.r2key && store.r2On()) store.del(g.r2key).catch(() => {}); // the photos nobody uses any more
-    const o = res.b ? { mine: true, place: BUILDING_TYPES[res.b.type]?.home ? 'building' : 'business', owner: res.c.handle, designed: true, home: res.home, size: res.home.size, room: res.room, photos: await this.photoUrls(res.room), coins: Math.round(Number(res.c.coins_base)) } : await this.out(res.c, res.home, res.room, true);
+    const o = res.b ? { mine: true, place: BUILDING_TYPES[res.b.type]?.home ? 'building' : 'business', owner: res.c.handle, designed: true, home: res.home, size: res.home.size, room: res.room, photos: await this.photoUrls(res.room), coins: Math.round(Number(res.c.coins_base)) } : await this.out(res.t, res.home, res.room, true);
+    if (!res.b && res.t.id !== res.c.id) { o.partner = true; o.coins = Math.round(Number(res.c.coins_base)); } /* your spouse's home: their home, your coins */
     return { ...o, ok: true, ...(res.item ? { item: res.item } : {}) };
   }
   find(room, i) { const at = room.items.findIndex(x => x.i === i), inBox = at < 0 ? room.box.findIndex(x => x.i === i) : -1;
@@ -173,9 +179,9 @@ export class Rooms {
     const pid = crypto.randomBytes(9).toString('base64url'); let r2key = null;
     if (store.r2On()) { try { await store.put(photoKey(pid), buf, 'image/jpeg'); r2key = photoKey(pid); } catch (e) { console.error('photo to R2:', e.message); } }
     try {
-      return await this.edit(id, async (room, home, c, q) => {
+      return await this.edit(id, async (room, home, c, q, b) => {
         const { it } = this.find(room, String(i || '')); if (!F.FURNITURE[it.k]?.photo) throw new HttpError(400, 'Only photo frames take a photo.');
-        await q('insert into room_photos (id, citizen_id, r2key, data, bytes, t, building_id) values ($1, $2, $3, $4, $5, $6, $7)', [pid, c.id, r2key, r2key ? null : buf, buf.length, Date.now(), bid || null]);
+        await q('insert into room_photos (id, citizen_id, r2key, data, bytes, t, building_id) values ($1, $2, $3, $4, $5, $6, $7)', [pid, c.id, r2key, r2key ? null : buf, buf.length, Date.now(), b ? b.id : null]);
         const old = it.ph; it.ph = pid; return { gone: old ? [old] : [] };
       }, bid);
     } catch (e) { if (r2key) store.del(r2key).catch(() => {}); throw e; }

@@ -175,6 +175,13 @@ ACT.piano = ACT.grandpiano = { kind: 'play', icon: '🎹', label: 'Play' }; ACT.
 ACT.treadmill = { kind: 'run', icon: '🏃', label: 'Run' };
 ACT.stove = { kind: 'use', icon: '🍳', label: 'Cook' }; ACT.sink = ACT.basin = ACT.vanity = { kind: 'use', icon: '🚰', label: 'Wash your hands' }; ACT.arcade = { kind: 'use', icon: '🕹️', label: 'Play' };
 ACT.mirror = { kind: 'use', icon: '🪞', label: 'Look in the mirror' }; ACT.fridge = { kind: 'use', icon: '🧊', label: 'Get a drink' }; ACT.gaming = { kind: 'use', icon: '🎮', label: 'Play' };
+// more places to sit: sofas and armchairs (their middle), and seats picked out by part (`seats`: the cushions you can
+// sit on, the nearest one is yours; `back`: the part you lean on; `faceCentre`: face the table in the middle)
+for (const k of ['clubsofa', 'velvetsofa', 'leatherchair']) ACT[k] = { kind: 'sit', icon: '🛋️', label: 'Sit' };
+ACT.chaise = { kind: 'sit', icon: '🛋️', label: 'Lounge', seats: [4], back: 6 };
+ACT.vipbooth = { kind: 'sit', icon: '🛋️', label: 'Sit', seats: [0, 2, 4], faceCentre: true }; ACT.booth = { kind: 'sit', icon: '🪑', label: 'Sit', seats: [2, 3], faceCentre: true };
+ACT.glowtable = { kind: 'sit', icon: '🪑', label: 'Sit', seats: [2, 3], faceCentre: true }; ACT.hightable = { kind: 'sit', icon: '🪑', label: 'Sit', seats: [4, 6], faceCentre: true };
+ACT.cinemaseats = { kind: 'sit', icon: '🍿', label: 'Sit', seats: [1, 4, 7], back: 2 }; ACT.diningset = { kind: 'sit', icon: '🪑', label: 'Sit', seats: [8, 11], faceCentre: true };
 ACT.dancefloor = ACT.bigdancefloor = { kind: 'dance', icon: '💃', label: 'Dance' }; ACT.dancepole = ACT.polestage = ACT.dancercage = { kind: 'pole', icon: '🕺', label: 'Dance on the pole' };
 ACT.tv = ACT.walltv = { kind: 'tv', icon: '📺', label: 'Turn on', labelOn: 'Turn off' };
 const POSE = { s: 'sit', l: 'lie', u: 'use', p: 'play', r: 'stand', d: 'dance', o: 'pole' }, CODE = { sit: 's', lie: 'l', use: 'u', play: 'p', run: 'r', dance: 'd', pole: 'o' };
@@ -558,7 +565,12 @@ export function createHouse(host, opts) {
     if (A.kind === 'tv' || A.kind === 'light') { const set = A.kind === 'tv' ? tvOn : offLights; set.has(it.i) ? set.delete(it.i) : set.add(it.i); buildStuff(); placeLights(true); actKey = ''; prompt(); dirty = true; wake(); return; }
     const av = me3.userData.av, back = { x: me.x, y: me.y, yaw: me.yaw }, fl = Math.hypot(b.cx - b.tx, b.cy - b.ty), F = fl > 0.05 ? { x: (b.cx - b.tx) / fl, y: (b.cy - b.ty) / fl } : null; /* the way it faces: away from its tallest part */
     const vl = Math.hypot(me.x - b.cx, me.y - b.cy) || 1, toMe = { x: (me.x - b.cx) / vl, y: (me.y - b.cy) / vl }; let x, y, wy, wyaw, yaw;
-    if (A.kind === 'sit') { const f = F || toMe, px = f.y, py = -f.x, hw = Math.abs(px) * (b.x1 - b.x0) / 2 + Math.abs(py) * (b.y1 - b.y0) / 2; /* on a long sofa, the seat nearest you */
+    if (A.kind === 'sit' && A.seats) { /* a seat picked out by part: the nearest one to you */ const ps = placedParts(it, '#ffffff'), cands = A.seats.map(n => ps[n]).filter(Boolean);
+      const p = cands.sort((a, c) => Math.hypot(a.x + a.w / 2 - me.x, a.y + a.d / 2 - me.y) - Math.hypot(c.x + c.w / 2 - me.x, c.y + c.d / 2 - me.y))[0], px = p.x + p.w / 2, py = p.y + p.d / 2;
+      let f = null; if (A.faceCentre) { const vx = b.cx - px, vy = b.cy - py, l = Math.hypot(vx, vy); if (l > 0.15) f = { x: vx / l, y: vy / l }; }
+      if (!f && A.back != null && ps[A.back]) { const q = ps[A.back], vx = px - (q.x + q.w / 2), vy = py - (q.y + q.d / 2), l = Math.hypot(vx, vy); if (l > 0.05) f = { x: vx / l, y: vy / l }; }
+      f = f || F || toMe; x = px; y = py; yaw = Math.atan2(-f.x, -f.y); wy = p.z + p.h - (A.sink || 0) + 0.06 - av.hipY; wyaw = yaw; }
+    else if (A.kind === 'sit') { const f = F || toMe, px = f.y, py = -f.x, hw = Math.abs(px) * (b.x1 - b.x0) / 2 + Math.abs(py) * (b.y1 - b.y0) / 2; /* on a long sofa, the seat nearest you */
       const t = hw > 0.6 ? Math.max(-(hw - 0.42), Math.min(hw - 0.42, (me.x - b.cx) * px + (me.y - b.cy) * py)) : 0, seat = (b.seat || 0.45) - (A.sink || 0);
       x = b.cx + px * t - f.x * 0.1; y = b.cy + py * t - f.y * 0.1; yaw = Math.atan2(-f.x, -f.y); wy = seat + 0.06 - av.hipY; wyaw = yaw; }
     else if (A.kind === 'lie') { let H = F ? { x: -F.x, y: -F.y } : null; if (!H) H = b.x1 - b.x0 > b.y1 - b.y0 ? { x: 1, y: 0 } : { x: 0, y: 1 }; /* head towards the headboard */

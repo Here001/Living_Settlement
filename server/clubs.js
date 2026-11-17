@@ -8,8 +8,9 @@ import { BUILDING_TYPES } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
 import { track } from './stats.js';
 
-export const SPRAY_PERSON = [200, 1000, 5000, 20000];       // coins: spraying one person
-export const SPRAY_CLUB = [10000, 50000, 200000, 1000000];  // coins: spraying the whole club
+export const SPRAY_PERSON = [200, 1000, 5000, 20000];       // quick amounts for spraying one person (any amount you have is fine)
+export const SPRAY_CLUB = [10000, 50000, 200000, 1000000];  // quick amounts for spraying the whole club (any amount you have is fine)
+const amountOf = v => { const n = Math.round(Number(v)); if (!Number.isFinite(n) || n < 1 || n > 1e12) throw new HttpError(400, 'How much do you want to spray?'); return n; };
 export const RAIN_MS = 20000;                               // how long the money falls
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const SHOUTS = [
@@ -33,7 +34,7 @@ export class Clubs {
   send(place, club) { this.world.bus.publish([{ inside: true, place, k: 'club', club }]); }
   // spray one person who's in the club with you
   async sprayPerson(me, place, handle, amount) {
-    amount = Number(amount); if (!SPRAY_PERSON.includes(amount)) throw new HttpError(400, 'How much?');
+    amount = amountOf(amount);
     const club = await this.club(place); if (!this.here(place, me.id)) throw new HttpError(409, 'You need to be in the club.');
     const to = (await pool.query('select id, handle from citizens where lower(handle) = lower($1)', [String(handle || '').replace(/^@/, '')])).rows[0];
     if (!to) throw new HttpError(404, 'No colonist with that name.'); if (to.id === me.id) throw new HttpError(400, 'Spray someone else!');
@@ -51,7 +52,7 @@ export class Clubs {
   }
   // spray the whole club: the money rains on everyone inside for a while, and they grab what they can
   async sprayClub(me, place, amount) {
-    amount = Number(amount); if (!SPRAY_CLUB.includes(amount)) throw new HttpError(400, 'How much?');
+    amount = amountOf(amount);
     const club = await this.club(place); if (!this.here(place, me.id)) throw new HttpError(409, 'You need to be in the club.');
     const busy = (await pool.query('select 1 from club_rains where place = $1 and not done and until > $2 limit 1', [place, Date.now()])).rowCount;
     if (busy) throw new HttpError(409, 'Money is already raining in here! Wait for it to finish.');

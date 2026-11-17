@@ -6546,9 +6546,12 @@ const Club={ R:null, info:null, audio:null, radio:undefined, got:0, rainT:null, 
   sheet(){ if(!(Me&&Me.token)){ toast('Sign in to spray money.'); return; } const {box,close}=sheetBox('💸 Spray money','spraysheet'), I=this.info||{};
     const people=this.who(), sel=el('select',{'aria-label':'Who to spray'}, ...people.map(h=>el('option',{value:h,text:'@'+h})));
     const one=el('div',{class:'row-actions'}, ...(I.person||[]).map(a=>el('button',{class:'btn sm',text:`💵 ${fmt(a)}`,onclick:()=>this.spray({to:sel.value,amount:a},close)})));
-    box.append(el('h4',{text:'Spray someone'}), people.length?el('div',null, sel, one):el('p',{class:'hint',text:'Nobody else is here yet.'}),
+    const amt=(ph)=>el('input',{type:'number',min:'1',step:'1',inputmode:'numeric',placeholder:ph,'aria-label':'How much'}), own1=amt('Any amount'), own2=amt('Any amount'), n=i=>Math.round(Number(i.value)); /* any amount you have */
+    const go1=el('button',{class:'btn sm',text:'💵 Spray',onclick:()=>{ if(!(n(own1)>=1)){ toast('Type how much to spray.'); return; } this.spray({to:sel.value,amount:n(own1)},close); }});
+    const go2=el('button',{class:'btn sm primary',text:'💸 Spray the club',onclick:()=>{ const a=n(own2); if(!(a>=1)){ toast('Type how much to spray.'); return; } toast(`Spray the whole club with ${fmt(a)} coins?`,'Spray it!',()=>this.spray({amount:a},close)); }});
+    box.append(el('h4',{text:'Spray someone'}), people.length?el('div',null, sel, one, el('div',{class:'row-actions'}, own1, go1)):el('p',{class:'hint',text:'Nobody else is here yet.'}),
       el('h4',{text:'🌧️ Spray the whole club'}), el('p',{class:'hint',text:'Money rains from the ceiling on everyone here for 20 seconds; they tap the notes to grab it. The DJ gives you a shout-out!'}),
-      el('div',{class:'row-actions'}, ...(I.club||[]).map(a=>el('button',{class:'btn sm primary',text:`💸 ${fmt(a)}`,onclick:()=>toast(`Spray the whole club with ${fmt(a)} coins?`,'Spray it!',()=>this.spray({amount:a},close))}))));
+      el('div',{class:'row-actions'}, ...(I.club||[]).map(a=>el('button',{class:'btn sm primary',text:`💸 ${fmt(a)}`,onclick:()=>toast(`Spray the whole club with ${fmt(a)} coins?`,'Spray it!',()=>this.spray({amount:a},close))}))), el('div',{class:'row-actions'}, own2, go2));
   },
   async spray(body,close){ if(!this.R) return; try{ const r=await api('/api/clubs/spray',{method:'POST',body:{...body,place:this.R.spot}}); close&&close(); if(myMoney&&typeof r.coins==='number'){ myMoney.coins=r.coins; refreshHUD(); } }catch(e){ toast(e.message); } },
   idOf(h){ if(Me&&h&&h.toLowerCase()===String(Me.handle||'').toLowerCase()) return 'me'; for(const p of (this.R&&this.R.others?this.R.others.values():[])) if(p.h&&p.h.toLowerCase()===h.toLowerCase()) return p.id; return null; },

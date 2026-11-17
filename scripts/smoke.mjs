@@ -2075,7 +2075,7 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   ok(inside.room?.plan === 'club' && inside.guests === 40 && ['djbooth', 'dancefloor', 'dancepole', 'clubbar', 'movinghead'].every(k => ks.includes(k)), 'a night club: a club floor plan, room for 40, a DJ booth, a dance floor, poles, a bar and lights', JSON.stringify({ plan: inside.room?.plan, guests: inside.guests, ks }));
   const here = P => call('POST', '/inside/here'.replace(/^/, '/api'), { place }, P.P); for (const P of [A, B, C]) await here(P);
   const coins = async P => Number((await pool.query('select coins_base from citizens where id = $1', [P.id])).rows[0].coins_base);
-  ok((await call('POST', '/api/clubs/spray', { place, to: 'club_ben', amount: 999 }, A.P)).status === 400, 'only the set amounts');
+  ok((await call('POST', '/api/clubs/spray', { place, to: 'club_ben', amount: 0 }, A.P)).status === 400, 'you have to spray something');
   ok((await call('POST', '/api/clubs/spray', { place, to: 'club_ben', amount: 1000 }, E.P)).status === 409, 'you have to be in the club to spray');
   ok((await call('POST', '/api/clubs/spray', { place, to: 'club_eve', amount: 1000 }, A.P)).status === 409, '…and so does the person you spray');
   const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'inside' || m.type === 'authed') got.push(m); });

@@ -243,7 +243,7 @@ export function createHouse(host, opts) {
   // where the piece being placed would go, aiming through a point on the screen (ndc), or the middle of it
   const ray = new THREE.Raycaster(), v2 = new THREE.Vector2();
   function aim(nx = 0, ny = 0) {
-    if (!pick) return; const f = FURNITURE[pick.k]; ray.setFromCamera(v2.set(nx, ny), camera);
+    if (!pick) return; const f = FURNITURE[pick.k]; ray.setFromCamera(v2.set(nx, ny), camera); ray.near = camera.near; /* not what's hidden in front of the camera's cut-off */
     if (f.mount === 'floor' || (view === 'above' && f.mount !== 'floor')) {
       if (f.mount !== 'floor') return;
       const hits = ray.intersectObjects([...floors.children, ...walls.children], false); let p = null;
@@ -269,17 +269,30 @@ export function createHouse(host, opts) {
   // you: seen from behind in third person (and from above); hidden in first person
   const me3 = figure(opts.me || 'you'), meMat = MAT.solid.clone(); meMat.transparent = true; me3.children[0].material = meMat; me3.visible = false; scene.add(me3); let persp = opts.persp === 'third' ? 'third' : 'first';
   const backRay = new THREE.Raycaster();
+  // how far the third-person camera can sit behind you before it would leave the house
+  const roomBehind = () => { const fx = -Math.sin(me.yaw), fy = -Math.cos(me.yaw), M = 0.2; let D = 2.6;
+    if (fx > 1e-6) D = Math.min(D, (me.x - M) / fx); else if (fx < -1e-6) D = Math.min(D, (S - M - me.x) / -fx);
+    if (fy > 1e-6) D = Math.min(D, (me.y - M) / fy); else if (fy < -1e-6) D = Math.min(D, (S - M - me.y) / -fy); return D; };
+  // in third person, step forward (if there's floor) until the camera has room behind you
+  function stepIn() { if (persp !== 'third') return; const fx = -Math.sin(me.yaw), fy = -Math.cos(me.yaw);
+    for (let i = 0; i < 30 && roomBehind() < 2.2; i++) { if (blocked(me.x + fx * 0.1, me.y + fy * 0.1)) break; me.x += fx * 0.1; me.y += fy * 0.1; } }
+  const setNear = n => { if (Math.abs(camera.near - n) > 0.001) { camera.near = n; camera.updateProjectionMatrix(); } };
   function placeCamera() {
     me3.position.set(me.x, 0, me.y); me3.rotation.y = me.yaw; me3.visible = view === 'above' || persp === 'third'; meMat.opacity = 1; meMat.depthWrite = true;
-    if (view === 'above') { const c = S / 2, dist = S * 1.7 + 5; camera.position.set(c + Math.sin(above.yaw) * dist * 0.62, dist, c + Math.cos(above.yaw) * dist * 0.62); camera.lookAt(c, 0, c); camera.updateMatrixWorld(); return; }
-    if (persp === 'third') { // behind you and above: with a wall close behind, the camera rises and looks down over your head instead of going through it
-      const fx = -Math.sin(me.yaw), fy = -Math.cos(me.yaw), head = new THREE.Vector3(me.x, 1.45, me.y);
-      // try the usual spot, then closer ones, until nothing stands between the camera and your head
-      let d = 0.15, up = 0.6; const v = new THREE.Vector3(); /* never higher than the tops of the doorways (2.05), so it can't sit inside a wall above a door */
-      for (let t = 2.1; t >= 0.15; t -= 0.25) { const u = Math.min(0.6, 0.45 + (2.1 - t) * 0.1); v.set(-fx * t, u, -fy * t); const len = v.length(); backRay.set(head, v.clone().normalize()); backRay.far = len + 0.2;
-        if (!backRay.intersectObjects(walls.children, false).length) { d = t; up = u; break; } }
-      camera.position.set(me.x - fx * d, 1.45 + up, me.y - fy * d); meMat.opacity = d < 1.1 ? 0.25 + 0.6 * Math.max(0, d - 0.15) : 1; meMat.depthWrite = meMat.opacity > 0.99; /* a wall close behind: fade yourself so the room shows */
-      const ahead = 1.6 + (2.1 - d) * 0.5; camera.lookAt(me.x + fx * ahead, 1.15 + Math.tan(me.pitch) * (ahead + d) - (2.1 - d) * 0.35, me.y + fy * ahead); camera.updateMatrixWorld(); return; }
+    if (view === 'above') { setNear(0.05); const c = S / 2, dist = S * 1.7 + 5; camera.position.set(c + Math.sin(above.yaw) * dist * 0.62, dist, c + Math.cos(above.yaw) * dist * 0.62); camera.lookAt(c, 0, c); camera.updateMatrixWorld(); return; }
+    if (persp === 'third') { // like an action game: always 2.6 m behind you at head height, looking ahead past you
+      // A wall behind you doesn't push the camera in: whatever lies between the camera and you (that wall) is simply not
+      // drawn, by moving the camera's near cut-off to just past it.
+      const fx = -Math.sin(me.yaw), fy = -Math.cos(me.yaw), CAM_H = 1.85, M = 0.2, from = new THREE.Vector3(me.x, CAM_H, me.y);
+      // but it stays inside the house: never out through an outside wall (from outside you'd see the house's outer walls)
+      const D = Math.max(0.3, roomBehind());
+      backRay.set(from, new THREE.Vector3(-fx, 0, -fy)); backRay.far = D; const hit = backRay.intersectObjects(walls.children, false)[0];
+      setNear(hit ? Math.max(0.05, Math.min(D - 0.45, D - hit.distance + 0.12)) : 0.05);
+      const tight = Math.max(0, 1.6 - D); /* little room behind (your back to an outside wall in a small room): rise a little and look down over your shoulder */
+      camera.position.set(me.x - fx * D, Math.min(WALL_H - 0.2, CAM_H + tight * 0.45), me.y - fy * D);
+      meMat.opacity = D < 0.7 ? 0.55 + 0.45 * Math.max(0, (D - 0.3) / 0.4) : 1; meMat.depthWrite = meMat.opacity > 0.99;
+      camera.rotation.set(me.pitch - 0.1 - tight * 0.4, me.yaw, 0); camera.updateMatrixWorld(); return; }
+    setNear(0.05);
     camera.position.set(me.x, EYE, me.y); camera.rotation.set(me.pitch, me.yaw, 0); camera.updateMatrixWorld();
   }
   // into a room: stand on a free spot near its doorway, looking into the room
@@ -287,7 +300,7 @@ export function createHouse(host, opts) {
     const spots = []; for (let x = r.x; x < r.x + r.w; x++) for (let y = r.y; y < r.y + r.d; y++) spots.push([x + 0.5, y + 0.5]);
     const near = ([x, y]) => (door.length ? Math.min(...door.map(([a, b]) => Math.hypot(a + 0.5 - x, b + 0.5 - y))) : Math.hypot(cx - x, cy - y)), at = spots.sort((a, b) => near(a) - near(b)).find(([x, y]) => !blocked(x, y)) || [cx, cy];
     me.x = at[0]; me.y = at[1]; const dx = cx - me.x, dy = cy - me.y, dl = Math.hypot(dx, dy); me.yaw = dl > 0.3 ? Math.atan2(-dx, -dy) : me.yaw; me.pitch = -0.12;
-    if (dl > 0.3) for (let k = 0; k < 6 && !blocked(me.x - dx / dl * 0.08, me.y - dy / dl * 0.08); k++) { me.x -= dx / dl * 0.08; me.y -= dy / dl * 0.08; } /* step back towards the doorway to see more of the room */ if (view !== 'walk') { view = 'walk'; applyView(); } moved(); }
+    if (dl > 0.3) for (let k = 0; k < 6 && !blocked(me.x - dx / dl * 0.08, me.y - dy / dl * 0.08); k++) { me.x -= dx / dl * 0.08; me.y -= dy / dl * 0.08; } /* step back towards the doorway to see more of the room */ if (view !== 'walk') { view = 'walk'; applyView(); } stepIn(); moved(); }
   { const [k] = [...L.edges].find(([, t]) => t === 'front'); const [a, b] = k.slice(1).split(',').map(Number); me.x = a + 0.5; me.y = b - 0.3; me.yaw = 0; } // just inside the front door
 
   // ---- walking into walls and furniture ----
@@ -315,7 +328,7 @@ export function createHouse(host, opts) {
     if (view === 'above') { above.yaw -= dx * 0.008; } else { me.yaw -= dx * 0.0045; me.pitch = Math.max(-1.2, Math.min(1.1, me.pitch - dy * 0.0045)); } moved(); });
   el.addEventListener('pointerup', e => { const p = ptrs.get(e.pointerId); ptrs.delete(e.pointerId); if (!p) return;
     if (Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < 8 && performance.now() - p.t < 450) { const r = el.getBoundingClientRect(), nx = (e.clientX - r.left) / r.width * 2 - 1, ny = -((e.clientY - r.top) / r.height) * 2 + 1;
-      if (pick) { tapAim = true; aim(nx, ny); } else { ray.setFromCamera(v2.set(nx, ny), camera); const hit = ray.intersectObjects([stuff, wallStuff, ceilStuff].filter(g => g.visible), true)[0]; opts.onTap && opts.onTap(hit ? { i: hit.object.userData.i, photo: !!hit.object.userData.photo } : null); } } });
+      if (pick) { tapAim = true; aim(nx, ny); } else { ray.setFromCamera(v2.set(nx, ny), camera); ray.near = camera.near; const hit = ray.intersectObjects([stuff, wallStuff, ceilStuff].filter(g => g.visible), true)[0]; opts.onTap && opts.onTap(hit ? { i: hit.object.userData.i, photo: !!hit.object.userData.photo } : null); } } });
   el.addEventListener('pointercancel', e => ptrs.delete(e.pointerId));
   const kd = e => { if (e.target.closest && e.target.closest('input,textarea')) return; const k = e.key.toLowerCase(); if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keys.add(k); e.preventDefault(); wake(); } };
   const ku = e => keys.delete(e.key.toLowerCase()); addEventListener('keydown', kd); addEventListener('keyup', ku);
@@ -344,7 +357,7 @@ export function createHouse(host, opts) {
   const ro = new ResizeObserver(resize); ro.observe(host);
   buildShell(); buildStuff(); resize(); moved();
   { const i = roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN), r = L.rooms[i]; /* in through the front door, looking into the room */
-    if (r && !blocked(me.x, me.y)) { const dx = r.x + r.w / 2 - me.x, dy = r.y + r.d / 2 - me.y; if (Math.hypot(dx, dy) > 0.3) me.yaw = Math.atan2(-dx, -dy); moved(); } else if (i >= 0) goRoom(i); }
+    if (r && !blocked(me.x, me.y)) { const dx = r.x + r.w / 2 - me.x, dy = r.y + r.d / 2 - me.y; if (Math.hypot(dx, dy) > 0.3) me.yaw = Math.atan2(-dx, -dy); stepIn(); moved(); } else if (i >= 0) goRoom(i); }
 
   return {
     setRoom(r, ph, shellToo) { room = r; photos = { ...photos, ...(ph || {}) }; if (shellToo) buildShell(); buildStuff(); wake(); },
@@ -356,7 +369,7 @@ export function createHouse(host, opts) {
     setView(v) { view = v; applyView(); moved(); },
     setSurroundings(A) { buildAround(A); },
     setPeople(list) { buildPeople(list); },
-    setPerspective(p) { persp = p === 'third' ? 'third' : 'first'; moved(); },
+    setPerspective(p) { persp = p === 'third' ? 'third' : 'first'; stepIn(); moved(); },
     get perspective() { return persp; },
     get view() { return view; },
     goRoom, roomHere: () => roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN),

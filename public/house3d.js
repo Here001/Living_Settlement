@@ -163,7 +163,7 @@ function pieceGroup(it, photoTex) {
     for (const p of leafParts) { const g = partGeo(p); g.translate(-hinge.x, 0, -hinge.z);
       if (isGlass(p.c)) { leaf.add(new THREE.Mesh(g, M.glass)); continue; } const kind = matKind(it.k, p.c, tint, 'd'); (lk.get(kind) || lk.set(kind, []).get(kind)).push(paint(g, p.c)); }
     for (const [kind, list] of lk) { const m = new THREE.Mesh(mergeGeometries(list), M[kind]); m.castShadow = m.receiveShadow = true; leaf.add(m); }
-    grp.add(leaf); grp.userData.door = { leaf, sign: alongX ? -out[1] : out[0], cx: (hx + mx) / 2, cy: (hy + my) / 2, a: 0 }; }
+    grp.add(leaf); grp.userData.door = { leaf, sign: alongX ? -out[1] : out[0], cx: (hx + mx) / 2, cy: (hy + my) / 2, a: 0, until: 0, seg: alongX ? [hx - 0.07, (hy + my) / 2, mx + 0.07, (hy + my) / 2] : [(hx + mx) / 2, hy - 0.07, (hx + mx) / 2, my + 0.07] }; }
   for (const p of all) { if (p.s === 'leaf') continue;
     if (p.s === 'p') { const ww = p.out && p.out[0] ? p.d : p.w, pl = new THREE.PlaneGeometry(ww, p.h), o = p.out || [0, 1];
       pl.rotateY(o[1] === 1 ? 0 : o[1] === -1 ? Math.PI : o[0] === 1 ? Math.PI / 2 : -Math.PI / 2);
@@ -479,16 +479,20 @@ export function createHouse(host, opts) {
   { const [k] = [...L.edges].find(([, t]) => t === 'front'); const [a, b] = k.slice(1).split(',').map(Number); me.x = a + 0.5; me.y = b - 0.3; me.yaw = 0; } // just inside the front door
 
   // ---- walking into walls and furniture ----
+  const frontAt = (() => { const e = [...L.edges].find(([, t]) => t === 'front'); if (!e) return null; const [a, b] = e[0].slice(1).split(',').map(Number); return e[0][0] === 'h' ? { x: a + 0.5, y: b } : { x: a, y: b + 0.5 }; })();
   const solidEdges = [...L.edges].filter(([, t]) => t !== 'door').map(([k]) => { const [a, b] = k.slice(1).split(',').map(Number); return k[0] === 'h' ? [a, b, a + 1, b] : [a, b, a, b + 1]; });
   function blocked(px, py) {
     const R = 0.22; if (px < R || py < R || px > S - R || py > S - R) return true;
-    for (const [x0, y0, x1, y1] of solidEdges) { const dx = x1 - x0, dy = y1 - y0, t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / (dx * dx + dy * dy))); if (Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy)) < R) return true; }
+    const segs = [...solidEdges]; for (const g of wallStuff.children) { const D = g.userData.door; if (D && D.a < 0.9) segs.push(D.seg); } /* a door that isn't open is in the way */
+    for (const [x0, y0, x1, y1] of segs) { const dx = x1 - x0, dy = y1 - y0, t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / (dx * dx + dy * dy))); if (Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy)) < R) return true; }
     for (const it of room.items) { const f = FURNITURE[it.k]; if (f.mount !== 'floor' || f.rug) continue; const [w, d] = footOf(it.k, it.r); if (px > it.x + 0.12 - R && px < it.x + w - 0.12 + R && py > it.y + 0.12 - R && py < it.y + d - 0.12 + R) return true; }
     return false;
   }
   let lastRoom = -1;
   let lastInput = 0;
-  function moved() { lastInput = performance.now(); if (others.size > MAX_SHOWN) nearest(false); opts.onMove && opts.onMove(me.x, me.y, me.yaw); placeCamera(); if (pick && !tapAim) aim(); const ri = roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN); placeLights(false); if (ri !== lastRoom) { lastRoom = ri; opts.onRoom && opts.onRoom(ri); } dirty = true; wake(); }
+  let nearExit = false, leftDoor = false, hintAt = 0;
+  function moved() { const fd = frontAt ? Math.hypot(me.x - frontAt.x, me.y - frontAt.y) : 99; if (fd > 1.9) leftDoor = true; const ne = view === 'walk' && leftDoor && fd < 1.4; /* only once you've walked in and come back to the door */ if (ne !== nearExit) { nearExit = ne; opts.onExit && opts.onExit(ne, false); } /* by the front door: the way out */
+    lastInput = performance.now(); if (others.size > MAX_SHOWN) nearest(false); opts.onMove && opts.onMove(me.x, me.y, me.yaw); placeCamera(); if (pick && !tapAim) aim(); const ri = roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN); placeLights(false); if (ri !== lastRoom) { lastRoom = ri; opts.onRoom && opts.onRoom(ri); } dirty = true; wake(); }
   let tapAim = false;
 
   // ---- input ----
@@ -504,7 +508,10 @@ export function createHouse(host, opts) {
     if (view === 'above') { above.yaw -= dx * 0.008; } else { me.yaw -= dx * 0.0045; me.pitch = Math.max(-1.2, Math.min(1.1, me.pitch - dy * 0.0045)); } moved(); });
   el.addEventListener('pointerup', e => { const p = ptrs.get(e.pointerId); ptrs.delete(e.pointerId); if (!p) return;
     if (Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < 8 && performance.now() - p.t < 450) { const r = el.getBoundingClientRect(), nx = (e.clientX - r.left) / r.width * 2 - 1, ny = -((e.clientY - r.top) / r.height) * 2 + 1;
-      if (pick) { tapAim = true; aim(nx, ny); } else { ray.setFromCamera(v2.set(nx, ny), camera); ray.near = camera.near; const hit = ray.intersectObjects([stuff, wallStuff, ceilStuff].filter(g => g.visible), true)[0]; opts.onTap && opts.onTap(hit ? { i: hit.object.userData.i, photo: !!hit.object.userData.photo } : null); } } });
+      if (pick) { tapAim = true; aim(nx, ny); } else { ray.setFromCamera(v2.set(nx, ny), camera); ray.near = camera.near; const hit = ray.intersectObjects([stuff, wallStuff, ceilStuff].filter(g => g.visible), true)[0], wallHit = ray.intersectObjects(walls.children, false)[0];
+        if (wallHit && (!hit || wallHit.distance < hit.distance) && frontAt && Math.hypot(wallHit.point.x - frontAt.x, wallHit.point.z - frontAt.y) < 0.55 && wallHit.point.y < 2.15) { opts.onExit && opts.onExit(true, true); return; } /* the front door: the way out */
+        let dg = hit && hit.object; while (dg && !dg.userData.door) dg = dg.parent; if (dg) { const D = dg.userData.door; D.until = performance.now() + 4500; wake(); } /* a door: open it (it closes again by itself) */
+        opts.onTap && opts.onTap(hit ? { i: hit.object.userData.i, photo: !!hit.object.userData.photo, door: !!dg } : null); } } });
   el.addEventListener('pointercancel', e => ptrs.delete(e.pointerId));
   const kd = e => { if ((e.target.closest && e.target.closest('input,textarea')) || !shown()) return; const k = e.key.toLowerCase(); if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { keys.add(k); e.preventDefault(); wake(); } };
   const ku = e => keys.delete(e.key.toLowerCase()); addEventListener('keydown', kd); addEventListener('keyup', ku);
@@ -528,12 +535,13 @@ export function createHouse(host, opts) {
     let fw = -joy.y, st = joy.x; if (keys.has('w') || keys.has('arrowup')) fw += 1; if (keys.has('s') || keys.has('arrowdown')) fw -= 1; if (keys.has('a')) st -= 1; if (keys.has('d')) st += 1;
     if (keys.has('arrowleft')) { me.yaw += 1.8 * dt; moving = true; } if (keys.has('arrowright')) { me.yaw -= 1.8 * dt; moving = true; }
     if (view === 'walk' && (fw || st)) { const sp = 2.3 * dt, sx = -Math.sin(me.yaw), sy = -Math.cos(me.yaw), dx = (sx * fw + -sy * st) * sp, dy = (sy * fw + sx * st) * sp;
-      const ox = me.x, oy = me.y; if (!blocked(me.x + dx, me.y)) me.x += dx; if (!blocked(me.x, me.y + dy)) me.y += dy; if (me.x !== ox || me.y !== oy) moving = true; tapAim = false; } /* pressing into a wall: nothing changes, nothing is drawn */
+      const ox = me.x, oy = me.y; if (!blocked(me.x + dx, me.y)) me.x += dx; if (!blocked(me.x, me.y + dy)) me.y += dy; if (me.x !== ox || me.y !== oy) moving = true; tapAim = false;
+      if (Math.hypot(me.x - ox, me.y - oy) < sp * 0.3 && performance.now() - hintAt > 5000) /* pushing against something */ for (const g of wallStuff.children) { const D = g.userData.door; if (D && D.a < 0.9 && Math.hypot(me.x - D.cx, me.y - D.cy) < 0.9) { hintAt = performance.now(); opts.onHint && opts.onHint('🚪 Tap the door to open it.'); break; } } } /* pressing into a wall: nothing changes, nothing is drawn */
     if (moving) moved();
-    // doors: swing open as someone comes within a metre or so, and close behind them (never in the way)
-    let doorsMoving = false; for (const g of wallStuff.children) { const D = g.userData.door; if (!D) continue;
-      let near = view === 'walk' && Math.hypot(me.x - D.cx, me.y - D.cy) < 1.15; if (!near) for (const o of others.values()) if (o.g.visible && Math.hypot(o.g.position.x - D.cx, o.g.position.z - D.cy) < 1.15) { near = true; break; }
-      const want = near ? 1.45 : 0; if (Math.abs(want - D.a) > 0.002) { D.a += Math.sign(want - D.a) * Math.min(Math.abs(want - D.a), dt * (near ? 3.2 : 2.2)); D.leaf.rotation.y = D.sign * D.a; dirty = true; doorsMoving = true; } }
+    // doors: open when tapped, and close by themselves a few seconds later (but not on someone standing in the doorway)
+    let doorsMoving = false; const tnow = performance.now(); for (const g of wallStuff.children) { const D = g.userData.door; if (!D) continue;
+      let inWay = Math.hypot(me.x - D.cx, me.y - D.cy) < 0.75; if (!inWay) for (const o of others.values()) if (o.g.visible && Math.hypot(o.g.position.x - D.cx, o.g.position.z - D.cy) < 0.75) { inWay = true; break; }
+      if (inWay && D.until > 0) D.until = Math.max(D.until, tnow + 1500); const open = tnow < D.until, want = open ? 1.45 : 0, near = open; if (Math.abs(want - D.a) > 0.002) { D.a += Math.sign(want - D.a) * Math.min(Math.abs(want - D.a), dt * (near ? 3.2 : 2.2)); D.leaf.rotation.y = D.sign * D.a; dirty = true; doorsMoving = true; } }
     if (me3.visible) { const mv = (fw || st) && view === 'walk'; if (mv) { me3.userData.av.animate(dt, 0, 2.3 * Math.min(1, Math.hypot(fw, st)), false); meStill = false; } else if (!meStill) { me3.userData.av.pose(); meStill = true; dirty = true; } } /* your legs move as you walk */
     // at most 60 frames a second (a 120 Hz screen would otherwise draw twice as many)
     const now = performance.now(), active = moving || joy.on || keys.size > 0 || now - lastInput < 160;

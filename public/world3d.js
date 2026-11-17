@@ -102,7 +102,7 @@ const GEO = { cyl: new THREE.CylinderGeometry(1, 1, 1, 10), cone: new THREE.Cone
 // ---------------- the view: renderer, sky, sun, camera ----------------
 export function createView(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
-  const maxPR = Math.min(window.devicePixelRatio || 1, PHONE ? 1.5 : 2); let pr = maxPR; renderer.setPixelRatio(pr);
+  const maxPR = Math.min(window.devicePixelRatio || 1, PHONE ? 1.5 : 2); renderer.setPixelRatio(maxPR);
   canvas.style.background = '#c9d8e4'; /* a light sky behind it, so it's never dark while it loads */
   pictureMode(renderer); /* phones that blank painted pictures get them another way (see safe3d.js) */
   renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
@@ -139,13 +139,10 @@ export function createView(canvas) {
     renderer.shadowMap.needsUpdate = true;
   };
   view.resize = () => { const box = canvas.parentElement || canvas, w = box.clientWidth || innerWidth, h = box.clientHeight || innerHeight; renderer.setSize(w, h, true); camera.aspect = w / h; camera.updateProjectionMatrix(); };
-  // the loop: steps down the resolution if frames run slow, and stops while the page is hidden
-  let last = performance.now(), slow = 0, fast = 0;
+  // the loop: always at full sharpness (the resolution is never lowered), and it stops while the page is hidden
+  let last = performance.now();
   view.start = fn => { view.onFrame = fn; if (view.running) return; view.running = true;
     renderer.setAnimationLoop(now => { if (document.hidden) { last = now; return; } const dt = Math.min(0.1, (now - last) / 1000); last = now;
-      if (dt > 0.026) { slow++; fast = 0; } else { fast++; slow = Math.max(0, slow - 1); }
-      if (slow > 40 && pr > 0.75) { pr = Math.max(0.75, pr - 0.25); renderer.setPixelRatio(pr); view.resize(); slow = 0; }
-      if (fast > 600 && pr < maxPR) { pr = Math.min(maxPR, pr + 0.25); renderer.setPixelRatio(pr); view.resize(); fast = 0; }
       const t0 = performance.now(); view.onFrame && view.onFrame(dt, now);
       // a hit shakes the camera just for this frame: "trauma" fades by itself, and the nudge is trauma² (see juice.js)
       let sx = 0, sy = 0, sz = 0; if (view.trauma > 0) { view.trauma = Math.max(0, view.trauma - 1.5 * dt); const k = view.trauma * view.trauma * (view.shakeAmp || 0.6), t = now / 1000 * 30; sx = k * Math.sin(t * 1.7); sy = k * Math.sin(t * 2.3) * 0.7; sz = k * Math.sin(t * 1.3); camera.position.x += sx; camera.position.y += sy; camera.position.z += sz; }

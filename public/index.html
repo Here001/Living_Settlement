@@ -1132,7 +1132,7 @@ let auth=null, authPoll=null; // the open "prove it's you" or "log in" panel
 let myMoney=null; // the signed-in colonist's own coins
 async function loadMyMoney(){ if(!(Me&&Me.handle)){ myMoney=null; return; } try{ const d=await api('/api/citizens/'+encodeURIComponent(Me.handle)); myMoney={coins:d.coins,net:d.net}; }catch(e){ myMoney=null; } refreshHUD(); }
 setInterval(()=>{ if(!document.hidden) loadMyMoney(); },60000); // (not while the app is in the background)
-async function checkMe(){ if(!Me||!Me.token) return; try{ const r=await api('/api/me'); Me={...Me,handle:r.handle,genderChosen:!!r.genderChosen}; ls.set('settlement-player',Me); loadMyMoney(); }catch(e){ Me=null; ls.set('settlement-player',null); syncFindChip(); } }
+async function checkMe(){ if(!Me||!Me.token) return; try{ const r=await api('/api/me'); Me={...Me,handle:r.handle,genderChosen:!!r.genderChosen,lookSet:!!r.lookSet}; ls.set('settlement-player',Me); loadMyMoney(); if(!r.lookSet) Look.show(true); }catch(e){ Me=null; ls.set('settlement-player',null); syncFindChip(); } }
 // Tell the live connection who we are (or that we signed out), so chats arrive and friends see us online.
 function wsAuth(){ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'auth',token:Me&&Me.token||null})); }catch(e){} }
 function signedIn(r){ Me={token:r.token,handle:r.handle,genderChosen:true}; setTimeout(()=>{ wsAuth(); buildToolbar(); Chats.load(); Daily.load(); Notices.load(); PushUI.auto(); },50); checkMe().then(()=>renderCard(true)); ls.set('settlement-player',Me); ls.set('settlement-me',r.handle); ls.set('settlement-claim',null); auth=null; clearInterval(authPoll); }
@@ -1149,7 +1149,9 @@ async function api(path, opts={}){
     // Anything a player does may tick off a getting-started step, so the guide checks again shortly after.
     if((opts.method||'GET')!=='GET'&&/^\/api\/(me\/|square)/.test(path)&&!/\/api\/me\/guide/.test(path)&&typeof GuideUI!=='undefined'&&GuideUI.data&&!GuideUI.data.finished){ GuideUI.at=0; setTimeout(()=>GuideUI.load(),400); }
     return j; } finally { clearTimeout(timer); } }
-const normC = c => ({ id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang, visit:c.visit||null, pet:c.pet||null, claimed:!!c.k, web:!!c.w, car:c.car||null, online:!!c.o });
+const LOOKA=new Map(); /* handle → a player's own character's map colours (see shared/avatar.js mapLook) */
+const normC = c => { if(c.a&&c.h) LOOKA.set(c.h.toLowerCase(),c.a); return normC0(c); };
+const normC0 = c => ({ a:c.a||null, id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang, visit:c.visit||null, pet:c.pet||null, claimed:!!c.k, web:!!c.w, car:c.car||null, online:!!c.o });
 const visiting = c => c.visit && Date.now()+skew < c.visit[4]+20*60000 ? c.visit : null; // [buildingId, type, x, y, until, from]: kept a while after it ends for the trip back
 const placeChunks = c => [c.home,c.job,c.hang,visiting(c)].filter(Boolean).map(p=>ckTile(p[2],p[3]));
 const keepCitizen = c => c.id===pinned || placeChunks(c).some(k=>S.chunks.has(k));
@@ -1848,7 +1850,8 @@ const HAIR=['#2B1D14','#5A3825','#C9A15B','#1B1B1B','#8C2F1B','#D9D2C5'];
 const PANTS=['#3A4150','#2F3A4F','#5B4A3A','#4A5A44','#26272B'];
 const HATS=['#C0392B','#2E5E8C','#E2A23B','#3E6B48'];
 // Each person's look is fixed by their name: men have short hair or a cap and trousers; women have long hair, a bun or a ponytail, and a dress or a blouse.
-const look = c => { const h=hash(c.handle||c.id), f=c.gender==='f';
+const look = c => { const a=c.a||(c.handle&&LOOKA.get(String(c.handle).toLowerCase())); if(a){ const [shirt,skin,hair,pants,style,dress,hat]=a; return { f:c.gender==='f', shirt, skin, hair, pants, style, dress:!!dress, hat:hat||HATS[0] }; }
+  const h=hash(c.handle||c.id), f=c.gender==='f';
   return { f, shirt:SHIRTS[h%SHIRTS.length], skin:SKIN[(h>>>4)%SKIN.length], hair:HAIR[(h>>>8)%HAIR.length], pants:PANTS[(h>>>12)%PANTS.length],
     style: f ? ['long','long','bun','pony'][(h>>>16)%4] : ['short','short','cap','buzz'][(h>>>16)%4], dress: f && (h>>>20)%5<3, hat:HATS[(h>>>22)%HATS.length] }; };
 // People are stamped from small cached pictures of their parts (legs, top, head, hair), drawn once per zoom level in the
@@ -6417,6 +6420,17 @@ const GameWeb={ el:null,
   close(quiet){ if(!this.el) return; this.el.remove(); this.el=null; document.body.classList.remove('web-on'); if(!quiet){ try{ if(history.state&&history.state.gameweb) history.back(); }catch(e){} } } };
 addEventListener('popstate',()=>{ if(GameWeb.el) GameWeb.close(true); });
 addEventListener('keydown',e=>{ if(e.key==='Escape'&&GameWeb.el) GameWeb.close(); });
+// ---- Your own character (public/creator.js): made when you join, changed any time from your profile ----
+const Look={ busy:false,
+  async show(required){ if(this.busy||document.querySelector('.cre')) return; this.busy=true;
+    try{ const m=await import('/creator.js'); await m.openCreator({ api, toast, required, onSaved:L=>{ Me.lookSet=true; Me.genderChosen=true; ls.set('settlement-player',Me); Looks.m.set((Me.handle||'').toLowerCase(),L); if(Room.h) Room.h.setMyLook(L); renderCard&&renderCard(true); } }); }
+    catch(e){ toast(e.message||'Your phone couldn’t open the character maker.'); if(required) setTimeout(()=>{ this.busy=false; this.show(true); },8000); }
+    finally{ this.busy=false; } } };
+// other people's characters, for drawing them in 3D: fetched in batches and kept for 10 minutes
+const Looks={ m:new Map(), at:new Map(),
+  async want(handles){ const now=Date.now(), need=[...new Set(handles.filter(Boolean).map(h=>String(h).toLowerCase()))].filter(h=>!this.m.has(h)||now-(this.at.get(h)||0)>600000).slice(0,40);
+    if(need.length){ try{ const r=await api('/api/looks?h='+encodeURIComponent(need.join(','))); for(const [h,L] of Object.entries(r||{})){ this.m.set(h,L); this.at.set(h,now); } }catch(e){} }
+    return handles.map(h=>h&&this.m.get(String(h).toLowerCase())); } };
 // ---- Inside a home, in 3D (public/house3d.js): walk through your own and furnish it, or look around someone else's ----
 // Furnish: pick a piece from the shop and it follows where you look (the floor, a wall, a window or the ceiling, by
 // kind), or tap where it should go; then Buy. Tap a piece to move, turn, store or sell it, or to give a frame a photo.
@@ -6435,7 +6449,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
   get base(){ return this.bld?`/api/me/buildings/${encodeURIComponent(this.d.home.id)}/inside/`:'/api/me/room/'; },
   get editWord(){ return this.biz?'🛋️ Design':'🛋️ Furnish'; },
   async open(handle,bid,pre){ if(handle&&Me&&Me.handle&&handle.toLowerCase()===Me.handle.toLowerCase()) handle=null;
-    let d, H3; try{ [d,H3]=await Promise.all([pre?Promise.resolve(pre):api(bid?`/api/buildings/${encodeURIComponent(bid)}/inside`:handle?`/api/citizens/${encodeURIComponent(handle)}/room`:'/api/me/room'), import('/house3d.js')]); }catch(e){ toast(e.message||'Your phone couldn’t load the 3D view.'); return; }
+    let d, H3, myLook=null; try{ [d,H3,[myLook]]=await Promise.all([pre?Promise.resolve(pre):api(bid?`/api/buildings/${encodeURIComponent(bid)}/inside`:handle?`/api/citizens/${encodeURIComponent(handle)}/room`:'/api/me/room'), import('/house3d.js'), Looks.want([Me&&Me.handle])]); }catch(e){ toast(e.message||'Your phone couldn’t load the 3D view.'); return; }
     this.close(true); this.d=d; this.H3=H3; this.edit=false; this.pick=null; this.sel=null; this.ri=-1; this.cat=this.biz?BIZ_CATS[{shop:0,food:1,office:2,industry:3}[d.room.plan]||0][0]:'living';
     this.sub=el('small',{text:d.home.name}); this.editBtn=d.mine?el('button',{class:'btn primary sm',text:this.editWord,onclick:()=>this.toggle()}):'';
     this.mapBtn=el('button',{class:'hhere',title:'Look at the colony map; come back inside any time',onclick:()=>this.toMap()}, '🗺️', el('span',{class:'wide',text:' Map'}));
@@ -6457,7 +6471,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     const root=el('div',{class:'webview roomview',role:'dialog','aria-label':title}, bar, this.stage, this.shop, this.file);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
     try{ if(!(history.state&&history.state.room)) history.pushState({room:1},''); }catch(e){}
-    try{ this.h=H3.createHouse(this.stage,{ size:d.size, plan:d.room.plan||'home', persp, me:(Me&&Me.handle)||'visitor', room:d.room, photos:d.photos, at:this.reAt||null, onLost:at=>this.reopen(at), check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
+    try{ this.h=H3.createHouse(this.stage,{ size:d.size, plan:d.room.plan||'home', persp, me:(Me&&Me.handle)||'visitor', look:myLook||null, room:d.room, photos:d.photos, at:this.reAt||null, onLost:at=>this.reopen(at), check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
       onMove:(x,y,a)=>this.moveSoon(x,y,a), onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; [...this.chips.children].forEach((b,j)=>b.classList.toggle('on',j===i)); if(this.edit&&this.cat==='style') this.paintShop(); } }); }
     catch(e){ this.close(); toast('Your phone couldn’t show the 3D view.'); return; }
     this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false); this.hereTick(true); this.join();
@@ -6477,8 +6491,9 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
   moveSoon(){ this.sendPos(false); },
   insideMsg(m){ if(!this.el||!this.d||m.place!==this.spot||!this.h) return; this.others||=new Map();
     const blocked=h=>h&&typeof Blocks!=='undefined'&&Blocks.has(h);
-    if(m.k==='all'){ for(const p of m.list||[]) if(!blocked(p.h)){ this.others.set(p.id,p); this.h.upsertOther(p.id,p); } }
-    else if(m.k==='pos'&&m.p){ if(blocked(m.p.h)) return; this.others.set(m.p.id,m.p); this.h.upsertOther(m.p.id,m.p); }
+    const show=p=>{ const L=p.h&&Looks.m.get(p.h.toLowerCase()); this.h.upsertOther(p.id,L?{...p,look:L}:p); if(p.h&&!L) Looks.want([p.h]).then(([L2])=>{ if(L2&&this.h&&this.others.has(p.id)) this.h.upsertOther(p.id,{...this.others.get(p.id),look:L2}); }); }; /* their own character, once it's loaded */
+    if(m.k==='all'){ for(const p of m.list||[]) if(!blocked(p.h)){ this.others.set(p.id,p); show(p); } }
+    else if(m.k==='pos'&&m.p){ if(blocked(m.p.h)) return; this.others.set(m.p.id,m.p); show(m.p); }
     else if(m.k==='gone'){ this.others.delete(m.id); this.h.removeOther(m.id); }
     else if(m.k==='chat'&&m.chat){ if(blocked(m.chat.from)) return; this.addChat(m.chat); }
     this.hereTick(); },
@@ -6493,13 +6508,13 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
   // ---- who's here now: colonists the game has at this place (working, visiting, at home), plus players looking round it ----
   people(){ const d=this.d; if(!d) return []; const gm=gmNow(), out=[]; const bid=d.home.id, owner=(d.owner||'').toLowerCase();
     const me=((Me&&Me.handle)||'').toLowerCase(), live=new Set([...(this.others||new Map()).values()].map(p=>(p.h||'').toLowerCase()).filter(Boolean)); /* you're "you", and players walking round in here show as themselves, not twice */
-    for(const c of S.citizens.values()){ const st=citizenAt(c,gm); if(!st||st.bid!==bid) continue; const h=c.handle.toLowerCase(); if(h===me||live.has(h)||(this.d.place==='home'&&h!==owner)) continue; out.push({name:c.handle,label:'@'+c.handle}); }
+    for(const c of S.citizens.values()){ const st=citizenAt(c,gm); if(!st||st.bid!==bid) continue; const h=c.handle.toLowerCase(); if(h===me||live.has(h)||(this.d.place==='home'&&h!==owner)) continue; out.push({name:c.handle,label:'@'+c.handle,g:c.gender,own:!!c.a}); }
     return out; },
   async hereTick(first){ if(!this.d||(document.hidden&&!first)) return; const place=this.bld?'b:'+this.d.home.id:'h:'+(this.d.owner||'').toLowerCase(); let live={viewers:0,names:[]};
     try{ live=await api('/api/inside/here',{method:'POST',body:{place}}); }catch(e){} if(!this.d) return;
     const sim=this.people(), lv=[...(this.others||new Map()).values()], named=lv.filter(p=>p.h).map(p=>'@'+p.h+' (walking round)'), anon=Math.max(lv.length,live.viewers)-named.length; live.viewers=Math.max(lv.length,live.viewers);
     this.hereNames=[...sim.map(p=>p.label), ...named, ...(anon>0?[`${anon} visitor${anon===1?'':'s'} looking round`]:[])];
-    this.hereNames.unshift('you'); const n=sim.length+live.viewers+1; if(this.hereChip){ this.hereChip.textContent=`👥 ${fmt(n)}`; this.hereChip.append(el('span',{class:'wide',text:n===1?' (just you)':' here now'})); this.hereChip.title=n===1?'Just you here':`${fmt(n)} here now`; } if(this.h) this.h.setPeople(sim); },
+    this.hereNames.unshift('you'); const n=sim.length+live.viewers+1; if(this.hereChip){ this.hereChip.textContent=`👥 ${fmt(n)}`; this.hereChip.append(el('span',{class:'wide',text:n===1?' (just you)':' here now'})); this.hereChip.title=n===1?'Just you here':`${fmt(n)} here now`; } if(this.h){ const own=sim.filter(p=>p.own).map(p=>p.name); const put=()=>this.h&&this.h.setPeople(sim.map(p=>({...p,look:p.own?Looks.m.get(p.name.toLowerCase())||null:null}))); put(); if(own.some(h=>!Looks.m.has(h.toLowerCase()))) Looks.want(own).then(put); } },
   close(quiet){ if(!this.el) return; setTimeout(mapResume,0); clearInterval(this.hereTimer); this.leave(); this.mapPill&&this.mapPill.remove(); this.mapPill=null; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
   toggle(on){ this.edit=on===undefined?!this.edit:on; this.setPick(null); this.select(null); this.shop.hidden=!this.edit; if(this.editBtn) this.editBtn.textContent=this.edit?'✓ Done':this.editWord; if(this.edit) this.paintShop(); this.paintTools(); },
   // the streets and buildings round the home: from what the map has loaded, or fetched once (only when looking from above)
@@ -6642,9 +6657,10 @@ function outPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'Go ou
   const fi=el('input',{type:'text',placeholder:'@friend',autocomplete:'off','aria-label':"Friend's username"});
   box.append(el('div',{class:'cbet'}, el('span',{text:'Visit a friend:'}), fi, el('button',{class:'btn',text:'Go',onclick:()=>meAction('/api/me/visit',{friend:fi.value},r=>`You're on your way to ${r.place}.`)}))); return box; }
 // What the street games borrow from the page: the live connection, and a few helpers.
-function arenaCtx(){ return {minute:()=>((gmAt(Date.now()+skew)%1440)+1440)%1440,send:o=>{ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'arena',...o})); }catch(e){} },toast,fmt,me:()=>Me&&Me.handle,done:()=>{ loadMyMoney(); }}; }
+function lookHooks(){ if(Me&&Me.handle) Looks.want([Me.handle]); return { lookOf:h=>h&&Looks.m.get(String(h).toLowerCase())||null, wantLooks:hs=>Looks.want(hs) }; } /* the mini games draw players as their own characters */
+function arenaCtx(){ return {...lookHooks(),minute:()=>((gmAt(Date.now()+skew)%1440)+1440)%1440,send:o=>{ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'arena',...o})); }catch(e){} },toast,fmt,me:()=>Me&&Me.handle,done:()=>{ loadMyMoney(); }}; }
 // What the crime mini games borrow from the page.
-function crimeCtx(){ return {minute:()=>((gmAt(Date.now()+skew)%1440)+1440)%1440,townTypes:()=>{ const n=new Map(); for(const b of D.buildings.values()) if(b.done!==false&&!b.ruin) n.set(b.type,(n.get(b.type)||0)+1); return [...n.keys()]; },api,toast,fmt,avatarSVG,me:()=>Me&&Me.handle,done:()=>{ Acts.at=0; Heist.at=0; loadMyMoney(); const me=myCitizen(); if(me) detail.delete(me.id); if(sel) renderCard(true); }}; }
+function crimeCtx(){ return {...lookHooks(),minute:()=>((gmAt(Date.now()+skew)%1440)+1440)%1440,townTypes:()=>{ const n=new Map(); for(const b of D.buildings.values()) if(b.done!==false&&!b.ruin) n.set(b.type,(n.get(b.type)||0)+1); return [...n.keys()]; },api,toast,fmt,avatarSVG,me:()=>Me&&Me.handle,done:()=>{ Acts.at=0; Heist.at=0; loadMyMoney(); const me=myCitizen(); if(me) detail.delete(me.id); if(sel) renderCard(true); }}; }
 async function doCrime(kind, target){ const r=await meAction('/api/me/crime',{kind,target}); if(!r) return;
   toast(r.caught ? (r.jailed?`🚓 Caught! You were fined ${fmt(r.fine)} coins and locked up for ${mins(r.jailFor)} minutes.`:`🚓 Caught! You were fined ${fmt(r.fine)} coins.`) : `💰 You got away with ${fmt(r.loot)} coins.`); }
 // Crime odds come in three bands, set by how far the nearest Police station is from where it happens.
@@ -6832,6 +6848,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
         card.append(el('div',{class:'authbox'}, el('h3',{text:'Choose your colonist'}), el('p',{class:'hint',text:'Pick once. After this, only the developer can change it.'}), el('div',{class:'row-actions'}, mk('m'), mk('f')))); }
 
       if(mine) card.append(actionTabs(c));
+      if(mine) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'👗 Change my look',title:'Your character: body, face, hair, clothes and what you wear',onclick:()=>Look.show(false)})));
       if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; myMoney=null; ls.set('settlement-player',null); wsAuth(); Chats.reset(); buildToolbar(); refreshHUD(); toast('Logged out.'); renderCard(true); }})));
       else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
       // Already signed in as someone else: one person, one colonist, so no "This is me" on other cards.

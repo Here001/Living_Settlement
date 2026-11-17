@@ -10,6 +10,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { BUILDING_TYPES, ROAD_TYPES } from '/shared/catalog.js';
 import { pictureMode, blackGuard, guardContext, webglOK } from '/safe3d.js';
+import { buildAvatar } from '/avatar3d.js';
 export const can3d = webglOK; // false on a phone that can't do 3D at all: the games fall back instead of a blank screen
 
 const PHONE = matchMedia('(pointer: coarse)').matches;
@@ -384,7 +385,9 @@ function faceTex(skin) { return canvasTex('face-' + skin, 256, (g, S) => {
   for (const sx of [-1, 1]) { g.fillStyle = 'rgba(0,0,0,.12)'; g.beginPath(); g.ellipse(c + sx * 64, ey + 4, 6, 10, 0, 0, 7); g.fill(); } // ears' shadow
 }, { repeat: false }); }
 const HEADS = new Map(); const headMat = skin => { let m = HEADS.get(skin); if (!m) { m = new THREE.MeshStandardMaterial({ map: faceTex(skin), roughness: 0.65 }); HEADS.set(skin, m); } return m; };
-export function makePerson(seed, role) {
+// look: a player's own character (shared/avatar.js). Hunters and seekers wear the game's colours over it.
+export function makePerson(seed, role, look) {
+  if (look) return personFromLook(look, role);
   const h = hashS(seed), skin = SKIN[h % SKIN.length], uniform = role === 'hunter' || role === 'seeker';
   const shirt = uniform ? (role === 'hunter' ? '#1e2a44' : '#3a4a2a') : SHIRT[(h >>> 3) % SHIRT.length], legs = uniform ? '#16203a' : TROUSERS[(h >>> 7) % TROUSERS.length];
   const hair = uniform ? '#16203a' : ['#1b1b1b', '#4a2e1c', '#8a5a2b', '#2b2b2b', '#b8b2a8'][(h >>> 11) % 5], longSleeve = uniform || ((h >>> 13) & 1);
@@ -425,6 +428,20 @@ export function makePerson(seed, role) {
   return P;
 }
 const BLOB = new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.28, depthWrite: false });
+function personFromLook(look, role) {
+  const L = JSON.parse(JSON.stringify(look)), w = L.w || (L.w = {});
+  if (role === 'hunter') { w.top = ['shirt', 5]; w.bot = ['trousers', 5]; w.hat = ['cap', 5]; delete w.out; } // in uniform
+  else if (role === 'seeker') { w.top = ['hoodie', 9]; w.bot = ['cargo', 9]; delete w.out; }
+  const av = buildAvatar(L), g = av.group;
+  let torch = null;
+  if (role === 'seeker') { torch = new THREE.Mesh(GEO.cyl, pmat('#2b2b2b')); torch.scale.set(0.05, 0.25, 0.05); torch.position.set(0, -0.6, 0.12); torch.rotation.x = Math.PI / 2; av.armR.add(torch);
+    const beam = new THREE.Mesh(new THREE.ConeGeometry(2.2, 9, 16, 1, true), new THREE.MeshBasicMaterial({ color: '#fff3c4', transparent: true, opacity: 0.12, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    beam.rotation.x = -Math.PI / 2; beam.position.set(0.32, 1.0, 4.7); beam.visible = false; g.add(beam); torch.userData.beam = beam; }
+  const blob = new THREE.Mesh(new THREE.CircleGeometry(0.45, 16), BLOB); blob.rotation.x = -Math.PI / 2; blob.position.y = 0.03; g.add(blob);
+  return { group: g, body: av.body, head: av.head, torch, role, armL: av.armL, armR: av.armR, x: 0, z: 0, av,
+    setPos(x, z) { this.x = x; this.z = z; g.position.set(x, 0, z); },
+    animate(dt, vx, vz) { av.animate(dt, vx, vz); if (torch) av.armR.rotation.x = -1.2; } };
+}
 // A name over someone's head.
 export function nameTag(text, color = '#ffffff') {
   const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d'); g.font = '700 30px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';

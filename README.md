@@ -498,6 +498,20 @@ These live on a signed-in colonist's own card, under **Home**, **👛 Wallet** a
   - If both cash and savings run out, the rest is let go for that week.
 - **New buildings.** A **Gym** and an outdoor **Fitness park**, under Parks → Sports.
 
+## 👗 Your own character
+
+Every player makes their own character, and that's the one they and everyone else see: inside homes and businesses, in the 3D mini games, on the map and in the little profile pictures.
+
+- **Made when you join.** A new player starts from a mannequin in underwear and builds their character before they play. Players who joined before this are asked the next time they open the game, and can't carry on until they've made one. Change it any time with **👗 Change my look** on your card.
+- **Body:** man or woman (chosen once, as before), skin tone (12 shades or any colour), height (5 steps) and build (slim, average, broad, heavier).
+- **Face:** face shape, eye colour, eyebrows, nose, facial hair (stubble, moustache, goatee, short or full beard) and makeup (lipstick in 6 colours, eyeshadow).
+- **Hair:** 24 styles (short, side part, curls, afro, twists, cornrows, locs, dreadlocks, box braids, bob, ponytail, bun, space buns, mohawk…) in any colour. Hair that stands up is pressed flat under a hat.
+- **Clothes and extras:** tops, bottoms, dresses, shoes, jackets and coats, hats, glasses, scarves and ties, gold chains and pearls, earrings, watches and bracelets, and bags, each in 20 colours (gold stays gold).
+- **From a photo:** a player can choose a photo of their face, line it up in the oval, and tap **Match my colours**: their skin, hair and eye colours are read from it. The photo is only read on the phone and is never uploaded or kept.
+- **Prices:** a good set of basics is free (T-shirt, shirt, dress, jeans, trousers, skirt, trainers, sandals and most hairstyles). Fancier things cost coins, from 200 (glasses) to 25,000 (a crown). Bought once, they stay in your wardrobe, in any colour. The coins go to the colony treasury.
+- **How it's drawn** (`public/avatar3d.js`): smooth, rounded bodies shaped by height and build; a face painted at high resolution (eye colour, brows, makeup, stubble) with a nose and ears; a hairline that follows the forehead and ears; every piece of clothing as its own layer over the body. Each moving part is merged into one or two meshes and all the materials are shared, so a person costs about a dozen draw calls, light enough for a full room on a phone. Other people's legs move as they walk round a home, and so do yours in third person. In hide and seek, hunters and seekers wear the game's uniform over their own character.
+- **Rules** (`shared/avatar.js`): the server checks every look, ignores anything it doesn't know, won't let you go out in your underwear, and charges for paid things you haven't bought yet. Looks are kept with each colonist (database v70); the map gets only the few colours it needs.
+
 ## 🛋️ Inside your home
 
 Every colonist can go inside the home they live in, owned or rented, walk around it in 3D and furnish it: **🛋️ Go inside** on the Home tab or on their home's card. Others can walk through it too (**🏠 Look inside** on someone's card), look only.

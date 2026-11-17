@@ -335,6 +335,10 @@ const MIGRATIONS = [
   // v69: the inside of each business (designed by its owner; until then it has a standard fit-out), and which building a photo hangs in
   `alter table buildings add column if not exists interior jsonb; alter table room_photos add column if not exists building_id text;
    create index if not exists room_photos_building on room_photos (building_id) where building_id is not null;`,
+  // v70: each player's own character (shared/avatar.js): their look, whether they've made it yet, and the clothes and
+  // wearables they've bought
+  `alter table citizens add column if not exists look jsonb; alter table citizens add column if not exists look_set boolean not null default false;
+   alter table citizens add column if not exists wardrobe text[] not null default '{}';`,
 ];
 
 export async function migrate() {

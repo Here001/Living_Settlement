@@ -1,4 +1,6 @@
-import { noteActive, history } from './stats.js';
+import { noteActive, history, track } from './stats.js';
+import { treasuryAdd } from './races.js';
+import * as AV from '../shared/avatar.js';
 import { assertNotMuted } from './chat.js';
 import express from 'express';
 import crypto from 'node:crypto';
@@ -66,11 +68,11 @@ export async function playerFrom(req) { return playerByToken(req.get('x-player')
 // The same check for a token on its own (the live connection signs in with it, so chats can be delivered there).
 export async function playerByToken(t) {
   if (!t || typeof t !== 'string') return null;
-  const s = (await pool.query(`select s.citizen_id, s.last_seen, c.handle, c.gender, c.gender_chosen, c.display_name from sessions s join citizens c on c.id = s.citizen_id where s.token_hash = $1`, [sha(t)])).rows[0];
+  const s = (await pool.query(`select s.citizen_id, s.last_seen, c.handle, c.gender, c.gender_chosen, c.look_set, c.display_name from sessions s join citizens c on c.id = s.citizen_id where s.token_hash = $1`, [sha(t)])).rows[0];
   if (!s || Date.now() - Number(s.last_seen) > SESSION_TTL) return null;
   noteActive(s.citizen_id); // developer stats: who played today
   if (Date.now() - Number(s.last_seen) > 3600 * 1000) pool.query('update sessions set last_seen = $2 where token_hash = $1', [sha(t), Date.now()]).catch(() => {});
-  return { id: s.citizen_id, handle: s.handle, name: s.display_name || '', gender: s.gender, genderChosen: !!s.gender_chosen };
+  return { id: s.citizen_id, handle: s.handle, name: s.display_name || '', gender: s.gender, genderChosen: !!s.gender_chosen, lookSet: !!s.look_set };
 }
 
 export function playersRouter({ limit, send, admin, world }) {
@@ -407,6 +409,39 @@ export function playersRouter({ limit, send, admin, world }) {
     if (!lock.rowCount) throw new HttpError(409, 'You have already chosen. Ask the developer if it needs changing.');
     await world.setGender(p.id, g);
     return { ok: true, gender: g };
+  }));
+  // ---------- your own character (shared/avatar.js) ----------
+  // Everyone makes one when they join (players from before are asked once, and can't carry on until they have). Basic
+  // clothes and hairstyles are free; the rest cost coins once and stay in the wardrobe.
+  const lookOf = c => AV.fixLook(c.look || AV.defaultLook(c.handle, c.gender));
+  r.get('/me/look', limit, send(async req => {
+    const p = await me(req), c = (await pool.query('select handle, gender, gender_chosen, look, look_set, wardrobe, coins_base, coins_day, net from citizens where id = $1', [p.id])).rows[0];
+    if (!c) throw new HttpError(404, 'No such colonist.');
+    return { look: lookOf(c), set: !!c.look_set, wardrobe: c.wardrobe || [], genderLocked: !!c.gender_chosen, gender: c.gender,
+      coins: Math.round(R.balanceOn(c.coins_base, c.coins_day, c.net, world.meta ? R.gameDay(Date.now(), world.meta.epoch) : 0)) };
+  }));
+  r.post('/me/look', limit, send(async req => {
+    const p = await me(req), b = req.body || {};
+    return world.personal(async ch => {
+      const c = (await ch.q('select * from citizens where id = $1 for update', [p.id])).rows[0]; if (!c) throw new HttpError(404, 'No such colonist.');
+      const L = AV.fixLook(b.look, lookOf(c));
+      if (c.gender_chosen && L.g !== c.gender) throw new HttpError(409, 'You chose to be a ' + (c.gender === 'f' ? 'woman' : 'man') + ' when you joined. Ask the developer if it needs changing.');
+      if (!AV.dressed(L)) throw new HttpError(400, 'Put on a top and some bottoms (or a dress) before you go out.');
+      const owed = AV.unpaid(L, c.wardrobe), total = owed.reduce((n, x) => n + x[2], 0), ward = [...(c.wardrobe || [])];
+      if (total) { ch.coins(c);
+        if (!b.buy) throw new HttpError(409, `That look has ${owed.length === 1 ? 'one thing' : owed.length + ' things'} you haven't bought yet (${total.toLocaleString('en-US')} coins).`);
+        if (Number(c.coins_base) < total) throw new HttpError(400, `That costs ${total.toLocaleString('en-US')} coins. You have ${Math.round(Number(c.coins_base)).toLocaleString('en-US')} on you${Number(c.bank) ? ' (withdraw some at a Bank first)' : ''}.`);
+        c.coins_base = Number(c.coins_base) - total; treasuryAdd(ch, total); track(ch, 'look:wardrobe', total, c.id); for (const [slot, k] of owed) ward.push(AV.wardKey(slot, k)); await ch.saveCitizen(c); }
+      await ch.q('update citizens set look = $2, look_set = true, wardrobe = $3, gender = $4, gender_chosen = true where id = $1', [c.id, JSON.stringify(L), ward, L.g]);
+      c.look = L; c.gender = L.g; ch.touch(c);
+      return { ok: true, look: L, wardrobe: ward, spent: total, coins: Math.round(Number(c.coins_base)) };
+    });
+  }));
+  // other people's characters, for drawing them (up to 40 at once): handle → look
+  r.get('/looks', limit, send(async req => {
+    const hs = String(req.query.h || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean).slice(0, 40); if (!hs.length) return {};
+    const rows = (await pool.query('select handle, gender, look from citizens where lower(handle) = any($1)', [hs])).rows, out = {};
+    for (const c of rows) out[c.handle.toLowerCase()] = lookOf(c); return out;
   }));
   r.delete('/session', limit, send(async req => { const t = req.get('x-player'); if (t) await pool.query('delete from sessions where token_hash = $1', [sha(t)]); return { ok: true }; }));
 

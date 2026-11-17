@@ -60,7 +60,7 @@ async function start(m) {
   clearTimeout(S.lobbyT); S.stop && S.stop();
   const root = S.root; root.innerHTML = ''; S.phase = 'play';
   root.append($c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'Loading the neighbourhood…' })));
-  let W; try { W = await load3d(); } catch (e) { X.toast('Your phone could not load the 3D view.'); closeArena(); return; }
+  let W; try { [W] = await Promise.all([load3d(), X.wantLooks ? X.wantLooks([X.me && X.me(), ...(m.roster || []).map(r => r && (r.h || r.handle))]).catch(() => {}) : null]); } catch (e) { X.toast('Your phone could not load the 3D view.'); closeArena(); return; } // everyone's own characters, loaded with the 3D engine
   if (!S || S.phase !== 'play') return;
   const L = AR.prepare(m.L), wire = m.L; root.innerHTML = '';
   const skew = m.now - Date.now(), me = { x: m.x ?? L.spawn.x, y: m.y ?? L.spawn.y, role: m.role, vx: 0, vy: 0 }, others = new Map();
@@ -76,12 +76,12 @@ async function start(m) {
   const rings = []; if (m.mode === 'hide') for (const sp of L.spots) { const rg = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.07, 6, 28), new THREE.MeshBasicMaterial({ color: '#7cffb2', transparent: true, opacity: 0.85 })); rg.rotation.x = -Math.PI / 2; rg.position.set(sp.x, 0.08, sp.y); view.scene.add(rg); rings.push(rg); }
   const bagGeo = new THREE.SphereGeometry(0.42, 14, 10), bagMat = new THREE.MeshStandardMaterial({ color: '#e2b13c', roughness: 0.4, metalness: 0.6, emissive: '#5a3a00', emissiveIntensity: 0.4 }); const bags = [];
   // people: you, and everyone else (built when they first show up)
-  const mine = W.makePerson(X.me ? X.me() : 'me', me.role); view.scene.add(mine.group); mine.setPos(me.x, me.y);
+  const myLook = X.lookOf ? X.lookOf(X.me && X.me()) : null, mine = W.makePerson(X.me ? X.me() : 'me', me.role, myLook); view.scene.add(mine.group); mine.setPos(me.x, me.y);
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.72, 28), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9, depthWrite: false })); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; mine.group.add(ring);
   // you can always see yourself, even behind a building
   const ghost = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.1, 4, 8), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.28, depthTest: false })); ghost.position.y = 0.95; ghost.renderOrder = 20; mine.group.add(ghost);
   let torchLight = null; const people = new Map(); S.match.mine = mine;
-  const rebuildMe = role => { const p = W.makePerson(X.me ? X.me() : 'me', role); p.setPos(me.x, me.y); p.group.add(ring, ghost); view.scene.remove(mine.group); view.scene.add(p.group); Object.assign(mine, p); };
+  const rebuildMe = role => { const p = W.makePerson(X.me ? X.me() : 'me', role, myLook); p.setPos(me.x, me.y); p.group.add(ring, ghost); view.scene.remove(mine.group); view.scene.add(p.group); Object.assign(mine, p); };
   // a torch for a seeker at night
   const torchFor = () => { if (torchLight) { view.scene.remove(torchLight); torchLight = null; } if (me.role === AR.chasers(m.mode) && view.night > 0.3) { torchLight = new THREE.SpotLight('#fff1c9', 60, 34, 0.5, 0.5, 1.4); view.scene.add(torchLight, torchLight.target); } };
   torchFor(); let role0 = me.role;
@@ -110,7 +110,7 @@ async function start(m) {
     // everyone else, a tenth of a second behind, smoothly
     const back = performance.now() - 110;
     for (const [i, o] of M.others) { let P = people.get(i); const R0 = M.roster[i] || { h: '?' };
-      if (!P || P.role !== (o.ch ? AR.chasers(M.mode) : AR.runners(M.mode))) { if (P) view.scene.remove(P.group); P = W.makePerson(R0.h, o.ch ? AR.chasers(M.mode) : AR.runners(M.mode)); const tag = W.nameTag('@' + R0.h, o.ch ? '#ffb3a8' : '#ffffff'); tag.position.y = 2.35; P.group.add(tag); view.scene.add(P.group); people.set(i, P); }
+      if (!P || P.role !== (o.ch ? AR.chasers(M.mode) : AR.runners(M.mode))) { if (P) view.scene.remove(P.group); P = W.makePerson(R0.h, o.ch ? AR.chasers(M.mode) : AR.runners(M.mode), X.lookOf ? X.lookOf(R0.h) : null); const tag = W.nameTag('@' + R0.h, o.ch ? '#ffb3a8' : '#ffffff'); tag.position.y = 2.35; P.group.add(tag); view.scene.add(P.group); people.set(i, P); }
       const b = o.buf; if (!b.length) continue; let x = b[b.length - 1][1], y = b[b.length - 1][2];
       for (let k = b.length - 1; k > 0; k--) if (b[k - 1][0] <= back && back <= b[k][0]) { const u = (back - b[k - 1][0]) / Math.max(1, b[k][0] - b[k - 1][0]); x = b[k - 1][1] + (b[k][1] - b[k - 1][1]) * u; y = b[k - 1][2] + (b[k][2] - b[k - 1][2]) * u; break; }
       const pvx = (x - P.x) / Math.max(dt, 0.001), pvy = (y - P.z) / Math.max(dt, 0.001); P.setPos(x, y); P.animate(dt, pvx, pvy);

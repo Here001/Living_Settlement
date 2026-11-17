@@ -13,6 +13,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { pictureMode, blackGuard, guardContext } from '/safe3d.js';
+import { buildAvatar } from '/avatar3d.js';
+import { defaultLook } from '/shared/avatar.js';
 import { FURNITURE, FLOORS, WALLS, TINTS, WALL_H, WALL_T, EYE, layoutOf, styleOf, placedParts, footOf, roomAt } from '/shared/furniture.js';
 import { BUILDING_TYPES, ROAD_TYPES } from '/shared/catalog.js';
 
@@ -296,23 +298,20 @@ export function createHouse(host, opts) {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); sp.scale.set(1.2, 0.3, 1); sp.renderOrder = 5; return sp; }
   let crowd = [];
   // a person: legs, a shirt in their own colour, arms, a head and hair (the same person always looks the same); facing -z
-  function figure(name) {
-    const SKIN = ['#F5D0B5', '#E0AC86', '#C68B59', '#8D5524', '#5C3A21'], h = hashS(name + 'c'), shirt = `hsl(${h % 360},55%,${40 + (h >> 9) % 20}%)`, g = new THREE.Group(), parts = [];
-    const add = (geo, c, px, py, pz) => { geo.translate(px, py, pz); parts.push(paint(geo, c)); };
-    add(new THREE.BoxGeometry(0.14, 0.8, 0.16), '#2C3E50', -0.09, 0.4, 0); add(new THREE.BoxGeometry(0.14, 0.8, 0.16), '#2C3E50', 0.09, 0.4, 0);
-    add(new THREE.BoxGeometry(0.42, 0.6, 0.24), shirt, 0, 1.1, 0); add(new THREE.BoxGeometry(0.1, 0.55, 0.12), shirt, -0.27, 1.08, 0); add(new THREE.BoxGeometry(0.1, 0.55, 0.12), shirt, 0.27, 1.08, 0);
-    add(new THREE.SphereGeometry(0.16, 12, 10), SKIN[h % SKIN.length], 0, 1.58, 0); add(new THREE.SphereGeometry(0.165, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2.2), ['#2B1B10', '#5A3A1A', '#C9A227', '#1C1C1C', '#8E2C1C'][(h >> 4) % 5], 0, 1.62, 0.02);
-    add(new THREE.BoxGeometry(0.05, 0.05, 0.05), SKIN[h % SKIN.length], 0, 1.56, -0.17); // a nose, so you can tell which way they face
-    g.add(new THREE.Mesh(mergeGeometries(parts), MAT.solid)); return g;
-  }
+  // a person: their own character (or, for someone who hasn't made one, the look the map gives them). Faces -z, like you.
+  function figure(name, look, own = false, g = 'm') {
+    const av = buildAvatar(look || defaultLook(name, g), { own }), w = new THREE.Group(); av.group.rotation.y = Math.PI; w.add(av.group); w.userData.av = av; return w; }
+  const dropFigure = w => { w.userData.av && w.userData.av.dispose(); w.traverse(o => { if (o.isSprite) { o.material.map && o.material.map.dispose(); o.material.dispose(); } }); };
+  let crowdKey = '';
   function buildPeople(list) {
-    for (const c of [...people.children]) { people.remove(c); c.traverse(o => { o.geometry && o.geometry.dispose(); o.material?.map && o.material.map.dispose(); }); }
+    const key = (list || []).slice(0, 14).map(p => p.name + ':' + (p.look ? JSON.stringify(p.look) : p.g || '')).join('|'); if (key === crowdKey) return; crowdKey = key; /* the same people: nothing to rebuild */
+    for (const c of [...people.children]) { people.remove(c); dropFigure(c); }
     crowd = (list || []).slice(0, 14); if (!crowd.length) { dirty = true; wake(); return; }
     const rooms = PLAN === 'home' ? L.rooms : L.rooms.filter(r => r.kind === 'main'), spots = [];
     for (const r of rooms) for (let x = r.x; x < r.x + r.w; x++) for (let y = r.y; y < r.y + r.d; y++) if (!blocked(x + 0.5, y + 0.5) && !L.keep.has(`${x},${y}`)) spots.push([x + 0.5, y + 0.5]);
     const used = new Set();
     for (const p of crowd) { if (!spots.length) break; let k = hashS(p.name) % spots.length; for (let n = 0; n < spots.length && used.has(k); n++) k = (k + 1) % spots.length; if (used.has(k)) break; used.add(k);
-      const [x, y] = spots[k], g = figure(p.name);
+      const [x, y] = spots[k], g = figure(p.name, p.look, false, p.g);
       const tag = nameTag(p.label || p.name); tag.position.set(0, 2.0, 0); g.add(tag);
       g.position.set(x, 0, y); g.rotation.y = (hashS(p.name + 'r') % 628) / 100; people.add(g); }
     dirty = true; wake();
@@ -330,9 +329,10 @@ export function createHouse(host, opts) {
     const list = [...others.values()].sort((a, b) => Math.hypot(a.tx - me.x, a.ty - me.y) - Math.hypot(b.tx - me.x, b.ty - me.y));
     list.forEach((o, i) => { const v = i < MAX_SHOWN; if (o.g.visible !== v) { o.g.visible = v; if (v) { o.g.position.x = o.tx; o.g.position.z = o.ty; } dirty = true; } }); }
   function upsertOther(id, p) { let o = others.get(id);
-    if (!o) { const g = figure(p.h || id); const tag = nameTag(p.h ? '@' + p.h : 'a visitor'); tag.position.set(0, 2.0, 0); g.add(tag); g.position.set(p.x, 0, p.y); g.rotation.y = p.a; scene.add(g); o = { g, tx: p.x, ty: p.y, ta: p.a }; others.set(id, o); }
+    if (o && p.look && o.lookKey !== JSON.stringify(p.look)) { const old = o.g.userData.av; o.g.remove(old.group); old.dispose(); const av = buildAvatar(p.look); av.group.rotation.y = Math.PI; o.g.add(av.group); o.g.userData.av = av; o.lookKey = JSON.stringify(p.look); dirty = true; } /* their own character arrived */
+    if (!o) { const g = figure(p.h || id, p.look); const tag = nameTag(p.h ? '@' + p.h : 'a visitor'); tag.position.set(0, 2.0, 0); g.add(tag); g.position.set(p.x, 0, p.y); g.rotation.y = p.a; scene.add(g); o = { g, tx: p.x, ty: p.y, ta: p.a, lookKey: p.look ? JSON.stringify(p.look) : '' }; others.set(id, o); }
     o.tx = p.x; o.ty = p.y; o.ta = p.a; nearest(false); if (o.g.visible) { dirty = true; wake(); } }
-  function removeOther(id) { const o = others.get(id); if (!o) return; scene.remove(o.g); o.g.traverse(m => { m.geometry && m.geometry.dispose(); m.material?.map && m.material.map.dispose(); }); others.delete(id); nearest(true); dirty = true; wake(); }
+  function removeOther(id) { const o = others.get(id); if (!o) return; scene.remove(o.g); dropFigure(o.g); others.delete(id); nearest(true); dirty = true; wake(); }
   function say(id, text) { const o = id === 'me' ? null : others.get(id), on = o ? o.g : me3; if (!on) return; const sp = bubbleSprite(text);
     if (o) { if (o.bubble) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); } o.bubble = sp; o.bubbleUntil = performance.now() + 7000; }
     else { if (meBubble) { me3.remove(meBubble); meBubble.material.map.dispose(); } meBubble = sp; meBubbleUntil = performance.now() + 7000; }
@@ -417,7 +417,7 @@ export function createHouse(host, opts) {
     const up = view === 'above'; ceilings.visible = !up; aoG.visible = !up; litFor = null; wallStuff.visible = ceilStuff.visible = !up; walls.scale.y = up ? 0.35 : 1; walls.updateMatrixWorld(true); dirty = true;
   }
   // you: seen from behind in third person (and from above); hidden in first person
-  const me3 = figure(opts.me || 'you'), meMat = MAT.solid.clone(); meMat.transparent = true; me3.children[0].material = meMat; me3.visible = false; scene.add(me3); let persp = opts.persp === 'third' ? 'third' : 'first';
+  let me3 = figure(opts.me || 'you', opts.look, true); me3.visible = false; const meFade = o => me3.userData.av.setOpacity(o); scene.add(me3); let persp = opts.persp === 'third' ? 'third' : 'first';
   const backRay = new THREE.Raycaster();
   // how far the third-person camera can sit behind you before it would leave the house
   const roomBehind = () => { const fx = -Math.sin(me.yaw), fy = -Math.cos(me.yaw), M = 0.2; let D = 2.6;
@@ -428,7 +428,7 @@ export function createHouse(host, opts) {
     for (let i = 0; i < 30 && roomBehind() < 2.2; i++) { if (blocked(me.x + fx * 0.1, me.y + fy * 0.1)) break; me.x += fx * 0.1; me.y += fy * 0.1; } }
   const setNear = n => { if (Math.abs(camera.near - n) > 0.001) { camera.near = n; camera.updateProjectionMatrix(); } };
   function placeCamera() {
-    me3.position.set(me.x, 0, me.y); me3.rotation.y = me.yaw; me3.visible = view === 'above' || persp === 'third'; meMat.opacity = 1; meMat.depthWrite = true;
+    me3.position.set(me.x, 0, me.y); me3.rotation.y = me.yaw; me3.visible = view === 'above' || persp === 'third'; meFade(1);
     if (view === 'above') { setNear(0.05); const c = S / 2, dist = S * 1.7 + 5; camera.position.set(c + Math.sin(above.yaw) * dist * 0.62, dist, c + Math.cos(above.yaw) * dist * 0.62); camera.lookAt(c, 0, c); camera.updateMatrixWorld(); return; }
     if (persp === 'third') { // like an action game: always 2.6 m behind you at head height, looking ahead past you
       // A wall behind you doesn't push the camera in: whatever lies between the camera and you (that wall) is simply not
@@ -440,7 +440,7 @@ export function createHouse(host, opts) {
       setNear(hit ? Math.max(0.05, Math.min(D - 0.45, D - hit.distance + 0.12)) : 0.05);
       const tight = Math.max(0, 1.6 - D); /* little room behind (your back to an outside wall in a small room): rise a little and look down over your shoulder */
       camera.position.set(me.x - fx * D, Math.min(WALL_H - 0.2, CAM_H + tight * 0.45), me.y - fy * D);
-      meMat.opacity = D < 0.7 ? 0.55 + 0.45 * Math.max(0, (D - 0.3) / 0.4) : 1; meMat.depthWrite = meMat.opacity > 0.99;
+      meFade(D < 0.7 ? 0.55 + 0.45 * Math.max(0, (D - 0.3) / 0.4) : 1);
       camera.rotation.set(me.pitch - 0.1 - tight * 0.4, me.yaw, 0); camera.updateMatrixWorld(); return; }
     setNear(0.05);
     camera.position.set(me.x, EYE, me.y); camera.rotation.set(me.pitch, me.yaw, 0); camera.updateMatrixWorld();
@@ -496,7 +496,7 @@ export function createHouse(host, opts) {
     try { again = step(t); } finally { inTick = false; } /* even if a frame fails, the next one can still be asked for */
     if (again || (dirty && shown())) raf = requestAnimationFrame(tick); else last = null; /* hidden behind the map: nothing to draw, so it waits */
   }
-  let lastDraw = 0, othersMoving = false;
+  let lastDraw = 0, othersMoving = false, meStill = true;
   function step(t) {
     if (!shown()) { for (const o of others.values()) { o.g.position.x = o.tx; o.g.position.z = o.ty; o.g.rotation.y = o.ta; } dirty = true; return false; } /* hidden: jump to where people are, draw later */
     const dt = last == null ? 1 / 60 : Math.max(0, Math.min(0.05, (t - last) / 1000)); last = t; let moving = false; /* time since the last frame: never below 0 or above 1/20 s */
@@ -505,13 +505,15 @@ export function createHouse(host, opts) {
     if (view === 'walk' && (fw || st)) { const sp = 2.3 * dt, sx = -Math.sin(me.yaw), sy = -Math.cos(me.yaw), dx = (sx * fw + -sy * st) * sp, dy = (sy * fw + sx * st) * sp;
       const ox = me.x, oy = me.y; if (!blocked(me.x + dx, me.y)) me.x += dx; if (!blocked(me.x, me.y + dy)) me.y += dy; if (me.x !== ox || me.y !== oy) moving = true; tapAim = false; } /* pressing into a wall: nothing changes, nothing is drawn */
     if (moving) moved();
+    if (me3.visible) { const mv = (fw || st) && view === 'walk'; if (mv) { me3.userData.av.animate(dt, 0, 2.3 * Math.min(1, Math.hypot(fw, st)), false); meStill = false; } else if (!meStill) { me3.userData.av.pose(); meStill = true; dirty = true; } } /* your legs move as you walk */
     // at most 60 frames a second (a 120 Hz screen would otherwise draw twice as many)
     const now = performance.now(), active = moving || joy.on || keys.size > 0 || now - lastInput < 160;
     const gap = active ? 15.5 : othersMoving ? 32 : 0; /* you moving: up to 60 a second; only other people moving: 30 (still smooth); nothing moving: just the one frame */
     if (dirty && shown() && now - lastDraw >= gap) { placeCamera(); renderer.render(scene, camera); dirty = false; lastDraw = now; if (guard.after()) dirty = true; } /* not while the map is showing */
     // other players: glide towards where they last said they were
     let gliding = false; for (const o of others.values()) if (o.g.visible) { const dx = o.tx - o.g.position.x, dz = o.ty - o.g.position.z; let da = o.ta - o.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
-      if (Math.abs(dx) + Math.abs(dz) + Math.abs(da) > 0.01) { const k = Math.min(1, dt * 8); o.g.position.x += dx * k; o.g.position.z += dz * k; o.g.rotation.y += da * k; gliding = true; dirty = true; }
+      if (Math.abs(dx) + Math.abs(dz) + Math.abs(da) > 0.01) { const k = Math.min(1, dt * 8); o.g.position.x += dx * k; o.g.position.z += dz * k; o.g.rotation.y += da * k; gliding = true; dirty = true; o.g.userData.av.animate(dt, 0, Math.min(3, Math.hypot(dx, dz) * k / Math.max(dt, 1e-3)), false); o.posed = false; }
+      else if (!o.posed) { o.g.userData.av.pose(); o.posed = true; dirty = true; }
       if (o.bubble && performance.now() > o.bubbleUntil) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); o.bubble = null; dirty = true; } }
     othersMoving = gliding;
     if (meBubble && performance.now() > meBubbleUntil) { me3.remove(meBubble); meBubble.material.map.dispose(); meBubble = null; dirty = true; }
@@ -541,6 +543,7 @@ export function createHouse(host, opts) {
     setView(v) { view = v; applyView(); moved(); },
     setSurroundings(A) { buildAround(A); },
     setPeople(list) { buildPeople(list); },
+    setMyLook(look) { const vis = me3.visible; if (meBubble) me3.remove(meBubble); scene.remove(me3); dropFigure(me3); me3 = figure(opts.me || 'you', look, true); me3.visible = vis; scene.add(me3); if (meBubble) me3.add(meBubble); placeCamera(); dirty = true; wake(); },
     upsertOther, removeOther, clearOthers() { for (const id of [...others.keys()]) removeOther(id); }, say, get me() { return { x: me.x, y: me.y, a: me.yaw }; },
     get stats() { const r = renderer.info.render; return { frame: r.frame, pr: prNow, people: others.size, shown: [...others.values()].filter(o => o.g.visible).length, canvas: renderer.domElement.width + 'x' + renderer.domElement.height, calls: r.calls, triangles: r.triangles, textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries, programs: renderer.info.programs?.length }; },
     setPerspective(p) { persp = p === 'third' ? 'third' : 'first'; stepIn(); moved(); },

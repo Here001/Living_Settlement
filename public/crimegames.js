@@ -185,7 +185,7 @@ async function stealth(root, L, finish) {
     const half = (yaw ? Math.hypot(L.W, L.H) * U * 0.72 : L.W * U) / 2 + 0.6, hf = Math.atan(Math.tan(view.camera.fov * Math.PI / 360) * asp), vf = view.camera.fov * Math.PI / 360;
     const dist = Math.max(half / Math.tan(hf), (L.H * U * 0.62) / Math.tan(vf)), pitch = 0.98;
     view.camera.position.set(cx + Math.sin(yaw) * dist * Math.cos(pitch), dist * Math.sin(pitch), cz + Math.cos(yaw) * dist * Math.cos(pitch)); view.camera.lookAt(cx, 0, cz - (yaw ? 0 : 1.2)); }; frame();
-  const me = W.makePerson('robber' + L.seed, 'civilian'); view.scene.add(me.group);
+  const me = W.makePerson('robber' + L.seed, 'civilian', X.lookOf ? X.lookOf(X.me && X.me()) : null); view.scene.add(me.group);
   const mask = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.4), new THREE.MeshStandardMaterial({ color: '#111' })); mask.position.y = 1.74; me.body.add(mask);
   const bag = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), new THREE.MeshStandardMaterial({ color: '#e2b13c', metalness: 0.5, roughness: 0.4 })); bag.position.set(0.38, 0.9, 0); bag.visible = false; me.group.add(bag);
   const staff = L.guards.map((g, i) => { const p = W.makePerson('staff' + L.seed + i, g.kind === 'guard' ? 'hunter' : 'civilian'); view.scene.add(p.group); const cone = W.viewCone('#ffd54a'); view.scene.add(cone);
@@ -648,7 +648,7 @@ async function horde(root, L, finish) {
   root.append(cv, hud(hp, wpn, clock), feed, waveB, stick, fire);
   const view = W.createView(cv), THREE = W.THREE; view.resize(); W.buildYard(view, L, { types: X.townTypes ? X.townTypes() : [] });
   const ro = new ResizeObserver(() => view.resize()); ro.observe(root);
-  const me = W.makePerson('muscle' + L.seed, 'civilian'); view.scene.add(me.group);
+  const me = W.makePerson('muscle' + L.seed, 'civilian', X.lookOf ? X.lookOf(X.me && X.me()) : null); view.scene.add(me.group);
   const weapon = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.9), new THREE.MeshStandardMaterial({ color: '#8a5a33', roughness: 0.6 })); weapon.position.set(0.32, 0.85, 0.35); me.group.add(weapon);
   const flash = new THREE.PointLight('#ffd27a', 0, 9, 2); flash.position.set(0, 1.3, 0.6); me.group.add(flash);
   const horde = W.makeHorde(90); view.scene.add(horde.group); const splats = W.makeSplats(140); view.scene.add(splats.mesh);

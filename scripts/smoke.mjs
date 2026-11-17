@@ -1845,6 +1845,29 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   const kb = await call('POST', '/api/me/land', k1, K.P); ok(kb.status === 200 && kb.json.kept === 2, 'land with decorations on it can be bought', JSON.stringify(kb.json).slice(0, 200));
   const got = (await pool.query('select type, owner_id, plot_id from buildings where id = any($1)', [[pk.json.building?.id || pk.json.id, tr.json.building?.id || tr.json.id]])).rows;
   ok(got.length === 2 && got.every(b => b.owner_id === K.id && b.plot_id), '…and the buyer owns them, on their plot', JSON.stringify(got)); }
+{ // your own character: made when you join, basic clothes free, the rest bought once and kept
+  const A = await player('looks_lu', 10_000), B = await player('poor_pat', 100);
+  const g0 = await call('GET', '/api/me/look', undefined, A.P); ok(g0.status === 200 && g0.json.set === false && g0.json.look && Array.isArray(g0.json.wardrobe), 'a new player has no character yet', JSON.stringify(g0.json).slice(0, 200));
+  ok((await call('GET', '/api/me', undefined, A.P)).json.lookSet === false, '…so the game asks them to make one');
+  const base = { g: 'f', ht: 3, bd: 0, sk: '#8D5524', fc: 1, br: 3, ns: 0, ey: '#3F6E8C', bdr: 0, mk: 1, lc: 2, hs: 'long', hc: '#120D0A', w: {} };
+  ok(/top/i.test((await call('POST', '/api/me/look', { look: base }, A.P)).json.error || ''), 'they can’t go out in their underwear');
+  const free = { ...base, w: { top: ['tee', 3], bot: ['jeans', 6], shoe: ['sneakers', 0] } };
+  const s1 = await call('POST', '/api/me/look', { look: free }, A.P); ok(s1.status === 200 && s1.json.spent === 0 && s1.json.look.sk === '#8D5524', 'free clothes cost nothing', JSON.stringify(s1.json).slice(0, 200));
+  ok((await call('GET', '/api/me', undefined, A.P)).json.lookSet === true, 'once made, the game stops asking');
+  const fancy = { ...free, hs: 'braids', w: { ...free.w, out: ['leather', 4], wrist: ['goldwatch', 0] } }; // 500 + 4,000 + 12,000
+  const s2 = await call('POST', '/api/me/look', { look: fancy }, A.P); ok(s2.status === 409 && /16,500/.test(s2.json.error || ''), 'paid things need buying first', JSON.stringify(s2.json));
+  const s3 = await call('POST', '/api/me/look', { look: fancy, buy: true }, A.P); ok(s3.status === 400 && /16,500/.test(s3.json.error || ''), '…and they must have the coins', JSON.stringify(s3.json));
+  await pool.query('update citizens set coins_base = 20000 where id = $1', [A.id]);
+  const s4 = await call('POST', '/api/me/look', { look: fancy, buy: true }, A.P); ok(s4.status === 200 && s4.json.spent === 16500 && s4.json.wardrobe.includes('wrist:goldwatch') && s4.json.wardrobe.includes('hair:braids'), 'bought: the coins go and the things are kept', JSON.stringify(s4.json).slice(0, 300));
+  ok(Math.round(Number((await pool.query('select coins_base from citizens where id = $1', [A.id])).rows[0].coins_base)) === 3500, '16,500 coins taken', '');
+  const s5 = await call('POST', '/api/me/look', { look: { ...fancy, w: { ...fancy.w, wrist: ['goldwatch', 0], out: ['leather', 14] } } }, A.P); ok(s5.status === 200 && s5.json.spent === 0, 'wearing them again (in another colour) is free');
+  ok(/chose/i.test((await call('POST', '/api/me/look', { look: { ...free, g: 'm' } }, A.P)).json.error || ''), 'the gender chosen at the start stays');
+  const bad = await call('POST', '/api/me/look', { look: { ...free, sk: 'javascript:1', hs: 'nonsense', w: { ...free.w, hat: ['tiara', 99] } } }, A.P); ok(bad.status === 200 && bad.json.look.sk === '#8D5524' && bad.json.look.hs === 'braids' && !bad.json.look.w.hat, 'nonsense values are ignored', JSON.stringify(bad.json.look));
+  const lk = (await call('GET', '/api/looks?h=looks_lu,poor_pat,nobody_x', undefined, { auth: false })).json; ok(lk.looks_lu?.hs === 'braids' && lk.poor_pat && !lk.nobody_x, 'anyone can load the characters to draw them', JSON.stringify(Object.keys(lk)));
+  const cd = (await call('GET', '/api/citizens/looks_lu', undefined, { auth: false })).json; ok(Array.isArray(cd.a) && cd.a[1] === '#8D5524' && cd.a[2] === '#120D0A', 'the map gets their colours', JSON.stringify(cd.a));
+  ok(!(await call('GET', '/api/citizens/poor_pat', undefined, { auth: false })).json.a, '…and nothing extra for someone who hasn’t made one');
+  ok((await call('POST', '/api/me/look', { look: fancy, buy: true }, B.P)).status === 400, 'someone without the coins can’t buy');
+  ok((await call('GET', '/api/me/look', undefined, { auth: false })).status === 401, 'you must be signed in to change your look'); }
 { // inside your home: a house with rooms; furniture on the floor, the walls, the windows and the ceiling; photos in frames
   const M = await player('homey_hal', 300_000), V = await player('visitor_vi', 1000);
   await pool.query('update citizens set home_id = (select id from buildings where type = $2 limit 1) where id = $1', [M.id, 'house']);

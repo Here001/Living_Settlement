@@ -8,6 +8,7 @@ import { score } from './leaderboards.js';
 import { playRound, GAMES, MAX_BET, validRoulette } from '../shared/casino.js';
 import { BUILDING_TYPES, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, roadClears, pgList } from '../shared/catalog.js';
 import { canEnter } from '../shared/furniture.js';
+import { fixLook, mapLook } from '../shared/avatar.js';
 import * as R from '../shared/rules.js';
 const changeScope = new AsyncLocalStorage();
 
@@ -33,7 +34,7 @@ const chunksOfRow = c => [...new Set([[c.home_cx, c.home_cy], [c.job_cx, c.job_c
 // The compact citizen record viewers receive. Coordinates travel with it so a viewer can draw a commute
 // even when the workplace is in a part of the map they haven't loaded.
 const CITIZEN_SELECT = `
-  select c.id, c.seq, c.handle, c.joined_at, c.founder, c.source, c.gender, c.display_name, c.pet, c.cars, c.car_active, (c.pass_hash is not null) claimed, c.last_seen,
+  select c.id, c.seq, c.handle, c.joined_at, c.founder, c.source, c.gender, c.display_name, c.pet, c.cars, c.car_active, c.look, (c.pass_hash is not null) claimed, c.last_seen,
          c.home_cx, c.home_cy, c.job_cx, c.job_cy, c.hang_cx, c.hang_cy, c.visit_cx, c.visit_cy, c.visit_until, c.visit_from, c.visit_origin, c.visit_id,
          h.id hid, h.type ht, h.x hx, h.y hy, j.id jid, j.type jt, j.x jx, j.y jy, g.id gid, g.type gt, g.x gx, g.y gy, v.id vid, v.type vt, v.x vx, v.y vy
   from citizens c
@@ -41,6 +42,7 @@ const CITIZEN_SELECT = `
   left join buildings v on v.id = c.visit_id`;
 const spotXY = id => String(id).slice(5).split(',').map(Number); // a trip to a tile ('spot:x,y') rather than a building
 export const cOut = r => ({ id: r.id, s: r.seq, h: r.handle, t: r.joined_at, f: r.founder ? 1 : 0, g: r.gender || 'm', n: r.display_name || '',
+  ...(r.look ? { a: mapLook(fixLook(r.look)) } : {}), // a player's own character: the few colours the map needs
   home: r.hid ? [r.hid, r.ht, r.hx, r.hy] : null, job: r.jid ? [r.jid, r.jt, r.jx, r.jy] : null, hang: r.gid ? [r.gid, r.gt, r.gx, r.gy] : null,
   // A visit: [building, type, x, y, until, from]. Kept for 20 minutes after it ends so viewers can draw the trip back.
   visit: (r.vid || /^spot:/.test(r.visit_id || '')) && Number(r.visit_until) > Date.now() - VISIT_TAIL ? [r.vid || r.visit_id, r.vid ? r.vt : 'spot', r.vid ? r.vx : spotXY(r.visit_id)[0], r.vid ? r.vy : spotXY(r.visit_id)[1], Number(r.visit_until), Number(r.visit_from || r.visit_until - 300000), r.visit_origin || null] : null, pet: r.pet || null,

@@ -391,7 +391,7 @@ export function createHouse(host, opts) {
   }
   const blobMat = () => new THREE.MeshBasicMaterial({ color: '#000000', alphaMap: radialTex('blob', [[0, '#9a9a9a'], [0.55, '#4a4a4a'], [1, '#000000']]), transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
   // ---- furniture and lamps ----
-  function buildStuff() {
+  function buildStuff() { boxes.clear();
     for (const g of [stuff, wallStuff, ceilStuff]) for (const c of [...g.children]) { g.remove(c); c.traverse(o => o.geometry && o.geometry.dispose()); }
     const lamps = [];
     for (const it of room.items) { if (pick && pick.i === it.i) continue; const f = FURNITURE[it.k], g = pieceGroup(it, photoTexture(it.ph), { off: offLights.has(it.i), on: tvOn.has(it.i) }); if (!g) continue;
@@ -523,7 +523,9 @@ export function createHouse(host, opts) {
   let lastInput = 0;
   // ---- using things: walk up to something you can use and a button appears (see actOf); tap it to sit, lie down,
   // play, use it, or switch it. The joystick (or the button again) gets you up. Others in the house see you do it.
-  function boxOf(it) { const ps = placedParts(it, '#ffffff'); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, tall = null;
+  const boxes = new Map(); /* each item's size and seat, worked out once (forgotten whenever the furniture is redrawn) */
+  function boxOf(it) { const key = it.i + '|' + it.k + '|' + it.x + '|' + it.y + '|' + (it.r || 0); let bx = boxes.get(key); if (!bx) { bx = boxOf0(it); boxes.set(key, bx); } return bx; }
+  function boxOf0(it) { const ps = placedParts(it, '#ffffff'); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, tall = null;
     for (const p of ps) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x + p.w); y1 = Math.max(y1, p.y + p.d); if (!tall || p.z + p.h > tall.z + tall.h) tall = p; }
     const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2; let seat = 0; /* the top of what's under the middle (the seat, the mattress), not the back or the headboard */
     for (const p of ps) { if (p === tall || p.z + p.h > 1.05) continue; if (cx >= p.x - 0.05 && cx <= p.x + p.w + 0.05 && cy >= p.y - 0.05 && cy <= p.y + p.d + 0.05) seat = Math.max(seat, p.z + p.h); }

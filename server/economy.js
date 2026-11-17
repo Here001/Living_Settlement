@@ -29,6 +29,8 @@ const nameOf = b => b.name || BUILDING_TYPES[b.type]?.name || 'a building';
 const BUYABLE_CATS = new Set(['housing', 'shops', 'offices', 'industry']);
 export const buyable = type => { const t = BUILDING_TYPES[type]; return !!t && BUYABLE_CATS.has(t.cat) && !!(t.home || t.work); };
 export const priceOf = (type, level = 1) => R.propertyPrice(type) * (level > 1 ? R.levelMul(level) : 1);
+// what the government sells a building for: the developer's own price for it, or the usual price × the developer's percentage
+export const saleOf = (b, meta) => b.sale_price != null ? Number(b.sale_price) : Math.max(1, Math.round(priceOf(b.type, b.level) * (Number(meta?.propPct) || 100) / 100));
 // How many properties a colonist holds: each plot of land (whatever stands on it) and each building bought on its own.
 export async function ownedCount(q, id) { return Number((await q('select (select count(distinct coalesce(estate, id)) from plots where owner_id = $1) + (select count(*) from buildings where owner_id = $1 and plot_id is null) n', [id])).rows[0].n); } // an estate of joined plots is one property
 export async function limitOf(q, id) { return R.propertyLimit((await q('select stars from citizens where id = $1', [id])).rows[0]?.stars || 0); } // see shared/rules.js: about a real month to pay for itself
@@ -330,7 +332,7 @@ export class Economy {
       if (b.owner_id) throw new HttpError(409, b.owner_id === c.id ? 'You already own it.' : `@${b.owner_handle} already owns it.`);
       const q = (a, v) => ch.q(a, v), n = await ownedCount(q, c.id), max = R.propertyLimit(c.stars);
       if (n >= max) throw new HttpError(409, `With ${c.stars || 0} star${c.stars === 1 ? '' : 's'} you can own up to ${max} properties. Sell one first, or earn more stars.`);
-      const price = priceOf(b.type, b.level); ch.coins(c);
+      const price = saleOf(b, ch.meta); ch.coins(c);
       if (c.coins_base < price) throw new HttpError(400, `It costs ${fmt(price)} coins. You have ${fmt(c.coins_base)} on you${c.bank ? ' (withdraw some at a Bank first)' : ''}.`);
       c.coins_base -= price; treasuryAdd(ch, price); track(ch, 'property:buy', price, c.id); ch.touch(c); await ch.saveCitizen(c);
       await ch.ownerChanged(b.id, null, c.id); // living there already? the rent stops

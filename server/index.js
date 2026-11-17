@@ -250,6 +250,12 @@ app.post('/api/admin/treasury', admin, send(req => world.adjustTreasury((req.bod
 app.post('/api/admin/economy', admin, send(async req => { const b = req.body || {}; const S = await import('./stats.js');
   return world.change(async ch => { if (b.f != null) { const f = Number(b.f); if (!(f >= R.ECON.min && f <= R.ECON.max)) throw new HttpError(400, `Set the dial between ${R.ECON.min} and ${R.ECON.max}.`); ch.meta.econ = { ...(ch.meta.econ || {}), f }; }
     if (b.measure) await S.econTick(ch, true); return { ok: true, econ: ch.meta.econ || null, f: R.econF(ch.meta) }; }); }));
+// what the government sells its buildings for: one building's own price (null: back to the usual), or a percentage of the usual price for all of them
+app.put('/api/admin/buildings/:id/sale-price', admin, send(req => world.change(async ch => { const v = (req.body || {}).price, price = v == null || v === '' ? null : Math.round(Number(v));
+  if (price !== null && !(price >= 0 && price <= 1e12)) throw new HttpError(400, 'Set a price from 0 up.');
+  const b = (await ch.q('update buildings set sale_price = $2 where id = $1 returning id', [String(req.params.id), price])).rows[0]; if (!b) throw new HttpError(404, 'That building is gone.'); ch.buildings.add(b.id); return { ok: true, price }; })));
+app.put('/api/admin/property-prices', admin, send(req => world.change(async ch => { const pct = Math.round(Number((req.body || {}).pct)); if (!(pct >= 1 && pct <= 1000)) throw new HttpError(400, 'Set a percentage from 1 to 1000.');
+  ch.meta.propPct = pct; return { ok: true, pct }; })));
 app.put('/api/admin/colony-name', admin, send(req => world.renameColony((req.body || {}).name)));
 app.put('/api/admin/weather', admin, send(req => world.setWeather((req.body || {}).kind)));
 app.get('/api/admin/draft', admin, send(async () => ({ draft: await world.getDraft() })));

@@ -2113,6 +2113,16 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   ok((await call('GET', '/api/citizens/dev_home_hal/room', undefined, { auth: false })).status === 403 && (await call('GET', '/api/citizens/dev_home_hal/room')).json.dev === true, 'a locked home keeps others out, but not the developer');
   let hp = null; for (let y = 0; y < 8 && !hp; y++) for (let x = 0; x < 8 && !hp; x++) { const r = await call('POST', '/api/admin/inside/h/dev_home_hal/buy', { k: 'plant', x, y, r: 0 }); if (r.status === 200) hp = r; }
   ok(hp && (await call('GET', '/api/me/room', undefined, H1.P)).json.room.items.some(i => i.k === 'plant') && Number((await pool.query('select coins_base from citizens where id = $1', [H1.id])).rows[0].coins_base) === 1000, '…who can furnish it too (it stays theirs, and costs them nothing)'); }
+{ // the developer sets what the government sells its buildings for: one building's own price, or a percentage of the usual price for all of them
+  const RR = await import('../shared/rules.js'), P1 = await player('price_pia', 5_000_000), P2 = await player('price_pat', 5_000_000);
+  const h1 = (await call('POST', '/api/admin/buildings', { type: 'house', x: 1520, y: 1300, instant: true })).json.building, h2 = (await call('POST', '/api/admin/buildings', { type: 'house', x: 1540, y: 1300, instant: true })).json.building;
+  ok((await call('PUT', `/api/admin/buildings/${h1.id}/sale-price`, { price: 1234 }, { auth: false })).status === 401, 'only the developer sets prices');
+  ok((await call('PUT', `/api/admin/buildings/${h1.id}/sale-price`, { price: 1234 })).json.price === 1234, 'the developer puts one house on sale for 1,234');
+  const b1 = await call('POST', '/api/me/properties/buy', { buildingId: h1.id }, P1.P); ok(b1.status === 200 && b1.json.price === 1234, '…and that’s what it sells for', JSON.stringify(b1.json));
+  ok((await call('PUT', '/api/admin/property-prices', { pct: 0 })).status === 400 && (await call('PUT', '/api/admin/property-prices', { pct: 50 })).json.pct === 50, 'every government building at half price');
+  const b2 = await call('POST', '/api/me/properties/buy', { buildingId: h2.id }, P2.P), want = Math.max(1, Math.round(RR.propertyPrice('house') * 50 / 100));
+  ok(b2.status === 200 && b2.json.price === want, '…so another house sells for half its usual price', JSON.stringify({ got: b2.json.price, want }));
+  await call('PUT', '/api/admin/property-prices', { pct: 100 }); }
 { // inside, live: everyone in the same place sees the others walk about and can chat; frames turn on the wall; homes differ by type
   const A = await player('live_amy', 50_000), Bq = await player('live_ben', 50_000), place = 'b:live-test-' + Date.now();
   const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'inside' || m.type === 'authed') got.push(m); });

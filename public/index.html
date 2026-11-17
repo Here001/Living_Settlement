@@ -6430,6 +6430,15 @@ function carsPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚗
   return box; }
 // A business's website on its card: where it goes, and a button that opens it in a new tab (after saying you're leaving
 // the game: links are added by players). The developer can take a link down.
+// What the government sells a building for (developer only): its own price, or the usual price × a percentage for every government building
+function salePriceBox(b,t,usual,price,pct){ const box=el('div',{class:'authbox'}), inp=el('input',{type:'number',min:'0',step:'100',value:String(b.sale!=null?b.sale:price),'aria-label':'Sale price'}), all=el('input',{type:'number',min:'1',max:'1000',step:'5',value:String(pct),'aria-label':'Percent of the usual price'});
+  const put=async(url,body,msg)=>{ try{ await api(url,{method:'PUT',body}); toast(msg); }catch(e){ toast(e.message); } };
+  box.append(el('h3',{text:'🏷️ Sale price'}), el('p',{class:'hint',text:b.owner?`Owned by @${b.owner}. This price applies if it goes back to the government.`:b.sale!=null?`Your price: ${fmt(b.sale)} coins (usually ${fmt(Math.max(1,Math.round(usual*pct/100)))}).`:`Selling for ${fmt(price)} coins (the usual price${pct!==100?` at ${pct}%`:''}).`}),
+    el('div',{class:'row-actions'}, inp, el('button',{class:'btn primary sm',text:'Set price',onclick:()=>{ const v=Math.round(Number(inp.value)); if(!(v>=0)){ toast('Type a price.'); return; } put(`/api/admin/buildings/${encodeURIComponent(b.id)}/sale-price`,{price:v},`🏷️ ${b.name||t.name} now sells for ${fmt(v)} coins.`); }}),
+      b.sale!=null?el('button',{class:'btn sm',text:'Usual price',onclick:()=>put(`/api/admin/buildings/${encodeURIComponent(b.id)}/sale-price`,{price:null},`🏷️ ${b.name||t.name} is back to its usual price.`)}):''),
+    el('p',{class:'hint',text:'Every government building (unless it has its own price):'}),
+    el('div',{class:'row-actions'}, all, el('span',{class:'hint',text:'% of the usual price'}), el('button',{class:'btn sm',text:'Set for all',onclick:()=>{ const v=Math.round(Number(all.value)); if(!(v>=1&&v<=1000)){ toast('Pick a percentage from 1 to 1000.'); return; } put('/api/admin/property-prices',{pct:v},`🏷️ Government buildings now sell at ${v}% of their usual price.`); }})));
+  return box; }
 // A night club's DJ mix (developer only): which one it plays, upload a new one (straight to Cloudflare, with progress), or take it off
 function mixBox(b,t){ const box=el('div',{class:'authbox mixbox'}), info=el('p',{class:'hint',text:'Checking…'}), bar=el('div',{class:'lovebar',hidden:true}, el('b',{style:'width:0%'}));
   const file=el('input',{type:'file',accept:'audio/mpeg,.mp3',hidden:true}), pick=el('button',{class:'btn primary sm',text:'⬆️ Upload a mix (MP3)',onclick:()=>file.click()}), off=el('button',{class:'btn sm',text:'Take it off',hidden:true});
@@ -7088,7 +7097,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(t.work) add('Workers',`${fmt(b.jobUsed||0)} of ${fmt(t.work.slots)}${list('job',b.jobUsed||0)}`);
     if(t.work) add('Pay',`${t.work.salary} coins a day`);
     add('Here now', inside.length?inside.join(', '):'Nobody');
-    const forSale=BUYABLE.has(t.cat)&&(t.home||t.work), price=Math.round(propertyPrice(b.type)*(lv>1?1+0.3*(lv-1):1));
+    const forSale=BUYABLE.has(t.cat)&&(t.home||t.work), usual=Math.round(propertyPrice(b.type)*(lv>1?1+0.3*(lv-1):1)), pct=Number(S.meta&&S.meta.propPct)||100, price=b.sale!=null?b.sale:Math.max(1,Math.round(usual*pct/100)); /* the developer can set the price */
     if(b.owner) add('Owner', `@${b.owner}${b.plot?' (on their own land)':''}`); else if(forSale&&b.done!==false&&!b.ruin) add('For sale', `${fmt(price)} coins`);
     if(b.owner&&b.plot) { const P=D.plots.get(b.plot); if(P&&P.name) add('Plot', P.name); }
     if((forSale||(b.owner&&(t.home||t.work)))&&b.done!==false){ const gross=((t.home?(b.homeUsed||0)*(t.home.rent||0):0)+(t.work?(b.jobUsed||0)*(t.work.salary||0)*0.25:0))*(1+0.1*(lv-1)); add('Earns', `About ${fmt(Math.floor(gross*0.8))} a day for its owner`); }
@@ -7099,6 +7108,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(!Store.canWrite&&Me&&Me.token) card.append(el('div',{class:'row-actions'}, Loc.btn(b.name||t.name, b.x, b.y)));
     if((canEnter(b.type)||(t.home&&!(MyHome.data&&MyHome.data.home&&MyHome.data.home.id===b.id)))&&b.done!==false&&!b.ruin&&!Store.canWrite) card.append(el('div',{class:'row-actions'}, b.owner&&isMe(b.owner)&&!t.home?el('button',{class:'btn primary',text:'🛋️ Design the inside',onclick:()=>Room.openBuilding(b.id,true)}):'', el('button',{class:'btn',text:'🚪 Go inside',onclick:()=>Room.openBuilding(b.id)}))); /* anyone can walk into a business */
     if(b.web && t.work && !b.ruin) card.append(websiteRow(b,t)); // up top, where visitors see it first
+    if(Store.canWrite && forSale && b.done!==false && !b.ruin) card.append(salePriceBox(b,t,usual,price,pct)); /* the developer: what the government sells it for */
     if(Store.canWrite && (t.home?roomSize(b.type):bizSize(b.type))) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🛠️ Go inside and furnish',title:'Developer: walk into this building and change its inside (free)',onclick:()=>Room.openBuilding(b.id,true)}))); /* the developer: into any building */
     if(Store.canWrite && t.guests && b.done!==false && !b.ruin) card.append(mixBox(b,t)); /* a night club: its DJ mix */
     Plots.buildingBits(card,b,t);

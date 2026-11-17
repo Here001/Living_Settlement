@@ -344,6 +344,9 @@ const MIGRATIONS = [
    create index if not exists visit_requests_owner on visit_requests (owner_id, status); create index if not exists visit_requests_visitor on visit_requests (visitor_id, owner_id, t desc);`,
   // v72: each resident's own apartment in a shared building: its number (which floor plan it has) and the building it's in
   `alter table citizens add column if not exists home_unit int; alter table citizens add column if not exists home_unit_bid text;`,
+  // v73: an owner's own apartment in a building they own, kept furnished (and its number kept) while they live elsewhere
+  `create table if not exists kept_homes (citizen_id text not null, building_id text not null, unit int not null, room jsonb, t bigint not null, primary key (citizen_id, building_id));
+   create index if not exists kept_homes_building on kept_homes (building_id);`,
 ];
 
 export async function migrate() {

@@ -2001,6 +2001,29 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   ok(ch.find(c => c.handle === 'res_ann')?.locked && ch.find(c => c.handle === 'res_ann')?.unit === 1 && ch.find(c => c.handle === 'res_ben')?.unit === 2, 'the building lists each apartment, locked or not', JSON.stringify(ch));
   ok((await call('POST', '/api/citizens/res_ann/visit', {}, Vq.P)).status === 200, 'a visitor can ask a renter to visit');
   const qv = (await call('GET', '/api/me/visits', undefined, R1.P)).json.requests[0]; ok(qv && (await call('POST', `/api/me/visits/${qv.id}`, { accept: false }, R1.P)).json.status === 'declined', '…and the renter can say no'); }
+{ // an owner's apartment in their own building is theirs for good: it stays furnished while they live elsewhere, nobody else gets it, and it's theirs again when they move back
+  const ap = (await call('POST', '/api/admin/buildings', { type: 'apartment', x: 1360, y: 1300, instant: true })).json.building, hs = (await call('POST', '/api/admin/buildings', { type: 'house', x: 1380, y: 1300, instant: true })).json.building;
+  const O = await player('own_oma', 200_000), N = await player('own_ned', 50_000);
+  await pool.query('update buildings set owner_id = $2, owner_handle = $3 where id = $1', [ap.id, O.id, 'own_oma']);
+  const moveTo = async (P, id) => { await pool.query('update citizens set home_changed_day = null where id = (select id from citizens where lower(handle) = lower($1))', [P.handle]); return call('POST', '/api/me/home', { buildingId: id }, P.P); };
+  O.handle = 'own_oma'; N.handle = 'own_ned';
+  ok((await moveTo(O, ap.id)).status === 200, 'an owner moves into their own building');
+  const u0 = (await call('GET', '/api/me/room', undefined, O.P)).json.home.unit;
+  await pool.query(`update citizens set room = '{"plan":"h:apartment","items":[{"i":"k1","k":"plant","x":3,"y":3,"r":0}],"box":[{"i":"k2","k":"armchair"}],"styles":{}}' where id = $1`, [O.id]);
+  ok((await moveTo(O, hs.id)).status === 200, '…then moves to another home');
+  const away = (await call('GET', '/api/me/room', undefined, O.P)).json;
+  ok(away.room.items.length === 0 && away.room.box.length === 0, 'their furniture stays behind in their apartment (the new home starts bare)', JSON.stringify(away.room));
+  const kept = (await pool.query('select unit, room from kept_homes where citizen_id = $1 and building_id = $2', [O.id, ap.id])).rows[0];
+  ok(kept && kept.unit === u0 && kept.room.items.length === 1, '…kept, with its number', JSON.stringify(kept));
+  await pool.query('update citizens set home_id = $2, room = null, home_unit = null, home_unit_bid = null where id = $1', [N.id, ap.id]);
+  ok((await call('GET', '/api/me/room', undefined, N.P)).json.home.unit !== u0, 'someone moving in meanwhile gets a different apartment');
+  ok((await moveTo(O, ap.id)).status === 200, 'the owner moves back');
+  const back = (await call('GET', '/api/me/room', undefined, O.P)).json;
+  ok(back.home.unit === u0 && back.room.items.some(i => i.i === 'k1') && back.room.box.some(i => i.i === 'k2'), '…and gets their apartment back just as they left it', JSON.stringify([back.home.unit, back.room.items, back.room.box]));
+  ok(!(await pool.query('select 1 from kept_homes where citizen_id = $1', [O.id])).rowCount, '…(nothing left waiting)');
+  await moveTo(O, hs.id); ok((await call('POST', '/api/me/properties/sell', { buildingId: ap.id }, O.P)).status === 200, 'they sell the building while living elsewhere');
+  const after = (await call('GET', '/api/me/room', undefined, O.P)).json.room;
+  ok(after.box.some(i => i.i === 'k1') && after.box.some(i => i.i === 'k2') && !(await pool.query('select 1 from kept_homes where citizen_id = $1', [O.id])).rowCount, '…and the apartment’s furniture comes to them, in storage', JSON.stringify(after.box)); }
 { // inside, live: everyone in the same place sees the others walk about and can chat; frames turn on the wall; homes differ by type
   const A = await player('live_amy', 50_000), Bq = await player('live_ben', 50_000), place = 'b:live-test-' + Date.now();
   const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'inside' || m.type === 'authed') got.push(m); });

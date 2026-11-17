@@ -13,6 +13,10 @@ import * as R from '../shared/rules.js';
 const changeScope = new AsyncLocalStorage();
 
 const uid = () => crypto.randomUUID();
+// a room with another room's furniture added to its storage box (what's placed and what's stored)
+const withStored = (base, extra) => { const add = [...(Array.isArray(extra?.items) ? extra.items : []), ...(Array.isArray(extra?.box) ? extra.box : [])].filter(it => it && it.k)
+  .map(it => ({ i: String(it.i), k: it.k, ...(it.c ? { c: it.c } : {}), ...(it.ph ? { ph: it.ph } : {}), ...(it.std ? { std: true } : {}) }));
+  if (!add.length) return base || null; const b = base && typeof base === 'object' ? { ...base } : {}; b.box = [...(Array.isArray(b.box) ? b.box : []), ...add]; return b; };
 const fmt = n => Math.round(n).toLocaleString('en-US');
 // Tiles sent as [[x, y], …]: whole numbers, no repeats, at most `max`.
 export function cleanTiles(tiles, max) { const out = [], seen = new Set(); if (!Array.isArray(tiles)) return out;
@@ -152,6 +156,7 @@ class Change {
   }
   async moveIn(c, home) {
     this.touch(c); this.coins(c);
+    await this.keepApartment(c, null, home.id);
     c.home_id = home.id; c.home_cx = home.cx; c.home_cy = home.cy; c.net = 0;
     this.meta.residents = (this.meta.residents || 0) + 1;
     await this.bump(home.id, 'home_used', 1);
@@ -169,15 +174,42 @@ class Change {
     this.coins(c);
     await this.bump(c.home_id, 'home_used', -1);
     await this.setHangout(c, null);
+    await this.keepApartment(c, c.home_id, null);
     c.home_id = c.home_cx = c.home_cy = null; c.net = 0; c.manual = false;
     this.meta.residents = Math.max(0, (this.meta.residents || 0) - 1);
     await this.saveCitizen(c);
+  }
+
+  // An owner's apartment in a building they own is theirs for good: moving out leaves it just as it is (everything in it,
+  // and its number, which nobody else is given), and moving back in gives it back. Furniture they had with them then goes
+  // into the apartment's storage. Renters' furniture still goes with them from home to home.
+  async keepApartment(c, fromId, toId) {
+    if (fromId === toId) return;
+    const r = (await this.q('select room, home_unit, home_unit_bid from citizens where id = $1', [c.id])).rows[0]; if (!r) return;
+    const owns = async bid => !!bid && !!(await this.q('select 1 from buildings where id = $1 and owner_id = $2', [bid, c.id])).rowCount;
+    let room = r.room, unit = r.home_unit, ubid = r.home_unit_bid, changed = false;
+    if (await owns(fromId)) {
+      const u = ubid === fromId && Number.isInteger(unit) ? unit : ubid == null && room?.items?.length ? 1 : null; /* (furnished before apartments had numbers: number 1, as on going in) */
+      if (u != null) { await this.q(`insert into kept_homes (citizen_id, building_id, unit, room, t) values ($1, $2, $3, $4, $5)
+          on conflict (citizen_id, building_id) do update set unit = excluded.unit, room = excluded.room, t = excluded.t`, [c.id, fromId, u, JSON.stringify(room || {}), Date.now()]);
+        room = null; unit = null; ubid = null; changed = true; } }
+    if (await owns(toId)) {
+      const k = (await this.q('delete from kept_homes where citizen_id = $1 and building_id = $2 returning unit, room', [c.id, toId])).rows[0];
+      if (k) { room = withStored(k.room, room); unit = k.unit; ubid = toId; changed = true; } }
+    if (changed) { await this.q('update citizens set room = $2, home_unit = $3, home_unit_bid = $4 where id = $1', [c.id, room ? JSON.stringify(room) : null, unit, ubid]); c.room = room; c.home_unit = unit; c.home_unit_bid = ubid; }
+  }
+  // A building stops being theirs (sold, knocked down): a kept apartment's furniture goes into their own storage.
+  async giveBackApartment(buildingId, ownerId) {
+    const rows = (await this.q(`delete from kept_homes where building_id = $1 ${ownerId ? 'and citizen_id = $2' : ''} returning citizen_id, room`, ownerId ? [buildingId, ownerId] : [buildingId])).rows;
+    for (const k of rows) { const c = (await this.q('select room from citizens where id = $1 for update', [k.citizen_id])).rows[0]; if (!c) continue;
+      await this.q('update citizens set room = $2 where id = $1', [k.citizen_id, JSON.stringify(withStored(c.room, k.room))]); }
   }
 
   // When a home changes hands, its new owner (if they live there) stops paying rent and the old one starts: call this
   // before the owner changes (old = the previous owner's id) and it settles both.
   async ownerChanged(buildingId, oldOwner, newOwner) {
     const b = (await this.q('select id, type, owner_id from buildings where id = $1', [buildingId])).rows[0]; if (!b) return;
+    if (oldOwner && oldOwner !== newOwner) await this.giveBackApartment(b.id, oldOwner);
     const rent = R.capacities(b.type).rent || 0; if (!rent) return;
     for (const id of [oldOwner, newOwner]) { if (!id) continue;
       const c = (await this.q('select c.*, j.type jtype from citizens c left join buildings j on j.id = c.job_id where c.id = $1 and c.home_id = $2 and c.job_id is not null for update of c', [id, b.id])).rows[0]; if (!c) continue;
@@ -193,6 +225,7 @@ class Change {
       this.income(newRent - oldRent); c.net = R.netOf(salary, newRent);
     }
     await this.bump(c.home_id, 'home_used', -1);
+    await this.keepApartment(c, c.home_id, home.id);
     c.home_id = home.id; c.home_cx = home.cx; c.home_cy = home.cy;
     await this.bump(home.id, 'home_used', 1);
     await this.setHangout(c, await this.nearestLeisure(home.x, home.y));
@@ -611,6 +644,7 @@ export class World {
   async demolishIn(ch, b) {
     if (this.economy) await this.economy.refundDemolished(ch, b); // an owner gets back what they paid
     await this.evict(ch, b);
+    await ch.giveBackApartment(b.id, null);
     await ch.q('delete from buildings where id = $1', [b.id]);
     for (const p of (await ch.q('delete from room_photos where building_id = $1 returning r2key', [b.id])).rows) if (p.r2key) import('./storage.js').then(s => s.r2On() && s.del(p.r2key)).catch(() => {}); // its photos go too
     ch.buildings.delete(b.id); ch.removedBuildings.set(b.id, R.chunkKey(b.cx, b.cy));

@@ -68,7 +68,8 @@ export class Rooms {
     let unit = c.home_unit_bid === b.id && Number.isInteger(c.home_unit) ? c.home_unit : null;
     if (unit == null) {
       if (c.home_unit_bid == null && c.room?.items?.length) unit = 1; /* furnished before: apartment 1 is the layout they had */
-      else { const taken = new Set((await q('select home_unit from citizens where home_id = $1 and home_unit_bid = $1 and id <> $2 and home_unit is not null', [b.id, c.id])).rows.map(r => r.home_unit)); unit = 1; while (taken.has(unit)) unit++; }
+      else { const taken = new Set((await q(`select home_unit from citizens where home_id = $1 and home_unit_bid = $1 and id <> $2 and home_unit is not null
+          union select k.unit from kept_homes k join buildings o on o.id = k.building_id and o.owner_id = k.citizen_id where k.building_id = $1 and k.citizen_id <> $2`, [b.id, c.id])).rows.map(r => r.home_unit)); /* the owner's own apartment stays theirs while they're away */ unit = 1; while (taken.has(unit)) unit++; }
       await q('update citizens set home_unit = $2, home_unit_bid = $3 where id = $1', [c.id, unit, b.id]); c.home_unit = unit; c.home_unit_bid = b.id; }
     return { id: b.id, type: b.type, name: b.name || BUILDING_TYPES[b.type]?.name || 'Home', size, plan: F.homePlan(b.type, unit), unit, x: b.x, y: b.y, w: b.w, d: b.d };
   }

@@ -1985,6 +1985,22 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   const h1 = await call('POST', '/api/inside/here', { place: 'b:' + bk.id }, O.P), h2 = await call('POST', '/api/inside/here', { place: 'b:' + bk.id }, Vz.P);
   ok(h1.status === 200 && h2.json.viewers === 1 && h2.json.names.includes('baker_bo'), 'someone walking in sees who else is looking round', JSON.stringify(h2.json));
   ok((await call('POST', '/api/inside/here', { place: 'nonsense here' }, O.P)).status === 400, 'only real places'); }
+{ // a shared building: everyone who lives there has their own apartment, with its own plan, lock and visitors
+  const ap = (await call('POST', '/api/admin/buildings', { type: 'apartment', x: 1340, y: 1300, instant: true })).json.building;
+  const R1 = await player('res_ann', 50_000), R2 = await player('res_ben', 50_000), R3 = await player('res_cal', 50_000), Vq = await player('look_lou', 1000);
+  for (const R of [R1, R2]) await pool.query('update citizens set home_id = $2, room = null, home_unit = null, home_unit_bid = null where id = $1', [R.id, ap.id]);
+  await pool.query(`update citizens set home_id = $2, home_unit = null, home_unit_bid = null, room = '{"items":[{"i":"x1","k":"plant","x":3,"y":3,"r":0}],"box":[],"styles":{}}' where id = $1`, [R3.id, ap.id]); // furnished before apartments had numbers
+  const r1 = (await call('GET', '/api/me/room', undefined, R1.P)).json, r2 = (await call('GET', '/api/me/room', undefined, R2.P)).json, r3 = (await call('GET', '/api/me/room', undefined, R3.P)).json;
+  ok(r1.room.plan === 'h:apartment' && r2.room.plan === 'h:apartment#2' && r1.home.unit === 1 && r2.home.unit === 2, 'neighbours get apartments of their own (the first one with the building’s usual layout)', JSON.stringify([r1.room.plan, r2.room.plan]));
+  const F3 = await import('../shared/furniture.js'); ok(JSON.stringify(F3.layoutOf(r1.size, r1.room.plan).rooms) !== JSON.stringify(F3.layoutOf(r2.size, r2.room.plan).rooms), '…laid out differently');
+  ok(r3.room.plan === 'h:apartment' && r3.room.items.length === 1, 'someone who furnished before keeps their layout and furniture', JSON.stringify([r3.room.plan, r3.room.items.length]));
+  ok((await call('GET', '/api/me/room', undefined, R2.P)).json.room.plan === 'h:apartment#2', 'the apartment stays theirs');
+  ok((await call('POST', '/api/me/room/lock', { locked: true }, R1.P)).status === 200, 'a renter can lock their own apartment');
+  ok((await call('GET', '/api/citizens/res_ann/room', undefined, Vq.P)).status === 403 && (await call('GET', '/api/citizens/res_ben/room', undefined, Vq.P)).status === 200, '…which doesn’t lock the neighbours');
+  const ch = (await call('GET', `/api/buildings/${ap.id}/inside`, undefined, Vq.P)).json.choose || [];
+  ok(ch.find(c => c.handle === 'res_ann')?.locked && ch.find(c => c.handle === 'res_ann')?.unit === 1 && ch.find(c => c.handle === 'res_ben')?.unit === 2, 'the building lists each apartment, locked or not', JSON.stringify(ch));
+  ok((await call('POST', '/api/citizens/res_ann/visit', {}, Vq.P)).status === 200, 'a visitor can ask a renter to visit');
+  const qv = (await call('GET', '/api/me/visits', undefined, R1.P)).json.requests[0]; ok(qv && (await call('POST', `/api/me/visits/${qv.id}`, { accept: false }, R1.P)).json.status === 'declined', '…and the renter can say no'); }
 { // inside, live: everyone in the same place sees the others walk about and can chat; frames turn on the wall; homes differ by type
   const A = await player('live_amy', 50_000), Bq = await player('live_ben', 50_000), place = 'b:live-test-' + Date.now();
   const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'inside' || m.type === 'authed') got.push(m); });

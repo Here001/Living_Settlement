@@ -6499,7 +6499,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     // a home where people live: pick whose home to look into
     Entrance.show(); let d; try{ d=await api(`/api/buildings/${encodeURIComponent(id)}/inside`); }catch(e){ Entrance.cancel(); toast(e.message); return; }
     if(d.choose){ Entrance.cancel(); document.querySelector('.rsheet-bg')?.remove(); const wrap=el('div',{class:'rsheet-bg rreport'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
-      const list=el('div',{class:'rchoose'}, ...d.choose.map(c=>el('button',{class:'btn',text:c.locked?`🔒 @${c.handle}’s home`:`🏠 @${c.handle}’s home`,onclick:()=>{ wrap.remove(); if(c.locked) Visit.open(c.handle); else this.open(c.handle); }})));
+      const list=el('div',{class:'rchoose'}, ...d.choose.map(c=>el('button',{class:'btn',text:`${c.locked?'🔒':'🏠'} ${c.unit?`Apartment ${c.unit} · `:''}@${c.handle}’s home`,onclick:()=>{ wrap.remove(); if(c.locked) Visit.open(c.handle); else this.open(c.handle); }})));
       wrap.append(el('div',{class:'rsheet inked',role:'dialog','aria-label':'Who lives here'}, el('h3',{text:`🚪 ${d.home.name}`}), el('p',{class:'hint',text:`${d.choose.length===1?'One colonist lives':`${d.choose.length} colonists live`} here. Whose home would you like to look into?`}), list, el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Cancel',onclick:()=>wrap.remove()}))));
       document.body.append(wrap); return; }
     await this.open(null,id,d); if(design&&this.d&&this.d.mine&&!this.edit) this.toggle(true); },
@@ -6516,7 +6516,8 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     this.sub=el('small',{text:d.home.name}); this.editBtn=d.mine?el('button',{class:'btn primary sm',text:this.editWord,onclick:()=>this.toggle()}):'';
     this.mapBtn=el('button',{class:'hhere',title:'Look at the colony map; come back inside any time',onclick:()=>this.toMap()}, '🗺️', el('span',{class:'wide',text:' Map'}));
     this.hereChip=el('button',{class:'hhere',text:'👥 …',onclick:()=>{ const n=this.hereNames||[]; toast(n.length>1?`Here now: ${n.slice(0,12).join(', ')}${n.length>12?'…':''}`:'Nobody else is here right now, just you.'); }});
-    const title=this.biz?(d.mine?`🏪 Your ${d.home.name.toLowerCase()}`:`🏪 ${d.home.name}${d.owner?` · @${d.owner}`:''}`):d.place==='building'?(d.mine?`🏠 Your ${d.home.name.toLowerCase()} (nobody lives here)`:`🏠 ${d.home.name} · empty${d.owner?` · @${d.owner}’s`:''}`):(d.mine?'🏠 Your home':`🏠 @${d.owner}’s home`);
+    const apt=d.home&&d.home.unit?` · Apt ${d.home.unit}`:''; /* their own apartment in the building */
+    const title=this.biz?(d.mine?`🏪 Your ${d.home.name.toLowerCase()}`:`🏪 ${d.home.name}${d.owner?` · @${d.owner}`:''}`):d.place==='building'?(d.mine?`🏠 Your ${d.home.name.toLowerCase()} (nobody lives here)`:`🏠 ${d.home.name} · empty${d.owner?` · @${d.owner}’s`:''}`):(d.mine?`🏠 Your home${apt}`:`🏠 @${d.owner}’s home${apt}`);
     const bar=el('div',{class:'webbar'}, el('button',{class:'webx','aria-label':'Back to the colony',text:'✕',onclick:()=>this.close()}),
       el('div',{class:'webaddr'}, el('b',{text:title}), this.sub), this.mapBtn, this.hereChip, this.editBtn);
     const L=layoutOf(d.size,d.room.plan||'home');

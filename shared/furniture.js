@@ -205,7 +205,9 @@ export function roomSize(type) {
   const rent = t.home.rent || 0, base = rent <= 3 ? 5 : rent <= 5 ? 6 : rent <= 9 ? 7 : rent <= 12 ? 8 : rent <= 15 ? 9 : rent <= 20 ? 10 : rent <= 45 ? 12 : 13;
   return Math.min(14, base + (rent > 3 ? hashStr(type) % 2 : 0) + ((t.height || 0) >= 100 ? 1 : 0));
 }
-export const homePlan = type => 'h:' + type;
+// A home's plan. Everyone who lives in a building has their own apartment there (`unit` 1, 2, 3…), each with its own
+// layout of rooms; apartment 1 has the building's original layout.
+export const homePlan = (type, unit = 0) => 'h:' + type + (unit > 1 ? '#' + unit : '');
 
 // ---------------- the floor plan ----------------
 // A home's own plan, the same every time for the same kind of home: the living room across the front (with the front

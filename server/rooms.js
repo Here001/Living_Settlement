@@ -53,8 +53,8 @@ export class Rooms {
     // a home: your own if you live here; the people who live here to choose from; or, with nobody living here, the home itself
     if (BUILDING_TYPES[b.type]?.home) {
       if (meId && (await pool.query('select 1 from citizens where id = $1 and home_id = $2', [meId, b.id])).rowCount) return this.view(meId);
-      const live = (await pool.query('select handle, room from citizens where home_id = $1 order by lower(handle) limit 60', [b.id])).rows;
-      if (live.length) return { choose: live.map(r => ({ handle: r.handle, locked: !!r.room?.locked })), home: { id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Home', type: b.type }, owner: b.owner_handle || null, mine: !!meId && b.owner_id === meId };
+      const live = (await pool.query('select handle, room, case when home_unit_bid = $1 then home_unit end unit from citizens where home_id = $1 order by home_unit nulls last, lower(handle) limit 60', [b.id])).rows;
+      if (live.length) return { choose: live.map(r => ({ handle: r.handle, locked: !!r.room?.locked, unit: r.unit || 0 })), home: { id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Home', type: b.type }, owner: b.owner_handle || null, mine: !!meId && b.owner_id === meId };
     }
     const { size, room } = this.bizRoom(b), mine = !!meId && b.owner_id === meId, c = mine ? (await pool.query('select coins_base from citizens where id = $1', [meId])).rows[0] : null;
     return { mine, place: BUILDING_TYPES[b.type]?.home ? 'building' : 'business', owner: b.owner_handle || null, designed: !!b.interior, home: { id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Building', type: b.type, x: b.x, y: b.y, w: b.w, d: b.d }, size, room, photos: await this.photoUrls(room), coins: c ? Math.round(Number(c.coins_base)) : undefined };
@@ -62,7 +62,15 @@ export class Rooms {
   async homeOf(q, c) {
     if (!c.home_id) return null;
     const b = (await q('select id, type, name, x, y, w, d from buildings where id = $1', [c.home_id])).rows[0]; if (!b) return null;
-    const size = F.roomSize(b.type); return size ? { id: b.id, type: b.type, name: b.name || BUILDING_TYPES[b.type]?.name || 'Home', size, plan: F.homePlan(b.type), x: b.x, y: b.y, w: b.w, d: b.d } : null;
+    const size = F.roomSize(b.type); if (!size) return null;
+    // their own apartment in the building: given the first time they go in (the lowest number no neighbour has) and
+    // kept while they live there. Someone who furnished their place before apartments had numbers keeps its layout.
+    let unit = c.home_unit_bid === b.id && Number.isInteger(c.home_unit) ? c.home_unit : null;
+    if (unit == null) {
+      if (c.home_unit_bid == null && c.room?.items?.length) unit = 1; /* furnished before: apartment 1 is the layout they had */
+      else { const taken = new Set((await q('select home_unit from citizens where home_id = $1 and home_unit_bid = $1 and id <> $2 and home_unit is not null', [b.id, c.id])).rows.map(r => r.home_unit)); unit = 1; while (taken.has(unit)) unit++; }
+      await q('update citizens set home_unit = $2, home_unit_bid = $3 where id = $1', [c.id, unit, b.id]); c.home_unit = unit; c.home_unit_bid = b.id; }
+    return { id: b.id, type: b.type, name: b.name || BUILDING_TYPES[b.type]?.name || 'Home', size, plan: F.homePlan(b.type, unit), unit, x: b.x, y: b.y, w: b.w, d: b.d };
   }
   // where each photo in the house can be fetched: straight from R2 when it's there (u), or through this server (s)
   async photoUrls(room) {
@@ -72,12 +80,12 @@ export class Rooms {
     return out;
   }
   async out(c, home, room, mine) {
-    return { mine, place: 'home', owner: c.handle, home: { id: home.id, name: home.name, type: home.type, x: home.x, y: home.y, w: home.w, d: home.d }, size: home.size, room, photos: await this.photoUrls(room), coins: mine ? Math.round(Number(c.coins_base)) : undefined };
+    return { mine, place: 'home', owner: c.handle, home: { id: home.id, name: home.name, type: home.type, x: home.x, y: home.y, w: home.w, d: home.d, unit: home.unit || 0 }, size: home.size, room, photos: await this.photoUrls(room), coins: mine ? Math.round(Number(c.coins_base)) : undefined };
   }
   // what you see when you go in: your own home, or someone else's (look only)
   async view(meId, handle) {
     const pq = (a, v) => pool.query(a, v);
-    const c = handle ? (await pq('select id, handle, home_id, room, coins_base from citizens where lower(handle) = lower($1)', [String(handle)])).rows[0] : (await pq('select id, handle, home_id, room, coins_base from citizens where id = $1', [meId])).rows[0];
+    const c = handle ? (await pq('select id, handle, home_id, room, coins_base, home_unit, home_unit_bid from citizens where lower(handle) = lower($1)', [String(handle)])).rows[0] : (await pq('select id, handle, home_id, room, coins_base, home_unit, home_unit_bid from citizens where id = $1', [meId])).rows[0];
     if (!c) throw new HttpError(404, 'No colonist with that name.');
     const home = await this.homeOf(pq, c); if (!home) throw new HttpError(404, c.id === meId ? 'You don’t have a home yet. Rent one first, then you can furnish it.' : `@${c.handle} doesn’t have a home right now.`);
     const room = F.fitRoom(c.room, home.size, home.plan).room; if (room.locked && c.id !== meId && !(await this.world.visits?.allowed(c.id, meId))) throw new HttpError(403, `@${c.handle} keeps their home locked. Ask to visit from their card.`); /* unless they've let you in */

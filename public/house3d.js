@@ -322,18 +322,24 @@ export function createHouse(host, opts) {
   el.addEventListener('wheel', e => { if (view === 'walk') { me.pitch = Math.max(-1.2, Math.min(1.1, me.pitch - e.deltaY * 0.001)); moved(); } }, { passive: true });
 
   // ---- the loop: runs only while something moves or changes ----
-  let raf = 0, last = 0, dead = false;
+  // Exactly one frame is ever waiting: while a frame runs, asking for another (moving, a change) only marks it as wanted.
+  let raf = 0, last = null, dead = false, inTick = false;
   function resize() { const r = host.getBoundingClientRect(); renderer.setSize(Math.max(1, r.width), Math.max(1, r.height), false); camera.aspect = r.width / Math.max(1, r.height); camera.fov = Math.min(95, Math.max(62, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(37)) / camera.aspect)))); camera.updateProjectionMatrix(); /* about 74° across, even on a tall phone */ dirty = true; wake(); }
-  function wake() { if (!raf && !dead) { last = performance.now(); raf = requestAnimationFrame(tick); } }
+  function wake() { if (!raf && !dead && !inTick) { last = null; raf = requestAnimationFrame(tick); } }
   function tick(t) {
-    raf = 0; if (dead) return; const dt = Math.min(0.05, (t - last) / 1000); last = t; let moving = false;
+    raf = 0; if (dead) return; inTick = true; let again = false;
+    try { again = step(t); } finally { inTick = false; } /* even if a frame fails, the next one can still be asked for */
+    if (again || dirty) raf = requestAnimationFrame(tick); else last = null;
+  }
+  function step(t) {
+    const dt = last == null ? 1 / 60 : Math.max(0, Math.min(0.05, (t - last) / 1000)); last = t; let moving = false; /* time since the last frame: never below 0 or above 1/20 s */
     let fw = -joy.y, st = joy.x; if (keys.has('w') || keys.has('arrowup')) fw += 1; if (keys.has('s') || keys.has('arrowdown')) fw -= 1; if (keys.has('a')) st -= 1; if (keys.has('d')) st += 1;
     if (keys.has('arrowleft')) { me.yaw += 1.8 * dt; moving = true; } if (keys.has('arrowright')) { me.yaw -= 1.8 * dt; moving = true; }
     if (view === 'walk' && (fw || st)) { const sp = 2.3 * dt, sx = -Math.sin(me.yaw), sy = -Math.cos(me.yaw), dx = (sx * fw + -sy * st) * sp, dy = (sy * fw + sx * st) * sp;
       if (!blocked(me.x + dx, me.y)) me.x += dx; if (!blocked(me.x, me.y + dy)) me.y += dy; moving = true; tapAim = false; }
     if (moving) moved();
     if (dirty) { placeCamera(); renderer.render(scene, camera); dirty = false; }
-    if (moving || joy.on || keys.size) raf = requestAnimationFrame(tick);
+    return moving || joy.on || keys.size > 0;
   }
   const ro = new ResizeObserver(resize); ro.observe(host);
   buildShell(); buildStuff(); resize(); moved();

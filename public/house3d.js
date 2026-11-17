@@ -443,30 +443,38 @@ export function createHouse(host, opts) {
   }
   // you: seen from behind in third person (and from above); hidden in first person
   let me3 = figure(opts.me || 'you', opts.look, true); me3.visible = false; const meFade = o => me3.userData.av.setOpacity(o); scene.add(me3); let persp = opts.persp === 'third' ? 'third' : 'first';
-  const backRay = new THREE.Raycaster();
+  // The third-person camera: framed like an action game, whatever the screen's shape: your head about the middle of the
+  // picture and your feet at its bottom edge. On a tall phone (a wide view) that's about 1.4 m behind you; on a wide
+  // screen about 2.5 m. Worked out again whenever the screen changes shape.
+  const backRay = new THREE.Raycaster(), CAM_H = 1.95; let CAM_BACK = 1.9, CAM_TILT = 0.2;
+  function frameThird() { const F = THREE.MathUtils.degToRad(camera.fov / 2), want = 0.96 * F + THREE.MathUtils.degToRad(2), gap = d => Math.atan(CAM_H / d) - Math.atan((CAM_H - 1.8) / d);
+    let lo = 0.8, hi = 4; for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (gap(m) > want) lo = m; else hi = m; }
+    CAM_BACK = Math.max(1.2, Math.min(2.8, (lo + hi) / 2)); CAM_TILT = Math.atan((CAM_H - 1.8) / CAM_BACK) + THREE.MathUtils.degToRad(2); }
   // how far the third-person camera can sit behind you before it would leave the house
-  const roomBehind = () => { const fx = -Math.sin(me.yaw), fy = -Math.cos(me.yaw), M = 0.2; let D = 2.6;
+  const roomBehind = () => { const fx = -Math.sin(me.yaw), fy = -Math.cos(me.yaw), M = 0.2; let D = CAM_BACK;
     if (fx > 1e-6) D = Math.min(D, (me.x - M) / fx); else if (fx < -1e-6) D = Math.min(D, (S - M - me.x) / -fx);
     if (fy > 1e-6) D = Math.min(D, (me.y - M) / fy); else if (fy < -1e-6) D = Math.min(D, (S - M - me.y) / -fy); return D; };
   // in third person, step forward (if there's floor) until the camera has room behind you
   function stepIn() { if (persp !== 'third') return; const fx = -Math.sin(me.yaw), fy = -Math.cos(me.yaw);
-    for (let i = 0; i < 30 && roomBehind() < 2.2; i++) { if (blocked(me.x + fx * 0.1, me.y + fy * 0.1)) break; me.x += fx * 0.1; me.y += fy * 0.1; } }
+    const need = Math.min(CAM_BACK, 1.4); for (let i = 0; i < 14 && roomBehind() < need; i++) { /* a short step at most, so the camera has a little room */ if (blocked(me.x + fx * 0.1, me.y + fy * 0.1)) break; me.x += fx * 0.1; me.y += fy * 0.1; } }
   const setNear = n => { if (Math.abs(camera.near - n) > 0.001) { camera.near = n; camera.updateProjectionMatrix(); } };
   function placeCamera() {
     me3.position.set(me.x, 0, me.y); me3.rotation.y = me.yaw; me3.visible = view === 'above' || persp === 'third'; meFade(1);
     if (view === 'above') { setNear(0.05); const c = S / 2, dist = S * 1.7 + 5; camera.position.set(c + Math.sin(above.yaw) * dist * 0.62, dist, c + Math.cos(above.yaw) * dist * 0.62); camera.lookAt(c, 0, c); camera.updateMatrixWorld(); return; }
-    if (persp === 'third') { // like an action game: always 2.6 m behind you at head height, looking ahead past you
+    if (persp === 'third') { // like an action game: just behind you and a little above your head, looking down past you, so
+      // you fill the lower half of the screen (your head about the middle, your feet at the bottom edge)
       // A wall behind you doesn't push the camera in: whatever lies between the camera and you (that wall) is simply not
       // drawn, by moving the camera's near cut-off to just past it.
-      const fx = -Math.sin(me.yaw), fy = -Math.cos(me.yaw), CAM_H = 1.85, M = 0.2, from = new THREE.Vector3(me.x, CAM_H, me.y);
+      const fx = -Math.sin(me.yaw), fy = -Math.cos(me.yaw), M = 0.2, from = new THREE.Vector3(me.x, 1.85, me.y);
       // but it stays inside the house: never out through an outside wall (from outside you'd see the house's outer walls)
       const D = Math.max(0.3, roomBehind());
       backRay.set(from, new THREE.Vector3(-fx, 0, -fy)); backRay.far = D; const hit = backRay.intersectObjects(walls.children, false)[0];
       setNear(hit ? Math.max(0.05, Math.min(D - 0.45, D - hit.distance + 0.12)) : 0.05);
       const tight = Math.max(0, 1.6 - D); /* little room behind (your back to an outside wall in a small room): rise a little and look down over your shoulder */
-      camera.position.set(me.x - fx * D, Math.min(WALL_H - 0.2, CAM_H + tight * 0.45), me.y - fy * D);
+      const camY = Math.min(WALL_H - 0.2, CAM_H + tight * 0.45), F = THREE.MathUtils.degToRad(camera.fov / 2); camera.position.set(me.x - fx * D, camY, me.y - fy * D);
+      const tilt = Math.max(CAM_TILT, Math.atan(camY / D) - 0.96 * F); /* closer than it would like: tilt down so your feet stay in the picture */
       meFade(D < 0.7 ? 0.55 + 0.45 * Math.max(0, (D - 0.3) / 0.4) : 1);
-      camera.rotation.set(me.pitch - 0.1 - tight * 0.4, me.yaw, 0); camera.updateMatrixWorld(); return; }
+      camera.rotation.set(me.pitch + 0.1 - tilt, me.yaw, 0); camera.updateMatrixWorld(); return; } /* (looking up or down still works on top) */
     setNear(0.05);
     camera.position.set(me.x, EYE, me.y); camera.rotation.set(me.pitch, me.yaw, 0); camera.updateMatrixWorld();
   }
@@ -521,7 +529,7 @@ export function createHouse(host, opts) {
   const shown = () => host.isConnected && host.getClientRects().length > 0; /* not hidden (behind the map) */
   // Exactly one frame is ever waiting: while a frame runs, asking for another (moving, a change) only marks it as wanted.
   let raf = 0, last = null, dead = false, inTick = false;
-  function resize() { const r = host.getBoundingClientRect(); renderer.setSize(Math.max(1, r.width), Math.max(1, r.height), false); camera.aspect = r.width / Math.max(1, r.height); camera.fov = Math.min(95, Math.max(62, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(37)) / camera.aspect)))); camera.updateProjectionMatrix(); /* about 74° across, even on a tall phone */ dirty = true; wake(); }
+  function resize() { const r = host.getBoundingClientRect(); renderer.setSize(Math.max(1, r.width), Math.max(1, r.height), false); camera.aspect = r.width / Math.max(1, r.height); camera.fov = Math.min(95, Math.max(62, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(37)) / camera.aspect)))); camera.updateProjectionMatrix(); frameThird(); /* about 74° across, even on a tall phone */ dirty = true; wake(); }
   function wake() { if (!raf && !dead && !inTick) { last = null; raf = requestAnimationFrame(tick); } }
   function tick(t) {
     raf = 0; if (dead || held) return; /* waiting for ready() */ inTick = true; let again = false;

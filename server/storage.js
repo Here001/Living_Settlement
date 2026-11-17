@@ -42,7 +42,8 @@ export function ensureCors(origin) {
 }
 async function setCors(origin) {
   try {
-    const cur = await r2('GET', null, null, null, { query: 'cors', ok404: true }), xml = cur.status === 404 ? '' : await cur.text();
+    let cur; try { cur = await r2('GET', null, null, null, { query: 'cors', ok404: true }); } catch (e) { corsDone.set(origin, 'couldn’t check: the R2 key can’t read bucket settings (set the CORS rule in Cloudflare; if it’s there, photos already load from R2)'); return; }
+    const xml = cur.status === 404 ? '' : await cur.text();
     if (xml.includes(`<AllowedOrigin>${origin}</AllowedOrigin>`) || xml.includes('<AllowedOrigin>*</AllowedOrigin>')) { corsDone.set(origin, 'ok (already allowed)'); return; }
     const rules = (xml.match(/<CORSRule>[\s\S]*?<\/CORSRule>/g) || []).join('');
     const body = Buffer.from(`<?xml version="1.0" encoding="UTF-8"?><CORSConfiguration>${rules}<CORSRule><AllowedOrigin>${origin}</AllowedOrigin><AllowedMethod>GET</AllowedMethod><AllowedMethod>HEAD</AllowedMethod><AllowedHeader>*</AllowedHeader><MaxAgeSeconds>86400</MaxAgeSeconds></CORSRule></CORSConfiguration>`);

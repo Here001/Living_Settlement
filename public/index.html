@@ -6470,6 +6470,8 @@ const Love={
       acts.append(el('button',{class:'btn sm',text:c.status==='married'?'Divorce':'Break up',onclick:()=>toast(c.status==='married'?`Divorce @${c.with}? Your hearts start again from nothing if you get back together.`:`Break up with @${c.with}?`,c.status==='married'?'Divorce':'Break up',()=>this.act('/api/me/love/end',{},c.status==='married'?'You’re divorced.':'You’ve broken up.',wrap))}));
       wrap.append(acts); }
     else wrap.append(el('p',{class:'hint',text:'You’re single. Open someone’s card and tap 💘 Ask out.'}));
+    { const hid=!!r.hidden, b=el('button',{class:'btn sm'+(hid?' primary':''),text:hid?'🙈 Hidden from others':'👁️ Shown on your card',title:'Whether other players can see who you’re dating or married to',onclick:()=>this.act('/api/me/love/privacy',{hidden:!hid},hid?'👁️ Others can see who you’re with.':'🙈 Your relationship is private now.',wrap)});
+      wrap.append(el('div',{class:'row-actions'}, b, el('span',{class:'hint',text:hid?'Only you and your partner see it.':'Others see who you’re with on your card.'}))); }
     for(const a of r.asks||[]) wrap.append(el('div',{class:'vreq'}, el('p',null, el('b',{text:'@'+a.from}), a.message?` asked you out: “${a.message}”`:' asked you out!'), el('div',{class:'row-actions'},
       el('button',{class:'btn sm primary',text:'💞 Yes',onclick:()=>this.act(`/api/citizens/${encodeURIComponent(a.from)}/love/answer`,{accept:true},`💞 You’re dating @${a.from} now!`,wrap)}),
       el('button',{class:'btn sm',text:'No thanks',onclick:()=>this.act(`/api/citizens/${encodeURIComponent(a.from)}/love/answer`,{accept:false},`You said no to @${a.from}.`,wrap)}))));
@@ -6484,7 +6486,7 @@ const Love={
         el('button',{class:'btn sm primary',text:'💞 Yes',onclick:async()=>{ try{ await api(`/api/citizens/${H}/love/answer`,{method:'POST',body:{accept:true}}); toast(`💞 You’re dating @${handle} now!`); redo(); }catch(e){ toast(e.message); } }}),
         el('button',{class:'btn sm',text:'No thanks',onclick:async()=>{ try{ await api(`/api/citizens/${H}/love/answer`,{method:'POST',body:{accept:false}}); redo(); }catch(e){ toast(e.message); } }})); return; }
       if(r.status==='asked'){ wrap.append(el('span',{class:'hint',text:`💘 You asked @${handle} out. Waiting…`}), el('button',{class:'linkb',text:'Take it back',onclick:async()=>{ try{ await api(`/api/citizens/${H}/love/cancel`,{method:'POST',body:{}}); redo(); }catch(e){ toast(e.message); } }})); return; }
-      if(r.theyTaken){ wrap.append(el('span',{class:'hint',text:`💞 @${handle} is with someone.`})); return; }
+      if(r.theyTaken){ const t=r.theirs; wrap.append(el('span',{class:'hint'}, t&&t.status==='married'?'💍 Married to ':'💞 Dating ', t&&t.with?el('button',{class:'linkb',text:'@'+t.with,onclick:()=>openCitizen(t.with)}):'someone')); return; }
       if(r.iTaken||r.status==='declined') return;
       wrap.append(el('button',{class:'btn love',text:'💘 Ask out',onclick:()=>this.ask(handle)})); }).catch(()=>{});
     return wrap; },

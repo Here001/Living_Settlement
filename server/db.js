@@ -351,6 +351,8 @@ const MIGRATIONS = [
   `create table if not exists relationships (pair text primary key, a_id text not null, b_id text not null, status text not null, asked_by text, message text, t bigint not null,
      points real not null default 0, started bigint, married_at bigint, proposed_by text, last_active bigint, faded_at bigint, day_key text, day_together real not null default 0, day_texts real not null default 0);
    create index if not exists relationships_a on relationships (a_id, status); create index if not exists relationships_b on relationships (b_id, status);`,
+  // v75: whether others can see who you're dating or married to (on your card)
+  `alter table citizens add column if not exists love_hidden boolean not null default false;`,
 ];
 
 export async function migrate() {

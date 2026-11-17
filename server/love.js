@@ -14,7 +14,7 @@ export const hearts = p => Math.max(0, Math.min(5, Math.floor((Number(p) || 0) /
 
 export class Love {
   constructor(world) { this.world = world; }
-  async who(handle) { const c = (await pool.query('select id, handle, display_name, pass_hash is not null claimed from citizens where lower(handle) = lower($1)', [String(handle || '').replace(/^@/, '')])).rows[0]; if (!c) throw new HttpError(404, 'No colonist with that name.'); return c; }
+  async who(handle) { const c = (await pool.query('select id, handle, display_name, love_hidden, pass_hash is not null claimed from citizens where lower(handle) = lower($1)', [String(handle || '').replace(/^@/, '')])).rows[0]; if (!c) throw new HttpError(404, 'No colonist with that name.'); return c; }
   // the relationship a colonist is in right now (dating or married), if any
   async current(q, id) { return (await q("select * from relationships where (a_id = $1 or b_id = $1) and status in ('dating', 'married') limit 1", [id])).rows[0] || null; }
   async spouseOf(id, q = (a, v) => pool.query(a, v)) { const r = (await q("select a_id, b_id from relationships where (a_id = $1 or b_id = $1) and status = 'married' limit 1", [id])).rows[0]; return r ? (r.a_id === id ? r.b_id : r.a_id) : null; }
@@ -37,8 +37,8 @@ export class Love {
   // my side: who I'm with, and who has asked me out
   async mine(meId) {
     const rows = await this.load((a, v) => pool.query(a, v), "(r.a_id = $1 or r.b_id = $1) and r.status in ('dating', 'married', 'asked')", [meId]);
-    const cur = rows.find(r => r.status !== 'asked');
-    return { current: cur ? this.out(cur, meId) : null,
+    const cur = rows.find(r => r.status !== 'asked'), hidden = !!(await pool.query('select love_hidden from citizens where id = $1', [meId])).rows[0]?.love_hidden;
+    return { hidden, current: cur ? this.out(cur, meId) : null,
       asks: rows.filter(r => r.status === 'asked' && r.asked_by !== meId).map(r => ({ from: r.asked_by === r.a_id ? r.a : r.b, message: r.message || '', t: Number(r.t) })),
       asked: rows.filter(r => r.status === 'asked' && r.asked_by === meId).map(r => (r.asked_by === r.a_id ? r.b : r.a)) };
   }
@@ -47,7 +47,9 @@ export class Love {
     const o = await this.who(handle); if (!meId || o.id === meId) return { self: o.id === meId };
     const r = (await this.load((a, v) => pool.query(a, v), 'r.pair = $1', [pairOf(meId, o.id)]))[0];
     const mineNow = await this.current((a, v) => pool.query(a, v), meId), theirs = await this.current((a, v) => pool.query(a, v), o.id);
-    const base = { handle: o.handle, claimed: o.claimed, iTaken: !!mineNow && (!r || mineNow.pair !== r.pair), theyTaken: !!theirs && (!r || theirs.pair !== r.pair) };
+    const other = !!theirs && (!r || theirs.pair !== r.pair), shown = other && !o.love_hidden; /* their relationship with someone else: shown unless they keep it private */
+    const base = { handle: o.handle, claimed: o.claimed, iTaken: !!mineNow && (!r || mineNow.pair !== r.pair), theyTaken: shown,
+      ...(shown ? { theirs: { status: theirs.status, with: (await pool.query('select handle from citizens where id = $1', [theirs.a_id === o.id ? theirs.b_id : theirs.a_id])).rows[0]?.handle || null } } : {}) };
     if (!r) return { ...base, status: 'none' };
     if (r.status === 'asked') return { ...base, status: r.asked_by === meId ? 'asked' : 'askedMe', message: r.message || '' };
     if (r.status === 'declined') return { ...base, status: Date.now() - Number(r.t) < LOVE.RETRY_MS && r.asked_by === meId ? 'declined' : 'none' };
@@ -61,7 +63,7 @@ export class Love {
       const q = (a, v) => ch.q(a, v), now = Date.now(), pair = pairOf(me.id, o.id);
       await q('select id from citizens where id = any($1) order by id for update', [[me.id, o.id]]); /* one change to these two at a time */
       if (await this.current(q, me.id)) throw new HttpError(409, 'You’re already with someone. You can only be in one relationship at a time.');
-      if (await this.current(q, o.id)) throw new HttpError(409, `@${o.handle} is already with someone.`);
+      if (await this.current(q, o.id)) throw new HttpError(409, o.love_hidden ? `@${o.handle} isn’t available right now.` : `@${o.handle} is already with someone.`);
       const r = (await q('select * from relationships where pair = $1', [pair])).rows[0];
       if (r?.status === 'asked') throw new HttpError(409, r.asked_by === me.id ? `You’ve already asked @${o.handle}. Wait for an answer.` : `@${o.handle} has asked you out already: answer them on your card.`);
       if (r?.status === 'declined' && r.asked_by === me.id && now - Number(r.t) < LOVE.RETRY_MS) throw new HttpError(429, `@${o.handle} said no not long ago. Give it a while.`);
@@ -110,8 +112,8 @@ export class Love {
       if (!accept) { await q('update relationships set proposed_by = null where pair = $1', [r.pair]); await this.world.actions?.notify(ch, other, 'love', `💍 @${me.handle} isn’t ready to get married yet.`); return { ok: true, status: 'dating' }; }
       await q("update relationships set status = 'married', married_at = $2, proposed_by = null, last_active = $2 where pair = $1", [r.pair, now]);
       await this.world.actions?.notify(ch, other, 'love', `💒 @${me.handle} said yes! You’re married. You can now design and furnish each other’s homes and businesses.`);
-      const names = (await q('select handle from citizens where id = any($1)', [[r.a_id, r.b_id]])).rows.map(x => '@' + x.handle);
-      await ch.event?.(`💒 ${names.join(' and ')} just got married!`, 'wedding');
+      const two = (await q('select handle, love_hidden from citizens where id = any($1)', [[r.a_id, r.b_id]])).rows;
+      if (!two.some(x => x.love_hidden)) await ch.event?.(`💒 ${two.map(x => '@' + x.handle).join(' and ')} just got married!`, 'wedding'); /* news only if neither keeps it private */
       return { ok: true, status: 'married' };
     });
   }
@@ -124,6 +126,8 @@ export class Love {
       return { ok: true, ended: r.status };
     });
   }
+  // keep who you're with private (or show it on your card)
+  async privacy(meId, hidden) { await pool.query('update citizens set love_hidden = $2 where id = $1', [meId, !!hidden]); return { ok: true, hidden: !!hidden }; }
   async cancelAsk(me, handle) { const o = await this.who(handle); await pool.query("delete from relationships where pair = $1 and status = 'asked' and asked_by = $2", [pairOf(me.id, o.id), me.id]); return { ok: true }; }
   // a little love: kind 'together' (a minute in the same place) or 'text' (a message to each other). Capped each day.
   async add(aId, bId, kind, amount) {

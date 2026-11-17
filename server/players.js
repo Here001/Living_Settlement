@@ -336,6 +336,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/citizens/:handle/love/cancel', limit, send(async req => world.love.cancelAsk(await me(req), req.params.handle)));
   r.post('/me/love/propose', limit, send(async req => world.love.propose(await me(req))));
   r.post('/me/love/proposal', limit, send(async req => world.love.answerProposal(await me(req), !!bd(req).accept)));
+  r.post('/me/love/privacy', limit, send(async req => world.love.privacy((await me(req)).id, !!bd(req).hidden)));
   r.post('/me/love/end', limit, send(async req => world.love.end(await me(req))));
   r.get('/me/visits', limit, send(async req => world.visits.incoming((await me(req)).id)));
   r.post('/me/visits/:id', limit, send(async req => { const p = await me(req); return world.visits.answer(p.id, p.handle, req.params.id, bd(req)); }));

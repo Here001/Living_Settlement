@@ -2059,6 +2059,12 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   ok((await call('GET', `/api/buildings/${shop.id}/inside`, undefined, A.P)).json.mine === true, '…and she can design his business too');
   ok((await call('POST', `/api/me/buildings/${shop.id}/inside/buy`, { k: 'plant', x: 0, y: 0, r: 0 }, C.P)).status === 403, '…but nobody else can');
   ok((await call('POST', '/api/me/partner/room/buy', { k: 'plant', x: 1, y: 1, r: 0 }, C.P)).status === 403, 'someone single has no partner’s home to furnish');
+  const seen = (await call('GET', '/api/citizens/love_ben/love', undefined, C.P)).json; ok(seen.theyTaken && seen.theirs?.status === 'married' && seen.theirs?.with === 'love_amy', 'others can see who Ben is married to', JSON.stringify(seen));
+  ok((await call('POST', '/api/me/love/privacy', { hidden: true }, B.P)).json.hidden === true && (await call('GET', '/api/me/love', undefined, B.P)).json.hidden === true, 'Ben can keep it private');
+  const unseen = (await call('GET', '/api/citizens/love_ben/love', undefined, C.P)).json; ok(!unseen.theyTaken && !unseen.theirs && unseen.status === 'none', '…then others can’t see it', JSON.stringify(unseen));
+  ok((await call('GET', '/api/citizens/love_ben/love', undefined, A.P)).json.status === 'married', '…but his wife still can');
+  const nope = await call('POST', '/api/citizens/love_ben/love/ask', {}, C.P); ok(nope.status === 409 && /isn’t available/.test(nope.json.error || ''), '…and someone asking him out is just told he isn’t available', JSON.stringify(nope.json));
+  ok((await call('GET', '/api/citizens/love_amy/love', undefined, C.P)).json.theirs?.with === 'love_ben', '(Amy didn’t hide it, so her card still shows it)');
   ok((await call('POST', '/api/me/love/end', {}, B.P)).json.ended === 'married', 'either of them can end it');
   ok((await call('GET', '/api/citizens/love_ben/room', undefined, A.P)).json.mine === false, '…and then it’s his home again, not hers to change'); }
 { // inside, live: everyone in the same place sees the others walk about and can chat; frames turn on the wall; homes differ by type

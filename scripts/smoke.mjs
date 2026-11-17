@@ -1885,6 +1885,16 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   const fr = await call('POST', '/api/me/room/buy', { k: 'frame', x: 0, y: 3, r: 3 }, M.P); ok(fr.status === 200, 'hang a photo frame on a wall', JSON.stringify(fr.json).slice(0, 160)); const frame = fr.json.item;
   ok(/window/i.test((await call('POST', '/api/me/room/buy', { k: 'frame', x: 0, y: 2, r: 3 }, M.P)).json.error || ''), 'a frame can’t hang over a window');
   ok((await call('POST', '/api/me/room/buy', { k: 'curtains', x: 0, y: 2, r: 3, c: 4 }, M.P)).status === 200, '…but curtains go on the window');
+  { // doors in the doorways between rooms (and door curtains); not on walls, and one per doorway
+    const F2 = await import('../shared/furniture.js'), Ld = F2.layoutOf(8, 'h:house'), dk = [...Ld.edges].find(([, t]) => t === 'door')[0], [da, db] = dk.slice(1).split(',').map(Number), hz = dk[0] === 'h';
+    const at = hz ? { x: da, y: db, r: 0 } : { x: da, y: db, r: 3 }, other = hz ? { x: da, y: db - 1, r: 2 } : { x: da - 1, y: db, r: 1 };
+    const d1 = await call('POST', '/api/me/room/buy', { k: 'door', ...at }, M.P); ok(d1.status === 200 && d1.json.item?.k === 'door', 'buy a door for a doorway between rooms', JSON.stringify(d1.json).slice(0, 160));
+    ok(/already has a door/i.test((await call('POST', '/api/me/room/buy', { k: 'beads', ...other, c: 2 }, M.P)).json.error || ''), 'one door or curtain per doorway, from either side');
+    ok(/doorway/i.test((await call('POST', '/api/me/room/buy', { k: 'door', x: 0, y: 0, r: 0 }, M.P)).json.error || ''), 'doors only go in doorways');
+    const fk = [...Ld.edges].find(([, t]) => t === 'front')[0], [fa, fb] = fk.slice(1).split(',').map(Number);
+    ok(/front door/i.test((await call('POST', '/api/me/room/buy', { k: 'doorcurtain', x: fa, y: fb - 1, r: 2 }, M.P)).json.error || ''), 'the front door already has a door');
+    ok((await call('POST', '/api/me/room/sell', { i: d1.json.item.i }, M.P)).status === 200, 'a door can be sold again');
+    await pool.query('update citizens set coins_base = coins_base + 450 where id = $1', [M.id]); } // the half lost on the door, so the sums below still add up
   ok((await call('POST', '/api/me/room/buy', { k: 'clock', x: 0, y: 3, r: 3 }, M.P)).status === 409, 'only one thing hangs on each bit of wall');
   ok((await call('POST', '/api/me/room/buy', { k: 'chandelier', x: 2, y: 3, r: 0 }, M.P)).status === 200 && (await call('POST', '/api/me/room/buy', { k: 'fan', x: 2, y: 3, r: 0 }, M.P)).status === 409, 'a chandelier on the ceiling, and only one thing per spot up there');
   ok((await call('POST', '/api/me/room/buy', { k: 'pendant', x: 1, y: 3, r: 0 }, M.P)).status === 200, '…a light above the sofa is fine (the ceiling is separate from the floor)');

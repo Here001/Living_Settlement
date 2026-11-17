@@ -6573,7 +6573,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
   tap(hit){ const d=this.d; if(!d) return; const it=hit&&d.room.items.find(x=>x.i===hit.i);
     if(!d.mine){ this.sel=it&&it.ph?it:null; if(this.h) this.h.setSelected(this.sel?this.sel.i:null); this.paintTools(); return; }
     if(this.edit) this.select(it?it.i:null); },
-  start(p){ this.select(null); const f=FURNITURE[p.k]; if((f.mount==='wall'||f.mount==='window'||f.mount==='ceil')&&this.h&&this.h.view==='above') this.flip(); this.setPick({ r:0, c:0, ...p, x:null, y:null }); },
+  start(p){ this.select(null); const f=FURNITURE[p.k]; if((f.mount==='wall'||f.mount==='window'||f.mount==='door'||f.mount==='ceil')&&this.h&&this.h.view==='above') this.flip(); this.setPick({ r:0, c:0, ...p, x:null, y:null }); },
   turn(){ const p=this.pick; if(!p||FURNITURE[p.k].mount!=='floor') return; p.r=(p.r+1)%4; const [w,dd]=footOf(p.k,p.r), S=this.d.size; if(p.x!=null){ p.x=Math.min(p.x,S-w); p.y=Math.min(p.y,S-dd); } this.h.refreshGhost(); this.paintTools(); },
   apply(r,shellToo){ if(!this.d) return; this.d.room=r.room; this.d.photos={...this.d.photos,...(r.photos||{})}; this.d.coins=r.coins; if(typeof r.coins==='number'&&myMoney){ myMoney.coins=r.coins; refreshHUD(); } if(this.h) this.h.setRoom(r.room,r.photos,shellToo); },
   async send(path,body,done,shellToo){ if(this.busy) return; this.busy=true; this.paintTools(); try{ const r=await api(path,{method:'POST',body}); this.apply(r,shellToo); loadMyMoney(); done&&done(r); }
@@ -6623,7 +6623,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     if(!this.edit&&this.biz&&!d.designed){ t.append(el('span',{class:'tip',text:'This is the standard fit-out. Tap 🛋️ Design to make it yours: keep these pieces, take them out, add your own and your logo.'})); return; }
     if(!this.edit){ t.append(el('span',{class:'tip',text:d.room.items.length?(PHONE_UI?'Joystick to walk, drag to look around.':'WASD or the arrows to walk, drag to look.'):'An empty home. Tap 🛋️ Furnish to buy furniture.'})); return; }
     const p=this.pick;
-    if(p){ const f=FURNITURE[p.k], bad=p.x==null?(f.mount==='floor'?'Look at the floor where it should go.':f.mount==='ceil'?'Look up at the ceiling where it should go.':f.mount==='window'?'Look at a window.':'Look at a wall where it should hang.'):placeProblem(d.room,d.size,p.k,p.x,p.y,p.r,p.i||null);
+    if(p){ const f=FURNITURE[p.k], bad=p.x==null?(f.mount==='floor'?'Look at the floor where it should go.':f.mount==='ceil'?'Look up at the ceiling where it should go.':f.mount==='window'?'Look at a window.':f.mount==='door'?'Look at a doorway between rooms.':'Look at a wall where it should hang.'):placeProblem(d.room,d.size,p.k,p.x,p.y,p.r,p.i||null);
       t.append(el('span',{class:'tip'+(bad?' bad':''),text:bad||`${f.name}: ${up?'tap where it goes':'look or tap where it goes'}`}));
       if(f.mount==='floor') t.append(el('button',{class:'btn sm',text:'↻ Turn',onclick:()=>this.turn()}));
       if(canTurnOnWall(p.k)) t.append(el('button',{class:'btn sm',text:p.o?'▭ Landscape':'▯ Portrait',onclick:()=>{ p.o=p.o?0:1; this.h.refreshGhost(); this.paintTools(); }}));

@@ -20,7 +20,7 @@ import { BUILDING_TYPES } from './catalog.js';
 export const WALL_H = 2.6, WALL_T = 0.06, EYE = 1.55;
 export const TINTS = ['#C0392B', '#2E86C1', '#27AE60', '#8E44AD', '#E67E22', '#5D6D7E', '#E8C9A0', '#22313F', '#F1C40F', '#EC87C0'];
 export const BIZ_CATS = [['shop', '🏪 Shop'], ['food', '🍽️ Food & drink'], ['office', '💼 Office'], ['industry', '🏭 Workshop']];
-export const ROOM_CATS = [['living', '🛋️ Living'], ['bed', '🛏️ Bedroom'], ['kitchen', '🍳 Kitchen'], ['bath', '🛁 Bathroom'], ['walls', '🖼️ Walls & photos'], ['ceiling', '💡 Ceiling'], ['fun', '🎮 Fun'], ['plants', '🪴 Plants'], ['luxury', '💎 Luxury']];
+export const ROOM_CATS = [['living', '🛋️ Living'], ['bed', '🛏️ Bedroom'], ['kitchen', '🍳 Kitchen'], ['bath', '🛁 Bathroom'], ['walls', '🖼️ Walls & photos'], ['ceiling', '💡 Ceiling'], ['fun', '🎮 Fun'], ['plants', '🪴 Plants'], ['doors', '🚪 Doors & curtains'], ['luxury', '💎 Luxury']];
 
 const W = '#8B5A3C', WD = '#6B4428', MT = '#3B3B40', WH = '#F4F1EA', CH = '#BDC3C7', H = WALL_H;
 const legs = (x0, y0, x1, y1, h, c = WD, t = 0.07) => [[x0, y0, 0, t, t, h, c], [x1 - t, y0, 0, t, t, h, c], [x0, y1 - t, 0, t, t, h, c], [x1 - t, y1 - t, 0, t, t, h, c]];
@@ -99,6 +99,15 @@ export const FURNITURE = {
   neon: { name: 'Neon sign', cat: 'walls', mount: 'wall', size: [2, 0.05], cost: 2600, tint: true, light: lamp('$', 0.6, 3.5), parts: [[0.2, 0, 1.55, 1.6, 0.03, 0.42, '#1C1C1E'], [0.3, 0.03, 1.62, 0.5, 0.02, 0.06, '$', 'l'], [0.3, 0.03, 1.62, 0.06, 0.02, 0.28, '$', 'l'], [0.9, 0.03, 1.62, 0.06, 0.02, 0.28, '$', 'l'], [0.9, 0.03, 1.84, 0.6, 0.02, 0.06, '$', 'l'], [1.44, 0.03, 1.62, 0.06, 0.02, 0.28, '$', 'l']] },
   curtains: { name: 'Curtains', cat: 'walls', mount: 'window', size: [1, 0.12], cost: 600, tint: true, parts: [[0.0, 0.07, 0.25, 0.24, 0.07, 2.05, '$'], [0.76, 0.07, 0.25, 0.24, 0.07, 2.05, '$'], [-0.05, 0.1, 2.3, 1.1, 0.03, 0.03, MT]] },
   blinds: { name: 'Window blind', cat: 'walls', mount: 'window', size: [1, 0.08], cost: 450, tint: true, parts: [[0.04, 0.04, 1.55, 0.92, 0.03, 0.5, '$'], [0.02, 0.03, 2.05, 0.96, 0.06, 0.06, WH]] },
+  // window curtains
+  drapes: { name: 'Long drapes', cat: 'doors', mount: 'window', size: [1, 0.14], cost: 1100, tint: true, parts: [[-0.16, 0.08, 0.05, 0.36, 0.09, 2.3, '$'], [0.8, 0.08, 0.05, 0.36, 0.09, 2.3, '$'], [-0.2, 0.05, 2.32, 1.4, 0.16, 0.16, '$'], [-0.22, 0.1, 2.36, 1.44, 0.03, 0.03, MT], [0.05, 0.16, 1.0, 0.14, 0.03, 0.06, '#C9A227'], [0.81, 0.16, 1.0, 0.14, 0.03, 0.06, '#C9A227']] },
+  sheers: { name: 'Sheer curtains', cat: 'doors', mount: 'window', size: [1, 0.08], cost: 500, parts: [[0.02, 0.05, 0.82, 0.96, 0.02, 1.4, 'rgba(240,230,210,0.72)'], [-0.04, 0.03, 2.24, 1.08, 0.03, 0.03, WH]] },
+  // in a doorway between rooms: doors swing open as someone walks up and close behind them; curtains you walk through
+  door: { name: 'Wooden door', cat: 'doors', mount: 'door', size: [1, 0.06], cost: 900, swing: true, parts: [[0.07, -0.0825, 0, 0.86, 0.045, 2.08, '#8A5A33', 'leaf'], [0.13, -0.035, 1.18, 0.74, 0.004, 0.78, '#7A4E2C', 'leaf'], [0.13, -0.035, 0.14, 0.74, 0.004, 0.86, '#7A4E2C', 'leaf'], [0.82, -0.032, 0.98, 0.04, 0.03, 0.04, '#D4AC0D', 'leaf'], [0.82, -0.115, 0.98, 0.04, 0.03, 0.04, '#D4AC0D', 'leaf']] },
+  paintdoor: { name: 'Painted door', cat: 'doors', mount: 'door', size: [1, 0.06], cost: 800, tint: true, swing: true, parts: [[0.07, -0.0825, 0, 0.86, 0.045, 2.08, '$', 'leaf'], [0.82, -0.032, 0.98, 0.04, 0.03, 0.04, CH, 'leaf'], [0.82, -0.115, 0.98, 0.04, 0.03, 0.04, CH, 'leaf']] },
+  glassdoor: { name: 'Glass door', cat: 'doors', mount: 'door', size: [1, 0.06], cost: 1600, swing: true, parts: [[0.07, -0.0825, 0, 0.86, 0.045, 0.16, '#3B3B40', 'leaf'], [0.07, -0.0825, 1.94, 0.86, 0.045, 0.14, '#3B3B40', 'leaf'], [0.07, -0.0825, 0.16, 0.08, 0.045, 1.78, '#3B3B40', 'leaf'], [0.85, -0.0825, 0.16, 0.08, 0.045, 1.78, '#3B3B40', 'leaf'], [0.15, -0.07, 0.16, 0.7, 0.02, 1.78, 'rgba(200,225,235,0.35)', 'leaf'], [0.78, -0.03, 0.75, 0.03, 0.03, 0.6, CH, 'leaf']] },
+  doorcurtain: { name: 'Door curtain', cat: 'doors', mount: 'door', size: [1, 0.06], cost: 400, tint: true, parts: [[0.08, -0.07, 0.02, 0.41, 0.02, 2.05, '$'], [0.51, -0.07, 0.02, 0.41, 0.02, 2.05, '$'], [0.05, -0.075, 2.06, 0.9, 0.03, 0.03, MT]] },
+  beads: { name: 'Bead curtain', cat: 'doors', mount: 'door', size: [1, 0.06], cost: 650, tint: true, beads: true, parts: [[0.05, -0.075, 2.06, 0.9, 0.03, 0.03, MT]] },
   // ---------------- ceiling ----------------
   ceilinglight: { name: 'Ceiling light', cat: 'ceiling', mount: 'ceil', size: [1, 1], cost: 400, light: lamp('#FFF4DC', 0.9, 6), parts: [[0.3, 0.3, H - 0.1, 0.4, 0.4, 0.1, '#FFF8E7', 'l']] },
   pendant: { name: 'Pendant lamp', cat: 'ceiling', mount: 'ceil', size: [1, 1], cost: 900, tint: true, light: lamp('#FFE2B0', 0.9, 5), parts: [[0.48, 0.48, 2.12, 0.04, 0.04, H - 2.12, MT], [0.3, 0.3, 1.92, 0.4, 0.4, 0.22, '$', 'c'], [0.4, 0.4, 1.89, 0.2, 0.2, 0.06, '#FFF4DC', 'l']] },
@@ -281,7 +290,7 @@ export function styleOf(room, S, i) {
 }
 
 // ---------------- where a piece goes ----------------
-export const footOf = (k, r) => { const f = FURNITURE[k] || {}, s = f.size || [1, 1]; if (f.mount === 'wall' || f.mount === 'window') return [Math.round(s[0]), 1]; return r % 2 ? [s[1], s[0]] : [s[0], s[1]]; };
+export const footOf = (k, r) => { const f = FURNITURE[k] || {}, s = f.size || [1, 1]; if (f.mount === 'wall' || f.mount === 'window' || f.mount === 'door') return [Math.round(s[0]), 1]; return r % 2 ? [s[1], s[0]] : [s[0], s[1]]; };
 // A floor piece's parts turned r quarter-turns (clockwise seen from above), within its turned footprint.
 export function partsOf(k, r = 0) {
   const f = FURNITURE[k]; if (!f) return []; let [w, d] = f.size, parts = f.parts.map(p => p.slice());
@@ -300,7 +309,7 @@ export function wallSpots(k, x, y, r) {
 export function placedParts(it, tint) {
   const f = FURNITURE[it.k]; if (!f) return [];
   const col = c => (c === '$' ? tint : c);
-  if (f.mount === 'wall' || f.mount === 'window') {
+  if (f.mount === 'wall' || f.mount === 'window' || f.mount === 'door') {
     const n = footOf(it.k, it.r)[0], r = it.r, T = WALL_T, o = r === 0 ? [0, 1] : r === 1 ? [-1, 0] : r === 2 ? [0, -1] : [1, 0];
     const ox = r === 0 ? it.x : r === 1 ? it.x + 1 : r === 2 ? it.x + n : it.x, oy = r === 0 ? it.y : r === 1 ? it.y : r === 2 ? it.y + 1 : it.y + n;
     return wallParts(it).map(([px, py, z, pw, pd, h, c, s]) => { const q = py + T;
@@ -311,9 +320,11 @@ export function placedParts(it, tint) {
 }
 // Frames, paintings and mirrors can be turned on the wall (landscape ↔ portrait): `o` 1 turns the whole piece a quarter
 // turn about its middle, in the plane of the wall.
+// a bead curtain's strands: thin strings of beads, alternating the chosen colour with gold and clear
+const BEADS = Array.from({ length: 15 }, (_, i) => [0.09 + i * 0.058, -0.068, 0.02, 0.012, 0.012, 2.04, i % 3 === 1 ? '#C9A227' : i % 3 === 2 ? 'rgba(235,240,245,0.6)' : '$', 'd']);
 export const canTurnOnWall = k => { const f = FURNITURE[k]; return !!f && f.mount === 'wall' && (!!f.photo || ['painting', 'wallmirror', 'whiteboard'].includes(k)); };
 function wallParts(it) {
-  const f = FURNITURE[it.k]; if (!(it.o && canTurnOnWall(it.k))) return f.parts;
+  const f = FURNITURE[it.k]; if (f.beads) return f.parts.concat(BEADS); if (!(it.o && canTurnOnWall(it.k))) return f.parts;
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const [px, , z, pw, , h] of f.parts) { x0 = Math.min(x0, px); x1 = Math.max(x1, px + pw); z0 = Math.min(z0, z); z1 = Math.max(z1, z + h); }
   const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
   return f.parts.map(([px, py, z, pw, pd, h, c, s]) => [cx - (z + h - cz), py, cz + (px - cx), h, pd, pw, c, s]);
@@ -325,11 +336,12 @@ export function placeProblem(room, size, k, x, y, r, skip = null) {
   const f = FURNITURE[k]; if (!f) return 'There’s no such piece.';
   if (![x, y, r].every(Number.isInteger) || r < 0 || r > 3) return 'That isn’t a spot in the house.';
   const L = layoutOf(size, room.plan || 'home'), others = (room.items || []).filter(it => it.i !== skip && FURNITURE[it.k]);
-  if (f.mount === 'wall' || f.mount === 'window') {
-    const want = f.mount === 'window' ? 'window' : 'wall', spots = wallSpots(k, x, y, r);
+  if (f.mount === 'wall' || f.mount === 'window' || f.mount === 'door') {
+    const want = f.mount, spots = wallSpots(k, x, y, r);
     for (const s of spots) { if (s.tx < 0 || s.ty < 0 || s.tx >= size || s.ty >= size) return 'It doesn’t fit there.';
-      const t = L.edges.get(s.edge); if (t !== want) return f.mount === 'window' ? 'Curtains and blinds go on a window.' : t === 'window' ? 'That’s a window. Pick a plain wall.' : t ? 'That’s a doorway. Pick a plain wall.' : 'There’s no wall there.'; }
-    const used = new Set(); for (const it of others) { const o = FURNITURE[it.k]; if (o.mount === 'wall' || o.mount === 'window') for (const s of wallSpots(it.k, it.x, it.y, it.r)) used.add(s.face); }
+      const t = L.edges.get(s.edge); if (t !== want) return f.mount === 'door' ? (t === 'front' ? 'The front door already has a door.' : 'Doors and door curtains go in a doorway between rooms.') : f.mount === 'window' ? 'Curtains and blinds go on a window.' : t === 'window' ? 'That’s a window. Pick a plain wall.' : t ? 'That’s a doorway. Pick a plain wall.' : 'There’s no wall there.'; }
+    const used = new Set(); for (const it of others) { const o = FURNITURE[it.k]; if (o.mount === 'wall' || o.mount === 'window') for (const s of wallSpots(it.k, it.x, it.y, it.r)) used.add(s.face); else if (o.mount === 'door') for (const s of wallSpots(it.k, it.x, it.y, it.r)) used.add('door:' + s.edge); }
+    if (f.mount === 'door' && spots.some(s => used.has('door:' + s.edge))) return 'That doorway already has a door or curtain.';
     if (spots.some(s => used.has(s.face))) return 'Something’s already hanging there.';
     return null;
   }

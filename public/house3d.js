@@ -142,7 +142,7 @@ const glow = new Map(); const glowMat = c => { if (!glow.has(c)) glow.set(c, new
 const glassMat = new Map(); const tintedGlass = c => { if (!glassMat.has(c)) glassMat.set(c, std({ color: col(c), transparent: true, opacity: 0.35, roughness: 0.05, metalness: 0.1, depthWrite: false })); return glassMat.get(c); };
 const haloMat = new Map(); const halo = c => { if (!haloMat.has(c)) haloMat.set(c, new THREE.SpriteMaterial({ map: radialTex('halo', [[0, 'rgba(255,255,255,.9)'], [0.25, 'rgba(255,255,255,.35)'], [1, 'rgba(255,255,255,0)']]), color: col(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); return haloMat.get(c); };
 // which material a part is: upholstery and bedding are fabric, browns are wood, steel greys are metal, golds gold, whites and lacquer gloss, leaves leafy
-const UPHOLSTERED = new Set(['sofa', 'cornersofa', 'armchair', 'beanbag', 'rug', 'roundrug', 'bigrug', 'bed', 'doublebed', 'bunkbed', 'cot', 'chair', 'officechair', 'catbed', 'booth', 'waiting', 'tablefour', 'cafetable', 'barstool', 'curtains', 'blinds', 'towelrail', 'coathooks', 'hamper', 'bathmat', 'throne', 'meeting', 'mannequin', 'clothesrack']);
+const UPHOLSTERED = new Set(['sofa', 'cornersofa', 'armchair', 'beanbag', 'rug', 'roundrug', 'bigrug', 'bed', 'doublebed', 'bunkbed', 'cot', 'chair', 'officechair', 'catbed', 'booth', 'waiting', 'tablefour', 'cafetable', 'barstool', 'curtains', 'blinds', 'drapes', 'doorcurtain', 'towelrail', 'coathooks', 'hamper', 'bathmat', 'throne', 'meeting', 'mannequin', 'clothesrack']);
 const METAL = new Set(['#3B3B40', '#BDC3C7', '#95A5A6', '#7F8C8D', '#A6ACAF']), GOLD = new Set(['#D4AC0D', '#C9A227', '#F1C40F', '#F4D03F']), GLOSS = new Set(['#F4F6F8', '#E5E8E8', '#DADDE2', '#D5D8DC', '#E8E4DC', '#1D1B1E', '#1C1C1E', '#4A4A4E', '#F5F5F0', '#2C2A2E']);
 const hsl = {}; function matKind(k, c, tint, s) {
   if (c === tint && UPHOLSTERED.has(k)) return 'fabric'; if (UPHOLSTERED.has(k) && /^#(F4F1EA|FFFFFF|F2E8D5)$/i.test(c)) return 'fabric';
@@ -154,7 +154,17 @@ const hsl = {}; function matKind(k, c, tint, s) {
 // One piece of furniture as a group: its parts merged into one mesh per material, plus glass, screens, lamps (with a glow) and its photo.
 function pieceGroup(it, photoTex) {
   const f = FURNITURE[it.k]; if (!f) return null; const tint = TINTS[it.c || 0] || TINTS[0], grp = new THREE.Group(), byKind = new Map(), M = mats();
-  for (const p of placedParts(it, tint)) {
+  // a door: its leaf parts go on a hinge of their own, so the door can swing open
+  const all = placedParts(it, tint), leafParts = all.filter(p => p.s === 'leaf'); let leaf = null;
+  if (leafParts.length) { const out = leafParts[0].out || [0, 1], alongX = out[0] === 0;
+    const hx = Math.min(...leafParts.map(p => p.x)), hy = Math.min(...leafParts.map(p => p.y)), mx = Math.max(...leafParts.map(p => p.x + p.w)), my = Math.max(...leafParts.map(p => p.y + p.d));
+    const hinge = alongX ? new THREE.Vector3(hx, 0, (hy + my) / 2) : new THREE.Vector3((hx + mx) / 2, 0, hy);
+    leaf = new THREE.Group(); leaf.position.copy(hinge); const lk = new Map();
+    for (const p of leafParts) { const g = partGeo(p); g.translate(-hinge.x, 0, -hinge.z);
+      if (isGlass(p.c)) { leaf.add(new THREE.Mesh(g, M.glass)); continue; } const kind = matKind(it.k, p.c, tint, 'd'); (lk.get(kind) || lk.set(kind, []).get(kind)).push(paint(g, p.c)); }
+    for (const [kind, list] of lk) { const m = new THREE.Mesh(mergeGeometries(list), M[kind]); m.castShadow = m.receiveShadow = true; leaf.add(m); }
+    grp.add(leaf); grp.userData.door = { leaf, sign: alongX ? -out[1] : out[0], cx: (hx + mx) / 2, cy: (hy + my) / 2, a: 0 }; }
+  for (const p of all) { if (p.s === 'leaf') continue;
     if (p.s === 'p') { const ww = p.out && p.out[0] ? p.d : p.w, pl = new THREE.PlaneGeometry(ww, p.h), o = p.out || [0, 1];
       pl.rotateY(o[1] === 1 ? 0 : o[1] === -1 ? Math.PI : o[0] === 1 ? Math.PI / 2 : -Math.PI / 2);
       pl.translate(p.x + p.w / 2 + o[0] * (Math.min(p.w, p.d) / 2 + 0.004), p.z + p.h / 2, p.y + p.d / 2 + o[1] * (Math.min(p.w, p.d) / 2 + 0.004));
@@ -166,7 +176,7 @@ function pieceGroup(it, photoTex) {
     const kind = matKind(it.k, p.c, tint, p.s); (byKind.get(kind) || byKind.set(kind, []).get(kind)).push(paint(partGeo(p), p.c));
   }
   for (const [kind, list] of byKind) { const m = new THREE.Mesh(mergeGeometries(list), M[kind]); m.castShadow = m.receiveShadow = true; grp.add(m); }
-  grp.userData = { i: it.i, k: it.k }; grp.traverse(o => { o.userData.i = it.i; }); return grp;
+  grp.userData = { i: it.i, k: it.k, door: grp.userData.door }; grp.traverse(o => { o.userData.i = it.i; }); return grp;
 }
 
 // ---------------- the house ----------------
@@ -412,6 +422,11 @@ export function createHouse(host, opts) {
       setPick(Math.max(0, Math.min(S - w, Math.round(p.x - w / 2))), Math.max(0, Math.min(S - d, Math.round(p.z - d / 2))), pick.r); return;
     }
     if (f.mount === 'ceil') { const h = ray.intersectObjects(ceilings.children, false)[0]; if (!h) return; setPick(Math.max(0, Math.min(S - 1, Math.floor(h.point.x))), Math.max(0, Math.min(S - 1, Math.floor(h.point.z))), 0); return; }
+    if (f.mount === 'door') { let best = null, bd = 0.9; const c = camera.position, pt = new THREE.Vector3();
+      for (const [k, t] of L.edges) { if (t !== 'door') continue; const [a, b] = k.slice(1).split(',').map(Number), horiz = k[0] === 'h';
+        pt.set(horiz ? a + 0.5 : a, 1.05, horiz ? b : b + 0.5); if (pt.clone().sub(c).dot(ray.ray.direction) <= 0) continue; const d = ray.ray.distanceToPoint(pt); if (d < bd) { bd = d; best = [horiz, a, b]; } }
+      if (!best) return; const [horiz, a, b] = best; /* hung on the side you're standing on, so it swings into your room */
+      if (horiz) { if (c.z < b) setPick(a, b - 1, 2); else setPick(a, b, 0); } else { if (c.x < a) setPick(a - 1, b, 1); else setPick(a, b, 3); } return; }
     // on a wall (or a window): which tile it faces, and which of that tile's walls it is
     const h = ray.intersectObjects(walls.children, false).find(h => h.face && Math.abs(h.face.normal.y) < 0.5); if (!h) return;
     const n = h.face.normal, p = h.point; let tx, ty, r;
@@ -515,6 +530,10 @@ export function createHouse(host, opts) {
     if (view === 'walk' && (fw || st)) { const sp = 2.3 * dt, sx = -Math.sin(me.yaw), sy = -Math.cos(me.yaw), dx = (sx * fw + -sy * st) * sp, dy = (sy * fw + sx * st) * sp;
       const ox = me.x, oy = me.y; if (!blocked(me.x + dx, me.y)) me.x += dx; if (!blocked(me.x, me.y + dy)) me.y += dy; if (me.x !== ox || me.y !== oy) moving = true; tapAim = false; } /* pressing into a wall: nothing changes, nothing is drawn */
     if (moving) moved();
+    // doors: swing open as someone comes within a metre or so, and close behind them (never in the way)
+    let doorsMoving = false; for (const g of wallStuff.children) { const D = g.userData.door; if (!D) continue;
+      let near = view === 'walk' && Math.hypot(me.x - D.cx, me.y - D.cy) < 1.15; if (!near) for (const o of others.values()) if (o.g.visible && Math.hypot(o.g.position.x - D.cx, o.g.position.z - D.cy) < 1.15) { near = true; break; }
+      const want = near ? 1.45 : 0; if (Math.abs(want - D.a) > 0.002) { D.a += Math.sign(want - D.a) * Math.min(Math.abs(want - D.a), dt * (near ? 3.2 : 2.2)); D.leaf.rotation.y = D.sign * D.a; dirty = true; doorsMoving = true; } }
     if (me3.visible) { const mv = (fw || st) && view === 'walk'; if (mv) { me3.userData.av.animate(dt, 0, 2.3 * Math.min(1, Math.hypot(fw, st)), false); meStill = false; } else if (!meStill) { me3.userData.av.pose(); meStill = true; dirty = true; } } /* your legs move as you walk */
     // at most 60 frames a second (a 120 Hz screen would otherwise draw twice as many)
     const now = performance.now(), active = moving || joy.on || keys.size > 0 || now - lastInput < 160;
@@ -527,7 +546,7 @@ export function createHouse(host, opts) {
       if (o.bubble && performance.now() > o.bubbleUntil) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); o.bubble = null; dirty = true; } }
     othersMoving = gliding;
     if (meBubble && performance.now() > meBubbleUntil) { me3.remove(meBubble); meBubble.material.map.dispose(); meBubble = null; dirty = true; }
-    return moving || joy.on || keys.size > 0 || dirty || gliding || [...others.values()].some(o => o.bubble) || !!meBubble;
+    return moving || doorsMoving || joy.on || keys.size > 0 || dirty || gliding || [...others.values()].some(o => o.bubble) || !!meBubble;
   }
   const ro = new ResizeObserver(resize); ro.observe(host);
   // never a dark screen: a black picture steps the lighting down; a view the phone threw away is rebuilt (see safe3d.js)

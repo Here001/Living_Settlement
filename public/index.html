@@ -929,6 +929,10 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .phedit{border-radius:6px;touch-action:none;cursor:grab;box-shadow:0 0 0 6px #3a2a1a,0 4px 14px rgba(0,0,0,.35)}
 .phz{display:flex;align-items:center;gap:8px;margin:6px 0}
 .phz input{flex:1}
+.spraypanel{position:absolute;left:12px;right:12px;bottom:118px;z-index:7;max-height:52vh;overflow:auto;background:rgba(24,14,36,.94);color:#fff;border:2px solid #FF3FA4;border-radius:18px;padding:12px 14px;box-shadow:0 0 22px rgba(255,63,164,.45);max-width:520px;margin:0 auto}
+.spraypanel .hint{color:#E8D9FF}.spraypanel .row-actions{flex-wrap:wrap;gap:6px;margin:6px 0}.spraypanel input{width:120px;flex:1;min-width:90px}.sphead{display:flex;align-items:center;gap:10px;margin-bottom:6px}.sphead b{font-size:16px}.sphead .x{margin-left:auto;position:static}
+.spchips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px}.spchip{flex:none;border:1px solid #6B4D8A;background:#2E1F45;color:#fff;border-radius:999px;padding:6px 12px;font-weight:700}.spchip.on{background:#FF3FA4;border-color:#FF3FA4}
+.sphr{height:1px;background:#4A3566;margin:10px 0}.spq.pop{transform:scale(1.12)}.hspray.on{background:#FF3FA4;color:#fff}
 .hspray{position:absolute;right:120px;bottom:72px;z-index:2;background:#2A1B3D;color:#FFE27A;border-color:#FF3FA4;box-shadow:0 0 14px rgba(255,63,164,.55)}
 .djbanner{position:absolute;left:50%;top:64px;transform:translateX(-50%);z-index:6;width:min(92vw,520px);display:flex;gap:10px;align-items:flex-start;background:linear-gradient(135deg,#2A1B3D,#4A1640);color:#fff;border:2px solid #FF3FA4;border-radius:16px;padding:12px 14px;font-weight:700;font-size:15px;line-height:1.35;box-shadow:0 0 24px rgba(255,63,164,.6);animation:djin .35s ease-out}
 .djbanner b{flex:none;color:#FFE27A}@keyframes djin{from{transform:translate(-50%,-14px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
@@ -6543,16 +6547,22 @@ const Club={ R:null, info:null, audio:null, radio:undefined, got:0, rainT:null, 
     if(url){ const a=new Audio(url); a.loop=true; a.volume=0.85; this.audio=a; if(Radio.st) Radio.off(true); a.play().catch(()=>{ const go=()=>{ removeEventListener('pointerdown',go,true); if(this.audio===a) a.play().catch(()=>{}); }; addEventListener('pointerdown',go,true); }); }
     else if(STATIONS.pidgin&&Radio.st!=='pidgin') Radio.tune('pidgin').catch(()=>{}); }, /* Gbedu FM */
   who(){ const R=this.R, seen=new Set(), out=[]; for(const p of (R&&R.others?R.others.values():[])) if(p.h&&!seen.has(p.h.toLowerCase())&&(!Me||p.h.toLowerCase()!==String(Me.handle||'').toLowerCase())){ seen.add(p.h.toLowerCase()); out.push(p.h); } return out; },
-  sheet(){ if(!(Me&&Me.token)){ toast('Sign in to spray money.'); return; } const {box,close}=sheetBox('💸 Spray money','spraysheet'), I=this.info||{};
-    const people=this.who(), sel=el('select',{'aria-label':'Who to spray'}, ...people.map(h=>el('option',{value:h,text:'@'+h})));
-    const one=el('div',{class:'row-actions'}, ...(I.person||[]).map(a=>el('button',{class:'btn sm',text:`💵 ${fmt(a)}`,onclick:()=>this.spray({to:sel.value,amount:a},close)})));
-    const amt=(ph)=>el('input',{type:'number',min:'1',step:'1',inputmode:'numeric',placeholder:ph,'aria-label':'How much'}), own1=amt('Any amount'), own2=amt('Any amount'), n=i=>Math.round(Number(i.value)); /* any amount you have */
-    const go1=el('button',{class:'btn sm',text:'💵 Spray',onclick:()=>{ if(!(n(own1)>=1)){ toast('Type how much to spray.'); return; } this.spray({to:sel.value,amount:n(own1)},close); }});
-    const go2=el('button',{class:'btn sm primary',text:'💸 Spray the club',onclick:()=>{ const a=n(own2); if(!(a>=1)){ toast('Type how much to spray.'); return; } toast(`Spray the whole club with ${fmt(a)} coins?`,'Spray it!',()=>this.spray({amount:a},close)); }});
-    box.append(el('h4',{text:'Spray someone'}), people.length?el('div',null, sel, one, el('div',{class:'row-actions'}, own1, go1)):el('p',{class:'hint',text:'Nobody else is here yet.'}),
-      el('h4',{text:'🌧️ Spray the whole club'}), el('p',{class:'hint',text:'Money rains from the ceiling on everyone here for 20 seconds; they tap the notes to grab it. The DJ gives you a shout-out!'}),
-      el('div',{class:'row-actions'}, ...(I.club||[]).map(a=>el('button',{class:'btn sm primary',text:`💸 ${fmt(a)}`,onclick:()=>toast(`Spray the whole club with ${fmt(a)} coins?`,'Spray it!',()=>this.spray({amount:a},close))}))), el('div',{class:'row-actions'}, own2, go2));
-  },
+  // the spray panel, right over the club: pick who, then tap an amount as often as you like (each tap sprays)
+  sheet(){ if(!(Me&&Me.token)){ toast('Sign in to spray money.'); return; } const R=this.R; if(!R) return;
+    if(this.panel&&this.panel.isConnected){ this.panel.remove(); this.panel=null; this.btn.classList.remove('on'); return; }
+    const I=this.info||{}, P=el('div',{class:'spraypanel'}); this.panel=P; this.btn.classList.add('on'); R.stage.append(P); this.fillPanel(); },
+  fillPanel(){ const P=this.panel; if(!P) return; const I=this.info||{}, people=this.who(); if(!people.includes(this.target)) this.target=people[0]||null;
+    const amt=()=>el('input',{type:'number',min:'1',step:'1',inputmode:'numeric',placeholder:'Any amount','aria-label':'How much'}), n=i=>Math.round(Number(i.value));
+    const chips=el('div',{class:'spchips'}, ...people.map(h=>el('button',{class:'spchip'+(h===this.target?' on':''),text:'@'+h,onclick:()=>{ this.target=h; this.fillPanel(); }})));
+    const own1=amt(), own2=amt(), quick=a=>el('button',{class:'btn sm spq',text:`💵 ${fmt(a)}`,disabled:!this.target,onclick:e=>this.tapSpray(e.currentTarget,{to:this.target,amount:a})});
+    const sure=(b,a)=>{ if(b.dataset.sure){ delete b.dataset.sure; b.textContent=b.dataset.t; this.tapSpray(b,{amount:a}); return; } b.dataset.t=b.textContent; b.dataset.sure='1'; b.textContent='Tap again to spray the club'; setTimeout(()=>{ if(b.dataset.sure){ delete b.dataset.sure; b.textContent=b.dataset.t; } },3000); };
+    P.replaceChildren(el('div',{class:'sphead'}, el('b',{text:'💸 Spray money'}), el('span',{class:'hint',text:myMoney&&typeof myMoney.coins==='number'?`You have ${fmt(myMoney.coins)}`:''}), el('button',{class:'x',text:'✕','aria-label':'Close',onclick:()=>this.sheet()})),
+      people.length?el('div',null, chips, el('div',{class:'row-actions'}, ...(I.person||[]).map(quick)), el('div',{class:'row-actions'}, own1, el('button',{class:'btn sm',text:'💵 Spray',disabled:!this.target,onclick:e=>{ if(!(n(own1)>=1)){ toast('Type how much to spray.'); return; } this.tapSpray(e.currentTarget,{to:this.target,amount:n(own1)}); }})))
+        :el('p',{class:'hint',text:'Nobody else is here yet to spray.'}),
+      el('div',{class:'sphr'}), el('b',{text:'🌧️ Make it rain on the whole club'}),
+      el('div',{class:'row-actions'}, ...(I.club||[]).map(a=>el('button',{class:'btn sm primary spq',text:`💸 ${fmt(a)}`,onclick:e=>sure(e.currentTarget,a)}))),
+      el('div',{class:'row-actions'}, own2, el('button',{class:'btn sm primary',text:'💸 Rain it',onclick:e=>{ const a=n(own2); if(!(a>=1)){ toast('Type how much to spray.'); return; } sure(e.currentTarget,a); }}))); },
+  async tapSpray(b,body){ b.classList.add('pop'); setTimeout(()=>b.classList.remove('pop'),180); for(let i=0;i<6;i++) this.note(false); await this.spray(body); if(this.panel) { const h=this.panel.querySelector('.sphead .hint'); if(h&&myMoney&&typeof myMoney.coins==='number') h.textContent=`You have ${fmt(myMoney.coins)}`; } },
   async spray(body,close){ if(!this.R) return; try{ const r=await api('/api/clubs/spray',{method:'POST',body:{...body,place:this.R.spot}}); close&&close(); if(myMoney&&typeof r.coins==='number'){ myMoney.coins=r.coins; refreshHUD(); } }catch(e){ toast(e.message); } },
   idOf(h){ if(Me&&h&&h.toLowerCase()===String(Me.handle||'').toLowerCase()) return 'me'; for(const p of (this.R&&this.R.others?this.R.others.values():[])) if(p.h&&p.h.toLowerCase()===h.toLowerCase()) return p.id; return null; },
   msg(c){ const R=this.R; if(!R) return;

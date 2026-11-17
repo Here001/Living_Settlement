@@ -890,7 +890,9 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .coinfly .coinface{width:100%;height:100%;background:center/contain no-repeat;animation:coinspin .32s linear infinite}
 @keyframes coinspin{0%{transform:rotateY(0)}100%{transform:rotateY(360deg)}}
 @media (prefers-reduced-motion:reduce){.coinfly .coinface{animation:none}}
+.roomview{--paper:#F6F1E6;--panel:#FBF8F1;--ink:#2B2621;--muted:#6E655A;--line:#2B2621;--soft:#E3DACA;--chip:#EFE7D8;--sel:#F3DCCB;color:var(--ink);color-scheme:light}
 .roomview .roomstage{flex:1;position:relative;min-height:0;background:#BFE3F7}
+.roomtools .tip{display:inline-flex;align-items:center;gap:6px}.tipx{border:0;background:rgba(0,0,0,.08);color:#2B2621;width:24px;height:24px;flex:0 0 24px;border-radius:50%;font-size:12px;font-weight:800;line-height:1;cursor:pointer;padding:0}
 .enter{position:fixed;inset:0;z-index:3500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;background:radial-gradient(ellipse at 50% 42%,#5A4532 0%,#2A211A 58%,#16110D 100%);color:#F6EBDD;text-align:center;transition:opacity .6s ease .25s}
 .enscene{position:relative;width:170px;height:250px;margin-bottom:14px;perspective:700px;transition:transform .85s cubic-bezier(.55,0,.75,.2)}
 .englow{position:absolute;left:50%;bottom:-34px;width:300px;height:90px;transform:translateX(-50%);background:radial-gradient(ellipse at 50% 30%,rgba(255,196,110,.55),rgba(255,196,110,0) 70%);animation:englow 2.4s ease-in-out infinite alternate;will-change:opacity}
@@ -912,9 +914,6 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .hchatto{max-width:38%;flex:0 0 auto;border:1.5px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:inherit;font-size:13px;padding:5px 4px}.hcl.pm{background:rgba(110,80,160,.13);border-radius:8px;padding:2px 6px}.hcl.pm b{color:#6D4FA0}.hcl b{cursor:pointer} /* the same sky as the 3D view, so it's never dark while it loads */
 .gl-card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;max-width:min(80%,320px);padding:12px 16px;border-radius:14px;background:rgba(255,255,255,.94);color:#2B2621;font-weight:700;font-size:14px;line-height:1.35;text-align:center;box-shadow:0 4px 18px rgba(0,0,0,.18);pointer-events:none}
 .roomstage .house3d{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
-.hchips{position:absolute;top:8px;left:8px;right:132px;display:flex;gap:6px;overflow-x:auto;z-index:2;scrollbar-width:none}
-.hchips .rtab{background:rgba(255,255,255,.9)}
-.hchips .rtab.on{background:#2E86C1;color:#fff}
 .hview{position:absolute;top:8px;right:8px;z-index:2}
 .phsheet{max-width:380px}
 .phwrap{display:flex;justify-content:center;margin:8px 0}
@@ -942,7 +941,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .roomitem .noimg{display:block;width:80px;height:64px}
 .roomitems .rfor{flex:none;align-self:center;font-weight:800;margin:0}
 body.room-on .toast,body.room-on .rsheet-bg.rreport{z-index:9700}
-.roomtools{position:absolute;left:8px;right:8px;top:52px;z-index:2;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;pointer-events:none}
+.roomtools{position:absolute;left:8px;right:8px;top:54px;z-index:2;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;pointer-events:none}
 .roomtools>*{pointer-events:auto}
 .roomtools .tip{background:rgba(255,255,255,.94);color:#222;border-radius:12px;padding:6px 10px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 .roomtools .tip.bad{background:#FDECEA;color:#B03A2E}
@@ -6492,7 +6491,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     const title=this.biz?(d.mine?`🏪 Your ${d.home.name.toLowerCase()}`:`🏪 ${d.home.name}${d.owner?` · @${d.owner}`:''}`):d.place==='building'?(d.mine?`🏠 Your ${d.home.name.toLowerCase()} (nobody lives here)`:`🏠 ${d.home.name} · empty${d.owner?` · @${d.owner}’s`:''}`):(d.mine?'🏠 Your home':`🏠 @${d.owner}’s home`);
     const bar=el('div',{class:'webbar'}, el('button',{class:'webx','aria-label':'Back to the colony',text:'✕',onclick:()=>this.close()}),
       el('div',{class:'webaddr'}, el('b',{text:title}), this.sub), this.mapBtn, this.hereChip, this.editBtn);
-    const L=layoutOf(d.size,d.room.plan||'home'); this.chips=el('div',{class:'hchips'}, ...L.rooms.map((r,i)=>el('button',{class:'rtab',text:r.name,onclick:()=>this.h&&this.h.goRoom(i)})));
+    const L=layoutOf(d.size,d.room.plan||'home');
     this.viewBtn=el('button',{class:'btn sm hview',text:'⬆ From above',onclick:()=>this.flip()});
     let persp='first'; try{ persp=localStorage.getItem('resurgence-persp')==='third'?'third':'first'; }catch(e){}
     this.perspBtn=el('button',{class:'btn sm hpersp',text:persp==='third'?'👁️ First person':'👤 Third person',title:'Switch between seeing through your own eyes and seeing yourself from behind',onclick:()=>{ if(!this.h) return; const p=this.h.perspective==='third'?'first':'third'; this.h.setPerspective(p); this.perspBtn.textContent=p==='third'?'👁️ First person':'👤 Third person'; try{ localStorage.setItem('resurgence-persp',p); }catch(e){} }});
@@ -6503,13 +6502,13 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     this.chatBox=el('div',{class:'hchat',hidden:true}, this.chatLog, el('div',{class:'hchatrow'}, this.chatTo, this.chatIn, el('button',{class:'btn primary sm',text:'Send',disabled:!(Me&&Me.token),onclick:()=>this.sendChat()})));
     this.chatBtn=el('button',{class:'btn sm hchatbtn',text:'💬 Chat',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden){ this.whoOpts(); setTimeout(()=>this.chatIn.focus(),50); } }});
     this.exitBtn=el('button',{class:'hexit',hidden:true,text:'🚪 Exit',title:'Leave the house and go back to the map',onclick:()=>this.close()}); /* shown by the front door */
-    this.stage=el('div',{class:'roomstage'}, this.chips, this.viewBtn, this.perspBtn, this.chatBtn, this.chatBox, this.tools, this.cross, this.exitBtn);
+    this.stage=el('div',{class:'roomstage'}, this.viewBtn, this.perspBtn, this.chatBtn, this.chatBox, this.tools, this.cross, this.exitBtn);
     this.file=el('input',{type:'file',accept:'image/*',hidden:true,onchange:()=>this.upload()});
     const root=el('div',{class:'webview roomview',role:'dialog','aria-label':title}, bar, this.stage, this.shop, this.file);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
     try{ if(!(history.state&&history.state.room)) history.pushState({room:1},''); }catch(e){}
     try{ this.h=H3.createHouse(this.stage,{ defer:true, size:d.size, plan:d.room.plan||'home', persp, me:(Me&&Me.handle)||'visitor', look:myLook||null, room:d.room, photos:d.photos, at:this.reAt||null, onLost:at=>this.reopen(at), check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
-      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.close(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; [...this.chips.children].forEach((b,j)=>b.classList.toggle('on',j===i)); if(this.edit&&this.cat==='style') this.paintShop(); } }); }
+      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.close(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
     catch(e){ ent.cancel(); this.close(); toast('Your phone couldn’t show the 3D view.'); return; }
     this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false); this.hereTick(true); this.join();
     ent.step('Switching on the lights…',0.66); const h=this.h; try{ await h.ready((n,t)=>ent.step(n/t<0.6?'Switching on the lights…':'Saying hello to who’s here…',0.66+0.32*n/t)); }catch(e){} if(this.h===h) ent.done(); else ent.cancel(); /* the first picture is on screen: step through */
@@ -6618,7 +6617,9 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
       el('div',{class:'phwrap'},cv), el('label',{class:'phz'}, '🔍', zoom),
       el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Cancel',onclick:()=>finish(null)}), el('button',{class:'btn primary',text:'✓ Use this photo',onclick:()=>{ clamp(); const s=fit*z, w=vw/s, h=vh/s; finish({ x:img.width/2-ox/s-w/2, y:img.height/2-oy/s-h/2, w, h }); }}))));
     document.body.append(wrap); draw(); }); },
-  paintTools(){ const t=this.tools; if(!t) return; t.innerHTML=''; const d=this.d; if(!d) return; const up=this.h&&this.h.view==='above';
+  paintTools(){ this.paintTools0(); const t=this.tools; if(!t||this.pick||this.sel) return; this.tipOff||=new Set();
+    for(const tip of [...t.querySelectorAll('.tip')]){ const k=tip.textContent; if(this.tipOff.has(k)){ tip.remove(); continue; } tip.append(el('button',{class:'tipx','aria-label':'Close',text:'✕',onclick:()=>{ this.tipOff.add(k); tip.remove(); }})); } },
+  paintTools0(){ const t=this.tools; if(!t) return; t.innerHTML=''; const d=this.d; if(!d) return; const up=this.h&&this.h.view==='above';
     if(!d.mine){ const s=this.sel; if(s&&s.ph) t.append(el('span',{class:'tip',text:'A photo'}), el('button',{class:'btn sm',text:'⚑ Report this photo',onclick:()=>reportSheet({kind:'photo',id:s.ph,handle:d.owner})}), el('button',{class:'btn sm',text:'✕',onclick:()=>{ this.sel=null; this.h&&this.h.setSelected(null); this.paintTools(); }}));
       else t.append(el('span',{class:'tip',text:up?'Drag to turn the house around. Tap 🚶 Walk to go back inside.':`${this.biz?`Welcome to ${d.home.name}.`:`Just looking around @${d.owner}’s home.`} ${PHONE_UI?'Use the joystick to walk and drag to look.':'Walk with WASD or the arrows; drag to look.'}`})); return; }
     if(up&&!this.pick){ t.append(el('span',{class:'tip',text:this.edit?'From above: drag to turn the house. Floor pieces can be placed here; walk in for walls and ceilings.':'Drag to turn the house around. Tap 🚶 Walk to go back inside.'})); if(!this.edit) return; }

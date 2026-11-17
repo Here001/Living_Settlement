@@ -2082,15 +2082,23 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
     await new Promise(r => w.once('open', r)); w.send(JSON.stringify({ type: 'auth', token: P.P.headers['x-player'] })); for (let i = 0; i < 40 && !got.some(m => m.type === 'authed'); i++) await sleep(50); w.send(JSON.stringify({ type: 'in', place, x: 3, y: 5, a: 0, pose: 'd', ph: 0.05 })); await sleep(200); return { w, got }; };
   const bs = await sock(B);
   const sp = await call('POST', '/api/clubs/spray', { place, to: 'club_ben', amount: 1000 }, A.P); await sleep(300);
-  ok(sp.status === 200 && await coins(B) === 2000 && await coins(A) === 1_999_000, 'Amy sprays Ben 1,000: it’s his', JSON.stringify(sp.json));
-  ok(bs.got.some(m => m.k === 'club' && m.club?.kind === 'spray' && m.club.to === 'club_ben'), '…and everyone in the club sees it');
+  ok(sp.status === 200 && sp.json.id && await coins(A) === 1_999_000 && await coins(B) === 1000, 'Amy sprays Ben 1,000: it falls on him, to pick up', JSON.stringify(sp.json));
+  ok(bs.got.some(m => m.k === 'club' && m.club?.kind === 'spray' && m.club.to === 'club_ben' && m.club.id === sp.json.id), '…and everyone in the club sees it');
+  const sp2 = await call('POST', '/api/clubs/spray', { place, to: 'club_ben', amount: 1000 }, A.P); ok(sp2.json.id === sp.json.id, 'spraying him again adds to it (and keeps it falling)');
+  ok((await call('POST', `/api/clubs/grab/${sp.json.id}`, {}, C.P)).json.notYours === true, 'only Ben can pick up money sprayed on him');
+  let picked = 0; for (let i = 0; i < 3; i++) { picked += (await call('POST', `/api/clubs/grab/${sp.json.id}`, {}, B.P)).json.got || 0; await sleep(200); }
+  ok(picked > 0 && picked < 2000 && await coins(B) === 1000 + picked, 'Ben picks some of it up', JSON.stringify({ picked }));
+  await pool.query('update club_rains set until = $2 where id = $1', [sp.json.id, Date.now() - 1]); await sleep(3800);
+  const missed = 2000 - picked, back = Math.floor(missed * 0.25);
+  ok(await coins(B) === 1000 + picked + back && await coins(O) === missed - back, 'when it stops, a quarter of what he missed is his anyway, the rest the club’s', JSON.stringify({ ben: await coins(B), owner: await coins(O), picked, back }));
+  await pool.query('update citizens set coins_base = 0 where id = $1', [O.id]);
   const rn = await call('POST', '/api/clubs/spray', { place, amount: 10000 }, A.P); await sleep(300);
-  ok(rn.status === 200 && rn.json.id && await coins(A) === 1_989_000, 'Amy sprays the whole club with 10,000', JSON.stringify(rn.json));
+  ok(rn.status === 200 && rn.json.id && await coins(A) === 1_988_000, 'Amy sprays the whole club with 10,000', JSON.stringify(rn.json));
   ok(bs.got.some(m => m.club?.kind === 'rain' && m.club.amount === 10000) && bs.got.some(m => m.club?.kind === 'dj' && /club_amy/.test(m.club.text)), '…money rains on everyone, and the DJ gives her a shout-out');
   ok((await call('POST', '/api/clubs/spray', { place, amount: 10000 }, A.P)).status === 409, 'one rain at a time');
   ok((await call('POST', `/api/clubs/grab/${rn.json.id}`, {}, A.P)).json.own === true, 'you can’t grab your own money back');
   let bGot = 0, cGot = 0; for (let i = 0; i < 6; i++) { bGot += (await call('POST', `/api/clubs/grab/${rn.json.id}`, {}, B.P)).json.got || 0; cGot += (await call('POST', `/api/clubs/grab/${rn.json.id}`, {}, C.P)).json.got || 0; await sleep(200); }
-  ok(bGot > 0 && cGot > 0 && bGot + cGot <= 10000 && await coins(B) === 2000 + bGot, 'Ben and Cat grab some of it', JSON.stringify({ bGot, cGot }));
+  const ben0 = await coins(B) - bGot; ok(bGot > 0 && cGot > 0 && bGot + cGot <= 10000, 'Ben and Cat grab some of it', JSON.stringify({ bGot, cGot, ben0 }));
   ok((await call('POST', `/api/clubs/grab/${rn.json.id}`, {}, E.P)).status === 409, 'someone outside the club can’t grab any');
   await pool.query('update club_rains set until = $2 where id = $1', [rn.json.id, Date.now() - 1]); await sleep(3800);
   const left = 10000 - bGot - cGot; ok(await coins(O) === left && (await pool.query('select done from club_rains where id = $1', [rn.json.id])).rows[0]?.done, 'when it stops, what nobody grabbed goes to the club’s owner', JSON.stringify({ owner: await coins(O), left }));

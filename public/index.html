@@ -6566,19 +6566,24 @@ const Club={ R:null, info:null, audio:null, radio:undefined, got:0, rainT:null, 
   async spray(body,close){ if(!this.R) return; try{ const r=await api('/api/clubs/spray',{method:'POST',body:{...body,place:this.R.spot}}); close&&close(); if(myMoney&&typeof r.coins==='number'){ myMoney.coins=r.coins; refreshHUD(); } }catch(e){ toast(e.message); } },
   idOf(h){ if(Me&&h&&h.toLowerCase()===String(Me.handle||'').toLowerCase()) return 'me'; for(const p of (this.R&&this.R.others?this.R.others.values():[])) if(p.h&&p.h.toLowerCase()===h.toLowerCase()) return p.id; return null; },
   msg(c){ const R=this.R; if(!R) return;
-    if(c.kind==='spray'){ const id=this.idOf(c.to); if(id&&R.h) R.h.say(id,`💸💸 +${fmt(c.amount)}`); this.burst(); R.addChat({from:c.from,text:`💸 sprayed @${c.to} ${fmt(c.amount)} coins`,t:Date.now()}); }
+    if(c.kind==='spray'){ const id=this.idOf(c.to); if(id&&R.h) R.h.say(id,`💸💸 ${fmt(c.amount)}`); const me=id==='me';
+      if(me) this.rain({...c, mine:false, forMe:true}); else this.burst(); /* sprayed on you: pick it up! */
+      if(!(this.rainId===c.id&&!me)) R.addChat({from:c.from,text:`💸 sprayed @${c.to} ${fmt(c.amount)} coins`,t:Date.now()}); }
     else if(c.kind==='rain') this.rain(c);
     else if(c.kind==='dj') this.dj(c.text);
-    else if(c.kind==='rainEnd'){ this.stopRain(); const top=(c.top||[]).map(t=>`@${t.h} ${fmt(t.got)}`).join(' · '); toast(`💸 The money's stopped falling.${top?' Most grabbed: '+top:''}${this.got?` You grabbed ${fmt(this.got)}.`:''}`); this.got=0; } },
+    else if(c.kind==='rainEnd'){ if(c.to){ if(this.rainId===c.id){ this.stopRain(); toast(`💸 You picked up ${fmt(this.got)} of @${c.from}’s ${fmt(c.total)}${c.back?`, and ${fmt(c.back)} more of what you missed`:''}.`); this.got=0; this.rainId=null; setTimeout(()=>loadMyMoney().catch(()=>{}),600); } /* (the part of what you missed that's yours anyway) */ return; }
+      this.stopRain(); const top=(c.top||[]).map(t=>`@${t.h} ${fmt(t.got)}`).join(' · '); toast(`💸 The money's stopped falling.${top?' Most grabbed: '+top:''}${this.got?` You grabbed ${fmt(this.got)}.`:''}`); this.got=0; this.rainId=null; } },
   // a few notes fluttering down the screen (someone was sprayed)
   burst(){ for(let i=0;i<14;i++) this.note(false); },
   note(grab,id){ const n=el('button',{class:'mnote'+(grab?' grab':''),text:Math.random()<0.5?'💵':'💸','aria-label':'Grab the money'}); const x=4+Math.random()*88, d=(grab?2.6:1.8)+Math.random()*1.6;
     n.style.left=x+'%'; n.style.animationDuration=d+'s'; n.style.fontSize=(grab?34:26)+Math.random()*12+'px';
     if(grab) n.onpointerdown=e=>{ e.preventDefault(); e.stopPropagation(); this.grab(id,n,e); };
     this.rainEl.hidden=false; this.rainEl.append(n); setTimeout(()=>n.remove(),d*1000+100); },
-  rain(c){ const mine=Me&&c.from&&c.from.toLowerCase()===String(Me.handle||'').toLowerCase(); this.got=0; clearInterval(this.rainT);
-    this.tally.hidden=false; this.tally.textContent=mine?`💸 Your ${fmt(c.amount)} coins are raining on the club!`:`💸 @${c.from} is making it rain! Tap the money to grab it`;
-    const end=Date.now()+(c.ms||20000); this.rainT=setInterval(()=>{ if(Date.now()>end){ this.stopRain(); return; } for(let i=0;i<2;i++) this.note(!mine,c.id); },160); },
+  rain(c){ const mine=Me&&c.from&&c.from.toLowerCase()===String(Me.handle||'').toLowerCase()&&!c.forMe;
+    if(this.rainId===c.id&&this.rainT){ this.rainEnd=Date.now()+(c.ms||20000); this.rainTotal=(this.rainTotal||0)+c.amount; this.tally.textContent=`💸 @${c.from} is spraying you ${fmt(this.rainTotal)}! Tap the money to pick it up`; return; } /* sprayed again: more, for longer */
+    this.got=0; this.rainId=c.id; this.rainTotal=c.amount; clearInterval(this.rainT);
+    this.tally.hidden=false; this.tally.textContent=c.forMe?`💸 @${c.from} is spraying you ${fmt(c.amount)}! Tap the money to pick it up`:mine?`💸 Your ${fmt(c.amount)} coins are raining on the club!`:`💸 @${c.from} is making it rain! Tap the money to grab it`;
+    this.rainEnd=Date.now()+(c.ms||20000); this.rainT=setInterval(()=>{ if(Date.now()>this.rainEnd){ this.stopRain(); return; } for(let i=0;i<(c.forMe?3:2);i++) this.note(!mine,this.rainId); },160); },
   stopRain(){ clearInterval(this.rainT); this.rainT=null; if(this.tally) setTimeout(()=>{ if(!this.rainT&&this.tally) this.tally.hidden=true; },2500); },
   async grab(id,n,e){ n.classList.add('got'); n.style.pointerEvents='none'; try{ const r=await api('/api/clubs/grab/'+encodeURIComponent(id),{method:'POST',body:{}}); if(r.got>0){ this.got+=r.got; this.tally.textContent=`💰 You grabbed ${fmt(this.got)} coins!`;
       const f=el('div',{class:'grabplus',text:'+'+fmt(r.got)}); f.style.left=e.clientX+'px'; f.style.top=e.clientY+'px'; document.body.append(f); setTimeout(()=>f.remove(),900); if(myMoney&&typeof r.coins==='number'){ myMoney.coins=r.coins; refreshHUD(); } } }catch(err){} n.remove(); },

@@ -358,6 +358,8 @@ const MIGRATIONS = [
    create index if not exists club_rains_due on club_rains (done, until); create table if not exists club_grabs (rain_id text not null, citizen_id text not null, handle text, got bigint not null default 0, primary key (rain_id, citizen_id));`,
   // v77: a price the developer has set for a government building (instead of the usual one)
   `alter table buildings add column if not exists sale_price bigint;`,
+  // v78: money sprayed on one person in a club (they pick it up): who it's for
+  `alter table club_rains add column if not exists to_id text; alter table club_rains add column if not exists to_handle text;`,
 ];
 
 export async function migrate() {

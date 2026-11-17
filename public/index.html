@@ -1311,7 +1311,7 @@ async function initStore(){
   try{ Store.token=localStorage.getItem('settlement-token'); }catch(e){}
   if(location.hash==='#builder' && !Store.token){ const t=prompt('Builder token'); if(t){ Store.token=t.trim(); try{ localStorage.setItem('settlement-token',Store.token); }catch(e){} } }
   if(location.hash==='#logout'){ Store.token=null; try{ localStorage.removeItem('settlement-token'); }catch(e){} }
-  if(Store.token){ try{ await api('/api/admin/check'); Store.canWrite=true; }catch(e){ Store.canWrite=false; toast('That builder token was not accepted.'); } }
+  if(Store.token){ try{ await api('/api/admin/check'); Store.canWrite=true; }catch(e){ Store.canWrite=false; if(/token/i.test(e.message||'')){ Store.token=null; try{ localStorage.removeItem('settlement-token'); }catch(e2){} } toast('That developer code was not accepted (it may have been changed). Open playresurgence.com/#builder to sign in with the new one.'); } } /* an old code is forgotten on this device, so it signs out and asks again next time */
   connect();
 }
 setInterval(()=>{ if(!document.hidden) syncChunks(); },400);

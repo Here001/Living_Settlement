@@ -434,13 +434,13 @@ function personFromLook(look, role) {
   else if (role === 'seeker') { w.top = ['hoodie', 9]; w.bot = ['cargo', 9]; delete w.out; }
   const av = buildAvatar(L), g = av.group;
   let torch = null;
-  if (role === 'seeker') { torch = new THREE.Mesh(GEO.cyl, pmat('#2b2b2b')); torch.scale.set(0.05, 0.25, 0.05); torch.position.set(0, -0.6, 0.12); torch.rotation.x = Math.PI / 2; av.armR.add(torch);
+  if (role === 'seeker') { torch = new THREE.Mesh(GEO.cyl, pmat('#2b2b2b')); torch.scale.set(0.05, 0.25, 0.05); torch.position.set(0, -0.3, 0.12); torch.rotation.x = Math.PI / 2; av.forearmR.add(torch);
     const beam = new THREE.Mesh(new THREE.ConeGeometry(2.2, 9, 16, 1, true), new THREE.MeshBasicMaterial({ color: '#fff3c4', transparent: true, opacity: 0.12, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
     beam.rotation.x = -Math.PI / 2; beam.position.set(0.32, 1.0, 4.7); beam.visible = false; g.add(beam); torch.userData.beam = beam; }
   const blob = new THREE.Mesh(new THREE.CircleGeometry(0.45, 16), BLOB); blob.rotation.x = -Math.PI / 2; blob.position.y = 0.03; g.add(blob);
   return { group: g, body: av.body, head: av.head, torch, role, armL: av.armL, armR: av.armR, x: 0, z: 0, av,
     setPos(x, z) { this.x = x; this.z = z; g.position.set(x, 0, z); },
-    animate(dt, vx, vz) { av.animate(dt, vx, vz); if (torch) av.armR.rotation.x = -1.2; } };
+    animate(dt, vx, vz) { av.animate(dt, vx, vz); if (torch) { av.armR.rotation.x = -1.2; av.forearmR.rotation.x = -0.1; } } };
 }
 // A name over someone's head.
 export function nameTag(text, color = '#ffffff') {

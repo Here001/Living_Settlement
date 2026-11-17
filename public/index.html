@@ -6458,7 +6458,7 @@ const Love={
   box(){ const wrap=el('div',{class:'authbox visitbox lovebox'}); wrap.append(el('h3',{text:'💘 Love'}), el('p',{class:'hint',text:'Loading…'}));
     api('/api/me/love').then(r=>this.fill(wrap,r)).catch(()=>wrap.remove()); return wrap; },
   fill(wrap,r){ wrap.replaceChildren(el('h3',{text:'💘 Love'})); const c=r.current;
-    if(c){ wrap.append(el('p',null, el('b',{text:this.label(c)}), ' to ', el('button',{class:'linkb',text:'@'+c.with,onclick:()=>openCitizen(c.with)})), this.hearts(c.hearts),
+    if(c){ wrap.append(el('p',null, el('b',{text:this.label(c)}), c.status==='married'?' to ':' ', el('button',{class:'linkb',text:'@'+c.with,onclick:()=>openCitizen(c.with)})), this.hearts(c.hearts),
         el('div',{class:'lovebar'}, el('b',{style:`width:${Math.round(100*c.points/c.max)}%`})),
         el('p',{class:'hint',text:c.status==='married'?`Married since ${new Date(c.married).toLocaleDateString()}. You can design and furnish each other’s homes and businesses.`:c.ripe?'Your hearts are full: you’re ready to get married!':`${c.points} of ${c.max}. Spend time together in the same home or business and message each other to fill your hearts. Today: ${c.today.together}/${c.caps.together} from time together, ${c.today.texts}/${c.caps.texts} from messages.`}));
       const acts=el('div',{class:'row-actions'});

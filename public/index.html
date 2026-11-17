@@ -3437,7 +3437,8 @@ let frameErrors=0, lastDraw=0, lastInput=0, drawnFrames=0, drawMs=0;
 // While nobody is touching the map, ~30 frames a second is plenty for people walking about, and halves the work
 // (and the battery). Any touch, drag, pinch, scroll or key goes straight back to full speed for a few seconds.
 for(const ev of ['pointerdown','pointermove','wheel','keydown','touchstart']) addEventListener(ev, ()=>{ lastInput=performance.now(); }, {passive:true, capture:true});
-function frame(ts){ requestAnimationFrame(frame);
+let mapPaused=false; const mapResume=()=>{ if(mapPaused){ mapPaused=false; requestAnimationFrame(frame); } };
+function frame(ts){ if(document.body.classList.contains('room-on')){ mapPaused=true; return; } /* inside a home or business: the map stops completely (not even a check each frame) until you come out */ requestAnimationFrame(frame);
   const gap=Power.gap(ts); if(gap&&ts-lastDraw<gap-4) return;
   lastDraw=ts; drawnFrames++;
   const t0=performance.now();
@@ -6482,7 +6483,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     if(mine) this.h.say('me',c.text); else { const o=[...(this.others||new Map()).entries()].find(([,p])=>p.h&&p.h.toLowerCase()===c.from.toLowerCase()); if(o) this.h.say(o[0],c.text); } },
   async sendChat(){ const t=this.chatIn.value.trim(); if(!t) return; this.chatIn.value=''; try{ const r=await api('/api/inside/chat',{method:'POST',body:{place:this.spot,text:t}}); this.addChat(r.chat); }catch(e){ toast(e.message); this.chatIn.value=t; } },
   // the colony map, from inside: the house waits; the pill at the top brings you back in
-  toMap(){ if(!this.el) return; this.el.hidden=true; document.body.classList.remove('room-on'); this.mapPill=el('button',{class:'btn primary hback',text:`🏠 Back inside · ${this.d.home.name}`,onclick:()=>this.fromMap()}); document.body.append(this.mapPill); },
+  toMap(){ if(!this.el) return; this.el.hidden=true; document.body.classList.remove('room-on'); mapResume(); this.mapPill=el('button',{class:'btn primary hback',text:`🏠 Back inside · ${this.d.home.name}`,onclick:()=>this.fromMap()}); document.body.append(this.mapPill); },
   fromMap(){ if(!this.el) return; this.el.hidden=false; document.body.classList.add('room-on'); this.mapPill&&this.mapPill.remove(); this.mapPill=null; this.h&&this.h.refreshGhost(); },
   // ---- who's here now: colonists the game has at this place (working, visiting, at home), plus players looking round it ----
   people(){ const d=this.d; if(!d) return []; const gm=gmNow(), out=[]; const bid=d.home.id, owner=(d.owner||'').toLowerCase();
@@ -6494,7 +6495,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     const sim=this.people(), lv=[...(this.others||new Map()).values()], named=lv.filter(p=>p.h).map(p=>'@'+p.h+' (walking round)'), anon=Math.max(lv.length,live.viewers)-named.length; live.viewers=Math.max(lv.length,live.viewers);
     this.hereNames=[...sim.map(p=>p.label), ...named, ...(anon>0?[`${anon} visitor${anon===1?'':'s'} looking round`]:[])];
     this.hereNames.unshift('you'); const n=sim.length+live.viewers+1; if(this.hereChip){ this.hereChip.textContent=`👥 ${fmt(n)}`; this.hereChip.append(el('span',{class:'wide',text:n===1?' (just you)':' here now'})); this.hereChip.title=n===1?'Just you here':`${fmt(n)} here now`; } if(this.h) this.h.setPeople(sim); },
-  close(quiet){ if(!this.el) return; clearInterval(this.hereTimer); this.leave(); this.mapPill&&this.mapPill.remove(); this.mapPill=null; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
+  close(quiet){ if(!this.el) return; setTimeout(mapResume,0); clearInterval(this.hereTimer); this.leave(); this.mapPill&&this.mapPill.remove(); this.mapPill=null; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
   toggle(on){ this.edit=on===undefined?!this.edit:on; this.setPick(null); this.select(null); this.shop.hidden=!this.edit; if(this.editBtn) this.editBtn.textContent=this.edit?'✓ Done':this.editWord; if(this.edit) this.paintShop(); this.paintTools(); },
   // the streets and buildings round the home: from what the map has loaded, or fetched once (only when looking from above)
   async around(fetch){ const h=this.d&&this.d.home; if(!h||h.x==null||this.aroundDone||!this.h) return; const R=8, x0=h.x-R, y0=h.y-R, x1=h.x+(h.w||1)+R, y1=h.y+(h.d||1)+R;

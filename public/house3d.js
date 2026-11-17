@@ -161,9 +161,7 @@ export function createHouse(host, opts) {
   // not every frame), a soft reflection of a bright room on every surface, and a fixed set of lamps that follows you
   // from room to room (a fixed number, so a phone never has to rebuild its shaders while you walk).
   const renderer = new THREE.WebGLRenderer({ antialias: !PHONE || (devicePixelRatio || 1) < 2.5, powerPreference: 'high-performance' });
-  // Resolution: sharp when you stand still; while you move or look around, lower (motion hides it) and lowered further
-  // by itself if frames start coming slowly. The moment you stop, one sharp frame is drawn. This is what keeps a phone cool.
-  const DPR = devicePixelRatio || 1, PR_HI = Math.min(DPR, PHONE ? (HQ ? 1.5 : 1.25) : 2); let prLo = PHONE ? Math.min(DPR, 1) : Math.min(DPR, 1.5), prNow = PR_HI;
+  const DPR = devicePixelRatio || 1, PR_HI = Math.min(DPR, PHONE ? (HQ ? 1.5 : 1.25) : 2), prNow = PR_HI;
   renderer.setPixelRatio(PR_HI); renderer.domElement.className = 'house3d'; host.append(renderer.domElement);
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = HQ; renderer.shadowMap.type = PHONE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap; /* phones: the cheaper filter (the shadows are still soft-edged) */ renderer.shadowMap.autoUpdate = false;
@@ -478,27 +476,24 @@ export function createHouse(host, opts) {
     try { again = step(t); } finally { inTick = false; } /* even if a frame fails, the next one can still be asked for */
     if (again || (dirty && shown())) raf = requestAnimationFrame(tick); else last = null; /* hidden behind the map: nothing to draw, so it waits */
   }
-  let lastDraw = 0, frameMs = 16, lastDrop = 0;
+  let lastDraw = 0;
   function step(t) {
     if (!shown()) { for (const o of others.values()) { o.g.position.x = o.tx; o.g.position.z = o.ty; o.g.rotation.y = o.ta; } dirty = true; return false; } /* hidden: jump to where people are, draw later */
     const dt = last == null ? 1 / 60 : Math.max(0, Math.min(0.05, (t - last) / 1000)); last = t; let moving = false; /* time since the last frame: never below 0 or above 1/20 s */
     let fw = -joy.y, st = joy.x; if (keys.has('w') || keys.has('arrowup')) fw += 1; if (keys.has('s') || keys.has('arrowdown')) fw -= 1; if (keys.has('a')) st -= 1; if (keys.has('d')) st += 1;
     if (keys.has('arrowleft')) { me.yaw += 1.8 * dt; moving = true; } if (keys.has('arrowright')) { me.yaw -= 1.8 * dt; moving = true; }
     if (view === 'walk' && (fw || st)) { const sp = 2.3 * dt, sx = -Math.sin(me.yaw), sy = -Math.cos(me.yaw), dx = (sx * fw + -sy * st) * sp, dy = (sy * fw + sx * st) * sp;
-      if (!blocked(me.x + dx, me.y)) me.x += dx; if (!blocked(me.x, me.y + dy)) me.y += dy; moving = true; tapAim = false; }
+      const ox = me.x, oy = me.y; if (!blocked(me.x + dx, me.y)) me.x += dx; if (!blocked(me.x, me.y + dy)) me.y += dy; if (me.x !== ox || me.y !== oy) moving = true; tapAim = false; } /* pressing into a wall: nothing changes, nothing is drawn */
     if (moving) moved();
-    // while anything moves: the lower resolution, at most 60 frames a second; when it all stops, back to sharp
+    // at most 60 frames a second (a 120 Hz screen would otherwise draw twice as many)
     const now = performance.now(), active = moving || joy.on || keys.size > 0 || now - lastInput < 160;
-    if (active && prNow !== prLo) { prNow = prLo; renderer.setPixelRatio(prNow); renderer.setSize(host.clientWidth || 1, host.clientHeight || 1, false); dirty = true; }
-    if (!active && prNow !== PR_HI && now - lastInput > 220) { prNow = PR_HI; renderer.setPixelRatio(prNow); renderer.setSize(host.clientWidth || 1, host.clientHeight || 1, false); dirty = true; }
-    if (active && lastDraw && now - lastDraw > 0) { frameMs = frameMs * 0.92 + (now - lastDraw) * 0.08; if (frameMs > 24 && prLo > 0.72 && now - lastDrop > 1200) { prLo = Math.max(0.72, prLo - 0.1); lastDrop = now; prNow = 0; } }
     if (dirty && shown() && (!active || now - lastDraw >= 15.5)) { placeCamera(); renderer.render(scene, camera); dirty = false; lastDraw = now; } /* not while the map is showing */
     // other players: glide towards where they last said they were
     let gliding = false; for (const o of others.values()) { const dx = o.tx - o.g.position.x, dz = o.ty - o.g.position.z; let da = o.ta - o.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       if (Math.abs(dx) + Math.abs(dz) + Math.abs(da) > 0.01) { const k = Math.min(1, dt * 8); o.g.position.x += dx * k; o.g.position.z += dz * k; o.g.rotation.y += da * k; gliding = true; dirty = true; }
       if (o.bubble && performance.now() > o.bubbleUntil) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); o.bubble = null; dirty = true; } }
     if (meBubble && performance.now() > meBubbleUntil) { me3.remove(meBubble); meBubble.material.map.dispose(); meBubble = null; dirty = true; }
-    return moving || joy.on || keys.size > 0 || dirty || prNow !== PR_HI || gliding || [...others.values()].some(o => o.bubble) || !!meBubble;
+    return moving || joy.on || keys.size > 0 || dirty || gliding || [...others.values()].some(o => o.bubble) || !!meBubble;
   }
   const ro = new ResizeObserver(resize); ro.observe(host);
   buildShell(); buildStuff(); resize(); moved();

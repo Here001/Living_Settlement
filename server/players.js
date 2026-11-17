@@ -304,6 +304,13 @@ export function playersRouter({ limit, send, admin, world }) {
   r.delete('/admin/room-photos/:id', admin, send(async req => ({ ok: await RM().removePhoto(req.params.id) })));
   r.get('/citizens/:handle/room', limit, send(async req => RM().view((await playerFrom(req))?.id || null, req.params.handle)));
   r.post('/me/room/buy', limit, send(async req => RM().buy((await me(req)).id, bd(req))));
+  r.post('/me/room/lock', limit, send(async req => RM().lock((await me(req)).id, bd(req))));
+  // businesses: anyone can walk in; the owner designs the inside
+  r.get('/buildings/:id/inside', limit, send(async req => RM().viewBuilding((await playerFrom(req))?.id || null, req.params.id)));
+  r.post('/me/buildings/:id/inside/photo/:i', limit, quota('photo'), express.raw({ type: 'image/jpeg', limit: '400kb' }), send(async req => RM().photo((await me(req)).id, req.params.i, req.body, req.params.id)));
+  r.post('/me/buildings/:id/inside/:op', limit, send(async req => { const op = req.params.op, M = RM(); if (!['buy', 'place', 'store', 'sell', 'style'].includes(op)) throw new HttpError(404, 'No such thing to do.'); return M[op]((await me(req)).id, bd(req), req.params.id); }));
+  // "here now": a view of a place says it's still open every 25 s, and hears who else is looking around
+  r.post('/inside/here', limit, send(async req => { const p = await playerFrom(req); return RM().seen(bd(req).place, p ? 'p:' + p.id : 'ip:' + clientIp(req), p ? p.handle : null); }));
   r.post('/me/room/place', limit, send(async req => RM().place((await me(req)).id, bd(req))));
   r.post('/me/room/store', limit, send(async req => RM().store((await me(req)).id, bd(req))));
   r.post('/me/room/sell', limit, send(async req => RM().sell((await me(req)).id, bd(req))));

@@ -31,7 +31,25 @@ export function jpegSize(buf) {
 }
 
 export class Rooms {
-  constructor(world) { this.world = world; }
+  constructor(world) { this.world = world; this.here = new Map(); }
+  // ---- who's looking around a place right now (players whose screen shows it), for the "here now" count ----
+  // Each open view says it's still there every 25 seconds; anyone not heard from for 70 seconds has left.
+  seen(place, who, name) {
+    const now = Date.now(); place = String(place || '').slice(0, 80); if (!/^(b|h):[A-Za-z0-9_.-]+$/.test(place)) throw new HttpError(400, 'Which place?');
+    let m = this.here.get(place); if (!m) this.here.set(place, m = new Map()); m.set(who, { name, at: now });
+    if (this.here.size > 5000) for (const [k, v] of this.here) { for (const [w, e] of v) if (now - e.at > 70000) v.delete(w); if (!v.size) this.here.delete(k); }
+    const others = [...m].filter(([w, e]) => w !== who && now - e.at < 70000).map(([, e]) => e.name).filter(Boolean);
+    return { viewers: [...m].filter(([, e]) => now - e.at < 70000).length - 1, names: others.slice(0, 12) };
+  }
+  // A business's inside: its plan, size and design (or the standard fit-out until its owner designs it).
+  bizRoom(b) { const size = F.bizSize(b.type), plan = F.bizKind(b.type); return { size, plan, room: F.fitRoom(b.interior || { items: F.standardFit(b.type, size) }, size, plan).room }; }
+  async viewBuilding(meId, bid) {
+    const b = (await pool.query('select id, type, name, x, y, w, d, owner_id, owner_handle, done, ruin, interior from buildings where id = $1', [String(bid)])).rows[0];
+    if (!b) throw new HttpError(404, 'That building is gone.'); if (!F.canEnter(b.type)) throw new HttpError(403, 'You can’t go inside there.');
+    if (!b.done || b.ruin) throw new HttpError(409, b.ruin ? 'It’s a ruin now.' : 'It isn’t finished yet.');
+    const { size, room } = this.bizRoom(b), mine = !!meId && b.owner_id === meId, c = mine ? (await pool.query('select coins_base from citizens where id = $1', [meId])).rows[0] : null;
+    return { mine, place: 'business', owner: b.owner_handle || null, designed: !!b.interior, home: { id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Building', type: b.type, x: b.x, y: b.y, w: b.w, d: b.d }, size, room, photos: await this.photoUrls(room), coins: c ? Math.round(Number(c.coins_base)) : undefined };
+  }
   async homeOf(q, c) {
     if (!c.home_id) return null;
     const b = (await q('select id, type, name, x, y, w, d from buildings where id = $1', [c.home_id])).rows[0]; if (!b) return null;
@@ -45,7 +63,7 @@ export class Rooms {
     return out;
   }
   async out(c, home, room, mine) {
-    return { mine, owner: c.handle, home: { id: home.id, name: home.name, type: home.type, x: home.x, y: home.y, w: home.w, d: home.d }, size: home.size, room, photos: await this.photoUrls(room), coins: mine ? Math.round(Number(c.coins_base)) : undefined };
+    return { mine, place: 'home', owner: c.handle, home: { id: home.id, name: home.name, type: home.type, x: home.x, y: home.y, w: home.w, d: home.d }, size: home.size, room, photos: await this.photoUrls(room), coins: mine ? Math.round(Number(c.coins_base)) : undefined };
   }
   // what you see when you go in: your own home, or someone else's (look only)
   async view(meId, handle) {
@@ -53,30 +71,37 @@ export class Rooms {
     const c = handle ? (await pq('select id, handle, home_id, room, coins_base from citizens where lower(handle) = lower($1)', [String(handle)])).rows[0] : (await pq('select id, handle, home_id, room, coins_base from citizens where id = $1', [meId])).rows[0];
     if (!c) throw new HttpError(404, 'No colonist with that name.');
     const home = await this.homeOf(pq, c); if (!home) throw new HttpError(404, c.id === meId ? 'You don’t have a home yet. Rent one first, then you can furnish it.' : `@${c.handle} doesn’t have a home right now.`);
-    return this.out(c, home, F.fitRoom(c.room, home.size).room, c.id === meId);
+    const room = F.fitRoom(c.room, home.size).room; if (room.locked && c.id !== meId) throw new HttpError(403, `@${c.handle} keeps their home locked.`);
+    return this.out(c, home, room, c.id === meId);
   }
   // Every change: lock the colonist, fit their home to the house they live in, apply fn, save. fn returns { spend, refund, gone }.
-  async edit(id, fn) {
+  // `bid`: a business the colonist owns, instead of their home.
+  async edit(id, fn, bid = null) {
     let gone = [];
     const res = await this.world.personal(async ch => {
       const q = (a, v) => ch.q(a, v), c = (await q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such colonist.');
-      const home = await this.homeOf(q, c); if (!home) throw new HttpError(409, 'You don’t have a home yet. Rent one first, then you can furnish it.');
-      const { room } = F.fitRoom(c.room, home.size), r = await fn(room, home, c, q) || {};
+      let home, room, b = null;
+      if (bid) { b = (await q('select * from buildings where id = $1 for update', [String(bid)])).rows[0]; if (!b) throw new HttpError(404, 'That building is gone.');
+        if (b.owner_id !== c.id) throw new HttpError(403, 'Only its owner can design the inside.'); if (!F.canEnter(b.type) || !b.done) throw new HttpError(409, 'This building has no inside to design.');
+        const z = this.bizRoom(b); room = z.room; home = { id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Building', type: b.type, x: b.x, y: b.y, w: b.w, d: b.d, size: z.size }; }
+      else { home = await this.homeOf(q, c); if (!home) throw new HttpError(409, 'You don’t have a home yet. Rent one first, then you can furnish it.'); room = F.fitRoom(c.room, home.size).room; }
+      const r = await fn(room, home, c, q, b) || {};
       if (r.spend || r.refund) { ch.coins(c);
         if (r.spend) { if (Number(c.coins_base) < r.spend) throw new HttpError(400, `That costs ${fmt(r.spend)} coins. You have ${fmt(c.coins_base)} on you${Number(c.bank) ? ' (withdraw some at a Bank first)' : ''}.`);
           c.coins_base = Number(c.coins_base) - r.spend; treasuryAdd(ch, r.spend); track(ch, 'home:furniture', r.spend, c.id); }
         if (r.refund) { c.coins_base = Number(c.coins_base) + r.refund; track(ch, 'home:resale', r.refund, c.id); }
         ch.touch(c); await ch.saveCitizen(c); }
-      if (r.gone?.length) { gone = (await q('delete from room_photos where id = any($1) and citizen_id = $2 returning r2key', [r.gone, c.id])).rows; }
-      await q('update citizens set room = $2 where id = $1', [c.id, JSON.stringify(room)]);
-      return { c, home, room, item: r.item };
+      if (r.gone?.length) { gone = (await q('delete from room_photos where id = any($1) returning r2key', [r.gone])).rows; }
+      if (b) await q('update buildings set interior = $2 where id = $1', [b.id, JSON.stringify(room)]); else await q('update citizens set room = $2 where id = $1', [c.id, JSON.stringify(room)]);
+      return { c, home, room, item: r.item, b };
     });
     for (const g of gone) if (g.r2key && store.r2On()) store.del(g.r2key).catch(() => {}); // the photos nobody uses any more
-    return { ...(await this.out(res.c, res.home, res.room, true)), ok: true, ...(res.item ? { item: res.item } : {}) };
+    const o = res.b ? { mine: true, place: 'business', owner: res.c.handle, designed: true, home: res.home, size: res.home.size, room: res.room, photos: await this.photoUrls(res.room), coins: Math.round(Number(res.c.coins_base)) } : await this.out(res.c, res.home, res.room, true);
+    return { ...o, ok: true, ...(res.item ? { item: res.item } : {}) };
   }
   find(room, i) { const at = room.items.findIndex(x => x.i === i), inBox = at < 0 ? room.box.findIndex(x => x.i === i) : -1;
     if (at < 0 && inBox < 0) throw new HttpError(404, 'That piece isn’t in your home any more.'); return { at, inBox, it: at >= 0 ? room.items[at] : room.box[inBox] }; }
-  buy(id, b) {
+  buy(id, b, bid = null) {
     return this.edit(id, (room, home) => {
       const k = String(b.k || ''), f = F.FURNITURE[k]; if (!f) throw new HttpError(400, 'There’s no such piece.');
       const x = int(b.x), y = int(b.y), r = int(b.r ?? 0), c = Number.isInteger(+b.c) && +b.c >= 0 && +b.c < F.TINTS.length ? +b.c : 0;
@@ -84,43 +109,45 @@ export class Rooms {
       const problem = F.placeProblem(room, home.size, k, x, y, r); if (problem) throw new HttpError(409, problem);
       const item = { i: crypto.randomUUID().slice(0, 8), k, x, y, r, c: f.tint ? c : 0 }; room.items.push(item);
       return { spend: f.cost, item };
-    });
+    }, bid);
   }
   // move (or turn) a piece, or set one out from storage
-  place(id, b) {
+  place(id, b, bid = null) {
     return this.edit(id, (room, home) => {
       const i = String(b.i || ''), { at, inBox, it } = this.find(room, i);
       const x = int(b.x), y = int(b.y), r = int(b.r ?? it.r ?? 0);
       if (inBox >= 0 && room.items.length >= F.MAX_ITEMS) throw new HttpError(409, `Your home holds up to ${F.MAX_ITEMS} pieces.`);
       const problem = F.placeProblem(room, home.size, it.k, x, y, r, i); if (problem) throw new HttpError(409, problem);
-      if (at >= 0) Object.assign(it, { x, y, r }); else { room.box.splice(inBox, 1); room.items.push({ i, k: it.k, x, y, r, c: it.c, ...(it.ph ? { ph: it.ph } : {}) }); }
-    });
+      if (at >= 0) Object.assign(it, { x, y, r }); else { room.box.splice(inBox, 1); room.items.push({ i, k: it.k, x, y, r, c: it.c, ...(it.ph ? { ph: it.ph } : {}), ...(it.std ? { std: true } : {}) }); }
+    }, bid);
   }
-  store(id, b) {
+  store(id, b, bid = null) {
     return this.edit(id, room => {
       const { at } = this.find(room, String(b.i || '')); if (at < 0) return;
       if (room.box.length >= F.MAX_STORED) throw new HttpError(409, 'Your storage is full. Sell something first.');
-      const [it] = room.items.splice(at, 1); room.box.push({ i: it.i, k: it.k, c: it.c, ...(it.ph ? { ph: it.ph } : {}) });
-    });
+      const [it] = room.items.splice(at, 1); room.box.push({ i: it.i, k: it.k, c: it.c, ...(it.ph ? { ph: it.ph } : {}), ...(it.std ? { std: true } : {}) });
+    }, bid);
   }
-  sell(id, b) {
+  sell(id, b, bid = null) {
     return this.edit(id, room => {
       const { at, inBox } = this.find(room, String(b.i || '')), [it] = at >= 0 ? room.items.splice(at, 1) : room.box.splice(inBox, 1);
-      return { refund: F.resaleOf(it.k), gone: it.ph ? [it.ph] : [] };
-    });
+      return { refund: F.resaleOf(it.k, it.std), gone: it.ph ? [it.ph] : [] };
+    }, bid);
   }
   // a room's floor and walls (each room has its own)
-  style(id, b) {
+  style(id, b, bid = null) {
     return this.edit(id, (room, home) => {
-      const i = int(b.room), L = F.layoutOf(home.size); if (!Number.isInteger(i) || !L.rooms[i]) throw new HttpError(400, 'Which room?');
+      const i = int(b.room), L = F.layoutOf(home.size, room.plan); if (!Number.isInteger(i) || !L.rooms[i]) throw new HttpError(400, 'Which room?');
       const now = F.styleOf(room, home.size, i), next = { ...(room.styles[i] || {}) }; let spend = 0;
       if (b.floor != null) { const f = F.FLOORS[b.floor]; if (!f) throw new HttpError(400, 'There’s no such floor.'); if (now.f !== b.floor) { next.f = b.floor; spend += f.cost; } }
       if (b.wall != null) { const w = F.WALLS[b.wall]; if (!w) throw new HttpError(400, 'There’s no such wallpaper.'); if (now.w !== b.wall) { next.w = b.wall; spend += w.cost; } }
       room.styles[i] = next; return { spend };
-    });
+    }, bid);
   }
+  // a home can be locked, so others can't walk in
+  lock(id, b) { return this.edit(id, room => { if (b.locked) room.locked = true; else delete room.locked; }); }
   // A new photo for a frame. The picture arrives as a small JPEG (the phone shrinks it first).
-  async photo(id, i, buf) {
+  async photo(id, i, buf, bid = null) {
     const size = jpegSize(buf); if (!size) throw new HttpError(400, 'That photo couldn’t be read. Try another one.');
     if (buf.length > F.PHOTO_BYTES || size.w > 2048 || size.h > 2048 || size.w < 32 || size.h < 32) throw new HttpError(400, 'That photo is too big.');
     if (Number((await pool.query('select count(*) n from room_photos where citizen_id = $1', [id])).rows[0].n) >= F.MAX_PHOTOS) throw new HttpError(409, `You can have up to ${F.MAX_PHOTOS} photos. Take one down (sell its frame) first.`);
@@ -129,9 +156,9 @@ export class Rooms {
     try {
       return await this.edit(id, async (room, home, c, q) => {
         const { it } = this.find(room, String(i || '')); if (!F.FURNITURE[it.k]?.photo) throw new HttpError(400, 'Only photo frames take a photo.');
-        await q('insert into room_photos (id, citizen_id, r2key, data, bytes, t) values ($1, $2, $3, $4, $5, $6)', [pid, c.id, r2key, r2key ? null : buf, buf.length, Date.now()]);
+        await q('insert into room_photos (id, citizen_id, r2key, data, bytes, t, building_id) values ($1, $2, $3, $4, $5, $6, $7)', [pid, c.id, r2key, r2key ? null : buf, buf.length, Date.now(), bid || null]);
         const old = it.ph; it.ph = pid; return { gone: old ? [old] : [] };
-      });
+      }, bid);
     } catch (e) { if (r2key) store.del(r2key).catch(() => {}); throw e; }
   }
   // serving a photo (for the frames, and the developer's Reports tab)
@@ -144,8 +171,10 @@ export class Rooms {
   }
   // The developer takes a photo down (after a report): it leaves its frame, which shows a blank picture again.
   async removePhoto(pid) {
-    const p = (await pool.query('delete from room_photos where id = $1 returning citizen_id, r2key', [String(pid)])).rows[0]; if (!p) return false;
+    const p = (await pool.query('delete from room_photos where id = $1 returning citizen_id, r2key, building_id', [String(pid)])).rows[0]; if (!p) return false;
     if (p.r2key && store.r2On()) store.del(p.r2key).catch(() => {});
+    const strip = room => { for (const it of [...(room?.items || []), ...(room?.box || [])]) if (it.ph === pid) delete it.ph; return room; };
+    if (p.building_id) { await this.world.personal(async ch => { const b = (await ch.q('select id, interior from buildings where id = $1 for update', [p.building_id])).rows[0]; if (b?.interior) await ch.q('update buildings set interior = $2 where id = $1', [b.id, JSON.stringify(strip(b.interior))]); }); return true; }
     await this.world.personal(async ch => { const c = (await ch.q('select id, room from citizens where id = $1 for update', [p.citizen_id])).rows[0]; if (!c?.room) return;
       const room = c.room; for (const it of [...(room.items || []), ...(room.box || [])]) if (it.ph === pid) delete it.ph; await ch.q('update citizens set room = $2 where id = $1', [c.id, JSON.stringify(room)]); });
     return true;

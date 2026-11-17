@@ -513,6 +513,14 @@ Every colonist can go inside the home they live in, owned or rented, walk around
 - **Furniture belongs to the colonist, not the building**, so it moves house with them; anything that doesn't fit the new home waits in **📦 Stored**. Furniture is for looks; it doesn't change pay or anything else. Money spent shows in the Wallet as **Furniture and decorating** and goes to the colony treasury.
 - Code: `shared/furniture.js` (plans, catalogue, rules), `public/house3d.js` (the 3D house, walking, placing), `server/rooms.js` (buying, placing, styles, photos), kept in `citizens.room` (migrations 67 and 68).
 
+### 🏪 Inside businesses, and who's here now
+
+- **Anyone can walk into any business or public building** (not the jail or the police): **🚪 Go inside** on its card. It works like a home: walk around, rooms to jump to, the view from above.
+- **A business's inside has its own plan**, sized by the building (6×6 up to 12×12): the main floor at the front (a shop floor, dining room, office floor or factory floor, by trade), and along the back an office, a storeroom and a staff toilet (`layoutOf(size, plan)`, `bizKind()`, `bizSize()` in `shared/furniture.js`).
+- **Its owner designs it.** When a business they built is finished, the owner gets a notice to design the inside; **🛋️ Design the inside** on its card opens it ready to design. Until then it has a **standard fit-out** for its trade (shelves and a till, tables and a bar, desks and a reception, machines and racking: `standardFit()`); the owner can keep those pieces or take them out (for nothing back), and add their own from the shop, which for businesses also has **🏪 Shop, 🍽️ Food & drink, 💼 Office and 🏭 Workshop** ranges: tills, shop shelves, drinks fridges, clothes rails, café tables, booths, a bar, a pizza oven, office desks, a meeting table, factory machines, a conveyor belt, a forklift, warehouse racking, a **company sign for your logo** and a menu board (both take a photo), an OPEN sign and more. The design belongs to the building (kept in `buildings.interior`, migration 69), so it goes with it if it's sold; its photos are deleted if it's knocked down.
+- **Homes can be locked.** In **Furnish**, **🔓 Open to visitors / 🔒 Locked** decides whether other players can walk into your home.
+- **👥 Here now** at the top of every inside counts who's there: the colonists the game has at that place right now (at work there, visiting, or at home), shown inside as figures with their names, plus the other players looking round it at the same moment, and you. Tap it for the names. Each open view tells the server it's still there every 25 seconds (`POST /api/inside/here`); anyone not heard from for 70 seconds has left.
+
 ## Chats and who's online
 
 - **Who can chat.** Verified colonists (claimed, signed in) can message each other privately.

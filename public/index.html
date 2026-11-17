@@ -896,6 +896,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .hchips .rtab{background:rgba(255,255,255,.9)}
 .hchips .rtab.on{background:#2E86C1;color:#fff}
 .hview{position:absolute;top:8px;right:8px;z-index:2}
+.hhere{flex:none;border:1.5px solid var(--line);background:var(--paper);border-radius:999px;padding:5px 10px;font-size:12.5px;font-weight:800;cursor:pointer;color:inherit;white-space:nowrap}
 .hjoy{position:absolute;left:18px;bottom:18px;width:116px;height:116px;border-radius:50%;background:rgba(255,255,255,.16);border:2px solid rgba(255,255,255,.5);z-index:2;touch-action:none;box-shadow:0 2px 12px rgba(0,0,0,.25)}
 .hjoy i{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px;border-radius:50%;background:rgba(255,255,255,.9);box-shadow:0 2px 8px rgba(0,0,0,.35);pointer-events:none}
 .roomview.above .hjoy{display:none}
@@ -1075,7 +1076,7 @@ import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
-import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, footOf, placeProblem, resaleOf, layoutOf, styleOf, photoAspect } from '/shared/furniture.js';
+import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, BIZ_CATS, canEnter, footOf, placeProblem, resaleOf, layoutOf, styleOf, photoAspect } from '/shared/furniture.js';
 import { paveCost, fullIncome, CRIME_FLOOR, FINE_MIN, FINE_MAX, nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
 /* ---------------- time ---------------- */
@@ -6400,27 +6401,43 @@ addEventListener('keydown',e=>{ if(e.key==='Escape'&&GameWeb.el) GameWeb.close()
 // Furnish: pick a piece from the shop and it follows where you look (the floor, a wall, a window or the ceiling, by
 // kind), or tap where it should go; then Buy. Tap a piece to move, turn, store or sell it, or to give a frame a photo.
 const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:null, sel:null, busy:false, ri:-1,
-  async open(handle){ if(handle&&Me&&Me.handle&&handle.toLowerCase()===Me.handle.toLowerCase()) handle=null;
-    let d, H3; try{ [d,H3]=await Promise.all([api(handle?`/api/citizens/${encodeURIComponent(handle)}/room`:'/api/me/room'), import('/house3d.js')]); }catch(e){ toast(e.message||'Your phone couldn’t load the 3D view.'); return; }
-    this.close(true); this.d=d; this.H3=H3; this.edit=false; this.pick=null; this.sel=null; this.ri=-1;
-    this.sub=el('small',{text:d.home.name}); this.editBtn=d.mine?el('button',{class:'btn primary sm',text:'🛋️ Furnish',onclick:()=>this.toggle()}):'';
+  // a business (or public building) anyone can walk into; its owner designs it
+  async openBuilding(id,design){ await this.open(null,id); if(design&&this.d&&this.d.mine&&!this.edit) this.toggle(true); },
+  get biz(){ return this.d&&this.d.place==='business'; },
+  get base(){ return this.biz?`/api/me/buildings/${encodeURIComponent(this.d.home.id)}/inside/`:'/api/me/room/'; },
+  get editWord(){ return this.biz?'🛋️ Design':'🛋️ Furnish'; },
+  async open(handle,bid){ if(handle&&Me&&Me.handle&&handle.toLowerCase()===Me.handle.toLowerCase()) handle=null;
+    let d, H3; try{ [d,H3]=await Promise.all([api(bid?`/api/buildings/${encodeURIComponent(bid)}/inside`:handle?`/api/citizens/${encodeURIComponent(handle)}/room`:'/api/me/room'), import('/house3d.js')]); }catch(e){ toast(e.message||'Your phone couldn’t load the 3D view.'); return; }
+    this.close(true); this.d=d; this.H3=H3; this.edit=false; this.pick=null; this.sel=null; this.ri=-1; this.cat=this.biz?BIZ_CATS[{shop:0,food:1,office:2,industry:3}[d.room.plan]||0][0]:'living';
+    this.sub=el('small',{text:d.home.name}); this.editBtn=d.mine?el('button',{class:'btn primary sm',text:this.editWord,onclick:()=>this.toggle()}):'';
+    this.hereChip=el('button',{class:'hhere',text:'👥 …',onclick:()=>{ const n=this.hereNames||[]; toast(n.length>1?`Here now: ${n.slice(0,12).join(', ')}${n.length>12?'…':''}`:'Nobody else is here right now, just you.'); }});
+    const title=this.biz?(d.mine?`🏪 Your ${d.home.name.toLowerCase()}`:`🏪 ${d.home.name}${d.owner?` · @${d.owner}`:''}`):(d.mine?'🏠 Your home':`🏠 @${d.owner}’s home`);
     const bar=el('div',{class:'webbar'}, el('button',{class:'webx','aria-label':'Back to the colony',text:'✕',onclick:()=>this.close()}),
-      el('div',{class:'webaddr'}, el('b',{text:d.mine?'🏠 Your home':`🏠 @${d.owner}’s home`}), this.sub), this.editBtn);
-    const L=layoutOf(d.size); this.chips=el('div',{class:'hchips'}, ...L.rooms.map((r,i)=>el('button',{class:'rtab',text:r.name,onclick:()=>this.h&&this.h.goRoom(i)})));
+      el('div',{class:'webaddr'}, el('b',{text:title}), this.sub), this.hereChip, this.editBtn);
+    const L=layoutOf(d.size,d.room.plan||'home'); this.chips=el('div',{class:'hchips'}, ...L.rooms.map((r,i)=>el('button',{class:'rtab',text:r.name,onclick:()=>this.h&&this.h.goRoom(i)})));
     this.viewBtn=el('button',{class:'btn sm hview',text:'⬆ From above',onclick:()=>this.flip()});
     this.tools=el('div',{class:'roomtools'}); this.cross=el('div',{class:'hcross',hidden:true}); this.shop=el('div',{class:'roomshop'}); this.shop.hidden=true;
     this.stage=el('div',{class:'roomstage'}, this.chips, this.viewBtn, this.tools, this.cross);
     this.file=el('input',{type:'file',accept:'image/*',hidden:true,onchange:()=>this.upload()});
-    const root=el('div',{class:'webview roomview',role:'dialog','aria-label':d.mine?'Your home':`@${d.owner}’s home`}, bar, this.stage, this.shop, this.file);
+    const root=el('div',{class:'webview roomview',role:'dialog','aria-label':title}, bar, this.stage, this.shop, this.file);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
     try{ history.pushState({room:1},''); }catch(e){}
-    try{ this.h=H3.createHouse(this.stage,{ size:d.size, room:d.room, photos:d.photos, check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
+    try{ this.h=H3.createHouse(this.stage,{ size:d.size, plan:d.room.plan||'home', room:d.room, photos:d.photos, check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
       onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; [...this.chips.children].forEach((b,j)=>b.classList.toggle('on',j===i)); if(this.edit&&this.cat==='style') this.paintShop(); } }); }
     catch(e){ this.close(); toast('Your phone couldn’t show the 3D view.'); return; }
-    this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false);
+    this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false); this.hereTick(true);
+    clearInterval(this.hereTimer); this.hereTimer=setInterval(()=>this.hereTick(),25000);
     if(d.mine&&!d.room.items.length&&!d.room.box.length) this.toggle(true); },
-  close(quiet){ if(!this.el) return; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
-  toggle(on){ this.edit=on===undefined?!this.edit:on; this.setPick(null); this.select(null); this.shop.hidden=!this.edit; if(this.editBtn) this.editBtn.textContent=this.edit?'✓ Done':'🛋️ Furnish'; if(this.edit) this.paintShop(); this.paintTools(); },
+  // ---- who's here now: colonists the game has at this place (working, visiting, at home), plus players looking round it ----
+  people(){ const d=this.d; if(!d) return []; const gm=gmNow(), out=[]; const bid=d.home.id, owner=(d.owner||'').toLowerCase();
+    for(const c of S.citizens.values()){ const st=citizenAt(c,gm); if(!st||st.bid!==bid) continue; if(!this.biz&&c.handle.toLowerCase()!==owner) continue; out.push({name:c.handle,label:'@'+c.handle}); }
+    return out; },
+  async hereTick(first){ if(!this.d||(document.hidden&&!first)) return; const place=this.biz?'b:'+this.d.home.id:'h:'+(this.d.owner||'').toLowerCase(); let live={viewers:0,names:[]};
+    try{ live=await api('/api/inside/here',{method:'POST',body:{place}}); }catch(e){} if(!this.d) return;
+    const sim=this.people(); this.hereNames=[...sim.map(p=>p.label), ...live.names.map(n=>'@'+n+' (looking round)'), ...(live.viewers>live.names.length?[`${live.viewers-live.names.length} other${live.viewers-live.names.length===1?'':'s'} looking round`]:[])];
+    this.hereNames.unshift('you'); const n=sim.length+live.viewers+1; if(this.hereChip) this.hereChip.textContent=n===1?'👥 Just you here':`👥 ${fmt(n)} here now`; if(this.h) this.h.setPeople(sim); },
+  close(quiet){ if(!this.el) return; clearInterval(this.hereTimer); try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
+  toggle(on){ this.edit=on===undefined?!this.edit:on; this.setPick(null); this.select(null); this.shop.hidden=!this.edit; if(this.editBtn) this.editBtn.textContent=this.edit?'✓ Done':this.editWord; if(this.edit) this.paintShop(); this.paintTools(); },
   // the streets and buildings round the home: from what the map has loaded, or fetched once (only when looking from above)
   async around(fetch){ const h=this.d&&this.d.home; if(!h||h.x==null||this.aroundDone||!this.h) return; const R=8, x0=h.x-R, y0=h.y-R, x1=h.x+(h.w||1)+R, y1=h.y+(h.d||1)+R;
     const keys=[]; for(let cx=Math.floor(x0/CHUNK);cx<=Math.floor((x1-1)/CHUNK);cx++) for(let cy=Math.floor(y0/CHUNK);cy<=Math.floor((y1-1)/CHUNK);cy++) keys.push(ck(cx,cy));
@@ -6442,8 +6459,8 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
   async send(path,body,done,shellToo){ if(this.busy) return; this.busy=true; this.paintTools(); try{ const r=await api(path,{method:'POST',body}); this.apply(r,shellToo); loadMyMoney(); done&&done(r); }
     catch(e){ toast(e.message); } this.busy=false; if(this.el){ this.paintTools(); if(this.edit) this.paintShop(); } },
   place(){ const p=this.pick; if(!p||p.x==null||placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null)) return; const f=FURNITURE[p.k];
-    if(p.i) this.send('/api/me/room/place',{i:p.i,x:p.x,y:p.y,r:p.r},()=>{ this.setPick(null); });
-    else this.send('/api/me/room/buy',{k:p.k,x:p.x,y:p.y,r:p.r,c:p.c},r=>{ this.setPick(null); toast(`🛋️ ${f.name} bought for ${fmt(f.cost)} coins.${f.photo?' Now add a photo to it.':''}`); if(f.photo&&r.item) this.select(r.item.i); }); },
+    if(p.i) this.send(this.base+'place',{i:p.i,x:p.x,y:p.y,r:p.r},()=>{ this.setPick(null); });
+    else this.send(this.base+'buy',{k:p.k,x:p.x,y:p.y,r:p.r,c:p.c},r=>{ this.setPick(null); toast(`🛋️ ${f.name} bought for ${fmt(f.cost)} coins.${f.photo?' Now add a photo to it.':''}`); if(f.photo&&r.item) this.select(r.item.i); }); },
   // a photo for a frame: cropped to the frame's shape and shrunk to a small JPEG on the phone, then sent
   choosePhoto(){ if(this.sel) this.file.click(); },
   async upload(){ const file=this.file.files&&this.file.files[0], it=this.sel; this.file.value=''; if(!file||!it) return;
@@ -6455,13 +6472,14 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     let blob=null; for(const q of [0.85,0.72,0.6]){ blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',q)); if(blob&&blob.size<300*1024) break; }
     if(!blob){ toast('That photo couldn’t be prepared.'); return; }
     this.busy=true; this.paintTools(); toast('📷 Putting your photo in the frame…');
-    try{ const res=await fetch('/api/me/room/photo/'+encodeURIComponent(it.i),{method:'POST',headers:{'content-type':'image/jpeg','x-player':Me.token},body:blob}); const j=await res.json().catch(()=>({}));
+    try{ const res=await fetch(this.base+'photo/'+encodeURIComponent(it.i),{method:'POST',headers:{'content-type':'image/jpeg','x-player':Me.token},body:blob}); const j=await res.json().catch(()=>({}));
       if(!res.ok) throw new Error(j.error||'The photo couldn’t be saved.'); this.apply(j); toast('📷 Your photo is up.'); }
     catch(e){ toast(e.message); } this.busy=false; if(this.el){ this.select(it.i); } },
   paintTools(){ const t=this.tools; if(!t) return; t.innerHTML=''; const d=this.d; if(!d) return; const up=this.h&&this.h.view==='above';
     if(!d.mine){ const s=this.sel; if(s&&s.ph) t.append(el('span',{class:'tip',text:'A photo'}), el('button',{class:'btn sm',text:'⚑ Report this photo',onclick:()=>reportSheet({kind:'photo',id:s.ph,handle:d.owner})}), el('button',{class:'btn sm',text:'✕',onclick:()=>{ this.sel=null; this.h&&this.h.setSelected(null); this.paintTools(); }}));
-      else t.append(el('span',{class:'tip',text:up?'Drag to turn the house around. Tap 🚶 Walk to go back inside.':`Just looking around @${d.owner}’s home. ${PHONE_UI?'Use the joystick to walk and drag to look.':'Walk with WASD or the arrows; drag to look.'}`})); return; }
+      else t.append(el('span',{class:'tip',text:up?'Drag to turn the house around. Tap 🚶 Walk to go back inside.':`${this.biz?`Welcome to ${d.home.name}.`:`Just looking around @${d.owner}’s home.`} ${PHONE_UI?'Use the joystick to walk and drag to look.':'Walk with WASD or the arrows; drag to look.'}`})); return; }
     if(up&&!this.pick){ t.append(el('span',{class:'tip',text:this.edit?'From above: drag to turn the house. Floor pieces can be placed here; walk in for walls and ceilings.':'Drag to turn the house around. Tap 🚶 Walk to go back inside.'})); if(!this.edit) return; }
+    if(!this.edit&&this.biz&&!d.designed){ t.append(el('span',{class:'tip',text:'This is the standard fit-out. Tap 🛋️ Design to make it yours: keep these pieces, take them out, add your own and your logo.'})); return; }
     if(!this.edit){ t.append(el('span',{class:'tip',text:d.room.items.length?(PHONE_UI?'Joystick to walk, drag to look around.':'WASD or the arrows to walk, drag to look.'):'An empty home. Tap 🛋️ Furnish to buy furniture.'})); return; }
     const p=this.pick;
     if(p){ const f=FURNITURE[p.k], bad=p.x==null?(f.mount==='floor'?'Look at the floor where it should go.':f.mount==='ceil'?'Look up at the ceiling where it should go.':f.mount==='window'?'Look at a window.':'Look at a wall where it should hang.'):placeProblem(d.room,d.size,p.k,p.x,p.y,p.r,p.i||null);
@@ -6473,22 +6491,25 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
       t.append(el('span',{class:'tip',text:f.name}));
       if(f.photo) t.append(el('button',{class:'btn primary sm',disabled:this.busy,text:s.ph?'📷 Change photo':'📷 Add a photo',onclick:()=>this.choosePhoto()}));
       t.append(el('button',{class:'btn sm',text:'✥ Move',onclick:()=>{ const q={i:s.i,k:s.k,c:s.c,r:s.r,ph:s.ph}; this.select(null); this.setPick({...q,x:null,y:null}); }}));
-      if(f.mount==='floor') t.append(el('button',{class:'btn sm',text:'↻ Turn',onclick:()=>{ const r=(s.r+1)%4, bad=placeProblem(d.room,d.size,s.k,s.x,s.y,r,s.i); if(bad){ toast(bad); return; } this.send('/api/me/room/place',{i:s.i,x:s.x,y:s.y,r},()=>this.select(s.i)); }}));
-      t.append(el('button',{class:'btn sm',text:'📦 Store',onclick:()=>this.send('/api/me/room/store',{i:s.i},()=>{ this.select(null); toast(`📦 ${f.name} put in storage.`); })}),
-        el('button',{class:'btn sm',text:`💰 Sell +${fmt(resaleOf(s.k))}`,onclick:()=>toast(`Sell the ${f.name.toLowerCase()} for ${fmt(resaleOf(s.k))} coins (half what it cost)?${s.ph?' Its photo goes too.':''}`,'Sell',()=>this.send('/api/me/room/sell',{i:s.i},()=>this.select(null)))}),
+      if(f.mount==='floor') t.append(el('button',{class:'btn sm',text:'↻ Turn',onclick:()=>{ const r=(s.r+1)%4, bad=placeProblem(d.room,d.size,s.k,s.x,s.y,r,s.i); if(bad){ toast(bad); return; } this.send(this.base+'place',{i:s.i,x:s.x,y:s.y,r},()=>this.select(s.i)); }}));
+      t.append(el('button',{class:'btn sm',text:'📦 Store',onclick:()=>this.send(this.base+'store',{i:s.i},()=>{ this.select(null); toast(`📦 ${f.name} put in storage.`); })}),
+        s.std?el('button',{class:'btn sm',text:'🗑️ Remove',onclick:()=>toast(`Take out the ${f.name.toLowerCase()}? It came with the building, so there’s nothing back for it.`,'Remove',()=>this.send(this.base+'sell',{i:s.i},()=>this.select(null)))})
+          :el('button',{class:'btn sm',text:`💰 Sell +${fmt(resaleOf(s.k))}`,onclick:()=>toast(`Sell the ${f.name.toLowerCase()} for ${fmt(resaleOf(s.k))} coins (half what it cost)?${s.ph?' Its photo goes too.':''}`,'Sell',()=>this.send(this.base+'sell',{i:s.i},()=>this.select(null)))}),
         el('button',{class:'btn sm',text:'✕',onclick:()=>this.select(null)})); return; }
     t.append(el('span',{class:'tip',text:'Pick something below, or tap a piece to move, turn, store or sell it, or to add a photo to a frame.'})); },
   paintShop(){ const s=this.shop, d=this.d; if(!s||!d) return; s.innerHTML=''; const R=d.room, H3=this.H3;
-    const tabs=[...ROOM_CATS,['style','🎨 Floor & walls'],['box',`📦 Stored${R.box.length?` (${R.box.length})`:''}`]];
-    s.append(el('div',{class:'roomtabs'}, ...tabs.map(([k,n])=>el('button',{class:'rtab'+(this.cat===k?' on':''),text:n,onclick:()=>{ this.cat=k; this.paintShop(); }})), el('span',{class:'roomcash',text:`💰 ${fmt(d.coins)}`})));
+    const tabs=[...(this.biz?BIZ_CATS:[]),...ROOM_CATS,['style','🎨 Floor & walls'],['box',`📦 Stored${R.box.length?` (${R.box.length})`:''}`]];
+    s.append(el('div',{class:'roomtabs'}, ...tabs.map(([k,n])=>el('button',{class:'rtab'+(this.cat===k?' on':''),text:n,onclick:()=>{ this.cat=k; this.paintShop(); }})),
+      this.biz?'':el('button',{class:'rtab'+(R.locked?' on':''),text:R.locked?'🔒 Locked':'🔓 Open to visitors',title:'Whether other players can walk into your home',onclick:()=>this.send('/api/me/room/lock',{locked:!R.locked},r=>toast(r.room.locked?'🔒 Your home is locked: others can’t come in.':'🔓 Your home is open: others can look around.'))}),
+      el('span',{class:'roomcash',text:`💰 ${fmt(d.coins)}`})));
     const row=el('div',{class:'roomitems'}), card=(img,name,price,on,click)=>el('button',{class:'roomitem'+(on?' on':''),onclick:click}, img, el('b',{text:name}), el('span',{text:price}));
     const pic=(k,c)=>{ const u=H3.thumb(k,c||0); return u?el('img',{src:u,alt:'',width:'80',height:'64'}):el('i',{class:'noimg'}); };
-    if(this.cat==='style'){ const ri=this.ri, L=layoutOf(d.size), rm=L.rooms[ri];
+    if(this.cat==='style'){ const ri=this.ri, L=layoutOf(d.size,R.plan||'home'), rm=L.rooms[ri];
       if(!rm){ row.append(el('p',{class:'hint',text:'Walk into a room to change its floor and walls.'})); s.append(row); return; }
       const st=styleOf(R,d.size,ri), sw=(name,cost,on,bg,click)=>el('button',{class:'roomitem rsw'+(on?' on':''),onclick:click}, el('i',{style:`background:${bg}`}), el('b',{text:name}), el('span',{text:on?'Yours':cost?fmt(cost):'Free'}));
       row.append(el('p',{class:'hint rfor',text:`${rm.name}:`}));
-      for(const [k,f] of Object.entries(FLOORS)) row.append(sw(f.name,f.cost,st.f===k,`repeating-conic-gradient(${f.a} 0 25%, ${f.b} 0 50%) 0 0/16px 16px`,()=>{ if(st.f!==k) this.send('/api/me/room/style',{room:ri,floor:k},null,true); }));
-      for(const [k,w] of Object.entries(WALLS)) row.append(sw(`${w.name} walls`,w.cost,st.w===k,w.c,()=>{ if(st.w!==k) this.send('/api/me/room/style',{room:ri,wall:k},null,true); })); }
+      for(const [k,f] of Object.entries(FLOORS)) row.append(sw(f.name,f.cost,st.f===k,`repeating-conic-gradient(${f.a} 0 25%, ${f.b} 0 50%) 0 0/16px 16px`,()=>{ if(st.f!==k) this.send(this.base+'style',{room:ri,floor:k},null,true); }));
+      for(const [k,w] of Object.entries(WALLS)) row.append(sw(`${w.name} walls`,w.cost,st.w===k,w.c,()=>{ if(st.w!==k) this.send(this.base+'style',{room:ri,wall:k},null,true); })); }
     else if(this.cat==='box'){ if(!R.box.length) row.append(el('p',{class:'hint',text:'Nothing in storage. Pieces you store, and any that don’t fit after you move house, wait here.'}));
       for(const it of R.box){ const f=FURNITURE[it.k]; row.append(card(pic(it.k,it.c),f.name,'Set it out',false,()=>this.start({i:it.i,k:it.k,c:it.c,ph:it.ph}))); } }
     else for(const [k,f] of Object.entries(FURNITURE)) if(f.cat===this.cat) row.append(card(pic(k),f.name,fmt(f.cost),this.pick&&!this.pick.i&&this.pick.k===k,()=>this.start({k})));
@@ -6764,6 +6785,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       if(!b.owner) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy for ${fmt(price)}`,onclick:()=>toast(`Buy ${b.name||t.name} for ${fmt(price)} coins? You'll collect 80% of its rent or profit every game day.`,'Buy',async()=>{ const r=await meAction('/api/me/properties/buy',{buildingId:b.id},r=>`It's yours! About ${fmt(r.income)} coins a day.`); if(r){ b.owner=Me.handle; Money.at=0; renderCard(true); } })})));
       else if(b.owner.toLowerCase()===Me.handle.toLowerCase()&&!b.plot) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'You own this'}), el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell ${b.name||t.name} back to the colony for 70% of what you paid?`,'Sell',async()=>{ const r=await meAction('/api/me/properties/sell',{buildingId:b.id},r=>`Sold for ${fmt(r.back)} coins.`); if(r){ b.owner=null; renderCard(true); } })}))); }
     if(!Store.canWrite&&Me&&Me.token) card.append(el('div',{class:'row-actions'}, Loc.btn(b.name||t.name, b.x, b.y)));
+    if(canEnter(b.type)&&b.done!==false&&!b.ruin&&!Store.canWrite) card.append(el('div',{class:'row-actions'}, b.owner&&isMe(b.owner)?el('button',{class:'btn primary',text:'🛋️ Design the inside',onclick:()=>Room.openBuilding(b.id,true)}):'', el('button',{class:'btn',text:'🚪 Go inside',onclick:()=>Room.openBuilding(b.id)}))); /* anyone can walk into a business */
     if(b.web && t.work && !b.ruin) card.append(websiteRow(b,t)); // up top, where visitors see it first
     Plots.buildingBits(card,b,t);
     if(t.hangar && b.done!==false && !b.ruin) card.append(hangarSection(b,t));

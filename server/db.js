@@ -332,6 +332,9 @@ const MIGRATIONS = [
   // v68: photos in the frames inside homes (in Cloudflare R2 when it's set up, otherwise here)
   `create table if not exists room_photos (id text primary key, citizen_id text not null, r2key text, data bytea, bytes int not null default 0, t bigint not null);
    create index if not exists room_photos_citizen on room_photos (citizen_id);`,
+  // v69: the inside of each business (designed by its owner; until then it has a standard fit-out), and which building a photo hangs in
+  `alter table buildings add column if not exists interior jsonb; alter table room_photos add column if not exists building_id text;
+   create index if not exists room_photos_building on room_photos (building_id) where building_id is not null;`,
 ];
 
 export async function migrate() {

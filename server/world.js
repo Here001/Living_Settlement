@@ -7,6 +7,7 @@ import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 import { playRound, GAMES, MAX_BET, validRoulette } from '../shared/casino.js';
 import { BUILDING_TYPES, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, roadClears, pgList } from '../shared/catalog.js';
+import { canEnter } from '../shared/furniture.js';
 import * as R from '../shared/rules.js';
 const changeScope = new AsyncLocalStorage();
 
@@ -482,7 +483,7 @@ export class World {
     if (!r) return false;
     ch.buildings.add(b.id);
     await this.attractVisitors(ch, r);
-    if (r.owner_id && r.plot_id) { if (!quiet) await this.actions?.notify(ch, r.owner_id, 'build', `🏗️ Your ${r.name || BUILDING_TYPES[r.type]?.name || 'building'} is finished.`); }
+    if (r.owner_id && r.plot_id) { if (!quiet) await this.actions?.notify(ch, r.owner_id, 'build', `🏗️ Your ${r.name || BUILDING_TYPES[r.type]?.name || 'building'} is finished.${canEnter(r.type) ? ' Now design the inside so customers can come in: tap it and choose 🛋️ Design the inside.' : ''}`); }
     else if (R.majorBuilding(r.type)) await ch.event(`${r.name || BUILDING_TYPES[r.type]?.name || 'A building'} is finished${r.requested_by ? `. Thanks for the idea, @${r.requested_by}` : ''}`, 'build');
     return true;
   }
@@ -609,6 +610,7 @@ export class World {
     if (this.economy) await this.economy.refundDemolished(ch, b); // an owner gets back what they paid
     await this.evict(ch, b);
     await ch.q('delete from buildings where id = $1', [b.id]);
+    for (const p of (await ch.q('delete from room_photos where building_id = $1 returning r2key', [b.id])).rows) if (p.r2key) import('./storage.js').then(s => s.r2On() && s.del(p.r2key)).catch(() => {}); // its photos go too
     ch.buildings.delete(b.id); ch.removedBuildings.set(b.id, R.chunkKey(b.cx, b.cy));
   }
 

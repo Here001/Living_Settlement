@@ -83,7 +83,7 @@ function pieceGroup(it, photoTex) {
 
 // ---------------- the house ----------------
 export function createHouse(host, opts) {
-  const S = opts.size, L = layoutOf(S), H = WALL_H;
+  const S = opts.size, PLAN = opts.plan || 'home', L = layoutOf(S, PLAN), H = WALL_H;
   const renderer = new THREE.WebGLRenderer({ antialias: !PHONE, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, PHONE ? 1.5 : 2)); renderer.domElement.className = 'house3d'; host.append(renderer.domElement);
   const scene = new THREE.Scene(); scene.background = col('#BFE3F7');
@@ -92,7 +92,7 @@ export function createHouse(host, opts) {
   const sun = new THREE.DirectionalLight('#FFF4E0', 1.3); sun.position.set(S * 0.3 - 6, 9, S * 0.2 - 5); scene.add(sun);
   { const g = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshLambertMaterial({ color: '#7FB069' })); g.rotation.x = -Math.PI / 2; g.position.set(S / 2, -0.02, S / 2); scene.add(g); }
   const shell = new THREE.Group(), walls = new THREE.Group(), ceilings = new THREE.Group(), floors = new THREE.Group(), stuff = new THREE.Group(), wallStuff = new THREE.Group(), ceilStuff = new THREE.Group(), lights = new THREE.Group();
-  const around = new THREE.Group(); shell.add(walls, ceilings, floors); scene.add(shell, stuff, wallStuff, ceilStuff, lights, around);
+  const people = new THREE.Group(), around = new THREE.Group(); scene.add(people); shell.add(walls, ceilings, floors); scene.add(shell, stuff, wallStuff, ceilStuff, lights, around);
   let room = opts.room, photos = opts.photos || {}, view = 'walk', pick = null, sel = null, ghost = null, marker = null, selBox = null, grid = null, dirty = true;
   const me = { x: 0, y: 0, yaw: 0, pitch: -0.08 }, keys = new Set(), joy = { on: false, x: 0, y: 0 }, above = { yaw: 0.7 };
   const photoTex = new Map();
@@ -108,7 +108,7 @@ export function createHouse(host, opts) {
     for (const g of [walls, ceilings, floors]) { for (const c of [...g.children]) { c.geometry.dispose(); g.remove(c); } }
     const plain = new Map(), textured = new Map(), glass = [], add = (key, geo) => { (plain.get(key) || plain.set(key, []).get(key)).push(paint(geo, key)); };
     const box = (x0, y0, z0, x1, y1, z1) => { const g = new THREE.BoxGeometry(x1 - x0, z1 - z0, y1 - y0); g.translate((x0 + x1) / 2, (z0 + z1) / 2, (y0 + y1) / 2); return g; };
-    const faceStyle = (tx, ty) => { if (tx < 0 || ty < 0 || tx >= S || ty >= S) return { c: EXTERIOR }; const ri = roomAt(S, tx, ty), w = WALLS[styleOf(room, S, ri).w]; return { c: w.c, k: styleOf(room, S, ri).w, inside: true }; };
+    const faceStyle = (tx, ty) => { if (tx < 0 || ty < 0 || tx >= S || ty >= S) return { c: EXTERIOR }; const ri = roomAt(S, tx, ty, PLAN), w = WALLS[styleOf(room, S, ri).w]; return { c: w.c, k: styleOf(room, S, ri).w, inside: true }; };
     const wallBox = (st, geo, len, hgt) => { const t = st.k && wallTex(st.k); if (t) { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * len, uv.getY(i) * hgt / 1.3); (textured.get(st.k) || textured.set(st.k, []).get(st.k)).push(geo); } else add(st.c, geo); };
     for (const [key, type] of L.edges) {
       const horiz = key[0] === 'h', [a, b] = key.slice(1).split(',').map(Number), T = WALL_T;
@@ -175,6 +175,28 @@ export function createHouse(host, opts) {
     if (list.length) around.add(new THREE.Mesh(mergeGeometries(list), MAT.solid));
     dirty = true; wake();
   }
+  // ---- the people here now: simple figures with their names, standing on free spots ----
+  const hashS = s => { let h = 2166136261 >>> 0; for (const ch of String(s)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; };
+  function nameTag(text) { const c = document.createElement('canvas'), g = c.getContext('2d'); c.width = 256; c.height = 64; g.font = 'bold 30px sans-serif'; const w = Math.min(248, g.measureText(text).width + 24);
+    g.fillStyle = 'rgba(20,24,30,.72)'; g.beginPath(); g.roundRect((256 - w) / 2, 10, w, 44, 22); g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, 128, 33);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); sp.scale.set(1.2, 0.3, 1); sp.renderOrder = 5; return sp; }
+  let crowd = [];
+  function buildPeople(list) {
+    for (const c of [...people.children]) { people.remove(c); c.traverse(o => { o.geometry && o.geometry.dispose(); o.material?.map && o.material.map.dispose(); }); }
+    crowd = (list || []).slice(0, 14); if (!crowd.length) { dirty = true; wake(); return; }
+    const rooms = PLAN === 'home' ? L.rooms : L.rooms.filter(r => r.kind === 'main'), spots = [];
+    for (const r of rooms) for (let x = r.x; x < r.x + r.w; x++) for (let y = r.y; y < r.y + r.d; y++) if (!blocked(x + 0.5, y + 0.5) && !L.keep.has(`${x},${y}`)) spots.push([x + 0.5, y + 0.5]);
+    const used = new Set(), SKIN = ['#F5D0B5', '#E0AC86', '#C68B59', '#8D5524', '#5C3A21'];
+    for (const p of crowd) { if (!spots.length) break; let k = hashS(p.name) % spots.length; for (let n = 0; n < spots.length && used.has(k); n++) k = (k + 1) % spots.length; if (used.has(k)) break; used.add(k);
+      const [x, y] = spots[k], h = hashS(p.name + 'c'), shirt = `hsl(${h % 360},55%,${40 + (h >> 9) % 20}%)`, g = new THREE.Group(), parts = [];
+      const add = (geo, c, px, py, pz) => { geo.translate(px, py, pz); parts.push(paint(geo, c)); };
+      add(new THREE.BoxGeometry(0.14, 0.8, 0.16), '#2C3E50', -0.09, 0.4, 0); add(new THREE.BoxGeometry(0.14, 0.8, 0.16), '#2C3E50', 0.09, 0.4, 0);
+      add(new THREE.BoxGeometry(0.42, 0.6, 0.24), shirt, 0, 1.1, 0); add(new THREE.BoxGeometry(0.1, 0.55, 0.12), shirt, -0.27, 1.08, 0); add(new THREE.BoxGeometry(0.1, 0.55, 0.12), shirt, 0.27, 1.08, 0);
+      add(new THREE.SphereGeometry(0.16, 12, 10), SKIN[h % SKIN.length], 0, 1.58, 0); add(new THREE.SphereGeometry(0.165, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2.2), ['#2B1B10', '#5A3A1A', '#C9A227', '#1C1C1C', '#8E2C1C'][(h >> 4) % 5], 0, 1.62, 0);
+      const body = new THREE.Mesh(mergeGeometries(parts), MAT.solid); g.add(body); const tag = nameTag(p.label || p.name); tag.position.set(0, 2.0, 0); g.add(tag);
+      g.position.set(x, 0, y); g.rotation.y = (hashS(p.name + 'r') % 628) / 100; people.add(g); }
+    dirty = true; wake();
+  }
   // ---- furniture and lamps ----
   function buildStuff() {
     for (const g of [stuff, wallStuff, ceilStuff]) for (const c of [...g.children]) { g.remove(c); c.traverse(o => o.geometry && o.geometry.dispose()); }
@@ -188,7 +210,7 @@ export function createHouse(host, opts) {
     L.rooms.forEach((r, i) => { const pl = new THREE.PointLight('#FFF1D6', roomLamp[i] ? 2.2 : 0.8, Math.max(r.w, r.d) * 1.6 + 2, 1.4); pl.position.set(r.x + r.w / 2, H - 0.3, r.y + r.d / 2); lights.add(pl); });
     for (const l of lamps.sort((a, b) => b.f.light.i - a.f.light.i).slice(0, Math.max(0, max - L.rooms.length))) { const c = l.f.light.c === '$' ? TINTS[l.it.c || 0] : l.f.light.c;
       const pl = new THREE.PointLight(c, l.f.light.i * 3.2, l.f.light.d, 1.5); pl.position.set(l.x, l.z, l.y); lights.add(pl); }
-    applyView(); showSel(); dirty = true;
+    applyView(); showSel(); if (crowd.length) buildPeople(crowd); dirty = true;
   }
   // ---- placing: the ghost piece and where it would go ----
   function showGhost() {
@@ -259,7 +281,7 @@ export function createHouse(host, opts) {
     return false;
   }
   let lastRoom = -1;
-  function moved() { placeCamera(); if (pick && !tapAim) aim(); const ri = roomAt(S, Math.floor(me.x), Math.floor(me.y)); if (ri !== lastRoom) { lastRoom = ri; opts.onRoom && opts.onRoom(ri); } dirty = true; wake(); }
+  function moved() { placeCamera(); if (pick && !tapAim) aim(); const ri = roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN); if (ri !== lastRoom) { lastRoom = ri; opts.onRoom && opts.onRoom(ri); } dirty = true; wake(); }
   let tapAim = false;
 
   // ---- input ----
@@ -297,7 +319,7 @@ export function createHouse(host, opts) {
   }
   const ro = new ResizeObserver(resize); ro.observe(host);
   buildShell(); buildStuff(); resize(); moved();
-  { const i = roomAt(S, Math.floor(me.x), Math.floor(me.y)), r = L.rooms[i]; /* in through the front door, looking into the room */
+  { const i = roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN), r = L.rooms[i]; /* in through the front door, looking into the room */
     if (r && !blocked(me.x, me.y)) { const dx = r.x + r.w / 2 - me.x, dy = r.y + r.d / 2 - me.y; if (Math.hypot(dx, dy) > 0.3) me.yaw = Math.atan2(-dx, -dy); moved(); } else if (i >= 0) goRoom(i); }
 
   return {
@@ -309,8 +331,9 @@ export function createHouse(host, opts) {
     setSelected(i) { sel = i; showSel(); wake(); },
     setView(v) { view = v; applyView(); moved(); },
     setSurroundings(A) { buildAround(A); },
+    setPeople(list) { buildPeople(list); },
     get view() { return view; },
-    goRoom, roomHere: () => roomAt(S, Math.floor(me.x), Math.floor(me.y)),
+    goRoom, roomHere: () => roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN),
     dispose() { dead = true; cancelAnimationFrame(raf); ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku);
       scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); for (const t of photoTex.values()) t.dispose(); renderer.dispose(); renderer.domElement.remove(); stick.remove(); },
   };

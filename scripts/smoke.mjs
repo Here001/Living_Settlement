@@ -1893,6 +1893,36 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   ok((await call('GET', '/api/citizens/visitor_vi/room', undefined, M.P)).json.room.items.length === 0, '…and nothing was taken or placed');
   await pool.query('update citizens set home_id = (select id from buildings where type = $2 limit 1) where id = $1', [M.id, 'tent']);
   const moved = (await call('GET', '/api/me/room', undefined, M.P)).json; ok(moved.size === 4 && moved.room.box.length > 0 && moved.room.items.every(x => x.x < 4 && x.y < 4), 'moving into a tent packs away what no longer fits', JSON.stringify(moved).slice(0, 200)); }
+{ // businesses: anyone can walk in; the owner designs the inside (it comes with a standard fit-out until then); homes can be locked; who's here now
+  const O = await player('baker_bo', 500_000), Vz = await player('walker_wu', 1000);
+  const bk = (await call('POST', '/api/admin/buildings', { type: 'bakery', x: 1300, y: 1300, instant: true })).json.building; await pool.query('update buildings set owner_id = $2, owner_handle = $3 where id = $1', [bk.id, O.id, 'baker_bo']);
+  const v1 = await call('GET', `/api/buildings/${bk.id}/inside`, undefined, { auth: false }); const std = v1.json.room?.items || [];
+  ok(v1.status === 200 && v1.json.place === 'business' && !v1.json.designed && std.length > 3 && std.every(x => x.std) && v1.json.room.plan === 'food', 'anyone can walk into a bakery: a dining room with the standard fit-out', JSON.stringify(v1.json).slice(0, 200));
+  ok((await call('POST', `/api/me/buildings/${bk.id}/inside/sell`, { i: std[0].i }, Vz.P)).status === 403, 'only the owner can change the inside');
+  const rm = await call('POST', `/api/me/buildings/${bk.id}/inside/sell`, { i: std[0].i }, O.P); ok(rm.status === 200 && rm.json.coins === 500_000 && rm.json.room.items.length === std.length - 1, 'the owner can take out a standard piece (nothing back for it)', JSON.stringify(rm.json).slice(0, 160));
+  ok((await call('GET', `/api/buildings/${bk.id}/inside`, undefined, { auth: false })).json.designed === true, '…and from then on the inside is theirs');
+  let bought = null; for (let y = 2; y < 8 && !bought; y++) for (let x = 0; x < 8 && !bought; x++) { const r = await call('POST', `/api/me/buildings/${bk.id}/inside/buy`, { k: 'cafetable', x, y, r: 0, c: 3 }, O.P); if (r.status === 200) bought = r; }
+  ok(bought && bought.json.coins === 500_000 - 900, 'the owner buys a café table for it', JSON.stringify(bought?.json || {}).slice(0, 160));
+  let logo = null; for (let y = 0; y < 8 && !logo; y++) for (let x = 0; x < 8 && !logo; x++) for (let r = 0; r < 4 && !logo; r++) { const q = await call('POST', `/api/me/buildings/${bk.id}/inside/buy`, { k: 'logo', x, y, r }, O.P); if (q.status === 200) logo = q.json.item; }
+  ok(!!logo, 'a company sign goes up on a wall');
+  const jpgB = Buffer.from(await (await fetch(BASE + '/api/room/photos/none')).arrayBuffer()); // (404 page, not a photo)
+  const lg = await fetch(BASE + `/api/me/buildings/${bk.id}/inside/photo/${logo.i}`, { method: 'POST', headers: { 'content-type': 'image/jpeg', 'x-player': O.P.headers['x-player'] }, body: jpgB });
+  ok(lg.status === 400, 'the sign only takes a real photo');
+  const st = await call('POST', `/api/me/buildings/${bk.id}/inside/style`, { room: 3, floor: 'terracotta', wall: 'sun' }, O.P); ok(st.status === 200 && st.json.room.styles[3].f === 'terracotta', 'the dining room gets a terracotta floor and sunny walls');
+  ok((await call('POST', `/api/me/buildings/${bk.id}/inside/explode`, {}, O.P)).status === 404, 'only real actions');
+  const hs = (await call('POST', '/api/admin/buildings', { type: 'house', x: 1310, y: 1300, instant: true })).json.building;
+  ok((await call('GET', `/api/buildings/${hs.id}/inside`, undefined, { auth: false })).status === 403, 'homes are visited through their people, not as buildings');
+  const un = (await call('POST', '/api/admin/buildings', { type: 'bakery', x: 1320, y: 1300, instant: false })).json.building;
+  ok((await call('GET', `/api/buildings/${un.id}/inside`, undefined, { auth: false })).status === 409, 'a building still going up can’t be entered yet');
+  // homes can be locked
+  await pool.query('update citizens set home_id = $2 where id = $1', [O.id, hs.id]);
+  ok((await call('POST', '/api/me/room/lock', { locked: true }, O.P)).json.room?.locked === true && (await call('GET', '/api/citizens/baker_bo/room', undefined, Vz.P)).status === 403, 'a home can be locked, and then others can’t come in');
+  ok((await call('GET', '/api/me/room', undefined, O.P)).status === 200, '…but its owner still can');
+  ok((await call('POST', '/api/me/room/lock', { locked: false }, O.P)).json.room?.locked === undefined && (await call('GET', '/api/citizens/baker_bo/room', undefined, Vz.P)).status === 200, '…and unlocked again');
+  // who's here now
+  const h1 = await call('POST', '/api/inside/here', { place: 'b:' + bk.id }, O.P), h2 = await call('POST', '/api/inside/here', { place: 'b:' + bk.id }, Vz.P);
+  ok(h1.status === 200 && h2.json.viewers === 1 && h2.json.names.includes('baker_bo'), 'someone walking in sees who else is looking round', JSON.stringify(h2.json));
+  ok((await call('POST', '/api/inside/here', { place: 'nonsense here' }, O.P)).status === 400, 'only real places'); }
 // bills include land
 const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 'weekly bills run with plots', JSON.stringify(bl2.json));
 { // land auctions: the developer puts prime land up, players bid with held cash, the top bid wins it as a plot

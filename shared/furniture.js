@@ -19,6 +19,7 @@ import { BUILDING_TYPES } from './catalog.js';
 
 export const WALL_H = 2.6, WALL_T = 0.06, EYE = 1.55;
 export const TINTS = ['#C0392B', '#2E86C1', '#27AE60', '#8E44AD', '#E67E22', '#5D6D7E', '#E8C9A0', '#22313F', '#F1C40F', '#EC87C0'];
+export const BIZ_CATS = [['shop', '🏪 Shop'], ['food', '🍽️ Food & drink'], ['office', '💼 Office'], ['industry', '🏭 Workshop']];
 export const ROOM_CATS = [['living', '🛋️ Living'], ['bed', '🛏️ Bedroom'], ['kitchen', '🍳 Kitchen'], ['bath', '🛁 Bathroom'], ['walls', '🖼️ Walls & photos'], ['ceiling', '💡 Ceiling'], ['fun', '🎮 Fun'], ['plants', '🪴 Plants'], ['luxury', '💎 Luxury']];
 
 const W = '#8B5A3C', WD = '#6B4428', MT = '#3B3B40', WH = '#F4F1EA', CH = '#BDC3C7', H = WALL_H;
@@ -135,6 +136,44 @@ export const FURNITURE = {
   throne: { name: 'Golden throne', cat: 'luxury', size: [1, 1], cost: 60000, parts: [[0.1, 0.15, 0, 0.8, 0.75, 0.45, '#C0392B'], [0.1, 0.05, 0, 0.8, 0.2, 1.7, '#F1C40F'], [0.05, 0.15, 0, 0.15, 0.75, 0.75, '#F1C40F'], [0.8, 0.15, 0, 0.15, 0.75, 0.75, '#F1C40F'], [0.4, 0.05, 1.7, 0.2, 0.15, 0.2, '#C0392B', 'o']] },
   statue: { name: 'Gold statue', cat: 'luxury', size: [1, 1], cost: 150000, parts: [[0.2, 0.2, 0, 0.6, 0.6, 0.45, '#ECE6DA'], [0.35, 0.35, 0.45, 0.3, 0.3, 0.75, '#F1C40F', 'c'], [0.3, 0.3, 1.15, 0.4, 0.4, 0.4, '#F4D03F', 'o']] },
   aquarium: { name: 'Big aquarium', cat: 'luxury', size: [3, 1], cost: 45000, parts: [[0, 0, 0, 3, 0.6, 0.5, '#1B2631'], [0, 0, 0.5, 3, 0.6, 1.3, '#3498DB', 'g'], [0.6, 0.3, 0.9, 0.25, 0.05, 0.12, '#F39C12'], [1.7, 0.35, 1.2, 0.2, 0.05, 0.1, '#E74C3C'], [2.3, 0.3, 0.7, 0.22, 0.05, 0.1, '#F7DC6F'], [0.2, 0.15, 0.5, 0.3, 0.3, 0.5, '#1E8449', 'o']] },
+  // ---------------- for businesses: shop, food and drink, office, workshop ----------------
+  till: { name: 'Counter with till', cat: 'shop', size: [2, 1], cost: 2500, tint: true, parts: [[0, 0.15, 0, 2, 0.7, 0.95, '$'], [0, 0.1, 0.95, 2, 0.8, 0.05, '#4A4A4E'], [1.3, 0.25, 1.0, 0.45, 0.35, 0.2, '#2C3E50'], [1.35, 0.25, 1.2, 0.35, 0.05, 0.22, '#0E1622', 's']] },
+  shelves: { name: 'Shop shelves', cat: 'shop', size: [2, 1], cost: 1800, parts: [[0, 0, 0, 2, 0.5, 1.8, '#D5D8DC'], ...[0.25, 0.75, 1.25, 1.65].flatMap((z, i) => [[0.08, 0.42, z - 0.22, 0.4, 0.1, 0.2, ['#E74C3C', '#F1C40F', '#2E86C1', '#27AE60'][i]], [0.6, 0.42, z - 0.22, 0.45, 0.1, 0.18, ['#F39C12', '#8E44AD', '#E67E22', '#16A085'][i]], [1.15, 0.42, z - 0.22, 0.35, 0.1, 0.2, ['#2ECC71', '#C0392B', '#F5B041', '#3498DB'][i]], [1.55, 0.42, z - 0.22, 0.35, 0.1, 0.16, ['#9B59B6', '#1ABC9C', '#E74C3C', '#F4D03F'][i]]])] },
+  fridgecase: { name: 'Drinks fridge', cat: 'shop', size: [1, 1], cost: 3800, light: lamp('#E8F8FF', 0.4, 2.5), parts: [[0.05, 0, 0, 0.9, 0.7, 1.95, '#2C3E50'], [0.1, 0.68, 0.1, 0.8, 0.03, 1.75, '#CFE9F7', 'g'], [0.15, 0.2, 0.3, 0.7, 0.4, 0.25, '#E74C3C'], [0.15, 0.2, 0.75, 0.7, 0.4, 0.25, '#F1C40F'], [0.15, 0.2, 1.2, 0.7, 0.4, 0.25, '#27AE60'], [0.1, 0.05, 1.8, 0.8, 0.6, 0.12, '#F4F6F8', 'l']] },
+  display: { name: 'Display counter', cat: 'shop', size: [2, 1], cost: 4200, parts: [[0, 0.1, 0, 2, 0.75, 0.6, '#5D6D7E'], [0, 0.1, 0.6, 2, 0.75, 0.45, '#D6EAF8', 'g'], [0.3, 0.35, 0.62, 0.3, 0.3, 0.15, '#F5B041', 'c'], [0.9, 0.35, 0.62, 0.35, 0.25, 0.12, '#E59866'], [1.45, 0.35, 0.62, 0.3, 0.3, 0.18, '#F7DC6F', 'c']] },
+  clothesrack: { name: 'Clothes rail', cat: 'shop', size: [2, 1], cost: 1600, tint: true, parts: [[0.1, 0.45, 0, 0.06, 0.06, 1.6, CH], [1.84, 0.45, 0, 0.06, 0.06, 1.6, CH], [0.1, 0.46, 1.55, 1.8, 0.04, 0.04, CH], [0.25, 0.3, 0.75, 0.35, 0.4, 0.78, '$'], [0.65, 0.3, 0.75, 0.35, 0.4, 0.78, '#F4F6F8'], [1.05, 0.3, 0.75, 0.35, 0.4, 0.78, '$'], [1.45, 0.3, 0.75, 0.3, 0.4, 0.78, '#22313F']] },
+  mannequin: { name: 'Mannequin', cat: 'shop', size: [1, 1], cost: 900, tint: true, parts: [[0.35, 0.35, 0, 0.3, 0.3, 0.05, '#BDC3C7', 'c'], [0.48, 0.48, 0.05, 0.04, 0.04, 0.75, CH], [0.32, 0.4, 0.8, 0.36, 0.22, 0.6, '$'], [0.4, 0.43, 1.42, 0.2, 0.16, 0.22, '#F5E6D3', 'o']] },
+  atm: { name: 'Cash machine', cat: 'shop', size: [1, 1], cost: 6500, parts: [[0.15, 0.05, 0, 0.7, 0.6, 1.6, '#5D6D7E'], [0.25, 0.64, 1.05, 0.5, 0.02, 0.35, '#0E1622', 's'], [0.3, 0.64, 0.8, 0.4, 0.06, 0.12, '#2C3E50'], [0.15, 0.05, 1.6, 0.7, 0.6, 0.1, '#2E86C1', 'l']] },
+  vending: { name: 'Vending machine', cat: 'shop', size: [1, 1], cost: 5000, tint: true, light: lamp('#EAF2F8', 0.35, 2), parts: [[0.05, 0.05, 0, 0.9, 0.65, 1.85, '$'], [0.12, 0.68, 0.6, 0.55, 0.03, 1.1, '#D6EAF8', 'g'], [0.72, 0.68, 1.1, 0.18, 0.03, 0.35, '#0E1622', 's'], [0.2, 0.3, 0.75, 0.45, 0.35, 0.8, '#F5B041']] },
+  cafetable: { name: 'Café table for two', cat: 'food', size: [1, 1], cost: 900, tint: true, parts: [[0.4, 0.4, 0, 0.2, 0.2, 0.05, MT, 'c'], [0.47, 0.47, 0.05, 0.06, 0.06, 0.68, MT], [0.25, 0.25, 0.73, 0.5, 0.5, 0.04, '#F4F1EA', 'c'], [0.02, 0.38, 0, 0.22, 0.24, 0.45, '$'], [0.76, 0.38, 0, 0.22, 0.24, 0.45, '$']] },
+  tablefour: { name: 'Table for four', cat: 'food', size: [2, 2], cost: 2800, tint: true, parts: [...legs(0.45, 0.45, 1.55, 1.55, 0.72), [0.4, 0.4, 0.72, 1.2, 1.2, 0.05, W], [0.6, 0.05, 0, 0.8, 0.3, 0.45, '$'], [0.6, 1.65, 0, 0.8, 0.3, 0.45, '$'], [0.05, 0.6, 0, 0.3, 0.8, 0.45, '$'], [1.65, 0.6, 0, 0.3, 0.8, 0.45, '$'], [0.85, 0.85, 0.77, 0.3, 0.3, 0.1, '#F5B041', 'c']] },
+  booth: { name: 'Restaurant booth', cat: 'food', size: [2, 2], cost: 5200, tint: true, parts: [[0, 0, 0, 2, 0.5, 1.1, '$'], [0, 1.5, 0, 2, 0.5, 1.1, '$'], [0, 0.1, 0, 2, 0.55, 0.45, '$'], [0, 1.35, 0, 2, 0.55, 0.45, '$'], [0.3, 0.75, 0.72, 1.4, 0.5, 0.05, '#F4F1EA'], [0.95, 0.85, 0, 0.1, 0.3, 0.72, MT]] },
+  bar: { name: 'Bar counter', cat: 'food', size: [2, 1], cost: 6000, tint: true, parts: [[0, 0.2, 0, 2, 0.65, 1.05, '$'], [-0.02, 0.1, 1.05, 2.04, 0.85, 0.06, '#5E3A21'], [0.2, 0.3, 1.11, 0.12, 0.12, 0.25, '#1D8348', 'c'], [0.5, 0.3, 1.11, 0.12, 0.12, 0.28, '#641E16', 'c'], [1.4, 0.4, 1.11, 0.15, 0.15, 0.15, '#F4F6F8', 'c'], [0, 0.85, 0.15, 2, 0.04, 0.05, CH]] },
+  coffee: { name: 'Coffee machine', cat: 'food', size: [1, 1], cost: 4800, parts: [[0, 0, 0, 1, 0.65, 0.88, '#E8E4DC'], [0, 0, 0.88, 1, 0.7, 0.06, '#4A4A4E'], [0.15, 0.1, 0.94, 0.7, 0.45, 0.5, '#BDC3C7'], [0.3, 0.45, 1.05, 0.12, 0.12, 0.12, '#F4F6F8', 'c'], [0.6, 0.45, 1.05, 0.12, 0.12, 0.12, '#F4F6F8', 'c'], [0.2, 0.15, 1.44, 0.6, 0.35, 0.06, '#7F8C8D']] },
+  pizzaoven: { name: 'Pizza oven', cat: 'food', size: [1, 1], cost: 7500, light: lamp('#FF8C42', 0.7, 3), parts: [[0.05, 0.05, 0, 0.9, 0.85, 0.9, '#A04000'], [0.05, 0.05, 0.9, 0.9, 0.85, 0.55, '#B9770E', 'o'], [0.3, 0.88, 0.95, 0.4, 0.04, 0.3, '#1B1B1B'], [0.38, 0.86, 0.98, 0.24, 0.03, 0.15, '#FF8C42', 'l']] },
+  fryer: { name: 'Kitchen fryer', cat: 'food', size: [1, 1], cost: 3200, parts: [[0, 0, 0, 1, 0.7, 0.9, CH], [0.1, 0.1, 0.9, 0.35, 0.5, 0.05, '#F5B041'], [0.55, 0.1, 0.9, 0.35, 0.5, 0.05, '#F5B041'], [0.2, 0.2, 0.95, 0.12, 0.3, 0.25, MT]] },
+  officedesk: { name: 'Office desk', cat: 'office', size: [2, 1], cost: 2600, tint: true, parts: [...legs(0.05, 0.1, 1.95, 0.85, 0.72, MT), [0, 0.05, 0.72, 2, 0.85, 0.05, '#ECE6DA'], [0.6, 0.15, 0.77, 0.8, 0.06, 0.45, '#1B2631', 's'], [0.9, 0.21, 0.77, 0.2, 0.15, 0.06, MT], [0.65, 0.45, 0.77, 0.6, 0.2, 0.03, '#2C3E50'], [0.7, 1.05, 0, 0.55, 0.55, 0.45, '$'], [0.72, 1.48, 0.45, 0.5, 0.08, 0.55, '$']] },
+  reception: { name: 'Reception desk', cat: 'office', size: [2, 1], cost: 5500, tint: true, parts: [[0, 0.3, 0, 2, 0.6, 1.1, '$'], [0, 0.25, 1.1, 2, 0.7, 0.05, '#ECE6DA'], [0, 0, 0.72, 2, 0.35, 0.05, '#ECE6DA'], [1.2, 0.05, 0.77, 0.6, 0.06, 0.35, '#1B2631', 's']] },
+  filing: { name: 'Filing cabinet', cat: 'office', size: [1, 1], cost: 900, parts: [[0.2, 0.1, 0, 0.6, 0.6, 1.3, '#7F8C8D'], [0.4, 0.71, 0.25, 0.2, 0.02, 0.04, '#D5D8DC'], [0.4, 0.71, 0.65, 0.2, 0.02, 0.04, '#D5D8DC'], [0.4, 0.71, 1.05, 0.2, 0.02, 0.04, '#D5D8DC']] },
+  meeting: { name: 'Meeting table', cat: 'office', size: [3, 2], cost: 7800, tint: true, parts: [[1.35, 0.85, 0, 0.3, 0.3, 0.72, MT], [0.3, 0.45, 0.72, 2.4, 1.1, 0.06, '#5E3A21'], ...[0.4, 1.3, 2.2].flatMap(x => [[x, 0.05, 0, 0.45, 0.35, 0.45, '$'], [x, 1.6, 0, 0.45, 0.35, 0.45, '$']])] },
+  printer: { name: 'Printer', cat: 'office', size: [1, 1], cost: 1500, parts: [[0.15, 0.15, 0, 0.7, 0.6, 0.6, '#E5E8E8'], [0.15, 0.15, 0.6, 0.7, 0.6, 0.35, '#F4F6F8'], [0.25, 0.7, 0.75, 0.5, 0.08, 0.04, '#FFFFFF'], [0.6, 0.3, 0.95, 0.2, 0.15, 0.02, '#2E86C1', 'l']] },
+  watercooler: { name: 'Water cooler', cat: 'office', size: [1, 1], cost: 700, parts: [[0.3, 0.3, 0, 0.4, 0.4, 1.0, '#F4F6F8'], [0.33, 0.33, 1.0, 0.34, 0.34, 0.45, '#AED6F1', 'c']] },
+  waiting: { name: 'Waiting chairs', cat: 'office', size: [2, 1], cost: 1400, tint: true, parts: [[0.1, 0.3, 0, 1.8, 0.1, 0.42, MT], ...[0.1, 0.72, 1.34].flatMap(x => [[x, 0.25, 0.42, 0.56, 0.55, 0.08, '$'], [x, 0.18, 0.42, 0.56, 0.08, 0.55, '$']])] },
+  workbench: { name: 'Workbench', cat: 'industry', size: [2, 1], cost: 2200, parts: [...legs(0.05, 0.1, 1.95, 0.85, 0.85, MT, 0.08), [0, 0.05, 0.85, 2, 0.85, 0.08, '#A0522D'], [0.3, 0.3, 0.93, 0.4, 0.2, 0.15, '#C0392B'], [1.2, 0.25, 0.93, 0.5, 0.35, 0.08, '#7F8C8D'], [0.1, 0.1, 0.25, 1.8, 0.75, 0.04, '#A0522D']] },
+  machine: { name: 'Factory machine', cat: 'industry', size: [2, 2], cost: 18000, tint: true, light: lamp('#58D68D', 0.4, 2.5), parts: [[0.1, 0.1, 0, 1.8, 1.8, 1.4, '$'], [0.3, 1.9, 0.9, 0.5, 0.04, 0.35, '#0E1622', 's'], [1.0, 1.9, 1.0, 0.12, 0.04, 0.12, '#2ECC71', 'l'], [1.2, 1.9, 1.0, 0.12, 0.04, 0.12, '#E74C3C', 'l'], [0.6, 0.6, 1.4, 0.8, 0.8, 0.5, '#7F8C8D', 'c'], [1.3, 0.2, 1.4, 0.3, 0.3, 0.9, '#5D6D7E', 'c']] },
+  conveyor: { name: 'Conveyor belt', cat: 'industry', size: [3, 1], cost: 9000, parts: [...legs(0.1, 0.25, 2.9, 0.75, 0.75, MT, 0.08), [0, 0.2, 0.75, 3, 0.6, 0.12, '#1C1C1E'], [0.3, 0.3, 0.87, 0.4, 0.4, 0.3, '#B9770E'], [1.3, 0.3, 0.87, 0.4, 0.4, 0.3, '#B9770E'], [2.3, 0.3, 0.87, 0.4, 0.4, 0.3, '#B9770E']] },
+  crates: { name: 'Stack of crates', cat: 'industry', size: [1, 1], cost: 500, parts: [[0.05, 0.05, 0, 0.6, 0.6, 0.6, '#B9770E'], [0.35, 0.3, 0, 0.6, 0.6, 0.6, '#A0522D'], [0.15, 0.15, 0.6, 0.6, 0.6, 0.6, '#B9770E']] },
+  pallet: { name: 'Pallet of boxes', cat: 'industry', size: [1, 1], cost: 600, parts: [[0.05, 0.05, 0, 0.9, 0.9, 0.12, '#C19A6B'], [0.1, 0.1, 0.12, 0.8, 0.8, 0.9, '#D4A373'], [0.1, 0.5, 0.12, 0.8, 0.01, 0.9, '#A57C52']] },
+  racking: { name: 'Warehouse racking', cat: 'industry', size: [2, 1], cost: 3500, parts: [[0, 0, 0, 0.08, 0.9, 2.3, '#2E86C1'], [1.92, 0, 0, 0.08, 0.9, 2.3, '#2E86C1'], ...[0.1, 0.9, 1.7].flatMap(z => [[0, 0, z, 2, 0.9, 0.06, '#E67E22'], [0.15, 0.1, z + 0.06, 0.8, 0.7, 0.55, '#D4A373'], [1.05, 0.1, z + 0.06, 0.8, 0.7, 0.5, '#C19A6B']])] },
+  forklift: { name: 'Forklift', cat: 'industry', size: [1, 2], cost: 14000, parts: [[0.1, 0.5, 0.15, 0.8, 1.3, 0.75, '#F1C40F'], [0.15, 0.9, 0.9, 0.7, 0.6, 0.06, '#1C1C1E'], ...[[0.1, 0.45], [0.75, 0.45], [0.1, 1.55], [0.75, 1.55]].map(([x, y]) => [x, y, 0, 0.15, 0.3, 0.3, '#1C1C1E', 'd']), [0.1, 0.4, 0, 0.06, 0.06, 2.0, MT], [0.84, 0.4, 0, 0.06, 0.06, 2.0, MT], [0.1, 0.4, 2.0, 0.8, 0.06, 0.06, MT], [0.2, 0, 0.1, 0.12, 0.45, 0.04, MT], [0.68, 0, 0.1, 0.12, 0.45, 0.04, MT]] },
+  barrels: { name: 'Barrels', cat: 'industry', size: [1, 1], cost: 700, tint: true, parts: [[0.05, 0.05, 0, 0.45, 0.45, 0.85, '$', 'c'], [0.5, 0.45, 0, 0.45, 0.45, 0.85, '#2C3E50', 'c']] },
+  // business walls: a sign for your logo, menus, a whiteboard, an OPEN sign, tools
+  logo: { name: 'Company sign (your logo)', cat: 'office', mount: 'wall', size: [2, 0.06], cost: 1500, photo: true, parts: [[0.1, 0, 1.35, 1.8, 0.05, 0.9, '#1C1C1E'], [0.15, 0.05, 1.4, 1.7, 0.01, 0.8, '#DDDDDD', 'p']] },
+  menuboard: { name: 'Menu board', cat: 'food', mount: 'wall', size: [2, 0.06], cost: 900, photo: true, parts: [[0.15, 0, 1.3, 1.7, 0.05, 1.0, '#5E3A21'], [0.2, 0.05, 1.35, 1.6, 0.01, 0.9, '#DDDDDD', 'p']] },
+  bottleshelf: { name: 'Bottle shelf', cat: 'food', mount: 'wall', size: [2, 0.3], cost: 1600, parts: [[0.05, 0, 1.3, 1.9, 0.28, 0.04, '#5E3A21'], [0.05, 0, 1.75, 1.9, 0.28, 0.04, '#5E3A21'], ...[0.15, 0.4, 0.65, 0.9, 1.15, 1.4, 1.65].flatMap((x, i) => [[x, 0.08, 1.34, 0.1, 0.1, 0.3, ['#1D8348', '#641E16', '#D4AC0D', '#1D8348', '#7B241C', '#E59866', '#1D8348'][i], 'c'], [x + 0.05, 0.08, 1.79, 0.1, 0.1, 0.28, ['#641E16', '#1D8348', '#7B241C', '#D4AC0D', '#1D8348', '#641E16', '#E59866'][i], 'c']])] },
+  whiteboard: { name: 'Whiteboard', cat: 'office', mount: 'wall', size: [2, 0.05], cost: 800, parts: [[0.1, 0, 0.95, 1.8, 0.04, 1.0, '#BDC3C7'], [0.14, 0.03, 0.99, 1.72, 0.02, 0.92, '#FDFEFE'], [0.3, 0.05, 1.5, 0.6, 0.01, 0.04, '#2E86C1'], [0.3, 0.05, 1.35, 0.9, 0.01, 0.04, '#E74C3C'], [0.3, 0.05, 1.2, 0.5, 0.01, 0.04, '#27AE60']] },
+  opensign: { name: 'OPEN sign', cat: 'shop', mount: 'wall', size: [1, 0.05], cost: 700, light: lamp('#FF3B6B', 0.5, 2.5), parts: [[0.15, 0, 1.55, 0.7, 0.03, 0.3, '#1C1C1E'], [0.2, 0.03, 1.6, 0.6, 0.02, 0.2, '#FF3B6B', 'l']] },
+  toolwall: { name: 'Tool wall', cat: 'industry', mount: 'wall', size: [2, 0.12], cost: 1300, parts: [[0.1, 0, 1.0, 1.8, 0.03, 1.0, '#C19A6B'], [0.3, 0.03, 1.3, 0.08, 0.06, 0.5, '#C0392B'], [0.6, 0.03, 1.4, 0.25, 0.06, 0.08, MT], [0.6, 0.03, 1.2, 0.06, 0.06, 0.3, '#7F8C8D'], [1.0, 0.03, 1.25, 0.3, 0.06, 0.3, '#F39C12', 'd'], [1.45, 0.03, 1.2, 0.08, 0.06, 0.55, '#2C3E50']] },
   winerack: { name: 'Wine rack', cat: 'luxury', size: [1, 1], cost: 5500, parts: [[0.1, 0.1, 0, 0.8, 0.4, 1.6, '#5E3A21'], [0.18, 0.46, 0.2, 0.12, 0.05, 0.12, '#641E16', 'd'], [0.44, 0.46, 0.2, 0.12, 0.05, 0.12, '#641E16', 'd'], [0.7, 0.46, 0.2, 0.12, 0.05, 0.12, '#641E16', 'd'], [0.18, 0.46, 0.6, 0.12, 0.05, 0.12, '#641E16', 'd'], [0.44, 0.46, 0.6, 0.12, 0.05, 0.12, '#1D8348', 'd'], [0.7, 0.46, 1.0, 0.12, 0.05, 0.12, '#641E16', 'd']] },
 };
 for (const f of Object.values(FURNITURE)) f.mount ||= 'floor';
@@ -158,14 +197,21 @@ export function roomSize(type) {
 
 // ---------------- the floor plan ----------------
 const PLANS = new Map();
-export function layoutOf(S) {
-  if (PLANS.has(S)) return PLANS.get(S);
+export function layoutOf(S, plan = 'home') {
+  const key = S + ':' + plan; if (PLANS.has(key)) return PLANS.get(key);
   const E = new Map(), rooms = [], set = (k, t) => E.set(k, t);
   for (let i = 0; i < S; i++) { set(`h${i},0`, 'wall'); set(`h${i},${S}`, 'wall'); set(`v0,${i}`, 'wall'); set(`v${S},${i}`, 'wall'); }
   const hline = (y, x0, x1, doors = []) => { for (let x = x0; x < x1; x++) set(`h${x},${y}`, doors.includes(x) ? 'door' : 'wall'); };
   const vline = (x, y0, y1, doors = []) => { for (let y = y0; y < y1; y++) set(`v${x},${y}`, doors.includes(y) ? 'door' : 'wall'); };
   const win = (...ks) => ks.forEach(k => set(k, 'window')), room = (name, kind, x, y, w, d) => rooms.push({ name, kind, x, y, w, d });
-  if (S <= 4) { room('Main room', 'living', 0, 0, S, S); set(`h1,${S}`, 'front'); win('h2,0', 'v0,1', `v${S},2`); }
+  if (plan !== 'home') {
+    // a business: the main floor at the front, and along the back an office, a storeroom and a staff toilet
+    const back = S >= 10 ? 3 : 2, mid = Math.max(2, Math.floor((S - 2) / 2)), main = { shop: 'Shop floor', food: 'Dining room', office: 'Office floor', industry: 'Factory floor' }[plan] || 'Main hall';
+    room('Office', 'office', 0, 0, mid, back); room('Storeroom', 'store', mid, 0, S - 2 - mid, back); room('Staff toilet', 'toilet', S - 2, 0, 2, back); room(main, 'main', 0, back, S, S - back);
+    hline(back, 0, S, [1, mid + 1, S - 1]); vline(mid, 0, back); vline(S - 2, 0, back);
+    const door = Math.floor(S / 2) - 1; set(`h${door},${S}`, 'front');
+    for (let x = 0; x < S; x++) if (x !== door && x % 2 === 0) win(`h${x},${S}`); for (let y = back + 1; y < S; y += 2) win(`v0,${y}`, `v${S},${y}`); win(`h1,0`);
+  } else if (S <= 4) { room('Main room', 'living', 0, 0, S, S); set(`h1,${S}`, 'front'); win('h2,0', 'v0,1', `v${S},2`); }
   else if (S === 5) {
     room('Bedroom', 'bed', 0, 0, 3, 2); room('Bathroom', 'bath', 3, 0, 2, 2); room('Living room & kitchen', 'living', 0, 2, 5, 3);
     hline(2, 0, 5, [1, 3]); vline(3, 0, 2); set('h3,5', 'front'); win('h1,0', 'h4,0', 'v0,3', 'v5,3', 'h1,5');
@@ -180,12 +226,12 @@ export function layoutOf(S) {
   const keep = new Set();
   for (const [k, t] of E) { if (t !== 'door' && t !== 'front') continue; const [a, b] = k.slice(1).split(',').map(Number);
     if (k[0] === 'h') { if (b > 0) keep.add(`${a},${b - 1}`); if (b < S) keep.add(`${a},${b}`); } else { if (a > 0) keep.add(`${a - 1},${b}`); if (a < S) keep.add(`${a},${b}`); } }
-  const L = { S, rooms, edges: E, keep }; PLANS.set(S, L); return L;
+  const L = { S, plan, rooms, edges: E, keep }; PLANS.set(key, L); return L;
 }
-export const roomAt = (S, x, y) => layoutOf(S).rooms.findIndex(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.d);
-const DEFAULT_STYLE = { living: ['wood', 'cream'], bed: ['cream', 'sky'], bath: ['tiles', 'white'], kitchen: ['tiles', 'cream'] };
+export const roomAt = (S, x, y, plan = 'home') => layoutOf(S, plan).rooms.findIndex(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.d);
+const DEFAULT_STYLE = { living: ['wood', 'cream'], bed: ['cream', 'sky'], bath: ['tiles', 'white'], kitchen: ['tiles', 'cream'], main: ['tiles', 'white'], office: ['carpet', 'white'], store: ['slate', 'white'], toilet: ['tiles', 'white'] };
 export function styleOf(room, S, i) {
-  const r = layoutOf(S).rooms[i], d = DEFAULT_STYLE[r?.kind] || DEFAULT_STYLE.living, s = (room?.styles || {})[i] || {};
+  const r = layoutOf(S, room?.plan || 'home').rooms[i], d = DEFAULT_STYLE[r?.kind] || DEFAULT_STYLE.living, s = (room?.styles || {})[i] || {};
   return { f: FLOORS[s.f] ? s.f : d[0], w: WALLS[s.w] ? s.w : d[1] };
 }
 
@@ -224,7 +270,7 @@ export function photoAspect(k) { const p = (FURNITURE[k]?.parts || []).find(p =>
 export function placeProblem(room, size, k, x, y, r, skip = null) {
   const f = FURNITURE[k]; if (!f) return 'There’s no such piece.';
   if (![x, y, r].every(Number.isInteger) || r < 0 || r > 3) return 'That isn’t a spot in the house.';
-  const L = layoutOf(size), others = (room.items || []).filter(it => it.i !== skip && FURNITURE[it.k]);
+  const L = layoutOf(size, room.plan || 'home'), others = (room.items || []).filter(it => it.i !== skip && FURNITURE[it.k]);
   if (f.mount === 'wall' || f.mount === 'window') {
     const want = f.mount === 'window' ? 'window' : 'wall', spots = wallSpots(k, x, y, r);
     for (const s of spots) { if (s.tx < 0 || s.ty < 0 || s.tx >= size || s.ty >= size) return 'It doesn’t fit there.';
@@ -248,16 +294,41 @@ export function placeProblem(room, size, k, x, y, r, skip = null) {
 const PHOTO_ID = /^[A-Za-z0-9_-]{6,24}$/;
 const tintOf = it => (Number.isInteger(it?.c) && it.c >= 0 && it.c < TINTS.length ? it.c : 0);
 const keepPhoto = (k, ph) => (FURNITURE[k]?.photo && PHOTO_ID.test(String(ph || '')) ? String(ph) : undefined);
-export function fitRoom(raw, size) {
-  const L = layoutOf(size), styles = {};
+export function fitRoom(raw, size, plan = 'home') {
+  const L = layoutOf(size, plan), styles = {};
   for (const [i, s] of Object.entries(raw?.styles || {})) if (L.rooms[i] && s && (FLOORS[s.f] || WALLS[s.w])) styles[i] = { ...(FLOORS[s.f] ? { f: s.f } : {}), ...(WALLS[s.w] ? { w: s.w } : {}) };
-  const room = { styles, items: [], box: [] }; let changed = false;
-  const toBox = p => { changed = true; if (room.box.length < MAX_STORED) room.box.push({ i: p.i, k: p.k, c: p.c, ...(p.ph ? { ph: p.ph } : {}) }); };
-  for (const it of Array.isArray(raw?.box) ? raw.box : []) if (FURNITURE[it?.k] && room.box.length < MAX_STORED) room.box.push({ i: String(it.i), k: it.k, c: tintOf(it), ...(keepPhoto(it.k, it.ph) ? { ph: keepPhoto(it.k, it.ph) } : {}) });
+  const room = { plan, styles, items: [], box: [], ...(raw?.locked ? { locked: true } : {}) }; let changed = false;
+  const toBox = p => { changed = true; if (room.box.length < MAX_STORED) room.box.push({ i: p.i, k: p.k, c: p.c, ...(p.ph ? { ph: p.ph } : {}), ...(p.std ? { std: true } : {}) }); };
+  for (const it of Array.isArray(raw?.box) ? raw.box : []) if (FURNITURE[it?.k] && room.box.length < MAX_STORED) room.box.push({ i: String(it.i), k: it.k, c: tintOf(it), ...(keepPhoto(it.k, it.ph) ? { ph: keepPhoto(it.k, it.ph) } : {}), ...(it.std ? { std: true } : {}) });
   for (const it of Array.isArray(raw?.items) ? raw.items : []) { if (!FURNITURE[it?.k]) { changed = true; continue; }
-    const p = { i: String(it.i), k: it.k, x: it.x, y: it.y, r: it.r || 0, c: tintOf(it) }, ph = keepPhoto(it.k, it.ph); if (ph) p.ph = ph;
+    const p = { i: String(it.i), k: it.k, x: it.x, y: it.y, r: it.r || 0, c: tintOf(it), ...(it.std ? { std: true } : {}) }, ph = keepPhoto(it.k, it.ph); if (ph) p.ph = ph;
     if (room.items.length < MAX_ITEMS && !placeProblem(room, size, p.k, p.x, p.y, p.r)) room.items.push(p); else toBox(p); }
   return { room, changed };
 }
-export const resaleOf = k => Math.floor((FURNITURE[k]?.cost || 0) * RESALE);
+export const resaleOf = (k, std) => (std ? 0 : Math.floor((FURNITURE[k]?.cost || 0) * RESALE));
+
+// ---------------- businesses ----------------
+// Which buildings anyone can walk into: every business and public building (not the jail or the police), and homes
+// whose owner hasn't locked them.
+const NO_ENTRY = new Set(['jail', 'prison', 'police', 'commissariat', 'policeplaza', 'dispatch']);
+export const canEnter = type => { const t = BUILDING_TYPES[type]; return !!t && !!t.work && !t.home && !t.outdoor && !NO_ENTRY.has(type) && t.cat !== 'nature' && t.cat !== 'decor'; };
+// The kind of business, for its floor plan and standard fit-out.
+const FOODY = /tavern|diner|restaurant|cafe|café|bar|pub|bakery|pizza|food|grill|kitchen|bistro|canteen|snack|icecream|brew/;
+export function bizKind(type) {
+  const t = BUILDING_TYPES[type] || {}, n = (type + ' ' + (t.name || '')).toLowerCase(), c = t.cat || '';
+  if (FOODY.test(n)) return 'food'; if (c === 'industry' || /factory|plant|works|mill|warehouse|depot|yard|refinery|forge|garage|hangar/.test(n)) return 'industry';
+  if (c === 'offices' || /office|bank|hall|tower|exchange|agency|studio|clinic|school|library|court/.test(n)) return 'office'; return 'shop';
+}
+export function bizSize(type) { const t = BUILDING_TYPES[type]; if (!t) return 0; const [w, d] = t.size || [1, 1], a = w * d; return a <= 2 ? 6 : a <= 4 ? 8 : a <= 9 ? 10 : 12; }
+// The fit-out a business has until its owner designs it (the owner can keep these pieces or take them out, for nothing).
+export function standardFit(type, S) {
+  const kind = bizKind(type), room = { plan: kind, items: [], box: [] }, L = layoutOf(S, kind), main = L.rooms.find(r => r.kind === 'main'); let n = 0;
+  const put = (k, x, y, r = 0, c = 0) => { if (!FURNITURE[k] || placeProblem(room, S, k, x, y, r)) return false; room.items.push({ i: 'std' + n++, k, x, y, r, c, std: true }); return true; };
+  const y0 = main.y, y1 = S - 1, cx = Math.floor(S / 2);
+  if (kind === 'shop') { put('till', 1, y0, 2, 5); for (let x = 3; x + 2 <= S; x += 3) put('shelves', x, y0, 0); for (let x = 1; x + 2 <= S - 1; x += 3) put('shelves', x, y0 + 2, 2); put('fridgecase', S - 1, y0 + 1, 1); put('plant', 0, y1, 0); put('opensign', cx - 1, y1, 2); put('ceilinglight', cx, y0 + 1, 0); put('ceilinglight', 1, y1 - 1, 0); }
+  else if (kind === 'food') { put('bar', 0, y0, 0, 3); put('coffee', 2, y0, 0); for (let x = 1; x + 2 <= S; x += 3) for (let y = y0 + 2; y + 2 <= S; y += 3) put('tablefour', x, y, 0, 0); put('menuboard', 3, y0, 0); put('pendant', 2, y0 + 2, 0, 8); put('pendant', S - 3, y0 + 2, 0, 8); put('plant', S - 1, y1, 0); }
+  else if (kind === 'office') { put('reception', cx - 1, y1 - 1, 2, 1); put('waiting', 0, y1, 0, 5); for (let x = 0; x + 2 <= S; x += 3) put('officedesk', x, y0, 0, 5); put('watercooler', S - 1, y1, 0); put('logo', 2, y0, 0); put('spotlights', cx, y0 + 1, 0); put('plant', S - 1, y0, 0); }
+  else { put('workbench', 0, y0, 0); put('machine', 3, y0 + 1, 0, 1); put('racking', S - 2, y0, 0); put('crates', 0, y1, 0); put('pallet', 1, y1, 0); put('barrels', S - 1, y1, 0, 4); put('toolwall', 0, y0, 0); put('ceilinglight', cx, y0 + 1, 0); }
+  return room.items;
+}
 export const photosIn = room => new Set([...(room.items || []), ...(room.box || [])].map(it => it.ph).filter(Boolean));

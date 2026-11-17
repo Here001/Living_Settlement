@@ -405,7 +405,7 @@ const rr = (g, x, y, w, h, r) => { g.beginPath(); if (g.roundRect) g.roundRect(x
 function keyHook(root, fn) { const k = e => { if (fn(e) !== false && e.key.startsWith('Arrow')) e.preventDefault(); }; addEventListener('keydown', k); const stop = root._stop; root._stop = () => { stop && stop(); removeEventListener('keydown', k); }; }
 
 // ---------------- Getaway drive ----------------
-let W3 = null; const load3d = () => W3 || (W3 = import('/world3d.js'));
+let W3 = null; const load3d = () => W3 || (W3 = import('/world3d.js').then(m => { if (!m.can3d()) { W3 = null; throw new Error('This phone can’t show 3D.'); } return m; }));
 async function drive(root, L, finish) {
   const loading = $c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'Warming up the engine…' })); root.append(loading);
   let W; try { W = await load3d(); } catch (e) { loading.remove(); return drive2d(root, L, finish); }

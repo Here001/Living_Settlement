@@ -9,6 +9,8 @@ import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { BUILDING_TYPES, ROAD_TYPES } from '/shared/catalog.js';
+import { pictureMode, blackGuard, guardContext, webglOK } from '/safe3d.js';
+export const can3d = webglOK; // false on a phone that can't do 3D at all: the games fall back instead of a blank screen
 
 const PHONE = matchMedia('(pointer: coarse)').matches;
 const hashS = s => { let h = 2166136261 >>> 0; for (const ch of String(s)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; };
@@ -100,10 +102,14 @@ const GEO = { cyl: new THREE.CylinderGeometry(1, 1, 1, 10), cone: new THREE.Cone
 export function createView(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
   const maxPR = Math.min(window.devicePixelRatio || 1, PHONE ? 1.5 : 2); let pr = maxPR; renderer.setPixelRatio(pr);
+  canvas.style.background = '#c9d8e4'; /* a light sky behind it, so it's never dark while it loads */
+  pictureMode(renderer); /* phones that blank painted pictures get them another way (see safe3d.js) */
   renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(46, 1, 0.5, 900);
-  const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); scene.environmentIntensity = 0.55;
+  const reflections = () => { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }; reflections(); scene.environmentIntensity = 0.55;
+  // never a dark screen: a black picture steps the lighting down; a view the phone threw away is rebuilt when it comes back
+  const guard = blackGuard(renderer, scene), ctx = guardContext(renderer, canvas.parentElement, { back: () => { if (guard.level < 1) reflections(); renderer.shadowMap.needsUpdate = true; } });
   const sky = new Sky(); sky.scale.setScalar(4000); scene.add(sky);
   const U = sky.material.uniforms; U.turbidity.value = 6; U.rayleigh.value = 1.6; U.mieCoefficient.value = 0.004; U.mieDirectionalG.value = 0.82;
   const hemi = new THREE.HemisphereLight('#cfe3ff', '#5f6b4a', 0.9); scene.add(hemi);
@@ -142,9 +148,9 @@ export function createView(canvas) {
       const t0 = performance.now(); view.onFrame && view.onFrame(dt, now);
       // a hit shakes the camera just for this frame: "trauma" fades by itself, and the nudge is trauma² (see juice.js)
       let sx = 0, sy = 0, sz = 0; if (view.trauma > 0) { view.trauma = Math.max(0, view.trauma - 1.5 * dt); const k = view.trauma * view.trauma * (view.shakeAmp || 0.6), t = now / 1000 * 30; sx = k * Math.sin(t * 1.7); sy = k * Math.sin(t * 2.3) * 0.7; sz = k * Math.sin(t * 1.3); camera.position.x += sx; camera.position.y += sy; camera.position.z += sz; }
-      renderer.render(scene, camera); if (sx || sy || sz) { camera.position.x -= sx; camera.position.y -= sy; camera.position.z -= sz; } view.ms = (view.ms || 0) * 0.9 + (performance.now() - t0) * 0.1; view.frames = (view.frames || 0) + 1; }); };
+      renderer.render(scene, camera); guard.after(); if (sx || sy || sz) { camera.position.x -= sx; camera.position.y -= sy; camera.position.z -= sz; } view.ms = (view.ms || 0) * 0.9 + (performance.now() - t0) * 0.1; view.frames = (view.frames || 0) + 1; }); };
   view.stop = () => { view.running = false; renderer.setAnimationLoop(null); };
-  view.dispose = () => { view.stop(); scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); for (const m of view.mats) m.dispose(); renderer.dispose(); };
+  view.dispose = () => { view.stop(); ctx.dispose(); scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); for (const m of view.mats) m.dispose(); renderer.dispose(); };
   view.resize(); return view;
 }
 

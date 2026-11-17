@@ -55,7 +55,7 @@ function lobby(m) {
 
 // ---------------- the match ----------------
 // The 3D engine loads only when a game starts (the map itself never needs it).
-let W3 = null; const load3d = () => W3 || (W3 = import('/world3d.js'));
+let W3 = null; const load3d = () => W3 || (W3 = import('/world3d.js').then(m => { if (!m.can3d()) { W3 = null; throw new Error('This phone can’t show 3D.'); } return m; }));
 async function start(m) {
   clearTimeout(S.lobbyT); S.stop && S.stop();
   const root = S.root; root.innerHTML = ''; S.phase = 'play';

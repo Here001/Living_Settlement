@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { pictureMode, blackGuard, guardContext } from '/safe3d.js';
 import { FURNITURE, FLOORS, WALLS, TINTS, WALL_H, WALL_T, EYE, layoutOf, styleOf, placedParts, footOf, roomAt } from '/shared/furniture.js';
 import { BUILDING_TYPES, ROAD_TYPES } from '/shared/catalog.js';
 
@@ -35,23 +36,8 @@ const READBACK_OK = (() => { try { const c = document.createElement('canvas'); c
   const d = g.getImageData(0, 0, 8, 8).data; return want.every(([r, gg, b], i) => { for (const [x, y] of [[0, 0], [3, 3], [1, 2]]) { const o = (((Math.floor(i / 2) * 4 + y) * 8) + (i % 2) * 4 + x) * 4; if (d[o] !== r || d[o + 1] !== gg || d[o + 2] !== b || d[o + 3] !== 255) return false; } return true; });
 } catch (e) { return false; } })();
 let NORMALS = READBACK_OK, TEXTURES = true;
-// Does this phone get canvas images to the graphics chip intact? Some browsers' privacy protection blanks them, which
-// turns every painted surface black. Checked once: a small coloured test pattern is drawn, uploaded and read back.
-let uploadChecked = false;
-function checkUploads(renderer) {
-  if (uploadChecked) return; uploadChecked = true;
-  try { const S = 32, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d'), cols = [[230, 40, 40], [40, 200, 60], [50, 80, 220], [240, 220, 30]];
-    cols.forEach(([r, gg, b], i) => { g.fillStyle = `rgb(${r},${gg},${b})`; g.fillRect((i % 2) * S / 2, Math.floor(i / 2) * S / 2, S / 2, S / 2); });
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.NoColorSpace; t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false;
-    const sc = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 2), q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: t, toneMapped: false }));
-    sc.add(q); const rt = new THREE.WebGLRenderTarget(S, S), was = renderer.getRenderTarget(); renderer.setRenderTarget(rt); renderer.render(sc, cam); const px = new Uint8Array(4);
-    let ok = true;
-    // the four quarters (the picture is upside down in the target: canvas row 0 is at the top)
-    for (const [qx, qy, k] of [[8, 24, 0], [24, 24, 1], [8, 8, 2], [24, 8, 3]]) { renderer.readRenderTargetPixels(rt, qx, qy, 1, 1, px); const w = cols[k]; if (Math.abs(px[0] - w[0]) > 12 || Math.abs(px[1] - w[1]) > 12 || Math.abs(px[2] - w[2]) > 12) ok = false; }
-    renderer.setRenderTarget(was); rt.dispose(); t.dispose(); q.geometry.dispose(); q.material.dispose();
-    if (!ok) { TEXTURES = false; NORMALS = false; }
-  } catch (e) { /* if the check itself fails, keep textures */ }
-}
+// Does this phone get painted pictures to the graphics chip intact? (see safe3d.js) If not even as raw pixels,
+// walls, floors and fabrics are drawn in their own solid colours instead.
 const useMap = t => (TEXTURES ? t : null);
 // a normal map from a greyscale height canvas (light = raised), so grout, plank joints and weave catch the light
 function normalOf(hc, strength = 2) {
@@ -190,11 +176,12 @@ export function createHouse(host, opts) {
   const renderer = new THREE.WebGLRenderer({ antialias: !PHONE || (devicePixelRatio || 1) < 2.5, powerPreference: 'high-performance' });
   const DPR = devicePixelRatio || 1, PR_HI = Math.min(DPR, PHONE ? (HQ ? 1.5 : 1.25) : 2), prNow = PR_HI;
   renderer.setPixelRatio(PR_HI); renderer.domElement.className = 'house3d'; host.append(renderer.domElement);
-  checkUploads(renderer); if (renderer.capabilities.precision !== 'highp') NORMALS = false; /* a GPU without full precision can also turn surface detail black */
+  if (pictureMode(renderer) === 'plain') { TEXTURES = false; NORMALS = false; } if (renderer.capabilities.precision !== 'highp') NORMALS = false; /* a GPU without full precision can also turn surface detail black */
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = HQ; renderer.shadowMap.type = PHONE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap; /* phones: the cheaper filter (the shadows are still soft-edged) */ renderer.shadowMap.autoUpdate = false;
   const scene = new THREE.Scene(); scene.background = col('#BFE3F7');
-  { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); scene.environmentIntensity = 0.42; }
+  const reflections = () => { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); scene.environmentIntensity = 0.42; };
+  reflections();
   const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 140); camera.rotation.order = 'YXZ';
   scene.add(new THREE.HemisphereLight('#FFF8EE', '#7A6E62', 0.55));
   const sun = new THREE.DirectionalLight('#FFE9C8', 2.6); sun.position.set(S / 2 - S * 0.9, 7.5, S / 2 + S * 0.7); sun.target.position.set(S / 2, 0, S / 2); scene.add(sun, sun.target);
@@ -521,7 +508,7 @@ export function createHouse(host, opts) {
     // at most 60 frames a second (a 120 Hz screen would otherwise draw twice as many)
     const now = performance.now(), active = moving || joy.on || keys.size > 0 || now - lastInput < 160;
     const gap = active ? 15.5 : othersMoving ? 32 : 0; /* you moving: up to 60 a second; only other people moving: 30 (still smooth); nothing moving: just the one frame */
-    if (dirty && shown() && now - lastDraw >= gap) { placeCamera(); renderer.render(scene, camera); dirty = false; lastDraw = now; } /* not while the map is showing */
+    if (dirty && shown() && now - lastDraw >= gap) { placeCamera(); renderer.render(scene, camera); dirty = false; lastDraw = now; if (guard.after()) dirty = true; } /* not while the map is showing */
     // other players: glide towards where they last said they were
     let gliding = false; for (const o of others.values()) if (o.g.visible) { const dx = o.tx - o.g.position.x, dz = o.ty - o.g.position.z; let da = o.ta - o.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       if (Math.abs(dx) + Math.abs(dz) + Math.abs(da) > 0.01) { const k = Math.min(1, dt * 8); o.g.position.x += dx * k; o.g.position.z += dz * k; o.g.rotation.y += da * k; gliding = true; dirty = true; }
@@ -531,6 +518,9 @@ export function createHouse(host, opts) {
     return moving || joy.on || keys.size > 0 || dirty || gliding || [...others.values()].some(o => o.bubble) || !!meBubble;
   }
   const ro = new ResizeObserver(resize); ro.observe(host);
+  // never a dark screen: a black picture steps the lighting down; a view the phone threw away is rebuilt (see safe3d.js)
+  const redraw = () => { dirty = true; wake(); }, guard = blackGuard(renderer, scene, redraw), checks = [800, 2400, 4000].map(ms => setTimeout(redraw, ms));
+  const ctx = guardContext(renderer, host, { back: () => { if (guard.level < 1) reflections(); reshadow(); redraw(); }, giveUp: () => opts.onLost && opts.onLost({ x: me.x, y: me.y, a: me.yaw }) });
   buildShell(); buildStuff(); resize(); moved();
   { const i = roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN), r = L.rooms[i]; /* in through the front door, looking into the room */
     if (r && !blocked(me.x, me.y)) { const dx = r.x + r.w / 2 - me.x, dy = r.y + r.d / 2 - me.y; if (Math.hypot(dx, dy) > 0.3) me.yaw = Math.atan2(-dx, -dy); stepIn(); moved(); } else if (i >= 0) goRoom(i);
@@ -539,6 +529,7 @@ export function createHouse(host, opts) {
     for (const side of [0.5, 0.8, 1.1, 1.4]) for (const fwd of [0, 0.4, 0.8]) for (const sg of [-1, 1]) tries.push([sg * side, fwd]);
     tries.sort(() => Math.random() - 0.5);
     for (const [sd, fw] of tries) { const nx = me.x + rx * sd + fx * fw, ny = me.y + ry * sd + fy * fw; if (!blocked(nx, ny)) { me.x = nx; me.y = ny; moved(); break; } } }
+  { const a = opts.at; if (a && Number.isFinite(a.x) && Number.isFinite(a.y) && !blocked(a.x, a.y)) { me.x = a.x; me.y = a.y; me.yaw = Number.isFinite(a.a) ? a.a : me.yaw; stepIn(); moved(); } } /* back where you stood (after the phone dropped the 3D view) */
 
   return {
     setRoom(r, ph, shellToo) { room = r; photos = { ...photos, ...(ph || {}) }; if (shellToo) buildShell(); buildStuff(); wake(); },
@@ -556,7 +547,7 @@ export function createHouse(host, opts) {
     get perspective() { return persp; },
     get view() { return view; },
     goRoom, roomHere: () => roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN),
-    dispose() { dead = true; cancelAnimationFrame(raf); ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku);
+    dispose() { dead = true; cancelAnimationFrame(raf); ro.disconnect(); ctx.dispose(); checks.forEach(clearTimeout); removeEventListener('keydown', kd); removeEventListener('keyup', ku);
       scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); for (const t of photoTex.values()) t.dispose(); renderer.dispose(); renderer.domElement.remove(); stick.remove(); },
   };
 }
@@ -566,7 +557,7 @@ let thumbR = null, thumbEnv = null; const thumbs = new Map();
 export function thumb(k, c = 0) {
   const key = k + ':' + c; if (thumbs.has(key)) return thumbs.get(key); const f = FURNITURE[k]; if (!f) return '';
   try {
-    if (!thumbR) { thumbR = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); thumbR.setSize(160, 128, false); thumbR.setPixelRatio(1); thumbR.toneMapping = THREE.ACESFilmicToneMapping; thumbR.toneMappingExposure = 1.1;
+    if (!thumbR) { thumbR = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); thumbR.setSize(160, 128, false); pictureMode(thumbR); thumbR.setPixelRatio(1); thumbR.toneMapping = THREE.ACESFilmicToneMapping; thumbR.toneMappingExposure = 1.1;
       const pm = new THREE.PMREMGenerator(thumbR); thumbEnv = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
     const sc = new THREE.Scene(); sc.environment = thumbEnv; sc.environmentIntensity = 0.7; sc.add(new THREE.HemisphereLight('#FFFFFF', '#9A8F82', 1.1)); const dl = new THREE.DirectionalLight('#FFF4E4', 2.2); dl.position.set(3, 5, 4); sc.add(dl);
     const g = pieceGroup({ i: 't', k, x: 0, y: 0, r: 0, c }, null); sc.add(g);

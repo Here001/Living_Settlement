@@ -27,8 +27,35 @@ const rngT = seed => { let s = seed >>> 0 || 1; return () => { s = (s + 0x6D2B79
 const TEX = new Map();
 function canvasOf(size, paint) { const c = document.createElement('canvas'); c.width = c.height = size; paint(c.getContext('2d'), size); return c; }
 function texOf(c, srgb = true) { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = HQ ? 8 : 4; return t; }
+// Can this browser read a canvas back faithfully? Some (privacy settings: Safari's fingerprinting protection, some
+// Android browsers) blank or scramble what getImageData returns. A normal map built from that makes surfaces face
+// away from the light and render black, so on those the surface-detail layer is simply left out.
+const READBACK_OK = (() => { try { const c = document.createElement('canvas'); c.width = c.height = 8; const g = c.getContext('2d', { willReadFrequently: true });
+  const want = [[10, 200, 30], [250, 5, 120], [128, 128, 255], [0, 0, 0]]; want.forEach(([r, gg, b], i) => { g.fillStyle = `rgb(${r},${gg},${b})`; g.fillRect((i % 2) * 4, Math.floor(i / 2) * 4, 4, 4); });
+  const d = g.getImageData(0, 0, 8, 8).data; return want.every(([r, gg, b], i) => { for (const [x, y] of [[0, 0], [3, 3], [1, 2]]) { const o = (((Math.floor(i / 2) * 4 + y) * 8) + (i % 2) * 4 + x) * 4; if (d[o] !== r || d[o + 1] !== gg || d[o + 2] !== b || d[o + 3] !== 255) return false; } return true; });
+} catch (e) { return false; } })();
+let NORMALS = READBACK_OK, TEXTURES = true;
+// Does this phone get canvas images to the graphics chip intact? Some browsers' privacy protection blanks them, which
+// turns every painted surface black. Checked once: a small coloured test pattern is drawn, uploaded and read back.
+let uploadChecked = false;
+function checkUploads(renderer) {
+  if (uploadChecked) return; uploadChecked = true;
+  try { const S = 32, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d'), cols = [[230, 40, 40], [40, 200, 60], [50, 80, 220], [240, 220, 30]];
+    cols.forEach(([r, gg, b], i) => { g.fillStyle = `rgb(${r},${gg},${b})`; g.fillRect((i % 2) * S / 2, Math.floor(i / 2) * S / 2, S / 2, S / 2); });
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.NoColorSpace; t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false;
+    const sc = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 2), q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: t, toneMapped: false }));
+    sc.add(q); const rt = new THREE.WebGLRenderTarget(S, S), was = renderer.getRenderTarget(); renderer.setRenderTarget(rt); renderer.render(sc, cam); const px = new Uint8Array(4);
+    let ok = true;
+    // the four quarters (the picture is upside down in the target: canvas row 0 is at the top)
+    for (const [qx, qy, k] of [[8, 24, 0], [24, 24, 1], [8, 8, 2], [24, 8, 3]]) { renderer.readRenderTargetPixels(rt, qx, qy, 1, 1, px); const w = cols[k]; if (Math.abs(px[0] - w[0]) > 12 || Math.abs(px[1] - w[1]) > 12 || Math.abs(px[2] - w[2]) > 12) ok = false; }
+    renderer.setRenderTarget(was); rt.dispose(); t.dispose(); q.geometry.dispose(); q.material.dispose();
+    if (!ok) { TEXTURES = false; NORMALS = false; }
+  } catch (e) { /* if the check itself fails, keep textures */ }
+}
+const useMap = t => (TEXTURES ? t : null);
 // a normal map from a greyscale height canvas (light = raised), so grout, plank joints and weave catch the light
 function normalOf(hc, strength = 2) {
+  if (!NORMALS) return null;
   const S = hc.width, src = hc.getContext('2d').getImageData(0, 0, S, S).data, out = document.createElement('canvas'); out.width = out.height = S;
   const g = out.getContext('2d'), img = g.createImageData(S, S), o = img.data, h = (x, y) => src[((((y % S) + S) % S) * S + (((x % S) + S) % S)) * 4] / 255;
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const dx = (h(x + 1, y) - h(x - 1, y)) * strength, dy = (h(x, y + 1) - h(x, y - 1)) * strength, l = Math.hypot(dx, dy, 1), i = (y * S + x) * 4;
@@ -114,9 +141,9 @@ const std = o => new THREE.MeshStandardMaterial(o);
 let MATS = null;
 function mats() {
   if (MATS) return MATS; const fab = detail('fabric'), wood = detail('wood');
-  for (const t of [fab.map, fab.normalMap]) t.repeat.set(4, 4); for (const t of [wood.map, wood.normalMap]) t.repeat.set(2, 2);
-  MATS = { plain: std({ vertexColors: true, roughness: 0.62 }), fabric: std({ vertexColors: true, roughness: 0.95, map: fab.map, normalMap: fab.normalMap, normalScale: new THREE.Vector2(0.7, 0.7) }),
-    wood: std({ vertexColors: true, roughness: 0.48, map: wood.map, normalMap: wood.normalMap, normalScale: new THREE.Vector2(0.5, 0.5) }),
+  for (const t of [fab.map, fab.normalMap]) if (t) t.repeat.set(4, 4); for (const t of [wood.map, wood.normalMap]) if (t) t.repeat.set(2, 2);
+  MATS = { plain: std({ vertexColors: true, roughness: 0.62 }), fabric: std({ vertexColors: true, roughness: 0.95, map: useMap(fab.map), normalMap: fab.normalMap, normalScale: new THREE.Vector2(0.7, 0.7) }),
+    wood: std({ vertexColors: true, roughness: 0.48, map: useMap(wood.map), normalMap: wood.normalMap, normalScale: new THREE.Vector2(0.5, 0.5) }),
     metal: std({ vertexColors: true, roughness: 0.3, metalness: 0.85 }), gold: std({ vertexColors: true, roughness: 0.26, metalness: 1 }), gloss: std({ vertexColors: true, roughness: 0.16 }),
     leaf: std({ vertexColors: true, roughness: 0.78 }), glass: std({ color: '#DCEFFA', transparent: true, opacity: 0.22, roughness: 0.04, metalness: 0.1, depthWrite: false }),
     screen: std({ color: '#0B1220', roughness: 0.12, metalness: 0.2, emissive: '#101A2C' }) };
@@ -143,7 +170,7 @@ function pieceGroup(it, photoTex) {
     if (p.s === 'p') { const ww = p.out && p.out[0] ? p.d : p.w, pl = new THREE.PlaneGeometry(ww, p.h), o = p.out || [0, 1];
       pl.rotateY(o[1] === 1 ? 0 : o[1] === -1 ? Math.PI : o[0] === 1 ? Math.PI / 2 : -Math.PI / 2);
       pl.translate(p.x + p.w / 2 + o[0] * (Math.min(p.w, p.d) / 2 + 0.004), p.z + p.h / 2, p.y + p.d / 2 + o[1] * (Math.min(p.w, p.d) / 2 + 0.004));
-      const m = new THREE.Mesh(pl, std({ map: photoTex || placeholderTex(), roughness: 0.35 })); m.userData.photo = true; grp.add(m); continue; }
+      const m = new THREE.Mesh(pl, std({ ...(photoTex || TEXTURES ? { map: photoTex || placeholderTex() } : { color: '#BFD9EA' }), roughness: 0.35 })); m.userData.photo = true; grp.add(m); continue; }
     if (p.s === 'l') { const lc = p.c === tint ? tint : p.c; grp.add(new THREE.Mesh(partGeo(p), glowMat(lc)));
       if (f.light) { const sp = new THREE.Sprite(halo(lc)), s2 = Math.max(p.w, p.d, p.h) * 2.4 + 0.3; sp.scale.set(s2, s2, 1); sp.position.set(p.x + p.w / 2, p.z + p.h / 2, p.y + p.d / 2); sp.renderOrder = 3; sp.userData.halo = true; grp.add(sp); } continue; }
     if (p.s === 's') { grp.add(new THREE.Mesh(partGeo(p), M.screen)); continue; }
@@ -163,6 +190,7 @@ export function createHouse(host, opts) {
   const renderer = new THREE.WebGLRenderer({ antialias: !PHONE || (devicePixelRatio || 1) < 2.5, powerPreference: 'high-performance' });
   const DPR = devicePixelRatio || 1, PR_HI = Math.min(DPR, PHONE ? (HQ ? 1.5 : 1.25) : 2), prNow = PR_HI;
   renderer.setPixelRatio(PR_HI); renderer.domElement.className = 'house3d'; host.append(renderer.domElement);
+  checkUploads(renderer); if (renderer.capabilities.precision !== 'highp') NORMALS = false; /* a GPU without full precision can also turn surface detail black */
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = HQ; renderer.shadowMap.type = PHONE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap; /* phones: the cheaper filter (the shadows are still soft-edged) */ renderer.shadowMap.autoUpdate = false;
   const scene = new THREE.Scene(); scene.background = col('#BFE3F7');
@@ -193,7 +221,7 @@ export function createHouse(host, opts) {
     const faceStyle = (tx, ty) => { if (tx < 0 || ty < 0 || tx >= S || ty >= S) return { c: EXTERIOR }; const ri = roomAt(S, tx, ty, PLAN), w = WALLS[styleOf(room, S, ri).w]; return { c: w.c, k: styleOf(room, S, ri).w, inside: true }; };
     // walls: their paint colour times a plaster (or brick, or wood) texture, laid at the same scale everywhere
     const wallBox = (st, geo, len, hgt) => { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * len, uv.getY(i) * hgt / 1.3);
-      const ws = st.k ? wallSet(st.k) : wallSet('cream'), key = (ws.textured ? 'T:' + st.k : 'P:') + '|' + (ws.textured ? '#ffffff' : st.c); (textured.get(key) || textured.set(key, []).get(key)).push(paint(geo, ws.textured ? '#ffffff' : st.c)); };
+      const ws = st.k ? wallSet(st.k) : wallSet('cream'), tex = ws.textured && TEXTURES, key = (tex ? 'T:' + st.k : 'P:') + '|' + (tex ? '#ffffff' : st.c); (textured.get(key) || textured.set(key, []).get(key)).push(paint(geo, tex ? '#ffffff' : st.c)); };
     for (const [key, type] of L.edges) {
       const horiz = key[0] === 'h', [a, b] = key.slice(1).split(',').map(Number), T = WALL_T;
       // each side of the wall is a thin slab in that side's colour: [tile on this side, slab bounds as a function of z range]
@@ -215,13 +243,13 @@ export function createHouse(host, opts) {
     }
     const trimMat = std({ vertexColors: true, roughness: 0.32 });
     for (const [c, list] of plain) { const m = new THREE.Mesh(mergeGeometries(list), trimMat); m.castShadow = m.receiveShadow = true; walls.add(m); }
-    for (const [key, list] of textured) { const k = key.startsWith('T:') ? key.slice(2).split('|')[0] : 'cream', ws = wallSet(k), m = new THREE.Mesh(mergeGeometries(list), std({ vertexColors: true, map: ws.map, normalMap: ws.normalMap, roughness: ws.roughness }));
+    for (const [key, list] of textured) { const k = key.startsWith('T:') ? key.slice(2).split('|')[0] : 'cream', ws = wallSet(k), m = new THREE.Mesh(mergeGeometries(list), std({ vertexColors: true, map: useMap(ws.map), normalMap: ws.normalMap, roughness: ws.roughness }));
       m.castShadow = m.receiveShadow = true; walls.add(m); }
     if (glass.length) { const gm = new THREE.Mesh(mergeGeometries(glass), MAT.glass); gm.userData.glass = true; walls.add(gm); }
     walls.traverse(o => { o.userData.wall = true; });
-    const plaster = wallSet('cream'), ceilMat = std({ color: CEILING, map: plaster.map, normalMap: plaster.normalMap, roughness: 0.95 }), ao = [];
-    L.rooms.forEach((r, i) => { const st = styleOf(room, S, i), fs = floorSet(st.f), m = std({ map: fs.map.clone(), normalMap: fs.normalMap.clone(), roughness: fs.roughness, normalScale: new THREE.Vector2(0.8, 0.8) });
-      for (const t of [m.map, m.normalMap]) { t.needsUpdate = true; t.repeat.set(r.w / 2, r.d / 2); t.offset.set(r.x / 2, r.y / 2); }
+    const plaster = wallSet('cream'), ceilMat = std({ color: CEILING, map: useMap(plaster.map), normalMap: plaster.normalMap, roughness: 0.95 }), ao = [];
+    L.rooms.forEach((r, i) => { const st = styleOf(room, S, i), fs = floorSet(st.f), m = std({ ...(TEXTURES ? {} : { color: FLOORS[st.f]?.a || '#C8A273' }), map: TEXTURES ? fs.map.clone() : null, normalMap: fs.normalMap ? fs.normalMap.clone() : null, roughness: fs.roughness, normalScale: new THREE.Vector2(0.8, 0.8) });
+      for (const t of [m.map, m.normalMap]) { if (!t) continue; t.needsUpdate = true; t.repeat.set(r.w / 2, r.d / 2); t.offset.set(r.x / 2, r.y / 2); }
       const fl = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.d), m); fl.rotation.x = -Math.PI / 2; fl.position.set(r.x + r.w / 2, 0, r.y + r.d / 2); fl.userData.floor = i; fl.receiveShadow = true; floors.add(fl);
       const cg = new THREE.PlaneGeometry(r.w, r.d); const cu = cg.attributes.uv; for (let q = 0; q < cu.count; q++) cu.setXY(q, cu.getX(q) * r.w / 1.3, cu.getY(q) * r.d / 1.3);
       const ce = new THREE.Mesh(cg, ceilMat); ce.rotation.x = Math.PI / 2; ce.position.set(r.x + r.w / 2, H, r.y + r.d / 2); ce.userData.ceil = i; ceilings.add(ce);

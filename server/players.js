@@ -370,6 +370,12 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/voice/answer', limit, send(async req => V().answer(await me(req), bd(req).place, bd(req))));
   r.post('/voice/audience', limit, send(async req => V().audience(await me(req), bd(req).place, bd(req).to)));
   r.post('/voice/leave', limit, send(async req => V().leave(await me(req), bd(req).place)));
+  // the in-game phone: ring someone, answer, hang up (server/phone.js); the talking goes through voice, above
+  const Ph = () => world.phone;
+  r.get('/phone', limit, send(async req => Ph().now(await me(req))));
+  r.post('/phone/call', limit, send(async req => { const p = await me(req); await assertNotMuted(p.id); return Ph().call(p, bd(req).to); }));
+  r.post('/phone/answer', limit, send(async req => Ph().answer(await me(req), bd(req).id, !!bd(req).accept)));
+  r.post('/phone/hangup', limit, send(async req => Ph().hangup(await me(req), bd(req).id)));
   r.post('/me/love/privacy', limit, send(async req => world.love.privacy((await me(req)).id, !!bd(req).hidden)));
   r.post('/me/love/end', limit, send(async req => world.love.end(await me(req))));
   r.get('/me/visits', limit, send(async req => world.visits.incoming((await me(req)).id)));

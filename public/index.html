@@ -612,6 +612,32 @@ body.clean #djBubble{display:none}
 .jobnow{font-size:14px;line-height:1.35}.jobnow .pay{font-weight:700}
 .authbox{margin-top:10px;padding:10px 12px;border:1.6px dashed var(--soft);border-radius:14px;display:flex;flex-direction:column;gap:6px}
 .authbox h3{margin:0;font-size:15px}
+.hphonebtn{position:absolute;right:14px;bottom:122px;z-index:2;box-shadow:0 2px 10px rgba(0,0,0,.25)}.phbadge{font-style:normal;margin-left:5px;background:#E74C3C;color:#fff;border-radius:999px;padding:0 6px;font-size:11px;font-weight:800;line-height:17px;display:inline-block}
+.phone{position:fixed;inset:0;z-index:9700;display:grid;place-items:center;background:rgba(10,12,20,.45);padding:12px}
+.phframe{position:relative;width:min(390px,100%);height:min(760px,calc(100dvh - 24px));background:var(--paper,#FBF7F0);border:11px solid #17181C;border-radius:44px;box-shadow:0 0 0 2px #3a3c44,0 24px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden;animation:phup .25s ease-out}
+@keyframes phup{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.phstatus{display:flex;align-items:center;justify-content:space-between;padding:8px 20px 4px;font-size:13px;flex:none}.phclock{font-weight:800}.phnotch{width:96px;height:24px;border-radius:14px;background:#17181C}
+.phbody{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}.phbody .pane-body{flex:1;min-height:0;overflow:auto}
+.phbody .maxb,.phbody .x[aria-label="Close"],.phbody .x[aria-label="Close panel"]{display:none}
+.phhome{flex:none;height:22px;border:0;background:none;display:grid;place-items:center;cursor:pointer;padding:0}.phhome::after{content:'';width:120px;height:5px;border-radius:3px;background:#17181C;opacity:.8}
+.phbanner{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);z-index:9750;width:min(380px,calc(100% - 20px));display:flex;align-items:center;gap:10px;text-align:left;padding:10px 12px;border:0;border-radius:18px;background:rgba(30,32,40,.92);color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.35);font:inherit;cursor:pointer;animation:phdrop .3s ease-out}
+.phbanner.out{transition:opacity .35s,transform .35s;opacity:0;transform:translate(-50%,-20px)}@keyframes phdrop{from{transform:translate(-50%,-30px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+.phbic{font-size:22px}.phbt{flex:1;min-width:0;display:flex;flex-direction:column}.phbt b{font-size:14px}.phbt span{font-size:13px;opacity:.9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.phbanner small{opacity:.6;font-size:11px}
+.phcall{position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);z-index:9800;width:min(340px,calc(100% - 20px));padding:20px 16px 16px;border-radius:28px;background:linear-gradient(180deg,#23262F,#14161C);color:#fff;box-shadow:0 14px 40px rgba(0,0,0,.45);display:flex;flex-direction:column;align-items:center;gap:6px;animation:phdrop .3s ease-out}
+.phcall .phava{width:76px;height:76px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.25)}.phcall.ringing .phava{animation:phpulse 1.1s infinite}.phcall.speaking .phava{box-shadow:0 0 0 5px #2ECC71}
+@keyframes phpulse{0%{box-shadow:0 0 0 0 rgba(46,204,113,.7)}100%{box-shadow:0 0 0 18px rgba(46,204,113,0)}}
+.phwho{font-size:20px}.phst{font-size:14px;opacity:.8}.phacts{display:flex;gap:34px;margin-top:10px}
+.phcb{display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:0;color:#fff;font:inherit;font-size:12px;cursor:pointer}.phcb b{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;font-size:26px;background:rgba(255,255,255,.18)}
+.phcb.yes b{background:#2ECC71}.phcb.no b{background:#E74C3C;transform:rotate(135deg)}.phcb.mute.on b{background:#fff;color:#14161C}
+.phmin{position:absolute;top:8px;right:12px;background:none;border:0;color:#fff;font-size:22px;cursor:pointer;opacity:.8}
+.phcall.small{flex-direction:row;padding:8px 10px;border-radius:999px;gap:8px;width:min(300px,calc(100% - 20px))}.phsmall{flex:1;display:flex;align-items:center;gap:8px;background:none;border:0;color:#fff;font:inherit;cursor:pointer;min-width:0}.phcall.small .phava{width:34px;height:34px}.phcall.small .phcb b{width:36px;height:36px;font-size:17px}.phcall.small .phcb span{display:none}
+.dmcall{font-size:17px}
+.fold{margin-top:8px;border:1px solid var(--glass-line,rgba(0,0,0,.12));border-radius:12px;background:var(--glass-2,rgba(255,255,255,.4))}
+.fold .fhead{display:flex;width:100%;min-height:0;height:auto;margin:0;line-height:1.25;align-items:center;justify-content:space-between;gap:8px;background:none;border:0;font:inherit;font-weight:700;font-size:14.5px;color:inherit;padding:9px 12px;cursor:pointer;text-align:left}
+.fold .fnote{display:flex;align-items:center;gap:8px;font-weight:500;font-size:13px;color:var(--muted)}.fold .fnote i{font-style:normal;font-size:12px}
+.fold .fbody{padding:0 12px 10px}.fold .fbody>.authbox{margin:0;border:0;padding:0;background:none}.fold .fbody>.authbox>h3{display:none}.foldin{display:flex;flex-direction:column;gap:6px}
+.cmore{margin:-4px 0 4px;font-size:13px}.cfoot{margin-top:6px;font-size:13px}.linkb.danger{color:var(--danger)}
+.authbox .visitbox{margin-top:4px;border:0;padding:0;background:none}
 .authbox input{padding:8px 10px;border-radius:12px;border:1.6px solid var(--soft);background:var(--paper);font-size:15px}
 .codebig{display:flex;align-items:center;justify-content:space-between;gap:10px;font:800 clamp(18px,6vw,26px)/1 'Bricolage Grotesque',system-ui,sans-serif;letter-spacing:.05em;white-space:nowrap;padding:8px 12px;background:var(--chip);border-radius:12px;-webkit-user-select:all;user-select:all}
 .autherr{color:var(--danger);margin:0;font-weight:600}
@@ -1294,6 +1320,7 @@ function connect(){
     else if(m.type==='inside'){ if(typeof Room!=='undefined') Room.insideMsg(m); }
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
+    else if(m.type==='phone' && m.data) Phone.msg(m.data);
     else if(m.type==='gm' && m.data) Chats.gincoming(m.data);
     else if(m.type==='chatInvite' && m.data) Chats.invited(m.data);
     else if(m.type==='notice' && m.data){ Notices.incoming(m.data); if((m.data.kind==='visit'||m.data.kind==='love')&&sel) setTimeout(()=>renderCard(true),300); } /* a visit asked for or answered: the open card shows it */
@@ -4883,35 +4910,36 @@ setInterval(()=>{ if(!document.hidden&&Store.canWrite) Reports.load(); },60000);
 var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:null, thread:null, draft:'', busy:false, loadedAt:0,
   menu:false, view:'chats', reply:null, making:null, sure:null,
   reset(){ this.list=[]; this.groups=[]; this.invites=[]; this.online=[]; this.unread=0; this.with=null; this.gid=null; this.thread=null; this.draft=''; this.menu=false; this.reply=null; this.making=null; Blocks.put([]); Daily.info=null; },
-  async load(){ if(!(Me&&Me.token)) return; try{ const [l,o,b,g,f]=await Promise.all([api('/api/dm'),api('/api/online'),api('/api/blocks'),api('/api/chat/groups').catch(()=>({groups:[],invites:[]})),api('/api/friends').catch(()=>[])]);
-      this.list=l; this.online=o; this.friends=f||[]; this.groups=g.groups||[]; this.invites=g.invites||[]; this.loadedAt=Date.now(); this.count(); Blocks.put(b); }catch(e){} if(activeTab==='chats'&&!this.with&&!this.gid) this.renderNow(); },
+  async load(){ if(!(Me&&Me.token)) return; if(!this.loadedAt) Phone.check(); /* on a call when the page loaded? */ try{ const [l,o,b,g,f]=await Promise.all([api('/api/dm'),api('/api/online'),api('/api/blocks'),api('/api/chat/groups').catch(()=>({groups:[],invites:[]})),api('/api/friends').catch(()=>[])]);
+      this.list=l; this.online=o; this.friends=f||[]; this.groups=g.groups||[]; this.invites=g.invites||[]; this.loadedAt=Date.now(); this.count(); Blocks.put(b); }catch(e){} if(this.live()&&!this.with&&!this.gid) this.renderNow(); },
   // After blocking or unblocking someone: refresh the open chat with them (if any) and the list.
   async after(h){ if(this.with&&this.with.toLowerCase()===String(h).toLowerCase()){ try{ this.thread=await api('/api/dm/'+encodeURIComponent(this.with)); }catch(e){} this.menu=false; this.renderNow(); } this.load(); },
   gone(id){ if(this.thread){ this.thread.messages=this.thread.messages.filter(m=>m.id!==id); document.querySelector(`#dmBody [data-id="${CSS.escape(id)}"]`)?.remove(); } this.load(); },
   requests(){ return this.list.filter(c=>c.request); },
-  count(){ const n=this.list.reduce((a,c)=>a+c.unread,0)+this.groups.reduce((a,g)=>a+g.unread,0)+this.invites.length; if(n!==this.unread){ this.unread=n; buildToolbar(); } },
+  count(){ const n=this.list.reduce((a,c)=>a+c.unread,0)+this.groups.reduce((a,g)=>a+g.unread,0)+this.invites.length; if(n!==this.unread){ this.unread=n; buildToolbar(); Phone.paintBtn(); } },
   isMe(h){ return String(h||'').toLowerCase()===(Me&&Me.handle||'').toLowerCase(); },
-  async open(handle){ if(!(Me&&Me.token)){ toast('Sign in to your colonist to chat.'); return; } this.with=handle; this.gid=null; this.thread=null; this.draft=''; this.menu=false; this.reply=null; this.making=null; this.sure=null; closeCard(); openTab('chats');
+  async open(handle){ if(!(Me&&Me.token)){ toast('Sign in to your colonist to chat.'); return; } this.with=handle; this.gid=null; this.thread=null; this.draft=''; this.menu=false; this.reply=null; this.making=null; this.sure=null; closeCard(); Phone.inside()?Phone.show():openTab('chats');
     try{ this.thread=await api('/api/dm/'+encodeURIComponent(handle)); const c=this.list.find(x=>x.with.h.toLowerCase()===handle.toLowerCase()); if(c){ c.unread=0; this.count(); } }catch(e){ toast(e.message); this.with=null; }
     this.renderNow(); },
-  async openGroup(id){ if(!(Me&&Me.token)) return; this.gid=id; this.with=null; this.thread=null; this.draft=''; this.menu=false; this.reply=null; this.making=null; this.sure=null; closeCard(); openTab('chats');
+  async openGroup(id){ if(!(Me&&Me.token)) return; this.gid=id; this.with=null; this.thread=null; this.draft=''; this.menu=false; this.reply=null; this.making=null; this.sure=null; closeCard(); Phone.inside()?Phone.show():openTab('chats');
     try{ this.thread=await api('/api/chat/groups/'+encodeURIComponent(id)); const g=this.groups.find(x=>x.id===id); if(g){ g.unread=0; this.count(); } }catch(e){ toast(e.message); this.gid=null; }
     this.renderNow(); },
   back(){ this.with=null; this.gid=null; this.thread=null; this.menu=false; this.reply=null; this.sure=null; this.load(); this.renderNow(); },
   incoming(m){ if(Blocks.has(m.from.h)) return; const mine=this.isMe(m.from.h), other=mine?m.to.h:m.from.h, msg={id:m.id,mine,text:m.text,t:m.t,reply:m.reply||null};
-    if(this.with&&this.with.toLowerCase()===other.toLowerCase()&&this.thread&&activeTab==='chats'){ if(!this.thread.messages.some(x=>x.id===m.id)){ this.thread.messages.push(msg); this.addBubble(msg); } if(!mine) api('/api/dm/'+encodeURIComponent(other)+'/read',{method:'POST'}).catch(()=>{}); return; }
+    if(this.with&&this.with.toLowerCase()===other.toLowerCase()&&this.thread&&this.live()){ if(!this.thread.messages.some(x=>x.id===m.id)){ this.thread.messages.push(msg); this.addBubble(msg); } if(!mine) api('/api/dm/'+encodeURIComponent(other)+'/read',{method:'POST'}).catch(()=>{}); return; }
     let c=this.list.find(x=>x.with.h.toLowerCase()===other.toLowerCase()); if(!c){ c={ with:{h:other,n:mine?'':m.from.n,g:mine?'m':m.from.g,online:true}, last:null, unread:0, request:!mine }; this.list.unshift(c); }
     c.last={text:m.text,t:m.t,mine}; if(!mine){ c.unread++; c.with.online=true; this.count();
-      if(c.request) toast(`📩 Friend request from @${m.from.h}: accept and you can message free`,'View',()=>{ this.view='requests'; this.open(m.from.h); });
+      if(Phone.inside()) Phone.buzz(c.request?`📩 @${m.from.h} (friend request)`:'@'+m.from.h, plainMsg(m.text).length>80?plainMsg(m.text).slice(0,80)+'…':plainMsg(m.text), ()=>{ if(c.request) this.view='requests'; this.open(m.from.h); }); /* inside a place: it comes in on your phone */
+      else if(c.request) toast(`📩 Friend request from @${m.from.h}: accept and you can message free`,'View',()=>{ this.view='requests'; this.open(m.from.h); });
       else toast(`💬 @${m.from.h}: ${plainMsg(m.text).length>60?plainMsg(m.text).slice(0,60)+'…':plainMsg(m.text)}`,'Reply',()=>this.open(m.from.h)); }
-    this.sortList(); if(activeTab==='chats'&&!this.with&&!this.gid) this.renderNow(); },
+    this.sortList(); if(this.live()&&!this.with&&!this.gid) this.renderNow(); },
   // A message in one of your group chats.
   gincoming(m){ if(m.from&&Blocks.has(m.from.h)) return; const mine=!!(m.from&&this.isMe(m.from.h)), msg=m.system?{id:m.id,system:true,text:m.text,t:m.t}:{id:m.id,mine,text:m.text,t:m.t,reply:m.reply||null,from:m.from};
-    if(this.gid===m.group&&this.thread&&activeTab==='chats'){ if(!this.thread.messages.some(x=>x.id===m.id)){ this.thread.messages.push(msg); this.addBubble(msg); }
+    if(this.gid===m.group&&this.thread&&this.live()){ if(!this.thread.messages.some(x=>x.id===m.id)){ this.thread.messages.push(msg); this.addBubble(msg); }
       if(m.system) api('/api/chat/groups/'+encodeURIComponent(m.group)).then(t=>{ if(this.gid===m.group){ this.thread=t; if(!$('dmText')||!$('dmText').value) this.renderNow(); } }).catch(()=>{}); return; }
     const g=this.groups.find(x=>x.id===m.group); if(!g){ this.load(); return; }
-    g.last={text:m.text,t:m.t,mine,from:m.from&&m.from.h}; if(!mine&&!m.system){ g.unread++; this.count(); toast(`👥 ${g.name} · @${m.from.h}: ${plainMsg(m.text).length>50?plainMsg(m.text).slice(0,50)+'…':plainMsg(m.text)}`,'Open',()=>this.openGroup(g.id)); }
-    this.groups.sort((a,b)=>(b.pinned-a.pinned)||(b.last.t-a.last.t)); if(activeTab==='chats'&&!this.with&&!this.gid) this.renderNow(); },
+    g.last={text:m.text,t:m.t,mine,from:m.from&&m.from.h}; if(!mine&&!m.system){ g.unread++; this.count(); if(Phone.inside()) Phone.buzz(`👥 ${g.name} · @${m.from.h}`,plainMsg(m.text).slice(0,80),()=>this.openGroup(g.id)); else toast(`👥 ${g.name} · @${m.from.h}: ${plainMsg(m.text).length>50?plainMsg(m.text).slice(0,50)+'…':plainMsg(m.text)}`,'Open',()=>this.openGroup(g.id)); }
+    this.groups.sort((a,b)=>(b.pinned-a.pinned)||(b.last.t-a.last.t)); if(this.live()&&!this.with&&!this.gid) this.renderNow(); },
   // The colony asking whether you want to join someone's group.
   invited(d){ if(Blocks.has(d.by)) return; toast(`🪐 ${d.from}: ${d.text}`,'View',()=>{ const iv=this.invites.find(i=>d.group&&i.id===d.group.id); this.view=iv&&iv.heist?'heists':'groups'; this.back(); openTab('chats'); }); this.load(); },
   sortList(){ this.list.sort((a,b)=>((b.pinned?1:0)-(a.pinned?1:0))||((b.last?b.last.t:0)-(a.last?a.last.t:0))); },
@@ -4938,7 +4966,8 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       b.onclick=()=>{ const on=!b.classList.contains('flagon'); document.querySelectorAll('.dm.flagon').forEach(x=>x.classList.remove('flagon')); b.classList.toggle('flagon',on); }; }
     return b; },
   dot(p){ return el('span',{class:'odot'+(p&&p.online?' on':''),title:p&&p.online?'Online':'Offline'}); },
-  renderNow(){ if(activeTab!=='chats') return; const p=$('pane'); if(p) { p.innerHTML=''; this.render(p); } },
+  live(){ return activeTab==='chats'||Phone.on; }, /* the chats are on screen: the side panel, or the phone inside a place */
+  renderNow(){ if(!this.live()) return; const p=Phone.on?Phone.screen:$('pane'); if(p) { p.innerHTML=''; this.render(p); } },
   async act(url, body, then){ try{ const r=await api(url,{method:'POST',body:body||{}}); if(then) await then(r); }catch(e){ toast(e.message); } },
   feeNote(T){ const c=T&&T.cost; if(!c) return null;
     if(this.gid){ if(!c.fee) return el('div',{class:'feenote free',text:'✓ Free: everyone here lives near you'});
@@ -4956,7 +4985,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       const head=el('div',{class:'pane-head dmhead'}, el('button',{class:'x',text:'‹','aria-label':'Back to chats',onclick:()=>this.back()}),
         el('button',{class:'dmcard',title:`Open @${this.with}'s card`,onclick:card}, av,
           el('div',{class:'dmwho'}, el('b',{text:withSt(w?w.h:this.with,w?(w.n||'@'+w.h):'@'+this.with)}), el('span',{class:'hint'+(w&&w.online?' onl-now':''),text:w?(w.online?'● Online now':w.seen?`Last seen ${ago(w.seen)}`:'Offline'):'…'}))),
-        el('button',{class:'x dmmore','aria-label':'More','aria-expanded':String(this.menu),text:'⋯',onclick:()=>{ this.menu=!this.menu; this.sure=null; this.renderNow(); }}),
+        this.thread&&this.thread.canSend?Phone.callBtn(this.with,'x dmcall'):'', el('button',{class:'x dmmore','aria-label':'More','aria-expanded':String(this.menu),text:'⋯',onclick:()=>{ this.menu=!this.menu; this.sure=null; this.renderNow(); }}),
         maxBtn(), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>openTab(null)}));
       const T=this.thread, lastTheirs=T&&[...T.messages].reverse().find(m=>!m.mine), H=encodeURIComponent(this.with);
       const menu=this.menu&&T?el('div',{class:'dmmenu'},
@@ -6002,10 +6031,11 @@ function scrollTabsUp(){ requestAnimationFrame(()=>requestAnimationFrame(()=>{ c
   if(!box||box===document.body) return; box.scrollTo({top:box.scrollTop+r.getBoundingClientRect().top-box.getBoundingClientRect().top-6,behavior:'smooth'}); })); }
 const BUYABLE=new Set(['housing','shops','offices','industry']); // what players may own (matches the server)
 function actionTabs(c){ const wrap=el('div',null); const gb=GuideUI.box(); if(gb) wrap.append(gb); const dr=Daily.row(); if(dr) wrap.append(dr);
+  if(Date.now()-(Love.at||0)>60000){ Love.at=Date.now(); api('/api/me/love').then(r=>{ if(Love.count(r)&&sel) renderCard(true); }).catch(()=>{}); } /* for the number on the 💘 Love tab */
   if(!PushUI.st&&!PushUI.busy) PushUI.load().then(()=>{ if(sel&&sel.kind==='c') renderCard(true); });
   wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}), el('button',{class:'btn sm',text:'⚙️ Settings',onclick:()=>PushUI.sheet()}))); const row=el('div',{class:'acttabs',role:'tablist'});
-  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home',MyHome.data&&MyHome.data.props?`🏠 Home · ${MyHome.data.props} 🏢`:'🏠 Home'],['wallet','👛 Wallet'],['cars','Cars'],['crime','Crime'],['badges','⭐ Stars']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=actTab===id?null:id; renderCard(true); if(actTab) scrollTabsUp(); }}));
-  if(actTab==='bank') actTab='wallet'; if(actTab==='pet'||actTab==='casino'||actTab==='out') actTab='earn'; if(!actTab){ wrap.append(row); return wrap; } const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>{ const p=Stars.panel(c); p.append(statusBox(c)); return p; }, earn:c=>Earn.panel(c) }[actTab]||workPanel;
+  for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home',MyHome.data&&MyHome.data.props?`🏠 Home · ${MyHome.data.props} 🏢`:'🏠 Home'],['wallet','👛 Wallet'],['love',Love.n?`💘 Love · ${Love.n}`:'💘 Love'],['cars','Cars'],['crime','Crime'],['badges','⭐ Stars']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=actTab===id?null:id; renderCard(true); if(actTab) scrollTabsUp(); }}));
+  if(actTab==='bank') actTab='wallet'; if(actTab==='pet'||actTab==='casino'||actTab==='out') actTab='earn'; if(!actTab){ wrap.append(row); return wrap; } const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, love:()=>Love.box(), casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>{ const p=Stars.panel(c); p.append(statusBox(c)); return p; }, earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
 // ---- Home (rent or move, and the buildings you own), Bank, Cars ----
 const Money={ id:null, at:0, homes:null, props:null, bank:null, busy:false };
@@ -6019,6 +6049,7 @@ const MyHome={ data:null, at:0, busy:false,
 async function findHomeToRent(){ try{ const H=await api('/api/me/homes'), h=H.homes.find(x=>x.space>0); if(!h){ toast('No homes have space right now. New homes will open up as the colony grows.'); return; }
     const b=D.buildings.get(h.id)||{id:h.id,x:0,y:0}; goToBuilding(b); toast(`${h.name} has ${h.space} flat${h.space===1?'':'s'} free. Tap 🔑 Rent here on its card.`); }catch(e){ toast(e.message); } }
 function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🏠 Home'})); MyHome.load(); const H=MyHome.data;
+  if(c.home){ const d=detail.get(c.id); box.append(Visit.box(!!(d&&d.locked))); } /* locking your home lives here */
   if(!H){ box.append(el('p',{class:'hint',text:'Checking where you live…'})); return box; }
   if(H.home){ const b=D.buildings.get(H.home.id);
     box.append(el('p',{class:'jobnow'}, 'You live at ', el('b',{text:H.home.name}), H.home.mine?' (you own it)':'', '.'),
@@ -6253,7 +6284,7 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
     if(mine&&b.upAt){ const left=b.upAt-now, cost=rushCost(upgradeQuote(b.type,lv+1).cost, left);
       card.append(el('p',{class:'jobnow',text:`⬆️ Upgrading to level ${lv+1}: ${left>0?`ready in ${realTime(left)}`:'finishing…'}`}), el('div',{class:'row-actions'}, el('button',{class:'btn',text:`⚡ Rush it (${fmt(cost)})`,onclick:()=>toast(`Pay the builders ${fmt(cost)} coins to finish the upgrade now?`,'Rush',()=>meAction(`/api/me/buildings/${encodeURIComponent(b.id)}/rush`,{},`Level ${lv+1}!`))})));
     }
-    else if(mine&&b.done!==false&&!b.ruin&&upgradable(b.type)){ const box=el('div',{class:'authbox'}, el('h3',{text:`⬆️ Upgrade · level ${lv} of ${MAX_LEVEL}`}));
+    else if(mine&&b.done!==false&&!b.ruin&&upgradable(b.type)) card.append(fold('up:'+b.id,`⬆️ Upgrade · level ${lv} of ${MAX_LEVEL}`,()=>{ const box=el('div',{class:'foldin'});
       if(lv>=MAX_LEVEL) box.append(el('p',{class:'hint',text:'It’s at the top level. Nothing grander can be built here.'}));
       else { if(!this.up||this.up.id!==b.id||Date.now()-this.up.at>20000){ if(!this.upBusy){ this.upBusy=true; const id=b.id; api(`/api/me/buildings/${encodeURIComponent(id)}/upgrade`).then(q=>{ this.up={id,q,at:Date.now()}; }).catch(e=>{ this.up={id,q:{error:e.message},at:Date.now()}; }).finally(()=>{ this.upBusy=false; if(sel&&sel.id===id) renderCard(true); }); } box.append(el('p',{class:'hint',text:'Asking the builders…'})); }
         else { const q=this.up.q; if(q.error) box.append(el('p',{class:'hint',text:q.error}));
@@ -6262,7 +6293,7 @@ const Plots={ info:new Map(), busy:new Set(), offers:null, offersAt:0,
               bill([['Builders',q.cost], ...(q.land?[['Extra ground',q.land]]:[]), ...q.charges.map(c=>[c.name,c.amount])], q.total));
             if(q.problem) box.append(el('p',{class:'warnline',text:q.problem}));
             else box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Upgrade for ${fmt(q.total)}`,onclick:()=>toast(`Upgrade ${b.name||t.name} to level ${q.level} for ${fmt(q.total)} coins?`,'Upgrade',async()=>{ const r=await meAction(`/api/me/buildings/${encodeURIComponent(b.id)}/upgrade`,{},r=>`The builders are on it. Level ${r.level} in ${realTime(r.minutes*GAME_MIN_MS)}.`); if(r) this.up=null; })}))); } } }
-      card.append(box); }
+      return box; }));
     if(mine&&!b.ruin) card.append(el('div',{class:'row-actions'},
       el('button',{class:'btn sm',text:'✏️ Rename',onclick:()=>this.renameSheet(b,t)}),
       t.work?el('button',{class:'btn sm',text:b.web?'🌐 Website':'🌐 Add website',onclick:()=>this.websiteSheet(b,t)}):'',
@@ -6493,8 +6524,10 @@ const Love={
   hearts(n){ return el('span',{class:'hearts','aria-label':`${n} of 5 hearts`}, '♥'.repeat(n), el('i',{text:'♥'.repeat(5-n)})); },
   label(c){ return c.status==='married'?'💍 Married':'💞 Dating'; },
   // your own card: who you're with, the meter, proposals, and who's asked you out
+  n:0, // things waiting for your answer (someone asked you out, a proposal), shown on the 💘 Love tab
+  count(r){ const n=(r.asks||[]).length+(r.current&&r.current.proposedBy==='them'?1:0); if(n!==this.n){ this.n=n; return true; } return false; },
   box(){ const wrap=el('div',{class:'authbox visitbox lovebox'}); wrap.append(el('h3',{text:'💘 Love'}), el('p',{class:'hint',text:'Loading…'}));
-    api('/api/me/love').then(r=>this.fill(wrap,r)).catch(()=>wrap.remove()); return wrap; },
+    api('/api/me/love').then(r=>{ this.fill(wrap,r); if(this.count(r)&&sel) renderCard(true); }).catch(()=>wrap.remove()); return wrap; },
   fill(wrap,r){ wrap.replaceChildren(el('h3',{text:'💘 Love'})); const c=r.current;
     if(c){ wrap.append(el('p',null, el('b',{text:this.label(c)}), c.status==='married'?' to ':' ', el('button',{class:'linkb',text:'@'+c.with,onclick:()=>openCitizen(c.with)})), this.hearts(c.hearts),
         el('div',{class:'lovebar'}, el('b',{style:`width:${Math.round(100*c.points/c.max)}%`})),
@@ -6631,7 +6664,7 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
     try{ this.mic=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}}); }catch(e){ toast('Allow the microphone to talk (in your browser’s settings for this site).'); return; }
     const tr=this.mic.getAudioTracks()[0], tx=this.pc.addTransceiver(tr,{direction:'sendonly'}); this.live=true; this.paint();
     await this.serial(async()=>{ await this.pc.setLocalDescription(await this.pc.createOffer()); const r=await api('/api/voice/publish',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,offer:{type:'offer',sdp:this.pc.localDescription.sdp},mid:tx.mid}}); await this.pc.setRemoteDescription(r.answer); });
-    this.meter('me',this.mic); toast(this.to?'🎙️ You’re live, to the people you picked.':'🎙️ You’re live: everyone here can hear you. Tap 🎙️ to mute.'); },
+    this.meter('me',this.mic); if(!this.call) toast(this.to?'🎙️ You’re live, to the people you picked.':'🎙️ You’re live: everyone here can hear you. Tap 🎙️ to mute.'); },
   paint(){ if(!this.micBtn) return; this.micBtn.textContent=!this.mic?'🎙️':this.live?'🎙️':'🔇'; this.micBtn.classList.toggle('live',!!this.mic&&this.live); this.micBtn.classList.toggle('off',!!this.mic&&!this.live);
     this.micBtn.title=!this.mic?'Tap to talk (everyone here hears you)':this.live?'You’re live: tap to mute':'Muted: tap to talk'; this.peopleBtn.textContent=this.to?'👤':'👥'; },
   // who hears you, and muting anyone for yourself
@@ -6651,6 +6684,84 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
       if(loud) this.lit.set(id,now+450); } for(const [id,t] of [...this.lit]) this.light(id,t>now); },
   light(id,on){ const R=this.R; if(!R||!R.h) return; if(on) R.h.talking(id,true); else { R.h.talking(id,false); this.lit.delete(id); } },
 };
+// ---- The in-game phone (server/phone.js) ----
+// Inside a place, your private chats (the "outside" chat) open on a phone in your hand, so you can read and answer them
+// without leaving. A message that arrives while you're inside buzzes the phone with a banner at the top. And you can call
+// anyone who's online: their phone rings wherever they are in the game, and once they answer you talk by voice (the same
+// voice service as inside places, on a line of your own that nobody else hears).
+const CallVoice=Object.assign(Object.create(Voice),{ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null, byMid:new Map(), els:new Map(), meters:new Map(), lit:new Map(), q:Promise.resolve(), ac:null, call:true,
+  // a call has no room to put buttons in: the phone's call screen has its own
+  async enter(R){ this.leave(); if(!(Me&&Me.token)||typeof RTCPeerConnection==='undefined') return 'This phone can’t do voice calls.'; this.R=R;
+    try{ this.cfg=await api('/api/voice/config'); }catch(e){ return 'Couldn’t connect the voice. Hang up and try again.'; } if(this.R!==R) return 'gone'; if(!this.cfg.on) return 'Voice calls aren’t switched on yet.';
+    try{ const s=await api('/api/voice/session',{method:'POST',body:{place:R.spot}}); if(this.R!==R) return 'gone'; this.sid=s.sessionId; }catch(e){ return 'Couldn’t connect the voice. Hang up and try again.'; }
+    this.pc=new RTCPeerConnection({iceServers:this.cfg.ice,bundlePolicy:'max-bundle'}); this.pc.ontrack=e=>this.track(e);
+    this.serial(()=>this.sync()); this.timer=setInterval(()=>this.levels(),150); return ''; },
+  paint(){ Phone.paintCall(); }, light(id,on){ if(!on) this.lit.delete(id); Phone.talking(id,on); } });
+const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null, unread:0,
+  inside(){ return !!(typeof Room!=='undefined'&&Room.el); },
+  // the phone in your hand, with your chats on its screen
+  show(){ if(!this.inside()){ openTab('chats'); return; } if(activeTab==='chats') openTab(null);
+    if(!this.el){ this.screen=el('div',{class:'phbody'});
+      const clock=el('b',{class:'phclock'}); const tick=()=>{ clock.textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}); }; tick(); this.clockT=setInterval(tick,15000);
+      this.el=el('div',{class:'phone',role:'dialog','aria-label':'Your phone',onclick:e=>{ if(e.target===this.el) this.hide(); }},
+        el('div',{class:'phframe'}, el('div',{class:'phstatus'}, clock, el('span',{class:'phnotch'}), el('span',{text:'📶 🔋'})), this.screen,
+          el('button',{class:'phhome','aria-label':'Put the phone away',title:'Put the phone away',onclick:()=>this.hide()})));
+      document.body.append(this.el); }
+    this.on=true; this.el.hidden=false; this.banner&&this.banner.remove(); Chats.renderNow(); if(!Chats.loadedAt||Date.now()-Chats.loadedAt>20000) Chats.load(); this.paintBtn(); },
+  hide(){ this.on=false; if(this.el){ this.el.remove(); this.el=null; clearInterval(this.clockT); } this.screen=null; },
+  // the 📱 button in a place (with how many messages are waiting)
+  btn(){ this.pbtn=el('button',{class:'btn sm hphonebtn',title:'Your phone: your chats and calls',onclick:()=>this.show()}); this.paintBtn(); return this.pbtn; },
+  paintBtn(){ const b=this.pbtn; if(!b) return; const n=Chats.unread||0; b.replaceChildren('📱 Phone', n?el('i',{class:'phbadge',text:n>9?'9+':String(n)}):''); },
+  // a message came in while you're inside: the phone buzzes and shows it at the top
+  buzz(from,text,open){ this.paintBtn(); if(this.on) return; try{ navigator.vibrate&&navigator.vibrate([90,60,90]); }catch(e){} this.beep(false);
+    this.banner&&this.banner.remove(); const b=el('button',{class:'phbanner',onclick:()=>{ b.remove(); open(); }}, el('span',{class:'phbic',text:'💬'}), el('span',{class:'phbt'}, el('b',{text:from}), el('span',{text:text})), el('small',{text:'now'}));
+    this.banner=b; document.body.append(b); setTimeout(()=>{ if(this.banner===b){ b.classList.add('out'); setTimeout(()=>b.remove(),400); } },6000); },
+  // a short tone (a message), or the ring of a call (repeating until it stops)
+  beep(ringing){ try{ const ac=this.ac=this.ac||new (window.AudioContext||window.webkitAudioContext)(), t=ac.currentTime, g=ac.createGain(); g.connect(ac.destination);
+      const notes=ringing?[[880,0,0.18],[660,0.22,0.18],[880,0.44,0.18],[660,0.66,0.18]]:[[988,0,0.09],[1319,0.11,0.12]];
+      for(const [f,at,d] of notes){ const o=ac.createOscillator(); o.type='sine'; o.frequency.value=f; o.connect(g); o.start(t+at); o.stop(t+at+d); }
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(ringing?0.25:0.12,t+0.02); g.gain.setValueAtTime(ringing?0.25:0.12,t+(ringing?0.82:0.2)); g.gain.exponentialRampToValueAtTime(0.0001,t+(ringing?0.9:0.26)); }catch(e){} },
+  startRing(){ this.stopRing(); const go=()=>{ this.beep(true); try{ navigator.vibrate&&navigator.vibrate([400,200,400]); }catch(e){} }; go(); this.ring=setInterval(go,2200); },
+  stopRing(){ clearInterval(this.ring); this.ring=null; try{ navigator.vibrate&&navigator.vibrate(0); }catch(e){} },
+  // 📞 Call on someone's card or in your chat with them
+  callBtn(handle,cls){ return el('button',{class:cls||'btn',text:cls&&/\bx\b/.test(cls)?'📞':'📞 Call','aria-label':`Call @${handle}`,title:`Ring @${handle}’s phone`,onclick:e=>{ e&&e.stopPropagation(); this.dial(handle); }}); },
+  async dial(handle){ if(!(Me&&Me.token)){ toast('Sign in to your colonist to make calls.'); return; } if(this.call){ toast('You’re already on a call.'); this.paintCall(); return; }
+    try{ const r=await api('/api/phone/call',{method:'POST',body:{to:handle}}); this.set(r.call); }catch(e){ toast(e.message); } },
+  me(){ return String(Me&&Me.handle||'').toLowerCase(); },
+  other(c){ c=c||this.call; return c&&(c.from.toLowerCase()===this.me()?c.to:c.from); },
+  incoming(c){ return c&&c.to.toLowerCase()===this.me(); },
+  set(c){ const was=this.call; this.call=c; if(!c){ this.stopRing(); CallVoice.leave(); this.vstate=''; this.small=false; clearInterval(this.secT); this.callEl&&this.callEl.remove(); this.callEl=null; return; }
+    if(c.state==='ringing'&&this.incoming(c)) this.startRing(); else this.stopRing();
+    if(c.state==='live'&&!(was&&was.state==='live')) this.connect(c);
+    this.paintCall(); },
+  async connect(c){ this.vstate='Connecting…'; this.paintCall(); const no=await CallVoice.enter({spot:c.place}); if(!this.call||this.call.id!==c.id) return; /* (the same call can arrive twice: the answer, and the news it's live) */
+    if(no){ this.vstate=no; this.paintCall(); return; } this.vstate=''; this.paintCall(); await CallVoice.talk(); this.paintCall(); },
+  msg(d){ if(d.kind==='voice'){ if(this.call&&d.place===this.call.place) CallVoice.msg(d.voice); return; }
+    if(d.kind==='ring'||d.kind==='live'){ if(d.call&&!(this.call&&this.call.id!==d.call.id)) this.set(d.call); return; }
+    if(d.kind==='end'&&this.call&&this.call.id===d.id){ const o=this.other(), mine=d.by&&d.by.toLowerCase()===this.me(), inc=this.incoming(this.call);
+      const say={ missed:inc?`📞 Missed call from @${o}.`:`📞 @${o} didn’t answer.`, declined:inc?'Call declined.':`📞 @${o} can’t talk right now.`, cancelled:inc?`📞 Missed call from @${o}.`:'Call cancelled.', long:'📞 The call ran out of time (an hour).', ended:mine?`Call ended${d.secs?` · ${this.dur(d.secs)}`:''}.`:`📞 @${o} hung up${d.secs?` · ${this.dur(d.secs)}`:''}.` }[d.why]||'Call ended.';
+      this.set(null); toast(say); } },
+  dur(s){ return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; },
+  async answer(yes){ const c=this.call; if(!c) return; this.stopRing(); try{ const r=await api('/api/phone/answer',{method:'POST',body:{id:c.id,accept:yes}}); if(yes&&r.call) this.set(r.call); else if(!yes) this.set(null); }catch(e){ toast(e.message); this.set(null); } },
+  async hangup(){ const c=this.call; if(!c) return; this.set(null); try{ await api('/api/phone/hangup',{method:'POST',body:{id:c.id}}); }catch(e){} },
+  talking(id,on){ if(!this.callEl) return; this.callEl.classList.toggle('speaking',!!on&&id!=='me'); },
+  // the call screen: ringing (answer or decline), calling…, or on the call (mute, hang up). It floats over everything,
+  // on the map or inside a place, and shrinks to a small bar when you tap ⌄ so you can carry on playing.
+  paintCall(){ const c=this.call; if(!c){ this.callEl&&this.callEl.remove(); this.callEl=null; return; }
+    if(!this.callEl){ this.callEl=el('div',{class:'phcall',role:'dialog','aria-label':'Phone call'}); document.body.append(this.callEl); }
+    const o=this.other(c), inc=this.incoming(c), oc=[...S.citizens.values()].find(x=>x.handle.toLowerCase()===o.toLowerCase()), av=el('span',{class:'ava phava'}); av.innerHTML=avatarSVG(oc||{handle:o,id:o,gender:'m'});
+    const st=c.state==='ringing'?(inc?'📞 Incoming call…':'Ringing…'):this.vstate||(c.at?this.dur(Math.max(0,Math.round((Date.now()+skew-c.at)/1000))):'On the call');
+    const mic=CallVoice.mic, live=CallVoice.live, small=this.small&&c.state==='live';
+    this.callEl.classList.toggle('small',!!small); this.callEl.classList.toggle('ringing',c.state==='ringing'&&inc);
+    const B=(cls,icon,label,fn)=>el('button',{class:'phcb '+cls,'aria-label':label,onclick:fn}, el('b',{text:icon}), el('span',{text:label}));
+    const acts=c.state==='ringing'?(inc?[B('no','✆','Decline',()=>this.answer(false)),B('yes','✆','Answer',()=>this.answer(true))]:[B('no','✆','Cancel',()=>this.hangup())])
+      :[B(mic&&!live?'mute on':'mute',mic&&!live?'🔇':'🎙️',mic&&!live?'Unmute':'Mute',()=>CallVoice.talk()), B('no','✆','Hang up',()=>this.hangup())];
+    if(small) this.callEl.replaceChildren(el('button',{class:'phsmall',onclick:()=>{ this.small=false; this.paintCall(); }}, av, el('b',{text:'@'+o}), el('span',{class:'phst',text:st})), B('no sm','✆','Hang up',()=>this.hangup()));
+    else this.callEl.replaceChildren(c.state==='live'?el('button',{class:'phmin','aria-label':'Make it small',title:'Make it small and keep playing',text:'⌄',onclick:()=>{ this.small=true; this.paintCall(); }}):'',
+      av, el('b',{class:'phwho',text:'@'+o}), el('span',{class:'phst',text:st}), el('div',{class:'phacts'}, ...acts));
+    clearInterval(this.secT); if(c.state==='live'&&!this.vstate) this.secT=setInterval(()=>{ const s=this.callEl&&this.callEl.querySelector('.phst'); if(s&&this.call&&this.call.at) s.textContent=this.dur(Math.max(0,Math.round((Date.now()+skew-this.call.at)/1000))); },1000); },
+  // after a reload: are you on a call?
+  async check(){ if(!(Me&&Me.token)) return; try{ const r=await api('/api/phone'); if(r.call&&!this.call) this.set(r.call); }catch(e){} } };
 const Visit={
   // tapping 🔒 Look inside: go in if you've been let in, otherwise ask
   async open(handle){ let st; try{ st=await api('/api/citizens/'+encodeURIComponent(handle)+'/visit'); }catch(e){ toast(e.message); return; }
@@ -6743,7 +6854,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     this.chatBtn=el('button',{class:'btn sm hchatbtn',text:'💬 Chat',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden){ this.whoOpts(); setTimeout(()=>this.chatIn.focus(),50); } }});
     this.exitBtn=el('button',{class:'hexit',hidden:true,text:'🚪 Exit',title:'Leave the house and go back to the map',onclick:()=>this.close()}); /* shown by the front door */
     this.actBtn=el('button',{class:'hact',hidden:true,onclick:()=>{ this.h&&this.h.act(); this.sendPos(true,true); }}); /* sit, lie down, use: shown next to things you can use */
-    this.stage=el('div',{class:'roomstage'}, this.viewBtn, this.perspBtn, this.chatBtn, this.chatBox, this.tools, this.cross, this.exitBtn, this.actBtn);
+    this.stage=el('div',{class:'roomstage'}, this.viewBtn, this.perspBtn, this.chatBtn, Phone.btn(), this.chatBox, this.tools, this.cross, this.exitBtn, this.actBtn);
     this.file=el('input',{type:'file',accept:'image/*',hidden:true,onchange:()=>this.upload()});
     const root=el('div',{class:'webview roomview',role:'dialog','aria-label':title}, bar, this.stage, this.shop, this.file);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
@@ -6802,7 +6913,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     const sim=this.people(), lv=[...(this.others||new Map()).values()], named=lv.filter(p=>p.h).map(p=>'@'+p.h+' (walking round)'), anon=Math.max(lv.length,live.viewers)-named.length; live.viewers=Math.max(lv.length,live.viewers);
     this.hereNames=[...sim.map(p=>p.label), ...named, ...(anon>0?[`${anon} visitor${anon===1?'':'s'} looking round`]:[])];
     this.hereNames.unshift('you'); const n=sim.length+live.viewers+1; if(this.hereChip){ this.hereChip.textContent=`👥 ${fmt(n)}`; this.hereChip.append(el('span',{class:'wide',text:n===1?' (just you)':' here now'})); this.hereChip.title=n===1?'Just you here':`${fmt(n)} here now`; } if(this.h){ const own=sim.filter(p=>p.own).map(p=>p.name); const put=()=>this.h&&this.h.setPeople(sim.map(p=>({...p,look:p.own?Looks.m.get(p.name.toLowerCase())||null:null}))); put(); if(own.some(h=>!Looks.m.has(h.toLowerCase()))) Looks.want(own).then(put); } },
-  close(quiet){ if(!this.el) return; setTimeout(mapResume,0); clearInterval(this.hereTimer); Club.leave(); Voice.leave(); this.leave(); this.mapPill&&this.mapPill.remove(); this.mapPill=null; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
+  close(quiet){ if(!this.el) return; setTimeout(mapResume,0); clearInterval(this.hereTimer); Club.leave(); Voice.leave(); Phone.hide(); this.leave(); this.mapPill&&this.mapPill.remove(); this.mapPill=null; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
   toggle(on){ this.edit=on===undefined?!this.edit:on; this.setPick(null); this.select(null); this.shop.hidden=!this.edit; if(this.editBtn) this.editBtn.textContent=this.edit?'✓ Done':this.editWord; if(this.edit) this.paintShop(); this.paintTools(); },
   // the streets and buildings round the home: from what the map has loaded, or fetched once (only when looking from above)
   async around(fetch){ const h=this.d&&this.d.home; if(!h||h.x==null||this.aroundDone||!this.h) return; const R=8, x0=h.x-R, y0=h.y-R, x1=h.x+(h.w||1)+R, y1=h.y+(h.d||1)+R;
@@ -7095,6 +7206,12 @@ function nameEditor(c,who){ const inp=el('input',{type:'text',maxlength:'40',pla
 // What a colonist is doing right now, for the top of their card.
 function cardNow(c, d){ const h=bOf(c.home), st=h?citizenAt(c,gmNow()):null;
   return !h ? (d&&d.leftHome ? 'Between homes, looking for a place to rent' : d&&d.queue ? `In cryosleep aboard the ark, #${fmt(d.queue)} in line to wake` : 'In cryosleep aboard the ark') : st ? st.act : 'Arriving soon'; }
+// A fold on a card: a header you tap to show or hide what's under it. What's under it is only built when it's open (so
+// a closed Upgrade doesn't even ask the builders), and whether it's open is remembered while you play.
+const Folds=new Map();
+function fold(key,title,body,{open=false,note=''}={}){ const on=Folds.has(key)?Folds.get(key):open;
+  const box=el('div',{class:'fold'+(on?' on':'')}, el('button',{class:'fhead','aria-expanded':String(on),onclick:()=>{ Folds.set(key,!on); renderCard(true); }}, el('span',{text:title}), el('span',{class:'fnote'}, note, el('i',{text:on?'▾':'▸'}))));
+  if(on){ const b=body(); if(b) box.append(el('div',{class:'fbody'}, b)); } return box; }
 function renderCard(force){ if(!force && cardBusy()) return;
   const card=$('card'); if(!sel){ card.hidden=true; return; } card.innerHTML='';
   // Playing at a Game House or Casino: the building's details step aside so the game fills the card.
@@ -7108,29 +7225,31 @@ function renderCard(force){ if(!force && cardBusy()) return;
     const nm=b=>(D.buildings.get(b.id)||b).name||T(b).name;
     const shr=el('button',{class:'x shr','aria-label':'Share','title':'Share',text:'↗',onclick:()=>Share.colonist(c)});
     const strip=d&&d.claimed?Stars.strip(d.stars||0, mineCard(c)):null;
+    const moreOn=!!Folds.get('cinfo'), more=rows=>moreOn?rows:[]; /* the details people rarely need fold away under "More" */
     card.append(close, cardMax(), shr, head); if(strip) card.append(strip); card.append(el('dl',null,
-      el('dt',{text:'Gender'}), el('dd',{text:c.gender==='f'?'Woman':'Man'}),
       el('dt',{text:'Home'}), el('dd',{text:h?nm(h)+(d&&d.where?`, ${d.where}`:''):d&&d.leftHome?'None: looking for a place to rent':d&&d.queue?`None yet. Moves in when ${fmt(d.queue)} more ${d.queue===1?'home is':'homes are'} built`:'None yet'}),
-      ...(d&&d.props!=null?[el('dt',{text:'Property'}), el('dd',{text:d.props?`Owns ${d.props} propert${d.props===1?'y':'ies'}${mineCard(c)?` (up to ${d.propMax})`:''}`:'Owns none yet'})]:[]),
+      ...more(d&&d.props!=null?[el('dt',{text:'Property'}), el('dd',{text:d.props?`Owns ${d.props} propert${d.props===1?'y':'ies'}${mineCard(c)?` (up to ${d.propMax})`:''}`:'Owns none yet'})]:[]),
       el('dt',{text:'Job'}), el('dd',{text:j?`${T(j).work.title} at ${nm(j)}`:h?'Looking for work':'Gets one after moving in'}),
-      ...(j?(()=>{ const sh=SHIFTS[shiftOf(c.id, j.id, j.type)]; return [el('dt',{text:'Hours'}), el('dd',{text:`${sh.name}, ${sh.hours}`})]; })():[]),
+      ...more(j?(()=>{ const sh=SHIFTS[shiftOf(c.id, j.id, j.type)]; return [el('dt',{text:'Hours'}), el('dd',{text:`${sh.name}, ${sh.hours}`})]; })():[]),
       ...((Store.canWrite||(Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase()))?[el('dt',{text:'Coins'}), el('dd',{text:d&&typeof d.coins==='number'?(d.net?`${fmt(d.coins)}, ${d.net>0?'+':''}${d.net} per day`:`${fmt(d.coins)}, no job yet`):(coinsReload(c),'…')})]:[]),
       ...(isMayor(c.handle)?[el('dt',{text:'Role'}), el('dd',{text:`👑 Mayor of ${(S.meta&&S.meta.name)||'the colony'}`})]:[]),
       ...(d&&d.claimed?[el('dt',{text:'Online'}), el('dd',{class:d.online?'online':'',text:d.online?'● Online now':d.seen?`Last seen ${ago(d.seen)}`:'Not seen yet'})]:[]),
-      ...(c.pet&&CREATURES[c.pet.k]?[el('dt',{text:'Pet'}), el('dd',{text:`${c.pet.n}, a ${CREATURES[c.pet.k].name.toLowerCase()}`})]:[]),
+      ...more(c.pet&&CREATURES[c.pet.k]?[el('dt',{text:'Pet'}), el('dd',{text:`${c.pet.n}, a ${CREATURES[c.pet.k].name.toLowerCase()}`})]:[]),
       ...(d&&d.jailedUntil>Date.now()+skew?[el('dt',{text:'Status'}), el('dd',{text:`In jail for ${Math.max(1,Math.ceil((d.jailedUntil-Date.now()-skew)/60000))} more min`})]:[]),
-      el('dt',{text:'Joined'}), el('dd',{text:`Day ${Math.max(1,Math.floor(gmAt(c.joinedAt)/1440)+1)}, arrival #${fmt(c.seq||0)}`})));
+      ...more([el('dt',{text:'Gender'}), el('dd',{text:c.gender==='f'?'Woman':'Man'}), el('dt',{text:'Joined'}), el('dd',{text:`Day ${Math.max(1,Math.floor(gmAt(c.joinedAt)/1440)+1)}, arrival #${fmt(c.seq||0)}`})])),
+      el('button',{class:'linkb cmore','aria-expanded':String(moreOn),text:moreOn?'Less ▴':'More details ▾',onclick:()=>{ Folds.set('cinfo',!moreOn); renderCard(true); }}));
     if(Store.canWrite){
       { const ci=el('input',{type:'number',step:'1',inputmode:'numeric','aria-label':'Coins',placeholder:'Coins'});
         const go=async sign=>{ const n=Math.floor(Math.abs(Number(ci.value)||0)); if(!n){ toast('Enter an amount.'); return; } try{ const r=await api(`/api/admin/citizens/${c.id}/coins`,{method:'POST',body:{amount:sign*n}}); toast(`${sign>0?'Added':'Took away'} ${fmt(n)} coins. @${c.handle} now has ${fmt(r.coins)}; the treasury has ${fmt(r.treasury)}.`); detail.delete(c.id); loadDetail(c.handle).then(()=>renderCard(true)); refreshHUD(); }catch(e){ toast(e.message); } };
         card.append(el('div',{class:'cbet devcoins'}, el('b',{text:'Coins'}), ci, el('button',{class:'btn primary',text:'＋ Add',onclick:()=>go(1)}), el('button',{class:'btn danger',text:'− Take away',onclick:()=>go(-1)})), el('p',{class:'hint devcoins-hint',text:'Added coins come out of the treasury; coins taken away go back into it.'})); }
-      card.append(nameEditor(c,'dev')); card.append(el('div',{class:'row-actions'},
+      card.append(el('div',{class:'row-actions'},
         el('button',{class:'btn',text:c.gender==='f'?'Make a man':'Make a woman',onclick:()=>setGender(c,c.gender==='f'?'m':'f')}),
         el('button',{class:'btn',text:'Change job',onclick:()=>openPicker('job',c)}), el('button',{class:'btn',text:'Change home',onclick:()=>openPicker('home',c)}),
         c.founder?null:el('button',{class:'btn danger',text:'Remove',onclick:()=>removeCitizen(c)})));
-      card.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Copy setup link',title:'A link that lets this person set a password without the Instagram code',onclick:async()=>{ try{ const r=await api(`/api/admin/citizens/${c.id}/setup-link`,{method:'POST'}); const link=`${location.origin}/?claim=${encodeURIComponent(r.claimId)}`; try{ await navigator.clipboard.writeText(link); toast(`Setup link for @${c.handle} copied. It works once, for 24 hours.`); }catch(e){ prompt('Setup link (works once, for 24 hours):',link); } }catch(e){ toast(e.message); } }}),
+      card.append(fold('dev:name','✏️ Name',()=>nameEditor(c,'dev'),{note:c.name||''}));
+      card.append(fold('dev:pw','🔑 Password and setup link',()=>el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Copy setup link',title:'A link that lets this person set a password without the Instagram code',onclick:async()=>{ try{ const r=await api(`/api/admin/citizens/${c.id}/setup-link`,{method:'POST'}); const link=`${location.origin}/?claim=${encodeURIComponent(r.claimId)}`; try{ await navigator.clipboard.writeText(link); toast(`Setup link for @${c.handle} copied. It works once, for 24 hours.`); }catch(e){ prompt('Setup link (works once, for 24 hours):',link); } }catch(e){ toast(e.message); } }}),
         d&&d.claimed?el('button',{class:'btn danger',text:'Clear password',onclick:()=>toast(`Clear @${c.handle}'s password? They'll need a new code to get back in.`,'Clear',async()=>{ try{ await api(`/api/admin/citizens/${c.id}/password`,{method:'DELETE'}); d.claimed=false; toast('Password cleared.'); renderCard(); }catch(e){ toast(e.message); } })}):null,
-        el('span',{class:'hint',text:d?(d.claimed?'Has a password':'No password yet'):''})));
+        ),{note:d?(d.claimed?'Has one':'None yet'):''}));
       if(sel.picker) card.append(renderPicker(c)); }
     else { const mine=Me&&Me.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase();
       if(mine && Me.genderChosen===false){ const pick=async g=>{ try{ await api('/api/me/gender',{method:'POST',body:{gender:g}}); Me.genderChosen=true; ls.set('settlement-player',Me); const x=S.citizens.get(c.id); if(x) x.gender=g; const dd=detail.get(c.id); if(dd) dd.g=g; toast(g==='f'?'Welcome to Gliese 12 b. She’s all yours.':'Welcome to Gliese 12 b. He’s all yours.'); renderCard(true); }catch(e){ toast(e.message); } };
@@ -7138,21 +7257,24 @@ function renderCard(force){ if(!force && cardBusy()) return;
         card.append(el('div',{class:'authbox'}, el('h3',{text:'Choose your colonist'}), el('p',{class:'hint',text:'Pick once. After this, only the developer can change it.'}), el('div',{class:'row-actions'}, mk('m'), mk('f')))); }
 
       if(mine) card.append(actionTabs(c));
-      if(mine&&c.home) card.append(Visit.box(!!(d&&d.locked)));
-      if(mine&&Me&&Me.token) card.append(Love.box());
       if(mine) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'👗 Change my look',title:'Your character: body, face, hair, clothes and what you wear',onclick:()=>Look.show(false)})));
       if(mine) card.append(el('div',{class:'row-actions'}, el('span',{class:'badge ok',text:'✓ Signed in as you'}), el('button',{class:'linkb',text:'Log out',onclick:async()=>{ try{ await api('/api/session',{method:'DELETE'}); }catch(e){} Me=null; myMoney=null; ls.set('settlement-player',null); wsAuth(); Chats.reset(); buildToolbar(); refreshHUD(); toast('Logged out.'); renderCard(true); }})));
       else if(auth&&auth.handle&&auth.handle.toLowerCase()===c.handle.toLowerCase()) card.append(authPanel(c));
       // Already signed in as someone else: one person, one colonist, so no "This is me" on other cards.
-      else if(Me&&Me.token&&Me.handle){ card.append(el('div',{class:'row-actions'}, el('span',{class:'hint',text:`You're signed in as @${Me.handle}.`}), el('button',{class:'linkb',text:'Go to my colonist',onclick:()=>findMe()})));
+      else if(Me&&Me.token&&Me.handle){ const blocked=Blocks.has(c.handle);
+        /* talking to them first: message, a gift, asking them out */
+        if(c.claimed&&!blocked) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'💬 Message',onclick:()=>Chats.open(c.handle)}), Phone.callBtn(c.handle), giftOpen===c.handle?'':el('button',{class:'btn',text:'🎁 Send a gift',onclick:()=>{ giftOpen=c.handle; renderCard(true); }})));
+        if(c.claimed&&!blocked&&giftOpen===c.handle) card.append(giftBox(c.handle));
+        if(c.claimed&&!blocked) card.append(Love.row(c.handle));
+        if(!c.claimed) card.append(el('p',{class:'hint',text:`@${c.handle} hasn't verified their avatar yet, so they can't get messages or gifts.`}));
+        /* then where they are: their home, watching them */
         if(c.home){ const look=el('button',{class:'btn',text:d&&d.locked?'🔒 Look inside':'🏠 Look inside',title:d&&d.locked?'Their home is locked: ask to visit':'See inside their home',onclick:()=>d&&d.locked?Visit.open(c.handle):Room.open(c.handle)});
           if(d&&d.locked&&Me&&Me.token) api('/api/citizens/'+encodeURIComponent(c.handle)+'/visit').then(v=>{ if(v.status==='accepted'){ look.textContent='🏠 Look inside · you’re invited'; look.title='You can visit until '+new Date(v.until).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}); } else if(v.status==='pending') look.textContent='🔒 Look inside · asked'; }).catch(()=>{}); /* how your request stands */
           card.append(el('div',{class:'row-actions'}, look, el('button',{class:'btn',text:'👀 Watch',title:'Keep the camera on them and see what they do',onclick:()=>Watch.start(0,`Watching @${c.handle}`,null,c.handle)}), el('button',{class:'btn',text:'Visit their home',onclick:()=>meAction('/api/me/visit',{friend:c.handle},r=>`You're on your way to ${r.place}.`)}),
           pocketBtn(c))); }
-        if(c.claimed) card.append(el('div',{class:'row-actions'}, Blocks.has(c.handle)?'':el('button',{class:'btn primary',text:'💬 Message',onclick:()=>Chats.open(c.handle)}),
-          Blocks.has(c.handle)?el('button',{class:'btn',text:'Unblock',onclick:()=>Blocks.unblock(c.handle)}):el('button',{class:'btn',text:'🚫 Block',onclick:()=>Blocks.ask(c.handle)})));
-        if(c.claimed&&!Blocks.has(c.handle)) card.append(Love.row(c.handle));
-        if(c.claimed) card.append(giftBox(c.handle)); else card.append(el('p',{class:'hint',text:`@${c.handle} hasn't verified their avatar yet, so they can't receive gifts.`})); }
+        /* and the small print at the bottom */
+        card.append(el('div',{class:'row-actions cfoot'}, el('span',{class:'hint',text:`Signed in as @${Me.handle}.`}), el('button',{class:'linkb',text:'Go to my colonist',onclick:()=>findMe()}),
+          c.claimed?(blocked?el('button',{class:'linkb',text:'Unblock',onclick:()=>Blocks.unblock(c.handle)}):el('button',{class:'linkb danger',text:'🚫 Block',onclick:()=>Blocks.ask(c.handle)})):'')); }
       else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}), c.home?el('button',{class:'btn',text:'👀 Watch',onclick:()=>Watch.start(0,`Watching @${c.handle}`,null,c.handle)}):'')); }
   } else if(sel.kind==='p'){ Plots.card(card, close);
   } else if(sel.kind==='g'){ Plots.grassCard(card, close);
@@ -7186,9 +7308,12 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(!Store.canWrite&&Me&&Me.token) card.append(el('div',{class:'row-actions'}, Loc.btn(b.name||t.name, b.x, b.y)));
     if((canEnter(b.type)||(t.home&&!(MyHome.data&&MyHome.data.home&&MyHome.data.home.id===b.id)))&&b.done!==false&&!b.ruin&&!Store.canWrite) card.append(el('div',{class:'row-actions'}, b.owner&&isMe(b.owner)&&!t.home?el('button',{class:'btn primary',text:'🛋️ Design the inside',onclick:()=>Room.openBuilding(b.id,true)}):'', el('button',{class:'btn',text:'🚪 Go inside',onclick:()=>Room.openBuilding(b.id)}))); /* anyone can walk into a business */
     if(b.web && t.work && !b.ruin) card.append(websiteRow(b,t)); // up top, where visitors see it first
-    if(Store.canWrite && forSale && b.done!==false && !b.ruin) card.append(salePriceBox(b,t,usual,price,pct)); /* the developer: what the government sells it for */
-    if(Store.canWrite && (t.home?roomSize(b.type):bizSize(b.type))) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🛠️ Go inside and furnish',title:'Developer: walk into this building and change its inside (free)',onclick:()=>Room.openBuilding(b.id,true)}))); /* the developer: into any building */
-    if(Store.canWrite && t.guests && b.done!==false && !b.ruin) card.append(mixBox(b,t)); /* a night club: its DJ mix */
+    if(Store.canWrite){ /* the developer's tools, together: furnish it, move it, and (folded) its price and DJ mix */
+      card.append(el('div',{class:'row-actions devrow'}, (t.home?roomSize(b.type):bizSize(b.type))?el('button',{class:'btn primary',text:'🛠️ Furnish inside',title:'Developer: walk into this building and change its inside (free)',onclick:()=>Room.openBuilding(b.id,true)}):'',
+        b.done===false?el('button',{class:'btn primary',text:'Finish now',onclick:async()=>{ try{ await api(`/api/admin/buildings/${encodeURIComponent(b.id)}/finish`,{method:'POST'}); toast(`${b.name||t.name} is finished`); }catch(e){ toast(e.message); } }}):'',
+        el('button',{class:'btn',text:'✥ Move',onclick:()=>{ setTool({kind:'move',id:b.id,rot:b.rot||0}); }}), el('button',{class:'btn',text:'⟲ Turn',onclick:()=>rotateBuilding(b.id)}), el('button',{class:'btn',text:'＋ One more',onclick:()=>{ setTool({kind:'place',type:b.type}); }}), el('button',{class:'btn danger',text:'Demolish',onclick:()=>removeBuilding(b.id)})));
+      if(forSale && b.done!==false && !b.ruin) card.append(fold('dev:sale','🏷️ Sale price',()=>salePriceBox(b,t,usual,price,pct),{note:`${fmt(price)} coins${b.sale!=null?' (set)':''}`}));
+      if(t.guests && b.done!==false && !b.ruin) card.append(fold('dev:mix','🎧 DJ mix',()=>mixBox(b,t))); }
     Plots.buildingBits(card,b,t);
     if(t.hangar && b.done!==false && !b.ruin) card.append(hangarSection(b,t));
     if(b.owner&&isMe(b.owner)&&!Store.canWrite){ const tl=Tills.map.get(b.id); if(tl){ const f=Math.min(1,tl.till/Math.max(1,tl.cap)), btn=el('button',{class:'btn primary sm',text:`Collect ${fmt(tl.till)}`,disabled:tl.till<1?'':null,onclick:e=>{ const r=e.currentTarget.getBoundingClientRect(); Tills.collect({id:b.id,x:r.left+r.width/2,y:r.top+r.height/2,col:f>=1?['#FFE680','#E2A71E','#9A6A0E']:f>=0.5?['#F4F6F8','#AEB5BD','#6E757C']:['#F0B27A','#B8743A','#7A4A20']}).then(()=>renderCard(true)); }});
@@ -7205,8 +7330,6 @@ function renderCard(force){ if(!force && cardBusy()) return;
       if(!(Me&&Me.token&&Me.handle)) card.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'}));
       else if(casino&&casino.open&&casino.id===b.id) card.append(casinoPanel({id:b.id}));
       else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎰 Play here',onclick:()=>{ casino={ ...(casino||{ game:'coin', pick:'heads', bet:10, last:null }), id:b.id, open:true, info:null, at:0 }; casino.greet=true; loadCasino({id:b.id}); casino.open=true; renderCard(true); }}))); }
-    if(Store.canWrite) card.append(el('div',{class:'row-actions'}, b.done===false?el('button',{class:'btn primary',text:'Finish now',onclick:async()=>{ try{ await api(`/api/admin/buildings/${encodeURIComponent(b.id)}/finish`,{method:'POST'}); toast(`${b.name||t.name} is finished`); }catch(e){ toast(e.message); } }}):null,
-      el('button',{class:'btn',text:'Move',onclick:()=>{ setTool({kind:'move',id:b.id,rot:b.rot||0}); }}), el('button',{class:'btn',text:'⟲ Turn',onclick:()=>rotateBuilding(b.id)}), el('button',{class:'btn',text:'One more',onclick:()=>{ setTool({kind:'place',type:b.type}); }}), el('button',{class:'btn danger',text:'Demolish',onclick:()=>removeBuilding(b.id)})));
   }
   const fresh=card.hidden; card.hidden=false; syncMyCardBtn();
   // On a phone the card takes the place of an open panel (Town Square, Colonists…), rather than being pushed up above it.
@@ -7443,7 +7566,7 @@ async function openInvite(tid){ if(!(Me&&Me.token)) return; let inv=null; try{ i
 /* ---------------- first-day guide ---------------- */
 // "Getting started" on your own card: six first steps, each checked off from what you've actually done, with a small
 // reward to collect for each and a bonus for finishing. "Show me" takes you to the right place for each step.
-var GuideUI={ data:null, at:0, busy:false, open:true,
+var GuideUI={ data:null, at:0, busy:false, open:false, /* folded: just the next step shows until you open it */
   load(){ if(this.busy||!(Me&&Me.token)) return; this.busy=true; api('/api/me/guide').then(d=>{ this.data=d; this.at=Date.now(); }).catch(()=>{}).finally(()=>{ this.busy=false; if(sel&&sel.kind==='c') renderCard(true); }); },
   get(){ if(!this.data||Date.now()-this.at>8000) this.load(); return this.data; },
   async claim(step){ try{ const r=await api('/api/me/guide/claim',{method:'POST',body:{step}}); toast(step==='bonus'?`🎉 You've got the hang of it! +${fmt(r.paid)} coins.`:`✓ +${fmt(r.paid)} coins`); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } this.at=0; this.load(); }catch(e){ toast(e.message); } },
@@ -7458,11 +7581,10 @@ var GuideUI={ data:null, at:0, busy:false, open:true,
     const n=G.steps.filter(s=>s.claimed).length, wrap=el('div',{class:'guide'+(this.open?'':' shut')});
     const head=el('button',{class:'g-head','aria-expanded':String(this.open),onclick:()=>{ this.open=!this.open; renderCard(true); }}, el('b',{text:'🧭 Getting started'}), el('span',{class:'g-n',text:`${n} of ${G.steps.length}`}), el('span',{class:'g-chev',text:this.open?'▾':'▸'}));
     const bar=el('div',{class:'g-bar'}, el('i',{style:`width:${Math.round(n/G.steps.length*100)}%`}));
-    wrap.append(head, bar); if(!this.open) return wrap;
-    const ul=el('ol',{class:'g-steps'});
-    for(const st of G.steps){ const right = st.claimed ? el('span',{class:'g-ok',text:'✓'}) : st.done ? el('button',{class:'btn primary sm',text:`Collect +${fmt(st.reward)}`,onclick:()=>this.claim(st.id)}) : el('button',{class:'btn sm',text:'Show me',onclick:()=>this.show(st.id)});
+    wrap.append(head, bar); const ul=el('ol',{class:'g-steps'}), next=G.steps.find(s=>s.done&&!s.claimed)||G.steps.find(s=>!s.claimed);
+    for(const st of this.open?G.steps:next?[next]:[]){ const right = st.claimed ? el('span',{class:'g-ok',text:'✓'}) : st.done ? el('button',{class:'btn primary sm',text:`Collect +${fmt(st.reward)}`,onclick:()=>this.claim(st.id)}) : el('button',{class:'btn sm',text:'Show me',onclick:()=>this.show(st.id)});
       ul.append(el('li',{class:st.claimed?'done':''}, el('span',{class:'g-ic',text:st.icon}), el('div',{class:'g-txt'}, el('b',{text:st.title}), el('small',{text:st.claimed?'Done':st.done?'Done: collect your reward':`${st.how} +${fmt(st.reward)} coins`})), right)); }
-    wrap.append(ul);
+    wrap.append(ul); if(!this.open) return wrap;
     wrap.append(el('div',{class:'g-bonus'}, el('span',{text:`🎉 Finish them all for a +${fmt(G.bonus.reward)} bonus`}), G.bonus.ready&&!G.bonus.claimed?el('button',{class:'btn primary sm',text:`Collect +${fmt(G.bonus.reward)}`,onclick:()=>this.claim('bonus')}):''),
       el('button',{class:'linkb g-hide',text:'Hide the guide',onclick:()=>this.hide()}));
     return wrap; } };

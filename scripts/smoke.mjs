@@ -2159,6 +2159,37 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
   await call('POST', '/api/voice/audience', { place, to: null }, VA.P); ok(((await call('POST', '/api/voice/list', { place }, VB.P)).json.speakers || []).length === 1, 'back to everyone: Bo hears her again');
   ok((await call('POST', '/api/voice/session', { place: 'b:somewhere-else' }, VA.P)).status === 409, 'you can only use voice where you are');
   await call('POST', '/api/voice/leave', { place }, VA.P); ok(((await call('POST', '/api/voice/list', { place }, VB.P)).json.speakers || []).length === 0, 'when Ava leaves, nobody hears her');
+  { // the in-game phone: ring someone who's online, they answer, and the two of you talk on a line of your own
+    const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'phone' || m.type === 'authed') got.push(m); });
+      await new Promise(r => w.once('open', r)); w.send(JSON.stringify({ type: 'auth', token: P.headers['x-player'] })); for (let i = 0; i < 40 && !got.some(m => m.type === 'authed'); i++) await sleep(50); return { w, got }; };
+    const PA = await player('phone_ann', 100), PB = await player('phone_bob', 100), PC = await player('phone_cat', 100);
+    ok((await call('POST', '/api/phone/call', { to: 'phone_bob' }, PA.P)).status === 409, 'you can’t ring someone who isn’t in the game');
+    const a = await sock(PA.P), b = await sock(PB.P), c = await sock(PC.P);
+    ok((await call('POST', '/api/phone/call', { to: 'phone_ann' }, PA.P)).status === 400, 'you can’t call yourself');
+    const r = await call('POST', '/api/phone/call', { to: 'phone_bob' }, PA.P), id = r.json.call?.id; await sleep(300);
+    ok(r.status === 200 && r.json.call.state === 'ringing', 'Ann rings Bob', JSON.stringify(r.json));
+    ok(b.got.some(m => m.data?.kind === 'ring' && m.data.call.from === 'phone_ann'), '…his phone rings');
+    ok((await call('POST', '/api/phone/call', { to: 'phone_bob' }, PC.P)).status === 409, 'Cat can’t get through: Bob’s line is busy');
+    ok((await call('POST', '/api/phone/answer', { id, accept: true }, PA.P)).status === 409, 'only Bob can answer his own call');
+    ok((await call('POST', '/api/voice/session', { place: 'c:' + id }, PA.P)).status === 409, 'no voice on the call until he answers');
+    const ans = await call('POST', '/api/phone/answer', { id, accept: true }, PB.P); await sleep(300);
+    ok(ans.json.call?.state === 'live' && a.got.some(m => m.data?.kind === 'live'), 'Bob answers: the call is live for both', JSON.stringify(ans.json));
+    const place2 = 'c:' + id, sa2 = (await call('POST', '/api/voice/session', { place: place2 }, PA.P)).json.sessionId, sb2 = (await call('POST', '/api/voice/session', { place: place2 }, PB.P)).json.sessionId;
+    ok(sa2 && sb2, 'both get a voice connection on the call');
+    ok((await call('POST', '/api/voice/session', { place: place2 }, PC.P)).status === 409, 'Cat can’t listen in');
+    await call('POST', '/api/voice/publish', { place: place2, sessionId: sa2, mid: '0', offer: { type: 'offer', sdp: 'v=0 mic' } }, PA.P); await sleep(300);
+    ok(b.got.some(m => m.data?.kind === 'voice' && m.data.voice?.kind === 'on') && !c.got.some(m => m.data?.kind === 'voice'), 'Bob is told Ann is talking; nobody else is');
+    ok(((await call('POST', '/api/voice/list', { place: place2 }, PB.P)).json.speakers || [])[0]?.h === 'phone_ann', 'Bob hears Ann');
+    await call('POST', '/api/phone/hangup', { id }, PB.P); await sleep(300);
+    ok(a.got.some(m => m.data?.kind === 'end' && m.data.why === 'ended' && m.data.by === 'phone_bob'), 'Bob hangs up: Ann sees he hung up');
+    ok((await call('POST', '/api/voice/list', { place: place2 }, PB.P)).status === 409, 'the line is closed after the call');
+    const r2 = await call('POST', '/api/phone/call', { to: 'phone_cat' }, PB.P); await call('POST', '/api/phone/answer', { id: r2.json.call.id, accept: false }, PC.P); await sleep(300);
+    ok(b.got.some(m => m.data?.kind === 'end' && m.data.why === 'declined'), 'Cat declines Bob’s call');
+    await call('POST', '/api/blocks/phone_ann', {}, PC.P);
+    ok((await call('POST', '/api/phone/call', { to: 'phone_cat' }, PA.P)).status === 409, 'someone who blocked you can’t be called');
+    const r3 = await call('POST', '/api/phone/call', { to: 'phone_ann' }, PB.P); await call('POST', '/api/phone/hangup', { id: r3.json.call.id }, PB.P); await sleep(400);
+    const nt = (await call('GET', '/api/me/notices', undefined, PA.P)).json; ok(JSON.stringify(nt).includes('Missed call from @phone_bob'), 'a call hung up before it’s answered leaves a missed call', JSON.stringify(nt).slice(0, 300));
+    for (const x of [a, b, c]) x.w.close(); }
   sfu.close(); }
 { // inside, live: everyone in the same place sees the others walk about and can chat; frames turn on the wall; homes differ by type
   const A = await player('live_amy', 50_000), Bq = await player('live_ben', 50_000), place = 'b:live-test-' + Date.now();

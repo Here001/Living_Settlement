@@ -539,6 +539,9 @@ export function createHouse(host, opts) {
     for (const it of room.items) { const f = FURNITURE[it.k]; if (f.mount !== 'floor' || f.rug) continue; const [w, d] = footOf(it.k, it.r); if (px > it.x + 0.12 - R && px < it.x + w - 0.12 + R && py > it.y + 0.12 - R && py < it.y + d - 0.12 + R) return true; }
     return false;
   }
+  // something put down where you're standing: step aside to the nearest free spot (not stuck inside it)
+  const crossesWall = (x0, y0, x1, y1) => solidEdges.some(([a, b, c, d]) => { const o = (px, py, qx, qy, rx, ry) => Math.sign((qx - px) * (ry - py) - (qy - py) * (rx - px)); return o(x0, y0, x1, y1, a, b) !== o(x0, y0, x1, y1, c, d) && o(a, b, c, d, x0, y0) !== o(a, b, c, d, x1, y1); });
+  function unstick() { if (act || !blocked(me.x, me.y)) return false; for (let r = 0.25; r <= 3.5; r += 0.25) for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, x = me.x + Math.cos(a) * r, y = me.y + Math.sin(a) * r; if (!blocked(x, y) && !crossesWall(me.x, me.y, x, y)) { /* (on your side of the wall) */ me.x = x; me.y = y; moved(); dirty = true; wake(); return true; } } return false; }
   let lastRoom = -1;
   let lastInput = 0;
   // ---- using things: walk up to something you can use and a button appears (see actOf); tap it to sit, lie down,
@@ -639,7 +642,7 @@ export function createHouse(host, opts) {
     if (act && view === 'walk' && Math.hypot(fw, st) > 0.35) standUp(); /* pushing the joystick gets you up */
     if (act) { fw = 0; st = 0; }
     if (view === 'walk' && (fw || st)) { const sp = 2.3 * dt, sx = -Math.sin(me.yaw), sy = -Math.cos(me.yaw), dx = (sx * fw + -sy * st) * sp, dy = (sy * fw + sx * st) * sp;
-      const ox = me.x, oy = me.y; if (!blocked(me.x + dx, me.y)) me.x += dx; if (!blocked(me.x, me.y + dy)) me.y += dy; if (me.x !== ox || me.y !== oy) moving = true; tapAim = false;
+      unstick(); /* (inside something, e.g. a bed put down where you stood: out to the nearest free spot first, never through a wall) */ const ox = me.x, oy = me.y; if (!blocked(me.x + dx, me.y)) me.x += dx; if (!blocked(me.x, me.y + dy)) me.y += dy; if (me.x !== ox || me.y !== oy) moving = true; tapAim = false;
       if (Math.hypot(me.x - ox, me.y - oy) < sp * 0.3 && performance.now() - hintAt > 5000) /* pushing against something */ for (const g of wallStuff.children) { const D = g.userData.door; if (D && D.a < 0.9 && Math.hypot(me.x - D.cx, me.y - D.cy) < 0.9) { hintAt = performance.now(); opts.onHint && opts.onHint('🚪 Tap the door to open it.'); break; } } } /* pressing into a wall: nothing changes, nothing is drawn */
     if (moving) moved();
     // doors: open when tapped, and close by themselves a few seconds later (but not on someone standing in the doorway)
@@ -683,7 +686,7 @@ export function createHouse(host, opts) {
   { const a = opts.at; if (a && Number.isFinite(a.x) && Number.isFinite(a.y) && !blocked(a.x, a.y)) { me.x = a.x; me.y = a.y; me.yaw = Number.isFinite(a.a) ? a.a : me.yaw; stepIn(); moved(); } } /* back where you stood (after the phone dropped the 3D view) */
 
   return {
-    setRoom(r, ph, shellToo) { room = r; photos = { ...photos, ...(ph || {}) }; if (shellToo) buildShell(); buildStuff(); wake(); },
+    setRoom(r, ph, shellToo) { room = r; photos = { ...photos, ...(ph || {}) }; if (shellToo) buildShell(); buildStuff(); unstick(); wake(); },
     setPick(p) { pick = p; tapAim = false; const m = p && FURNITURE[p.k].mount; showGrid(m === 'floor'); buildStuff();
       if (p && view === 'walk' && p.x == null) me.pitch = m === 'ceil' ? 0.75 : m === 'floor' ? -0.45 : 0.02; // look where this kind of piece goes
       if (p) { placeCamera(); if (p.x == null) aim(); showGhost(); opts.onPick && opts.onPick(pick); } else showGhost(); wake(); },
@@ -720,6 +723,7 @@ export function createHouse(host, opts) {
     setPerspective(p) { persp = p === 'third' ? 'third' : 'first'; stepIn(); moved(); },
     get perspective() { return persp; },
     get view() { return view; },
+    check: { at(x, y) { me.x = x; me.y = y; moved(); }, blocked: (x, y) => blocked(x, y) }, /* (for checking) */
     goRoom, roomHere: () => roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN),
     dispose() { dead = true; cancelAnimationFrame(raf); ro.disconnect(); ctx.dispose(); checks.forEach(clearTimeout); removeEventListener('keydown', kd); removeEventListener('keyup', ku);
       scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); for (const t of photoTex.values()) t.dispose(); renderer.dispose(); renderer.domElement.remove(); stick.remove(); },

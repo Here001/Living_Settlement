@@ -129,6 +129,7 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .news[hidden]{display:none}
 .news .kick{font-size:12px;color:var(--muted);font-family:'Bricolage Grotesque',system-ui,sans-serif}
 .news .head{font-size:16px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.netbar{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);transform:translateX(-50%);z-index:60;display:flex;gap:9px;align-items:center;width:max-content;max-width:calc(100vw - 32px);padding:6px 14px 6px 10px;border-radius:16px;background:#2B2621;color:#FBF8F1;box-shadow:0 6px 20px rgba(0,0,0,.3);pointer-events:none;animation:netin .25s ease-out}.netbar[hidden]{display:none}.netbar b{font-size:20px}.netbar span{display:flex;flex-direction:column;line-height:1.25}.netbar strong{font-size:14px}.netbar small{font-size:12px;opacity:.85}.netbar[data-k=none],.netbar[data-k=down]{background:#B03A2E}.netbar[data-k=slow]{background:#8A6D1E}.netbar[data-k=ok]{background:#1E8449}@keyframes netin{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
 .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 168px);transform:translateX(-50%);z-index:9;background:#2B2621;color:#FBF8F1;padding:8px 8px 8px 14px;border-radius:999px;box-shadow:var(--shadow);display:flex;gap:10px;align-items:center;font-size:14px;max-width:calc(100% - 24px)}
 .toast[hidden]{display:none}
 .toast button{border:0;background:var(--accent);color:#fff;border-radius:999px;padding:3px 10px;font-weight:600}
@@ -1354,9 +1355,10 @@ function myPos(){ try{ const me=myCitizen(); const st=me&&citizenAt(me,gmNow());
 async function api(path, opts={}){
   if((opts.method||'GET')==='POST'&&/^\/api\/me\/(visit|earn\/)/.test(path)&&typeof myCitizen==='function'){ const from=myPos(); if(from) opts={...opts, body:{...(opts.body||{}), from}}; }
   const ac=typeof AbortController!=='undefined'?new AbortController():null, timer=ac&&setTimeout(()=>ac.abort(), opts.timeout||20000);
-  let r;
+  let r; const t0=Date.now(), rq={t:t0}; if(typeof Net!=='undefined'&&Net) Net.live.add(rq); /* (how long requests take: for the slow-connection notice) */
   try{ r=await fetch(path,{ method:opts.method||'GET', signal:ac?ac.signal:undefined, headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{}), ...(Me&&Me.token?{'x-player':Me.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined }); }
-  catch(e){ clearTimeout(timer); throw new Error(e&&e.name==='AbortError'?'The connection is slow. Please try again.':'Can\'t reach the colony right now. Check your connection.'); }
+  catch(e){ clearTimeout(timer); if(Net){ Net.live.delete(rq); Net.fail(); } throw new Error(e&&e.name==='AbortError'?'The connection is slow. Please try again.':'Can\'t reach the colony right now. Check your connection.'); }
+  if(Net){ Net.live.delete(rq); Net.took(Date.now()-t0); }
   try{ const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`);
     // Anything a player does may tick off a getting-started step, so the guide checks again shortly after.
     if((opts.method||'GET')!=='GET'&&/^\/api\/(me\/|square)/.test(path)&&!/\/api\/me\/guide/.test(path)&&typeof GuideUI!=='undefined'&&GuideUI.data&&!GuideUI.data.finished){ GuideUI.at=0; setTimeout(()=>GuideUI.load(),400); }
@@ -1442,10 +1444,35 @@ async function syncChunks(){
 function reloadAll(){ for(const k of [...S.chunks.keys()]) dropChunk(k); S.citizens.clear(); subKey=''; syncChunks(); }
 async function loadMeta(){ const r=await api('/api/meta'); S.meta=r.meta; S.events=r.events||[]; S.disasters=r.disasters||[]; skew=r.serverNow-Date.now(); loadChat(); loadStatus(); Auction.load(); }
 S.chat=[]; async function loadChat(){ try{ S.chat=await api('/api/square'); feedDirty=true; renderFeed(); }catch(e){} }
+// The connection notice: a strip at the top of the screen whenever the game can't reach the server, or the line is slow,
+// saying which and for how long (with a countdown to the next try), and "Back" for a moment once it's fine again.
+var Net={ live:new Set(), slowAt:0, lostAt:0, retryAt:0, fails:0, shown:'', el:null, okT:null,
+  took(ms){ this.fails=0; if(ms>4000) this.slowAt=Date.now(); },
+  fail(){ this.fails++; },
+  state(){ const now=Date.now(), up=ws&&ws.readyState===1, started=Store.ready||this.fails>0;
+    if(typeof navigator!=='undefined'&&navigator.onLine===false) return 'none';
+    if(started&&!up&&(this.lostAt||Store.ready)&&now-(this.lostAt||connectAt)>1500) return 'down';
+    if(!up&&this.fails>=2) return 'down';
+    const waiting=[...this.live].some(r=>now-r.t>4000), quiet=up&&now-lastMsgAt>4500;
+    if(waiting||quiet||now-this.slowAt<6000) return 'slow';
+    return ''; },
+  tick(){ if(document.hidden) return; const st=this.state(), now=Date.now(), secs=t=>{ t=Math.max(0,Math.round(t/1000)); return t<60?`${t}s`:`${Math.floor(t/60)}m ${String(t%60).padStart(2,'0')}s`; };
+    if(st){ if(!this.since) this.since=now;
+      if(!this.lostAt&&st!=='slow') this.lostAt=now;
+      const off=secs(now-(this.lostAt||this.since)), next=Math.max(0,Math.ceil((this.retryAt-now)/1000)), oldest=[...this.live].reduce((a,r)=>Math.min(a,r.t),now), wait=secs(Math.max(now-oldest,now-lastMsgAt));
+      const [icon,head,line]=st==='none'?['📵',`No internet · ${off}`,'Check your mobile data or Wi-Fi.']
+        :st==='down'?['🔌',`Can’t reach the game · ${off}`,`${next>0?`Retrying in ${next}s.`:'Retrying now…'} Changes may not save yet.`]
+        :['🐢',`Slow connection · ${wait}`,'Waiting for the server. Things may lag.'];
+      this.paint(st,icon,head,line); }
+    else if(this.shown&&this.shown!=='ok'){ const was=this.shown; this.since=0; this.lostAt=0; if(was!=='slow'){ this.paint('ok','✅','Back',`Connected to the game again.`); clearTimeout(this.okT); this.okT=setTimeout(()=>{ if(this.shown==='ok') this.hide(); },2500); } else this.hide(); } },
+  paint(st,icon,head,line){ if(!this.el){ this.el=el('div',{class:'netbar',role:'status','aria-live':'polite'}); document.body.append(this.el); }
+    if(this.shown!==st) this.el.dataset.k=st; this.shown=st; this.el.hidden=false; this.el.replaceChildren(el('b',{text:icon}), el('span',{}, el('strong',{text:head}), el('small',{text:line}))); },
+  hide(){ this.shown=''; if(this.el) this.el.hidden=true; } };
+setInterval(()=>Net.tick(),1000); addEventListener('offline',()=>Net.tick()); addEventListener('online',()=>setTimeout(()=>Net.tick(),300));
 // The live connection: the server sends a clock tick every 1.25 s, so a silent line for 20 s means it died without telling us
 // (common on phones switching networks). Reconnects back off gently and happen at once when the phone wakes or comes back online.
 let lastMsgAt=Date.now(), retryN=0, retryTimer=null, connectAt=0;
-function reconnectSoon(now){ clearTimeout(retryTimer); const wait=now?200:Math.min(30000,1500*Math.pow(1.7,retryN++))+Math.random()*1500; retryTimer=setTimeout(connect,wait); }
+function reconnectSoon(now){ clearTimeout(retryTimer); const wait=now?200:Math.min(30000,1500*Math.pow(1.7,retryN++))+Math.random()*1500; Net.retryAt=Date.now()+wait; retryTimer=setTimeout(connect,wait); }
 function connect(){
   clearTimeout(retryTimer);
   if(ws){ ws.onclose=ws.onmessage=ws.onerror=null; try{ ws.close(); }catch(e){} }
@@ -1473,7 +1500,7 @@ function connect(){
     else if(m.type==='dmGone' && m.id) Chats.gone(m.id);
     else if(m.type==='badge' && m.data) {} // badges were replaced by stars
     else if(m.type==='stars' && m.data) Stars.got(m.data.stars); };
-  ws.onclose=()=>{ if(ws!==me) return; if(Store.online) toast('Reconnecting to the colony…'); Store.online=false; reconnectSoon(); };
+  ws.onclose=()=>{ if(ws!==me) return; if(Store.online) Net.lostAt=Date.now(); Store.online=false; reconnectSoon(); }; /* (the connection notice at the top says so, with a timer) */
 }
 // A line that's open but silent (the server ticks every 1.25 s) or a connection attempt that never finishes is dead: start over.
 setInterval(()=>{ if(!ws||document.hidden) return; const now=Date.now();

@@ -2283,6 +2283,12 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
     r2.s({ type: 'ride', a: 'ask', id: Dp.id }); await sleep(300); d.s({ type: 'ride', a: 'answer', id: R2p.id, yes: true }); await sleep(300);
     ok(r2.got.some(m => m.type === 'ride' && m.k === 'in' && m.seat === 2 && m.seats === 4), 'a four-seater takes more: the next one gets the next seat');
     r3.s({ type: 'ride', a: 'ask', id: Dp.id }); await sleep(300); ok(r3.got.some(m => m.type === 'ride' && m.k === 'no' && /closer/.test(m.text)), 'you have to be by the car to ask');
+    { // voice: everyone in the same car talks together; out on the street, the people round you (by square of the town)
+      const vs = async (P, place) => call('POST', '/api/voice/session', { place }, P.P), deny = r => r.status === 409 && /there/.test(r.json.error || '');
+      ok(!deny(await vs(Dp, 'v:' + Dp.id)) && !deny(await vs(R2p, 'v:' + Dp.id)), 'voice in a car: the driver and the people riding with them', JSON.stringify((await vs(R2p, 'v:' + Dp.id)).json));
+      ok(deny(await vs(R3p, 'v:' + Dp.id)), '…and nobody outside the car');
+      ok(!deny(await vs(R3p, 's:2_2')) && deny(await vs(R3p, 's:9_9')), 'voice on the street: in the square of town you’re in, not one far away');
+      ok(deny(await vs(R2p, 's:1_1')), '…and someone riding in a car talks in the car, not on the street'); }
     r3.s({ type: 'drive', mode: 'walk', x: 25.2, y: 19.6, a: 0 }); await sleep(200); r3.s({ type: 'ride', a: 'ask', id: Dp.id }); await sleep(300); d.s({ type: 'ride', a: 'answer', id: R3p.id, yes: false }); await sleep(300);
     ok(r3.got.some(m => m.type === 'ride' && m.k === 'no' && /said no/.test(m.text)) && !r3.got.some(m => m.k === 'in'), 'the driver can say no');
     d.s({ type: 'ride', a: 'answer', id: R3p.id, yes: true }); await sleep(300); ok(!r3.got.some(m => m.k === 'in'), '…and can’t pull anyone in who didn’t ask');

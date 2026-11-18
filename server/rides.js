@@ -16,7 +16,7 @@ export class Rides {
   list(d) { const c = this.cars.get(d); return c ? [...c.riders].map(([id, r]) => ({ id, h: r.h, seat: r.seat })) : []; }
   // a drive update from someone (already checked): keep where they are; a driver's riders move with them
   moved(id, w) { if (this.riding.has(id)) return false; /* riders' own updates are ignored: they go where the car goes */
-    this.where.set(id, w); const c = this.cars.get(id);
+    this.where.set(id, { ...w, t: Date.now() }); const c = this.cars.get(id);
     if (c && w.mode !== 'car') { this.empty(id, 'out'); return true; } /* the driver got out: so does everyone */
     if (c) this.publish([...c.riders].map(([rid, r]) => ({ driving: true, id: rid, h: r.h, mode: 'ride', x: w.x, y: w.y, a: w.a, m: w.m, col: w.col, by: id })));
     return true; }

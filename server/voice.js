@@ -10,7 +10,12 @@ import { HttpError } from './world.js';
 
 const base = () => (process.env.CF_REALTIME_URL || 'https://rtc.live.cloudflare.com/v1').replace(/\/+$/, '') + '/apps/' + encodeURIComponent(process.env.CF_REALTIME_APP_ID || '');
 export const voiceOn = () => !!(process.env.CF_REALTIME_APP_ID && process.env.CF_REALTIME_APP_TOKEN);
-const PLACE = /^(b|h|c):[A-Za-z0-9_.-]{1,64}$/; /* c: a phone call (server/phone.js) */
+const PLACE = /^(b|h|c|s|v):[A-Za-z0-9_.-]{1,64}$/; /* c: a phone call (server/phone.js); s: out on the street; v: in a car */
+// Out on the street (in 3D), voice works by where you are: the town is cut into squares of STREET tiles, and you talk
+// with the people in yours (their voices fade with distance on your phone, so it's the people near you you hear).
+// In a car, everyone in it talks together (server/rides.js): 'v:<the driver>'.
+export const STREET = 16;
+export const streetCell = (x, y) => Math.floor(x / STREET) + '_' + Math.floor(y / STREET);
 const desc = d => (d && (d.type === 'offer' || d.type === 'answer') && typeof d.sdp === 'string' && d.sdp.length < 200000 ? { type: d.type, sdp: d.sdp } : null);
 
 export class Voice {
@@ -38,10 +43,18 @@ export class Voice {
     return j;
   }
   room(place) { let m = this.places.get(place); if (!m) this.places.set(place, m = new Map()); return m; }
-  here(place, id) { if (place.startsWith('c:')) return !!this.world.phone?.inCall(place.slice(2), id); /* on the call */ const e = this.world.rooms.here.get(place)?.get('p:' + id); return !!e && Date.now() - e.at < 70000; }
+  // who's in a street square (or the next one: you may be just over the edge) or a car, now
+  near(place) { const R = this.world.rides; if (!R) return [];
+    if (place.startsWith('v:')) { const d = place.slice(2), c = R.cars.get(d); return c ? [d, ...c.riders.keys()] : []; }
+    const [cx, cy] = place.slice(2).split('_').map(Number), out = [];
+    for (const [id, w] of R.where) if (w.mode !== 'ride' && Date.now() - (w.t || 0) < 30000 && Math.abs(Math.floor(w.x / STREET) - cx) <= 1 && Math.abs(Math.floor(w.y / STREET) - cy) <= 1 && !R.riding.has(id)) out.push(id);
+    return out; }
+  here(place, id) { if (place.startsWith('c:')) return !!this.world.phone?.inCall(place.slice(2), id); /* on the call */
+    if (place.startsWith('s:') || place.startsWith('v:')) return this.near(place).includes(id); /* on the street there, or in that car */ const e = this.world.rooms.here.get(place)?.get('p:' + id); return !!e && Date.now() - e.at < 70000; }
   check(me, place) { this.note(me); if (!PLACE.test(String(place || ''))) throw new HttpError(400, 'Which place?'); if (!this.here(place, me.id)) throw new HttpError(409, place.startsWith('c:') ? 'That call has ended.' : 'You need to be there to use voice.'); }
   mine(me, place, sessionId) { const s = this.sessions.get(me.id + '|' + place); if (!s || s.sessionId !== String(sessionId || '')) throw new HttpError(409, 'Start voice again.'); return s; }
   send(place, voice) { if (place.startsWith('c:')) { const to = this.world.phone?.ids(place.slice(2)); if (to) this.world.bus.publish([{ op: 'phone', private: true, to, data: { kind: 'voice', place, voice } }]); return; } /* a call: just the two of you */
+    if (place.startsWith('s:') || place.startsWith('v:')) { const to = [...new Set([...this.near(place), ...this.room(place).keys()])]; if (to.length) this.world.bus.publish([{ op: 'phone', private: true, to, data: { kind: 'voice', place, voice } }]); return; } /* the people there */
     this.world.bus.publish([{ inside: true, place, k: 'voice', club: voice }]); }
   async blocked(a, b) { const s = await this.world.chat.blockState(a, b); return s.iBlocked || s.blockedMe; }
   may(sp, me) { return !sp.to || sp.to.has(String(me.handle).toLowerCase()); }

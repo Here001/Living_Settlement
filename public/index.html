@@ -651,7 +651,7 @@ body.room-on .toast{z-index:9850} /* above the phone and the call screen, so a r
   .rsheet{max-height:calc(100dvh - 20px)}
   .toast{max-width:min(560px,80vw)}
   /* driving: a smaller map in the corner, and the big map and the phone fit the short screen */
-  .dmini{width:90px;height:90px}body.room-on.drive-on .worldbtn{top:calc(56px + 90px + 10px + env(safe-area-inset-top))!important}.dminiw{top:calc(56px + env(safe-area-inset-top))}
+  .dmini{width:90px;height:90px}body.room-on.drive-on .worldbtn{top:calc(56px + 90px + 10px + env(safe-area-inset-top))!important}.driveview .sidecol{top:calc(56px + 90px + 10px + 48px + 10px + env(safe-area-inset-top))}.dminiw{top:calc(56px + env(safe-area-inset-top))}
   .dbig{inset:52px 10px 8px 10px}
   .phframe{height:calc(100dvh - 16px)}.phstatus{padding:4px 18px 2px}.phhome{height:16px}
   .phcall{top:8px}
@@ -1108,9 +1108,13 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .hcl.me b{color:#2E86C1}
 .hchatrow{display:flex;gap:6px}
 .hchatrow input{flex:1;min-width:0;border:1.5px solid #ccc;border-radius:999px;padding:6px 12px;font:inherit;font-size:14px}
-.worldbtn{position:fixed;right:calc(env(safe-area-inset-right,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 66px);z-index:250;width:48px;height:48px;border-radius:50%;border:2px solid #2B2621;background:#fff;color:#2B2621;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:0;box-shadow:0 3px 0 #2B2621,0 6px 16px rgba(0,0,0,.25);cursor:pointer;font:800 10.5px/1.1 inherit}.worldbtn b{font-size:17px;font-weight:900;letter-spacing:-.02em;line-height:1}body.room-on .worldbtn{top:calc(env(safe-area-inset-top,0px) + 112px)}body.room-on.drive-on .worldbtn{top:calc(env(safe-area-inset-top,0px) + 64px + 108px + 10px)}body.room-on .worldbtn{z-index:9650}.worldbtn:active{transform:translateY(2px);box-shadow:0 1px 0 #2B2621}
+.worldbtn{position:fixed;right:calc(env(safe-area-inset-right,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 66px);z-index:250;width:48px;height:48px;border-radius:50%;border:2px solid #2B2621;background:#fff;color:#2B2621;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:0;box-shadow:0 3px 0 #2B2621,0 6px 16px rgba(0,0,0,.25);cursor:pointer;font:800 10.5px/1.1 inherit}.worldbtn b{font-size:17px;font-weight:900;letter-spacing:-.02em;line-height:1}body.room-on .worldbtn{top:calc(env(safe-area-inset-top,0px) + 66px)}body.room-on.drive-on .worldbtn{top:calc(env(safe-area-inset-top,0px) + 64px + 108px + 10px)}body.room-on .worldbtn{z-index:9650}.worldbtn:active{transform:translateY(2px);box-shadow:0 1px 0 #2B2621}
 .worldbtn[data-k="3d"]{background:linear-gradient(160deg,#ff9a5a,#E2783B);color:#fff;border-color:#8a3d14;box-shadow:0 3px 0 #8a3d14,0 6px 16px rgba(0,0,0,.25)}
 body.phone-on .worldbtn{display:none}
+.dfill{flex:1}.dbar .hphonebtn{position:static;box-shadow:none}
+.sidecol{position:absolute;right:calc(env(safe-area-inset-right,0px) + 14px);z-index:6;display:flex;flex-direction:column;gap:8px}
+.sidebtn{width:44px;height:44px;border-radius:50%;border:2px solid #2B2621;background:#fff;font-size:20px;display:grid;place-items:center;padding:0;cursor:pointer;box-shadow:0 2px 0 #2B2621,0 4px 12px rgba(0,0,0,.2)}.sidebtn:active{transform:translateY(2px);box-shadow:none}
+.driveview .sidecol{top:calc(env(safe-area-inset-top,0px) + 64px + 108px + 10px + 48px + 10px)}.roomstage .sidecol{top:66px}
 .hback{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);z-index:9650;box-shadow:0 4px 16px rgba(0,0,0,.3)}
 .rchoose{display:flex;flex-direction:column;gap:8px;margin:10px 0;max-height:50vh;overflow:auto}
 @media (max-width:520px){ .hhere .wide{display:none} }
@@ -6895,7 +6899,7 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
     VoiceOut.talk(this,other); this.space(); if(now-this.statsAt>2000){ this.statsAt=now; this.quality(); } },
   // inside a place: a voice is louder the nearer they stand, and comes from their side of you
   space(){ const R=this.R; if(this.call||!R||!R.h||!R.others) return; let me; try{ me=R.h.me; }catch(e){ return; } if(!me) return; const ca=Math.cos(me.a||0), sa=Math.sin(me.a||0); let moved=false;
-    for(const x of this.els.values()){ const p=R.others.get(x.id); if(!p) continue; const dx=p.x-me.x, dy=p.y-me.y, d=Math.hypot(dx,dy), dist=Math.max(0.35,Math.min(1,1.2-d/16)), pan=Math.max(-1,Math.min(1,(dx*ca-dy*sa)/Math.max(d,1)))*0.6;
+    for(const x of this.els.values()){ const p=R.others.get(x.id); if(!p) continue; const dx=p.x-me.x, dy=p.y-me.y, d=Math.hypot(dx,dy), dist=Math.max(R.floor!=null?R.floor:0.35,Math.min(1,1.2-d/(R.range||16))), pan=Math.max(-1,Math.min(1,(dx*ca-dy*sa)/Math.max(d,1)))*0.6;
       if(Math.abs(dist-x.dist)>0.02||Math.abs(pan-x.pan)>0.03){ x.dist=dist; x.pan=pan; moved=true; } } if(moved) this.route(); },
   light(id,on){ const R=this.R; if(!R||!R.h) return; if(on) R.h.talking(id,true); else { R.h.talking(id,false); this.lit.delete(id); } },
 };
@@ -6988,7 +6992,7 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
     this.paintCall(); },
   async connect(c){ this.vstate='Connecting…'; this.paintCall(); const no=await CallVoice.enter({spot:c.place}); if(!this.call||this.call.id!==c.id) return; /* (the same call can arrive twice: the answer, and the news it's live) */
     if(no){ this.vstate=no; this.paintCall(); return; } this.vstate=''; this.paintCall(); await CallVoice.talk(); this.paintCall(); },
-  msg(d){ if(d.kind==='voice'){ if(this.call&&d.place===this.call.place) CallVoice.msg(d.voice); return; }
+  msg(d){ if(d.kind==='voice'){ if(this.call&&d.place===this.call.place) CallVoice.msg(d.voice); else if(Voice.R&&Voice.R.spot===d.place) Voice.msg(d.voice); return; } /* (a call; or voice out on the street, or in a car) */
     if(d.kind==='ring'||d.kind==='live'){ if(d.call&&!(this.call&&this.call.id!==d.call.id)) this.set(d.call); return; }
     if(d.kind==='end'&&this.call&&this.call.id===d.id){ const o=this.other(), mine=d.by&&d.by.toLowerCase()===this.me(), inc=this.incoming(this.call);
       const say={ missed:inc?`📞 Missed call from @${o}.`:`📞 @${o} didn’t answer.`, declined:inc?'Call declined.':`📞 @${o} can’t talk right now.`, cancelled:inc?`📞 Missed call from @${o}.`:'Call cancelled.', long:'📞 The call ran out of time (an hour).', ended:mine?`Call ended${d.secs?` · ${this.dur(d.secs)}`:''}.`:`📞 @${o} hung up${d.secs?` · ${this.dur(d.secs)}`:''}.` }[d.why]||'Call ended.';
@@ -7165,10 +7169,10 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     this.modeBtn=el('button',{class:'btn dgo dmode',onclick:()=>this.switchMode()}); /* get out and walk, or get (back) in the car */
     this.goBtn=el('button',{class:'btn primary dgo',hidden:true}); this.inBtn=el('button',{class:'btn dgo',hidden:true}); this.rideBtn=el('button',{class:'btn primary dgo',hidden:true}); this.riding=null; this.riders=[]; /* rides: asking someone for one, or riding along */
     this.speed=el('div',{class:'dspeed'}); this.sub=sub;
-    const bar=el('div',{class:'webbar'}, el('button',{class:'webx','aria-label':'To the colony map',text:'✕',onclick:()=>World.toMap()}), el('div',{class:'webaddr'}, title, sub),
-      el('button',{class:'webbtn',title:'Camera: behind the car, from the driver’s seat, or from above',text:'🎥',onclick:()=>{ if(!this.T) return; const m=this.T.toggleView(); toast(m==='driver'?'🎥 From the driver’s seat':m==='above'?'🎥 From above':'🎥 Behind the car'); }}),
-      el('button',{class:'webbtn',title:'Driving controls',text:'⚙️',onclick:()=>DriveCtl.sheet()}), Phone.btn());
-    const root=el('div',{class:'webview driveview',role:'dialog','aria-label':'Driving around town'}, bar, stage, el('div',{class:'dhud'}, this.speed, el('div',{class:'dacts'}, this.rideBtn, this.goBtn, this.inBtn, this.modeBtn)));
+    const bar=el('div',{class:'webbar dbar'}, el('button',{class:'webx','aria-label':'To the colony map',text:'✕',onclick:()=>World.toMap()}), el('span',{class:'dfill'}), Phone.btn()); /* (no title: you can see where you are) */
+    const side=el('div',{class:'sidecol'}, el('button',{class:'sidebtn',title:'Camera: behind you, through your eyes (the driver’s seat), or from above','aria-label':'Camera',text:'🎥',onclick:()=>{ if(!this.T) return; const m=this.T.toggleView(), foot=this.T.pos.mode==='walk'; toast(m==='driver'?(foot?'🎥 Through your eyes':'🎥 From the driver’s seat'):m==='above'?'🎥 From above':foot?'🎥 Behind you':'🎥 Behind the car'); }}),
+      el('button',{class:'sidebtn',title:'Controls','aria-label':'Controls',text:'⚙️',onclick:()=>DriveCtl.sheet()}));
+    const root=el('div',{class:'webview driveview',role:'dialog','aria-label':'Driving around town'}, bar, side, stage, el('div',{class:'dhud'}, this.speed, el('div',{class:'dacts'}, this.rideBtn, this.goBtn, this.inBtn, this.modeBtn)));
     document.body.append(root); document.body.classList.add('room-on','drive-on'); this.el=root; this.dist=0; this.last={x:s.x,y:s.y}; this.car=car; DriveMap.mount(root);
     let T3; try{ T3=await import('/town3d.js'); }catch(e){ this.close(); toast('Driving couldn’t load. Check your connection and try again.'); return; } if(this.el!==root) return;
     try{ this.T=T3.createTown(stage,{ start:s, car, controls:DriveCtl.get(), mode:walk?'walk':'car', look, onCar:near=>{ this.atCar=near; this.paintMode(); }, onRide:c=>this.nearRide(c),
@@ -7192,7 +7196,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
       out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, m:m&&CAR_MODELS[m].kind!=='bike'?m:V===VEHICLE_TYPES.taxi?'sedan':'hatch', look:L||null, tag:online||live?'@'+c.handle+(n?` +${n}`:''):null, online, h:c.handle, drv, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, full:drv&&n>=seatsOf(dn.m)-1 }); }
     return out.sort((a,b)=>a.d-b.d).slice(0,40); },
   moved(x,y,a,v){ if(!this.el) return; if(this.last){ this.dist+=Math.hypot(x-this.last.x,y-this.last.y); } this.last={x,y};
-    const foot=this.T&&this.T.pos.mode==='walk'; this.speed.textContent=foot?(Math.abs(v)*8>3?'🏃 Running':Math.abs(v)>0.01?'🚶 Walking':'🧍 Standing'):`${this.T?this.T.kmh():0} km/h`;
+    const foot=this.T&&this.T.pos.mode==='walk'; this.speed.hidden=!!foot; if(!foot) this.speed.textContent=`${this.T?this.T.kmh():0} km/h`; this.voiceSync(); /* on foot: no speed to show */
     if(this.riding){ this.speed.textContent=`${this.T?this.T.kmh():0} km/h`; DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); } return; } /* riding: the car goes where its driver takes it */
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'drive',mode:foot?'walk':'car',x:+x.toFixed(2),y:+y.toFixed(2),a:+a.toFixed(2),m:this.car.m,col:this.car.col})); }catch(e){}
     DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); }
@@ -7213,6 +7217,16 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     if(foot){ T3.drive(); this.title.textContent=`🚗 Driving ${this.car.own?'your '+this.car.name.toLowerCase():this.car.name}`; this.sub.textContent='Steer with the stick'; }
     else { T3.walk(this.car.own); this.title.textContent='🚶 Out on foot'; this.sub.textContent='Stick to walk, drag the screen to look round'; if(this.car.own) toast(`🅿️ Your ${this.car.name.toLowerCase()} is parked here. Walk back to it to get in.`); }
     this.dist=0; this.nearBy(null); this.paintMode(); },
+  // ---- voice out here: with the people near you on the street (their voices fade with distance), or with everyone in
+  // your car. The street is cut into squares (server/voice.js); you keep your square until you're well into the next. ----
+  voiceSync(){ if(!this.T||!(Me&&Me.token)) return; const now=Date.now(); if(now-(this.vAt||0)<1500) return; this.vAt=now; const p=this.T.pos, me=myCitizen();
+    let spot; if(this.riding) spot='v:'+this.riding.id; else if(this.riders.length&&me) spot='v:'+me.id;
+    else { const C=16, cur=this.vSpot&&this.vSpot.startsWith('s:')?this.vSpot.slice(2).split('_').map(Number):null;
+      if(cur&&p.x>cur[0]*C-2&&p.x<(cur[0]+1)*C+2&&p.y>cur[1]*C-2&&p.y<(cur[1]+1)*C+2) spot=this.vSpot; else spot='s:'+Math.floor(p.x/C)+'_'+Math.floor(p.y/C); }
+    if(spot===this.vSpot&&Voice.R===this.vR) return; this.vSpot=spot; const live=!!(Voice.mic&&Voice.live&&Voice.R===this.vR), stage=this.el&&this.el.querySelector('.drivestage'); if(!stage) return;
+    const one=(id,d)=>({ id:'p:'+id, h:(S.citizens.get(id)||{}).handle||null, x:d.x*8, y:d.y*8 }), others={ get:k=>{ const d=DrivingNow.get(String(k).slice(2)); return d?one(String(k).slice(2),d):null; }, values:()=>[...DrivingNow].map(([id,d])=>one(id,d)) }; /* where everyone is now, in metres */
+    const T=this.T, R={ spot, stage, others, range:spot.startsWith('s:')?42:9999, floor:spot.startsWith('s:')?0:1, h:{ get me(){ const q=T.pos; return { x:q.x*8, y:q.y*8, a:q.a }; }, talking(){} } };
+    this.vR=R; setTimeout(async()=>{ await Voice.enter(R); if(live&&Voice.R===R) setTimeout(()=>{ if(Voice.R===R&&!Voice.mic) Voice.talk(); },1500); },300); /* your mic stays on as you move along */ },
   // ---- rides: in someone else's car, as many as it has seats (2 in sports cars, 4 in the rest, the driver included) ----
   send(o){ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }catch(e){} },
   nearRide(c){ const B=this.rideBtn; if(!B) return; if(!c||this.riding||!c.h){ B.hidden=true; return; } B.hidden=false; B.disabled=!!c.full;
@@ -7240,7 +7254,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     if(inside){ const p=this.T&&this.T.pos, door=this.T&&this.T.doorOf(b.id), foot=p&&p.mode==='walk'; this.resume=foot?{ mode:'walk', x:door?door.x:p.x, y:door?door.y:p.y, a:door?door.a:p.a+Math.PI, bid:b.id, t:Date.now() }:this.car&&this.car.own&&p?{ x:p.x, y:p.y, a:p.a, bid:b.id, t:Date.now() }:null; /* on foot: back out of the front door */ this.close(); setTimeout(()=>Room.openBuilding(b.id),50); } }, /* your own car waits outside for you */
   map:null, /* (DriveMap, for checking) */
   back(){ const r=this.resume; this.resume=null; if(!r||Date.now()-r.t>3*3600000) return; setTimeout(()=>this.start(r),80); },
-  close(quiet){ if(!this.el) return; try{ this.T&&this.T.dispose(); }catch(e){} this.T=null; Phone.hide(); DriveMap.reset(); this.el.remove(); this.el=null; document.body.classList.remove('room-on','drive-on'); if(this.camWas){ cam.x=this.camWas.x; cam.y=this.camWas.y; cam.z=this.camWas.z; this.camWas=null; } setTimeout(mapResume,0);
+  close(quiet){ if(!this.el) return; if(Voice.R&&Voice.R===this.vR) Voice.leave(); this.vR=null; this.vSpot=null; try{ this.T&&this.T.dispose(); }catch(e){} this.T=null; Phone.hide(); DriveMap.reset(); this.el.remove(); this.el=null; document.body.classList.remove('room-on','drive-on'); if(this.camWas){ cam.x=this.camWas.x; cam.y=this.camWas.y; cam.z=this.camWas.z; this.camWas=null; } setTimeout(mapResume,0);
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'drive',off:true})); }catch(e){}
     if(!quiet){ try{ if(history.state&&history.state.drive) history.back(); }catch(e){} } } };
 addEventListener('popstate',()=>{ if(Drive.el) Drive.close(true); });
@@ -7323,7 +7337,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     const apt=d.home&&d.home.unit?` · Apt ${d.home.unit}`:''; /* their own apartment in the building */
     const title=this.biz?(d.mine?`🏪 Your ${d.home.name.toLowerCase()}`:`🏪 ${d.home.name}${d.owner?` · @${d.owner}`:''}`):d.place==='building'?(d.mine?`🏠 Your ${d.home.name.toLowerCase()} (nobody lives here)`:`🏠 ${d.home.name} · empty${d.owner?` · @${d.owner}’s`:''}`):(d.mine?`🏠 Your home${apt}`:`🏠 @${d.owner}’s home${apt}`);
     const bar=el('div',{class:'webbar'}, el('button',{class:'webx','aria-label':'Go out of the door',title:'Go out of the door, onto the street',text:'✕',onclick:()=>this.exit()}),
-      el('div',{class:'webaddr'}, el('b',{text:title}), this.sub), this.mapBtn, this.hereChip, this.editBtn);
+      el('span',{class:'dfill'}), this.hereChip, this.editBtn); /* (no title: you can see where you are) */
     const L=layoutOf(d.size,d.room.plan||'home');
     this.viewBtn=el('button',{class:'btn sm hview',text:'⬆ From above',onclick:()=>this.flip()});
     let persp='first'; try{ persp=localStorage.getItem('resurgence-persp')==='third'?'third':'first'; }catch(e){}
@@ -7336,7 +7350,8 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     this.chatBtn=el('button',{class:'btn sm hchatbtn',text:'💬 Chat',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden){ this.whoOpts(); setTimeout(()=>this.chatIn.focus(),50); } }});
     this.exitBtn=el('button',{class:'hexit',hidden:true,text:'🚪 Exit',title:'Leave the house and go back to the map',onclick:()=>this.close()}); /* shown by the front door */
     this.actBtn=el('button',{class:'hact',hidden:true,onclick:()=>{ this.h&&this.h.act(); this.sendPos(true,true); }}); /* sit, lie down, use: shown next to things you can use */
-    this.stage=el('div',{class:'roomstage'}, this.viewBtn, this.perspBtn, this.chatBtn, Phone.btn(), this.chatBox, this.tools, this.cross, this.exitBtn, this.actBtn);
+    this.camBtn=el('button',{class:'sidebtn',text:'🎥',title:'Camera: through your eyes, behind you, or from above','aria-label':'Camera',onclick:()=>this.camera()});
+    this.stage=el('div',{class:'roomstage'}, el('div',{class:'sidecol'}, this.camBtn), this.chatBtn, Phone.btn(), this.chatBox, this.tools, this.cross, this.exitBtn, this.actBtn);
     this.file=el('input',{type:'file',accept:'image/*',hidden:true,onchange:()=>this.upload()});
     const root=el('div',{class:'webview roomview',role:'dialog','aria-label':title}, bar, this.stage, this.shop, this.file);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
@@ -7410,6 +7425,11 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
         for(const c of Object.values(r.chunks||{})){ A.buildings.push(...(c.buildings||[]).filter(b=>inBox(b.x,b.y,b.w||1,b.d||1))); A.roads.push(...Object.entries(c.roads||{}).filter(([k])=>tile(k))); A.water.push(...Object.entries(c.water||{}).filter(([k])=>tile(k))); } }
       catch(e){ this.aroundDone=false; return; } }
     this.aroundDone=true; if(this.h) this.h.setSurroundings(A); },
+  // the camera, one button round: through your own eyes → behind you → from above → through your eyes…
+  camera(){ const h=this.h; if(!h) return; const save=p=>{ try{ localStorage.setItem('resurgence-persp',p); }catch(e){} };
+    if(h.view==='above'){ this.flip(); h.setPerspective('first'); save('first'); this.perspBtn.textContent='👤 Third person'; toast('🎥 Through your eyes'); }
+    else if(h.perspective!=='third'){ h.setPerspective('third'); save('third'); this.perspBtn.textContent='👁️ First person'; toast('🎥 Behind you'); }
+    else { this.flip(); toast('🎥 From above'); } },
   flip(){ if(!this.h) return; const up=this.h.view!=='above'; if(up) this.around(true); this.h.setView(up?'above':'walk'); this.viewBtn.textContent=up?'🚶 Walk':'⬆ From above'; this.el.classList.toggle('above',up); this.paintTools(); },
   setPick(p){ this.pick=p; this.cross.hidden=!p||(this.h&&this.h.view==='above'); if(this.h) this.h.setPick(p); this.paintTools(); },
   select(i){ this.sel=i?this.d.room.items.find(x=>x.i===i)||null:null; if(this.h) this.h.setSelected(this.sel?this.sel.i:null); this.paintTools(); },
@@ -7463,8 +7483,8 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     for(const tip of [...t.querySelectorAll('.tip')]){ const k=tip.textContent; if(this.tipOff.has(k)){ tip.remove(); continue; } tip.append(el('button',{class:'tipx','aria-label':'Close',text:'✕',onclick:()=>{ this.tipOff.add(k); tip.remove(); }})); } },
   paintTools0(){ const t=this.tools; if(!t) return; t.innerHTML=''; const d=this.d; if(!d) return; const up=this.h&&this.h.view==='above';
     if(!d.mine){ const s=this.sel; if(s&&s.ph) t.append(el('span',{class:'tip',text:'A photo'}), el('button',{class:'btn sm',text:'⚑ Report this photo',onclick:()=>reportSheet({kind:'photo',id:s.ph,handle:d.owner})}), el('button',{class:'btn sm',text:'✕',onclick:()=>{ this.sel=null; this.h&&this.h.setSelected(null); this.paintTools(); }}));
-      else t.append(el('span',{class:'tip',text:up?'Drag to turn the house around. Tap 🚶 Walk to go back inside.':`${this.biz?`Welcome to ${d.home.name}.`:`Just looking around @${d.owner}’s home.`} ${PHONE_UI?'Use the joystick to walk and drag to look.':'Walk with WASD or the arrows; drag to look.'}`})); return; }
-    if(up&&!this.pick){ t.append(el('span',{class:'tip',text:this.edit?'From above: drag to turn the house. Floor pieces can be placed here; walk in for walls and ceilings.':'Drag to turn the house around. Tap 🚶 Walk to go back inside.'})); if(!this.edit) return; }
+      else t.append(el('span',{class:'tip',text:up?'Drag to turn the house around. Tap 🎥 to go back inside.':`${this.biz?`Welcome to ${d.home.name}.`:`Just looking around @${d.owner}’s home.`} ${PHONE_UI?'Use the joystick to walk and drag to look.':'Walk with WASD or the arrows; drag to look.'}`})); return; }
+    if(up&&!this.pick){ t.append(el('span',{class:'tip',text:this.edit?'From above: drag to turn the house. Floor pieces can be placed here; walk in for walls and ceilings.':'Drag to turn the house around. Tap 🎥 to go back inside.'})); if(!this.edit) return; }
     if(!this.edit&&this.biz&&!d.designed){ t.append(el('span',{class:'tip',text:'This is the standard fit-out. Tap 🛋️ Design to make it yours: keep these pieces, take them out, add your own and your logo.'})); return; }
     if(!this.edit){ t.append(el('span',{class:'tip',text:d.room.items.length?(PHONE_UI?'Joystick to walk, drag to look around.':'WASD or the arrows to walk, drag to look.'):'An empty home. Tap 🛋️ Furnish to buy furniture.'})); return; }
     const p=this.pick;

@@ -517,7 +517,7 @@ export function createTown(host, opts) {
     if (now - sent > 250) { sent = now; opts.onMove(car.x / TILE, car.z / TILE, car.a, car.v / TILE); }
     if (now - nearAt > 300 && !riding) { nearAt = now; let b = null; const fx = car.x + Math.cos(car.a) * 3, fz = car.z - Math.sin(car.a) * 3;
       if (foot) { let bd = 3.2; for (const s of solidsNear(car.x, car.z)) { if (!s.door) continue; const d = Math.hypot(s.door[0] - car.x, s.door[1] - car.z); if (d < bd) { bd = d; b = s.id; } } /* at the front door */
-        const nc = !!parked && Math.hypot(parked.x - car.x, parked.z - car.z) < 4.5; if (nc !== nearCar) { nearCar = nc; opts.onCar && opts.onCar(nc); } }
+        const nc = !!parked && Math.hypot(parked.x - car.x, parked.z - car.z) < 6.5; /* (a few steps from its side) */ if (nc !== nearCar) { nearCar = nc; opts.onCar && opts.onCar(nc); } }
       else if (Math.abs(car.v) < 5) { let bd = 7; for (const s of solidsNear(car.x, car.z)) { if (!s.id || !s.r) continue; const dx = Math.max(s.r[0] - fx, 0, fx - s.r[2]), dz = Math.max(s.r[1] - fz, 0, fz - s.r[3]), d = Math.hypot(dx, dz); if (d < bd) { bd = d; b = s.id; } } }
       if (b !== nearId) { nearId = b; opts.onNear(b ? opts.byId(b) : null); }
       { let rc = null, rd = 4.5; if (foot) for (const [id, f] of folk) if (f.kind === 'car' && f.drv) { const d = Math.hypot(f.x - car.x, f.z - car.z); if (d < rd) { rd = d; rc = id; } } /* by someone's car: ask them for a ride */
@@ -577,6 +577,9 @@ export function createTown(host, opts) {
     drive() { if (!foot) return; if (parked) { car.x = parked.x; car.z = parked.z; car.a = parked.ry + Math.PI / 2; parked = null; } foot = false; car.v = 0; car.vx = car.vz = 0; car.wa = 0; lk.yaw = 0; nearCar = false; opts.onCar && opts.onCar(false); controls(); },
     get parked() { return !!parked; },
     callCar() { return callCar(); }, get coming() { return !!summon; },
+    // where a point of the town is on the screen (tiles, and metres up): for buttons that sit on the door, or on the car
+    project(tx, ty, h = 0) { const v = new THREE.Vector3(tx * TILE, h, ty * TILE).project(camera), w = canvas.clientWidth, hh = canvas.clientHeight; return { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * hh, on: v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 }; },
+    get parkedAt() { return parked ? { x: parked.x / TILE, y: parked.z / TILE } : null; },
     doorOf(id) { for (const v of blocks.values()) for (const s of v.solid) if (s.id === id && s.door) return { x: s.door[0] / TILE, y: s.door[1] / TILE, a: s.out }; return null; },
     kmh() { return Math.round(Math.abs(car.v) * 3.6); },
     stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },

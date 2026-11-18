@@ -1121,6 +1121,7 @@ body.phone-on .worldbtn{display:none}
 /* inside a building: no banner either; ✕, who's here and Furnish float over the view */
 .roomview>.rbar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:calc(env(safe-area-inset-left,0px) + 10px);right:64px;z-index:7;background:none!important;border:0!important;box-shadow:none!important;padding:0!important;pointer-events:none}.roomview>.rbar>*{pointer-events:auto}.roomview>.rbar .hhere{box-shadow:0 2px 10px rgba(0,0,0,.25);background:rgba(255,253,248,.92)}.roomview>.rbar .btn{box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .tip.tipgo{opacity:0;transform:translateY(-6px);transition:opacity .5s,transform .5s}
+.floatbtn{position:absolute;left:0;top:0;z-index:6;margin:-30px 0 0 -30px;width:60px;height:60px;border-radius:50%;border:2.5px solid #fff;background:radial-gradient(circle at 35% 30%,#ffb07a,#E2783B 60%,#b9561f);color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.4),0 0 0 4px rgba(226,120,59,.25);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;padding:0;will-change:transform;animation:floatin .3s ease-out}.floatbtn b{font-size:24px;line-height:1}.floatbtn span{position:absolute;top:100%;margin-top:6px;white-space:nowrap;background:rgba(20,22,28,.78);color:#fff;font:700 12px/1.2 inherit;padding:3px 9px;border-radius:9px;pointer-events:none}.floatbtn:active{filter:brightness(.92)}@keyframes floatin{from{opacity:0}to{opacity:1}}
 .hback{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);z-index:9650;box-shadow:0 4px 16px rgba(0,0,0,.3)}
 .rchoose{display:flex;flex-direction:column;gap:8px;margin:10px 0;max-height:50vh;overflow:auto}
 @media (max-width:520px){ .hhere .wide{display:none} }
@@ -6947,7 +6948,7 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
   // the phone in your hand: its home screen has the same five apps as the bar at the bottom of the map (Town Square,
   // My card, Colonists, Races, Chats). An app is the real thing, moved onto the phone's screen while it's open (the
   // panel or the card), so everything in it works just as it does on the map; the home bar takes you back to the apps.
-  APPS:[['maps','Maps','#2E86DE'],['feed','Town Square','#3D7BD9'],['me','My card','#E2783B'],['people','Colonists','#2F9E6A'],['races','Races','#C0392B'],['chats','Chats','#8E44AD']],
+  APPS:[['car','Car','#1F9E89'],['maps','Maps','#2E86DE'],['feed','Town Square','#3D7BD9'],['me','My card','#E2783B'],['people','Colonists','#2F9E6A'],['races','Races','#C0392B'],['chats','Chats','#8E44AD']],
   show(app){ if(!this.inside()){ if(app&&app!=='chats'){ app==='me'?openMyCard():openTab(app); } else openTab('chats'); return; } if(activeTab&&!this.app) openTab(null);
     try{ window.__phone=this; }catch(e){} /* (for checking how it looks) */
     const P=this.model(); if(this.el&&this.elOf!==P.m+P.col){ this.hide(); return this.show(app); } /* a new phone: take the new one out */
@@ -6981,7 +6982,7 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
   back(){ if(this.app==='card'&&this.from){ const f=this.from; this.from=null; this.open(f); } else this.home(); },
   showBack(on){ if(this.backBtn) this.backBtn.hidden=!on; },
   home(){ if(!this.screen) return; this.leave(); this.from=null; this.showBack(false); const n=Chats.unread||0, P=this.model(), t=P.tier;
-    const icon=(id,name,bg)=>{ const ic=el('i',{style:`--ic:${bg}`}); ic.innerHTML=id==='maps'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>':ICONS[id]||''; if(id==='chats'&&n) ic.append(el('b',{class:'phbadge',text:n>9?'9+':String(n)})); return el('button',{class:'phapp','aria-label':name,onclick:()=>this.open(id)}, ic, el('span',{text:name})); };
+    const icon=(id,name,bg)=>{ const ic=el('i',{style:`--ic:${bg}`}); ic.innerHTML=id==='car'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 16V11l2-5h10l2 5v5"/><path d="M3 16h18v3H3z"/><circle cx="7.5" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/><path d="M5 11h14"/></svg>':id==='maps'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>':ICONS[id]||''; if(id==='chats'&&n) ic.append(el('b',{class:'phbadge',text:n>9?'9+':String(n)})); return el('button',{class:'phapp','aria-label':name,onclick:()=>this.open(id)}, ic, el('span',{text:name})); };
     const apps=this.APPS.filter(([id])=>id!=='chats'||(Me&&Me.token)), dockIds=t>=2?['feed','me','chats']:[];
     const grid=el('div',{class:'phapps'}), dock=el('div',{class:'phdock'}); for(const [id,name,bg] of apps) (dockIds.includes(id)?dock:grid).append(icon(id,name,bg));
     const now=new Date(), time=now.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}), date=now.toLocaleDateString([],{weekday:'long',day:'numeric',month:'long'});
@@ -6992,7 +6993,8 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
       :el('div',{class:'phhello'}, el('b',{text:Me&&Me.handle?`Hi, @${Me.handle}`:'Hi there'}), el('span',{text:date}));
     const scr=this.screen.parentElement; if(scr&&!scr.querySelector(':scope>.phwall')) scr.prepend(el('div',{class:'phwall','aria-hidden':'true'})); this.el.classList.add('onhome'); /* the wallpaper fills the whole screen, behind the clock too */
     this.screen.replaceChildren(el('div',{class:'phhomescr'}, top, el('div',{class:'phwhere'}, el('span',{text:'📍'}), el('span',{text:this.where()})), grid, t>=2?dock:'', el('p',{class:'phmodel',text:`${P.name}${t<5?' · Upgrade at a Phone store':''}`}))); },
-  open(app){ if(!this.on){ this.show(app); return; } this.leave(); this.el.classList.remove('onhome'); this.showBack(true); this.anchor(); this.screen.replaceChildren(); this.busy=true;
+  open(app){ if(app==='car'){ this.hide(); Drive.el?Drive.callCar():toast('🚗 Go outside to call your car.'); return; } /* (an app that does a thing: calls your car) */
+    if(!this.on){ this.show(app); return; } this.leave(); this.el.classList.remove('onhome'); this.showBack(true); this.anchor(); this.screen.replaceChildren(); this.busy=true;
     try{ if(app==='maps'){ this.app='maps'; if(Drive.T) DriveMap.open(this.screen); else this.screen.append(el('div',{class:'phmapsoff'}, el('b',{text:'🗺️ Maps'}), el('p',{text:'Maps shows the streets round you and the way to anywhere you pick, when you’re out on the street or driving. Inside, tap 2D for the colony map.'}))); }
       else if(app==='me'||app==='card'){ this.app='card'; this.from=null; this.screen.append($('card')); const h=myHandle(); if(h) openCitizen(h,{stay:true}); else { this.home(); findMe(); } }
       else { this.app=app; this.screen.append($('pane')); openTab(app); } } finally{ this.busy=false; } },
@@ -7230,12 +7232,13 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     closeCard(); openTab(null);
     const stage=el('div',{class:'drivestage'}), title=el('b',{text:walk?'🚶 Out on foot':`🚗 Driving ${car.own?'your '+car.name.toLowerCase():car.name}`}), sub=el('span',{class:'dsub',text:walk?'Stick to walk, drag the screen to look round':'Steer with the stick'}); this.title=title;
     this.modeBtn=el('button',{class:'btn dgo dmode',onclick:()=>this.switchMode()}); /* get out and walk, or get (back) in the car */
-    this.goBtn=el('button',{class:'btn primary dgo',hidden:true}); this.inBtn=el('button',{class:'btn dgo',hidden:true}); this.rideBtn=el('button',{class:'btn primary dgo',hidden:true}); this.riding=null; this.riders=[]; /* rides: asking someone for one, or riding along */
+    this.goBtn=el('button',{class:'btn primary dgo',hidden:true}); this.inBtn=el('button',{class:'btn dgo',hidden:true}); this.rideBtn=el('button',{class:'btn primary dgo',hidden:true}); this.riding=null; this.riders=[];
+    this.doorBtn=el('button',{class:'floatbtn',hidden:true}); this.carBtn=el('button',{class:'floatbtn',hidden:true,'aria-label':'Get in the car',onclick:()=>this.switchMode()}, el('b',{text:'🚗'}), el('span',{text:'Get in'})); /* rides: asking someone for one, or riding along */
     this.speed=el('div',{class:'dspeed'}); this.sub=sub;
     const bar=''; /* no banner on top: the 2D switch, the camera, the controls and the phone are on the right */
     const side=sideCol(el('button',{class:'sidebtn',title:'Camera: behind you, through your eyes (the driver’s seat), or from above','aria-label':'Camera',text:'🎥',onclick:()=>{ if(!this.T) return; const m=this.T.toggleView(), foot=this.T.pos.mode==='walk'; toast(m==='driver'?(foot?'🎥 Through your eyes':'🎥 From the driver’s seat'):m==='above'?'🎥 From above':foot?'🎥 Behind you':'🎥 Behind the car'); }}),
       el('button',{class:'sidebtn',title:'Controls','aria-label':'Controls',text:'⚙️',onclick:()=>DriveCtl.sheet()}), Phone.sideBtn());
-    const root=el('div',{class:'webview driveview',role:'dialog','aria-label':'Driving around town'}, bar, side, stage, el('div',{class:'dhud'}, this.speed, el('div',{class:'dacts'}, this.rideBtn, this.goBtn, this.inBtn, this.modeBtn)));
+    const root=el('div',{class:'webview driveview',role:'dialog','aria-label':'Driving around town'}, bar, side, this.doorBtn, this.carBtn, stage, el('div',{class:'dhud'}, this.speed, el('div',{class:'dacts'}, this.rideBtn, this.goBtn, this.inBtn, this.modeBtn)));
     document.body.append(root); document.body.classList.add('room-on','drive-on'); this.el=root; this.dist=0; this.last={x:s.x,y:s.y}; this.car=car; DriveMap.mount(root);
     let T3; try{ T3=await import('/town3d.js'); }catch(e){ this.close(); toast('Driving couldn’t load. Check your connection and try again.'); return; } if(this.el!==root) return;
     try{ this.T=T3.createTown(stage,{ start:s, car, controls:DriveCtl.get(), mode:walk?'walk':'car', look, onCar:near=>{ this.atCar=near; this.paintMode(); }, onCarHere:()=>{ toast(`🚗 Your ${this.car.own?this.car.name.toLowerCase():'car'} is here. Get in when you’re ready.`); this.paintMode(); }, onRide:c=>this.nearRide(c),
@@ -7246,6 +7249,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
         people:(x,y)=>this.people(x,y), services:(x,y)=>this.services(x,y), onMove:(x,y,a,v)=>this.moved(x,y,a,v), onNear:b=>this.nearBy(b), onLost:()=>{ this.close(); toast('Your phone needed the memory back. Tap 🚗 Drive or 🚶 Walk to carry on.'); } }); }
     catch(e){ this.close(); toast('Your phone couldn’t show the 3D town.'); return; }
     try{ window.__drive=this; this.map=DriveMap; }catch(e){} /* (for checking how it runs) */
+    this.floats();
     try{ if(!(history.state&&history.state.drive)) history.pushState({drive:1},''); }catch(e){}
     this.paintMode();
     if(walk) toast(at&&at.x!=null?'🚶 Back out on the street.':'🚶 You’re out on foot. Walk up to a building’s front door to go in.'); else toast(at?'🚗 Back in your car.':car.own?`🚗 You’re in your ${car.name.toLowerCase()}. Tap the map to pick where to go, or pull up at a building to stop there.`:'🚗 You’re in a basic car (buy your own at a Car dealership). Tap the map to pick where to go.'); },
@@ -7271,11 +7275,11 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'drive',mode:foot?'walk':'car',x:+x.toFixed(2),y:+y.toFixed(2),a:+a.toFixed(2),m:this.car.m,col:this.car.col})); }catch(e){}
     DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); }
     if(Date.now()-this.synced>1500){ this.synced=Date.now(); const V=DriveMap.big&&DriveMap.bv, q=V?iso(V.x,V.y):iso(x,y); cam.x=q.x; cam.y=q.y; cam.z=V?Math.max(0.2,Math.min(0.45,V.s/20)):0.45; follow=null; syncChunks(); } } /* the town round the car loads; with the big map open, round where you're looking (for routes further away) */, /* the map loads the town round the car (zoomed out, so it loads plenty) */
-  nearBy(b){ this.near=b; if(this.riding){ this.goBtn.hidden=true; this.inBtn.hidden=true; return; } const name=b&&(b.name||T(b).name), foot=this.T&&this.T.pos.mode==='walk';
+  nearBy(b){ this.near=b; this.doorOk=false; if(this.riding){ this.goBtn.hidden=true; this.inBtn.hidden=true; return; } const name=b&&(b.name||T(b).name), foot=this.T&&this.T.pos.mode==='walk';
     if(!b||!canGoTo(b.type)||b.done===false){ this.goBtn.hidden=true; this.inBtn.hidden=true; this.sub.textContent=b?`${name}`:foot?'Stick to walk, drag the screen to look round':'Steer with the stick'; return; }
     this.sub.textContent=`📍 ${name}`; const enter=canEnter(b.type)||T(b).home;
     if(foot){ /* at the front door: go in (or, where there's no inside to walk into, just go there) */
-      this.goBtn.hidden=false; this.goBtn.textContent=enter?`🚪 Enter ${name}`:`📍 Visit ${name}`; this.goBtn.onclick=()=>this.arrive(b,enter);
+      this.goBtn.hidden=true; this.doorOk=true; this.doorBtn.replaceChildren(el('b',{text:enter?'🚪':'📍'}), el('span',{text:name})); this.doorBtn.setAttribute('aria-label',enter?`Enter ${name}`:`Visit ${name}`); this.doorBtn.onclick=()=>this.arrive(b,enter); /* the round 🚪 on its door */
       const t0=T(b), mine=Me&&Me.handle&&b.owner&&b.owner.toLowerCase()===Me.handle.toLowerCase(), myHome=(()=>{ const c=myCitizen(), H=MyHome.data; MyHome.load(); if(!H){ clearTimeout(this.nbT); this.nbT=setTimeout(()=>{ if(this.near===b) this.nearBy(b); },1500); } /* (look again once the server says which home is yours) */ return !!((c&&c.home&&c.home[0]===b.id)||(H&&H.home&&H.home.id===b.id)); })(), /* (from the map, or from the server) */ sale=BUYABLE.has(t0.cat)&&(t0.home||t0.work)&&!b.owner;
       this.inBtn.hidden=!((t0.home&&!myHome)||sale)||mine; this.inBtn.textContent=t0.home?(myHome?'🏷️ Buy this home':sale?'🏷️ Rent or buy':'🔑 Rent here'):'🏷️ For sale'; this.inBtn.onclick=()=>Phone.showBuilding(b.id); return; } /* a home (or a business for sale): its card, with 🔑 Rent here and Buy, on your phone */
     this.goBtn.hidden=false; this.goBtn.textContent=`🅿️ Stop at ${name}`; this.goBtn.onclick=()=>this.arrive(b,false);
@@ -7283,10 +7287,20 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
   // walking and driving: get out (your own car stays parked where you left it) and get back in when you walk up to it
   paintMode(){ const B=this.modeBtn; if(!B||!this.T) return; if(this.riding){ B.hidden=false; B.textContent='🚶 Get out'; return; } const foot=this.T.pos.mode==='walk';
     if(!foot){ B.hidden=false; B.textContent='🚶 Get out'; return; }
-    if(this.T.parked){ B.hidden=!this.atCar; B.disabled=false; B.textContent=this.car.own?`🚗 Get in your ${this.car.name.toLowerCase()}`:'🚗 Get in the car'; return; }
-    B.hidden=false; B.disabled=!!this.T.coming; B.textContent=this.T.coming?'🚗 On its way…':this.car.own?`🚗 Call your ${this.car.name.toLowerCase()}`:'🚗 Call a car'; },
+    B.hidden=true; /* on foot: get in with the round 🚗 on the car itself; call it from your phone (🚗 Car) */ },
+  // the car: called from the phone's 🚗 Car app
+  callCar(){ const T3=this.T; if(!T3){ toast('🚗 Go outside to call your car.'); return; } if(this.riding){ toast('You’re riding with someone.'); return; }
+    if(T3.pos.mode!=='walk'){ toast('🚗 You’re already in it.'); return; } if(T3.coming){ toast('🚗 It’s on its way.'); return; } if(T3.parked){ toast('🚗 It’s parked where you left it: walk back to it to get in.'); return; }
+    if(T3.callCar()) toast(this.car.own?`🚗 Your ${this.car.name.toLowerCase()} is on its way. It’ll pull up beside you.`:'🚗 A car is on its way. It’ll pull up beside you.'); else { T3.drive(); this.title.textContent=`🚗 Driving`; this.dist=0; this.nearBy(null); this.paintMode(); } },
+  // round buttons that sit on things in the town: 🚪 on a front door you're at, 🚗 on your car when you're by it
+  floats(){ if(!this.el||!this.T) return; const T3=this.T, foot=T3.pos.mode==='walk'&&!this.riding, st=this.el.querySelector('.drivestage'), sr=st?st.getBoundingClientRect():{left:0,top:0}, rr=this.el.getBoundingClientRect(), ox=sr.left-rr.left, oy=sr.top-rr.top; /* (the 3D view's own place in the screen) */
+    const place=(btn,pt,h)=>{ if(!pt){ btn.hidden=true; return; } const q=T3.project(pt.x,pt.y,h); btn.hidden=!q.on; if(q.on) btn.style.transform=`translate(${Math.round(q.x+ox)}px,${Math.round(q.y+oy)}px)`; };
+    const b=foot&&this.near, door=b&&this.doorFor===b.id?this.doorAt:null; if(b&&this.doorFor!==b.id){ this.doorFor=b.id; this.doorAt=T3.doorOf(b.id); } if(!b) this.doorFor=null;
+    place(this.doorBtn, b&&this.doorOk?(door||this.doorAt):null, 1.5);
+    place(this.carBtn, foot&&T3.parked&&this.atCar?T3.parkedAt:null, 1.9);
+    requestAnimationFrame(()=>this.floats()); },
   switchMode(){ const T3=this.T; if(!T3) return; if(this.riding){ this.send({type:'ride',a:'leave'}); return; } if(T3.pos.mode==='car'&&this.riders.length) toast('👥 Everyone riding with you gets out too.'); const foot=T3.pos.mode==='walk';
-    if(foot&&!T3.parked){ if(T3.coming) return; if(T3.callCar()){ toast(this.car.own?`🚗 Your ${this.car.name.toLowerCase()} is on its way. It’ll pull up beside you.`:'🚗 A car is on its way. It’ll pull up beside you.'); this.paintMode(); return; } } /* it drives up to you (straight to you if there's no road near) */
+    if(foot&&!T3.parked){ this.callCar(); return; } /* (a car is called from the phone) */
     if(foot){ T3.drive(); this.title.textContent=`🚗 Driving ${this.car.own?'your '+this.car.name.toLowerCase():this.car.name}`; this.sub.textContent='Steer with the stick'; }
     else { T3.walk(this.car.own); this.title.textContent='🚶 Out on foot'; this.sub.textContent='Stick to walk, drag the screen to look round'; if(this.car.own) toast(`🅿️ Your ${this.car.name.toLowerCase()} is parked here. Walk back to it to get in.`); }
     this.dist=0; this.nearBy(null); this.paintMode(); },
@@ -7327,7 +7341,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     if(inside){ const p=this.T&&this.T.pos, door=this.T&&this.T.doorOf(b.id), foot=p&&p.mode==='walk'; this.resume=foot?{ mode:'walk', x:door?door.x:p.x, y:door?door.y:p.y, a:door?door.a:p.a+Math.PI, bid:b.id, t:Date.now() }:this.car&&this.car.own&&p?{ x:p.x, y:p.y, a:p.a, bid:b.id, t:Date.now() }:null; /* on foot: back out of the front door */ this.close(); setTimeout(()=>Room.openBuilding(b.id),50); } }, /* your own car waits outside for you */
   map:null, /* (DriveMap, for checking) */
   back(){ const r=this.resume; this.resume=null; if(!r||Date.now()-r.t>3*3600000) return; setTimeout(()=>this.start(r),80); },
-  close(quiet){ if(!this.el) return; if(Voice.R&&Voice.R===this.vR) Voice.leave(); this.vR=null; this.vSpot=null; try{ this.T&&this.T.dispose(); }catch(e){} this.T=null; Phone.hide(); DriveMap.reset(); this.el.remove(); this.el=null; document.body.classList.remove('room-on','drive-on'); if(this.camWas){ cam.x=this.camWas.x; cam.y=this.camWas.y; cam.z=this.camWas.z; this.camWas=null; } setTimeout(mapResume,0);
+  close(quiet){ if(!this.el) return; if(Voice.R&&Voice.R===this.vR) Voice.leave(); this.vR=null; this.vSpot=null; this.near=null; this.doorOk=false; this.doorFor=null; this.atCar=false; /* (a fresh street: not at any door or car yet) */ try{ this.T&&this.T.dispose(); }catch(e){} this.T=null; Phone.hide(); DriveMap.reset(); this.el.remove(); this.el=null; document.body.classList.remove('room-on','drive-on'); if(this.camWas){ cam.x=this.camWas.x; cam.y=this.camWas.y; cam.z=this.camWas.z; this.camWas=null; } setTimeout(mapResume,0);
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'drive',off:true})); }catch(e){}
     if(!quiet){ try{ if(history.state&&history.state.drive) history.back(); }catch(e){} } } };
 addEventListener('popstate',()=>{ if(Drive.el) Drive.close(true); });

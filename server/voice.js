@@ -19,7 +19,7 @@ export const streetCell = (x, y) => Math.floor(x / STREET) + '_' + Math.floor(y 
 const desc = d => (d && (d.type === 'offer' || d.type === 'answer') && typeof d.sdp === 'string' && d.sdp.length < 200000 ? { type: d.type, sdp: d.sdp } : null);
 
 export class Voice {
-  constructor(world) { this.world = world; this.places = new Map(); this.sessions = new Map(); this.pre = new Map(); this.handles = new Map(); }
+  constructor(world) { this.world = world; this.reports = []; this.places = new Map(); this.sessions = new Map(); this.pre = new Map(); this.handles = new Map(); }
   config() { return this.ice().then(ice => ({ on: voiceOn(), ice })); }
   // How phones reach the voice service. Direct (STUN) works for most; some mobile networks and office or school wifi block
   // it, and then the sound goes through Cloudflare's relay (TURN). Set CF_TURN_KEY_ID and CF_TURN_KEY_TOKEN (Cloudflare
@@ -61,7 +61,7 @@ export class Voice {
 
   // your connection to the voice service, in this place (hearing comes first: it doesn't need your microphone)
   // for the developer: is the voice service set up and answering? (makes a session and says what Cloudflare said)
-  async diagnose() { const out = { on: voiceOn(), appId: (process.env.CF_REALTIME_APP_ID || '').slice(0, 6) + '…', url: base().replace(/apps\/.*/, 'apps/…') };
+  async diagnose() { const out = { reports: this.reports.slice(0, 20), turn: !!(process.env.CF_TURN_KEY_ID && process.env.CF_TURN_KEY_TOKEN), on: voiceOn(), appId: (process.env.CF_REALTIME_APP_ID || '').slice(0, 6) + '…', url: base().replace(/apps\/.*/, 'apps/…') };
     if (!out.on) return { ...out, ok: false, why: 'CF_REALTIME_APP_ID or CF_REALTIME_APP_TOKEN is missing.' };
     const ice = await this.ice(), relay = ice.some(x => /turns?:/.test(JSON.stringify(x.urls))); out.relay = !process.env.CF_TURN_KEY_ID ? 'not set up (optional)' : relay ? 'working' : 'set up, but Cloudflare didn’t give relay logins';
     try { const j = await this.cf('POST', '/sessions/new'); return { ...out, ok: !!j.sessionId, why: (j.sessionId ? 'Cloudflare made a voice session: the keys work.' : 'Cloudflare answered without a session.') + ` Relay (TURN): ${out.relay}.` }; }
@@ -100,6 +100,11 @@ export class Voice {
       for (const m of mids) s.pulls.delete(m); } }
   // you've stopped talking or left
   async leave(me, place) { this.drop(me.id, place); return { ok: true }; }
+  // a phone's voice wouldn't go out (its mic was silent, or nothing left it): what it saw, and what it tried. The last
+  // few are kept for the developer (the Voice panel), to see which phones have trouble and why.
+  report(me, b = {}) { const clip = (v, n) => String(v ?? '').slice(0, n);
+    const r = { t: Date.now(), h: me.handle, what: clip(b.what, 24), fix: clip(b.fix, 24), ice: clip(b.ice, 16), relay: !!b.relay, sent: Math.max(0, Math.round(Number(b.sent) || 0)), peak: Math.round((Number(b.peak) || 0) * 1e5) / 1e5, muted: !!b.muted, ended: !!b.ended, ac: clip(b.ac, 12), ua: clip(b.ua, 160) };
+    this.reports.unshift(r); this.reports.length = Math.min(this.reports.length, 60); console.warn('voice report:', JSON.stringify(r)); return { ok: true }; }
   drop(id, place) { const sp = this.places.get(place)?.get(id); this.sessions.delete(id + '|' + place); this.pre.delete(id + '|' + place);
     if (sp) { this.places.get(place).delete(id); this.send(place, { kind: 'off', id: 'p:' + id }); } }
   note(me) { this.handles.set(me.id, me.handle); if (this.handles.size > 20000) this.handles.clear(); }

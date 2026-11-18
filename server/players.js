@@ -370,6 +370,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/voice/list', limit, send(async req => V().list(await me(req), bd(req).place)));
   r.post('/voice/pull', limit, send(async req => V().pull(await me(req), bd(req).place, bd(req))));
   r.post('/voice/answer', limit, send(async req => V().answer(await me(req), bd(req).place, bd(req))));
+  r.post('/voice/report', limit, send(async req => V().report(await me(req), bd(req))));
   r.post('/voice/audience', limit, send(async req => V().audience(await me(req), bd(req).place, bd(req).to)));
   r.post('/voice/leave', limit, send(async req => V().leave(await me(req), bd(req).place)));
   // the in-game phone: ring someone, answer, hang up (server/phone.js); the talking goes through voice, above

@@ -2183,6 +2183,11 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
   ok((await call('POST', '/api/voice/pull', { place, sessionId: sb, ids: ['p:' + VA.id] }, VB.P)).json.tracks.length === 0, '…and can’t start hearing her again');
   await call('POST', '/api/voice/audience', { place, to: null }, VA.P); ok(((await call('POST', '/api/voice/list', { place }, VB.P)).json.speakers || []).length === 1, 'back to everyone: Bo hears her again');
   ok((await call('POST', '/api/voice/session', { place: 'b:somewhere-else' }, VA.P)).status === 409, 'you can only use voice where you are');
+  { // a phone whose voice won't go out tells the server what it saw; the developer sees it
+    const rp = await call('POST', '/api/voice/report', { what: 'mic-silent', fix: 'plain-mic', ice: 'connected', sent: 0, peak: 0, ua: 'Mozilla/5.0 (Linux; Android 9; Test phone)'.padEnd(400, 'x') }, VA.P);
+    const ck = await call('GET', '/api/admin/voice/check'), last = ck.json.reports && ck.json.reports[0];
+    ok(rp.status === 200 && last && last.h === 'voice_ava' && last.what === 'mic-silent' && last.fix === 'plain-mic' && last.ua.length <= 160, 'a phone whose voice won’t go out reports why, and the developer sees it', JSON.stringify(last).slice(0, 200));
+    ok((await call('POST', '/api/voice/report', { what: 'x' }, { auth: false })).status === 401, '…only a signed-in player can report'); }
   await call('POST', '/api/voice/leave', { place }, VA.P); ok(((await call('POST', '/api/voice/list', { place }, VB.P)).json.speakers || []).length === 0, 'when Ava leaves, nobody hears her');
   { // the in-game phone: ring someone who's online, they answer, and the two of you talk on a line of your own
     const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'phone' || m.type === 'authed') got.push(m); });

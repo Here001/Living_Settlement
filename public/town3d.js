@@ -72,6 +72,33 @@ function blockArea(bx, by, o) {
   return { L: { seed: (bx * 31 + by) >>> 0, tw: B, th: B, ground: Array.from(ground).join(''), roads, sroads, buildings, props, spots, scenery: [], gnd }, solid, parked };
 }
 
+// Grass on open land: the further a patch is from any building, the taller it grows (wild meadow out in the open, short
+// tufts near where people live, none on lawns, roads or water). One merged mesh per block, swaying in the wind in its
+// shader (no work each frame), and no shadows. dist: tiles to the nearest building (0 = on one), up to 6.
+const GRASS = { tex: null, mat: null, time: { value: 0 } };
+function grassMaterial() { if (GRASS.mat) return GRASS.mat;
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64; const g = c.getContext('2d'); let s = 9; const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 26; i++) { const x = 2 + r() * 60, w = 1.5 + r() * 2.5, h = 30 + r() * 34, lean = (r() - 0.5) * 14, sh = 170 + Math.floor(r() * 85);
+    g.fillStyle = `rgb(${sh},${sh},${sh})`; g.beginPath(); g.moveTo(x - w, 64); g.lineTo(x + w, 64); g.lineTo(x + lean, 64 - h); g.closePath(); g.fill(); }
+  GRASS.tex = new THREE.CanvasTexture(c); GRASS.tex.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.MeshStandardMaterial({ map: GRASS.tex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1 });
+  m.onBeforeCompile = sh => { sh.uniforms.uT = GRASS.time; sh.vertexShader = 'uniform float uT;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    float sway = uv.y * uv.y * (0.18 + 0.1 * sin(position.x * 0.31 + position.z * 0.17));
+    transformed.x += sin(uT * 1.7 + position.x * 0.45 + position.z * 0.3) * sway; transformed.z += cos(uT * 1.3 + position.z * 0.5) * sway * 0.6;`); };
+  return GRASS.mat = m; }
+function grassBlock(bx, by, o, dense) {
+  const P = [], N = [], U = [], C = [], col = new THREE.Color(), near = new Map();
+  const dist = (tx, ty) => { for (let d = 0; d <= 6; d++) { for (let i = -d; i <= d; i++) for (const [x, y] of [[tx + i, ty - d], [tx + i, ty + d], [tx - d, ty + i], [tx + d, ty + i]]) if (o.building(x, y)) return d; } return 7; };
+  const quad = (x, z, w, h, ang, tint) => { const cx = Math.cos(ang) * w / 2, cz = Math.sin(ang) * w / 2, ny = [Math.sin(ang), 0, -Math.cos(ang)];
+    for (const [px, py, pz, u, v] of [[x - cx, 0, z - cz, 0, 0], [x + cx, 0, z + cz, 1, 0], [x + cx, h, z + cz, 1, 1], [x - cx, 0, z - cz, 0, 0], [x + cx, h, z + cz, 1, 1], [x - cx, h, z - cz, 0, 1]]) { P.push(px, py, pz); N.push(0, 1, 0); U.push(u, v); C.push(tint.r, tint.g, tint.b); } };
+  for (let ty = 0; ty < B; ty++) for (let tx = 0; tx < B; tx++) { const X = bx + tx, Y = by + ty; if (o.road(X, Y) || o.water(X, Y) || o.building(X, Y)) continue;
+    const d = dist(X, Y); if (d < 1) continue; const h0 = d >= 7 ? 1.95 : 0.14 + (d - 1) * 0.3, n = Math.round((d === 1 ? 3 : 4 + Math.min(d, 7) * 1.5) * (dense ? 1 : 0.55)); /* taller and thicker the further from anyone */
+    let seed = ((X * 73856093) ^ (Y * 19349663)) >>> 0; const r = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+    for (let k = 0; k < n; k++) { const x = (tx + r()) * TILE, z = (ty + r()) * TILE, h = h0 * (0.7 + r() * 0.6), w = 1.1 + h * 1.1, a = r() * Math.PI;
+      col.setHSL(0.24 + r() * 0.06 - (d >= 5 ? 0.03 : 0), 0.45 + r() * 0.15, 0.32 + r() * 0.12 + (d >= 6 ? 0.04 : 0)); quad(x, z, w, h, a, col); quad(x, z, w, h, a + Math.PI / 2, col); } }
+  if (!P.length) return null; const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.computeBoundingSphere();
+  const m = new THREE.Mesh(g, grassMaterial()); m.receiveShadow = true; /* in the block's own coordinates: it goes in the block's group */ m.castShadow = false; m.matrixAutoUpdate = false; m.updateMatrix(); return m; }
+
 // opts: start {x,y,a} (tiles; a: 0 = east, anticlockwise), car {kind,col}, road(x,y), water(x,y), building(x,y),
 //   buildings(x0,y0,x1,y1) → raw buildings whose corner is in the area, byId(id), loaded(x,y), people(x,y) → nearby
 //   [{id,x,y,car,col,kind}], minute() → the colony's minute of the day, onMove(x,y,a,v) (tiles, tiles/s), onNear(b|null), onLost()
@@ -90,7 +117,7 @@ export function createTown(host, opts) {
   function build(bx, by) {
     const t0 = performance.now(), key = bx + ',' + by, old = blocks.get(key), s = sig(bx, by); if (old && old.sig === s) return;
     const { L, solid, parked } = blockArea(bx, by, opts), g = W.buildArea(view, L, { cordon: false, pad: 0, ring: false, add: false });
-    g.position.set(bx * TILE, 0, by * TILE); g.updateMatrixWorld(true); scene.add(g);
+    g.position.set(bx * TILE, 0, by * TILE); { const gr = grassBlock(bx, by, opts, HQ); if (gr) g.add(gr); } g.updateMatrixWorld(true); scene.add(g);
     if (old) drop(old); blocks.set(key, { g, sig: s, bx, by, solid, parked }); shadowsDue = true; const ms = performance.now() - t0; stats.builds++; stats.maxMs = Math.max(stats.maxMs, ms); stats.totalMs += ms; }
   const stats = { builds: 0, maxMs: 0, totalMs: 0 }; /* how long blocks take to build (for checking it stays smooth) */
   const drop = v => { scene.remove(v.g); v.g.traverse(m => m.geometry && m.geometry.dispose()); };
@@ -233,7 +260,7 @@ export function createTown(host, opts) {
 
   // ---- the camera: behind the car, from the driver's seat, or higher up; drag anywhere to look round as you drive ----
   let mode = 0; const cam = new THREE.Vector3(car.x - Math.cos(car.a) * 9, 3.6, car.z + Math.sin(car.a) * 9), look = new THREE.Vector3();
-  const lk = { yaw: 0, pitch: 0, id: null, x: 0, y: 0, at: 0 };
+  const lk = { yaw: 0, pitch: 0, id: null, x: 0, y: 0, at: 0 }, aim = { x: car.x + Math.cos(car.a) * 6, z: car.z - Math.sin(car.a) * 6 };
   // the driver's seat: a dashboard and a steering wheel that turns as you steer (the car's body is hidden in there)
   const cockpit = new THREE.Group(), dashM = new THREE.MeshStandardMaterial({ color: '#23252a', roughness: 0.7 }), wheelM = new THREE.MeshStandardMaterial({ color: '#15161a', roughness: 0.5 });
   { const dash = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.42, 0.7), dashM); dash.position.set(0, -0.66, -0.95); cockpit.add(dash);
@@ -242,13 +269,13 @@ export function createTown(host, opts) {
   const sw = new THREE.Group(); sw.add(new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.026, 10, 32), wheelM)); for (const a of [0, 2.1, 4.2]) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.19, 0.02), wheelM); sp.position.set(Math.sin(a) * 0.095, Math.cos(a) * 0.095, 0); sp.rotation.z = -a; sw.add(sp); }
   sw.position.set(0, -0.44, -0.72); sw.rotation.x = -0.32; cockpit.add(sw); cockpit.visible = false; camera.add(cockpit); scene.add(camera);
   function chase(dt) {
-    if (lk.id == null && now0() - lk.at > 1500 && Math.abs(car.v) > 2) { lk.yaw *= Math.pow(0.15, dt); lk.pitch *= Math.pow(0.15, dt); } /* let go: the view comes back round to the road */
+    if (lk.id == null) { const back = Math.exp(-dt * Math.min(0.8, Math.abs(car.v) / 22)); lk.yaw *= back; lk.pitch *= back; } /* let go: the view stays where you turned it, and drifts gently back behind the car as you drive (not at all while you're stopped) */
     const fp = mode === 1; me.visible = !fp; cockpit.visible = fp; sw.rotation.z = car.steer * 1.4;
     if (fp) { const a = car.a + lk.yaw; camera.position.set(car.x + Math.cos(car.a) * 0.15 - Math.sin(car.a) * 0.36, 1.18, car.z - Math.sin(car.a) * 0.15 - Math.cos(car.a) * 0.36); /* the driver's seat, on the left */
       look.set(camera.position.x + Math.cos(a) * 10, 1.18 + Math.tan(lk.pitch - 0.04) * 10, camera.position.z - Math.sin(a) * 10); camera.lookAt(look); cam.copy(camera.position); view.cut.R.value = 0; }
-    else { const high = mode === 2, a = car.a + lk.yaw, back = high ? 26 : 9, up = (high ? 18 : 3.4) + lk.pitch * -8, tx = car.x - Math.cos(a) * back, tz = car.z + Math.sin(a) * back, k = Math.min(1, dt * (lk.id != null ? 10 : 3.2));
+    else { const high = mode === 2, a = car.a + lk.yaw, back = high ? 26 : 9, up = (high ? 18 : 3.4) + lk.pitch * -8, tx = car.x - Math.cos(a) * back, tz = car.z + Math.sin(a) * back, k = Math.min(1, dt * 4.5); /* one steady pace, dragging or not: no jumps */
       cam.x += (tx - cam.x) * k; cam.z += (tz - cam.z) * k; cam.y += (Math.max(1.2, up) - cam.y) * k; camera.position.copy(cam);
-      look.set(car.x + Math.cos(car.a) * (lk.id != null ? 0 : 6), 1.2, car.z - Math.sin(car.a) * (lk.id != null ? 0 : 6)); camera.lookAt(look);
+      const lx = car.x + Math.cos(a) * 6, lz = car.z - Math.sin(a) * 6; aim.x += (lx - aim.x) * k; aim.z += (lz - aim.z) * k; look.set(aim.x, 1.2, aim.z); camera.lookAt(look); /* look past the car the way the camera faces */
       view.cut.A.value.set(car.x, 1.0, car.z); view.cut.B.value.copy(camera.position); view.cut.R.value = high ? 6 : 3.5; }
     if (bump > 0) { bump -= dt; camera.position.y += Math.sin(bump * 60) * 0.08; }
     const sp = Math.abs(car.v); if (sp > 16) { const t = now0() / 1000, k = (sp - 16) * 0.0016; camera.position.x += Math.sin(t * 37) * k; camera.position.y += Math.sin(t * 43) * k; } } /* a faint tremble at speed */
@@ -285,7 +312,7 @@ export function createTown(host, opts) {
     driveTraffic(dt); walk(dt); skyLife(dt, now, night);
     head.intensity = night * 60; if (night > 0.02) { const fx = Math.cos(car.a), fz = -Math.sin(car.a); head.position.set(car.x + fx * 1.8, 0.9, car.z + fz * 1.8); head.target.position.set(car.x + fx * 14, 0, car.z + fz * 14); }
     const fov = 60 + Math.min(14, Math.abs(car.v) * 0.45); if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); } /* the view widens with speed */
-    chase(dt); crowd(now, dt); drawFleet(night); routeMat.opacity = 0.6 + 0.3 * Math.sin(now / 250); ground.position.set(Math.round(car.x / 50) * 50, -0.08, Math.round(car.z / 50) * 50);
+    GRASS.time.value = now / 1000; chase(dt); crowd(now, dt); drawFleet(night); routeMat.opacity = 0.6 + 0.3 * Math.sin(now / 250); ground.position.set(Math.round(car.x / 50) * 50, -0.08, Math.round(car.z / 50) * 50);
     if (now - chk > 600) { chk = now; around(); }
     if (queue.length) { const [bx, by] = queue.shift().split(',').map(Number); if (opts.loaded(bx + B / 2, by + B / 2) || opts.loaded(bx, by)) build(bx, by); else queue.push(bx + ',' + by); }
     if (now - timeAt > 20000) { timeAt = now; shadowsDue = true; } sunNow(false);

@@ -578,6 +578,7 @@ const THEMES = [
   [/shoeshop/, 'shop', ['shoewall', 'till', 'velvetsofa', 'wallmirror']],
   [/cardealer/, 'shop', [['showcar', 2, 1], 'execdesk', 'plant']],
   [/petstore/, 'shop', [['petcages', 2], 'till', 'catbed']],
+  [/phonestore/, 'shop', [['display', 2], 'till', 'tvwall']],
   [/florist/, 'shop', [['flowerstand', 3], 'till', 'plant']],
   [/electronics/, 'shop', ['tvwall', ['checkout', 1, 1], 'display']],
   [/toyshop/, 'shop', [['toyshelf', 2], 'till', 'playmat']],

@@ -200,6 +200,7 @@ export const BUILDING_TYPES = {
   cornershop: { name:'Corner shop', cat:'shops', size:[1,1], style:'block', height:26, awning:'#3E7A4B', colors:{wall:'#EFE8D8', roof:'#8C7B66', trim:'#3E7A4B'}, work:{title:'Shopkeeper', slots:2, salary:16}, cost:700 },
   gamehouse:  { name:'Game House', cat:'shops', size:[3,2], style:'block', height:32, sign:'#1F3A6B', label:'GAMES', neon:true, awning:'#4FA3E0', colors:{wall:'#2F4F7F', roof:'#1C2C47', trim:'#F2C94C'}, work:{title:'Game host', slots:8, salary:26}, leisure:true, visitors:180, cost:9000 },
   cardealer:  { name:'Car dealership', cat:'shops', size:[3,2], style:'block', height:26, sign:'#2F4A7A', label:'CARS', awning:'#5B8DB8', colors:{wall:'#EEF1F4', roof:'#5E6E80', trim:'#2F4A7A'}, work:{title:'Car salesperson', slots:5, salary:24}, cost:6000 },
+  phonestore: { name:'Phone store', cat:'shops', size:[2,1], style:'block', height:24, sign:'#1B1E2B', label:'PHONES', awning:'#6C5CE7', colors:{wall:'#F2F3F7', roof:'#3A3F55', trim:'#6C5CE7'}, work:{title:'Phone seller', slots:3, salary:22}, leisure:true, visitors:20, cost:2200 },
   petstore:   { name:'Pet store', cat:'shops', size:[2,1], style:'block', height:24, sign:'#2E8A73', label:'PETS', awning:'#3FBFA0', colors:{wall:'#F4EDE0', roof:'#5E7C99', trim:'#3FBFA0'}, work:{title:'Pet keeper', slots:3, salary:20}, leisure:true, visitors:20, cost:1600 },
   florist:    { name:'Florist', cat:'shops', size:[1,1], style:'house', height:22, roofH:12, awning:'#B06FD8', colors:{wall:'#F4EDE0', roof:'#5E8F4E', trim:'#6E4F3A'}, work:{title:'Florist', slots:2, salary:16}, cost:800 },
   pharmacy:   { name:'Pharmacy', cat:'shops', size:[1,1], style:'block', height:28, cross:true, colors:{wall:'#F2F0EA', roof:'#7E7B78', trim:'#3E7A4B'}, work:{title:'Pharmacist', slots:3, salary:22}, cost:1200 },
@@ -458,7 +459,7 @@ const SUB_OF = {
   houses:['tent','cabin','cottage','house','timber','gablecottage','chalet','villa','garagevilla'],
   lowrise:['rowhouses','brickflats','townhouse','townhouses','canalhouses','baroquegables','workers','walkup','mews','almshouse','terraces','slab50s','haussmann','georgian','courtyard','arcadehouse','artnouveau'],
   highrise:['apartment','aptower','gallery','altbau','pilotis','domedapt','cubetower','steppedtower','balconyblock','belletower'],
-  small:['stall','bakery','cafe','bookshop','grocer','cornershop','florist','petstore','pharmacy','openmarket'],
+  small:['stall','bakery','cafe','bookshop','grocer','cornershop','florist','petstore','phonestore','pharmacy','openmarket'],
   large:['supermarket','deptstore','markethall','arcade','mall','gasstation','hotel','cardealer'],
   going:['tavern','casino','gamehouse','diner','restaurant','cinema'],
   workshops:['lumber','workshop','garage','printshop','lumberyard','canalwarehouses','warehouse'],
@@ -543,6 +544,23 @@ export const CAR_MODELS = {
 };
 export const carKind = m => CAR_MODELS[m]?.kind || 'car'; // 'car' | 'bike' (both ridden on trips) | 'water' | 'air'
 export const ridden = m => ['car', 'bike'].includes(carKind(m));
+// Phones a colonist can buy at a Phone store. Everyone starts with the Brick; the phone you carry decides how your
+// in-game phone looks when you take it out (its frame, its screen, its home screen and apps): the dearer, the finer.
+// tier 0 Brick: a chunky plastic phone, thick bezels and a home button, plain square icons on grey;
+// tier 1: a coloured plastic body, a notch, rounded icons on a soft gradient;
+// tier 2: thin bezels, a punch-hole camera, a vivid wallpaper and a dock;
+// tier 3: a metal frame, a pill-shaped camera cut-out, a slowly moving wallpaper, glass icons, a clock and coins widget;
+// tier 4: a curved edge-to-edge screen with a polished frame, an aurora wallpaper that drifts, frosted widgets;
+// tier 5: a gold-and-gem frame, a shimmering live wallpaper, jewel icons and its own ringtone-gold accents.
+export const PHONE_MODELS = {
+  brick:  { name:'Brick',         tier:0, price:0,       colors:['#3A3D44'], note:'Everyone’s first phone. It calls and it texts.' },
+  nimbus: { name:'Nimbus Lite',   tier:1, price:4000,    colors:['#5B8DB8','#E86A5A','#3E9E6A','#F2C94C','#F2F0EA'], note:'A cheerful plastic phone with a bigger screen.' },
+  pulse:  { name:'Pulse 5',       tier:2, price:18000,   colors:['#1E2A3A','#7C5CFF','#E4572E','#2EC4B6'], note:'Thin bezels, a punch-hole camera and a vivid screen.' },
+  aura:   { name:'Aura Pro',      tier:3, price:90000,   colors:['#8A8F98','#2B2F36','#C8B79A','#3D5A80'], note:'A metal frame, glass icons and a screen that slowly moves.' },
+  lumen:  { name:'Lumen Ultra',   tier:4, price:350000,  colors:['#1A1C22','#D9DCE1','#5B4B8A','#0F5C4E'], note:'A curved edge-to-edge screen and a drifting aurora.' },
+  zenith: { name:'Zenith Royale', tier:5, price:2500000, colors:['#D4AF37','#E8C9A0','#B76E79'], note:'Gold, gems and a shimmering live screen. The finest phone money can buy.' },
+};
+export const phoneOf = v => { const [m, col] = String(v || '').split('|'); const M = PHONE_MODELS[m] ? m : 'brick'; return { m: M, col: PHONE_MODELS[M].colors.includes(col) ? col : PHONE_MODELS[M].colors[0], ...PHONE_MODELS[M] }; };
 // seats: how many people fit (the driver included): 2 in the sports cars, 4 in the rest (and a basic car)
 export const seatsOf = m => CAR_MODELS[m]?.seats || 4;
 export const needsHangar = m => !!CAR_MODELS[m]?.hangar;

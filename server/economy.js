@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { pool } from './db.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
-import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES, carPaid, carKind, ridden, needsHangar, hangarCap } from '../shared/catalog.js';
+import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES, carPaid, carKind, ridden, needsHangar, hangarCap, PHONE_MODELS, phoneOf } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
 import { track, snapshot, ledger, econTick } from './stats.js';
 import { bump } from './achievements.js';
@@ -184,6 +184,26 @@ export class Economy {
     const b = (await pool.query('select id, type, owner_id from buildings where id = $1', [String(buildingId)])).rows[0]; if (!b || !hangarCap(b.type)) throw new HttpError(404, 'That isn\'t a hangar.');
     const o = b.owner_id ? (await pool.query('select cars from citizens where id = $1', [b.owner_id])).rows[0] : null, cars = Array.isArray(o?.cars) ? o.cars : [];
     return { cap: hangarCap(b.type), planes: cars.filter(x => x.hangar === b.id).map(x => ({ id: x.id, m: x.m, name: CAR_MODELS[x.m]?.name || 'Plane', col: x.col })) };
+  }
+
+  // ---------- phones ----------
+  // Phones are bought at a Phone store (tap one on the map). You carry one: a new one replaces the old (which the
+  // store takes back for a fifth of what it cost). Its colour can be changed for free at the store.
+  async myPhone(id) { const r = (await pool.query('select phone from citizens where id = $1', [id])).rows[0]; const P = phoneOf(r?.phone); return { phone: { m: P.m, col: P.col } }; }
+  async buyPhone(id, model, color, buildingId) {
+    const M = PHONE_MODELS[model]; if (!M || !M.price) throw new HttpError(400, 'Pick a phone from the store.');
+    if (!M.colors.includes(color)) color = M.colors[0];
+    return this.world.change(async ch => {
+      const shop = (await ch.q("select id from buildings where id = $1 and type = 'phonestore' and done and not ruin", [String(buildingId || '')])).rows[0];
+      if (!shop) throw new HttpError(409, 'Phones are sold at a Phone store. Tap one on the map.');
+      const c = await this.lockMe(ch, id), now = phoneOf(c.phone);
+      if (now.m === model) { await ch.q('update citizens set phone = $2 where id = $1', [c.id, model + '|' + color]); return { ok: true, phone: { m: model, col: color }, recolour: true }; } /* the same phone: a new colour, free */
+      const back = Math.floor((now.price || 0) / 5), cost = M.price - back;
+      ch.coins(c); if (c.coins_base < cost) throw new HttpError(400, `The ${M.name} costs ${fmt(M.price)} coins${back ? ` (${fmt(cost)} with your ${now.name} traded in)` : ''}. You have ${fmt(c.coins_base)} on you.`);
+      c.coins_base -= cost; treasuryAdd(ch, cost); track(ch, 'phone:buy', cost, c.id);
+      await ch.q('update citizens set phone = $2 where id = $1', [c.id, model + '|' + color]); ch.touch(c); await ch.saveCitizen(c);
+      return { ok: true, phone: { m: model, col: color }, paid: cost, tradeIn: back, coins: c.coins_base };
+    });
   }
 
   // ---------- cars ----------

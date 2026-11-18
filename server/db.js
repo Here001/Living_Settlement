@@ -360,6 +360,8 @@ const MIGRATIONS = [
   `alter table buildings add column if not exists sale_price bigint;`,
   // v78: money sprayed on one person in a club (they pick it up): who it's for
   `alter table club_rains add column if not exists to_id text; alter table club_rains add column if not exists to_handle text;`,
+  // v79: the phone you carry ('model|colour'; none: the Brick everyone starts with)
+  `alter table citizens add column if not exists phone text;`,
 ];
 
 export async function migrate() {

@@ -1457,7 +1457,7 @@ console.log('Men and women');
 await post(comment('c4', 'ada_f', 'spawn female 👩')); await post(comment('c5', 'bayo_m', 'Spawn me as a man'));
 let ada = null; for (let i = 0; i < 40 && !ada?.id; i++) { await sleep(100); ada = await who('ada_f'); }
 ok(ada?.g === 'f', '"spawn female" makes a woman', JSON.stringify(ada));
-ok((await who('bayo_m'))?.g === 'm', '"spawn me as a man" makes a man');
+{ let bayo = null; for (let i = 0; i < 40 && !bayo?.id; i++) { bayo = await who('bayo_m'); if (!bayo?.id) await sleep(100); } ok(bayo?.g === 'm', '"spawn me as a man" makes a man', JSON.stringify(bayo)); }
 r = await call('POST', '/api/admin/citizens', { handle: 'chioma', gender: 'f' });
 ok(r.status === 200 && (await who('chioma')).g === 'f', 'the developer can add a woman');
 ok(['m', 'f'].includes((await who('zara_ng')).g), 'everyone else gets a gender');
@@ -2115,6 +2115,21 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   for (let i = 0; i < 41; i++) await call('POST', '/api/inside/here', { place }, { auth: false, headers: { 'cf-connecting-ip': `10.9.${i >> 8}.${i & 255}` } }); /* 41 visitors from 41 addresses */
   const full = await call('GET', `/api/buildings/${cb.id}/inside`, undefined, E.P); ok(full.status === 409 && /full/.test(full.json.error || ''), 'a full club turns people away', JSON.stringify(full.json));
   ok((await call('GET', `/api/buildings/${cb.id}/inside`, undefined, O.P)).status === 200, '…but its owner can always get in');
+}
+{ // phones: everyone starts with the Brick; buy a better one at a Phone store (the old one traded in for a fifth), change its colour for free
+  const P1 = await player('phone_pip', 1000), PM = (await import('../shared/catalog.js')).PHONE_MODELS;
+  const g0 = await call('GET', '/api/me/phone', undefined, P1.P); ok(g0.status === 200 && g0.json.phone.m === 'brick', 'phones: everyone starts with the Brick', JSON.stringify(g0.json));
+  ok((await call('POST', '/api/me/phone', { model: 'pulse', buildingId: 'nope' }, P1.P)).status === 409, '…phones are bought at a Phone store');
+  const st = (await call('POST', '/api/admin/buildings', { type: 'phonestore', x: 1600, y: 1340, instant: true })).json.building; ok(st && st.type === 'phonestore', 'the developer can build a Phone store', JSON.stringify(st).slice(0, 120));
+  ok((await call('POST', '/api/me/phone', { model: 'pulse', buildingId: st.id }, P1.P)).status === 400, '…and you need the coins');
+  await pool.query('update citizens set coins_base = 200000, net = 0 where id = $1', [P1.id]);
+  const b1 = await call('POST', '/api/me/phone', { model: 'pulse', color: '#7C5CFF', buildingId: st.id }, P1.P);
+  ok(b1.status === 200 && b1.json.phone.m === 'pulse' && b1.json.phone.col === '#7C5CFF' && b1.json.paid === PM.pulse.price, 'buy a phone in the colour you pick', JSON.stringify(b1.json));
+  const b2 = await call('POST', '/api/me/phone', { model: 'aura', buildingId: st.id }, P1.P);
+  ok(b2.status === 200 && b2.json.paid === PM.aura.price - PM.pulse.price / 5 && b2.json.tradeIn === PM.pulse.price / 5, '…a better one: your old phone is traded in for a fifth of what it cost', JSON.stringify(b2.json));
+  const b3 = await call('POST', '/api/me/phone', { model: 'aura', color: '#C8B79A', buildingId: st.id }, P1.P), g1 = await call('GET', '/api/me/phone', undefined, P1.P);
+  ok(b3.status === 200 && b3.json.recolour && g1.json.phone.m === 'aura' && g1.json.phone.col === '#C8B79A', '…and a new colour for the one you have is free', JSON.stringify(g1.json));
+  ok((await call('POST', '/api/me/phone', { model: 'brick', buildingId: st.id }, P1.P)).status === 400 && (await call('POST', '/api/me/phone', { model: 'zenith', buildingId: st.id }, P1.P)).status === 400, '…the Brick isn’t for sale, and the finest phone costs more than you have');
 }
 { // the developer can walk into any building (even one the public can't, or a locked home) and furnish it, for nothing
   const pol = (await call('POST', '/api/admin/buildings', { type: 'police', x: 1460, y: 1300, instant: true })).json.building, bak = (await call('POST', '/api/admin/buildings', { type: 'bakery', x: 1480, y: 1300, instant: true })).json.building;

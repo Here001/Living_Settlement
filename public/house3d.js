@@ -564,8 +564,8 @@ export function createHouse(host, opts) {
   // shins hang in front of it, not through it), and never so far back that you sink into the backrest
   const seatFwd = (hd, av, backrest) => { const k = av.hipY / 0.9, thigh = 0.45 * k, back = 0.13 * k, rest = backrest ? Math.min(0.22, hd * 0.4) : 0;
     return Math.max(-hd + rest + back, Math.min(hd - 0.05, hd - thigh + 0.06)); };
-  function doAct() {
-    if (act) { standUp(); return; } nearAct = findNear(); if (!nearAct) return; const { it, A, b } = nearAct;
+  function doAct(to) {
+    if (act) { standUp(); return; } nearAct = to || findNear(); if (!nearAct) return; /* to: a piece picked for you (into bed, say) */ const { it, A, b } = nearAct;
     if (A.kind === 'tv' || A.kind === 'light') { const set = A.kind === 'tv' ? tvOn : offLights; set.has(it.i) ? set.delete(it.i) : set.add(it.i); buildStuff(); placeLights(true); actKey = ''; prompt(); dirty = true; wake(); return; }
     const av = me3.userData.av, back = { x: me.x, y: me.y, yaw: me.yaw }, fl = Math.hypot(b.cx - b.tx, b.cy - b.ty), F = fl > 0.05 ? { x: (b.cx - b.tx) / fl, y: (b.cy - b.ty) / fl } : null; /* the way it faces: away from its tallest part */
     const vl = Math.hypot(me.x - b.cx, me.y - b.cy) || 1, toMe = { x: (me.x - b.cx) / vl, y: (me.y - b.cy) / vl }; let x, y, wy, wyaw, yaw;
@@ -709,7 +709,11 @@ export function createHouse(host, opts) {
         const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, depthTest: false, transparent: true })); sp.scale.set(0.34, 0.34, 1); sp.position.set(0, 2.38, 0); sp.renderOrder = 6; g.add(sp); g.userData.talk = sp; }
       else if (!on && sp) { g.remove(sp); sp.material.map.dispose(); sp.material.dispose(); g.userData.talk = null; } else return; dirty = true; wake(); },
     upsertOther, removeOther, clearOthers() { for (const id of [...others.keys()]) removeOther(id); }, say, get me() { return { x: me.x, y: me.y, a: act ? act.wyaw : me.yaw, pose: act ? CODE[act.kind] : '', ph: act ? +act.wy.toFixed(2) : 0 }; },
-    act() { doAct(); }, standUp() { standUp(); }, refreshAct() { actKey = ''; prompt(); },
+    act() { doAct(); }, standUp() { standUp(); },
+    // into bed (when your colonist is asleep as you come in): the first bed in the home; stand up beside it
+    sleep() { if (act) return false; const it = room.items.find(x => { const A = actOf(x.k); return A && A.kind === 'lie' && /bed/.test(x.k); }) || room.items.find(x => (actOf(x.k) || {}).kind === 'lie'); if (!it) return false;
+      const b = boxOf(it); for (const [x, y] of [[b.x1 + 0.45, b.cy], [b.x0 - 0.45, b.cy], [b.cx, b.y1 + 0.45], [b.cx, b.y0 - 0.45]]) if (!blocked(x, y)) { me.x = x; me.y = y; break; }
+      doAct({ it, A: actOf(it.k), b }); return true; }, refreshAct() { actKey = ''; prompt(); },
     get stats() { const r = renderer.info.render; return { frame: r.frame, pr: prNow, people: others.size, shown: [...others.values()].filter(o => o.g.visible).length, canvas: renderer.domElement.width + 'x' + renderer.domElement.height, calls: r.calls, triangles: r.triangles, textures: renderer.info.memory.textures, geometries: renderer.info.memory.geometries, programs: renderer.info.programs?.length }; },
     setPerspective(p) { persp = p === 'third' ? 'third' : 'first'; stepIn(); moved(); },
     get perspective() { return persp; },

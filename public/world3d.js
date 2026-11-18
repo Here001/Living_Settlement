@@ -153,6 +153,26 @@ export function createView(canvas) {
 }
 
 // ---------------- materials ----------------
+// Water that moves: small waves running across it (a few sines on the graphics chip, bending the light, no extra
+// geometry), its pattern drifting slowly in two directions, and the sky caught in it at a shallow angle. WATER.time is
+// moved on by whoever draws it (town3d.js); left at 0 it's still, and still looks like water.
+export const WATER = { time: { value: 0 } };
+function waterFx(m) {
+  m.onBeforeCompile = sh => { sh.uniforms.uWT = WATER.time;
+    sh.vertexShader = 'varying vec3 vWW;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vWW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = 'uniform float uWT; varying vec3 vWW;\n' + sh.fragmentShader
+      .replace('#include <map_fragment>', `#ifdef USE_MAP
+        vec4 wa = texture2D(map, vMapUv + vec2(uWT * 0.012, uWT * 0.007)), wb = texture2D(map, vMapUv * 0.63 + vec2(-uWT * 0.009, uWT * 0.011));
+        diffuseColor *= mix(wa, wb, 0.5);
+      #endif`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        { vec2 p = vWW.xz; float t = uWT;
+          float dx = 0.42 * cos(p.x * 0.42 + t * 1.3) * cos(p.y * 0.31 - t * 0.8) + 0.9 * cos(p.x * 0.9 - p.y * 0.55 + t * 2.1) * 0.35 + 1.7 * cos(p.x * 1.7 + p.y * 1.3 - t * 2.9) * 0.12;
+          float dz = -0.31 * sin(p.x * 0.42 + t * 1.3) * sin(p.y * 0.31 - t * 0.8) - 0.55 * cos(p.x * 0.9 - p.y * 0.55 + t * 2.1) * 0.35 + 1.3 * cos(p.x * 1.7 + p.y * 1.3 - t * 2.9) * 0.12;
+          vec3 nw = normalize(vec3(-dx * 0.16, 1.0, -dz * 0.16)); normal = normalize((viewMatrix * vec4(nw, 0.0)).xyz); }`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        { float fr = pow(1.0 - clamp(dot(normalize(vViewPosition), -normal) * -1.0, 0.0, 1.0), 3.0); totalEmissiveRadiance += vec3(0.42, 0.58, 0.72) * fr * 0.35; }`); };
+  m.customProgramCacheKey = () => 'water'; return m; }
 function cutAway(m, cut) {
   m.onBeforeCompile = sh => {
     sh.uniforms.uCutA = cut.A; sh.uniforms.uCutB = cut.B; sh.uniforms.uCutR = cut.R;
@@ -175,7 +195,8 @@ function materials(view) {
     roof: std({ map: ground.roof(), roughness: 0.95 }, 0, true), tiles: std({ map: ground.tiles(), roughness: 0.8 }, 0, true),
     grass: std({ map: ground.grass(), roughness: 1 }), paving: std({ map: ground.paving(), roughness: 0.9 }), asphalt: std({ map: ground.asphalt(), roughness: 0.92 }),
     field: std({ map: ground.field(), roughness: 1 }), pitch: std({ map: ground.pitch(), roughness: 1 }),
-    water: std({ map: ground.water(), roughness: 0.08, metalness: 0.2, transparent: true, opacity: 0.92 }),
+    water: waterFx(std({ map: ground.water(), roughness: 0.06, metalness: 0.25, transparent: true, opacity: 0.9 })),
+    foam: std({ roughness: 1, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
     solid: std({ roughness: 0.75, flatShading: true }, 0, true), shiny: std({ roughness: 0.3, metalness: 0.5 }, 0, true),
     paint: std({ roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
     glow: std({ roughness: 1 }, 2.2),
@@ -204,10 +225,11 @@ export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add =
   if (add) { view.center.set(tw * TILE / 2, 0, th * TILE / 2); view.span = Math.max(tw, th) * TILE * 0.8; }
   // the ground, tile by tile, with the town carrying on beyond the edges
   for (let ty = -pad; ty < th + pad; ty++) for (let tx = -pad; tx < tw + pad; tx++) {
-    const k = (tx >= 0 && ty >= 0 && tx < tw && ty < th) ? gAt(tx, ty) : isRoad(tx, ty) ? 2 : (L.swater || []).some(w => w[0] === tx && w[1] === ty) ? 3 : 0, x0 = tx * TILE, z0 = ty * TILE, x1 = x0 + TILE, z1 = z0 + TILE, b = k === 2 ? B.asphalt : k === 3 ? B.water : k === 4 ? B.field : k === 5 ? B.pitch : k === 1 ? B.paving : B.grass, y = k === 3 ? -0.35 : 0;
+    const k = (tx >= 0 && ty >= 0 && tx < tw && ty < th) ? gAt(tx, ty) : isRoad(tx, ty) ? 2 : (L.swater || []).some(w => w[0] === tx && w[1] === ty) ? 3 : 0, x0 = tx * TILE, z0 = ty * TILE, x1 = x0 + TILE, z1 = z0 + TILE, b = k === 2 ? B.asphalt : k === 3 ? B.water : k === 4 ? B.field : k === 5 ? B.pitch : k === 1 ? B.paving : B.grass, y = k === 3 ? -0.05 : 0; /* (water just above the far ground sheet, below the banks) */
     if (k === 2 && isRail(tx, ty)) { B.solid.box(x0, z0, x1, z1, -0.05, 0.06, col('#8a8276')); continue; } /* a railway: a bed of grey ballast */
     const s = k === 2 ? 8 : 6; b.quad([x0, y, z1], [x1, y, z1], [x1, y, z0], [x0, y, z0], [0, 1, 0], [x0 / s, z1 / s, x1 / s, z1 / s, x1 / s, z0 / s, x0 / s, z0 / s], col('#ffffff'));
-    if (k === 3) for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) { const n = gAt(tx + dx, ty + dy); if (n === 3) continue; // banks
+    if (k === 3) for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) { const n = gAt(tx + dx, ty + dy); if (n === 3) continue; // banks (and a line of foam along them)
+      { const fw = 0.9, fy = y + 0.04, fc = col('#ffffff'); if (dx) { const a = dx > 0 ? x1 - fw : x0; B.foam.quad([a, fy, z1], [a + fw, fy, z1], [a + fw, fy, z0], [a, fy, z0], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], fc); } else { const a = dy > 0 ? z1 - fw : z0; B.foam.quad([x0, fy, a + fw], [x1, fy, a + fw], [x1, fy, a], [x0, fy, a], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], fc); } }
       const ex0 = dx === 1 ? x1 : x0, ex1 = dx === -1 ? x0 : x1, ez0 = dy === 1 ? z1 : z0, ez1 = dy === -1 ? z0 : z1; if (dx) B.paving.box(ex0 - 0.3, z0, ex0 + 0.3, z1, -0.6, 0.15, col('#b9b2a3'), { su: 4, sv: 4 }); else B.paving.box(x0, ez0 - 0.3, x1, ez0 + 0.3, -0.6, 0.15, col('#b9b2a3'), { su: 4, sv: 4 }); }
   }
   // streets: pavements and kerbs where a street meets anything else, lane markings, and zebra crossings at junctions
@@ -528,6 +550,10 @@ const CARS = {
   bus: { L: 11, W: 2.5, y0: 0.36, r: 0.5, xr: -3.6, xf: 3.5, top: [[-5.5, 0.6], [-5.5, 2.9], [-5.38, 3.02], [5.35, 3.02], [5.5, 2.88], [5.5, 0.6]], glass: [[-5.6, 1.45], [-5.6, 2.6], [5.6, 2.6], [5.6, 1.45]], lamp: 0.85, tail: 1.1 },
 };
 CARS.police = CARS.car;
+// the colony's service vehicles (as on the 2D map): a fire engine, an ambulance and a lorry, front at +x
+CARS.firetruck = { L: 8.2, W: 2.5, y0: 0.4, r: 0.52, xr: -2.7, xf: 2.6, top: [[-4.1, 0.75], [-4.1, 2.55], [1.85, 2.55], [2.05, 3.0], [3.55, 3.0], [4.1, 2.15], [4.1, 0.75]], glass: [[2.15, 2.0], [2.2, 2.85], [3.5, 2.85], [4.0, 2.1]], lamp: 1.0, tail: 1.2, paint: [0.3, 0.35, 1.1] };
+CARS.ambulance = { L: 5.9, W: 2.1, y0: 0.34, r: 0.38, xr: -1.85, xf: 1.85, top: [[-2.95, 0.58], [-2.95, 2.62], [1.05, 2.62], [1.3, 2.22], [2.25, 1.35], [2.95, 1.05], [2.95, 0.58]], glass: [[1.32, 1.42], [1.34, 2.1], [1.42, 2.14], [2.22, 1.36]], lamp: 0.88, tail: 1.2, paint: [0.3, 0.3, 1.0] };
+CARS.truck = { L: 7.6, W: 2.45, y0: 0.4, r: 0.5, xr: -2.5, xf: 2.45, top: [[-3.8, 0.75], [-3.8, 3.05], [1.55, 3.05], [1.55, 2.65], [2.05, 2.65], [2.3, 2.55], [3.8, 1.95], [3.8, 0.75]], glass: [[2.32, 1.75], [2.35, 2.5], [2.45, 2.52], [3.75, 1.98]], lamp: 0.95, tail: 1.2, paint: [0.4, 0.3, 0.9] };
 // The colony's own cars (shared/catalog.js CAR_MODELS), each with its own body. Style: grille (plain, chrome or none), led
 // (a light bar across the front and back), spoiler (lip or wing), intakes, diffuser, rails, bed (a pickup's covered bed),
 // glow (underglow and glowing rims), wheel (steel, alloy, sport, aero, turbine), paint [roughness, metalness, reflections],

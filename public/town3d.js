@@ -328,6 +328,27 @@ export function createTown(host, opts) {
       const g = f.g, dx = f.tx - g.position.x, dz = f.tz - g.position.z; if (Math.hypot(dx, dz) > 40) { g.position.x = f.tx; g.position.z = f.tz; continue; }
       const vx = dx * k / Math.max(dt, 1e-3), vz = dz * k / Math.max(dt, 1e-3); g.position.x += dx * k; g.position.z += dz * k; f.P.animate(dt, vx, vz); } }
 
+  // ---- the colony's service vehicles, where the 2D map has them: police patrols, fire engines and ambulances (lights
+  // flashing on a call), buses, taxis, vans and lorries. One light bar mesh and one ladder mesh for all of them. ----
+  const svc = new Map(); let svcAt = 0; const SV = { police: 'police', firetruck: 'firetruck', fire: 'firetruck', ambulance: 'ambulance', bus: 'bus', van: 'van', truck: 'truck', taxi: 'car', car: 'sedan' }, ROOF = { police: 1.52, firetruck: 3.05, ambulance: 2.66 };
+  const svBars = (() => { const m = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 0.13, 0.26), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), 64); m.frustumCulled = false; m.count = 0; scene.add(m); return m; })();
+  const svLadder = (() => { const g = new THREE.BoxGeometry(0.7, 0.12, 5.6); const m = new THREE.InstancedMesh(g, new THREE.MeshStandardMaterial({ color: '#c9ced4', roughness: 0.35, metalness: 0.8 }), 16); m.frustumCulled = false; m.count = 0; scene.add(m); return m; })();
+  function services(now, dt) {
+    if (opts.services && now - svcAt > 400) { svcAt = now; const L = opts.services(car.x / TILE, car.z / TILE), seen = new Set();
+      for (const v of L) { const kind = SV[v.type]; if (!kind) continue; seen.add(v.id); let f = svc.get(v.id); const tx = v.x * TILE, tz = v.y * TILE, ta = v.a != null ? v.a - Math.PI / 2 : null;
+        if (!f) { f = { kind, col: v.col, x: tx, z: tz, ry: ta || 0 }; svc.set(v.id, f); } f.tx = tx; f.tz = tz; f.ta = ta; f.siren = !!v.siren; f.kind = kind; f.col = v.col || f.col; }
+      for (const id of [...svc.keys()]) if (!seen.has(id)) svc.delete(id); }
+    let nb = 0, nl = 0; const k = Math.min(1, dt * 2.2), flash = Math.floor(now / 260) % 2;
+    for (const f of svc.values()) { const dx = f.tx - f.x, dz = f.tz - f.z; if (Math.hypot(dx, dz) > 40) { f.x = f.tx; f.z = f.tz; } else { f.x += dx * k; f.z += dz * k; }
+      const want = Math.hypot(dx, dz) > 0.05 ? Math.atan2(-dx, -dz) : f.ta; if (want != null) { let d = want - f.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); f.ry += d * Math.min(1, dt * 4); }
+      pushCar(f.kind, f.col, f.x, f.z, f.ry); const roof = ROOF[f.kind]; if (!roof) continue; const c = Math.cos(f.ry), sn = Math.sin(f.ry);
+      for (const side of [-1, 1]) { if (nb >= 64) break; const ox = side * 0.3, oz = f.kind === 'police' ? 0.05 : -(CARS3D[f.kind] || 0) ; /* the bar: red and blue (white on a fire engine), flashing on a call */
+        Q.setFromAxisAngle(Y, f.ry); M4.compose(P3.set(f.x + c * ox + sn * oz, roof + 0.07, f.z - sn * ox + c * oz), Q, V1); svBars.setMatrixAt(nb, M4);
+        const on = !f.siren || (side > 0 ? flash : 1 - flash); svBars.setColorAt(nb, C3.set(f.siren ? (on ? (side < 0 ? '#ff2a2a' : f.kind === 'firetruck' ? '#ffffff' : '#2a5bff') : '#3a2222') : (side < 0 ? '#7a1f1f' : '#1f2f7a'))); nb++; }
+      if (f.kind === 'firetruck' && nl < 16) { Q.setFromAxisAngle(Y, f.ry); M4.compose(P3.set(f.x + sn * 0.6, 2.65, f.z + c * 0.6), Q, V1); svLadder.setMatrixAt(nl++, M4); } }
+    svBars.count = nb; svLadder.count = nl; svBars.instanceMatrix.needsUpdate = true; if (svBars.instanceColor) svBars.instanceColor.needsUpdate = true; svLadder.instanceMatrix.needsUpdate = true; }
+  const CARS3D = { firetruck: 2.6, ambulance: 1.2 }; /* how far forward of the middle the light bar sits (over the cab) */
+
   // ---- the sky: slow clouds, and birds by day ----
   const sky = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); for (let i = 0; i < 7; i++) { const gx = 30 + Math.random() * 68, gy = 40 + Math.random() * 48, r = 22 + Math.random() * 22, gr = x.createRadialGradient(gx, gy, 2, gx, gy, r); gr.addColorStop(0, 'rgba(255,255,255,.85)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128); }
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const N = PHONE ? 10 : 18, m = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, fog: false, opacity: 0.8 }), N);
@@ -489,7 +510,7 @@ export function createTown(host, opts) {
     driveTraffic(dt); walk(dt); skyLife(dt, now, night);
     head.intensity = foot || riding ? 0 : night * 60; if (night > 0.02) { const fx = Math.cos(car.a), fz = -Math.sin(car.a); head.position.set(car.x + fx * 1.8, 0.9, car.z + fz * 1.8); head.target.position.set(car.x + fx * 14, 0, car.z + fz * 14); }
     const fov = mode === 1 && camera.aspect < 1 ? 72 + (foot ? 0 : Math.min(8, Math.abs(car.v) * 0.3)) : foot ? 62 : 60 + Math.min(14, Math.abs(car.v) * 0.45); if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); } /* the view widens with speed */
-    GRASS.time.value = now / 1000; crowd(now, dt); rideSync(dt); chase(dt); drawFleet(night); routeMat.opacity = 0.6 + 0.3 * Math.sin(now / 250); ground.position.set(Math.round(car.x / 50) * 50, -0.08, Math.round(car.z / 50) * 50);
+    GRASS.time.value = now / 1000; W.WATER.time.value = now / 1000; crowd(now, dt); services(now, dt); rideSync(dt); chase(dt); drawFleet(night); routeMat.opacity = 0.6 + 0.3 * Math.sin(now / 250); ground.position.set(Math.round(car.x / 50) * 50, -0.45, Math.round(car.z / 50) * 50); /* (well below the water, so water always shows) */
     if (now - chk > 600) { chk = now; around(); }
     if (queue.length) { const [bx, by] = queue.shift().split(',').map(Number); if (opts.loaded(bx + B / 2, by + B / 2) || opts.loaded(bx, by)) build(bx, by); else queue.push(bx + ',' + by); }
     if (now - timeAt > 20000) { timeAt = now; shadowsDue = true; } sunNow(false);

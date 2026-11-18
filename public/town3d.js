@@ -113,7 +113,7 @@ export function createTown(host, opts) {
 
   // ---- blocks of town: built when near, thrown away when far ----
   const blocks = new Map(); let RAD = HQ && !PHONE ? 2 : 1; const queue = [];
-  const sig = (bx, by) => { let s = 0; for (const b of opts.buildings(bx, by, bx + B, by + B)) { const k = b.id + (b.lv || 1) + (b.rot || 0) + b.type; for (let i = 0; i < k.length; i++) s = (s * 31 + k.charCodeAt(i)) >>> 0; }
+  const sig = (bx, by) => { let s = 0; for (const b of opts.buildings(bx, by, bx + B, by + B)) { const k = b.id + (b.lv || 1) + (b.rot || 0) + b.type + (b.name || ''); /* (renamed: its sign changes) */ for (let i = 0; i < k.length; i++) s = (s * 31 + k.charCodeAt(i)) >>> 0; }
     for (let ty = by; ty < by + B; ty++) for (let tx = bx; tx < bx + B; tx++) { const t = o_road(tx, ty); if (t) s = (s * 7 + t.length + tx * 3 + ty * 5) >>> 0; } return s; };
   const o_road = (x, y) => opts.road(x, y);
   function build(bx, by) {
@@ -122,7 +122,7 @@ export function createTown(host, opts) {
     g.position.set(bx * TILE, 0, by * TILE); { const gr = grassBlock(bx, by, opts, HQ); if (gr) g.add(gr); } g.updateMatrixWorld(true); scene.add(g);
     if (old) drop(old); blocks.set(key, { g, sig: s, bx, by, solid, parked }); shadowsDue = true; const ms = performance.now() - t0; stats.builds++; stats.maxMs = Math.max(stats.maxMs, ms); stats.totalMs += ms; }
   const stats = { builds: 0, maxMs: 0, totalMs: 0 }; /* how long blocks take to build (for checking it stays smooth) */
-  const drop = v => { scene.remove(v.g); v.g.traverse(m => m.geometry && m.geometry.dispose()); };
+  const drop = v => { scene.remove(v.g); const gone = new Set(); v.g.traverse(m => { m.geometry && m.geometry.dispose(); if (m.userData.sign) { gone.add(m.material); W.dropSign(m.material); } }); if (gone.size) view.mats = view.mats.filter(x => !gone.has(x)); }; /* (its name boards too) */
   const near = () => { const cx = Math.floor(car.x / TILE / B), cy = Math.floor(car.z / TILE / B), want = [];
     for (let i = -RAD; i <= RAD; i++) for (let j = -RAD; j <= RAD; j++) want.push([(cx + i) * B, (cy + j) * B]); return want; };
   function around() { const want = near(), keys = new Set(want.map(([a, b]) => a + ',' + b));

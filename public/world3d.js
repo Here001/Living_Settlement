@@ -148,7 +148,7 @@ export function createView(canvas) {
       let sx = 0, sy = 0, sz = 0; if (view.trauma > 0) { view.trauma = Math.max(0, view.trauma - 1.5 * dt); const k = view.trauma * view.trauma * (view.shakeAmp || 0.6), t = now / 1000 * 30; sx = k * Math.sin(t * 1.7); sy = k * Math.sin(t * 2.3) * 0.7; sz = k * Math.sin(t * 1.3); camera.position.x += sx; camera.position.y += sy; camera.position.z += sz; }
       renderer.render(scene, camera); guard.after(); if (sx || sy || sz) { camera.position.x -= sx; camera.position.y -= sy; camera.position.z -= sz; } view.ms = (view.ms || 0) * 0.9 + (performance.now() - t0) * 0.1; view.frames = (view.frames || 0) + 1; }); };
   view.stop = () => { view.running = false; renderer.setAnimationLoop(null); };
-  view.dispose = () => { view.stop(); ctx.dispose(); scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); for (const m of view.mats) m.dispose(); renderer.dispose(); };
+  view.dispose = () => { view.stop(); ctx.dispose(); scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); for (const m of view.mats) m.userData.signTex ? dropSign(m) : m.dispose(); renderer.dispose(); };
   view.resize(); return view;
 }
 
@@ -263,7 +263,7 @@ export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add =
   const front = b => { const tx0 = Math.floor(b.x / TILE), ty0 = Math.floor(b.y / TILE), tx1 = Math.floor((b.x + b.w) / TILE), ty1 = Math.floor((b.y + b.h) / TILE); let best = 'S', bv = -1;
     const sides = { S: [], N: [], E: [], W: [] }; for (let x = tx0; x <= tx1; x++) { sides.S.push(isRoad(x, ty1 + 1) || isRoad(x, ty1)); sides.N.push(isRoad(x, ty0 - 1)); } for (let y = ty0; y <= ty1; y++) { sides.E.push(isRoad(tx1 + 1, y) || isRoad(tx1, y)); sides.W.push(isRoad(tx0 - 1, y)); }
     for (const [k, v] of Object.entries(sides)) { const c = v.filter(Boolean).length; if (c > bv) { bv = c; best = k; } } return best; };
-  for (const b of L.buildings) building(B, view, b, front(b), r);
+  view.signs = []; for (const b of L.buildings) building(B, view, b, front(b), r);
   for (const b of L.scenery || []) building(B, view, b, 'S', r);
   // trees, cars, benches, lamps, fences, fountains, and the hiding places
   for (const p of L.props) prop(B, view, p, r);
@@ -273,7 +273,7 @@ export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add =
     for (let x = 0; x < W; x += 3) { B.solid.box(x + 0.2, -0.3, x + 2.8, 0.1, 0.6, 1.0, (x / 3) % 2 ? c1 : c2); B.solid.box(x + 0.2, H - 0.1, x + 2.8, H + 0.3, 0.6, 1.0, (x / 3) % 2 ? c1 : c2); B.solid.box(x + 0.3, -0.2, x + 0.5, 0, 0, 0.6, c1); B.solid.box(x + 0.3, H, x + 0.5, H + 0.2, 0, 0.6, c1); }
     for (let z = 0; z < H; z += 3) { B.solid.box(-0.3, z + 0.2, 0.1, z + 2.8, 0.6, 1.0, (z / 3) % 2 ? c1 : c2); B.solid.box(W - 0.1, z + 0.2, W + 0.3, z + 2.8, 0.6, 1.0, (z / 3) % 2 ? c1 : c2); } }
   // merge each bucket into one mesh
-  const group = new THREE.Group();
+  const group = new THREE.Group(); for (const sg of view.signs || []) group.add(sg); view.signs = null; /* (the name boards, with the rest of the area) */
   for (const [k, b] of Object.entries(B)) { const g = b.geometry(); if (!g) continue; const m = new THREE.Mesh(g, M[k]); m.castShadow = !['grass', 'asphalt', 'field', 'pitch', 'water', 'paint', 'pool', 'ao'].includes(k); if (k === 'pool' || k === 'ao') { m.renderOrder = 2; m.receiveShadow = false; } m.receiveShadow = true; m.matrixAutoUpdate = false; group.add(m); if (k === 'water') view.water = m; }
   if (add) { view.scene.add(group); view.area = group; renderer_shadow(view); } return group;
 }
@@ -314,8 +314,9 @@ function building(B, view, b, face, r) {
   // an awning over the shop front
   if (T.awning) { const c = col(T.awning), len = Math.min(b.w, b.h) * 0.4; const a1 = at(-len, 3.0, 0.05), a2 = at(len, 3.0, 0.05), a3 = at(len, 2.5, 1.6), a4 = at(-len, 2.5, 1.6);
     B.solid.quad(...((face === 'S' || face === 'W') ? [a4, a3, a2, a1] : [a3, a4, a1, a2]), [out[0] * 0.3, 0.95, out[1] * 0.3], [0, 0, 1, 0, 1, 1, 0, 1], c); }
-  // a sign with the name (POLICE, CASINO, MARKET…), lit at night if it's neon
-  if (T.label) sign(view, T.label, T.sign || trimC.getStyle(), !!T.neon, at(0, Math.min(H - 0.8, 4.6), 0.12), face);
+  // its name on a board over the front door (a business's own name, or what it is: POLICE, MARKET…), lit up at night;
+  // homes have none
+  if (T.cat !== 'housing' && (T.work || T.label || b.name) && !['prop', 'fence', 'tree', 'xmastree', 'ponds', 'well', 'pitch', 'square', 'yard', 'tanks'].includes(st)) { const text = String(b.name || T.label || T.name || '').trim(); if (text) sign(view, text, T.sign || trimC.getStyle(), !!T.neon, at(0, Math.max(3.25, Math.min(H - 0.7, 4.6)), 0.14), face, Math.max(2.4, (face === 'E' || face === 'W' ? b.h : b.w) - 1.2)); }
   // the roof
   if (pitched) {
     const rh = Math.max(2.2, (T.roofH || 14) * 0.2), alongX = (x1 - x0) >= (z1 - z0), o = 0.5;
@@ -344,15 +345,25 @@ function building(B, view, b, face, r) {
     if (st === 'needle') bake(B.shiny, GEO.cyl, { x: (x0 + x1) / 2, y: H + 6, z: (z0 + z1) / 2, sx: 0.2, sy: 12, sz: 0.2, color: col('#cfd3d6') });
   }
 }
-// A sign: lettering painted onto a board, glowing at night if it's neon.
-function sign(view, text, bg, neon, pos, face) {
-  const c = document.createElement('canvas'); c.width = 512; c.height = 128; const g = c.getContext('2d');
-  g.fillStyle = bg; g.fillRect(0, 0, 512, 128); g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = 6; g.strokeRect(6, 6, 500, 116);
-  g.font = '900 78px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = neon ? '#ffe9a8' : '#ffffff'; if (neon) { g.shadowColor = '#ffcf4a'; g.shadowBlur = 24; } g.fillText(text, 256, 68);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-  const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.6, emissive: new THREE.Color('#ffffff'), emissiveMap: t, emissiveIntensity: neon ? 0.35 : 0.0 }); m.userData.glow = neon ? 1.6 : 0.5; view.mats.push(m);
-  const w = Math.min(6, 0.9 * text.length + 1.2), mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 4), m);
-  mesh.position.set(pos[0], pos[1], pos[2]); mesh.rotation.y = { S: 0, N: Math.PI, E: Math.PI / 2, W: -Math.PI / 2 }[face]; view.scene.add(mesh);
+// A name board: lettering painted onto a board in the building's colour. By day it's just paint; at night it lights up
+// (neon ones brighter). The same name on the same colour shares one picture (phones have little memory for them).
+const SIGNS = new Map(); /* key → { t, n } */
+function signTex(text, bg, neon) { const key = text + '|' + bg + '|' + (neon ? 1 : 0); let e = SIGNS.get(key); if (e) { e.n++; return e; }
+  const H = 96, c = document.createElement('canvas'), g = c.getContext('2d'); g.font = `900 ${H * 0.56}px system-ui, sans-serif`; const tw = g.measureText(text).width;
+  c.width = Math.min(1024, Math.max(256, Math.ceil(tw + H * 0.9))); c.height = H; const g2 = c.getContext('2d');
+  g2.fillStyle = bg; g2.fillRect(0, 0, c.width, H); g2.strokeStyle = 'rgba(255,255,255,.55)'; g2.lineWidth = 4; g2.strokeRect(5, 5, c.width - 10, H - 10);
+  let fs = H * 0.56; g2.font = `900 ${fs}px system-ui, sans-serif`; while (g2.measureText(text).width > c.width - H * 0.6 && fs > 14) { fs -= 2; g2.font = `900 ${fs}px system-ui, sans-serif`; }
+  g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.fillStyle = neon ? '#ffe9a8' : '#ffffff'; g2.shadowColor = neon ? '#ffcf4a' : 'rgba(255,240,200,.9)'; g2.shadowBlur = neon ? 18 : 8; g2.fillText(text, c.width / 2, H * 0.54);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; e = { t, n: 1, key, aspect: c.width / H }; SIGNS.set(key, e); return e; }
+export function dropSign(m) { const e = m && m.userData && m.userData.signTex; if (!e) return; m.dispose(); if (--e.n <= 0) { e.t.dispose(); SIGNS.delete(e.key); } }
+const SIGN_BACK = new THREE.MeshStandardMaterial({ color: '#2b2621', roughness: 0.7 });
+function sign(view, text, bg, neon, pos, face, room = 6) {
+  const e = signTex(text, bg, neon), m = new THREE.MeshStandardMaterial({ map: e.t, roughness: 0.55, emissive: new THREE.Color('#ffffff'), emissiveMap: e.t, emissiveIntensity: 0 });
+  m.userData.glow = neon ? 2.6 : 1.9; m.userData.signTex = e; m.emissiveIntensity = m.userData.glow * (view.night || 0); view.mats.push(m); /* (lit with the night, like the windows) */
+  const hgt = 1.35, w = Math.min(room, hgt * e.aspect), h = w / e.aspect, mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
+  mesh.position.set(pos[0], pos[1], pos[2]); mesh.rotation.y = { S: 0, N: Math.PI, E: Math.PI / 2, W: -Math.PI / 2 }[face]; mesh.userData.sign = true;
+  const back = new THREE.Mesh(new THREE.BoxGeometry(w + 0.16, h + 0.16, 0.1), SIGN_BACK); back.position.set(0, 0, -0.06); mesh.add(back); /* a frame behind the board */
+  if (view.signs) view.signs.push(mesh); else view.scene.add(mesh);
 }
 function tree(B, x, z, s, leaf, kind, r, lite) { /* lite: a street tree (fewer leaf clumps, for the long rows of them) */
   const lc = col(leaf), trunk = col('#6b4a32');

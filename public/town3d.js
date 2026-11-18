@@ -195,7 +195,7 @@ export function createTown(host, opts) {
     const pts = [[2.1 * dir, 0.85], [2.1 * dir, -0.85], [0, 0]]; /* the front corners (the back ones going backwards) and the middle */
     if (pts.some(([u, w]) => hits(nx + fx * u + fz * w, nz + fz * u - fx * w, S, car.x + fx * u + fz * w, car.z + fz * u - fx * w))) { car.vx = -car.vx * 0.25; car.vz = -car.vz * 0.25; car.v = -car.v * 0.25; bump = 0.25; return; }
     car.x = nx; car.z = nz; }
-  let bump = 0, roll = 0, pitch = 0, accel0 = 0;
+  let bump = 0, roll = 0, pitch = 0, accel0 = 0, accS = 0;
 
   // ---- every car but yours, drawn together: one draw per model for all of them (parked, traffic, other people) ----
   const fleetM = new Map(), fleetQ = new Map(), M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), V1 = new THREE.Vector3(1, 1, 1), P3 = new THREE.Vector3(), C3 = new THREE.Color();
@@ -473,7 +473,7 @@ export function createTown(host, opts) {
       const ahead = foot ? 3 : 6, lx = car.x + Math.cos(a) * ahead, lz = car.z - Math.sin(a) * ahead; aim.x += (lx - aim.x) * k; aim.z += (lz - aim.z) * k; look.set(aim.x, foot ? 1.45 : 1.2, aim.z); camera.lookAt(look); /* look past the car the way the camera faces */
       view.cut.A.value.set(car.x, 1.0, car.z); { const bx = camera.position.x - car.x, bz = camera.position.z - car.z, L = Math.hypot(bx, bz) || 1; view.cut.B.value.set(camera.position.x + bx / L * 3, camera.position.y + 1, camera.position.z + bz / L * 3); } view.cut.R.value = high ? 6 : 3.8; } /* see through what's between you and the car, and just behind the camera */
     if (bump > 0) { bump -= dt; camera.position.y += Math.sin(bump * 60) * 0.08; }
-    const sp = Math.abs(car.v); if (sp > 16) { const t = now0() / 1000, k = (sp - 16) * 0.0016; camera.position.x += Math.sin(t * 37) * k; camera.position.y += Math.sin(t * 43) * k; } } /* a faint tremble at speed */
+  } /* (no tremble at speed: it read as the car hopping) */
   const now0 = () => performance.now();
   canvas.style.touchAction = 'none';
   canvas.addEventListener('pointerdown', e => { if (lk.id != null) return; lk.id = e.pointerId; lk.x = e.clientX; lk.y = e.clientY; try { canvas.setPointerCapture(e.pointerId); } catch (x) {} });
@@ -496,8 +496,8 @@ export function createTown(host, opts) {
   // ---- the loop ----  // ---- the loop ----
   let nearCar = false, nearRide = null, sent = 0, nearAt = 0, nearId = null, chk = 0, timeAt = 0, shadowAt = { x: 1e9, z: 1e9 }, shadowsDue = true, frames = 0, spent = 0, dead = false;
   const minute = () => (opts.minute ? opts.minute() : 720);
-  function sunNow(force) { if (!(force || shadowsDue || Math.hypot(car.x - shadowAt.x, car.z - shadowAt.z) > 40)) return; shadowAt = { x: car.x, z: car.z }; shadowsDue = false;
-    view.center.set(car.x, 0, car.z); view.span = 110; view.setTime(minute()); haze(); }
+  function sunNow(force) { const fast = Math.min(90, Math.abs(car.v) * 1.6); if (!(force || shadowsDue || Math.hypot(car.x - shadowAt.x, car.z - shadowAt.z) > 40 + fast)) return; /* (redone less often the faster you go: each redo is a hitch) */ shadowAt = { x: car.x, z: car.z }; shadowsDue = false;
+    view.center.set(car.x + Math.cos(car.a) * Math.min(40, Math.abs(car.v)), 0, car.z - Math.sin(car.a) * Math.min(40, Math.abs(car.v))); view.span = 110 + Math.min(70, Math.abs(car.v) * 1.2); /* at speed: a wider patch, ahead of you */ view.setTime(minute()); haze(); }
   view.resize(); around(); sunNow(true);
   view.start((dt, now) => {
     if (dead) return; drive(dt);
@@ -505,7 +505,7 @@ export function createTown(host, opts) {
     if (parked) pushCar(parked.kind, parked.col, parked.x, parked.z, parked.ry);
     if (summon) { comeUp(dt); if (summon) pushCar(summon.kind, summon.col, summon.x, summon.z, summon.ry); }
     me.position.set(car.x, 0, car.z); me.rotation.set(0, 0, 0); me.rotation.y = car.a - Math.PI / 2; for (const w of me.userData.wheels || []) w.rotation.x -= car.v * dt / 0.33;
-    roll += (car.steer * Math.min(1, Math.abs(car.v) / 14) * 0.05 - roll) * Math.min(1, dt * 5); pitch += ((accel0 - car.v) / Math.max(dt, 1e-3) * 0.0025 - pitch) * Math.min(1, dt * 4); accel0 = car.v; me.rotateZ(roll); me.rotateX(Math.max(-0.035, Math.min(0.035, pitch))); /* the body leans into a turn and dips when you brake */
+    roll += (car.steer * Math.min(1, Math.abs(car.v) / 14) * 0.05 - roll) * Math.min(1, dt * 5); accS += ((car.v - accel0) / Math.max(dt, 1 / 30) - accS) * Math.min(1, dt * 2.5); accel0 = car.v; pitch += (-accS * 0.0022 - pitch) * Math.min(1, dt * 3); /* the body dips under braking and squats as it pulls away: smoothed, so it never twitches */ me.rotateZ(roll); me.rotateX(Math.max(-0.035, Math.min(0.035, pitch))); /* the body leans into a turn and dips when you brake */
     const night = view.night || 0; for (const blk of blocks.values()) for (const c of blk.parked) pushCar(c.kind, c.col, c.x, c.z, c.ry);
     driveTraffic(dt); walk(dt); skyLife(dt, now, night);
     head.intensity = foot || riding ? 0 : night * 60; if (night > 0.02) { const fx = Math.cos(car.a), fz = -Math.sin(car.a); head.position.set(car.x + fx * 1.8, 0.9, car.z + fz * 1.8); head.target.position.set(car.x + fx * 14, 0, car.z + fz * 14); }
@@ -529,9 +529,9 @@ export function createTown(host, opts) {
   // ---- controls on screen, in the layout picked in Settings: a stick; pedals and steer buttons; or a steering wheel and
   // pedals (steering on the left unless it's swapped). The arrow keys and the keys picked in Settings always work too.
   let pad = null;
-  function controls() { if (pad) pad.remove(); inp.thr = inp.steer = 0; const lay = foot ? 'stick' : ctl.layout || 'stick'; /* on foot: always the stick */ pad = document.createElement('div'); pad.className = 'tpad ' + lay + (ctl.swap ? ' swap' : ''); let ts = ctl.steerSize || 1, tp = ctl.pedalSize || 1; if (lay !== 'stick') { const W0 = host.clientWidth || innerWidth, need = (lay === 'wheel' ? 150 * ts : 170 * ts) + 168 * tp + 52; if (need > W0) { const f = (W0 - 52) / (need - 52); ts *= f; tp *= f; } } /* both fit side by side, however big you've made them */
+  function controls() { if (pad) pad.remove(); inp.thr = inp.steer = 0; const lay = foot ? 'stick' : ctl.layout || 'stick'; /* on foot: always the stick */ pad = document.createElement('div'); pad.className = 'tpad ' + lay + (ctl.swap ? ' swap' : ''); let ts = ctl.steerSize || 1, tp = ctl.pedalSize || 1; if (lay !== 'stick') { const W0 = host.clientWidth || innerWidth, need = (lay === 'wheel' ? 150 * ts : 170 * ts) + 88 * tp + 52; if (need > W0) { const f = (W0 - 52) / (need - 52); ts *= f; tp *= f; } } /* both fit side by side, however big you've made them */
     pad.style.setProperty('--ts', String(ts)); pad.style.setProperty('--tp', String(tp)); host.append(pad); /* sizes picked in Settings */
-    { const right = lay === 'stick' ? (ctl.swap ? 28 + 128 * ts : 0) : ctl.swap ? (lay === 'wheel' ? 18 + 150 * ts : 24 + 78 * ts) : 20 + 118 * tp;
+    { const right = lay === 'stick' ? (ctl.swap ? 28 + 128 * ts : 0) : ctl.swap ? (lay === 'wheel' ? 18 + 150 * ts : 24 + 78 * ts) : 20 + 186 * tp; /* (the pedals stand one above the other) */
       (host.parentElement || host).style.setProperty('--dhud', Math.max(24, right + 14) + 'px'); } /* the speed and Stop buttons sit above whatever is on the right */
     const mk = (cls, html) => { const d = document.createElement('div'); d.className = cls; if (html) d.innerHTML = html; pad.append(d); return d; };
     const hold = (elm, down, up) => { const on = new Set(); elm.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); try { elm.setPointerCapture(e.pointerId); } catch (x) {} on.add(e.pointerId); elm.classList.add('on'); down(e); });
@@ -541,7 +541,7 @@ export function createTown(host, opts) {
       st.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); id = e.pointerId; st.setPointerCapture(id); mv(e); }); st.addEventListener('pointermove', e => { if (e.pointerId === id) mv(e); });
       const end = () => { id = null; inp.thr = inp.steer = 0; knob.style.transform = ''; }; st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end); return; }
     // the pedals: brake (and reverse when stopped) and accelerator, held down
-    const pedals = mk('tpedals'), brake = document.createElement('div'), gas = document.createElement('div'); brake.className = 'tped brake'; brake.innerHTML = '<b>BRAKE</b>'; gas.className = 'tped gas'; gas.innerHTML = '<b>GAS</b>'; pedals.append(brake, gas);
+    const pedals = mk('tpedals'), brake = document.createElement('div'), gas = document.createElement('div'); brake.className = 'tped brake'; brake.innerHTML = '<b>BRAKE</b>'; gas.className = 'tped gas'; gas.innerHTML = '<b>GAS</b>'; pedals.append(gas, brake); /* the accelerator on top of the brake (and reverse) */
     hold(gas, () => { inp.thr = 1; }, () => { inp.thr = Math.min(0, inp.thr); }); hold(brake, () => { inp.thr = -1; }, () => { inp.thr = Math.max(0, inp.thr); });
     if (lay === 'pedals') { const st = mk('tsteer'), l = document.createElement('div'), r = document.createElement('div'); l.className = 'tbtn'; l.textContent = '◀'; r.className = 'tbtn'; r.textContent = '▶'; st.append(l, r);
       hold(l, () => { inp.steer = 1; }, () => { inp.steer = Math.min(0, inp.steer); }); hold(r, () => { inp.steer = -1; }, () => { inp.steer = Math.max(0, inp.steer); }); return; }

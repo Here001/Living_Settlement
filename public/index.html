@@ -1108,7 +1108,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .hcl.me b{color:#2E86C1}
 .hchatrow{display:flex;gap:6px}
 .hchatrow input{flex:1;min-width:0;border:1.5px solid #ccc;border-radius:999px;padding:6px 12px;font:inherit;font-size:14px}
-.worldbtn{position:fixed;left:calc(env(safe-area-inset-left,0px) + 10px);top:40%;z-index:250;width:68px;height:68px;border-radius:50%;border:2px solid #2B2621;background:#fff;color:#2B2621;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:0;box-shadow:0 3px 0 #2B2621,0 6px 16px rgba(0,0,0,.25);cursor:pointer;font:800 10.5px/1.1 inherit}.worldbtn b{font-size:22px;line-height:1.1}.worldbtn span{white-space:nowrap;font-size:10px;letter-spacing:-.01em}body.room-on .worldbtn{z-index:9650}.worldbtn:active{transform:translateY(2px);box-shadow:0 1px 0 #2B2621}
+.worldbtn{position:fixed;left:calc(env(safe-area-inset-left,0px) + 10px);top:40%;z-index:250;width:58px;height:58px;border-radius:50%;border:2px solid #2B2621;background:#fff;color:#2B2621;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:0;box-shadow:0 3px 0 #2B2621,0 6px 16px rgba(0,0,0,.25);cursor:pointer;font:800 10.5px/1.1 inherit}.worldbtn b{font-size:21px;font-weight:900;letter-spacing:-.02em;line-height:1}body.room-on .worldbtn{z-index:9650}.worldbtn:active{transform:translateY(2px);box-shadow:0 1px 0 #2B2621}
 .worldbtn[data-k="3d"]{background:linear-gradient(160deg,#ff9a5a,#E2783B);color:#fff;border-color:#8a3d14;box-shadow:0 3px 0 #8a3d14,0 6px 16px rgba(0,0,0,.25)}
 body.phone-on .worldbtn{display:none}
 .hback{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);z-index:9650;box-shadow:0 4px 16px rgba(0,0,0,.3)}
@@ -7024,7 +7024,7 @@ const World={ btn:null, last:null, booted:false,
   in3d(){ return !!((Room.el&&!Room.el.hidden)||Drive.el); },
   mount(){ if(this.btn) return; this.btn=el('button',{class:'worldbtn',onclick:()=>this.toggle()}); document.body.append(this.btn); this.paint(); setInterval(()=>this.paint(),1000); },
   paint(){ const b=this.btn; if(!b) return; const on=!!(Me&&Me.token&&Me.handle), d3=this.in3d(); b.hidden=!on||!!document.querySelector('.cre')||document.body.classList.contains('mg-on');
-    const k=d3?'2d':'3d'; if(b.dataset.k===k) return; b.dataset.k=k; b.replaceChildren(el('b',{text:d3?'🗺️':'🧍'}), el('span',{text:d3?'2D map':'3D'}));
+    const k=d3?'2d':'3d'; if(b.dataset.k===k) return; b.dataset.k=k; b.replaceChildren(el('b',{text:d3?'2D':'3D'}));
     b.title=d3?'The colony map (2D): come back with 3D':'Back to your character in 3D'; b.setAttribute('aria-label',b.title); },
   toggle(){ if(this.in3d()) this.toMap(); else this.to3D(); },
   // to the map: remember where your character is, to come back to

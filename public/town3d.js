@@ -359,7 +359,11 @@ export function createTown(host, opts) {
   const keyOf = e => e.key.length === 1 ? e.key.toLowerCase() : e.key;
   const kd = e => { if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; const k = keyOf(e), K = Object.values(ctl.keys || {}).map(x => String(x).toLowerCase()); if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k) || K.includes(String(k).toLowerCase())) { keys.add(String(k).length === 1 ? String(k).toLowerCase() : k); e.preventDefault(); } };
   const ku = e => keys.delete(keyOf(e)), kb = () => keys.clear();
-  addEventListener('keydown', kd); addEventListener('keyup', ku); addEventListener('blur', kb); addEventListener('resize', view.resize);
+  addEventListener('keydown', kd); addEventListener('keyup', ku); addEventListener('blur', kb);
+  // turning the phone: the view follows its own box (not the window, which reports the turn in steps), and checks again as
+  // the turn settles, so the picture never stretches or jumps
+  const fit = () => { if (dead) return; view.resize(); canvas.style.width = '100%'; canvas.style.height = '100%'; }, ro = new ResizeObserver(fit); ro.observe(host);
+  const turned = () => [60, 250, 600].forEach(t => setTimeout(fit, t)); addEventListener('orientationchange', turned); addEventListener('resize', fit);
   canvas.addEventListener('webglcontextlost', () => { setTimeout(() => { if (!dead && renderer.getContext().isContextLost()) opts.onLost && opts.onLost(); }, 8000); }); /* the view tries to come back by itself first */
 
   return {
@@ -370,7 +374,7 @@ export function createTown(host, opts) {
     setControls(c) { ctl = c || ctl; controls(); },
     setRoute,
     stop() { car.v = 0; },
-    dispose() { dead = true; clearInterval(refresh); view.stop(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); removeEventListener('blur', kb); removeEventListener('resize', view.resize);
+    dispose() { dead = true; clearInterval(refresh); view.stop(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); removeEventListener('blur', kb); removeEventListener('resize', fit); removeEventListener('orientationchange', turned); ro.disconnect();
       for (const v of blocks.values()) drop(v); blocks.clear(); for (const f of folk.values()) scene.remove(f.g); folk.clear();
       ground.geometry.dispose(); ground.material.dispose(); try { view.dispose(); } catch (e) {} try { renderer.forceContextLoss(); } catch (e) {} canvas.remove(); if (pad) pad.remove(); chevron.dispose(); routeMat.dispose(); beamMat.dispose(); for (const m of fleetM.values()) { scene.remove(m); m.dispose(); } blobGeo.dispose(); blobMat.dispose(); beamGeo.dispose(); beamMat2.dispose(); beamTex.dispose(); sky.t.dispose(); },
   };

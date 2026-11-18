@@ -633,6 +633,25 @@ body.clean #djBubble{display:none}
 .drivectl .spchips{flex-wrap:wrap}
 .dkeys{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;font-size:14px}
 body.drive-on .rsheet-bg{z-index:9750}
+/* ---------- Landscape on a phone (a short, wide screen): cards and panels down the right-hand side at full height, the map
+   left in view, and everything kept clear of the notch and the rounded corners on the sides ---------- */
+@media (orientation:landscape) and (max-height:540px){
+  .hud{left:calc(env(safe-area-inset-left,0px) + 10px);right:calc(env(safe-area-inset-right,0px) + 10px)}
+  .bar{left:auto;right:calc(env(safe-area-inset-right,0px) + 8px);top:calc(env(safe-area-inset-top,0px) + 54px);width:min(460px,54vw);padding:0 0 calc(env(safe-area-inset-bottom,0px) + 6px);justify-content:flex-end;align-items:stretch}
+  .bar>*{max-width:100%}
+  .bar>.tools-row{align-self:center}
+  #card,.pane{max-height:none!important;flex:0 1 auto;min-height:0}
+  body.card-max .bar,body.pane-max .bar{top:calc(env(safe-area-inset-top,0px) + 8px);width:min(640px,calc(100vw - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px) - 16px))}
+  .rsheet-bg{padding-left:calc(env(safe-area-inset-left,0px) + 10px);padding-right:calc(env(safe-area-inset-right,0px) + 10px)}
+  .rsheet{max-height:calc(100dvh - 20px)}
+  .toast{max-width:min(560px,80vw)}
+  /* driving: a smaller map in the corner, and the big map and the phone fit the short screen */
+  .dmini{width:104px;height:104px}.dminiw{top:calc(56px + env(safe-area-inset-top))}
+  .dbig{inset:52px 10px 8px 10px}
+  .phframe{height:calc(100dvh - 16px);border-width:8px;border-radius:34px}.phstatus{padding:4px 18px 2px}.phhome{height:16px}
+  .phcall{top:8px}
+  .tjoy{width:112px;height:112px}
+}
 .carshot{display:flex;flex-direction:column;align-items:center;gap:2px;margin:6px 0;padding:8px;border-radius:16px;background:radial-gradient(ellipse at 50% 70%,#ffffff 0%,#e9ecef 55%,#d5dae0 100%)}.carshot-img{width:100%;max-width:360px;height:auto;aspect-ratio:36/22}
 .driveview .drivestage::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 55%,rgba(0,0,0,0) 58%,rgba(0,0,0,.28) 100%);z-index:2}
 .driveview .drivestage{position:relative;flex:1;min-height:0;overflow:hidden;background:#A9D8F2}.drivestage canvas.town3d{display:block;width:100%;height:100%;touch-action:none}

@@ -15,7 +15,20 @@ const desc = d => (d && (d.type === 'offer' || d.type === 'answer') && typeof d.
 
 export class Voice {
   constructor(world) { this.world = world; this.places = new Map(); this.sessions = new Map(); this.pre = new Map(); this.handles = new Map(); }
-  config() { return { on: voiceOn(), ice: [{ urls: 'stun:stun.cloudflare.com:3478' }] }; }
+  config() { return this.ice().then(ice => ({ on: voiceOn(), ice })); }
+  // How phones reach the voice service. Direct (STUN) works for most; some mobile networks and office or school wifi block
+  // it, and then the sound goes through Cloudflare's relay (TURN). Set CF_TURN_KEY_ID and CF_TURN_KEY_TOKEN (Cloudflare
+  // dashboard: Realtime -> TURN Server -> create a key) and phones get short-lived relay logins (kept for 12 hours here).
+  async ice() { const stun = [{ urls: 'stun:stun.cloudflare.com:3478' }], id = process.env.CF_TURN_KEY_ID, tok = process.env.CF_TURN_KEY_TOKEN; if (!id || !tok) return stun;
+    if (this.turn && Date.now() < this.turn.until) return this.turn.ice;
+    const turnBase = (process.env.CF_TURN_URL || 'https://rtc.live.cloudflare.com/v1').replace(/\/+$/, '') + '/turn/keys/' + encodeURIComponent(id) + '/credentials/';
+    for (const path of ['generate-ice-servers', 'generate']) {
+      try { const r = await fetch(turnBase + path, { method: 'POST', headers: { authorization: 'Bearer ' + tok, 'content-type': 'application/json' }, body: JSON.stringify({ ttl: 86400 }), signal: AbortSignal.timeout(8000) });
+        if (!r.ok) { console.error('turn:', path, r.status); continue; } const j = await r.json(), list = Array.isArray(j.iceServers) ? j.iceServers : j.iceServers ? [j.iceServers] : [];
+        const relay = list.filter(x => x && x.urls && /turns?:/.test(JSON.stringify(x.urls))); if (!relay.length) continue;
+        const ice = [...stun, ...relay]; this.turn = { ice, until: Date.now() + 12 * 3600e3 }; return ice; }
+      catch (e) { console.error('turn:', e.message); } }
+    this.turn = { ice: stun, until: Date.now() + 5 * 60e3 }; return stun; } /* (tried again in five minutes) */
   async cf(method, path, body) {
     if (!voiceOn()) throw new HttpError(503, 'Voice chat isn’t set up on this server yet.');
     let r; try { r = await fetch(base() + path, { method, headers: { authorization: 'Bearer ' + process.env.CF_REALTIME_APP_TOKEN, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(10000) }); } /* (a new session: no body at all, as Cloudflare's own examples do) */
@@ -37,7 +50,8 @@ export class Voice {
   // for the developer: is the voice service set up and answering? (makes a session and says what Cloudflare said)
   async diagnose() { const out = { on: voiceOn(), appId: (process.env.CF_REALTIME_APP_ID || '').slice(0, 6) + '…', url: base().replace(/apps\/.*/, 'apps/…') };
     if (!out.on) return { ...out, ok: false, why: 'CF_REALTIME_APP_ID or CF_REALTIME_APP_TOKEN is missing.' };
-    try { const j = await this.cf('POST', '/sessions/new'); return { ...out, ok: !!j.sessionId, why: j.sessionId ? 'Cloudflare made a voice session: the keys work.' : 'Cloudflare answered without a session.' }; }
+    const ice = await this.ice(), relay = ice.some(x => /turns?:/.test(JSON.stringify(x.urls))); out.relay = !process.env.CF_TURN_KEY_ID ? 'not set up (optional)' : relay ? 'working' : 'set up, but Cloudflare didn’t give relay logins';
+    try { const j = await this.cf('POST', '/sessions/new'); return { ...out, ok: !!j.sessionId, why: (j.sessionId ? 'Cloudflare made a voice session: the keys work.' : 'Cloudflare answered without a session.') + ` Relay (TURN): ${out.relay}.` }; }
     catch (e) { return { ...out, ok: false, why: e.message, last: this.last || null }; } }
   async session(me, place) { this.check(me, place); const j = await this.cf('POST', '/sessions/new');
     this.sessions.set(me.id + '|' + place, { sessionId: j.sessionId, pulls: new Map() }); return { sessionId: j.sessionId }; }

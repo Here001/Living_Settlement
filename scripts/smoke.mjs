@@ -2141,16 +2141,19 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
 if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat: a stand-in for Cloudflare Realtime on port 3999 checks who hears whom
   const http = await import('node:http'); let n = 0; const calls = [];
   const sfu = http.createServer((req, res) => { let body = ''; req.on('data', d => body += d); req.on('end', () => { const j = body ? JSON.parse(body) : {}; calls.push({ m: req.method, u: req.url, j, raw: body, auth: req.headers.authorization });
-    const out = /sessions\/new$/.test(req.url) ? { sessionId: 'sess' + (++n) } : /tracks\/new$/.test(req.url) ? (j.tracks?.[0]?.location === 'local' ? { sessionDescription: { type: 'answer', sdp: 'v=0 answer' }, tracks: j.tracks }
+    const out = /turn\/keys\/[^/]+\/credentials\/generate-ice-servers$/.test(req.url) ? { iceServers: [{ urls: ['stun:stun.cloudflare.com:3478'] }, { urls: ['turn:turn.cloudflare.com:3478?transport=udp', 'turns:turn.cloudflare.com:443?transport=tcp'], username: 'u1', credential: 'c1' }] }
+      : /sessions\/new$/.test(req.url) ? { sessionId: 'sess' + (++n) } : /tracks\/new$/.test(req.url) ? (j.tracks?.[0]?.location === 'local' ? { sessionDescription: { type: 'answer', sdp: 'v=0 answer' }, tracks: j.tracks }
       : { requiresImmediateRenegotiation: true, sessionDescription: { type: 'offer', sdp: 'v=0 offer' }, tracks: j.tracks.map(t => ({ ...t, mid: String(++n) })) }) : {};
     res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(out)); }); });
   await new Promise(r => sfu.listen(3999, '127.0.0.1', r));
   const VA = await player('voice_ava', 100), VB = await player('voice_bo', 100), VC = await player('voice_cy', 100), VD = await player('voice_di', 100), place = 'b:voice-test-' + Date.now();
   for (const P of [VA, VB, VC, VD]) await call('POST', '/api/inside/here', { place }, P.P);
-  ok((await call('GET', '/api/voice/config', undefined, VA.P)).json.on === true, 'voice chat is on when the server has Cloudflare Realtime');
+  { const cfg = (await call('GET', '/api/voice/config', undefined, VA.P)).json; ok(cfg.on === true, 'voice chat is on when the server has Cloudflare Realtime');
+    if (process.env.CF_TURN_KEY_ID) ok(cfg.ice.some(x => JSON.stringify(x.urls).includes('turn:') && x.username === 'u1' && x.credential === 'c1') && cfg.ice.some(x => JSON.stringify(x.urls).includes('stun:')), 'phones get relay (TURN) logins as well as the direct route', JSON.stringify(cfg.ice));
+    if (process.env.CF_TURN_KEY_ID) ok(calls.some(c => /turn\/keys\/testturn/.test(c.u) && c.auth === 'Bearer ' + process.env.CF_TURN_KEY_TOKEN && c.j.ttl > 0), '…asked for with the relay key, on the server'); }
   const sess = async P => (await call('POST', '/api/voice/session', { place }, P.P)).json.sessionId;
   const sa = await sess(VA), sb = await sess(VB), sc = await sess(VC), sd = await sess(VD); ok(sa && sb && sa !== sb, 'each player gets their own voice connection');
-  ok(calls.every(c => c.auth === 'Bearer test-token-not-secret'), '…every call to Cloudflare carries the app’s token (the phone never sees it)');
+  ok(calls.filter(c => !/\/turn\//.test(c.u)).every(c => c.auth === 'Bearer test-token-not-secret'), '…every call to Cloudflare carries the app’s token (the phone never sees it)'); /* (the relay has its own key) */
   const pub = await call('POST', '/api/voice/publish', { place, sessionId: sa, mid: '0', offer: { type: 'offer', sdp: 'v=0 mic' } }, VA.P);
   ok(pub.json.answer?.type === 'answer' && calls.some(c => /tracks\/new$/.test(c.u) && c.j.tracks?.[0]?.location === 'local' && c.j.tracks[0].trackName === 'mic-' + VA.id), 'Ava goes live: her mic goes up as a track', JSON.stringify(pub.json));
   ok((await call('POST', '/api/voice/publish', { place, sessionId: sb, mid: '0', offer: { type: 'offer', sdp: 'x' } }, VA.P)).status === 409, 'you can only use your own voice connection');

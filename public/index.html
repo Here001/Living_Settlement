@@ -631,6 +631,10 @@ body.clean #djBubble{display:none}
 .dbigbar{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid rgba(0,0,0,.1)}.dbigbar b{flex:1;font-size:15px}.dbigc{flex:1;min-height:0;width:100%;touch-action:none;cursor:crosshair;display:block}
 .dbigfoot{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid rgba(0,0,0,.1)}
 .drivectl .spchips{flex-wrap:wrap}
+.phvol{display:flex;align-items:center;gap:8px;width:100%;margin-top:8px;font-size:15px}.phvol input{flex:1}.phcall.small .phvol{display:none}
+.vrow{display:flex;align-items:center;gap:6px}.vrow .vname{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:34%}.vrow input[type=range]{flex:1;min-width:60px}.vrow .vpct{font-size:11px;width:34px;text-align:right;opacity:.75}
+.vq{width:9px;height:9px;border-radius:50%;background:#9aa0a6;flex:none}.vq.good{background:#2ecc71}.vq.fair{background:#f2c94c}.vq.weak{background:#e74c3c}
+.vmic.ptt{box-shadow:0 3px 0 #2B2621,inset 0 0 0 3px #7fd1ff}
 .dkeys{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;font-size:14px}
 body.drive-on .rsheet-bg{z-index:9750}
 body.room-on .toast{z-index:9850} /* above the phone and the call screen, so a reason is never hidden behind them */
@@ -6708,21 +6712,54 @@ const Club={ R:null, info:null, audio:null, radio:undefined, got:0, rainT:null, 
 // ---- Voice chat inside a place: you hear everyone there; your open mic (with a mute button) reaches everyone, or just
 // the people you pick; mute anyone for yourself; a 🔊 shows over whoever's talking. The voice goes through Cloudflare
 // Realtime; the server (server/voice.js) decides who hears whom.
-const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null, byMid:new Map(), els:new Map(), meters:new Map(), lit:new Map(), q:Promise.resolve(), ac:null,
+// ---- How voices sound (voice chat and calls) ----
+// Every voice you hear goes through its own volume (your slider for that person, and inside a place how far away they
+// are), then left or right by where they stand, then one leveller that lifts quiet voices and tames loud ones, then out.
+// Until the phone lets sound play through this (it wants a tap first), and on a phone that can't do it at all, each voice
+// plays straight from its own audio element instead, so nothing is ever silent. The club's music and the radio dip while
+// anyone is talking, and come back when they stop. Your microphone goes up with error correction (speech stays smooth on
+// a patchy connection) and without the gaps phones leave in silences (the first word isn't clipped), at 32 kbps.
+const VoiceOut={ ac:null, comp:null, users:new Set(),
+  graph(){ if(this.ac) return this.ac; try{ const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return null; const ac=new AC({latencyHint:'interactive'});
+      const comp=ac.createDynamicsCompressor(); comp.threshold.value=-32; comp.knee.value=18; comp.ratio.value=4; comp.attack.value=0.003; comp.release.value=0.22;
+      const lift=ac.createGain(); lift.gain.value=1.8; comp.connect(lift); lift.connect(ac.destination); this.ac=ac; this.comp=comp; /* the leveller, then a lift for the quiet */
+      const wake=()=>{ if(ac.state!=='running') ac.resume().catch(()=>{}); }; addEventListener('pointerdown',wake,true); addEventListener('keydown',wake,true); wake();
+      ac.onstatechange=()=>{ for(const v of this.users) v.route(); }; return ac; }catch(e){ return null; } },
+  live(){ return !!(this.ac&&this.ac.state==='running'); },
+  vols:(()=>{ try{ return ls.get('resurgence-voice-vol')||{}; }catch(e){ return {}; } })(),
+  vol(h){ const v=this.vols[String(h||'').toLowerCase()]; return typeof v==='number'?v:1; },
+  setVol(h,v){ this.vols[String(h||'').toLowerCase()]=v; try{ ls.set('resurgence-voice-vol',this.vols); }catch(e){} for(const u of this.users) u.route(); },
+  // the music dips while anyone is talking (and comes back a moment after they stop)
+  speaking:new Set(), ducked:false, offAt:0,
+  talk(src,on){ on?this.speaking.add(src):this.speaking.delete(src); const now=performance.now();
+    if(this.speaking.size){ this.offAt=0; if(!this.ducked) this.duck(true); } else if(this.ducked){ if(!this.offAt) this.offAt=now+900; else if(now>this.offAt) this.duck(false); } },
+  duck(on){ this.ducked=on; try{ if(Club.audio) Club.audio.volume=on?0.3:0.85; }catch(e){} try{ if(Radio.player&&Radio.player.setVolume&&Radio.st) Radio.player.setVolume(Radio.vol*(on?0.35:1)); }catch(e){} },
+  // the microphone's sound on the way up: error correction on, no gaps in silences, mono, 32 kbps
+  opus(sdp){ const pt=(String(sdp).match(/a=rtpmap:(\d+) opus\/48000/i)||[])[1]; if(!pt) return sdp; const want={ useinbandfec:'1', usedtx:'0', stereo:'0', maxaveragebitrate:'32000' };
+    const re=new RegExp('a=fmtp:'+pt+' ([^\\r\\n]*)'); const line=p=>'a=fmtp:'+pt+' '+Object.entries(p).map(([k,v])=>k+'='+v).join(';');
+    if(re.test(sdp)) return sdp.replace(re,(m,p)=>{ const kv={}; for(const x of p.split(';')){ const [k,v]=x.trim().split('='); if(k) kv[k]=v; } return line({ ...kv, ...want }); });
+    return sdp.replace(new RegExp('(a=rtpmap:'+pt+' opus/48000[^\\r\\n]*\\r?\\n)','i'),'$1'+line(want)+'\r\n'); },
+  async sender(tx){ try{ const ps=tx.sender.getParameters(); if(!ps.encodings||!ps.encodings.length) ps.encodings=[{}]; Object.assign(ps.encodings[0],{ maxBitrate:32000, priority:'high', networkPriority:'high' }); await tx.sender.setParameters(ps); }catch(e){} },
+  mic(){ return { echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1, voiceIsolation:true }; }, /* voice isolation: where the phone has it, the best at cutting out the room */
+  tip(){ try{ if(ls.get('resurgence-hp-tip')) return; ls.set('resurgence-hp-tip',1); }catch(e){ return; } setTimeout(()=>toast('🎧 Tip: earphones make voices clearer for everyone (no echo from your speaker).'),2500); } };
+const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null, byMid:new Map(), els:new Map(), meters:new Map(), lit:new Map(), q:Promise.resolve(), ac:null, holding:false, statsAt:0, myQ:null,
   muted:new Set((()=>{ try{ return ls.get('resurgence-voice-muted')||[]; }catch(e){ return []; } })()),
+  ptt:(()=>{ try{ return !!ls.get('resurgence-voice-ptt'); }catch(e){ return false; } })(), /* hold to talk, instead of an open mic */
   async enter(R){ this.leave(); if(!(Me&&Me.token)||typeof RTCPeerConnection==='undefined') return; this.R=R;
     try{ this.cfg=await api('/api/voice/config'); }catch(e){ return; } if(!this.cfg.on||this.R!==R) return;
-    this.micBtn=el('button',{class:'vbtn vmic',title:'Your microphone',onclick:()=>this.talk()}); this.peopleBtn=el('button',{class:'vbtn vpeople',title:'Who hears you, and who you hear',onclick:()=>this.panel()});
+    this.micBtn=el('button',{class:'vbtn vmic',title:'Your microphone',onclick:()=>{ if(!this.ptt) this.talk(); }}); this.peopleBtn=el('button',{class:'vbtn vpeople',title:'Who hears you, and who you hear',onclick:()=>this.panel()});
+    const hold=on=>e=>{ if(!this.ptt) return; e.preventDefault(); this.hold(on); };
+    this.micBtn.addEventListener('pointerdown',hold(true)); for(const ev of ['pointerup','pointercancel','pointerleave']) this.micBtn.addEventListener(ev,hold(false));
     R.stage.append(this.micBtn,this.peopleBtn); this.paint();
     try{ const s=await api('/api/voice/session',{method:'POST',body:{place:R.spot}}); if(this.R!==R) return; this.sid=s.sessionId; }catch(e){ return; }
-    this.pc=new RTCPeerConnection({iceServers:this.cfg.ice,bundlePolicy:'max-bundle'}); this.pc.ontrack=e=>this.track(e);
+    this.pc=new RTCPeerConnection({iceServers:this.cfg.ice,bundlePolicy:'max-bundle'}); this.pc.ontrack=e=>this.track(e); VoiceOut.users.add(this);
     this.serial(()=>this.sync()); this.timer=setInterval(()=>this.levels(),150); },
-  leave(){ const R=this.R; clearInterval(this.timer); this.timer=null;
+  leave(){ const R=this.R; clearInterval(this.timer); this.timer=null; VoiceOut.users.delete(this); VoiceOut.talk(this,false);
     if(this.mic){ for(const t of this.mic.getTracks()) t.stop(); this.mic=null; } if(this.pc){ try{ this.pc.close(); }catch(e){} this.pc=null; }
-    for(const e of this.els.values()){ try{ e.a.srcObject=null; e.a.remove(); }catch(x){} } this.els.clear(); this.byMid.clear(); this.meters.clear();
+    for(const e of this.els.values()) this.unplug(e); this.els.clear(); this.byMid.clear(); this.meters.clear();
     if(R&&R.h) for(const id of this.lit.keys()) R.h.talking(id,false); this.lit.clear();
     if(R&&this.sid) api('/api/voice/leave',{method:'POST',body:{place:R.spot}}).catch(()=>{});
-    this.sid=null; this.live=false; this.R=null; this.vp&&this.vp.remove(); this.vp=null; },
+    this.sid=null; this.live=false; this.R=null; this.myQ=null; this.vp&&this.vp.remove(); this.vp=null; },
   serial(fn){ return this.q=this.q.then(fn).catch(e=>{ console.warn('voice:',e&&e.message||e); if(Date.now()-(Voice.toldAt||0)>20000){ Voice.toldAt=Date.now(); toast(`🎙️ Voice: ${(e&&e.message)||'it didn’t connect'}`); } }); },
   // everyone talking here that I may hear: start hearing the new ones, stop hearing anyone I no longer may
   async sync(){ if(!this.pc||!this.R) return; const r=await api('/api/voice/list',{method:'POST',body:{place:this.R.spot}}), ok=new Set(r.speakers.map(s=>s.id));
@@ -6730,33 +6767,66 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
     const have=new Set([...this.byMid.values()].map(v=>v.id)), ids=r.speakers.map(s=>s.id).filter(id=>!have.has(id)); if(!ids.length) return;
     const p=await api('/api/voice/pull',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,ids}}); for(const t of p.tracks) this.byMid.set(t.mid,{id:t.id,h:t.h});
     if(p.offer){ await this.pc.setRemoteDescription(p.offer); await this.pc.setLocalDescription(await this.pc.createAnswer()); await api('/api/voice/answer',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,answer:{type:'answer',sdp:this.pc.localDescription.sdp}}}); } },
-  track(e){ const mid=e.transceiver&&e.transceiver.mid, v=this.byMid.get(mid); if(!v) return; const st=new MediaStream([e.track]), a=document.createElement('audio'); a.autoplay=true; a.playsInline=true; a.setAttribute('playsinline',''); a.style.display='none'; document.body.append(a); /* on the page: iPhones won't play it otherwise */ a.srcObject=st; a.muted=this.muted.has(v.h.toLowerCase()); a.play().catch(()=>{ const go=()=>{ removeEventListener('pointerdown',go,true); a.play().catch(()=>{}); }; addEventListener('pointerdown',go,true); });
-    this.els.set(mid,{a,...v}); this.meter(mid,st); },
-  dropMid(mid){ const e=this.els.get(mid); if(e){ try{ e.a.srcObject=null; e.a.remove(); }catch(x){} this.els.delete(mid); this.light(e.id,false); } this.byMid.delete(mid); this.meters.delete(mid); },
+  // a voice arrives: an audio element on the page (iPhones need one), and its own volume and left/right on the way out
+  track(e){ const mid=e.transceiver&&e.transceiver.mid, v=this.byMid.get(mid); if(!v) return; const st=new MediaStream([e.track]), a=document.createElement('audio');
+    a.autoplay=true; a.playsInline=true; a.setAttribute('playsinline',''); a.style.display='none'; document.body.append(a); a.srcObject=st;
+    a.play().catch(()=>{ const go=()=>{ removeEventListener('pointerdown',go,true); a.play().catch(()=>{}); }; addEventListener('pointerdown',go,true); });
+    const x={a,...v,dist:1,pan:0}, ac=VoiceOut.graph();
+    if(ac) try{ x.src=ac.createMediaStreamSource(st); x.gain=ac.createGain(); x.panner=ac.createStereoPanner?ac.createStereoPanner():null; x.src.connect(x.gain); if(x.panner){ x.gain.connect(x.panner); x.panner.connect(VoiceOut.comp); } else x.gain.connect(VoiceOut.comp); }catch(err){ x.gain=null; }
+    this.els.set(mid,x); this.meter(mid,st); this.route(); },
+  // where each voice comes out: through the volume and leveller once sound can play that way; straight from its element until then
+  route(){ const live=VoiceOut.live(); for(const x of this.els.values()){ const off=this.muted.has(String(x.h).toLowerCase()), g=off?0:VoiceOut.vol(x.h)*x.dist;
+      if(x.gain&&live){ x.a.muted=true; x.gain.gain.setTargetAtTime(g,VoiceOut.ac.currentTime,0.08); if(x.panner) x.panner.pan.setTargetAtTime(x.pan,VoiceOut.ac.currentTime,0.1); }
+      else { x.a.muted=off; try{ x.a.volume=Math.min(1,g); }catch(e){} if(x.gain) x.gain.gain.value=0; } } },
+  unplug(x){ try{ x.src&&x.src.disconnect(); x.gain&&x.gain.disconnect(); x.panner&&x.panner.disconnect(); }catch(e){} try{ x.a.srcObject=null; x.a.remove(); }catch(e){} },
+  dropMid(mid){ const e=this.els.get(mid); if(e){ this.unplug(e); this.els.delete(mid); this.light(e.id,false); } this.byMid.delete(mid); this.meters.delete(mid); },
   msg(v){ if(!this.pc||!v) return; if(v.kind==='on'||v.kind==='audience') this.serial(()=>this.sync()); else if(v.kind==='off'){ for(const [mid,e] of [...this.byMid]) if(e.id===v.id) this.dropMid(mid); } },
-  // the mic: the first tap asks the phone for it and goes live; after that it mutes and unmutes
-  async talk(){ if(!this.pc) return; if(this.mic){ this.live=!this.live; for(const t of this.mic.getAudioTracks()) t.enabled=this.live; this.paint(); return; }
-    try{ this.mic=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}}); }catch(e){ toast('Allow the microphone to talk (in your browser’s settings for this site).'); return; }
-    const tr=this.mic.getAudioTracks()[0], tx=this.pc.addTransceiver(tr,{direction:'sendonly'}); this.live=true; this.paint();
-    await this.serial(async()=>{ await this.pc.setLocalDescription(await this.pc.createOffer()); const r=await api('/api/voice/publish',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,offer:{type:'offer',sdp:this.pc.localDescription.sdp},mid:tx.mid}}); await this.pc.setRemoteDescription(r.answer); });
-    this.meter('me',this.mic); if(!this.call) toast(this.to?'🎙️ You’re live, to the people you picked.':'🎙️ You’re live: everyone here can hear you. Tap 🎙️ to mute.'); },
-  paint(){ if(!this.micBtn) return; this.micBtn.textContent=!this.mic?'🎙️':this.live?'🎙️':'🔇'; this.micBtn.classList.toggle('live',!!this.mic&&this.live); this.micBtn.classList.toggle('off',!!this.mic&&!this.live);
-    this.micBtn.title=!this.mic?'Tap to talk (everyone here hears you)':this.live?'You’re live: tap to mute':'Muted: tap to talk'; this.peopleBtn.textContent=this.to?'👤':'👥'; },
-  // who hears you, and muting anyone for yourself
+  // the mic: the first tap asks the phone for it and goes live; after that it mutes and unmutes (or, held down, talks)
+  async talk(){ if(!this.pc) return; if(this.mic){ this.setLive(!this.live); return; }
+    try{ this.mic=await navigator.mediaDevices.getUserMedia({audio:VoiceOut.mic()}); }catch(e){ toast('Allow the microphone to talk (in your browser’s settings for this site).'); return; }
+    const tr=this.mic.getAudioTracks()[0]; try{ tr.contentHint='speech'; }catch(e){} const tx=this.pc.addTransceiver(tr,{direction:'sendonly'}); this.live=true; this.paint();
+    await this.serial(async()=>{ await this.pc.setLocalDescription(await this.pc.createOffer()); const r=await api('/api/voice/publish',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,offer:{type:'offer',sdp:this.pc.localDescription.sdp},mid:tx.mid}});
+      await this.pc.setRemoteDescription({type:'answer',sdp:VoiceOut.opus(r.answer.sdp)}); await VoiceOut.sender(tx); });
+    this.meter('me',this.mic); VoiceOut.tip(); if(this.ptt&&!this.holding) this.setLive(false);
+    if(!this.call) toast(this.ptt?'🎙️ Hold 🎙️ while you talk; let go to stop.':this.to?'🎙️ You’re live, to the people you picked.':'🎙️ You’re live: everyone here can hear you. Tap 🎙️ to mute.'); },
+  setLive(v){ this.live=!!v; if(this.mic) for(const t of this.mic.getAudioTracks()) t.enabled=this.live; this.paint(); },
+  hold(on){ this.holding=on; if(on&&!this.mic){ this.talk(); return; } if(this.mic) this.setLive(on); },
+  paint(){ if(!this.micBtn) return; this.micBtn.textContent=!this.mic?'🎙️':this.live?'🎙️':'🔇'; this.micBtn.classList.toggle('live',!!this.mic&&this.live); this.micBtn.classList.toggle('off',!!this.mic&&!this.live&&!this.ptt); this.micBtn.classList.toggle('ptt',this.ptt);
+    this.micBtn.title=this.ptt?'Hold to talk':!this.mic?'Tap to talk (everyone here hears you)':this.live?'You’re live: tap to mute':'Muted: tap to talk'; this.peopleBtn.textContent=this.to?'👤':'👥'; },
+  // who hears you, open mic or hold to talk, and each voice's volume (or muting it) for yourself
   panel(){ if(this.vp&&this.vp.isConnected){ this.vp.remove(); this.vp=null; return; } const R=this.R; if(!R) return; const P=el('div',{class:'voicepanel'}); this.vp=P; R.stage.append(P); this.fillPanel(); },
   fillPanel(){ const P=this.vp, R=this.R; if(!P||!R) return; const people=[...(R.others?R.others.values():[])].map(p=>p.h).filter(h=>h&&(!Me||h.toLowerCase()!==String(Me.handle||'').toLowerCase())).filter((h,i,a)=>a.indexOf(h)===i);
     const sel=new Set(this.to||[]), setTo=async to=>{ try{ const r=await api('/api/voice/audience',{method:'POST',body:{place:R.spot,to}}); this.to=r.to; this.paint(); this.fillPanel(); }catch(e){ toast(e.message); } };
+    const setPtt=v=>{ this.ptt=v; try{ ls.set('resurgence-voice-ptt',v?1:0); }catch(e){} if(this.mic) this.setLive(!v); this.paint(); this.fillPanel(); };
     P.replaceChildren(el('div',{class:'sphead'}, el('b',{text:'🎙️ Voice'}), el('button',{class:'x',text:'✕','aria-label':'Close',onclick:()=>this.panel()})),
+      el('div',{class:'spchips'}, el('button',{class:'spchip'+(this.ptt?'':' on'),text:'🎙️ Open mic',onclick:()=>setPtt(false)}), el('button',{class:'spchip'+(this.ptt?' on':''),text:'✋ Hold to talk',onclick:()=>setPtt(true)})),
       el('p',{class:'hint',text:this.to?`Only ${this.to.map(h=>'@'+h).join(', ')||'nobody'} can hear you.`:'Everyone here can hear you.'}),
       el('div',{class:'spchips'}, el('button',{class:'spchip'+(this.to?'':' on'),text:'Everyone',onclick:()=>setTo(null)}),
         ...people.map(h=>el('button',{class:'spchip'+(sel.has(h.toLowerCase())?' on':''),text:'@'+h,onclick:()=>{ const s2=new Set(this.to||[]); s2.has(h.toLowerCase())?s2.delete(h.toLowerCase()):s2.add(h.toLowerCase()); setTo([...s2]); }}))),
+      this.myQ?el('p',{class:'hint vq-me',text:`Your connection: ${this.myQ}`}):'',
       el('div',{class:'sphr'}), el('b',{text:'People you hear'}),
-      people.length?el('div',{class:'vlistv'}, ...people.map(h=>{ const m=this.muted.has(h.toLowerCase()); return el('div',{class:'vrow'}, el('span',{text:'@'+h}), el('button',{class:'btn sm'+(m?' primary':''),text:m?'🔇 Muted':'🔊 Hearing',onclick:()=>{ m?this.muted.delete(h.toLowerCase()):this.muted.add(h.toLowerCase()); try{ ls.set('resurgence-voice-muted',[...this.muted]); }catch(e){} for(const e of this.els.values()) e.a.muted=this.muted.has(e.h.toLowerCase()); this.fillPanel(); }})); })):el('p',{class:'hint',text:'Nobody else is here yet.'})); },
-  // who's talking: a quick level meter on each voice (yours too), lighting the 🔊 over them
+      people.length?el('div',{class:'vlistv'}, ...people.map(h=>{ const m=this.muted.has(h.toLowerCase()), v=Math.round(VoiceOut.vol(h)*100);
+        const out=el('span',{class:'vpct',text:v+'%'}), r=el('input',{type:'range',min:'0',max:'200',step:'10',value:String(v),'aria-label':`@${h}'s volume`,oninput:()=>{ out.textContent=r.value+'%'; VoiceOut.setVol(h,Number(r.value)/100); }});
+        return el('div',{class:'vrow'}, el('span',{class:'vq','data-h':h.toLowerCase(),title:'Their connection'}), el('span',{class:'vname',text:'@'+h}), r, out,
+          el('button',{class:'btn sm'+(m?' primary':''),text:m?'🔇':'🔊',title:m?'Muted: tap to hear them':'Tap to mute them',onclick:()=>{ m?this.muted.delete(h.toLowerCase()):this.muted.add(h.toLowerCase()); try{ ls.set('resurgence-voice-muted',[...this.muted]); }catch(e){} this.route(); this.fillPanel(); }})); })):el('p',{class:'hint',text:'Nobody else is here yet.'}));
+    this.dots(); },
+  // how good each connection is (from the phone's own counts of lost and late sound), every couple of seconds
+  async quality(){ if(!this.pc) return; let st; try{ st=await this.pc.getStats(); }catch(e){ return; } const word=(loss,jit)=>loss<0.02&&jit<0.03?'good':loss<0.08&&jit<0.08?'fair':'weak';
+    st.forEach(r=>{ if(r.type==='inbound-rtp'&&r.kind==='audio'&&r.mid!=null){ const x=this.els.get(String(r.mid)); if(!x) return; const lost=r.packetsLost||0, got=r.packetsReceived||0, dl=lost-(x.l0||0), dg=got-(x.g0||0); x.l0=lost; x.g0=got; x.q=word(dg+dl>0?dl/(dg+dl):0,r.jitter||0); }
+      if(r.type==='remote-inbound-rtp'&&r.kind==='audio') this.myQ=word(r.fractionLost||0,r.jitter||0)+(r.roundTripTime?` · ${Math.round(r.roundTripTime*1000)} ms`:''); });
+    this.dots(); },
+  dots(){ if(!this.vp) return; for(const x of this.els.values()){ const d=this.vp.querySelector(`.vq[data-h="${CSS.escape(String(x.h).toLowerCase())}"]`); if(d){ d.className='vq '+(x.q||''); d.title=`Their connection: ${x.q||'checking'}`; } }
+    const me=this.vp.querySelector('.vq-me'); if(me&&this.myQ) me.textContent=`Your connection: ${this.myQ}`; },
+  // who's talking: a quick level meter on each voice (yours too), lighting the 🔊 over them; and, inside a place, nearer is louder
   meter(key,stream){ try{ this.ac=this.ac||new (window.AudioContext||window.webkitAudioContext)(); const s=this.ac.createMediaStreamSource(stream), an=this.ac.createAnalyser(); an.fftSize=512; s.connect(an); this.meters.set(key,{an,buf:new Float32Array(an.fftSize)}); }catch(e){} },
-  levels(){ const now=performance.now(); for(const [key,m] of this.meters){ m.an.getFloatTimeDomainData(m.buf); let sum=0; for(const v of m.buf) sum+=v*v; const rms=Math.sqrt(sum/m.buf.length);
+  levels(){ const now=performance.now(); let other=false; for(const [key,m] of this.meters){ m.an.getFloatTimeDomainData(m.buf); let sum=0; for(const v of m.buf) sum+=v*v; const rms=Math.sqrt(sum/m.buf.length);
       const id=key==='me'?'me':(this.byMid.get(key)||{}).id, loud=rms>0.035&&(key!=='me'||this.live)&&!(key!=='me'&&this.muted.has(((this.byMid.get(key)||{}).h||'').toLowerCase())); if(!id) continue;
-      if(loud) this.lit.set(id,now+450); } for(const [id,t] of [...this.lit]) this.light(id,t>now); },
+      if(loud){ this.lit.set(id,now+450); if(key!=='me') other=true; } } for(const [id,t] of [...this.lit]) this.light(id,t>now);
+    VoiceOut.talk(this,other); this.space(); if(now-this.statsAt>2000){ this.statsAt=now; this.quality(); } },
+  // inside a place: a voice is louder the nearer they stand, and comes from their side of you
+  space(){ const R=this.R; if(this.call||!R||!R.h||!R.others) return; let me; try{ me=R.h.me; }catch(e){ return; } if(!me) return; const ca=Math.cos(me.a||0), sa=Math.sin(me.a||0); let moved=false;
+    for(const x of this.els.values()){ const p=R.others.get(x.id); if(!p) continue; const dx=p.x-me.x, dy=p.y-me.y, d=Math.hypot(dx,dy), dist=Math.max(0.35,Math.min(1,1.2-d/16)), pan=Math.max(-1,Math.min(1,(dx*ca-dy*sa)/Math.max(d,1)))*0.6;
+      if(Math.abs(dist-x.dist)>0.02||Math.abs(pan-x.pan)>0.03){ x.dist=dist; x.pan=pan; moved=true; } } if(moved) this.route(); },
   light(id,on){ const R=this.R; if(!R||!R.h) return; if(on) R.h.talking(id,true); else { R.h.talking(id,false); this.lit.delete(id); } },
 };
 // ---- The in-game phone (server/phone.js) ----
@@ -6764,13 +6834,14 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
 // without leaving. A message that arrives while you're inside buzzes the phone with a banner at the top. And you can call
 // anyone who's online: their phone rings wherever they are in the game, and once they answer you talk by voice (the same
 // voice service as inside places, on a line of your own that nobody else hears).
-const CallVoice=Object.assign(Object.create(Voice),{ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null, byMid:new Map(), els:new Map(), meters:new Map(), lit:new Map(), q:Promise.resolve(), ac:null, call:true,
+const CallVoice=Object.assign(Object.create(Voice),{ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null, byMid:new Map(), els:new Map(), meters:new Map(), lit:new Map(), q:Promise.resolve(), ac:null, call:true, ptt:false, holding:false, statsAt:0, myQ:null,
   // a call has no room to put buttons in: the phone's call screen has its own
   async enter(R){ this.leave(); if(!(Me&&Me.token)||typeof RTCPeerConnection==='undefined') return 'This phone can’t do voice calls.'; this.R=R;
     try{ this.cfg=await api('/api/voice/config'); }catch(e){ return 'Couldn’t connect the voice. Hang up and try again.'; } if(this.R!==R) return 'gone'; if(!this.cfg.on) return 'Voice calls aren’t switched on yet.';
     try{ const s=await api('/api/voice/session',{method:'POST',body:{place:R.spot}}); if(this.R!==R) return 'gone'; this.sid=s.sessionId; }catch(e){ return 'Couldn’t connect the voice. Hang up and try again.'; }
-    this.pc=new RTCPeerConnection({iceServers:this.cfg.ice,bundlePolicy:'max-bundle'}); this.pc.ontrack=e=>this.track(e);
+    this.pc=new RTCPeerConnection({iceServers:this.cfg.ice,bundlePolicy:'max-bundle'}); this.pc.ontrack=e=>this.track(e); VoiceOut.users.add(this);
     this.serial(()=>this.sync()); this.timer=setInterval(()=>this.levels(),150); return ''; },
+  quality0(){ const q=[...this.els.values()].map(x=>x.q).filter(Boolean)[0]||null; return q; }, /* the other end's connection */
   paint(){ Phone.paintCall(); }, light(id,on){ if(!on) this.lit.delete(id); Phone.talking(id,on); } });
 const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null, unread:0,
   inside(){ return !!((typeof Room!=='undefined'&&Room.el)||(typeof Drive!=='undefined'&&Drive.el)); }, /* in a place, or in the car */
@@ -6833,8 +6904,9 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
       :[B(mic&&!live?'mute on':'mute',mic&&!live?'🔇':'🎙️',mic&&!live?'Unmute':'Mute',()=>CallVoice.talk()), B('no','✆','Hang up',()=>this.hangup())];
     if(small) this.callEl.replaceChildren(el('button',{class:'phsmall',onclick:()=>{ this.small=false; this.paintCall(); }}, av, el('b',{text:'@'+o}), el('span',{class:'phst',text:st})), B('no sm','✆','Hang up',()=>this.hangup()));
     else this.callEl.replaceChildren(c.state==='live'?el('button',{class:'phmin','aria-label':'Make it small',title:'Make it small and keep playing',text:'⌄',onclick:()=>{ this.small=true; this.paintCall(); }}):'',
-      av, el('b',{class:'phwho',text:'@'+o}), el('span',{class:'phst',text:st}), el('div',{class:'phacts'}, ...acts));
-    clearInterval(this.secT); if(c.state==='live'&&!this.vstate) this.secT=setInterval(()=>{ const s=this.callEl&&this.callEl.querySelector('.phst'); if(s&&this.call&&this.call.at) s.textContent=this.dur(Math.max(0,Math.round((Date.now()+skew-this.call.at)/1000))); },1000); },
+      av, el('b',{class:'phwho',text:'@'+o}), el('span',{class:'phst',text:st}), el('div',{class:'phacts'}, ...acts),
+      c.state==='live'?(()=>{ const v=Math.round(VoiceOut.vol(o)*100), r=el('input',{type:'range',min:'0',max:'200',step:'10',value:String(v),'aria-label':`@${o}'s volume`,oninput:()=>VoiceOut.setVol(o,Number(r.value)/100)}); return el('label',{class:'phvol'}, el('span',{text:'🔈'}), r, el('span',{text:'🔊'})); })():''); /* how loud they are, for you */
+    clearInterval(this.secT); if(c.state==='live'&&!this.vstate) this.secT=setInterval(()=>{ const s=this.callEl&&this.callEl.querySelector('.phst'); if(s&&this.call&&this.call.at) { const q=CallVoice.quality0(); s.textContent=this.dur(Math.max(0,Math.round((Date.now()+skew-this.call.at)/1000)))+(q?` · 📶 ${q==='good'?'Good line':q==='fair'?'OK line':'Weak line'}`:''); } },1000); }, /* the time, and how good the line is */
   // after a reload: are you on a call?
   async check(){ if(!(Me&&Me.token)) return; try{ const r=await api('/api/phone'); if(r.call&&!this.call) this.set(r.call); }catch(e){} } };
 // ---- Driving around town in 3D (public/town3d.js) ----

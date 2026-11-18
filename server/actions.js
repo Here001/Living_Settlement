@@ -338,7 +338,8 @@ export class Actions {
   }
   // Send the colonist to a place, or to a friend's home (by username). null ends the visit.
   // `spot` {x, y}: any tile on the map (a patch of grass, a street corner); they go there, stay a while, and come back.
-  async visit(id, { buildingId, friend, spot }) {
+  // `drove`: they drove there themselves in 3D (the tiles they drove): they're there now, and pay the fuel for it, not a cab.
+  async visit(id, { buildingId, friend, spot, drove }) {
     return this.world.personal(async ch => {
       const { c } = await this.load(ch, id);
       if (!buildingId && !friend && !spot) { await this.setVisit(ch, c, null); return { ok: true, home: true }; }
@@ -360,7 +361,9 @@ export class Actions {
         label = nameOf(b);
       }
       const until = Date.now() + VISIT_TIME; await this.setVisit(ch, c, b, until); await bump(ch, c.id, { outings: 1 });
-      return { ok: true, place: label, until, fare: c.lastTrip?.fare || 0, mode: c.lastTrip?.mode || 'walk', coins: c.coins_base };
+      let fuel = 0; const dv = Math.min(3000, Math.max(0, Math.round(Number(drove) || 0)));
+      if (dv) { const f = R.tripFare(dv, true); ch.coins(c); if (f.fare > 0 && c.coins_base >= f.fare) { fuel = f.fare; c.coins_base -= fuel; treasuryAdd(ch, fuel); track(ch, 'travel', fuel, c.id); await ch.saveCitizen(c); await bump(ch, c.id, { travel: fuel }); } }
+      return { ok: true, place: label, until, fare: c.lastTrip?.fare || 0, mode: dv ? 'car' : c.lastTrip?.mode || 'walk', fuel, coins: c.coins_base };
     });
   }
 

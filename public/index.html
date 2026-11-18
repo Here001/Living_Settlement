@@ -612,6 +612,13 @@ body.clean #djBubble{display:none}
 .jobnow{font-size:14px;line-height:1.35}.jobnow .pay{font-weight:700}
 .authbox{margin-top:10px;padding:10px 12px;border:1.6px dashed var(--soft);border-radius:14px;display:flex;flex-direction:column;gap:6px}
 .authbox h3{margin:0;font-size:15px}
+.driveview .drivestage{position:relative;flex:1;min-height:0;overflow:hidden;background:#A9D8F2}.drivestage canvas.town3d{display:block;width:100%;height:100%;touch-action:none}
+.driveview .webbar .hphonebtn{position:static;box-shadow:none}
+.tjoy{position:absolute;left:22px;bottom:calc(28px + env(safe-area-inset-bottom));width:128px;height:128px;border-radius:50%;background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.65);touch-action:none;z-index:3;box-shadow:0 4px 18px rgba(0,0,0,.18)}
+.tjoy i{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.25)}
+.dhud{position:absolute;right:14px;bottom:calc(24px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-end;gap:8px;z-index:4;pointer-events:none}.dhud>*{pointer-events:auto}
+.dspeed{background:rgba(20,22,28,.72);color:#fff;font-weight:800;font-size:15px;padding:6px 12px;border-radius:12px}.dacts{display:flex;flex-direction:column;gap:8px;align-items:flex-end}.dgo{box-shadow:0 3px 12px rgba(0,0,0,.3)}
+.dsub{display:block;font-size:12.5px;opacity:.75}
 .hphonebtn{position:absolute;right:14px;bottom:122px;z-index:2;box-shadow:0 2px 10px rgba(0,0,0,.25)}.phbadge{font-style:normal;margin-left:5px;background:#E74C3C;color:#fff;border-radius:999px;padding:0 6px;font-size:11px;font-weight:800;line-height:17px;display:inline-block}
 .phone{position:fixed;inset:0;z-index:9700;display:grid;place-items:center;background:rgba(10,12,20,.45);padding:12px}
 .phframe{position:relative;width:min(390px,100%);height:min(760px,calc(100dvh - 24px));background:var(--paper,#FBF7F0);border:11px solid #17181C;border-radius:44px;box-shadow:0 0 0 2px #3a3c44,0 24px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden;animation:phup .25s ease-out}
@@ -1321,6 +1328,7 @@ function connect(){
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
     else if(m.type==='phone' && m.data) Phone.msg(m.data);
+    else if(m.type==='drive' && m.id){ if(m.off) DrivingNow.delete(m.id); else DrivingNow.set(m.id,{x:m.x,y:m.y,a:m.a,m:m.m,col:m.col,t:Date.now()}); } /* someone driving about in 3D */
     else if(m.type==='whereIn'){ if(m.all){ InsideNow.clear(); for(const [id,pl] of m.all) InsideNow.set(id,pl); } else if(m.place) InsideNow.set(m.id,m.place); else InsideNow.delete(m.id); }
     else if(m.type==='gm' && m.data) Chats.gincoming(m.data);
     else if(m.type==='chatInvite' && m.data) Chats.invited(m.data);
@@ -1582,7 +1590,7 @@ function insideAt(c){ const pl=InsideNow.get(c.id); if(!pl) return null; let b=n
   return { x:pos[0], y:pos[1], visible:false, act:`Inside ${pl.startsWith('h:')?`${c.handle.toLowerCase()===pl.slice(2)?'their':'@'+pl.slice(2)+'’s'} home`:name}`, where:name, bid:b.id, moving:false, seg:{type:'stay',p,from:0,to:1440,act:'inside'}, plan:null }; }
 function citizenAt(c, gm){
   const joinGm=gmAt(c.joinedAt); if(gm<joinGm) return null;
-  if(InsideNow.size&&InsideNow.has(c.id)&&Math.abs(gm-gmNow())<3){ const st=insideAt(c); if(st) return st; } /* inside a place right now */
+  if((InsideNow.size||DrivingNow.size)&&Math.abs(gm-gmNow())<3){ if(InsideNow.has(c.id)){ const st=insideAt(c); if(st) return st; } if(DrivingNow.has(c.id)){ const st=drivingAt(c); if(st) return st; } } /* inside a place, or driving about, right now */
   const v=visiting(c); if(v){ const st=tripAt(c, v, gm); if(st) return st; }
   return dayAt(c, gm); }
 function dayAt(c, gm){
@@ -6044,7 +6052,7 @@ const BUYABLE=new Set(['housing','shops','offices','industry']); // what players
 function actionTabs(c){ const wrap=el('div',null); const gb=GuideUI.box(); if(gb) wrap.append(gb); const dr=Daily.row(); if(dr) wrap.append(dr);
   if(Date.now()-(Love.at||0)>60000){ Love.at=Date.now(); api('/api/me/love').then(r=>{ if(Love.count(r)&&sel) renderCard(true); }).catch(()=>{}); } /* for the number on the 💘 Love tab */
   if(!PushUI.st&&!PushUI.busy) PushUI.load().then(()=>{ if(sel&&sel.kind==='c') renderCard(true); });
-  wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}), el('button',{class:'btn sm',text:'⚙️ Settings',onclick:()=>PushUI.sheet()}))); const row=el('div',{class:'acttabs',role:'tablist'});
+  wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}), el('button',{class:'btn sm',text:'⚙️ Settings',onclick:()=>PushUI.sheet()}), el('button',{class:'btn sm primary',text:'🚗 Drive',title:'Drive around town in 3D',onclick:()=>Drive.start()}))); const row=el('div',{class:'acttabs',role:'tablist'});
   for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home',MyHome.data&&MyHome.data.props?`🏠 Home · ${MyHome.data.props} 🏢`:'🏠 Home'],['wallet','👛 Wallet'],['love',Love.n?`💘 Love · ${Love.n}`:'💘 Love'],['cars','Cars'],['crime','Crime'],['badges','⭐ Stars']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=actTab===id?null:id; renderCard(true); if(actTab) scrollTabsUp(); }}));
   if(actTab==='bank') actTab='wallet'; if(actTab==='pet'||actTab==='casino'||actTab==='out') actTab='earn'; if(!actTab){ wrap.append(row); return wrap; } const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, love:()=>Love.box(), casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>{ const p=Stars.panel(c); p.append(statusBox(c)); return p; }, earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
@@ -6476,6 +6484,7 @@ function carsPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚗
   if(cars.length) box.append(el('p',{class:'hint',text:`Your garage (${cars.length} of 3). You drive on longer trips; without a car you take a cab.`}), garageList(cars, active));
   else box.append(el('p',{class:'hint',text:"You don't have a car, so you take cabs on longer trips."}));
   const lot=nearestOf('cardealer', c);
+  box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🚗 Drive around town',title:'Drive around the colony in 3D',onclick:()=>Drive.start()})));
   box.append(el('div',{class:'row-actions'}, lot?el('button',{class:'btn primary',text:'🚘 Go to the Car dealership',onclick:()=>goToBuilding(lot)}):el('span',{class:'hint',text:'Cars are bought at a Car dealership. The colony doesn’t have one yet.'})));
   return box; }
 // A business's website on its card: where it goes, and a button that opens it in a new tab (after saying you're leaving
@@ -6709,7 +6718,7 @@ const CallVoice=Object.assign(Object.create(Voice),{ R:null, cfg:null, pc:null, 
     this.serial(()=>this.sync()); this.timer=setInterval(()=>this.levels(),150); return ''; },
   paint(){ Phone.paintCall(); }, light(id,on){ if(!on) this.lit.delete(id); Phone.talking(id,on); } });
 const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null, unread:0,
-  inside(){ return !!(typeof Room!=='undefined'&&Room.el); },
+  inside(){ return !!((typeof Room!=='undefined'&&Room.el)||(typeof Drive!=='undefined'&&Drive.el)); }, /* in a place, or in the car */
   // the phone in your hand, with your chats on its screen
   show(){ if(!this.inside()){ openTab('chats'); return; } if(activeTab==='chats') openTab(null);
     if(!this.el){ this.screen=el('div',{class:'phbody'});
@@ -6773,6 +6782,70 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
     clearInterval(this.secT); if(c.state==='live'&&!this.vstate) this.secT=setInterval(()=>{ const s=this.callEl&&this.callEl.querySelector('.phst'); if(s&&this.call&&this.call.at) s.textContent=this.dur(Math.max(0,Math.round((Date.now()+skew-this.call.at)/1000))); },1000); },
   // after a reload: are you on a call?
   async check(){ if(!(Me&&Me.token)) return; try{ const r=await api('/api/phone'); if(r.call&&!this.call) this.set(r.call); }catch(e){} } };
+// ---- Driving around town in 3D (public/town3d.js) ----
+// Your own car if you have one (the one you're driving in the Cars tab), otherwise a basic car. You start where your
+// colonist is, on the nearest road. Other players see your car drive about on their map. Pull up at a building to stop
+// there: that counts as going there (the fuel for the distance you drove is paid, no cab fare), and you can walk in.
+// Others driving show on the map as cars too (DrivingNow), however their routine would have them.
+const DrivingNow=new Map(); // citizen id → { x, y, a, m, col, t }
+function drivingAt(c){ const d=DrivingNow.get(c.id); if(!d) return null; if(Date.now()-d.t>5000){ DrivingNow.delete(c.id); return null; }
+  const M=CAR_MODELS[d.m], V=M&&!M.vtype?M:VEHICLE_TYPES.car; return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:true, car:true, V, col:d.col||V.colors[0], act:'Driving around town', where:'the streets', bid:null, moving:true, seg:null, plan:null }; }
+const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
+  // which car: the one you're driving if it's a road one, otherwise a basic car
+  ride(c){ const M=c&&c.car&&CAR_MODELS[c.car[0]]; if(M&&M.kind!=='water'&&M.kind!=='air'&&!M.vtype) return { m:c.car[0], col:c.car[1]||M.colors[0], kind:c.car[0]==='pickup'||c.car[0]==='suv'?'van':'car', name:M.name, own:true };
+    const V=VEHICLE_TYPES.car, col=V.colors[hash((c&&c.id)||'x')%V.colors.length]; return { m:'car', col, kind:'car', name:'a basic car', own:false }; },
+  // the road tile nearest to where you are (and which way it runs)
+  startAt(x,y){ let best=null, bd=1e9; for(let r=0;r<=12&&!best;r++) for(let i=-r;i<=r;i++) for(let j=-r;j<=r;j++){ if(Math.max(Math.abs(i),Math.abs(j))!==r) continue; const tx=Math.floor(x)+i, ty=Math.floor(y)+j, k=tx+','+ty; if(!carOK(k)||D.occ.get(k)) continue; const d=Math.hypot(i,j); if(d<bd){ bd=d; best=[tx,ty]; } }
+    if(!best) return { x, y, a:0 }; const [tx,ty]=best; let a=0, run=-1; /* face the way the road runs furthest */
+    for(const [dx,dy,ang] of [[1,0,0],[0,-1,Math.PI/2],[-1,0,Math.PI],[0,1,-Math.PI/2]]){ let n=0; while(n<12&&carOK((tx+dx*(n+1))+','+(ty+dy*(n+1)))&&!D.occ.get((tx+dx*(n+1))+','+(ty+dy*(n+1)))) n++; if(n>run){ run=n; a=ang; } }
+    return { x:tx+0.5, y:ty+0.5, a }; },
+  async start(){ if(!(Me&&Me.token)){ toast('Sign in to your colonist to drive.'); return; } if(this.el) return; if(Room.el) Room.close(true);
+    const c=myCitizen(); if(!c||!c.home){ toast('Your colonist needs a home before they can drive about.'); return; }
+    const st=citizenAt(c,gmNow()); if(st&&st.bid&&String(st.where||'').toLowerCase().includes('jail')){ toast('You can’t drive while you’re in jail.'); return; }
+    const here=st||{ x:bOf(c.home).x+1, y:bOf(c.home).y+1 }, s=this.startAt(here.x,here.y), car=this.ride(c);
+    closeCard(); openTab(null);
+    const stage=el('div',{class:'drivestage'}), title=el('b',{text:`🚗 Driving ${car.own?'your '+car.name.toLowerCase():car.name}`}), sub=el('span',{class:'dsub',text:'Steer with the stick'});
+    this.goBtn=el('button',{class:'btn primary dgo',hidden:true}); this.inBtn=el('button',{class:'btn dgo',hidden:true});
+    this.speed=el('div',{class:'dspeed'}); this.sub=sub;
+    const bar=el('div',{class:'webbar'}, el('button',{class:'webx','aria-label':'Stop driving',text:'✕',onclick:()=>this.close()}), el('div',{class:'webaddr'}, title, sub),
+      el('button',{class:'webbtn',title:'Camera: behind the car, or higher up',text:'🎥',onclick:()=>{ this.T&&this.T.toggleView(); }}), Phone.btn());
+    const root=el('div',{class:'webview driveview',role:'dialog','aria-label':'Driving around town'}, bar, stage, el('div',{class:'dhud'}, this.speed, el('div',{class:'dacts'}, this.goBtn, this.inBtn)));
+    document.body.append(root); document.body.classList.add('room-on','drive-on'); this.el=root; this.dist=0; this.last={x:s.x,y:s.y}; this.car=car;
+    let T3; try{ T3=await import('/town3d.js'); }catch(e){ this.close(); toast('Driving couldn’t load. Check your connection and try again.'); return; } if(this.el!==root) return;
+    try{ this.T=T3.createTown(stage,{ start:s, car,
+        road:(x,y)=>D.roads.get(x+','+y)||null, water:(x,y)=>D.water.has(x+','+y),
+        building:(x,y)=>{ const id=D.occ.get(x+','+y); return id?D.buildings.get(id)||null:null; },
+        buildings:(x0,y0,x1,y1)=>{ const out=[]; for(const b of D.buildings.values()) if(b.x>=x0&&b.x<x1&&b.y>=y0&&b.y<y1&&!b.ruin&&BUILDING_TYPES[b.type]) out.push(b); return out; },
+        byId:id=>D.buildings.get(id)||null, loaded:(x,y)=>S.chunks.has(ckTile(x,y)), minute:()=>((gmNow()%1440)+1440)%1440,
+        people:(x,y)=>this.people(x,y), onMove:(x,y,a,v)=>this.moved(x,y,a,v), onNear:b=>this.nearBy(b), onLost:()=>{ this.close(); toast('Your phone needed the memory back. Tap 🚗 Drive to carry on.'); } }); }
+    catch(e){ this.close(); toast('Your phone couldn’t show the 3D town.'); return; }
+    try{ window.__drive=this; }catch(e){} /* (for checking how it runs) */
+    try{ if(!(history.state&&history.state.drive)) history.pushState({drive:1},''); }catch(e){}
+    toast(car.own?`🚗 You’re in your ${car.name.toLowerCase()}. Pull up at a building to stop there.`:'🚗 You’re in a basic car (buy your own at a Car dealership). Pull up at a building to stop there.'); },
+  // who's about near you: the colonists the map has here, where it has them now (walking, or driving)
+  people(x,y){ const gm=gmNow(), out=[], meH=(Me&&Me.handle||'').toLowerCase();
+    for(const c of S.citizens.values()){ if(c.handle.toLowerCase()===meH||!c.home) continue; const st=citizenAt(c,gm); if(!st||!st.visible) continue; const d=Math.hypot(st.x-x,st.y-y); if(d>26) continue;
+      const V=st.V||null; out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, van:!!(V&&(V===CAR_MODELS.pickup||V===CAR_MODELS.suv)) }); }
+    return out.sort((a,b)=>a.d-b.d).slice(0,40); },
+  moved(x,y,a,v){ if(!this.el) return; if(this.last){ this.dist+=Math.hypot(x-this.last.x,y-this.last.y); } this.last={x,y};
+    this.speed.textContent=`${this.T?this.T.kmh():0} km/h`;
+    try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'drive',x:+x.toFixed(2),y:+y.toFixed(2),a:+a.toFixed(2),m:this.car.m,col:this.car.col})); }catch(e){}
+    if(Date.now()-this.synced>1500){ this.synced=Date.now(); const q=iso(x,y); cam.x=q.x; cam.y=q.y; follow=null; syncChunks(); } }, /* the map loads the town round the car */
+  nearBy(b){ this.near=b; const name=b&&(b.name||T(b).name);
+    if(!b||!canGoTo(b.type)||b.done===false){ this.goBtn.hidden=true; this.inBtn.hidden=true; this.sub.textContent=b?`${name}`:'Steer with the stick'; return; }
+    this.sub.textContent=`📍 ${name}`; const enter=canEnter(b.type)||T(b).home;
+    this.goBtn.hidden=false; this.goBtn.textContent=`🅿️ Stop at ${name}`; this.goBtn.onclick=()=>this.arrive(b,false);
+    this.inBtn.hidden=!enter; this.inBtn.textContent='🚪 Go inside'; this.inBtn.onclick=()=>this.arrive(b,true); },
+  // you've pulled up: you're there (it counts as going there), and you can walk in
+  async arrive(b,inside){ this.T&&this.T.stop(); const name=b.name||T(b).name;
+    try{ const r=await api('/api/me/visit',{method:'POST',body:{buildingId:b.id,from:{x:b.x,y:b.y,b:b.id},drove:Math.round(this.dist)}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
+      this.dist=0; toast(r.home?`🏠 You’re home.`:`🅿️ You’re at ${name}.${r.fuel?` ⛽ Fuel: ${fmt(r.fuel)} coins.`:''}`); }
+    catch(e){ toast(e.message); return; }
+    if(inside){ this.close(); setTimeout(()=>Room.openBuilding(b.id),50); } },
+  close(quiet){ if(!this.el) return; try{ this.T&&this.T.dispose(); }catch(e){} this.T=null; Phone.hide(); this.el.remove(); this.el=null; document.body.classList.remove('room-on','drive-on'); setTimeout(mapResume,0);
+    try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'drive',off:true})); }catch(e){}
+    if(!quiet){ try{ if(history.state&&history.state.drive) history.back(); }catch(e){} } } };
+addEventListener('popstate',()=>{ if(Drive.el) Drive.close(true); });
 const Visit={
   // tapping 🔒 Look inside: go in if you've been let in, otherwise ask
   async open(handle){ let st; try{ st=await api('/api/citizens/'+encodeURIComponent(handle)+'/visit'); }catch(e){ toast(e.message); return; }

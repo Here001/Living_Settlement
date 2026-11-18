@@ -740,7 +740,14 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       const go = off && await call('POST', '/api/me/visit', { buildingId: off.id }, P);
       ok(go && go.status === 200, `Go here works for any building, not just shops and parks (${off?.type})`, JSON.stringify(go?.json));
       const myHome = (await who('zara_ng')).home[0], gh = await call('POST', '/api/me/visit', { buildingId: myHome }, P);
-      ok(gh.status === 200 && gh.json.home === true, 'going to your own home heads home'); }
+      ok(gh.status === 200 && gh.json.home === true, 'going to your own home heads home');
+      // driving there yourself (in 3D): you're there now, and pay the fuel for the distance you drove, not a cab
+      await pool.query("update citizens set coins_base = 50000, net = 0 where handle = 'zara_ng'");
+      const ob = (await pool.query('select x, y from buildings where id = $1', [off.id])).rows[0], want = R0.tripFare(120, true).fare;
+      const dr = await call('POST', '/api/me/visit', { buildingId: off.id, from: { x: ob.x, y: ob.y, b: off.id }, drove: 120 }, P);
+      ok(dr.status === 200 && dr.json.fuel === want && dr.json.mode === 'car', `driving there yourself pays the fuel (${want} coins for 120 tiles)`, JSON.stringify(dr.json));
+      const vo = (await pool.query("select visit_origin from citizens where handle = 'zara_ng'")).rows[0].visit_origin; ok(vo && vo.x === ob.x && vo.y === ob.y, '…and you arrive where you parked (no trip from home)', JSON.stringify(vo));
+      await call('POST', '/api/me/visit', { buildingId: myHome }, P); }
     { // trips start where the colonist really is, and riding costs money
       await pool.query("update citizens set cars = null, car_active = null, coins_base = 1000, net = 0, coins_day = 0, visit_id = null, visit_until = null, visit_origin = null where handle = 'zara_ng'");
       const R0 = await import('../shared/rules.js'), zh = (await who('zara_ng')).home;
@@ -2203,6 +2210,11 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
   ok(apos && apos.p.h === 'live_ben' && apos.p.x === 4, '…and they see you come in', JSON.stringify(apos));
   const seenIn = [], watch = new WebSocket(BASE.replace('http', 'ws') + '/ws'); watch.on('message', d => { const m = JSON.parse(d); if (m.type === 'whereIn') seenIn.push(m); }); await new Promise(r => watch.once('open', r)); await sleep(300);
   ok(seenIn.some(m => m.all && m.all.some(([id, pl]) => id === A.id && pl === place)), 'anyone opening the map is told who is inside a place (so they aren’t shown out and about)', JSON.stringify(seenIn).slice(0, 200));
+  { const drv = []; watch.on('message', d => { const m = JSON.parse(d); if (m.type === 'drive') drv.push(m); });
+    a.w.send(JSON.stringify({ type: 'drive', x: 12.5, y: 7.25, a: 1.57, m: 'sedan', col: '#2F4A7A' })); await sleep(300);
+    ok(drv.some(m => m.id === A.id && m.x === 12.5 && m.m === 'sedan' && m.col === '#2F4A7A'), 'driving in 3D: everyone’s map sees your car where it is', JSON.stringify(drv));
+    a.w.send(JSON.stringify({ type: 'drive', x: 'nope', y: 1, a: 0 })); a.w.send(JSON.stringify({ type: 'drive', off: true })); await sleep(300);
+    ok(drv.some(m => m.id === A.id && m.off) && !drv.some(m => m.x === 'nope'), '…bad positions are ignored, and when you stop driving your car goes'); }
   b.w.send(JSON.stringify({ type: 'in', place, x: 4.5, y: 5, a: 1 })); await sleep(300); ok(a.got.filter(m => m.k === 'pos' && m.p.h === 'live_ben').some(m => m.p.x === 4.5), '…and see you move');
   b.w.send(JSON.stringify({ type: 'in', place, x: 4.5, y: 5.2, a: 1, pose: 's', ph: -0.32 })); await sleep(300); ok(a.got.filter(m => m.k === 'pos' && m.p.h === 'live_ben').some(m => m.p.pose === 's' && m.p.ph === -0.32), '…and see you sit down');
   b.w.send(JSON.stringify({ type: 'in', place, x: 4.5, y: 5.4, a: 1, pose: 'zz', ph: 99 })); await sleep(300); { const last = a.got.filter(m => m.k === 'pos' && m.p.h === 'live_ben').pop(); ok(last && last.p.y === 5.4 && !('pose' in last.p), 'a made-up pose is dropped'); }

@@ -393,6 +393,11 @@ wss.on('connection', (ws, req) => {
     if (m?.type === 'arena' && ws.playerId) { const now = Date.now(); if (now - (ws.arenaAt || 0) > 1000) { ws.arenaAt = now; ws.arenaN = 0; } if (++ws.arenaN > 30) return;
       const a = String(m.a || ''); if (!['join', 'leave', 'go', 'pos', 'state'].includes(a)) return;
       bus.publish([{ arena: true, k: 'in', pid: ws.playerId, handle: ws.playerHandle, m: { a, mode: String(m.mode || ''), id: String(m.id || ''), x: Number(m.x), y: Number(m.y) } }]); return; }
+    // Driving around town in 3D: where your car is, passed on to everyone so their maps show it (a few times a second at most)
+    if (m?.type === 'drive' && ws.playerId) { const now = Date.now();
+      if (m.off) { if (ws.driving) { ws.driving = false; bus.publish([{ driving: true, id: ws.playerId, off: true }]); } return; }
+      const x = Number(m.x), y = Number(m.y), a = Number(m.a); if (![x, y, a].every(Number.isFinite) || Math.abs(x) > 1e5 || Math.abs(y) > 1e5 || now - (ws.driveAt || 0) < 150) return; ws.driveAt = now; ws.driving = true;
+      bus.publish([{ driving: true, id: ws.playerId, x: +x.toFixed(2), y: +y.toFixed(2), a: +a.toFixed(2), m: /^[a-z]{1,16}$/.test(String(m.m || '')) ? String(m.m) : 'car', col: /^#[0-9A-Fa-f]{6}$/.test(String(m.col || '')) ? String(m.col) : null }]); return; }
     // Inside a building or home: where you stand, so everyone else in there sees you walk about (see Rooms.seen)
     if (m?.type === 'in') { const place = String(m.place || ''), x = Number(m.x), y = Number(m.y), a = Number(m.a);
       if (!/^(b|h):[A-Za-z0-9_.-]{1,64}$/.test(place) || ![x, y, a].every(Number.isFinite) || x < 0 || y < 0 || x > 16 || y > 16) return;
@@ -413,7 +418,7 @@ wss.on('connection', (ws, req) => {
       ws.send(JSON.stringify({ type: 'authed', ok: !!p }));
     }).catch(() => {});
   });
-  ws.on('close', () => { insideLeave(ws); if (ws.playerId && !localOnline(ws.playerId)) { chat.gone(ws.playerId).catch(() => {}); world.phone.gone(ws.playerId); bus.publish([{ arena: true, k: 'in', pid: ws.playerId, m: { a: 'gone' } }]); } });
+  ws.on('close', () => { insideLeave(ws); if (ws.playerId && !localOnline(ws.playerId)) { chat.gone(ws.playerId).catch(() => {}); world.phone.gone(ws.playerId); if (ws.driving) bus.publish([{ driving: true, id: ws.playerId, off: true }]); bus.publish([{ arena: true, k: 'in', pid: ws.playerId, m: { a: 'gone' } }]); } });
   ws.send(JSON.stringify({ type: 'hello', meta: world.publicMeta(), serverNow: Date.now() }));
 });
 function insideLeave(ws) { if (!ws.inside) return; const place = ws.inside, who = ws.insideWho; ws.inside = null; ws.insidePos = null;
@@ -441,6 +446,10 @@ bus.on(ops => {
   if (ops.some(o => o.whereIn)) { for (const o of ops.filter(o => o.whereIn)) { if (o.place) whereIn.set(o.id, o.place); else whereIn.delete(o.id);
       const json = JSON.stringify({ type: 'whereIn', id: o.id, place: o.place }); for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.bufferedAmount > MAX_BUFFER) continue; try { ws.send(json); } catch {} } }
     ops = ops.filter(o => !o.whereIn); if (!ops.length) return; }
+  // Someone driving about in 3D: every map shows their car where it is
+  if (ops.some(o => o.driving)) { for (const o of ops.filter(o => o.driving)) { const json = JSON.stringify(o.off ? { type: 'drive', id: o.id, off: true } : { type: 'drive', id: o.id, x: o.x, y: o.y, a: o.a, m: o.m, col: o.col });
+      for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.bufferedAmount > MAX_BUFFER || ws.playerId === o.id) continue; try { ws.send(json); } catch {} } }
+    ops = ops.filter(o => !o.driving); if (!ops.length) return; }
   // Private chat messages go only to the two people's own connections.
   const priv = ops.filter(o => o.private); if (priv.length) ops = ops.filter(o => !o.private);
   for (const o of priv) { const msg = JSON.stringify({ type: o.op, data: o.data, id: o.id }); for (const ws of wss.clients) if (ws.readyState === 1 && o.to.includes(ws.playerId)) { try { ws.send(msg); } catch {} } }

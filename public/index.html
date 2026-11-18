@@ -7027,7 +7027,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     const here=st||{ x:bOf(c.home).x+1, y:bOf(c.home).y+1 }, s=at&&at.x!=null?{x:at.x,y:at.y,a:at.a||0}:this.startAt(here.x,here.y), car=this.ride(c); /* at: back in the car where you parked it */
     this.camWas={x:cam.x,y:cam.y,z:cam.z}; DriveMap.reset(); this.foot=walk; this.parked=false; let look=null; try{ [look]=await Looks.want([Me.handle]); }catch(e){}
     closeCard(); openTab(null);
-    const stage=el('div',{class:'drivestage'}), title=el('b',{text:walk?'🚶 Out on foot':`🚗 Driving ${car.own?'your '+car.name.toLowerCase():car.name}`}), sub=el('span',{class:'dsub',text:walk?'Walk with the stick, push it right out to run':'Steer with the stick'}); this.title=title;
+    const stage=el('div',{class:'drivestage'}), title=el('b',{text:walk?'🚶 Out on foot':`🚗 Driving ${car.own?'your '+car.name.toLowerCase():car.name}`}), sub=el('span',{class:'dsub',text:walk?'Stick to walk, drag the screen to look round':'Steer with the stick'}); this.title=title;
     this.modeBtn=el('button',{class:'btn dgo dmode',onclick:()=>this.switchMode()}); /* get out and walk, or get (back) in the car */
     this.goBtn=el('button',{class:'btn primary dgo',hidden:true}); this.inBtn=el('button',{class:'btn dgo',hidden:true});
     this.speed=el('div',{class:'dspeed'}); this.sub=sub;
@@ -7061,7 +7061,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); }
     if(Date.now()-this.synced>1500){ this.synced=Date.now(); const q=iso(x,y); cam.x=q.x; cam.y=q.y; cam.z=0.45; follow=null; syncChunks(); } }, /* the map loads the town round the car (zoomed out, so it loads plenty) */
   nearBy(b){ this.near=b; const name=b&&(b.name||T(b).name), foot=this.T&&this.T.pos.mode==='walk';
-    if(!b||!canGoTo(b.type)||b.done===false){ this.goBtn.hidden=true; this.inBtn.hidden=true; this.sub.textContent=b?`${name}`:foot?'Walk with the stick, push it right out to run':'Steer with the stick'; return; }
+    if(!b||!canGoTo(b.type)||b.done===false){ this.goBtn.hidden=true; this.inBtn.hidden=true; this.sub.textContent=b?`${name}`:foot?'Stick to walk, drag the screen to look round':'Steer with the stick'; return; }
     this.sub.textContent=`📍 ${name}`; const enter=canEnter(b.type)||T(b).home;
     if(foot){ /* at the front door: go in (or, where there's no inside to walk into, just go there) */
       this.goBtn.hidden=false; this.goBtn.textContent=enter?`🚪 Enter ${name}`:`📍 Visit ${name}`; this.goBtn.onclick=()=>this.arrive(b,enter); this.inBtn.hidden=true; return; }
@@ -7074,7 +7074,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     B.hidden=false; B.textContent=this.car.own?`🚗 Drive your ${this.car.name.toLowerCase()}`:'🚗 Drive'; },
   switchMode(){ const T3=this.T; if(!T3) return; const foot=T3.pos.mode==='walk';
     if(foot){ T3.drive(); this.title.textContent=`🚗 Driving ${this.car.own?'your '+this.car.name.toLowerCase():this.car.name}`; this.sub.textContent='Steer with the stick'; }
-    else { T3.walk(this.car.own); this.title.textContent='🚶 Out on foot'; this.sub.textContent='Walk with the stick, push it right out to run'; if(this.car.own) toast(`🅿️ Your ${this.car.name.toLowerCase()} is parked here. Walk back to it to get in.`); }
+    else { T3.walk(this.car.own); this.title.textContent='🚶 Out on foot'; this.sub.textContent='Stick to walk, drag the screen to look round'; if(this.car.own) toast(`🅿️ Your ${this.car.name.toLowerCase()} is parked here. Walk back to it to get in.`); }
     this.dist=0; this.nearBy(null); this.paintMode(); },
   // you've pulled up: you're there (it counts as going there), and you can walk in
   async arrive(b,inside){ this.T&&this.T.stop(); const name=b.name||T(b).name;

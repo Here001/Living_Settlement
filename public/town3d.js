@@ -151,14 +151,16 @@ export function createTown(host, opts) {
   function drive(dt) {
     const K = ctl.keys || {}, on = (a, d) => keys.has(d) || keys.has(String(K[a] || '').toLowerCase());
     const up = (on('up', 'ArrowUp') ? 1 : 0) - (on('down', 'ArrowDown') ? 1 : 0) + inp.thr, turn = (on('left', 'ArrowLeft') ? 1 : 0) - (on('right', 'ArrowRight') ? 1 : 0) + inp.steer;
-    if (foot) { // walking: forward and back, turning on the spot; push the stick right out (or hold Shift) to run
-      const thr = Math.max(-1, Math.min(1, up)), st = Math.max(-1, Math.min(1, turn)), run = keys.has('Shift') || Math.abs(inp.thr) > 0.88, want = thr * (thr > 0 ? (run ? 4.4 : 1.8) : 1.1);
-      car.v += (want - car.v) * Math.min(1, dt * 8); if (Math.abs(car.v) < 0.04 && Math.abs(thr) < 0.05) car.v = 0; car.steer = st; car.a += st * 2.4 * dt;
-      const fx = Math.cos(car.a), fz = -Math.sin(car.a), nx = car.x + fx * car.v * dt, nz = car.z + fz * car.v * dt, S = solidsNear(nx, nz), dir = Math.sign(car.v || 1);
-      const free = (x, z) => ![0.35 * dir, 0].some(u => hits(x + fx * u, z + fz * u, S, car.x + fx * u, car.z + fz * u));
+    if (foot) { // walking: the stick (or WASD/arrows) moves you forward, back and to either side of where the camera faces; you turn to face the way you walk. Push the stick right out (or hold Shift) to run
+      let iy = Math.max(-1, Math.min(1, up)), ix = -Math.max(-1, Math.min(1, turn)); const mag = Math.min(1, Math.hypot(ix, iy)), run = keys.has('Shift') || mag > 0.88;
+      if (mag < 0.12) { car.v = 0; car.steer = 0; return; }
+      const ma = lk.yaw - Math.atan2(ix, iy), sp = (run ? 4.4 : 1.8) * Math.min(1, mag / 0.7); car.mv = ma;
+      let d = ma - car.a; d = Math.atan2(Math.sin(d), Math.cos(d)); car.steer = Math.sign(d); car.a += d * Math.min(1, dt * 12); /* turn to face the way you're walking */
+      car.v += (sp - car.v) * Math.min(1, dt * 8); const fx = Math.cos(ma), fz = -Math.sin(ma), nx = car.x + fx * car.v * dt, nz = car.z + fz * car.v * dt, S = solidsNear(nx, nz);
+      const free = (x, z) => ![0.35, 0].some(u => hits(x + fx * u, z + fz * u, S, car.x + fx * u, car.z + fz * u));
       if (free(nx, nz)) { car.x = nx; car.z = nz; return; }
       /* bumped into something (a bin, a tree, a parked car): slide along it rather than stop dead */
-      for (const da of [0.6, -0.6, 1.1, -1.1]) { const b = car.a + da * dir, sx = car.x + Math.cos(b) * car.v * dt * 0.8, sz = car.z - Math.sin(b) * car.v * dt * 0.8; if (free(sx, sz)) { car.x = sx; car.z = sz; return; } }
+      for (const da of [0.6, -0.6, 1.1, -1.1]) { const b = ma + da, sx = car.x + Math.cos(b) * car.v * dt * 0.8, sz = car.z - Math.sin(b) * car.v * dt * 0.8; if (free(sx, sz)) { car.x = sx; car.z = sz; return; } }
       car.v = 0; return; }
     const thr = Math.max(-1, Math.min(1, up)), st = Math.max(-1, Math.min(1, turn)), rt = opts.road(tileOf(car.x), tileOf(car.z)), R = rt && ROAD_TYPES[rt];
     const top = R ? 7 * (R.speed || 2) : 6; /* metres a second: a street 14 (50 km/h), a highway 28; off the road, slower */
@@ -287,7 +289,7 @@ export function createTown(host, opts) {
 
   // ---- the camera: behind the car, from the driver's seat, or higher up; drag anywhere to look round as you drive ----
   let mode = 0; const cam = new THREE.Vector3(car.x - Math.cos(car.a) * 9, 3.6, car.z + Math.sin(car.a) * 9), look = new THREE.Vector3();
-  const lk = { yaw: 0, pitch: 0, id: null, x: 0, y: 0, at: 0 }, aim = { x: car.x + Math.cos(car.a) * 6, z: car.z - Math.sin(car.a) * 6 };
+  const lk = { yaw: foot ? car.a : 0, pitch: 0, id: null, x: 0, y: 0, at: 0 }, /* yaw: on foot, where the camera faces; driving, how far it's turned from the car */ aim = { x: car.x + Math.cos(car.a) * 6, z: car.z - Math.sin(car.a) * 6 };
   // the driver's seat: a dashboard and a steering wheel that turns as you steer (the car's body is hidden in there)
   const cockpit = new THREE.Group(), dashM = new THREE.MeshStandardMaterial({ color: '#23252a', roughness: 0.7 }), wheelM = new THREE.MeshStandardMaterial({ color: '#15161a', roughness: 0.5 });
   { const dash = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.42, 0.7), dashM); dash.position.set(0, -0.66, -0.95); cockpit.add(dash);
@@ -296,12 +298,12 @@ export function createTown(host, opts) {
   const sw = new THREE.Group(); sw.add(new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.026, 10, 32), wheelM)); for (const a of [0, 2.1, 4.2]) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.19, 0.02), wheelM); sp.position.set(Math.sin(a) * 0.095, Math.cos(a) * 0.095, 0); sp.rotation.z = -a; sw.add(sp); }
   sw.position.set(0, -0.44, -0.72); sw.rotation.x = -0.32; cockpit.add(sw); cockpit.visible = false; camera.add(cockpit); scene.add(camera);
   function chase(dt) {
-    if (lk.id == null) { const back = Math.exp(-dt * Math.min(0.8, Math.abs(car.v) / 22)); lk.yaw *= back; lk.pitch *= back; } /* let go: the view stays where you turned it, and drifts gently back behind the car as you drive (not at all while you're stopped) */
+    if (lk.id == null && !foot) { const back = Math.exp(-dt * Math.min(0.8, Math.abs(car.v) / 22)); lk.yaw *= back; lk.pitch *= back; } /* let go: the view stays where you turned it, and drifts gently back behind the car as you drive (not at all while you're stopped) */
     const fp = mode === 1; cockpit.visible = fp && !foot; sw.rotation.z = car.steer * 1.4;
-    if (fp && foot) { const a = car.a + lk.yaw; camera.position.set(car.x + Math.cos(car.a) * 0.1, 1.62, car.z - Math.sin(car.a) * 0.1); look.set(camera.position.x + Math.cos(a) * 10, 1.62 + Math.tan(lk.pitch - 0.02) * 10, camera.position.z - Math.sin(a) * 10); camera.lookAt(look); cam.copy(camera.position); view.cut.R.value = 0; } /* through your own eyes */
+    if (fp && foot) { const a = lk.yaw; camera.position.set(car.x + Math.cos(a) * 0.1, 1.62, car.z - Math.sin(a) * 0.1); look.set(camera.position.x + Math.cos(a) * 10, 1.62 + Math.tan(lk.pitch - 0.02) * 10, camera.position.z - Math.sin(a) * 10); camera.lookAt(look); cam.copy(camera.position); view.cut.R.value = 0; } /* through your own eyes */
     else if (fp) { const a = car.a + lk.yaw; camera.position.set(car.x + Math.cos(car.a) * 0.15 - Math.sin(car.a) * 0.36, 1.18, car.z - Math.sin(car.a) * 0.15 - Math.cos(car.a) * 0.36); /* the driver's seat, on the left */
       look.set(camera.position.x + Math.cos(a) * 10, 1.18 + Math.tan(lk.pitch - 0.04) * 10, camera.position.z - Math.sin(a) * 10); camera.lookAt(look); cam.copy(camera.position); view.cut.R.value = 0; }
-    else { const high = mode === 2, a = car.a + lk.yaw, back = foot ? (high ? 14 : 4.2) : high ? 26 : 9, up = (foot ? (high ? 10 : 2.3) : high ? 18 : 3.4) + lk.pitch * -8, tx = car.x - Math.cos(a) * back, tz = car.z + Math.sin(a) * back, k = Math.min(1, dt * 4.5); /* one steady pace, dragging or not: no jumps */
+    else { const high = mode === 2, a = foot ? lk.yaw : car.a + lk.yaw, back = foot ? (high ? 14 : 4.2) : high ? 26 : 9, up = (foot ? (high ? 10 : 2.3) : high ? 18 : 3.4) + lk.pitch * -8, tx = car.x - Math.cos(a) * back, tz = car.z + Math.sin(a) * back, k = Math.min(1, dt * 4.5); /* one steady pace, dragging or not: no jumps */
       cam.x += (tx - cam.x) * k; cam.z += (tz - cam.z) * k; cam.y += (Math.max(1.2, up) - cam.y) * k; camera.position.copy(cam);
       const ahead = foot ? 3 : 6, lx = car.x + Math.cos(a) * ahead, lz = car.z - Math.sin(a) * ahead; aim.x += (lx - aim.x) * k; aim.z += (lz - aim.z) * k; look.set(aim.x, foot ? 1.45 : 1.2, aim.z); camera.lookAt(look); /* look past the car the way the camera faces */
       view.cut.A.value.set(car.x, 1.0, car.z); { const bx = camera.position.x - car.x, bz = camera.position.z - car.z, L = Math.hypot(bx, bz) || 1; view.cut.B.value.set(camera.position.x + bx / L * 3, camera.position.y + 1, camera.position.z + bz / L * 3); } view.cut.R.value = high ? 6 : 3.8; } /* see through what's between you and the car, and just behind the camera */
@@ -310,9 +312,9 @@ export function createTown(host, opts) {
   const now0 = () => performance.now();
   canvas.style.touchAction = 'none';
   canvas.addEventListener('pointerdown', e => { if (lk.id != null) return; lk.id = e.pointerId; lk.x = e.clientX; lk.y = e.clientY; try { canvas.setPointerCapture(e.pointerId); } catch (x) {} });
-  canvas.addEventListener('pointermove', e => { if (e.pointerId !== lk.id) return; lk.yaw = Math.max(-Math.PI, Math.min(Math.PI, lk.yaw - (e.clientX - lk.x) * 0.006)); lk.pitch = Math.max(-0.5, Math.min(0.45, lk.pitch - (e.clientY - lk.y) * 0.004)); lk.x = e.clientX; lk.y = e.clientY; });
+  canvas.addEventListener('pointermove', e => { if (e.pointerId !== lk.id) return; lk.yaw = foot ? lk.yaw - (e.clientX - lk.x) * 0.006 : Math.max(-Math.PI, Math.min(Math.PI, lk.yaw - (e.clientX - lk.x) * 0.006)); lk.pitch = Math.max(-0.5, Math.min(0.45, lk.pitch - (e.clientY - lk.y) * 0.004)); lk.x = e.clientX; lk.y = e.clientY; });
   const lkEnd = e => { if (e.pointerId === lk.id) { lk.id = null; lk.at = now0(); } }; canvas.addEventListener('pointerup', lkEnd); canvas.addEventListener('pointercancel', lkEnd);
-  canvas.addEventListener('dblclick', () => { lk.yaw = 0; lk.pitch = 0; });
+  canvas.addEventListener('dblclick', () => { lk.yaw = foot ? car.a : 0; lk.pitch = 0; });
 
   // ---- the way to where you're going: arrows along the road, and a beam of light where it ends ----
   const routeG = new THREE.Group(); scene.add(routeG); let routeMesh = null, routeEnd = null;
@@ -334,7 +336,7 @@ export function createTown(host, opts) {
   view.resize(); around(); sunNow(true);
   view.start((dt, now) => {
     if (dead) return; drive(dt);
-    me.visible = !foot && mode !== 1; if (feet) { feet.group.visible = foot && mode !== 1; if (foot) { feet.setPos(car.x, car.z); feet.animate(dt, Math.cos(car.a) * car.v + (car.v === 0 && Math.abs(car.steer) > 0.1 ? Math.cos(car.a) * 0.01 : 0), -Math.sin(car.a) * car.v + (car.v === 0 && Math.abs(car.steer) > 0.1 ? -Math.sin(car.a) * 0.01 : 0)); feet.group.rotation.y = car.a + Math.PI / 2; } } /* your character walks (and faces where you're going) */
+    me.visible = !foot && mode !== 1; if (feet) { feet.group.visible = foot && mode !== 1; if (foot) { feet.setPos(car.x, car.z); { const m = car.mv == null ? car.a : car.mv; feet.animate(dt, Math.cos(m) * car.v, -Math.sin(m) * car.v); } feet.group.rotation.y = car.a + Math.PI / 2; } } /* your character walks (and faces where you're going) */
     if (parked) pushCar(parked.kind, parked.col, parked.x, parked.z, parked.ry);
     me.position.set(car.x, 0, car.z); me.rotation.set(0, 0, 0); me.rotation.y = car.a - Math.PI / 2; for (const w of me.userData.wheels || []) w.rotation.x -= car.v * dt / 0.33;
     roll += (car.steer * Math.min(1, Math.abs(car.v) / 14) * 0.05 - roll) * Math.min(1, dt * 5); pitch += ((accel0 - car.v) / Math.max(dt, 1e-3) * 0.0025 - pitch) * Math.min(1, dt * 4); accel0 = car.v; me.rotateZ(roll); me.rotateX(Math.max(-0.035, Math.min(0.035, pitch))); /* the body leans into a turn and dips when you brake */
@@ -396,14 +398,14 @@ export function createTown(host, opts) {
   return {
     get pos() { return { x: car.x / TILE, y: car.z / TILE, a: car.a, v: car.v / TILE, mode: foot ? 'walk' : 'car' }; },
     // get out of the car (it stays parked there if it's yours) and walk, or get back in (at your parked car, or a car appears)
-    walk(keep) { if (foot) return; parked = keep ? { kind: opts.car.kind || 'car', col: opts.car.col, x: car.x, z: car.z, ry: car.a - Math.PI / 2 } : null; foot = true; mkFeet();
+    walk(keep) { if (foot) return; parked = keep ? { kind: opts.car.kind || 'car', col: opts.car.col, x: car.x, z: car.z, ry: car.a - Math.PI / 2 } : null; foot = true; mkFeet(); lk.yaw = car.a; car.mv = null;
       const sx = -Math.sin(car.a) * 2.2, sz = -Math.cos(car.a) * 2.2; car.x += sx; car.z += sz; car.v = 0; nearCar = false; controls(); },
-    drive() { if (!foot) return; if (parked) { car.x = parked.x; car.z = parked.z; car.a = parked.ry + Math.PI / 2; parked = null; } foot = false; car.v = 0; nearCar = false; opts.onCar && opts.onCar(false); controls(); },
+    drive() { if (!foot) return; if (parked) { car.x = parked.x; car.z = parked.z; car.a = parked.ry + Math.PI / 2; parked = null; } foot = false; car.v = 0; lk.yaw = 0; nearCar = false; opts.onCar && opts.onCar(false); controls(); },
     get parked() { return !!parked; },
     doorOf(id) { for (const v of blocks.values()) for (const s of v.solid) if (s.id === id && s.door) return { x: s.door[0] / TILE, y: s.door[1] / TILE, a: s.out }; return null; },
     kmh() { return Math.round(Math.abs(car.v) * 3.6); },
     stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
-    toggleView() { mode = (mode + 1) % 3; lk.yaw = lk.pitch = 0; return ['behind', 'driver', 'above'][mode]; },
+    toggleView() { mode = (mode + 1) % 3; lk.yaw = foot ? lk.yaw : 0; lk.pitch = 0; return ['behind', 'driver', 'above'][mode]; },
     setControls(c) { ctl = c || ctl; controls(); },
     setRoute,
     stop() { car.v = 0; },

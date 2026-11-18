@@ -750,6 +750,13 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 #wxIcon{font-size:13px!important}
 .clock{flex:none;min-width:0;padding:4px 10px;border-radius:14px}
 .clock .time{font-size:16px}
+/* a phone-width top bar never cuts anything off: the radio is a round button (no label), the coins' daily change sits under
+   them, and if the chips still don't fit (a weather chip as well, say) they wrap onto a second line rather than scroll out of view */
+@media (max-width:480px){
+  .hud .chips{flex-wrap:wrap;overflow:visible;row-gap:5px}
+  .chip.radio-chip{min-width:0;padding:3px}.chip.radio-chip .lbl{display:none!important}
+  #coinChip{display:grid;grid-template-columns:auto auto;column-gap:5px;row-gap:0;align-items:center;line-height:1.05;padding:3px 9px 3px 5px}#coinChip .coin{grid-row:span 2}#coinChip small{font-size:10px}
+}
 .cevent{top:calc(env(safe-area-inset-top,0px) + 52px)} body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 92px)}
 .news{top:calc(env(safe-area-inset-top,0px) + 52px);flex-direction:row;align-items:baseline;gap:8px;padding:3px 12px 4px;border-radius:12px;max-width:min(520px,calc(100% - 20px))}
 .news .kick{font-size:11px;white-space:nowrap}.news .kick:empty{display:none}

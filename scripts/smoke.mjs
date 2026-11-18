@@ -2218,6 +2218,8 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
   { const drv = []; watch.on('message', d => { const m = JSON.parse(d); if (m.type === 'drive') drv.push(m); });
     a.w.send(JSON.stringify({ type: 'drive', x: 12.5, y: 7.25, a: 1.57, m: 'sedan', col: '#2F4A7A' })); await sleep(300);
     ok(drv.some(m => m.id === A.id && m.x === 12.5 && m.m === 'sedan' && m.col === '#2F4A7A'), 'driving in 3D: everyone’s map sees your car where it is', JSON.stringify(drv));
+    a.w.send(JSON.stringify({ type: 'drive', mode: 'walk', x: 13, y: 7.5, a: 0.5 })); await sleep(300);
+    ok(drv.some(m => m.id === A.id && m.mode === 'walk' && m.x === 13 && m.h === 'live_amy'), 'walking in 3D: everyone sees you on foot, and who you are', JSON.stringify(drv.slice(-1)));
     a.w.send(JSON.stringify({ type: 'drive', x: 'nope', y: 1, a: 0 })); a.w.send(JSON.stringify({ type: 'drive', off: true })); await sleep(300);
     ok(drv.some(m => m.id === A.id && m.off) && !drv.some(m => m.x === 'nope'), '…bad positions are ignored, and when you stop driving your car goes'); }
   b.w.send(JSON.stringify({ type: 'in', place, x: 4.5, y: 5, a: 1 })); await sleep(300); ok(a.got.filter(m => m.k === 'pos' && m.p.h === 'live_ben').some(m => m.p.x === 4.5), '…and see you move');

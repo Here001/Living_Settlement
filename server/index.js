@@ -398,7 +398,7 @@ wss.on('connection', (ws, req) => {
     if (m?.type === 'drive' && ws.playerId) { const now = Date.now();
       if (m.off) { if (ws.driving) { ws.driving = false; bus.publish([{ driving: true, id: ws.playerId, off: true }]); } return; }
       const x = Number(m.x), y = Number(m.y), a = Number(m.a); if (![x, y, a].every(Number.isFinite) || Math.abs(x) > 1e5 || Math.abs(y) > 1e5 || now - (ws.driveAt || 0) < 150) return; ws.driveAt = now; ws.driving = true;
-      bus.publish([{ driving: true, id: ws.playerId, x: +x.toFixed(2), y: +y.toFixed(2), a: +a.toFixed(2), m: /^[a-z]{1,16}$/.test(String(m.m || '')) ? String(m.m) : 'car', col: /^#[0-9A-Fa-f]{6}$/.test(String(m.col || '')) ? String(m.col) : null }]); return; }
+      bus.publish([{ driving: true, id: ws.playerId, h: ws.playerHandle || null, mode: m.mode === 'walk' ? 'walk' : 'car', x: +x.toFixed(2), y: +y.toFixed(2), a: +a.toFixed(2), m: /^[a-z]{1,16}$/.test(String(m.m || '')) ? String(m.m) : 'car', col: /^#[0-9A-Fa-f]{6}$/.test(String(m.col || '')) ? String(m.col) : null }]); return; } /* mode: on foot or in a car */
     // Inside a building or home: where you stand, so everyone else in there sees you walk about (see Rooms.seen)
     if (m?.type === 'in') { const place = String(m.place || ''), x = Number(m.x), y = Number(m.y), a = Number(m.a);
       if (!/^(b|h):[A-Za-z0-9_.-]{1,64}$/.test(place) || ![x, y, a].every(Number.isFinite) || x < 0 || y < 0 || x > 16 || y > 16) return;
@@ -448,7 +448,7 @@ bus.on(ops => {
       const json = JSON.stringify({ type: 'whereIn', id: o.id, place: o.place }); for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.bufferedAmount > MAX_BUFFER) continue; try { ws.send(json); } catch {} } }
     ops = ops.filter(o => !o.whereIn); if (!ops.length) return; }
   // Someone driving about in 3D: every map shows their car where it is
-  if (ops.some(o => o.driving)) { for (const o of ops.filter(o => o.driving)) { const json = JSON.stringify(o.off ? { type: 'drive', id: o.id, off: true } : { type: 'drive', id: o.id, x: o.x, y: o.y, a: o.a, m: o.m, col: o.col });
+  if (ops.some(o => o.driving)) { for (const o of ops.filter(o => o.driving)) { const json = JSON.stringify(o.off ? { type: 'drive', id: o.id, off: true } : { type: 'drive', id: o.id, h: o.h, mode: o.mode, x: o.x, y: o.y, a: o.a, m: o.m, col: o.col });
       for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.bufferedAmount > MAX_BUFFER || ws.playerId === o.id) continue; try { ws.send(json); } catch {} } }
     ops = ops.filter(o => !o.driving); if (!ops.length) return; }
   // Private chat messages go only to the two people's own connections.

@@ -456,6 +456,8 @@ export function nameTag(text, color = '#ffffff') {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); s.scale.set(2.4, 0.6, 1); s.renderOrder = 10; return s;
 }
 export { THREE };
+// a car's length and width in metres (for bumping into it on foot)
+export const carSize = kind => { const S = CARS[kind] || CARS.car; return [S.L, S.W]; };
 
 // ---------------- the getaway: a straight road out of town, lined with the colony's own kinds of buildings ----------------
 // The road runs away from the camera (towards -z). `types` are building types to line it with (the town's own).

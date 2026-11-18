@@ -560,6 +560,10 @@ export function createHouse(host, opts) {
     if (act) info = { icon: '🧍', label: act.kind === 'lie' ? 'Get up' : act.kind === 'run' ? 'Stop' : act.kind === 'dance' || act.kind === 'pole' ? 'Stop dancing' : act.kind === 'use' ? 'Step away' : 'Stand up' };
     else { nearAct = findNear(); if (nearAct) { const A = nearAct.A, i = nearAct.it.i; info = { icon: A.icon, label: A.kind === 'tv' ? (tvOn.has(i) ? A.labelOn : A.label) : A.kind === 'light' ? (offLights.has(i) ? A.labelOff : A.label) : A.label }; } }
     const k = info ? info.icon + info.label : ''; if (k !== actKey) { actKey = k; opts.onAction && opts.onAction(info); } }
+  // how far forward of a seat's middle your hips go: far enough that your knees come out past its front edge (so your
+  // shins hang in front of it, not through it), and never so far back that you sink into the backrest
+  const seatFwd = (hd, av, backrest) => { const k = av.hipY / 0.9, thigh = 0.45 * k, back = 0.13 * k, rest = backrest ? Math.min(0.22, hd * 0.4) : 0;
+    return Math.max(-hd + rest + back, Math.min(hd - 0.05, hd - thigh + 0.06)); };
   function doAct() {
     if (act) { standUp(); return; } nearAct = findNear(); if (!nearAct) return; const { it, A, b } = nearAct;
     if (A.kind === 'tv' || A.kind === 'light') { const set = A.kind === 'tv' ? tvOn : offLights; set.has(it.i) ? set.delete(it.i) : set.add(it.i); buildStuff(); placeLights(true); actKey = ''; prompt(); dirty = true; wake(); return; }
@@ -569,10 +573,10 @@ export function createHouse(host, opts) {
       const p = cands.sort((a, c) => Math.hypot(a.x + a.w / 2 - me.x, a.y + a.d / 2 - me.y) - Math.hypot(c.x + c.w / 2 - me.x, c.y + c.d / 2 - me.y))[0], px = p.x + p.w / 2, py = p.y + p.d / 2;
       let f = null; if (A.faceCentre) { const vx = b.cx - px, vy = b.cy - py, l = Math.hypot(vx, vy); if (l > 0.15) f = { x: vx / l, y: vy / l }; }
       if (!f && A.back != null && ps[A.back]) { const q = ps[A.back], vx = px - (q.x + q.w / 2), vy = py - (q.y + q.d / 2), l = Math.hypot(vx, vy); if (l > 0.05) f = { x: vx / l, y: vy / l }; }
-      f = f || F || toMe; x = px; y = py; yaw = Math.atan2(-f.x, -f.y); wy = p.z + p.h - (A.sink || 0) + 0.06 - av.hipY; wyaw = yaw; }
+      f = f || F || toMe; const hd = Math.abs(f.x) * p.w / 2 + Math.abs(f.y) * p.d / 2, fwd = seatFwd(hd, av); x = px + f.x * fwd; y = py + f.y * fwd; yaw = Math.atan2(-f.x, -f.y); wy = p.z + p.h - (A.sink || 0) + 0.075 - av.hipY; wyaw = yaw; }
     else if (A.kind === 'sit') { const f = F || toMe, px = f.y, py = -f.x, hw = Math.abs(px) * (b.x1 - b.x0) / 2 + Math.abs(py) * (b.y1 - b.y0) / 2; /* on a long sofa, the seat nearest you */
       const t = hw > 0.6 ? Math.max(-(hw - 0.42), Math.min(hw - 0.42, (me.x - b.cx) * px + (me.y - b.cy) * py)) : 0, seat = (b.seat || 0.45) - (A.sink || 0);
-      x = b.cx + px * t - f.x * 0.1; y = b.cy + py * t - f.y * 0.1; yaw = Math.atan2(-f.x, -f.y); wy = seat + 0.06 - av.hipY; wyaw = yaw; }
+      const hd = Math.abs(f.x) * (b.x1 - b.x0) / 2 + Math.abs(f.y) * (b.y1 - b.y0) / 2, fwd = seatFwd(hd, av, true); x = b.cx + px * t + f.x * fwd; y = b.cy + py * t + f.y * fwd; yaw = Math.atan2(-f.x, -f.y); wy = seat + 0.075 - av.hipY; wyaw = yaw; }
     else if (A.kind === 'lie') { let H = F ? { x: -F.x, y: -F.y } : null; if (!H) H = b.x1 - b.x0 > b.y1 - b.y0 ? { x: 1, y: 0 } : { x: 0, y: 1 }; /* head towards the headboard */
       const px = H.y, py = -H.x, hw = Math.abs(px) * (b.x1 - b.x0) / 2 + Math.abs(py) * (b.y1 - b.y0) / 2, t = hw > 0.6 ? Math.sign((me.x - b.cx) * px + (me.y - b.cy) * py || 1) * hw * 0.45 : 0; /* a double bed: your side */
       x = b.cx + px * t; y = b.cy + py * t; wy = (b.seat || 0.55) - (A.sink || 0); wyaw = Math.atan2(H.x, H.y); yaw = Math.atan2(-H.x, -H.y); }

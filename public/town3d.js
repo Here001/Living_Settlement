@@ -145,8 +145,15 @@ export function createTown(host, opts) {
   const depth = (x, z, s) => s.r ? Math.min(x - s.r[0], s.r[2] - x, z - s.r[1], s.r[3] - z) : s.c[2] - Math.hypot(x - s.c[0], z - s.c[1]); /* > 0: inside, by this much */
   const hits = (x, z, S, x0, z0) => { const tx = tileOf(x), tz = tileOf(z); if (!opts.loaded(tx, tz)) return true; if (opts.water(tx, tz) && !opts.road(tx, tz) && !(opts.water(tileOf(x0), tileOf(z0)) && !opts.road(tileOf(x0), tileOf(z0)))) return true;
     for (const s of S) { const d = depth(x, z, s); if (d > 0 && d >= depth(x0, z0, s) - 1e-3) return true; }
-    for (const t of traffic) { const s = { c: [t.px, t.pz, 1.9] }, d = depth(x, z, s); if (d > 0 && d >= depth(x0, z0, s) - 1e-3) return true; }
-    if (parked && foot) { const s = { c: [parked.x, parked.z, 1.5] }, d = depth(x, z, s); if (d > 0 && d >= depth(x0, z0, s) - 1e-3) return true; } return false; };
+    if (!foot) { for (const t of traffic) { const s = { c: [t.px, t.pz, 1.9] }, d = depth(x, z, s); if (d > 0 && d >= depth(x0, z0, s) - 1e-3) return true; } return false; }
+    // on foot, a car is solid all along its body (its own length and width, and a little for your shoulders): yours where
+    // you parked it, other players' cars and the traffic
+    const carHit = (kind, cx, cz, ry) => { const [L, Wd] = W.carSize(kind), c = Math.cos(ry), s2 = Math.sin(ry), dep = (px, pz) => { const dx = px - cx, dz = pz - cz, along = -dx * s2 - dz * c, side = dx * c - dz * s2; return Math.min(L / 2 + 0.28 - Math.abs(along), Wd / 2 + 0.28 - Math.abs(side)); };
+      const d = dep(x, z); return d > 0 && d >= dep(x0, z0) - 1e-3; };
+    if (parked && carHit(parked.kind, parked.x, parked.z, parked.ry)) return true;
+    for (const t of traffic) if (Math.abs(t.px - x) < 4 && Math.abs(t.pz - z) < 4 && carHit(t.kind, t.px, t.pz, t.ry)) return true;
+    for (const f of folk.values()) if (f.kind === 'car' && Math.abs(f.x - x) < 4 && Math.abs(f.z - z) < 4 && carHit(f.m, f.x, f.z, f.ry)) return true;
+    return false; };
   const keys = new Set(), inp = { thr: 0, steer: 0 }; let ctl = opts.controls || { layout: 'stick' }; /* inp: from the on-screen controls (steer +1 = left) */
   function drive(dt) { if (riding) return;
     const K = ctl.keys || {}, on = (a, d) => keys.has(d) || keys.has(String(K[a] || '').toLowerCase());

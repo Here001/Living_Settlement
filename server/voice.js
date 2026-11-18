@@ -85,6 +85,11 @@ export class Voice {
     const j = await this.cf('POST', `/sessions/${encodeURIComponent(s.sessionId)}/tracks/new`, { tracks });
     const got = (j.tracks || []).map(t => { const sp = want.find(w => w.trackName === t.trackName && w.sessionId === t.sessionId); if (sp && t.mid != null) s.pulls.set(String(t.mid), sp.id); return sp && t.mid != null ? { mid: String(t.mid), id: 'p:' + sp.id, h: sp.h } : null; }).filter(Boolean);
     return { tracks: got, offer: j.requiresImmediateRenegotiation ? j.sessionDescription : null }; }
+  // stop hearing these people (in a crowd you hear the nearest few): their voices stop coming down to you at all
+  async unpull(me, place, b = {}) { this.check(me, place); const s = this.mine(me, place, b.sessionId), ids = new Set((Array.isArray(b.ids) ? b.ids : []).slice(0, 40).map(x => String(x).replace(/^p:/, '')));
+    const mids = [...s.pulls].filter(([, id]) => ids.has(id)).map(([mid]) => mid); if (!mids.length) return { ok: true, closed: 0 };
+    try { await this.cf('PUT', `/sessions/${encodeURIComponent(s.sessionId)}/tracks/close`, { tracks: mids.map(mid => ({ mid })), force: true }); } catch (e) {}
+    for (const m of mids) s.pulls.delete(m); return { ok: true, closed: mids.length }; }
   async answer(me, place, b = {}) { const s = this.mine(me, place, b.sessionId), ans = desc(b.answer); if (!ans) throw new HttpError(400, 'Bad voice answer.');
     await this.cf('PUT', `/sessions/${encodeURIComponent(s.sessionId)}/renegotiate`, { sessionDescription: ans }); return { ok: true }; }
   // who may hear you: everyone here (null), or just the people you pick. Anyone left out stops hearing you at once.

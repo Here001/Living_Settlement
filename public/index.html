@@ -129,6 +129,7 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .news[hidden]{display:none}
 .news .kick{font-size:12px;color:var(--muted);font-family:'Bricolage Grotesque',system-ui,sans-serif}
 .news .head{font-size:16px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psheet{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 150px);transform:translateX(-50%);z-index:30;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 32px);padding:10px 12px;border-radius:18px;background:#FBF8F1;border:2px solid #2B2621;box-shadow:0 3px 0 #2B2621,0 8px 22px rgba(0,0,0,.25);animation:netin .2s ease-out}.psheet>b{width:100%;text-align:center;font-size:14px}.psheet .x{position:absolute;top:4px;right:6px}.sidecol .vspk.off,.sidecol .vmic.off{background:#F4D6D6!important}
 .netbar{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);transform:translateX(-50%);z-index:60;display:flex;gap:9px;align-items:center;width:max-content;max-width:calc(100vw - 32px);padding:6px 14px 6px 10px;border-radius:16px;background:#2B2621;color:#FBF8F1;box-shadow:0 6px 20px rgba(0,0,0,.3);pointer-events:none;animation:netin .25s ease-out}.netbar[hidden]{display:none}.netbar b{font-size:20px}.netbar span{display:flex;flex-direction:column;line-height:1.25}.netbar strong{font-size:14px}.netbar small{font-size:12px;opacity:.85}.netbar[data-k=none],.netbar[data-k=down]{background:#B03A2E}.netbar[data-k=slow]{background:#8A6D1E}.netbar[data-k=ok]{background:#1E8449}@keyframes netin{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
 .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 168px);transform:translateX(-50%);z-index:9;background:#2B2621;color:#FBF8F1;padding:8px 8px 8px 14px;border-radius:999px;box-shadow:var(--shadow);display:flex;gap:10px;align-items:center;font-size:14px;max-width:calc(100% - 24px)}
 .toast[hidden]{display:none}
@@ -6853,28 +6854,47 @@ const VoiceOut={ ac:null, comp:null, users:new Set(), plain:(()=>{ try{ return !
 const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null, byMid:new Map(), els:new Map(), meters:new Map(), lit:new Map(), q:Promise.resolve(), ac:null, holding:false, statsAt:0, myQ:null,
   muted:new Set((()=>{ try{ return ls.get('resurgence-voice-muted')||[]; }catch(e){ return []; } })()),
   ptt:(()=>{ try{ return !!ls.get('resurgence-voice-ptt'); }catch(e){ return false; } })(), /* hold to talk, instead of an open mic */
-  async enter(R){ this.leave(); if(!(Me&&Me.token)||typeof RTCPeerConnection==='undefined') return; this.R=R;
+  deaf:(()=>{ try{ return !!ls.get('resurgence-voice-deaf'); }catch(e){ return false; } })(), /* 🔊 off: hear nobody (and pull no voices at all) */
+  MAX:6, /* in a crowd you hear the nearest six talking: the rest aren't even downloaded (data, battery, heat) */
+  async enter(R){ this.leave(); if(!(Me&&Me.token)||typeof RTCPeerConnection==='undefined') return; this.R=R; try{ window.__voice=this; }catch(e){} /* (for checking) */
     try{ this.cfg=await api('/api/voice/config'); }catch(e){ return; } if(!this.cfg.on||this.R!==R) return;
-    this.micBtn=el('button',{class:'vbtn vmic',title:'Your microphone',onclick:()=>{ if(!this.ptt) this.talk(); }}); this.peopleBtn=el('button',{class:'vbtn vpeople',title:'Voice: open mic or hold to talk, and who you hear',onclick:()=>this.panel()});
+    this.micBtn=el('button',{class:'vbtn vmic',title:'Your microphone',onclick:()=>{ if(!this.ptt) this.talk(); }}); this.spkBtn=el('button',{class:'vbtn vspk',onclick:()=>this.setDeaf(!this.deaf)}); this.peopleBtn=el('button',{class:'vbtn vpeople',title:'Voice: open mic or hold to talk, and who you hear',onclick:()=>this.panel()});
     const hold=on=>e=>{ if(!this.ptt) return; e.preventDefault(); this.hold(on); };
     this.micBtn.addEventListener('pointerdown',hold(true)); for(const ev of ['pointerup','pointercancel','pointerleave']) this.micBtn.addEventListener(ev,hold(false));
-    { const col=(R.stage.closest('.webview')||R.stage).querySelector('.sidecol'); if(col){ this.micBtn.classList.add('sidebtn','sidehide'); this.peopleBtn.classList.add('sidebtn','sidehide'); /* (they hide with ▴ too) */ col.append(this.micBtn,this.peopleBtn); } else R.stage.append(this.micBtn,this.peopleBtn); } this.paint(); /* (in the column on the right, under 📱) */
+    { const col=(R.stage.closest('.webview')||R.stage).querySelector('.sidecol'); if(col){ for(const b of [this.micBtn,this.spkBtn,this.peopleBtn]) b.classList.add('sidebtn','sidehide'); /* (they hide with ▴ too) */ col.append(this.micBtn,this.spkBtn,this.peopleBtn); } else R.stage.append(this.micBtn,this.spkBtn,this.peopleBtn); } this.paint(); /* (in the column on the right, under 📱) */
     try{ const s=await api('/api/voice/session',{method:'POST',body:{place:R.spot}}); if(this.R!==R) return; this.sid=s.sessionId; }catch(e){ return; }
     this.pc=new RTCPeerConnection({iceServers:this.cfg.ice,bundlePolicy:'max-bundle',...(VoiceOut.relay?{iceTransportPolicy:'relay'}:{})}); this.pc.ontrack=e=>this.track(e); VoiceOut.users.add(this);
     this.serial(()=>this.sync()); this.timer=setInterval(()=>this.levels(),150); },
   leave(){ const R=this.R; clearInterval(this.timer); this.timer=null; clearTimeout(this.wT); this.tx=null; VoiceOut.users.delete(this); VoiceOut.talk(this,false);
     if(this.mic){ for(const t of this.mic.getTracks()) t.stop(); this.mic=null; } if(this.pc){ try{ this.pc.close(); }catch(e){} this.pc=null; }
-    for(const e of this.els.values()) this.unplug(e); this.els.clear(); this.byMid.clear(); this.meters.clear();
+    for(const e of this.els.values()) this.unplug(e); this.els.clear(); this.byMid.clear(); this.meters.clear(); this.heard=[]; this.pickAt=0; this.sheet&&this.sheet.remove(); this.sheet=null;
+    for(const k of ['micBtn','spkBtn','peopleBtn']) if(Object.prototype.hasOwnProperty.call(this,k)&&this[k]){ this[k].remove(); this[k]=null; } /* (the next place makes its own: never two of them) */
     if(R&&R.h) for(const id of this.lit.keys()) R.h.talking(id,false); this.lit.clear();
     if(R&&this.sid) api('/api/voice/leave',{method:'POST',body:{place:R.spot}}).catch(()=>{});
     this.sid=null; this.live=false; this.R=null; this.myQ=null; this.vp&&this.vp.remove(); this.vp=null; },
   serial(fn){ return this.q=this.q.then(fn).catch(e=>{ console.warn('voice:',e&&e.message||e); if(Date.now()-(Voice.toldAt||0)>20000){ Voice.toldAt=Date.now(); toast(`🎙️ Voice: ${(e&&e.message)||'it didn’t connect'}`); } }); },
   // everyone talking here that I may hear: start hearing the new ones, stop hearing anyone I no longer may
-  async sync(){ if(!this.pc||!this.R) return; const r=await api('/api/voice/list',{method:'POST',body:{place:this.R.spot}}), ok=new Set(r.speakers.map(s=>s.id));
-    for(const [mid,v] of [...this.byMid]) if(!ok.has(v.id)) this.dropMid(mid);
+  // (in a crowd: only the nearest MAX who aren't muted; none at all with 🔊 off)
+  async sync(cached){ if(!this.pc||!this.R) return; const r=cached&&this.heard?{speakers:this.heard}:await api('/api/voice/list',{method:'POST',body:{place:this.R.spot}}); this.heard=r.speakers; r.speakers=this.pick(r.speakers); const ok=new Set(r.speakers.map(s=>s.id));
+    { const still=new Set(this.heard.map(x=>x.id)), gone=[]; for(const [mid,v] of [...this.byMid]) if(!ok.has(v.id)){ if(still.has(v.id)) gone.push(v.id); this.dropMid(mid); }
+      if(gone.length&&this.sid) api('/api/voice/unpull',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,ids:[...new Set(gone)]}}).catch(()=>{}); } /* (still talking, just not heard: stop their sound coming down) */
     const have=new Set([...this.byMid.values()].map(v=>v.id)), ids=r.speakers.map(s=>s.id).filter(id=>!have.has(id)); if(!ids.length) return;
     const p=await api('/api/voice/pull',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,ids}}); for(const t of p.tracks) this.byMid.set(t.mid,{id:t.id,h:t.h});
     if(p.offer){ await this.pc.setRemoteDescription(p.offer); await this.pc.setLocalDescription(await this.pc.createAnswer()); await api('/api/voice/answer',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,answer:{type:'answer',sdp:this.pc.localDescription.sdp}}}); } },
+  // who to hear: nobody with 🔊 off; otherwise everyone talking that you haven't muted, nearest first, up to MAX
+  far(id){ const R=this.R; let me=null, p=null; try{ me=R&&R.h&&R.h.me; p=R&&R.others&&R.others.get(id); }catch(e){} return me&&p?Math.hypot(p.x-me.x,p.y-me.y):1e9; },
+  pick(list){ if(this.call) return list||[]; /* (a phone call: always the person you called) */ if(this.deaf) return []; const L=(list||[]).filter(s=>!this.muted.has(String(s.h||'').toLowerCase())); return L.map(s=>[s,this.far(s.id)]).sort((a,b)=>a[1]-b[1]).slice(0,this.MAX).map(x=>x[0]); },
+  repick(){ if(!this.pc||!this.heard||this.call) return; const want=this.pick(this.heard).map(s=>s.id).sort().join(), have=[...new Set([...this.byMid.values()].map(v=>v.id))].sort().join(); if(want!==have) this.serial(()=>this.sync(true)); },
+  setDeaf(on){ this.deaf=on; try{ ls.set('resurgence-voice-deaf',on?1:0); }catch(e){} this.paint(); this.serial(()=>this.sync(true)); toast(on?'🔇 Voices off: you hear nobody. Tap 🔇 to hear people again.':'🔊 Voices on: you hear the people near you.'); this.vp&&this.fillPanel(); },
+  setMuted(h,on){ const k=String(h||'').toLowerCase(); on?this.muted.add(k):this.muted.delete(k); try{ ls.set('resurgence-voice-muted',[...this.muted]); }catch(e){} this.route(); this.serial(()=>this.sync(true)); this.vp&&this.fillPanel(); },
+  // tapping someone in the room: their voice and their card
+  person(id){ const R=this.R||Room, p=R&&R.others&&R.others.get(id), h=p&&p.h; if(!h) return; this.sheet&&this.sheet.remove(); const m=this.muted.has(h.toLowerCase()), close=()=>{ this.sheet&&this.sheet.remove(); this.sheet=null; };
+    const host=(R.stage&&(R.stage.closest('.webview')||R.stage))||document.body;
+    this.sheet=el('div',{class:'psheet',role:'dialog','aria-label':'@'+h}, el('b',{text:'@'+h}),
+      el('button',{class:'btn sm'+(m?' primary':''),text:m?'🔊 Hear their voice':'🔇 Mute their voice',onclick:()=>{ this.setMuted(h,!m); toast(m?`🔊 You hear @${h} again.`:`🔇 @${h} is muted for you.`); close(); }}),
+      el('button',{class:'btn sm',text:'👤 Their card',onclick:()=>{ close(); try{ Phone.show(); }catch(e){} openCitizen(h); }}),
+      el('button',{class:'x',text:'✕','aria-label':'Close',onclick:close}));
+    host.append(this.sheet); clearTimeout(this.sheetT); this.sheetT=setTimeout(close,8000); },
   // a voice arrives: an audio element on the page (iPhones need one), and its own volume and left/right on the way out
   track(e){ const mid=e.transceiver&&e.transceiver.mid, v=this.byMid.get(mid); if(!v) return; const st=new MediaStream([e.track]), a=document.createElement('audio');
     a.autoplay=true; a.playsInline=true; a.setAttribute('playsinline',''); a.style.display='none'; document.body.append(a); a.srcObject=st;
@@ -6888,7 +6908,7 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
       else { x.a.muted=off; try{ x.a.volume=Math.min(1,g); }catch(e){} if(x.gain) x.gain.gain.value=0; } } },
   unplug(x){ try{ x.src&&x.src.disconnect(); x.gain&&x.gain.disconnect(); x.panner&&x.panner.disconnect(); }catch(e){} try{ x.a.srcObject=null; x.a.remove(); }catch(e){} },
   dropMid(mid){ const e=this.els.get(mid); if(e){ this.unplug(e); this.els.delete(mid); this.light(e.id,false); } this.byMid.delete(mid); this.meters.delete(mid); },
-  msg(v){ if(!this.pc||!v) return; if(v.kind==='on'||v.kind==='audience') this.serial(()=>this.sync()); else if(v.kind==='off'){ for(const [mid,e] of [...this.byMid]) if(e.id===v.id) this.dropMid(mid); } },
+  msg(v){ if(!this.pc||!v) return; if(v.kind==='on'||v.kind==='audience') this.serial(()=>this.sync()); else if(v.kind==='off'){ if(this.heard) this.heard=this.heard.filter(x=>x.id!==v.id); for(const [mid,e] of [...this.byMid]) if(e.id===v.id) this.dropMid(mid); this.repick(); } }, /* (someone stopped: the next nearest may come in) */
   // the mic: the first tap asks the phone for it and goes live; after that it mutes and unmutes (or, held down, talks)
   async talk(){ if(!this.pc) return; if(this.mic){ this.setLive(!this.live); return; }
     try{ this.mic=await navigator.mediaDevices.getUserMedia({audio:VoiceOut.plain?true:VoiceOut.mic()}); /* (a phone whose mic went silent with the voice settings: its plain mic, from then on) */ }catch(e){ toast('Allow the microphone to talk (in your browser’s settings for this site).'); return; }
@@ -6918,22 +6938,24 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
     this.meters.delete('me'); this.meter('me',m); this.mePeak=0; toast('🎙️ Switched to your phone’s plain microphone.'); this.watch(tx); },
   setLive(v){ this.live=!!v; if(v) this.mePeak=0; if(this.mic) for(const t of this.mic.getAudioTracks()) t.enabled=this.live; this.paint(); },
   hold(on){ this.holding=on; if(on&&!this.mic){ this.talk(); return; } if(this.mic) this.setLive(on); },
-  paint(){ if(!this.micBtn) return; this.micBtn.textContent=!this.mic?'🎙️':this.live?'🎙️':'🔇'; this.micBtn.classList.toggle('live',!!this.mic&&this.live); this.micBtn.classList.toggle('off',!!this.mic&&!this.live&&!this.ptt); this.micBtn.classList.toggle('ptt',this.ptt);
+  paint(){ if(!this.micBtn) return; if(this.spkBtn){ this.spkBtn.textContent=this.deaf?'🔇':'🔊'; this.spkBtn.classList.toggle('off',this.deaf); this.spkBtn.title=this.deaf?'Voices off: tap to hear people':'Tap to stop hearing everyone'; this.spkBtn.setAttribute('aria-label',this.spkBtn.title); } this.micBtn.textContent='🎙️'; this.micBtn.classList.toggle('live',!!this.mic&&this.live); this.micBtn.classList.toggle('off',!!this.mic&&!this.live&&!this.ptt); this.micBtn.classList.toggle('ptt',this.ptt);
     this.micBtn.title=this.ptt?'Hold to talk':!this.mic?'Tap to talk (everyone here hears you)':this.live?'You’re live: tap to mute':'Muted: tap to talk'; this.peopleBtn.textContent=this.to?'👤':'👥'; },
   // who hears you, open mic or hold to talk, and each voice's volume (or muting it) for yourself
   panel(){ if(this.vp&&this.vp.isConnected){ this.vp.remove(); this.vp=null; return; } const R=this.R; if(!R) return; const P=el('div',{class:'voicepanel'}); this.vp=P; R.stage.append(P); this.fillPanel(); },
-  fillPanel(){ const P=this.vp, R=this.R; if(!P||!R) return; const people=[...(R.others?R.others.values():[])].map(p=>p.h).filter(h=>h&&(!Me||h.toLowerCase()!==String(Me.handle||'').toLowerCase())).filter((h,i,a)=>a.indexOf(h)===i);
+  fillPanel(){ const P=this.vp, R=this.R; if(!P||!R) return; const people=[...new Set([...this.els.values()].map(x=>x.h).filter(Boolean))], talking=(this.heard||[]).length, mutedN=this.muted.size; /* only who you're hearing now (never more than six) */
     if(this.to&&!this.toReset){ this.toReset=true; api('/api/voice/audience',{method:'POST',body:{place:R.spot,to:null}}).then(()=>{ this.to=null; this.toReset=false; this.paint(); }).catch(()=>{ this.toReset=false; }); } /* (anyone who had picked people: back to everyone) */
     const setPtt=v=>{ this.ptt=v; try{ ls.set('resurgence-voice-ptt',v?1:0); }catch(e){} if(this.mic) this.setLive(!v); this.paint(); this.fillPanel(); };
     P.replaceChildren(el('div',{class:'sphead'}, el('b',{text:'🎙️ Voice'}), el('button',{class:'x',text:'✕','aria-label':'Close',onclick:()=>this.panel()})),
       el('div',{class:'spchips'}, el('button',{class:'spchip'+(this.ptt?'':' on'),text:'🎙️ Open mic',onclick:()=>setPtt(false)}), el('button',{class:'spchip'+(this.ptt?' on':''),text:'✋ Hold to talk',onclick:()=>setPtt(true)})),
       el('p',{class:'hint',text:'One mic for everyone: when it’s on, everyone here hears you.'}), /* (no picking who hears you, person by person) */
       this.myQ?el('p',{class:'hint vq-me',text:`Your connection: ${this.myQ}`}):'',
-      el('div',{class:'sphr'}), el('b',{text:'People you hear'}),
+      el('div',{class:'spchips'}, el('button',{class:'spchip'+(this.deaf?'':' on'),text:'🔊 Hear people',onclick:()=>this.deaf&&this.setDeaf(false)}), el('button',{class:'spchip'+(this.deaf?' on':''),text:'🔇 Hear nobody',onclick:()=>!this.deaf&&this.setDeaf(true)})),
+      el('div',{class:'sphr'}), el('b',{text:'People you hear'}), el('p',{class:'hint',text:this.deaf?'Voices are off.':talking>people.length?`The nearest ${people.length} of ${talking} talking. Walk closer to hear someone else; voices fade out with distance.`:'Voices fade out with distance. To mute someone, tap them (or here).'}),
       people.length?el('div',{class:'vlistv'}, ...people.map(h=>{ const m=this.muted.has(h.toLowerCase()), v=Math.round(VoiceOut.vol(h)*100);
         const out=el('span',{class:'vpct',text:v+'%'}), r=el('input',{type:'range',min:'0',max:'200',step:'10',value:String(v),'aria-label':`@${h}'s volume`,oninput:()=>{ out.textContent=r.value+'%'; VoiceOut.setVol(h,Number(r.value)/100); }});
         return el('div',{class:'vrow'}, el('span',{class:'vq','data-h':h.toLowerCase(),title:'Their connection'}), el('span',{class:'vname',text:'@'+h}), r, out,
-          el('button',{class:'btn sm'+(m?' primary':''),text:m?'🔇':'🔊',title:m?'Muted: tap to hear them':'Tap to mute them',onclick:()=>{ m?this.muted.delete(h.toLowerCase()):this.muted.add(h.toLowerCase()); try{ ls.set('resurgence-voice-muted',[...this.muted]); }catch(e){} this.route(); this.fillPanel(); }})); })):el('p',{class:'hint',text:'Nobody else is here yet.'}));
+          el('button',{class:'btn sm'+(m?' primary':''),text:m?'🔇':'🔊',title:m?'Muted: tap to hear them':'Tap to mute them',onclick:()=>this.setMuted(h,!m)})); })):el('p',{class:'hint',text:this.deaf?'':'Nobody near you is talking.'}),
+      mutedN?el('button',{class:'linkb',text:`🔇 ${mutedN} muted · hear them all again`,onclick:()=>{ this.muted.clear(); try{ ls.set('resurgence-voice-muted',[]); }catch(e){} this.route(); this.serial(()=>this.sync(true)); this.fillPanel(); }}):'');
     this.dots(); },
   // how good each connection is (from the phone's own counts of lost and late sound), every couple of seconds
   async quality(){ if(!this.pc) return; let st; try{ st=await this.pc.getStats(); }catch(e){ return; } const word=(loss,jit)=>loss<0.02&&jit<0.03?'good':loss<0.08&&jit<0.08?'fair':'weak';
@@ -6950,8 +6972,9 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
     VoiceOut.talk(this,other); this.space(); if(now-this.statsAt>2000){ this.statsAt=now; this.quality(); } },
   // inside a place: a voice is louder the nearer they stand, and comes from their side of you
   space(){ const R=this.R; if(this.call||!R||!R.h||!R.others) return; let me; try{ me=R.h.me; }catch(e){ return; } if(!me) return; const ca=Math.cos(me.a||0), sa=Math.sin(me.a||0); let moved=false;
-    for(const x of this.els.values()){ const p=R.others.get(x.id); if(!p) continue; const dx=p.x-me.x, dy=p.y-me.y, d=Math.hypot(dx,dy), dist=Math.max(R.floor!=null?R.floor:0.35,Math.min(1,1.2-d/(R.range||16))), pan=Math.max(-1,Math.min(1,(dx*ca-dy*sa)/Math.max(d,1)))*0.6;
-      if(Math.abs(dist-x.dist)>0.02||Math.abs(pan-x.pan)>0.03){ x.dist=dist; x.pan=pan; moved=true; } } if(moved) this.route(); },
+    for(const x of this.els.values()){ const p=R.others.get(x.id); if(!p) continue; const dx=p.x-me.x, dy=p.y-me.y, d=Math.hypot(dx,dy), dist=Math.max(R.floor!=null?R.floor:0,Math.min(1,1.2-d/(R.range||16))) /* (silent beyond about 19 m: across a big club you hear nothing) */, pan=Math.max(-1,Math.min(1,(dx*ca-dy*sa)/Math.max(d,1)))*0.6;
+      if(Math.abs(dist-x.dist)>0.02||Math.abs(pan-x.pan)>0.03){ x.dist=dist; x.pan=pan; moved=true; } } if(moved) this.route();
+    const now=performance.now(); if(now-(this.pickAt||0)>2500){ this.pickAt=now; this.repick(); } }, /* (people move: the nearest six change) */
   light(id,on){ const R=this.R; if(!R||!R.h) return; if(on) R.h.talking(id,true); else { R.h.talking(id,false); this.lit.delete(id); } },
 };
 // ---- The in-game phone (server/phone.js) ----
@@ -7471,7 +7494,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     setTimeout(()=>{ if(this.d===d) Voice.enter(this); },1500); /* voice chat (once we've said we're here) */
     try{ if(!(history.state&&history.state.room)) history.pushState({room:1},''); }catch(e){}
     try{ this.h=H3.createHouse(this.stage,{ defer:true, size:d.size, plan:d.room.plan||'home', persp, me:(Me&&Me.handle)||'visitor', look:myLook||null, room:d.room, photos:d.photos, at:this.reAt||null, onLost:at=>this.reopen(at), check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
-      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.exit(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onAction:a=>{ const b=this.actBtn; if(!b) return; b.hidden=!a; if(a){ b.replaceChildren(el('b',{text:a.icon}),el('span',{text:a.label})); b.title=a.label; } }, onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
+      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.exit(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onAction:a=>{ const b=this.actBtn; if(!b) return; b.hidden=!a; if(a){ b.replaceChildren(el('b',{text:a.icon}),el('span',{text:a.label})); b.title=a.label; } }, onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onPerson:id=>Voice.person(id), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
     catch(e){ ent.cancel(); this.close(); toast('Your phone couldn’t show the 3D view.'); return; }
     this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false); this.hereTick(true); this.join();
     ent.step('Switching on the lights…',0.66); const h=this.h; try{ await h.ready((n,t)=>ent.step(n/t<0.6?'Switching on the lights…':'Saying hello to who’s here…',0.66+0.32*n/t)); }catch(e){} if(this.h===h) ent.done(); else ent.cancel(); /* the first picture is on screen: step through */

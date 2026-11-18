@@ -2174,6 +2174,8 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
   ok((await call('POST', '/api/voice/publish', { place, sessionId: sb, mid: '0', offer: { type: 'offer', sdp: 'x' } }, VA.P)).status === 409, 'you can only use your own voice connection');
   const lb = (await call('POST', '/api/voice/list', { place }, VB.P)).json.speakers || []; ok(lb.length === 1 && lb[0].h === 'voice_ava', 'Bo can hear her', JSON.stringify(lb));
   const pb = (await call('POST', '/api/voice/pull', { place, sessionId: sb, ids: lb.map(x => x.id) }, VB.P)).json; ok(pb.tracks?.[0]?.h === 'voice_ava' && pb.offer?.type === 'offer', '…and starts hearing her', JSON.stringify(pb));
+  { const u1 = (await call('POST', '/api/voice/unpull', { place, sessionId: sb, ids: lb.map(x => x.id) }, VB.P)).json, u2 = (await call('POST', '/api/voice/unpull', { place, sessionId: sb, ids: lb.map(x => x.id) }, VB.P)).json; ok(u1.closed === 1 && u2.closed === 0, 'in a crowd Bo can stop hearing her (her voice stops coming down to him)', JSON.stringify([u1, u2]));
+    ok((await call('POST', '/api/voice/pull', { place, sessionId: sb, ids: lb.map(x => x.id) }, VB.P)).json.tracks?.[0]?.h === 'voice_ava', '…and hear her again when she’s among the nearest'); }
   ok((await call('POST', '/api/voice/answer', { place, sessionId: sb, answer: { type: 'answer', sdp: 'v=0 a' } }, VB.P)).status === 200, '…answering the service');
   await call('POST', '/api/blocks/voice_ava', {}, VD.P);
   ok(((await call('POST', '/api/voice/list', { place }, VD.P)).json.speakers || []).length === 0, 'someone who blocked her never hears her');

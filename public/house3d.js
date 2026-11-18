@@ -609,6 +609,8 @@ export function createHouse(host, opts) {
   el.addEventListener('pointerup', e => { const p = ptrs.get(e.pointerId); ptrs.delete(e.pointerId); if (!p) return;
     if (Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < 8 && performance.now() - p.t < 450) { const r = el.getBoundingClientRect(), nx = (e.clientX - r.left) / r.width * 2 - 1, ny = -((e.clientY - r.top) / r.height) * 2 + 1;
       if (pick) { tapAim = true; aim(nx, ny); } else { ray.setFromCamera(v2.set(nx, ny), camera); ray.near = camera.near; const hit = ray.intersectObjects([stuff, wallStuff, ceilStuff].filter(g => g.visible), true)[0], wallHit = ray.intersectObjects(walls.children, false)[0];
+        { const og = [...others.values()].filter(o => o.g.visible).map(o => o.g), ph = og.length ? ray.intersectObjects(og, true)[0] : null;
+          if (ph && (!hit || ph.distance < hit.distance + 0.3) && opts.onPerson) { let g = ph.object; while (g && !og.includes(g)) g = g.parent; for (const [id, o] of others) if (o.g === g) { opts.onPerson(id); return; } } } /* someone here: what to do about them (their voice, their card) */
         if (wallHit && (!hit || wallHit.distance < hit.distance) && frontAt && Math.hypot(wallHit.point.x - frontAt.x, wallHit.point.z - frontAt.y) < 0.55 && wallHit.point.y < 2.15) { opts.onExit && opts.onExit(true, true); return; } /* the front door: the way out */
         let dg = hit && hit.object; while (dg && !dg.userData.door) dg = dg.parent; if (dg) { const D = dg.userData.door; D.until = performance.now() + 4500; wake(); } /* a door: open it (it closes again by itself) */
         opts.onTap && opts.onTap(hit ? { i: hit.object.userData.i, photo: !!hit.object.userData.photo, door: !!dg } : null); } } });

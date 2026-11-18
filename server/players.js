@@ -369,6 +369,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/voice/publish', limit, send(async req => { const p = await me(req); await assertNotMuted(p.id); return V().publish(p, bd(req).place, bd(req)); }));
   r.post('/voice/list', limit, send(async req => V().list(await me(req), bd(req).place)));
   r.post('/voice/pull', limit, send(async req => V().pull(await me(req), bd(req).place, bd(req))));
+  r.post('/voice/unpull', limit, send(async req => V().unpull(await me(req), bd(req).place, bd(req))));
   r.post('/voice/answer', limit, send(async req => V().answer(await me(req), bd(req).place, bd(req))));
   r.post('/voice/report', limit, send(async req => V().report(await me(req), bd(req))));
   r.post('/voice/audience', limit, send(async req => V().audience(await me(req), bd(req).place, bd(req).to)));

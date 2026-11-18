@@ -671,7 +671,17 @@ body.room-on .toast{z-index:9850} /* above the phone and the call screen, so a r
 .phframe{position:relative;width:min(390px,100%);height:min(760px,calc(100dvh - 24px));background:var(--paper,#FBF7F0);border:11px solid #17181C;border-radius:44px;box-shadow:0 0 0 2px #3a3c44,0 24px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden;animation:phup .25s ease-out}
 @keyframes phup{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
 .phstatus{display:flex;align-items:center;justify-content:space-between;padding:8px 20px 4px;font-size:13px;flex:none}.phclock{font-weight:800}.phnotch{width:96px;height:24px;border-radius:14px;background:#17181C}
-.phbody{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}.phbody .pane-body{flex:1;min-height:0;overflow:auto}
+.phbody{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.phhomescr{flex:1;overflow:auto;background:linear-gradient(160deg,#2b3a67 0%,#5b4b8a 45%,#c06c84 100%);color:#fff;padding:22px 18px}
+.phhello{display:flex;flex-direction:column;gap:2px;margin:6px 4px 26px}.phhello b{font-size:22px}.phhello span{opacity:.85;font-size:13px}
+.phapps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px 8px}
+.phapp{display:flex;flex-direction:column;align-items:center;gap:7px;background:none;border:0;color:#fff;font:600 12px/1.2 inherit;cursor:pointer;padding:0;text-shadow:0 1px 3px rgba(0,0,0,.4)}
+.phapp i{position:relative;width:62px;height:62px;border-radius:17px;display:grid;place-items:center;box-shadow:0 6px 16px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.35);color:#fff}
+.phapp i svg{width:32px;height:32px}.phapp i svg *{stroke:#fff}.phapp:active i{transform:scale(.94)}
+.phapp .phbadge{position:absolute;top:-6px;right:-6px}
+.phbody>#pane,.phbody>#card{position:static!important;max-height:none!important;flex:1 1 auto;min-height:0;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;width:auto!important;left:auto!important;right:auto!important;bottom:auto!important;transform:none!important;overflow:auto}
+.phbody>#pane:not([hidden]){display:flex!important}.phbody>#card:not([hidden]){display:block!important}
+body.phone-on .rsheet-bg{z-index:9760}.phbody .pane-body{flex:1;min-height:0;overflow:auto}
 .phbody .maxb,.phbody .x[aria-label="Close"],.phbody .x[aria-label="Close panel"]{display:none}
 .phhome{flex:none;height:22px;border:0;background:none;display:grid;place-items:center;cursor:pointer;padding:0}.phhome::after{content:'';width:120px;height:5px;border-radius:3px;background:#17181C;opacity:.8}
 .phbanner{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);z-index:9750;width:min(380px,calc(100% - 20px));display:flex;align-items:center;gap:10px;text-align:left;padding:10px 12px;border:0;border-radius:18px;background:rgba(30,32,40,.92);color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.35);font:inherit;cursor:pointer;animation:phdrop .3s ease-out}
@@ -4170,7 +4180,7 @@ function buildToolbar(){ const row=$('toolsRow'); row.innerHTML=''; syncFindChip
     const btn=el('button',{class:'tb'+(c.id==='bulldoze'?' warn':''),'aria-pressed':String(c.id==='me'?myCardOpen():activeTab===c.id),onclick:()=>c.id==='me'?openMyCard():c.id==='build'?BuildHub.open():openTab(activeTab===c.id?null:c.id)}); btn.innerHTML=ICONS[c.id]; btn.append(el('span',{text:c.name})); if(c.id==='me') btn.dataset.me='1'; if(c.id==='chats'&&Chats&&Chats.unread) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Chats.unread))})); if(c.id==='reports'&&typeof Reports!=='undefined'&&Reports.open) btn.append(el('b',{class:'tbadge',text:String(Math.min(99,Reports.open))})); row.append(btn); } }
 function openTab(name){ if(!name) document.body.classList.remove('pane-max'); if(name==='races'){ if(Date.now()-(Race.loadAt||0)>60000){ loadRace(); loadLottery(); } if(Date.now()-(Fight.loadAt||0)>60000) loadFight(); } /* fresh when you open it (it isn't refreshed in the background) */
   if(name && PLAYER_TABS.has(name) && innerWidth<900 && !$('card').hidden) closeCard(); /* on a phone a bottom button replaces the open card */
-  activeTab=name; if((PLAYER_TABS.has(name)||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); }
+  activeTab=name; if((PLAYER_TABS.has(name)||!name) && tool.kind!=='pan' && tool.kind!=='move') setTool({kind:'pan'}); buildToolbar(); renderPane(); if(!name) try{ Phone.closed('pane'); }catch(e){} }
 function applyPermissions(){ buildToolbar(); refreshHUD(); refreshUndo(); refreshDraftBar(); if(Store.canWrite && !draftLoaded){ draftLoaded=true; loadDraft(); if(typeof Reports!=='undefined') Reports.load(); } $('spawnBoxNote')&&0; if(!Store.canWrite && activeTab && !PLAYER_TABS.has(activeTab)) openTab(null); }
 
 const subTab={}; let brushSize=2;
@@ -4294,7 +4304,7 @@ function renderPicker(c){ const {kind,items}=sel.picker; const cur=(kind==='job'
     el('span',null, el('b',{text:it.name}), kind==='job'?el('small',{text:' '+it.title.toLowerCase()}):null), el('small',{text:`${it.id===cur?'current · ':''}${fmt(it.used)}/${fmt(it.cap)}${full?(kind==='job'?' full, bumps someone':' full, someone moves out'):''}`}))); }
   return box; }
 function selectBuilding(id){ sel={kind:'b',id}; follow=null; renderCard(); }
-function closeCard(){ document.body.classList.remove('card-max'); sel=null; follow=null; if(Watch.id&&!Watch.until) Watch.stop(); queueMicrotask(syncMyCardBtn); if(pinned){ const c=S.citizens.get(pinned); pinned=null; if(c&&!keepCitizen(c)) S.citizens.delete(c.id); } $('card').hidden=true; }
+function closeCard(){ document.body.classList.remove('card-max'); sel=null; follow=null; if(Watch.id&&!Watch.until) Watch.stop(); queueMicrotask(syncMyCardBtn); if(pinned){ const c=S.citizens.get(pinned); pinned=null; if(c&&!keepCitizen(c)) S.citizens.delete(c.id); } $('card').hidden=true; try{ Phone.closed('card'); }catch(e){} }
 const CAT_NAME = id => (CATS.find(c=>c.id===id)||{}).name || 'Building';
 function levelOf(b){ const t=T(b); let lv=1; const res=b.homeUsed||0, wk=b.jobUsed||0; if((t.home&&res>=t.home.capacity)||(t.work&&wk>=t.work.slots)) lv++; if(gmNow()/1440-(b.builtDay||0)>=7) lv++; return lv; }
 function authPanel(c){ const box=el('div',{class:'authbox'}); const A=auth;
@@ -4995,10 +5005,10 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
   requests(){ return this.list.filter(c=>c.request); },
   count(){ const n=this.list.reduce((a,c)=>a+c.unread,0)+this.groups.reduce((a,g)=>a+g.unread,0)+this.invites.length; if(n!==this.unread){ this.unread=n; buildToolbar(); Phone.paintBtn(); } },
   isMe(h){ return String(h||'').toLowerCase()===(Me&&Me.handle||'').toLowerCase(); },
-  async open(handle){ if(!(Me&&Me.token)){ toast('Sign in to your colonist to chat.'); return; } this.with=handle; this.gid=null; this.thread=null; this.draft=''; this.menu=false; this.reply=null; this.making=null; this.sure=null; closeCard(); Phone.inside()?Phone.show():openTab('chats');
+  async open(handle){ if(!(Me&&Me.token)){ toast('Sign in to your colonist to chat.'); return; } this.with=handle; this.gid=null; this.thread=null; this.draft=''; this.menu=false; this.reply=null; this.making=null; this.sure=null; closeCard(); Phone.inside()?Phone.show('chats'):openTab('chats');
     try{ this.thread=await api('/api/dm/'+encodeURIComponent(handle)); const c=this.list.find(x=>x.with.h.toLowerCase()===handle.toLowerCase()); if(c){ c.unread=0; this.count(); } }catch(e){ toast(e.message); this.with=null; }
     this.renderNow(); },
-  async openGroup(id){ if(!(Me&&Me.token)) return; this.gid=id; this.with=null; this.thread=null; this.draft=''; this.menu=false; this.reply=null; this.making=null; this.sure=null; closeCard(); Phone.inside()?Phone.show():openTab('chats');
+  async openGroup(id){ if(!(Me&&Me.token)) return; this.gid=id; this.with=null; this.thread=null; this.draft=''; this.menu=false; this.reply=null; this.making=null; this.sure=null; closeCard(); Phone.inside()?Phone.show('chats'):openTab('chats');
     try{ this.thread=await api('/api/chat/groups/'+encodeURIComponent(id)); const g=this.groups.find(x=>x.id===id); if(g){ g.unread=0; this.count(); } }catch(e){ toast(e.message); this.gid=null; }
     this.renderNow(); },
   back(){ this.with=null; this.gid=null; this.thread=null; this.menu=false; this.reply=null; this.sure=null; this.load(); this.renderNow(); },
@@ -5044,8 +5054,8 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
       b.onclick=()=>{ const on=!b.classList.contains('flagon'); document.querySelectorAll('.dm.flagon').forEach(x=>x.classList.remove('flagon')); b.classList.toggle('flagon',on); }; }
     return b; },
   dot(p){ return el('span',{class:'odot'+(p&&p.online?' on':''),title:p&&p.online?'Online':'Offline'}); },
-  live(){ return activeTab==='chats'||Phone.on; }, /* the chats are on screen: the side panel, or the phone inside a place */
-  renderNow(){ if(!this.live()) return; const p=Phone.on?Phone.screen:$('pane'); if(p) { p.innerHTML=''; this.render(p); } },
+  live(){ return activeTab==='chats'; }, /* the chats are on screen: the side panel, or the phone inside a place */
+  renderNow(){ if(!this.live()) return; const p=$('pane'); if(p) { p.innerHTML=''; this.render(p); } },
   async act(url, body, then){ try{ const r=await api(url,{method:'POST',body:body||{}}); if(then) await then(r); }catch(e){ toast(e.message); } },
   feeNote(T){ const c=T&&T.cost; if(!c) return null;
     if(this.gid){ if(!c.fee) return el('div',{class:'feenote free',text:'✓ Free: everyone here lives near you'});
@@ -6847,21 +6857,42 @@ const CallVoice=Object.assign(Object.create(Voice),{ R:null, cfg:null, pc:null, 
   paint(){ Phone.paintCall(); }, light(id,on){ if(!on) this.lit.delete(id); Phone.talking(id,on); } });
 const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null, unread:0,
   inside(){ return !!((typeof Room!=='undefined'&&Room.el)||(typeof Drive!=='undefined'&&Drive.el)); }, /* in a place, or in the car */
-  // the phone in your hand, with your chats on its screen
-  show(){ if(!this.inside()){ openTab('chats'); return; } if(activeTab==='chats') openTab(null);
+  // the phone in your hand: its home screen has the same five apps as the bar at the bottom of the map (Town Square,
+  // My card, Colonists, Races, Chats). An app is the real thing, moved onto the phone's screen while it's open (the
+  // panel or the card), so everything in it works just as it does on the map; the home bar takes you back to the apps.
+  APPS:[['feed','Town Square','#3D7BD9'],['me','My card','#E2783B'],['people','Colonists','#2F9E6A'],['races','Races','#C0392B'],['chats','Chats','#8E44AD']],
+  show(app){ if(!this.inside()){ if(app&&app!=='chats'){ app==='me'?openMyCard():openTab(app); } else openTab('chats'); return; } if(activeTab&&!this.app) openTab(null);
     if(!this.el){ this.screen=el('div',{class:'phbody'});
       const clock=el('b',{class:'phclock'}); const tick=()=>{ clock.textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}); }; tick(); this.clockT=setInterval(tick,15000);
       this.el=el('div',{class:'phone',role:'dialog','aria-label':'Your phone',onclick:e=>{ if(e.target===this.el) this.hide(); }},
         el('div',{class:'phframe'}, el('div',{class:'phstatus'}, clock, el('span',{class:'phnotch'}), el('span',{class:'phsig'}, el('span',{text:'📶 🔋'}), el('button',{class:'phx','aria-label':'Close the phone',title:'Close the phone',text:'✕',onclick:()=>this.hide()}))), this.screen,
-          el('button',{class:'phhome','aria-label':'Put the phone away',title:'Put the phone away',onclick:()=>this.hide()})));
+          el('button',{class:'phhome','aria-label':'Home: your apps',title:'Home: your apps',onclick:()=>this.app?this.home():this.hide()})));
       document.body.append(this.el); }
-    this.on=true; this.el.hidden=false; this.banner&&this.banner.remove(); Chats.renderNow(); if(!Chats.loadedAt||Date.now()-Chats.loadedAt>20000) Chats.load(); this.paintBtn(); },
-  hide(){ this.on=false; if(this.el){ this.el.remove(); this.el=null; clearInterval(this.clockT); } this.screen=null; },
+    this.on=true; this.el.hidden=false; document.body.classList.add('phone-on'); this.banner&&this.banner.remove(); this.paintBtn();
+    if(app) this.open(app); else if(!this.app) this.home(); },
+  // the panel and the card live in the bar at the bottom of the map; an app borrows one of them for a while
+  anchor(){ if(this.aP) return; this.aP=document.createComment('pane'); $('pane').before(this.aP); this.aC=document.createComment('card'); $('card').before(this.aC); },
+  park(){ const P=$('pane'), C=$('card'); if(this.aP&&P.parentElement===this.screen) this.aP.after(P); if(this.aC&&C.parentElement===this.screen) this.aC.after(C); },
+  leave(){ const was=this.app; this.busy=true; this.app=null; try{ if(was==='card') closeCard(); else if(was) openTab(null); } finally{ this.busy=false; } this.park(); },
+  home(){ if(!this.screen) return; this.leave(); this.from=null; const n=Chats.unread||0;
+    const grid=el('div',{class:'phapps'}); for(const [id,name,bg] of this.APPS){ if(id==='chats'&&!(Me&&Me.token)) continue; const ic=el('i',{style:`background:${bg}`}); ic.innerHTML=ICONS[id]||''; if(id==='chats'&&n) ic.append(el('b',{class:'phbadge',text:n>9?'9+':String(n)}));
+      grid.append(el('button',{class:'phapp','aria-label':name,onclick:()=>this.open(id)}, ic, el('span',{text:name}))); }
+    const hi=Me&&Me.handle?`Hi, @${Me.handle}`:'Hi there';
+    this.screen.replaceChildren(el('div',{class:'phhomescr'}, el('div',{class:'phhello'}, el('b',{text:hi}), el('span',{text:new Date().toLocaleDateString([],{weekday:'long',day:'numeric',month:'long'})})), grid)); },
+  open(app){ if(!this.on){ this.show(app); return; } this.leave(); this.anchor(); this.screen.replaceChildren(); this.busy=true;
+    try{ if(app==='me'||app==='card'){ this.app='card'; this.from=null; this.screen.append($('card')); const h=myHandle(); if(h) openCitizen(h,{stay:true}); else { this.home(); findMe(); } }
+      else { this.app=app; this.screen.append($('pane')); openTab(app); } } finally{ this.busy=false; } },
+  // someone's card opened from inside an app (a colonist in the list, a name in a chat…): it shows on the phone, and
+  // closing it takes you back to where you were
+  toCard(){ if(!this.on||this.busy||this.app==='card') return; const from=this.app; this.busy=true; try{ if(from&&activeTab) openTab(null); } finally{ this.busy=false; } this.park(); this.anchor();
+    this.app='card'; this.from=from; this.screen.replaceChildren($('card')); },
+  closed(what){ if(!this.on||this.busy) return; queueMicrotask(()=>{ if(!this.on||this.busy) return; if(what==='card'&&this.app==='card'){ const f=this.from; this.from=null; f?this.open(f):this.home(); } else if(what==='pane'&&this.app&&this.app!=='card'&&!activeTab) this.home(); }); },
+  hide(){ if(this.on) this.leave(); this.on=false; this.from=null; document.body.classList.remove('phone-on'); if(this.el){ this.el.remove(); this.el=null; clearInterval(this.clockT); } this.screen=null; },
   // the 📱 button in a place (with how many messages are waiting)
-  btn(){ this.pbtn=el('button',{class:'btn sm hphonebtn',title:'Your phone: your chats and calls',onclick:()=>this.show()}); this.paintBtn(); return this.pbtn; },
+  btn(){ this.pbtn=el('button',{class:'btn sm hphonebtn',title:'Your phone: Town Square, your card, colonists, races and chats',onclick:()=>this.show()}); this.paintBtn(); return this.pbtn; },
   paintBtn(){ const b=this.pbtn; if(!b) return; const n=Chats.unread||0; b.replaceChildren('📱 Phone', n?el('i',{class:'phbadge',text:n>9?'9+':String(n)}):''); },
   // a message came in while you're inside: the phone buzzes and shows it at the top
-  buzz(from,text,open){ this.paintBtn(); if(this.on) return; try{ navigator.vibrate&&navigator.vibrate([90,60,90]); }catch(e){} this.beep(false);
+  buzz(from,text,open){ this.paintBtn(); if(this.on&&this.app==='chats') return; if(this.on&&!this.app) this.home(); /* (the badge on Chats) */ try{ navigator.vibrate&&navigator.vibrate([90,60,90]); }catch(e){} this.beep(false);
     this.banner&&this.banner.remove(); const b=el('button',{class:'phbanner',onclick:()=>{ b.remove(); open(); }}, el('span',{class:'phbic',text:'💬'}), el('span',{class:'phbt'}, el('b',{text:from}), el('span',{text:text})), el('small',{text:'now'}));
     this.banner=b; document.body.append(b); setTimeout(()=>{ if(this.banner===b){ b.classList.add('out'); setTimeout(()=>b.remove(),400); } },6000); },
   // a short tone (a message), or the ring of a call (repeating until it stops)
@@ -7028,7 +7059,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     const st=citizenAt(c,gmNow()); if(st&&st.bid&&String(st.where||'').toLowerCase().includes('jail')){ toast('You can’t drive while you’re in jail.'); return; }
     const here=st||{ x:bOf(c.home).x+1, y:bOf(c.home).y+1 }, s=at&&at.x!=null?{x:at.x,y:at.y,a:at.a||0}:this.startAt(here.x,here.y), car=this.ride(c); /* at: back in the car where you parked it */
     this.send({type:'ride',a:'leave'}); /* (in case the server still has you in someone's car) */
-    this.camWas={x:cam.x,y:cam.y,z:cam.z}; DriveMap.reset(); this.foot=walk; this.parked=false; let look=null; try{ [look]=await Looks.want([Me.handle]); }catch(e){}
+    Phone.hide(); this.camWas={x:cam.x,y:cam.y,z:cam.z}; DriveMap.reset(); this.foot=walk; this.parked=false; let look=null; try{ [look]=await Looks.want([Me.handle]); }catch(e){}
     closeCard(); openTab(null);
     const stage=el('div',{class:'drivestage'}), title=el('b',{text:walk?'🚶 Out on foot':`🚗 Driving ${car.own?'your '+car.name.toLowerCase():car.name}`}), sub=el('span',{class:'dsub',text:walk?'Stick to walk, drag the screen to look round':'Steer with the stick'}); this.title=title;
     this.modeBtn=el('button',{class:'btn dgo dmode',onclick:()=>this.switchMode()}); /* get out and walk, or get (back) in the car */
@@ -7689,7 +7720,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
       else if(casino&&casino.open&&casino.id===b.id) card.append(casinoPanel({id:b.id}));
       else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🎰 Play here',onclick:()=>{ casino={ ...(casino||{ game:'coin', pick:'heads', bet:10, last:null }), id:b.id, open:true, info:null, at:0 }; casino.greet=true; loadCasino({id:b.id}); casino.open=true; renderCard(true); }}))); }
   }
-  const fresh=card.hidden; card.hidden=false; syncMyCardBtn();
+  const fresh=card.hidden; card.hidden=false; syncMyCardBtn(); try{ if(Phone.on&&Phone.app!=='card') Phone.toCard(); }catch(e){} /* on the phone: the card shows there */
   // On a phone the card takes the place of an open panel (Town Square, Colonists…), rather than being pushed up above it.
   if(fresh && innerWidth<900 && activeTab && PLAYER_TABS.has(activeTab)){ activeTab=null; document.body.classList.remove('pane-max'); buildToolbar(); renderPane(); }
 }

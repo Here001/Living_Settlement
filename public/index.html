@@ -130,7 +130,7 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .news .kick{font-size:12px;color:var(--muted);font-family:'Bricolage Grotesque',system-ui,sans-serif}
 .news .head{font-size:16px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psheet{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 150px);transform:translateX(-50%);z-index:30;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 32px);padding:10px 12px;border-radius:18px;background:#FBF8F1;border:2px solid #2B2621;box-shadow:0 3px 0 #2B2621,0 8px 22px rgba(0,0,0,.25);animation:netin .2s ease-out}.psheet>b{width:100%;text-align:center;font-size:14px}.psheet .x{position:absolute;top:4px;right:6px}.sidecol .vspk.off,.sidecol .vmic.off{background:#F4D6D6!important}
-.netbar{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);transform:translateX(-50%);z-index:60;display:flex;gap:9px;align-items:center;width:max-content;max-width:calc(100vw - 32px);padding:6px 14px 6px 10px;border-radius:16px;background:#2B2621;color:#FBF8F1;box-shadow:0 6px 20px rgba(0,0,0,.3);pointer-events:none;animation:netin .25s ease-out}.netbar[hidden]{display:none}.netbar b{font-size:20px}.netbar span{display:flex;flex-direction:column;line-height:1.25}.netbar strong{font-size:14px}.netbar small{font-size:12px;opacity:.85}.netbar[data-k=none],.netbar[data-k=down]{background:#B03A2E}.netbar[data-k=slow]{background:#8A6D1E}.netbar[data-k=ok]{background:#1E8449}@keyframes netin{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+.netbar{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);transform:translateX(-50%);z-index:9800;display:flex;gap:9px;align-items:center;width:max-content;max-width:calc(100vw - 32px);padding:6px 14px 6px 10px;border-radius:16px;background:#2B2621;color:#FBF8F1;box-shadow:0 6px 20px rgba(0,0,0,.3);pointer-events:none;animation:netin .25s ease-out}.netbar[hidden]{display:none}.netbar b{font-size:20px}.netbar span{display:flex;flex-direction:column;line-height:1.25}.netbar strong{font-size:14px}.netbar small{font-size:12px;opacity:.85}.netbar[data-k=none],.netbar[data-k=down]{background:#B03A2E}.netbar[data-k=slow]{background:#8A6D1E}.netbar[data-k=ok]{background:#1E8449}@keyframes netin{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
 .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 168px);transform:translateX(-50%);z-index:9;background:#2B2621;color:#FBF8F1;padding:8px 8px 8px 14px;border-radius:999px;box-shadow:var(--shadow);display:flex;gap:10px;align-items:center;font-size:14px;max-width:calc(100% - 24px)}
 .toast[hidden]{display:none}
 .toast button{border:0;background:var(--accent);color:#fff;border-radius:999px;padding:3px 10px;font-weight:600}
@@ -1053,7 +1053,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .roomview{--paper:#F6F1E6;--panel:#FBF8F1;--ink:#2B2621;--muted:#6E655A;--line:#2B2621;--soft:#E3DACA;--chip:#EFE7D8;--sel:#F3DCCB;color:var(--ink);color-scheme:light}
 .roomview .roomstage{flex:1;position:relative;min-height:0;background:#BFE3F7}
 .roomtools .tip{display:inline-flex;align-items:center;gap:6px}.tipx{border:0;background:rgba(0,0,0,.08);color:#2B2621;width:24px;height:24px;flex:0 0 24px;border-radius:50%;font-size:12px;font-weight:800;line-height:1;cursor:pointer;padding:0}
-.enter{position:fixed;inset:0;z-index:3500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;background:radial-gradient(ellipse at 50% 42%,#5A4532 0%,#2A211A 58%,#16110D 100%);color:#F6EBDD;text-align:center;transition:opacity .6s ease .25s}
+.enter{position:fixed;inset:0;z-index:9700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;background:radial-gradient(ellipse at 50% 42%,#5A4532 0%,#2A211A 58%,#16110D 100%);color:#F6EBDD;text-align:center;transition:opacity .6s ease .25s}
 .enscene{position:relative;width:170px;height:250px;margin-bottom:14px;perspective:700px;transition:transform .85s cubic-bezier(.55,0,.75,.2)}
 .englow{position:absolute;left:50%;bottom:-34px;width:300px;height:90px;transform:translateX(-50%);background:radial-gradient(ellipse at 50% 30%,rgba(255,196,110,.55),rgba(255,196,110,0) 70%);animation:englow 2.4s ease-in-out infinite alternate;will-change:opacity}
 .enframe{position:absolute;inset:0;border:11px solid #E9DCC6;border-bottom:none;border-radius:8px 8px 0 0;box-shadow:0 0 0 3px #B9A88C,0 18px 50px rgba(0,0,0,.45);overflow:visible;transform-style:preserve-3d}
@@ -1067,6 +1067,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .entitle{margin:6px 0 0;font-size:20px;font-weight:800;letter-spacing:.01em}.enstep{margin:0;min-height:20px;font-size:15px;color:#F3D9B4}
 .enbar{width:min(240px,70vw);height:6px;border-radius:999px;background:rgba(255,255,255,.14);overflow:hidden}.enfill{display:block;height:100%;width:100%;transform:scaleX(0);transform-origin:0 50%;background:linear-gradient(90deg,#F2C94C,#E4572E);border-radius:inherit;transition:transform .45s ease}
 .entip{margin:10px 0 0;font-size:12.5px;color:rgba(246,235,221,.6);max-width:280px}
+.bootload{z-index:9750;background:radial-gradient(ellipse at 50% 38%,#2F4A3A 0%,#17241C 60%,#0C130F 100%)}.blogo{display:flex;flex-direction:column;align-items:center;gap:4px;margin-bottom:6px}.blogo b{font-size:30px;letter-spacing:.18em;font-weight:900;color:#F2C94C;text-shadow:0 2px 0 #7A4A12,0 6px 24px rgba(242,201,76,.35)}.blogo small{font-size:14px;opacity:.85}.bspin{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.18);border-top-color:#F2C94C;animation:bspin .9s linear infinite;margin:6px 0}@keyframes bspin{to{transform:rotate(360deg)}}.bootload .entitle:empty{display:none}.bootload.open .bspin,.bootload.open .blogo{opacity:0;transition:opacity .25s}@media (prefers-reduced-motion:reduce){.bspin{animation-duration:3s}}
 .enter.open{opacity:0;pointer-events:none}.enter.open .enscene{transform:scale(4.2) translateY(6%)}.enter.open .endoor{animation:none;transform:rotateY(-108deg);transition:transform .6s ease-in}
 .enter.open .entitle,.enter.open .enstep,.enter.open .enbar,.enter.open .entip{opacity:0;transition:opacity .25s}
 @media (prefers-reduced-motion:reduce){.endoor,.englow,.enlight{animation:none}.enscene,.enter .endoor{transition:none}}
@@ -1235,6 +1236,14 @@ body.room-on .toast,body.room-on .rsheet-bg.rreport{z-index:9700}
 </style>
 </head>
 <body>
+<script>
+/* Joining: a returning player (signed in, character made) opening the game itself sees a loading screen at once, and keeps
+   seeing it while the game connects and builds their home (or the street they're on) behind it; it goes once that's ready. */
+(function(){ try{ var me=JSON.parse(localStorage.getItem('settlement-player')||'null'); if(!me||!me.token||!me.lookSet||location.search.length>1) return;
+  var d=document.createElement('div'); d.id='bootload'; d.className='enter bootload'; d.setAttribute('role','status'); d.setAttribute('aria-live','polite');
+  d.innerHTML='<div class="blogo"><b>RESURGENCE</b><small>Welcome back'+(me.handle?', @'+String(me.handle).replace(/[<>&"]/g,''):'')+'</small></div><div class="bspin" aria-hidden="true"></div><h3 class="entitle"></h3><p class="enstep">Connecting to the colony…</p><div class="enbar"><i class="enfill" style="transform:scaleX(.06)"></i></div><p class="entip">Getting everything ready, so it\u2019s all there when you arrive.</p>';
+  document.body.appendChild(d); window.__bootAt=Date.now(); }catch(e){} })();
+</script>
 <canvas id="world" aria-label="Map of the colony on Gliese 12 b"></canvas>
 <header class="hud">
   <div class="plate inked"><div class="town" id="townName">Waking the colony…</div><div class="sub" id="popLine"></div></div>
@@ -1479,11 +1488,11 @@ function connect(){
   if(ws){ ws.onclose=ws.onmessage=ws.onerror=null; try{ ws.close(); }catch(e){} }
   try{ ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`); }catch(e){ reconnectSoon(); return; }
   lastMsgAt=Date.now(); connectAt=Date.now(); const me=ws;
-  ws.onopen=()=>{ Store.online=true; subKey=''; retryN=0; wsAuth(); if(typeof Room!=='undefined') Room.rejoin(); };
+  ws.onopen=()=>{ Boot.step('Loading the colony…',0.12); Store.online=true; subKey=''; retryN=0; wsAuth(); if(typeof Room!=='undefined') Room.rejoin(); };
   ws.onerror=()=>{ try{ me.close(); }catch(e){} };
   ws.onmessage=e=>{ lastMsgAt=Date.now(); let m; try{ m=JSON.parse(e.data); }catch(err){ return; }
     if(m.type==='hello'){ S.meta=m.meta; skew=m.serverNow-Date.now();
-      if(!Store.ready){ Store.ready=true; loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); Chats.load(); Daily.load(); Notices.load(); PushUI.auto(); CEvent.load(); Mayor.load(); buildToolbar(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); catchUp(); } }
+      if(!Store.ready){ Store.ready=true; Boot.step('Loading the town…',0.17); loadMeta().catch(()=>{}).then(()=>{ afterLoad(); syncChunks(); loadRace(); loadLottery(); Chats.load(); Daily.load(); Notices.load(); PushUI.auto(); CEvent.load(); Mayor.load(); buildToolbar(); }); } else { $('setup').hidden=!!S.meta||!Store.canWrite; reloadAll(); refreshUI(); catchUp(); } }
     else if(m.type==='ops'){ opBatch++; try{ for(const o of m.ops){ try{ applyOp(o); }catch(err){ console.error('Skipped an update:', err); } } } finally { opBatch--; } if(!opBatch&&batchChanged){ batchChanged=false; changed(); } }
     else if(m.type==='resync') reloadAll();
     else if(m.type==='arena') arenaMsg(m);
@@ -7143,7 +7152,7 @@ const World={ btn:null, last:null, booted:false,
   // the game opens where your colonist is in the colony right now (as the map has them): at home (asleep in bed, at
   // night), just outside their work (there's no 3D inside for most workplaces), outside wherever else they've gone, or
   // out on the street walking or driving where they are
-  boot(){ if(this.booted||DEEP||STREAM||!(Me&&Me.token&&Me.lookSet)||!S.meta||Room.el||Drive.el||document.querySelector('.cre')) return; this.booted=true; this.enter(); },
+  boot(){ if(this.booted||DEEP||STREAM||!(Me&&Me.token&&Me.lookSet)||!S.meta||Room.el||Drive.el||document.querySelector('.cre')){ if(!this.booted) Boot.drop(); return; } this.booted=true; Boot.step('Finding your colonist…',0.22); this.enter(); }, /* (not going into 3D: the loading screen goes) */
   async load(x,y){ const q=iso(x+0.5,y+0.5); cam.x=q.x; cam.y=q.y; follow=null; syncChunks(); for(let i=0;i<30&&!S.chunks.has(ckTile(Math.floor(x),Math.floor(y)));i++) await new Promise(r=>setTimeout(r,120)); },
   async enter(){ let c=myCitizen(); if(!c&&Me.handle){ try{ const d=await loadDetail(Me.handle); if(d){ c=normC(d); S.citizens.set(c.id,c); } }catch(e){} }
     if(!c||!c.home) return this.home(); const hb=bOf(c.home); if(hb) await this.load(hb.x,hb.y); /* the map round home, for working out the day */
@@ -7422,14 +7431,22 @@ const Visit={
 // Shown the instant you tap. Its door, light and progress bar move on the graphics chip (transform and opacity only),
 // so they keep moving even while the phone is busy building the room; the steps say what's happening. When the room's
 // first picture is on screen, the door swings wide and you step through.
+// The joining loading screen (made in the page's first lines): its steps while the game connects, and going away
+// if the game isn't taking you into 3D after all (a link, no character yet, signed out)
+const Boot={ at:0.06,
+  get el(){ const e=document.getElementById('bootload'); return e&&!e.classList.contains('open')?e:null; },
+  step(text,frac){ const e=this.el; if(!e||Entrance.el===e) { if(Entrance.el===e) Entrance.step(text,frac); return; } const s=e.querySelector('.enstep'), f=e.querySelector('.enfill'); if(text&&s) s.textContent=text; if(frac!=null&&f){ this.at=Math.max(this.at,frac); f.style.transform=`scaleX(${this.at})`; } },
+  drop(){ const e=this.el; if(!e||Entrance.el===e) return; e.classList.add('open'); setTimeout(()=>e.remove(),900); } };
+setTimeout(()=>{ if(!Entrance.el) Boot.drop(); },30000); /* (never stuck on it) */
 const Entrance={ el:null,
-  show(title){ if(this.el){ if(title) this.title(title); return this; } const fill=el('i',{class:'enfill'}), step=el('p',{class:'enstep',text:'Walking up to the door…'}), name=el('h3',{class:'entitle',text:title||'Going inside'});
+  show(title){ if(this.el){ if(title) this.title(title); return this; }
+    { const B=document.getElementById('bootload'); if(B&&!B.classList.contains('open')){ this.el=B; this.fill=B.querySelector('.enfill'); this.stepEl=B.querySelector('.enstep'); this.nameEl=B.querySelector('.entitle'); this.at=Boot.at; if(title) this.title(title); clearTimeout(this.safety); this.safety=setTimeout(()=>this.done(),25000); return this; } } /* (joining: the loading screen carries on, with where you're going) */ const fill=el('i',{class:'enfill'}), step=el('p',{class:'enstep',text:'Walking up to the door…'}), name=el('h3',{class:'entitle',text:title||'Going inside'});
     this.el=el('div',{class:'enter',role:'status','aria-live':'polite'}, el('div',{class:'enscene'}, el('div',{class:'englow'}), el('div',{class:'enframe'}, el('div',{class:'enlight'}), el('div',{class:'endoor'}, el('b',{class:'enknob'}))), el('div',{class:'enmat'})),
       name, step, el('div',{class:'enbar'}, fill), el('p',{class:'entip',text:PHONE_UI?'Tip: the joystick walks you round; drag anywhere to look.':'Tip: W A S D or the arrow keys walk you round; drag to look.'}));
     this.fill=fill; this.stepEl=step; this.nameEl=name; this.at=0; document.body.append(this.el); this.safety=setTimeout(()=>this.done(),20000); return this; },
   title(t){ if(this.nameEl) this.nameEl.textContent=t; },
   step(text,frac){ if(!this.el) return; if(text&&this.stepEl.textContent!==text) this.stepEl.textContent=text; if(frac!=null){ this.at=Math.max(this.at,Math.min(1,frac)); this.fill.style.transform=`scaleX(${this.at})`; } },
-  done(){ const e=this.el; if(!e) return; this.el=null; clearTimeout(this.safety); this.fill.style.transform='scaleX(1)'; this.stepEl.textContent='Come on in!'; e.classList.add('open'); setTimeout(()=>e.remove(),900); },
+  done(){ const e=this.el; if(!e) return; this.el=null; clearTimeout(this.safety); this.fill.style.transform='scaleX(1)'; this.stepEl.textContent=e.id==='bootload'?'Here you are!':'Come on in!'; e.classList.add('open'); setTimeout(()=>e.remove(),900); },
   cancel(){ const e=this.el; if(!e) return; this.el=null; clearTimeout(this.safety); e.remove(); } };
 // ---- Your own character (public/creator.js): made when you join, changed any time from your profile ----
 const Look={ busy:false,
@@ -8891,7 +8908,7 @@ function openSharedLink(){ const q=new URLSearchParams(location.search), c=q.get
   let n=0; const tryB=()=>{ if(S.buildings.has(b)) selectBuilding(b); else if(++n<20) setTimeout(tryB,500); }; tryB(); }
 function afterLoad(){
   applyPermissions(); refreshUI();
-  if(!S.meta){ if(Store.canWrite) $('setup').hidden=false; else { $('townName').textContent='Not founded yet'; $('popLine').textContent='The colony hasn’t landed yet.'; } }
+  if(!S.meta){ Boot.drop(); if(Store.canWrite) $('setup').hidden=false; else { $('townName').textContent='Not founded yet'; $('popLine').textContent='The colony hasn’t landed yet.'; } }
   else { const [cx,cy]=centerTile(); const p=iso(cx+0.5,cy+0.5); cam.x=p.x; cam.y=p.y; updateNews(); openSharedLink(); World.mount(); World.boot(); }
 }
 $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();

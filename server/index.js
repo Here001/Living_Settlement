@@ -280,6 +280,7 @@ app.post('/api/admin/citizens/:id/coins', admin, send(req => economy.adjust(req.
 app.patch('/api/admin/buildings/:id', admin, send(req => world.move(req.params.id, (req.body || {}).x, (req.body || {}).y, (req.body || {}).rot)));
 app.delete('/api/admin/buildings/:id', admin, send(req => world.demolish(req.params.id, { refund: req.query.refund === '1' })));
 app.post('/api/admin/roads', admin, send(req => world.paintRoads(req.body || {})));
+app.get('/api/admin/voice/check', admin, send(() => world.voice.diagnose())); // the developer: are the voice keys working?
 app.post('/api/admin/citizens', admin, send(req => world.spawn((req.body || {}).handle, 'manual', (req.body || {}).gender)));
 app.post('/api/admin/citizens/remove', admin, send(req => world.removeMany(req.body || {})));
 app.post('/api/admin/reset', admin, send(async req => {

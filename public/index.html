@@ -633,6 +633,7 @@ body.clean #djBubble{display:none}
 .drivectl .spchips{flex-wrap:wrap}
 .dkeys{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;font-size:14px}
 body.drive-on .rsheet-bg{z-index:9750}
+body.room-on .toast{z-index:9850} /* above the phone and the call screen, so a reason is never hidden behind them */
 /* ---------- Landscape on a phone (a short, wide screen): cards and panels down the right-hand side at full height, the map
    left in view, and everything kept clear of the notch and the rounded corners on the sides ---------- */
 @media (orientation:landscape) and (max-height:540px){
@@ -754,7 +755,10 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
    them, and if the chips still don't fit (a weather chip as well, say) they wrap onto a second line rather than scroll out of view */
 @media (max-width:480px){
   .hud .chips{flex-wrap:wrap;overflow:visible;row-gap:5px}
-  .chip.radio-chip{min-width:0;padding:3px}.chip.radio-chip .lbl{display:none!important}
+  .chip.radio-chip{min-width:0;padding:3px 9px 2px;border-radius:16px}
+  .chip.radio-chip button{flex-direction:column;gap:1px;align-items:center}
+  .chip.radio-chip .mi{width:20px;height:20px;font-size:11px}
+  .chip.radio-chip .lbl{display:block!important;font-size:9.5px;font-weight:800;line-height:1;letter-spacing:.01em;white-space:nowrap;color:var(--ink)} /* the station's name, small, under the icon */
   #coinChip{display:grid;grid-template-columns:auto auto;column-gap:5px;row-gap:0;align-items:center;line-height:1.05;padding:3px 9px 3px 5px}#coinChip .coin{grid-row:span 2}#coinChip small{font-size:10px}
 }
 .cevent{top:calc(env(safe-area-inset-top,0px) + 52px)} body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 92px)}
@@ -4216,7 +4220,7 @@ function renderPane(){
       const gseg=el('div',{class:'seg',role:'radiogroup','aria-label':'Gender for new people'}); for(const [g,nm] of [['','Random'],['m','Man'],['f','Woman']]) gseg.append(el('button',{'aria-pressed':String(addGender===g),onclick:()=>{ addGender=g; renderPane(); }, text:nm}));
       body.append(el('h3',{text:'Add a person'}), gseg, el('div',{class:'spawn'}, inp, el('button',{class:'btn primary',text:'Add',onclick:spawnFromInput})),
         el('h3',{text:'Add many at once'}), bulk, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'Add everyone',onclick:bulkAdd})),
-        el('p',{class:'hint',text:'Comments saying SPAWN on your Instagram posts add people automatically. Followers can write "spawn male" or "spawn female" to choose; otherwise it\'s a coin flip.'}), igPanel(), dangerPanel()); }
+        el('p',{class:'hint',text:'Comments saying SPAWN on your Instagram posts add people automatically. Followers can write "spawn male" or "spawn female" to choose; otherwise it\'s a coin flip.'}), igPanel(), voicePanel(), dangerPanel()); }
     p.append(body); renderPeople(); return; }
   const cards=el('div',{class:'cards'});
   const subs=SUBS[activeTab]; let subNow=subs&&(subTab[activeTab]||subs[0][0]);
@@ -5014,6 +5018,7 @@ var Chats={ list:[], groups:[], invites:[], online:[], unread:0, with:null, gid:
     const url=this.gid?'/api/chat/groups/'+encodeURIComponent(this.gid):'/api/dm/'+encodeURIComponent(this.with);
     try{ const r=await api(url,{method:'POST',body:{text,replyTo:this.reply?this.reply.id:undefined}}); this.draft=''; if(ta){ ta.value=''; ta.focus(); }
       if(this.reply){ this.reply=null; $('dmReply')?.remove(); }
+      if(r&&r.id&&this.thread&&!this.thread.messages.some(x=>x.id===r.id)){ const m={id:r.id,mine:true,text,t:r.t||Date.now(),reply:null}; this.thread.messages.push(m); this.addBubble(m); } /* show it at once: don't wait for the live connection to echo it back */
       if(r.fee){ if(myMoney) { myMoney={...myMoney,coins:Math.max(0,(myMoney.coins||0)-r.fee)}; refreshHUD(); } } }catch(e){ toast(e.message); } this.busy=false; },
   addBubble(m){ const body=$('dmBody'); if(!body) return; body.querySelector('.dmempty')?.remove(); const near=body.scrollHeight-body.scrollTop-body.clientHeight<60; body.append(this.bubble(m)); if(near||m.mine) body.scrollTop=body.scrollHeight; },
   replyTo(m){ this.reply={id:m.id,text:m.text,from:m.mine?Me.handle:(m.from?m.from.h:this.with)}; const bar=$('dmBar'); $('dmReply')?.remove();
@@ -6714,20 +6719,20 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
     this.serial(()=>this.sync()); this.timer=setInterval(()=>this.levels(),150); },
   leave(){ const R=this.R; clearInterval(this.timer); this.timer=null;
     if(this.mic){ for(const t of this.mic.getTracks()) t.stop(); this.mic=null; } if(this.pc){ try{ this.pc.close(); }catch(e){} this.pc=null; }
-    for(const e of this.els.values()){ try{ e.a.srcObject=null; }catch(x){} } this.els.clear(); this.byMid.clear(); this.meters.clear();
+    for(const e of this.els.values()){ try{ e.a.srcObject=null; e.a.remove(); }catch(x){} } this.els.clear(); this.byMid.clear(); this.meters.clear();
     if(R&&R.h) for(const id of this.lit.keys()) R.h.talking(id,false); this.lit.clear();
     if(R&&this.sid) api('/api/voice/leave',{method:'POST',body:{place:R.spot}}).catch(()=>{});
     this.sid=null; this.live=false; this.R=null; this.vp&&this.vp.remove(); this.vp=null; },
-  serial(fn){ return this.q=this.q.then(fn).catch(e=>console.warn('voice:',e&&e.message||e)); },
+  serial(fn){ return this.q=this.q.then(fn).catch(e=>{ console.warn('voice:',e&&e.message||e); if(Date.now()-(Voice.toldAt||0)>20000){ Voice.toldAt=Date.now(); toast(`🎙️ Voice: ${(e&&e.message)||'it didn’t connect'}`); } }); },
   // everyone talking here that I may hear: start hearing the new ones, stop hearing anyone I no longer may
   async sync(){ if(!this.pc||!this.R) return; const r=await api('/api/voice/list',{method:'POST',body:{place:this.R.spot}}), ok=new Set(r.speakers.map(s=>s.id));
     for(const [mid,v] of [...this.byMid]) if(!ok.has(v.id)) this.dropMid(mid);
     const have=new Set([...this.byMid.values()].map(v=>v.id)), ids=r.speakers.map(s=>s.id).filter(id=>!have.has(id)); if(!ids.length) return;
     const p=await api('/api/voice/pull',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,ids}}); for(const t of p.tracks) this.byMid.set(t.mid,{id:t.id,h:t.h});
     if(p.offer){ await this.pc.setRemoteDescription(p.offer); await this.pc.setLocalDescription(await this.pc.createAnswer()); await api('/api/voice/answer',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,answer:{type:'answer',sdp:this.pc.localDescription.sdp}}}); } },
-  track(e){ const mid=e.transceiver&&e.transceiver.mid, v=this.byMid.get(mid); if(!v) return; const st=new MediaStream([e.track]), a=new Audio(); a.autoplay=true; a.playsInline=true; a.srcObject=st; a.muted=this.muted.has(v.h.toLowerCase()); a.play().catch(()=>{ const go=()=>{ removeEventListener('pointerdown',go,true); a.play().catch(()=>{}); }; addEventListener('pointerdown',go,true); });
+  track(e){ const mid=e.transceiver&&e.transceiver.mid, v=this.byMid.get(mid); if(!v) return; const st=new MediaStream([e.track]), a=document.createElement('audio'); a.autoplay=true; a.playsInline=true; a.setAttribute('playsinline',''); a.style.display='none'; document.body.append(a); /* on the page: iPhones won't play it otherwise */ a.srcObject=st; a.muted=this.muted.has(v.h.toLowerCase()); a.play().catch(()=>{ const go=()=>{ removeEventListener('pointerdown',go,true); a.play().catch(()=>{}); }; addEventListener('pointerdown',go,true); });
     this.els.set(mid,{a,...v}); this.meter(mid,st); },
-  dropMid(mid){ const e=this.els.get(mid); if(e){ try{ e.a.srcObject=null; }catch(x){} this.els.delete(mid); this.light(e.id,false); } this.byMid.delete(mid); this.meters.delete(mid); },
+  dropMid(mid){ const e=this.els.get(mid); if(e){ try{ e.a.srcObject=null; e.a.remove(); }catch(x){} this.els.delete(mid); this.light(e.id,false); } this.byMid.delete(mid); this.meters.delete(mid); },
   msg(v){ if(!this.pc||!v) return; if(v.kind==='on'||v.kind==='audience') this.serial(()=>this.sync()); else if(v.kind==='off'){ for(const [mid,e] of [...this.byMid]) if(e.id===v.id) this.dropMid(mid); } },
   // the mic: the first tap asks the phone for it and goes live; after that it mutes and unmutes
   async talk(){ if(!this.pc) return; if(this.mic){ this.live=!this.live; for(const t of this.mic.getAudioTracks()) t.enabled=this.live; this.paint(); return; }
@@ -7586,6 +7591,10 @@ function renderPeople(){
 let addGender='';
 async function setGender(c,g){ try{ await api('/api/admin/citizens/'+c.id,{method:'PATCH',body:{gender:g}}); const x=S.citizens.get(c.id); if(x) x.gender=g; const d=detail.get(c.id); if(d) d.g=g; renderCard(); }catch(e){ toast(e.message); } }
 // Developer: the Instagram connection, its webhook details to paste into Meta, and whether comments are arriving.
+// Developer: are the voice keys (voice chat inside places, and phone calls) working with Cloudflare?
+function voicePanel(){ const out=el('p',{class:'hint',text:'Checks the voice keys on the server with Cloudflare.'});
+  return el('div',{class:'igbox'}, el('h3',{text:'🎙️ Voice chat and calls'}), out, el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Check voice service',onclick:async()=>{ out.textContent='Checking…';
+    try{ const r=await api('/api/admin/voice/check'); out.textContent=`${r.ok?'✅':'❌'} ${r.why}${r.last?` (Cloudflare said ${r.last.status}${r.last.code?' '+r.last.code:''}${r.last.why?': '+r.last.why:''})`:''} · App ID ${r.appId}`; }catch(e){ out.textContent='❌ '+e.message; } }}))); }
 function igPanel(){ const box=el('div',{class:'igbox'}, el('h3',{text:'Instagram connection'}), el('p',{class:'hint',text:'Checking…'}));
   const ago=t=>{ if(!t) return 'never'; const m=Math.round((Date.now()-t)/60000); return m<1?'just now':m<60?`${m} min ago`:m<1440?`${Math.round(m/60)} h ago`:`${Math.round(m/1440)} days ago`; };
   const copyRow=(label,val)=>el('div',{class:'igrow'}, el('span',{class:'k',text:label}), el('code',{text:val||'not set'}), val?el('button',{class:'btn',text:'Copy',onclick:()=>{ try{ navigator.clipboard.writeText(val); toast(`${label} copied`); }catch(e){ prompt(label,val); } }}):'');
@@ -7743,6 +7752,8 @@ const PushUI={ st:null, at:0, busy:false, sw:null,
       const meC=Me&&Me.handle&&[...S.citizens.values()].find(x=>x.handle.toLowerCase()===Me.handle.toLowerCase());
       box.append(el('h3',{text:'⚙️ Settings'})); if(meC) box.append(el('h4',{class:'bgroup',text:'🏷️ Your name'}), nameEditor(meC,'me'), el('p',{class:'hint',text:'Shown above your avatar and on your card. Leave it empty to show just your @username.'}));
       box.append(DriveCtl.section());
+      if(Store.canWrite){ const out=el('p',{class:'hint',text:'Checks the voice keys on the server with Cloudflare (voice chat and phone calls).'}); /* the developer: is voice set up? */
+        box.append(el('h4',{class:'bgroup',text:'🎙️ Voice service'}), out, el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Check voice service',onclick:async()=>{ out.textContent='Checking…'; try{ const r=await api('/api/admin/voice/check'); out.textContent=`${r.ok?'✅':'❌'} ${r.why}${r.last?` (Cloudflare said ${r.last.status}${r.last.code?' '+r.last.code:''}${r.last.why?': '+r.last.why:''})`:''} · App ID ${r.appId}`; }catch(e){ out.textContent='❌ '+e.message; } }}))); }
       box.append(el('h4',{class:'bgroup',text:'🔔 Phone notifications'}), el('p',{class:'hint',text:on?'On for this device. You’ll hear about what happens in the colony even when the game is closed.':'Hear about what happens in the colony even when the game is closed.'}));
       if(this.iosNeedsInstall()) box.append(el('p',{class:'jobnow',text:'On iPhone: tap Share, then “Add to Home Screen”, and open Resurgence from your Home Screen. Then turn notifications on here.'}));
       box.append(el('div',{class:'row-actions'}, on?el('button',{class:'btn',text:'Turn off on this device',onclick:async()=>{ await this.disable(); fill(); }}):el('button',{class:'btn primary',text:'Turn on notifications',onclick:async()=>{ if(await this.enable()) fill(); }})));

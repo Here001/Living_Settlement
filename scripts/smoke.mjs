@@ -2140,7 +2140,7 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   await call('PUT', '/api/admin/property-prices', { pct: 100 }); }
 if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat: a stand-in for Cloudflare Realtime on port 3999 checks who hears whom
   const http = await import('node:http'); let n = 0; const calls = [];
-  const sfu = http.createServer((req, res) => { let body = ''; req.on('data', d => body += d); req.on('end', () => { const j = body ? JSON.parse(body) : {}; calls.push({ m: req.method, u: req.url, j, auth: req.headers.authorization });
+  const sfu = http.createServer((req, res) => { let body = ''; req.on('data', d => body += d); req.on('end', () => { const j = body ? JSON.parse(body) : {}; calls.push({ m: req.method, u: req.url, j, raw: body, auth: req.headers.authorization });
     const out = /sessions\/new$/.test(req.url) ? { sessionId: 'sess' + (++n) } : /tracks\/new$/.test(req.url) ? (j.tracks?.[0]?.location === 'local' ? { sessionDescription: { type: 'answer', sdp: 'v=0 answer' }, tracks: j.tracks }
       : { requiresImmediateRenegotiation: true, sessionDescription: { type: 'offer', sdp: 'v=0 offer' }, tracks: j.tracks.map(t => ({ ...t, mid: String(++n) })) }) : {};
     res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(out)); }); });
@@ -2197,6 +2197,8 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
     const r3 = await call('POST', '/api/phone/call', { to: 'phone_ann' }, PB.P); await call('POST', '/api/phone/hangup', { id: r3.json.call.id }, PB.P); await sleep(400);
     const nt = (await call('GET', '/api/me/notices', undefined, PA.P)).json; ok(JSON.stringify(nt).includes('Missed call from @phone_bob'), 'a call hung up before it’s answered leaves a missed call', JSON.stringify(nt).slice(0, 300));
     for (const x of [a, b, c]) x.w.close(); }
+  { const vc = await call('GET', '/api/admin/voice/check'); ok(vc.status === 200 && vc.json.ok === true && /keys work/.test(vc.json.why), 'the developer can check the voice keys with the voice service', JSON.stringify(vc.json));
+    const nw = calls.filter(c => /sessions\/new$/.test(c.u)).pop(); ok(nw && nw.raw === '', 'a new voice session is asked for without a body (as Cloudflare expects)'); }
   sfu.close(); }
 { // inside, live: everyone in the same place sees the others walk about and can chat; frames turn on the wall; homes differ by type
   const A = await player('live_amy', 50_000), Bq = await player('live_ben', 50_000), place = 'b:live-test-' + Date.now();

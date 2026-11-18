@@ -18,9 +18,10 @@ export class Voice {
   config() { return { on: voiceOn(), ice: [{ urls: 'stun:stun.cloudflare.com:3478' }] }; }
   async cf(method, path, body) {
     if (!voiceOn()) throw new HttpError(503, 'Voice chat isn’t set up on this server yet.');
-    let r; try { r = await fetch(base() + path, { method, headers: { authorization: 'Bearer ' + process.env.CF_REALTIME_APP_TOKEN, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(10000) }); }
+    let r; try { r = await fetch(base() + path, { method, headers: { authorization: 'Bearer ' + process.env.CF_REALTIME_APP_TOKEN, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(10000) }); } /* (a new session: no body at all, as Cloudflare's own examples do) */
     catch (e) { throw new HttpError(502, 'The voice service can’t be reached right now.'); }
-    const j = await r.json().catch(() => ({})); if (!r.ok || j.errorCode) { console.error('voice:', r.status, j.errorCode || '', j.errorDescription || ''); throw new HttpError(502, 'The voice service said no. Try again in a moment.'); }
+    const j = await r.json().catch(() => ({})); if (!r.ok || j.errorCode) { console.error('voice:', method, path.replace(/sessions\/[^/]+/, 'sessions/…'), r.status, j.errorCode || '', j.errorDescription || ''); this.last = { at: Date.now(), status: r.status, code: j.errorCode || null, why: j.errorDescription || null };
+      throw new HttpError(502, r.status === 401 || r.status === 403 ? 'The voice service didn’t accept the app’s key.' : `The voice service said no (${j.errorDescription || r.status}). Try again in a moment.`); }
     return j;
   }
   room(place) { let m = this.places.get(place); if (!m) this.places.set(place, m = new Map()); return m; }
@@ -33,7 +34,12 @@ export class Voice {
   may(sp, me) { return !sp.to || sp.to.has(String(me.handle).toLowerCase()); }
 
   // your connection to the voice service, in this place (hearing comes first: it doesn't need your microphone)
-  async session(me, place) { this.check(me, place); const j = await this.cf('POST', '/sessions/new', {});
+  // for the developer: is the voice service set up and answering? (makes a session and says what Cloudflare said)
+  async diagnose() { const out = { on: voiceOn(), appId: (process.env.CF_REALTIME_APP_ID || '').slice(0, 6) + '…', url: base().replace(/apps\/.*/, 'apps/…') };
+    if (!out.on) return { ...out, ok: false, why: 'CF_REALTIME_APP_ID or CF_REALTIME_APP_TOKEN is missing.' };
+    try { const j = await this.cf('POST', '/sessions/new'); return { ...out, ok: !!j.sessionId, why: j.sessionId ? 'Cloudflare made a voice session: the keys work.' : 'Cloudflare answered without a session.' }; }
+    catch (e) { return { ...out, ok: false, why: e.message, last: this.last || null }; } }
+  async session(me, place) { this.check(me, place); const j = await this.cf('POST', '/sessions/new');
     this.sessions.set(me.id + '|' + place, { sessionId: j.sessionId, pulls: new Map() }); return { sessionId: j.sessionId }; }
   // your microphone goes up as a track; everyone who may hear you is told you're on
   async publish(me, place, b = {}) { this.check(me, place); const s = this.mine(me, place, b.sessionId), offer = desc(b.offer), mid = String(b.mid ?? ''); if (!offer || !mid) throw new HttpError(400, 'Bad voice offer.');

@@ -133,7 +133,8 @@ export function createTown(host, opts) {
 
   // ---- your car ----
   const car = { x: (opts.start.x) * TILE, z: (opts.start.y) * TILE, a: opts.start.a || 0, v: 0, steer: 0 };
-  let foot = opts.mode === 'walk', parked = null, riding = null; /* riding: in someone else's car ({ id, seat }), going where they drive */ /* foot: walking (your character), not driving; parked: your car, where you got out */
+  const PERF = (() => { const P = (CAR_MODELS[opts.car.m] || {}).price || 0, t = P >= 800000 ? 3 : P >= 200000 ? 2 : P >= 50000 ? 1 : 0; return { top: [36, 42, 54, 68][t], acc: [5.5, 6.6, 8.6, 11][t], grip: [7.6, 8.3, 9.6, 11.2][t] }; })(); /* how your car goes: top speed (m/s), pull, grip */
+  let foot = opts.mode === 'walk', parked = null, riding = null, summon = null; /* summon: your car, driving up to you after you called it */ /* riding: in someone else's car ({ id, seat }), going where they drive */ /* foot: walking (your character), not driving; parked: your car, where you got out */
   let feet = null; const mkFeet = () => { if (feet) return feet; feet = W.makePerson('me', null, opts.look || null); feet.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); scene.add(feet.group); return feet; };
   if (foot) mkFeet();
   const me = W.makeCar(opts.car.kind || 'car', opts.car.col || '#c8382e'); scene.add(me); me.traverse(m => { if (m.isMesh) m.castShadow = true; });
@@ -169,14 +170,30 @@ export function createTown(host, opts) {
       /* bumped into something (a bin, a tree, a parked car): slide along it rather than stop dead */
       for (const da of [0.6, -0.6, 1.1, -1.1]) { const b = ma + da, sx = car.x + Math.cos(b) * car.v * dt * 0.8, sz = car.z - Math.sin(b) * car.v * dt * 0.8; if (free(sx, sz)) { car.x = sx; car.z = sz; return; } }
       car.v = 0; return; }
+    // A car that drives like one (a simple bicycle model with tyre grip):
+    //  - the wheels turn smoothly, and less far the faster you go; how fast you turn follows the wheelbase;
+    //  - the tyres hold the road up to their grip: corner too fast and the car understeers or slides, and Space (the
+    //    handbrake) lets the back step out for a drift;
+    //  - the engine pulls hard from a stop and tails off near top speed; brakes bite hard; let go and it coasts;
+    //  - no speed limit on any road (only grass and rough ground slow you); dearer cars pull harder, grip more, go faster.
     const thr = Math.max(-1, Math.min(1, up)), st = Math.max(-1, Math.min(1, turn)), rt = opts.road(tileOf(car.x), tileOf(car.z)), R = rt && ROAD_TYPES[rt];
-    const top = R ? 7 * (R.speed || 2) : 6; /* metres a second: a street 14 (50 km/h), a highway 28; off the road, slower */
-    if (thr > 0.05) car.v += (car.v < 0 ? 14 : 5) * thr * dt; else if (thr < -0.05) car.v += (car.v > 0 ? 14 : 3) * thr * dt; else car.v *= Math.pow(0.45, dt);
-    if (car.v > top) car.v = Math.max(top, car.v - 10 * dt); car.v = Math.max(-5, car.v); if (Math.abs(car.v) < 0.05 && Math.abs(thr) < 0.05) car.v = 0;
-    car.steer += (st - car.steer) * Math.min(1, dt * 7); car.a += car.steer * 1.5 * Math.max(-1, Math.min(1, car.v / 5)) * dt;
-    const fx = Math.cos(car.a), fz = -Math.sin(car.a), nx = car.x + fx * car.v * dt, nz = car.z + fz * car.v * dt, S = solidsNear(nx, nz), dir = Math.sign(car.v || 1);
+    const rough = !rt || (R && R.kind === 'rail'), top = rough ? PERF.top * 0.5 : PERF.top, hb = keys.has(' ') && Math.abs(car.v) > 4;
+    let fx = Math.cos(car.a), fz = -Math.sin(car.a), lx = fz, lz = -fx; /* forward, and across to the side */
+    let vf = (car.vx || 0) * fx + (car.vz || 0) * fz, vl = (car.vx || 0) * lx + (car.vz || 0) * lz;
+    if (thr > 0.05) vf += vf < -0.5 ? 16 * thr * dt : PERF.acc * thr * Math.max(0.12, 1 - (vf / top) ** 2) * dt; /* (pressing on while rolling back brakes first) */
+    else if (thr < -0.05) vf += vf > 0.5 ? 16 * thr * dt : Math.max(-9 - vf, 4.5 * thr * dt);
+    else { const d = (1.1 + (rough ? 2.5 : 0) + 0.0012 * vf * vf) * dt; vf = Math.abs(vf) <= d ? 0 : vf - Math.sign(vf) * d; } /* rolling on, slowing down by itself */
+    if (hb) { const d = 7 * dt; vf = Math.abs(vf) <= d ? 0 : vf - Math.sign(vf) * d; }
+    if (vf > top) vf = Math.max(top, vf - 7 * dt);
+    const maxA = 0.6 / (1 + Math.abs(vf) / 11), want = st * maxA, rate = (st === 0 ? 4.5 : 2.6) * dt; car.wa = (car.wa || 0) + Math.max(-rate, Math.min(rate, want - (car.wa || 0))); car.steer = car.wa / 0.6;
+    let yr = vf / 2.7 * Math.tan(car.wa); const yl = (hb ? PERF.grip * 2.2 : PERF.grip * 1.08) / Math.max(1.5, Math.abs(vf)); yr = Math.max(-yl, Math.min(yl, yr)); /* the tyres can only turn you so hard */
+    car.a += yr * dt; const wx2 = vf * fx + vl * lx, wz2 = vf * fz + vl * lz; fx = Math.cos(car.a); fz = -Math.sin(car.a); lx = fz; lz = -fx; /* the car turns; where it was going lags behind a little */
+    vf = wx2 * fx + wz2 * fz; vl = wx2 * lx + wz2 * lz; const g = (hb ? PERF.grip * 0.3 : PERF.grip * (rough ? 0.7 : 1)) * dt; vl = Math.abs(vl) <= g ? 0 : vl - Math.sign(vl) * g; /* grip pulls it back in line */
+    if (Math.abs(vf) < 0.05 && Math.abs(thr) < 0.05) vf = 0; car.slip = Math.abs(vl);
+    car.vx = vf * fx + vl * lx; car.vz = vf * fz + vl * lz; car.v = vf;
+    const nx = car.x + car.vx * dt, nz = car.z + car.vz * dt, S = solidsNear(nx, nz), dir = Math.sign(car.v || 1);
     const pts = [[2.1 * dir, 0.85], [2.1 * dir, -0.85], [0, 0]]; /* the front corners (the back ones going backwards) and the middle */
-    if (pts.some(([u, w]) => hits(nx + fx * u + fz * w, nz + fz * u - fx * w, S, car.x + fx * u + fz * w, car.z + fz * u - fx * w))) { car.v = -car.v * 0.25; bump = 0.25; return; }
+    if (pts.some(([u, w]) => hits(nx + fx * u + fz * w, nz + fz * u - fx * w, S, car.x + fx * u + fz * w, car.z + fz * u - fx * w))) { car.vx = -car.vx * 0.25; car.vz = -car.vz * 0.25; car.v = -car.v * 0.25; bump = 0.25; return; }
     car.x = nx; car.z = nz; }
   let bump = 0, roll = 0, pitch = 0, accel0 = 0;
 
@@ -408,6 +425,21 @@ export function createTown(host, opts) {
   const SEATS = [[-0.36, -0.15], [0.36, -0.15], [-0.36, 0.85], [0.36, 0.85]]; /* across and back from the middle of the car: driver, front passenger, back left, back right */
   // riding in someone's car: you go where it goes (it's drawn where their updates put it)
   function rideSync(dt) { const f = riding && folk.get(riding.id); if (!f || f.kind !== 'car') return; const v = Math.hypot(f.x - car.x, f.z - car.z) / Math.max(dt, 1e-3); car.v += (Math.min(v, 80) - car.v) * Math.min(1, dt * 4); car.x = f.x; car.z = f.z; car.a = f.ry + Math.PI / 2; car.steer = 0; }
+  // ---- calling your car: it sets off from a road a little way off and drives along the streets to you, slows, and
+  // pulls up at the kerb beside you (rather than appearing out of thin air) ----
+  function callCar() { if (!foot || summon || parked) return false; const px = tileOf(car.x), pz = tileOf(car.z); let goal = null, bd = 9;
+    for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) if (drivable(px + dx, pz + dz)) { const d = Math.hypot(dx, dz); if (d < bd) { bd = d; goal = [px + dx, pz + dz]; } }
+    if (!goal) return false; const key = (x, z) => x + ',' + z, prev = new Map([[key(...goal), null]]), depth = new Map([[key(...goal), 0]]), q = [goal]; let far = goal;
+    while (q.length) { const [x, z] = q.shift(), d = depth.get(key(x, z)); if (d > depth.get(key(...far))) far = [x, z]; if (d >= 12) continue; /* (about 100 m of road away at most) */
+      for (const [ex, ez] of DIRS) { const nx = x + ex, nz = z + ez, k = key(nx, nz); if (prev.has(k) || !drivable(nx, nz)) continue; prev.set(k, [x, z]); depth.set(k, d + 1); q.push([nx, nz]); } }
+    if (depth.get(key(...far)) < 2) return false; const path = []; for (let p = far; p; p = prev.get(key(...p))) path.push(p); /* from where it sets off, to you */
+    const pts = path.map(([x, z]) => [(x + 0.5) * TILE, (z + 0.5) * TILE]), [gx, gz] = pts[pts.length - 1], ox = car.x - gx, oz = car.z - gz, ol = Math.hypot(ox, oz) || 1;
+    pts.push([gx + ox / ol * Math.min(2.6, ol), gz + oz / ol * Math.min(2.6, ol)]); /* the last bit: in to the kerb, on your side */
+    const [sx, sz] = pts[0], [nx2, nz2] = pts[1]; summon = { pts, i: 1, x: sx, z: sz, v: 0, ry: Math.atan2(-(nz2 - sz), nx2 - sx) - Math.PI / 2, kind: opts.car.kind || 'car', col: opts.car.col }; return true; }
+  function comeUp(dt) { const S2 = summon, [tx, tz] = S2.pts[S2.i], dx = tx - S2.x, dz = tz - S2.z, d = Math.hypot(dx, dz); let left = d; for (let k = S2.i; k < S2.pts.length - 1; k++) left += Math.hypot(S2.pts[k + 1][0] - S2.pts[k][0], S2.pts[k + 1][1] - S2.pts[k][1]);
+    const want = Math.min(11, Math.max(1.2, left * 0.9)); S2.v += Math.max(-8 * dt, Math.min(4 * dt, want - S2.v)); /* speeds up, then slows to a stop */
+    const step = S2.v * dt; if (d <= step || d < 0.05) { S2.x = tx; S2.z = tz; if (++S2.i >= S2.pts.length) { parked = { kind: S2.kind, col: S2.col, x: S2.x, z: S2.z, ry: S2.ry }; summon = null; opts.onCarHere && opts.onCarHere(); } return; }
+    S2.x += dx / d * step; S2.z += dz / d * step; const ry = Math.atan2(-dz, dx) - Math.PI / 2; let da = ry - S2.ry; da = Math.atan2(Math.sin(da), Math.cos(da)); S2.ry += da * Math.min(1, dt * 6); }
   function chase(dt) {
     if (lk.id == null && !foot) { const back = Math.exp(-dt * Math.min(0.8, Math.abs(car.v) / 22)); lk.yaw *= back; lk.pitch *= back; } /* let go: the view stays where you turned it, and drifts gently back behind the car as you drive (not at all while you're stopped) */
     const fp = mode === 1; cockpit.visible = fp && !foot; sw.rotation.z = car.steer * 1.4; if (cockpit.visible) { cockpit.position.set(car.x, 0, car.z); cockpit.rotation.set(0, car.a - Math.PI / 2, 0); }
@@ -450,6 +482,7 @@ export function createTown(host, opts) {
     if (dead) return; drive(dt);
     me.visible = !foot && !riding && mode !== 1; if (feet) { feet.group.visible = foot && mode !== 1; if (foot) { feet.setPos(car.x, car.z); { const m = car.mv == null ? car.a : car.mv; feet.animate(dt, Math.cos(m) * car.v, -Math.sin(m) * car.v); } feet.group.rotation.y = car.a + Math.PI / 2; } } /* your character walks (and faces where you're going) */
     if (parked) pushCar(parked.kind, parked.col, parked.x, parked.z, parked.ry);
+    if (summon) { comeUp(dt); if (summon) pushCar(summon.kind, summon.col, summon.x, summon.z, summon.ry); }
     me.position.set(car.x, 0, car.z); me.rotation.set(0, 0, 0); me.rotation.y = car.a - Math.PI / 2; for (const w of me.userData.wheels || []) w.rotation.x -= car.v * dt / 0.33;
     roll += (car.steer * Math.min(1, Math.abs(car.v) / 14) * 0.05 - roll) * Math.min(1, dt * 5); pitch += ((accel0 - car.v) / Math.max(dt, 1e-3) * 0.0025 - pitch) * Math.min(1, dt * 4); accel0 = car.v; me.rotateZ(roll); me.rotateX(Math.max(-0.035, Math.min(0.035, pitch))); /* the body leans into a turn and dips when you brake */
     const night = view.night || 0; for (const blk of blocks.values()) for (const c of blk.parked) pushCar(c.kind, c.col, c.x, c.z, c.ry);
@@ -500,7 +533,7 @@ export function createTown(host, opts) {
     wh.addEventListener('pointerup', wend); wh.addEventListener('pointercancel', wend); }
   controls();
   const keyOf = e => e.key.length === 1 ? e.key.toLowerCase() : e.key;
-  const kd = e => { if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; const k = keyOf(e), K = Object.values(ctl.keys || {}).map(x => String(x).toLowerCase()); if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k) || K.includes(String(k).toLowerCase())) { keys.add(String(k).length === 1 ? String(k).toLowerCase() : k); e.preventDefault(); } };
+  const kd = e => { if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; const k = keyOf(e), K = Object.values(ctl.keys || {}).map(x => String(x).toLowerCase()); if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Shift'].includes(k) || /* (Space: the handbrake; Shift: run) */ K.includes(String(k).toLowerCase())) { keys.add(String(k).length === 1 ? String(k).toLowerCase() : k); e.preventDefault(); } };
   const ku = e => keys.delete(keyOf(e)), kb = () => keys.clear();
   addEventListener('keydown', kd); addEventListener('keyup', ku); addEventListener('blur', kb);
   // turning the phone: the view follows its own box (not the window, which reports the turn in steps), and checks again as
@@ -520,15 +553,16 @@ export function createTown(host, opts) {
     // get out of the car (it stays parked there if it's yours) and walk, or get back in (at your parked car, or a car appears)
     walk(keep) { if (foot) return; parked = keep ? { kind: opts.car.kind || 'car', col: opts.car.col, x: car.x, z: car.z, ry: car.a - Math.PI / 2 } : null; foot = true; mkFeet(); lk.yaw = car.a; car.mv = null;
       const sx = -Math.sin(car.a) * 2.2, sz = -Math.cos(car.a) * 2.2; car.x += sx; car.z += sz; car.v = 0; nearCar = false; controls(); },
-    drive() { if (!foot) return; if (parked) { car.x = parked.x; car.z = parked.z; car.a = parked.ry + Math.PI / 2; parked = null; } foot = false; car.v = 0; lk.yaw = 0; nearCar = false; opts.onCar && opts.onCar(false); controls(); },
+    drive() { if (!foot) return; if (parked) { car.x = parked.x; car.z = parked.z; car.a = parked.ry + Math.PI / 2; parked = null; } foot = false; car.v = 0; car.vx = car.vz = 0; car.wa = 0; lk.yaw = 0; nearCar = false; opts.onCar && opts.onCar(false); controls(); },
     get parked() { return !!parked; },
+    callCar() { return callCar(); }, get coming() { return !!summon; },
     doorOf(id) { for (const v of blocks.values()) for (const s of v.solid) if (s.id === id && s.door) return { x: s.door[0] / TILE, y: s.door[1] / TILE, a: s.out }; return null; },
     kmh() { return Math.round(Math.abs(car.v) * 3.6); },
     stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
     toggleView() { mode = (mode + 1) % 3; lk.yaw = foot ? lk.yaw : 0; lk.pitch = 0; return ['behind', 'driver', 'above'][mode]; },
     setControls(c) { ctl = c || ctl; controls(); if (riding && pad) pad.style.display = 'none'; },
     setRoute,
-    stop() { car.v = 0; },
+    stop() { car.v = 0; car.vx = car.vz = 0; },
     dispose() { dead = true; clearInterval(refresh); view.stop(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); removeEventListener('blur', kb); removeEventListener('resize', fit); removeEventListener('orientationchange', turned); ro.disconnect();
       for (const v of blocks.values()) drop(v); blocks.clear(); for (const f of folk.values()) scene.remove(f.g); folk.clear();
       ground.geometry.dispose(); ground.material.dispose(); try { view.dispose(); } catch (e) {} try { renderer.forceContextLoss(); } catch (e) {} canvas.remove(); if (pad) pad.remove(); chevron.dispose(); routeMat.dispose(); beamMat.dispose(); for (const m of fleetM.values()) { scene.remove(m); m.dispose(); } blobGeo.dispose(); blobMat.dispose(); beamGeo.dispose(); beamMat2.dispose(); beamTex.dispose(); sky.t.dispose(); },

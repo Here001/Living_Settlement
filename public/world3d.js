@@ -200,10 +200,12 @@ export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add =
   const M = materials(view), B = {}; for (const k of Object.keys(M)) B[k] = new Bucket();
   const r = rnd(L.seed || 1), TILE = 8, tw = L.tw, th = L.th, gAt = (tx, ty) => (tx < 0 || ty < 0 || tx >= tw || ty >= th) ? (L.gnd ? L.gnd(tx, ty) : -1) : L.ground.charCodeAt(ty * tw + tx) - 48;
   const roadSet = new Map([...L.roads, ...(L.sroads || [])].map(([x, y, t]) => [x + ',' + y, t])), isRoad = (x, y) => roadSet.has(x + ',' + y);
+  const kindAt = (x, y) => (ROAD_TYPES[roadSet.get(x + ',' + y)] || {}).kind, isRail = (x, y) => kindAt(x, y) === 'rail', railish = (x, y) => isRail(x, y) || kindAt(x, y) === 'crossing'; /* tracks, and where a road crosses them */
   if (add) { view.center.set(tw * TILE / 2, 0, th * TILE / 2); view.span = Math.max(tw, th) * TILE * 0.8; }
   // the ground, tile by tile, with the town carrying on beyond the edges
   for (let ty = -pad; ty < th + pad; ty++) for (let tx = -pad; tx < tw + pad; tx++) {
     const k = (tx >= 0 && ty >= 0 && tx < tw && ty < th) ? gAt(tx, ty) : isRoad(tx, ty) ? 2 : (L.swater || []).some(w => w[0] === tx && w[1] === ty) ? 3 : 0, x0 = tx * TILE, z0 = ty * TILE, x1 = x0 + TILE, z1 = z0 + TILE, b = k === 2 ? B.asphalt : k === 3 ? B.water : k === 4 ? B.field : k === 5 ? B.pitch : k === 1 ? B.paving : B.grass, y = k === 3 ? -0.35 : 0;
+    if (k === 2 && isRail(tx, ty)) { B.solid.box(x0, z0, x1, z1, -0.05, 0.06, col('#8a8276')); continue; } /* a railway: a bed of grey ballast */
     const s = k === 2 ? 8 : 6; b.quad([x0, y, z1], [x1, y, z1], [x1, y, z0], [x0, y, z0], [0, 1, 0], [x0 / s, z1 / s, x1 / s, z1 / s, x1 / s, z0 / s, x0 / s, z0 / s], col('#ffffff'));
     if (k === 3) for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) { const n = gAt(tx + dx, ty + dy); if (n === 3) continue; // banks
       const ex0 = dx === 1 ? x1 : x0, ex1 = dx === -1 ? x0 : x1, ez0 = dy === 1 ? z1 : z0, ez1 = dy === -1 ? z0 : z1; if (dx) B.paving.box(ex0 - 0.3, z0, ex0 + 0.3, z1, -0.6, 0.15, col('#b9b2a3'), { su: 4, sv: 4 }); else B.paving.box(x0, ez0 - 0.3, x1, ez0 + 0.3, -0.6, 0.15, col('#b9b2a3'), { su: 4, sv: 4 }); }
@@ -214,8 +216,15 @@ export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add =
     const kerb = (side) => { const w = 1.6, hgt = 0.14, c = col(R0.walk || '#d6d1c6');
       if (side === 'N') B.paving.box(x0, z0 - w, x0 + TILE, z0, 0, hgt, c, { su: 2, sv: 2 }); if (side === 'S') B.paving.box(x0, z0 + TILE, x0 + TILE, z0 + TILE + w, 0, hgt, c, { su: 2, sv: 2 });
       if (side === 'W') B.paving.box(x0 - w, z0, x0, z0 + TILE, 0, hgt, c, { su: 2, sv: 2 }); if (side === 'E') B.paving.box(x0 + TILE, z0, x0 + TILE + w, z0 + TILE, 0, hgt, c, { su: 2, sv: 2 }); };
-    for (const s of ['N', 'S', 'W', 'E']) { const [dx, dy] = { N: [0, -1], S: [0, 1], W: [-1, 0], E: [1, 0] }[s]; if (!n[s] && gAt(tx + dx, ty + dy) !== 3) kerb(s); }
-    if (R0.rail) { for (let i = 0; i < 8; i++) B.solid.box(x0 + (n.E || n.W ? i : 0.4), z0 + (n.E || n.W ? 3 : i), x0 + (n.E || n.W ? i + 0.4 : 7.6), z0 + (n.E || n.W ? 5 : i + 0.4), 0, 0.08, col('#6b5a48')); continue; }
+    if (R0.kind !== 'rail') for (const s of ['N', 'S', 'W', 'E']) { const [dx, dy] = { N: [0, -1], S: [0, 1], W: [-1, 0], E: [1, 0] }[s]; if (!n[s] && gAt(tx + dx, ty + dy) !== 3) kerb(s); } /* (no pavements along a railway) */
+    if (R0.kind === 'rail' || R0.kind === 'crossing') { // a railway: sleepers across a ballast bed, two steel rails on them; at a level crossing the rails sit flush in the road
+      const r = { N: railish(tx, ty - 1), S: railish(tx, ty + 1), W: railish(tx - 1, ty), E: railish(tx + 1, ty) }, sides = Object.keys(r).filter(k => r[k]), cross = R0.kind === 'crossing';
+      const steel = col('#9aa1a8'), wood = col('#5a4636'), cx = x0 + 4, cz = z0 + 4, ends = sides.length ? sides : ['W', 'E'];
+      for (const sd of ends.length === 1 ? [...ends, { N: 'S', S: 'N', W: 'E', E: 'W' }[ends[0]]] : ends) { const ew = sd === 'E' || sd === 'W', a = sd === 'E' || sd === 'S' ? 0 : -4; /* half a track from the middle to this edge */
+        if (!cross) for (let i = 0; i < 6; i++) { const u = a + 0.35 + i * 0.66; if (ew) B.solid.box(cx + u, cz - 1.3, cx + u + 0.24, cz + 1.3, 0.06, 0.16, wood); else B.solid.box(cx - 1.3, cz + u, cx + 1.3, cz + u + 0.24, 0.06, 0.16, wood); }
+        for (const o of [-0.72, 0.72]) { const y0 = cross ? 0 : 0.16, y1 = cross ? 0.045 : 0.3; if (ew) B.solid.box(cx + a - 0.05, cz + o - 0.05, cx + a + 4.05, cz + o + 0.05, y0, y1, steel); else B.solid.box(cx + o - 0.05, cz + a - 0.05, cx + o + 0.05, cz + a + 4.05, y0, y1, steel); } }
+      if (R0.platform) { const ew = r.E || r.W || !(r.N || r.S); for (const o of [-1, 1]) { if (ew) B.paving.box(x0, cz + o * 3.15 - 0.95, x0 + TILE, cz + o * 3.15 + 0.95, 0, 0.9, col('#cfc9bc'), { su: 2, sv: 2 }); else B.paving.box(cx + o * 3.15 - 0.95, z0, cx + o * 3.15 + 0.95, z0 + TILE, 0, 0.9, col('#cfc9bc'), { su: 2, sv: 2 }); } } /* the platforms either side */
+      if (!cross) continue; }
     const ew = (n.E || n.W) && !n.N && !n.S, ns = (n.N || n.S) && !n.E && !n.W, y = 0.02;
     if (ew) for (let i = 0; i < 2; i++) { const a = x0 + 0.8 + i * 4; B.paint.quad([a, y, z0 + 4.08], [a + 2.2, y, z0 + 4.08], [a + 2.2, y, z0 + 3.92], [a, y, z0 + 3.92], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], R0.lanes ? white : yellow); }
     if (ns) for (let i = 0; i < 2; i++) { const a = z0 + 0.8 + i * 4; B.paint.quad([x0 + 3.92, y, a + 2.2], [x0 + 4.08, y, a + 2.2], [x0 + 4.08, y, a], [x0 + 3.92, y, a], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], R0.lanes ? white : yellow); }

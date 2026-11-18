@@ -664,7 +664,7 @@ body.room-on .toast{z-index:9850} /* above the phone and the call screen, so a r
 .tjoy{position:absolute;left:22px;bottom:calc(28px + env(safe-area-inset-bottom));width:128px;height:128px;border-radius:50%;background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.65);touch-action:none;z-index:3;box-shadow:0 4px 18px rgba(0,0,0,.18)}
 .tjoy i{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.25)}
 .dhud{position:absolute;right:14px;bottom:calc(24px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-end;gap:8px;z-index:4;pointer-events:none}.dhud>*{pointer-events:auto}
-.dspeed{background:rgba(20,22,28,.72);color:#fff;font-weight:800;font-size:15px;padding:6px 12px;border-radius:12px}.dacts{display:flex;flex-direction:column;gap:8px;align-items:flex-end}.dgo{box-shadow:0 3px 12px rgba(0,0,0,.3)}
+.dspeed{background:rgba(20,22,28,.72);color:#fff;font-weight:800;font-size:15px;padding:6px 12px;border-radius:12px}.dacts{display:flex;flex-direction:column;gap:8px;align-items:flex-end}.dask{position:absolute;left:50%;top:calc(env(safe-area-inset-top,0px) + 132px);transform:translateX(-50%);z-index:6;background:var(--card,#fffdf8);color:var(--ink,#1d1b18);border-radius:16px;padding:12px 14px;box-shadow:0 8px 28px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:8px;align-items:center;max-width:calc(100% - 32px)}.dask .row-actions{margin:0}.dgo{box-shadow:0 3px 12px rgba(0,0,0,.3)}
 .dsub{display:block;font-size:12.5px;opacity:.75}
 .hphonebtn{position:absolute;right:14px;bottom:122px;z-index:2;box-shadow:0 2px 10px rgba(0,0,0,.25)}.phbadge{font-style:normal;margin-left:5px;background:#E74C3C;color:#fff;border-radius:999px;padding:0 6px;font-size:11px;font-weight:800;line-height:17px;display:inline-block}
 .phone{position:fixed;inset:0;z-index:9700;display:grid;place-items:center;background:rgba(10,12,20,.45);padding:12px}
@@ -1215,7 +1215,7 @@ body.room-on .toast,body.room-on .rsheet-bg.rreport{z-index:9700}
 <script type="importmap">{"imports":{"three":"/vendor/three/three.module.min.js","three/addons/":"/vendor/three-addons/"}}</script>
 <script type="module">
 window.__booted=true; try{ sessionStorage.removeItem('resurgence-reloaded'); const u=new URL(location.href); if(u.searchParams.has('r')){ u.searchParams.delete('r'); history.replaceState(null,'',u.pathname+u.search+u.hash); } }catch(e){} /* the code loaded: no rescue needed */
-import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, landKeeps, isBank, carPaid, kindOf, carKind, ridden, needsHangar } from '/shared/catalog.js';
+import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, landKeeps, isBank, carPaid, kindOf, carKind, ridden, needsHangar, seatsOf } from '/shared/catalog.js';
 import { TABLE_W, TABLE_H, BALL_R, POCKETS } from '/shared/snooker.js';
 import { placeOk, placeAuto, HEAD_X, BAULK_X, D_R } from '/shared/cuegames.js';
 import { TABLE_GAMES, WHOT_SHAPES, LUDO_SAFE, RAKE, MAX_STAKE } from '/shared/boardgames.js';
@@ -1385,7 +1385,8 @@ function connect(){
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
     else if(m.type==='phone' && m.data) Phone.msg(m.data);
-    else if(m.type==='drive' && m.id){ if(m.off) DrivingNow.delete(m.id); else DrivingNow.set(m.id,{x:m.x,y:m.y,a:m.a,m:m.m,col:m.col,mode:m.mode==='walk'?'walk':'car',t:Date.now()}); } /* someone driving about in 3D */
+    else if(m.type==='drive' && m.id){ if(m.off) DrivingNow.delete(m.id); else DrivingNow.set(m.id,{x:m.x,y:m.y,a:m.a,m:m.m,col:m.col,mode:m.mode==='walk'?'walk':m.mode==='ride'?'ride':'car',by:m.by||null,t:Date.now()}); } /* someone driving about in 3D (or riding in someone's car) */
+    else if(m.type==='ride'){ Drive.rideMsg(m); } /* rides: asks, answers, getting in and out */
     else if(m.type==='whereIn'){ if(m.all){ InsideNow.clear(); for(const [id,pl] of m.all) InsideNow.set(id,pl); } else if(m.place) InsideNow.set(m.id,m.place); else InsideNow.delete(m.id); }
     else if(m.type==='gm' && m.data) Chats.gincoming(m.data);
     else if(m.type==='chatInvite' && m.data) Chats.invited(m.data);
@@ -7010,6 +7011,7 @@ const LiveOnline={ ids:new Set(), at:0, busy:false,
 const CAR_KEY=new Map(Object.entries(CAR_MODELS).map(([k,v])=>[v,k])); /* a car model back to its name */
 const DrivingNow=new Map(); // citizen id → { x, y, a, m, col, t }
 function drivingAt(c){ const d=DrivingNow.get(c.id); if(!d) return null; if(Date.now()-d.t>5000){ DrivingNow.delete(c.id); return null; }
+  if(d.mode==='ride'){ const by=d.by&&S.citizens.get(d.by); return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:false, act:by?`Riding with @${by.handle}`:'Riding in a car', where:'the streets', bid:null, moving:true, seg:null, plan:null }; } /* in someone's car: it's their car you see */
   if(d.mode==='walk') return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:true, act:'Walking around town', where:'the streets', bid:null, moving:true, seg:null, plan:null }; /* out on foot, as themselves */
   const M=CAR_MODELS[d.m], V=M&&!M.vtype?M:VEHICLE_TYPES.car; return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:true, car:true, V, col:d.col||V.colors[0], act:'Driving around town', where:'the streets', bid:null, moving:true, seg:null, plan:null }; }
 const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
@@ -7025,19 +7027,20 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     const c=myCitizen(); if(!c||!c.home){ toast('Your colonist needs a home before they can drive about.'); return; }
     const st=citizenAt(c,gmNow()); if(st&&st.bid&&String(st.where||'').toLowerCase().includes('jail')){ toast('You can’t drive while you’re in jail.'); return; }
     const here=st||{ x:bOf(c.home).x+1, y:bOf(c.home).y+1 }, s=at&&at.x!=null?{x:at.x,y:at.y,a:at.a||0}:this.startAt(here.x,here.y), car=this.ride(c); /* at: back in the car where you parked it */
+    this.send({type:'ride',a:'leave'}); /* (in case the server still has you in someone's car) */
     this.camWas={x:cam.x,y:cam.y,z:cam.z}; DriveMap.reset(); this.foot=walk; this.parked=false; let look=null; try{ [look]=await Looks.want([Me.handle]); }catch(e){}
     closeCard(); openTab(null);
     const stage=el('div',{class:'drivestage'}), title=el('b',{text:walk?'🚶 Out on foot':`🚗 Driving ${car.own?'your '+car.name.toLowerCase():car.name}`}), sub=el('span',{class:'dsub',text:walk?'Stick to walk, drag the screen to look round':'Steer with the stick'}); this.title=title;
     this.modeBtn=el('button',{class:'btn dgo dmode',onclick:()=>this.switchMode()}); /* get out and walk, or get (back) in the car */
-    this.goBtn=el('button',{class:'btn primary dgo',hidden:true}); this.inBtn=el('button',{class:'btn dgo',hidden:true});
+    this.goBtn=el('button',{class:'btn primary dgo',hidden:true}); this.inBtn=el('button',{class:'btn dgo',hidden:true}); this.rideBtn=el('button',{class:'btn primary dgo',hidden:true}); this.riding=null; this.riders=[]; /* rides: asking someone for one, or riding along */
     this.speed=el('div',{class:'dspeed'}); this.sub=sub;
     const bar=el('div',{class:'webbar'}, el('button',{class:'webx','aria-label':'Stop driving',text:'✕',onclick:()=>this.close()}), el('div',{class:'webaddr'}, title, sub),
       el('button',{class:'webbtn',title:'Camera: behind the car, from the driver’s seat, or from above',text:'🎥',onclick:()=>{ if(!this.T) return; const m=this.T.toggleView(); toast(m==='driver'?'🎥 From the driver’s seat':m==='above'?'🎥 From above':'🎥 Behind the car'); }}),
       el('button',{class:'webbtn',title:'Driving controls',text:'⚙️',onclick:()=>DriveCtl.sheet()}), Phone.btn());
-    const root=el('div',{class:'webview driveview',role:'dialog','aria-label':'Driving around town'}, bar, stage, el('div',{class:'dhud'}, this.speed, el('div',{class:'dacts'}, this.goBtn, this.inBtn, this.modeBtn)));
+    const root=el('div',{class:'webview driveview',role:'dialog','aria-label':'Driving around town'}, bar, stage, el('div',{class:'dhud'}, this.speed, el('div',{class:'dacts'}, this.rideBtn, this.goBtn, this.inBtn, this.modeBtn)));
     document.body.append(root); document.body.classList.add('room-on','drive-on'); this.el=root; this.dist=0; this.last={x:s.x,y:s.y}; this.car=car; DriveMap.mount(root);
     let T3; try{ T3=await import('/town3d.js'); }catch(e){ this.close(); toast('Driving couldn’t load. Check your connection and try again.'); return; } if(this.el!==root) return;
-    try{ this.T=T3.createTown(stage,{ start:s, car, controls:DriveCtl.get(), mode:walk?'walk':'car', look, onCar:near=>{ this.atCar=near; this.paintMode(); },
+    try{ this.T=T3.createTown(stage,{ start:s, car, controls:DriveCtl.get(), mode:walk?'walk':'car', look, onCar:near=>{ this.atCar=near; this.paintMode(); }, onRide:c=>this.nearRide(c),
         road:(x,y)=>D.roads.get(x+','+y)||null, water:(x,y)=>D.water.has(x+','+y),
         building:(x,y)=>{ const id=D.occ.get(x+','+y); return id?D.buildings.get(id)||null:null; },
         buildings:(x0,y0,x1,y1)=>{ const out=[]; for(const b of D.buildings.values()) if(b.x>=x0&&b.x<x1&&b.y>=y0&&b.y<y1&&!b.ruin&&BUILDING_TYPES[b.type]) out.push(b); return out; },
@@ -7049,18 +7052,21 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     this.paintMode();
     if(walk) toast(at&&at.x!=null?'🚶 Back out on the street.':'🚶 You’re out on foot. Walk up to a building’s front door to go in.'); else toast(at?'🚗 Back in your car.':car.own?`🚗 You’re in your ${car.name.toLowerCase()}. Tap the map to pick where to go, or pull up at a building to stop there.`:'🚗 You’re in a basic car (buy your own at a Car dealership). Tap the map to pick where to go.'); },
   // who's about near you: the colonists the map has here, where it has them now (walking, or driving)
-  people(x,y){ const gm=gmNow(), out=[], meH=(Me&&Me.handle||'').toLowerCase();
-    for(const c of S.citizens.values()){ if(c.handle.toLowerCase()===meH||!c.home) continue; const st=citizenAt(c,gm); if(!st||!st.visible) continue; const d=Math.hypot(st.x-x,st.y-y); if(d>26) continue;
+  people(x,y){ const gm=gmNow(), out=[], meH=(Me&&Me.handle||'').toLowerCase(), aboard=new Map();
+    for(const d of DrivingNow.values()) if(d.mode==='ride'&&d.by&&Date.now()-d.t<5000) aboard.set(d.by,(aboard.get(d.by)||0)+1); /* how many are riding with each driver */
+    for(const c of S.citizens.values()){ if(c.handle.toLowerCase()===meH||!c.home) continue; const dn=DrivingNow.get(c.id); if(dn&&dn.mode==='ride'&&Date.now()-dn.t<5000) continue; /* riding: inside someone's car */ const st=citizenAt(c,gm); if(!st||!st.visible) continue; const d=Math.hypot(st.x-x,st.y-y); if(d>26) continue;
       const V=st.V||null, m=V&&CAR_KEY.get(V), live=DrivingNow.has(c.id), online=live||LiveOnline.has(c.id), L=c.claimed!==false&&(live||online)?Looks.m.get(c.handle.toLowerCase()):null;
       if(online&&!L) Looks.want([c.handle]); /* their own look, for next time */
-      out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, m:m&&CAR_MODELS[m].kind!=='bike'?m:V===VEHICLE_TYPES.taxi?'sedan':'hatch', look:L||null, tag:online||live?'@'+c.handle:null, online }); }
+      const drv=!!(dn&&dn.mode==='car'), n=aboard.get(c.id)||0;
+      out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, m:m&&CAR_MODELS[m].kind!=='bike'?m:V===VEHICLE_TYPES.taxi?'sedan':'hatch', look:L||null, tag:online||live?'@'+c.handle+(n?` +${n}`:''):null, online, h:c.handle, drv, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, full:drv&&n>=seatsOf(dn.m)-1 }); }
     return out.sort((a,b)=>a.d-b.d).slice(0,40); },
   moved(x,y,a,v){ if(!this.el) return; if(this.last){ this.dist+=Math.hypot(x-this.last.x,y-this.last.y); } this.last={x,y};
     const foot=this.T&&this.T.pos.mode==='walk'; this.speed.textContent=foot?(Math.abs(v)*8>3?'🏃 Running':Math.abs(v)>0.01?'🚶 Walking':'🧍 Standing'):`${this.T?this.T.kmh():0} km/h`;
+    if(this.riding){ this.speed.textContent=`${this.T?this.T.kmh():0} km/h`; DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); } return; } /* riding: the car goes where its driver takes it */
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'drive',mode:foot?'walk':'car',x:+x.toFixed(2),y:+y.toFixed(2),a:+a.toFixed(2),m:this.car.m,col:this.car.col})); }catch(e){}
     DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); }
     if(Date.now()-this.synced>1500){ this.synced=Date.now(); const q=iso(x,y); cam.x=q.x; cam.y=q.y; cam.z=0.45; follow=null; syncChunks(); } }, /* the map loads the town round the car (zoomed out, so it loads plenty) */
-  nearBy(b){ this.near=b; const name=b&&(b.name||T(b).name), foot=this.T&&this.T.pos.mode==='walk';
+  nearBy(b){ this.near=b; if(this.riding){ this.goBtn.hidden=true; this.inBtn.hidden=true; return; } const name=b&&(b.name||T(b).name), foot=this.T&&this.T.pos.mode==='walk';
     if(!b||!canGoTo(b.type)||b.done===false){ this.goBtn.hidden=true; this.inBtn.hidden=true; this.sub.textContent=b?`${name}`:foot?'Stick to walk, drag the screen to look round':'Steer with the stick'; return; }
     this.sub.textContent=`📍 ${name}`; const enter=canEnter(b.type)||T(b).home;
     if(foot){ /* at the front door: go in (or, where there's no inside to walk into, just go there) */
@@ -7068,14 +7074,33 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     this.goBtn.hidden=false; this.goBtn.textContent=`🅿️ Stop at ${name}`; this.goBtn.onclick=()=>this.arrive(b,false);
     this.inBtn.hidden=!enter; this.inBtn.textContent='🚪 Go inside'; this.inBtn.onclick=()=>this.arrive(b,true); },
   // walking and driving: get out (your own car stays parked where you left it) and get back in when you walk up to it
-  paintMode(){ const B=this.modeBtn; if(!B||!this.T) return; const foot=this.T.pos.mode==='walk';
+  paintMode(){ const B=this.modeBtn; if(!B||!this.T) return; if(this.riding){ B.hidden=false; B.textContent='🚶 Get out'; return; } const foot=this.T.pos.mode==='walk';
     if(!foot){ B.hidden=false; B.textContent='🚶 Get out'; return; }
     if(this.T.parked){ B.hidden=!this.atCar; B.textContent=`🚗 Get in your ${this.car.name.toLowerCase()}`; return; }
     B.hidden=false; B.textContent=this.car.own?`🚗 Drive your ${this.car.name.toLowerCase()}`:'🚗 Drive'; },
-  switchMode(){ const T3=this.T; if(!T3) return; const foot=T3.pos.mode==='walk';
+  switchMode(){ const T3=this.T; if(!T3) return; if(this.riding){ this.send({type:'ride',a:'leave'}); return; } if(T3.pos.mode==='car'&&this.riders.length) toast('👥 Everyone riding with you gets out too.'); const foot=T3.pos.mode==='walk';
     if(foot){ T3.drive(); this.title.textContent=`🚗 Driving ${this.car.own?'your '+this.car.name.toLowerCase():this.car.name}`; this.sub.textContent='Steer with the stick'; }
     else { T3.walk(this.car.own); this.title.textContent='🚶 Out on foot'; this.sub.textContent='Stick to walk, drag the screen to look round'; if(this.car.own) toast(`🅿️ Your ${this.car.name.toLowerCase()} is parked here. Walk back to it to get in.`); }
     this.dist=0; this.nearBy(null); this.paintMode(); },
+  // ---- rides: in someone else's car, as many as it has seats (2 in sports cars, 4 in the rest, the driver included) ----
+  send(o){ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }catch(e){} },
+  nearRide(c){ const B=this.rideBtn; if(!B) return; if(!c||this.riding||!c.h){ B.hidden=true; return; } B.hidden=false; B.disabled=!!c.full;
+    B.textContent=c.full?`🚗 @${c.h}’s car is full`:`🙋 Ride with @${c.h}`; B.onclick=()=>{ if(c.full) return; this.send({type:'ride',a:'ask',id:c.id}); B.disabled=true; setTimeout(()=>{ B.disabled=false; },4000); }; },
+  rideMsg(m){ if(!this.el||!this.T){ if(m.k==='ask') this.send({type:'ride',a:'answer',id:m.id,yes:false}); return; }
+    if(m.k==='asked'){ toast(`🙋 You asked @${m.h} for a ride. Waiting for them…`); return; }
+    if(m.k==='no'){ toast(m.text||'No ride this time.'); return; }
+    if(m.k==='ask'){ this.askBox(m); return; }
+    if(m.k==='riders'){ const was=new Set(this.riders.map(r=>r.h)), now=new Set((m.list||[]).map(r=>r.h)); this.riders=m.list||[];
+      for(const h of now) if(!was.has(h)) toast(`👥 @${h} got in. Drive on!`); for(const h of was) if(!now.has(h)) toast(`👋 @${h} got out.`);
+      if(this.T.pos.mode==='car') this.sub.textContent=this.riders.length?`👥 ${this.riders.map(r=>'@'+r.h).join(', ')} riding with you (${this.riders.length+1} of ${m.seats||4} seats)`:'Steer with the stick'; return; }
+    if(m.k==='in'){ this.nearBy(null); this.nearRide(null); this.riding={id:m.id,h:m.h,seat:m.seat}; this.T.ride({id:m.id,seat:m.seat,col:m.col,x:m.x,y:m.y,a:m.a});
+      this.title.textContent=`🚗 Riding with @${m.h}`; this.sub.textContent=`${m.seat===1?'In the front seat':'In the back seat'} · 🎥 to see from your seat`; this.paintMode(); toast(`🚗 You’re in @${m.h}’s car. They drive; tap 🚶 Get out when you like.`); return; }
+    if(m.k==='out'){ if(!this.riding) return; const h=this.riding.h; this.riding=null; this.T.unride(m.x,m.y,m.a); this.title.textContent='🚶 Out on foot'; this.sub.textContent='Stick to walk, drag the screen to look round'; this.paintMode(); toast(`🚶 You got out of @${h||'their'}’s car.`); } },
+  // the driver: someone wants a ride
+  askBox(m){ const root=this.el; if(this.T.pos.mode!=='car'){ this.send({type:'ride',a:'answer',id:m.id,yes:false}); return; } const old=root.querySelector(`.dask[data-id="${CSS.escape(m.id)}"]`); if(old) old.remove();
+    const done=yes=>{ clearTimeout(t); box.remove(); this.send({type:'ride',a:'answer',id:m.id,yes}); };
+    const box=el('div',{class:'dask','data-id':m.id}, el('b',{text:`🙋 @${m.h} wants a ride`}), el('div',{class:'row-actions'}, el('button',{class:'btn sm primary',text:'Let them in',onclick:()=>done(true)}), el('button',{class:'btn sm',text:'No',onclick:()=>done(false)})));
+    const t=setTimeout(()=>{ if(box.isConnected) done(false); },19000); root.append(box); },
   // you've pulled up: you're there (it counts as going there), and you can walk in
   async arrive(b,inside){ this.T&&this.T.stop(); const name=b.name||T(b).name;
     try{ const r=await api('/api/me/visit',{method:'POST',body:{buildingId:b.id,from:{x:b.x,y:b.y,b:b.id},drove:Math.round(this.dist)}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
@@ -7369,7 +7394,7 @@ function dealerSection(b){ const box=el('div',{class:'authbox'}, el('h3',{text:'
     const sw=el('div',{class:'swatches'}); for(const col of M.colors) sw.append(el('button',{class:'sw'+(carPick.col===col?' on':''),style:`background:${col}`,'aria-label':'Colour','aria-pressed':String(carPick.col===col),onclick:()=>{ carPick.col=col; renderCard(true); }}));
     const why=needsHangar(carPick.m)?`Planes are kept in a hangar on your land and fly over the colony from there. Build a Plane hangar (holds ${BUILDING_TYPES.planehangar.hangar}) or a Private airport (holds ${BUILDING_TYPES.airport.hangar}) first: tap your plot, then Build here → Services → Aviation. `:M.kind==='water'?'It’s kept on the water nearest your home, where everyone can see it cruise. ':M.kind==='air'?'It flies over the colony from your home, for everyone to see. ':M.kind==='bike'?'You ride it on longer trips. ':'';
     const shot=carKind(carPick.m)==='car'?Showroom.img(carPick.m,carPick.col):null; /* the chosen car in 3D, in its colour */
-    box.append(g, shot?el('div',{class:'carshot'}, shot, el('b',{text:`${M.name}${M.electric?' ⚡':''}`}), el('span',{class:'hint',text:`${fmt(M.price)} coins`})):'', M.colors.length>1?sw:'', el('p',{class:'hint',text:`${why}Upkeep: ${fmt(M.upkeep)} coins a week. Resale value: 60% of what you paid. You can keep 3 cars and bikes, 3 boats and other aircraft, and as many planes as your hangars hold.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy the ${M.name.toLowerCase()} for ${fmt(M.price)}`,onclick:()=>meAction('/api/me/cars',{model:carPick.m,color:carPick.col,buildingId:b.id},r=>`Enjoy your new ${M.name.toLowerCase()}!`)}))); }
+    box.append(g, shot?el('div',{class:'carshot'}, shot, el('b',{text:`${M.name}${M.electric?' ⚡':''}`}), el('span',{class:'hint',text:`${fmt(M.price)} coins · 👥 ${seatsOf(carPick.m)} seats`})):'', M.colors.length>1?sw:'', el('p',{class:'hint',text:`${why}Upkeep: ${fmt(M.upkeep)} coins a week. Resale value: 60% of what you paid. You can keep 3 cars and bikes, 3 boats and other aircraft, and as many planes as your hangars hold.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy the ${M.name.toLowerCase()} for ${fmt(M.price)}`,onclick:()=>meAction('/api/me/cars',{model:carPick.m,color:carPick.col,buildingId:b.id},r=>`Enjoy your new ${M.name.toLowerCase()}!`)}))); }
   if(my.cars.length) box.append(el('h4',{class:'bgroup',text:'Sell one of yours'}), garageList(my.cars, my.active));
   return box; }
 async function meAction(path, body, ok, method){ try{ const r=await api(path,{method:method||'POST',body}); GuideUI.at=0; if(ok) toast(typeof ok==='function'?ok(r):ok); if(r&&typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }

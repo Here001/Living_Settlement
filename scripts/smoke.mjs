@@ -2248,6 +2248,33 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
   b.w.send(JSON.stringify({ type: 'out' })); await sleep(300); ok(a.got.some(m => m.k === 'gone'), 'leaving: the others see you go');
   ok(seenIn.some(m => m.id === Bq.id && m.place === null), '…and the map shows them out and about again'); watch.close();
   a.w.close(); b.w.close();
+  { // rides: walk up to someone's car and ask; the driver lets you in; as many as the car has seats (2 in sports cars, 4 in the rest)
+    const rs = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'ride' || m.type === 'drive' || m.type === 'authed') got.push(m); });
+      await new Promise(r => w.once('open', r)); w.send(JSON.stringify({ type: 'auth', token: P.headers['x-player'] })); for (let i = 0; i < 40 && !got.some(m => m.type === 'authed'); i++) await sleep(50); return { w, got, s: o => w.send(JSON.stringify(o)) }; };
+    const Dp = await player('ride_dan', 1000), R1p = await player('ride_rue', 1000), R2p = await player('ride_rex', 1000), R3p = await player('ride_ria', 1000);
+    const d = await rs(Dp.P), r1 = await rs(R1p.P), r2 = await rs(R2p.P), r3 = await rs(R3p.P), seen = await rs(A.P);
+    d.s({ type: 'drive', mode: 'car', x: 20, y: 20, a: 0, m: 'sports', col: '#E4572E' }); r1.s({ type: 'drive', mode: 'walk', x: 20.5, y: 20, a: 0 }); r2.s({ type: 'drive', mode: 'walk', x: 20.3, y: 20.2, a: 0 }); r3.s({ type: 'drive', mode: 'walk', x: 40, y: 40, a: 0 }); await sleep(300);
+    r1.s({ type: 'ride', a: 'ask', id: Dp.id }); await sleep(300); const ask = d.got.find(m => m.type === 'ride' && m.k === 'ask');
+    ok(ask && ask.id === R1p.id && ask.h === 'ride_rue', 'rides: walk up to a car and ask; the driver is asked', JSON.stringify(ask));
+    d.s({ type: 'ride', a: 'answer', id: R1p.id, yes: true }); await sleep(300); const inn = r1.got.find(m => m.type === 'ride' && m.k === 'in');
+    ok(inn && inn.id === Dp.id && inn.seat === 1 && inn.seats === 2 && inn.h === 'ride_dan', '…they let you in: a seat in their two-seater', JSON.stringify(inn));
+    ok(d.got.some(m => m.type === 'ride' && m.k === 'riders' && m.list.length === 1 && m.list[0].h === 'ride_rue'), '…and the driver sees who is riding with them');
+    ok(seen.got.some(m => m.type === 'drive' && m.id === R1p.id && m.mode === 'ride' && m.by === Dp.id), '…and everyone’s map shows you in their car');
+    r2.s({ type: 'ride', a: 'ask', id: Dp.id }); await sleep(300); ok(r2.got.some(m => m.type === 'ride' && m.k === 'no' && /full/.test(m.text)) && !d.got.some(m => m.k === 'ask' && m.id === R2p.id), 'a two-seater with a passenger is full', JSON.stringify(r2.got.filter(m => m.type === 'ride')));
+    seen.got.length = 0; d.s({ type: 'drive', mode: 'car', x: 25, y: 20, a: 0, m: 'sports', col: '#E4572E' }); await sleep(300);
+    ok(seen.got.some(m => m.type === 'drive' && m.id === R1p.id && m.mode === 'ride' && m.x === 25), 'riders go where the car goes');
+    r1.s({ type: 'drive', mode: 'walk', x: 1, y: 1, a: 0 }); await sleep(300); ok(!seen.got.some(m => m.type === 'drive' && m.id === R1p.id && m.x === 1), '…a rider can’t walk off on their own while in the car');
+    d.s({ type: 'drive', mode: 'car', x: 25, y: 20, a: 0, m: 'sedan', col: '#2F4A7A' }); r2.s({ type: 'drive', mode: 'walk', x: 25.4, y: 20.3, a: 0 }); await sleep(3100);
+    r2.s({ type: 'ride', a: 'ask', id: Dp.id }); await sleep(300); d.s({ type: 'ride', a: 'answer', id: R2p.id, yes: true }); await sleep(300);
+    ok(r2.got.some(m => m.type === 'ride' && m.k === 'in' && m.seat === 2 && m.seats === 4), 'a four-seater takes more: the next one gets the next seat');
+    r3.s({ type: 'ride', a: 'ask', id: Dp.id }); await sleep(300); ok(r3.got.some(m => m.type === 'ride' && m.k === 'no' && /closer/.test(m.text)), 'you have to be by the car to ask');
+    r3.s({ type: 'drive', mode: 'walk', x: 25.2, y: 19.6, a: 0 }); await sleep(200); r3.s({ type: 'ride', a: 'ask', id: Dp.id }); await sleep(300); d.s({ type: 'ride', a: 'answer', id: R3p.id, yes: false }); await sleep(300);
+    ok(r3.got.some(m => m.type === 'ride' && m.k === 'no' && /said no/.test(m.text)) && !r3.got.some(m => m.k === 'in'), 'the driver can say no');
+    d.s({ type: 'ride', a: 'answer', id: R3p.id, yes: true }); await sleep(300); ok(!r3.got.some(m => m.k === 'in'), '…and can’t pull anyone in who didn’t ask');
+    r1.s({ type: 'ride', a: 'leave' }); await sleep(300); const out1 = r1.got.find(m => m.type === 'ride' && m.k === 'out');
+    ok(out1 && out1.x === 25 && d.got.filter(m => m.k === 'riders').pop().list.length === 1, 'a rider gets out where the car is, and the driver sees them go', JSON.stringify(out1));
+    d.s({ type: 'drive', mode: 'walk', x: 25, y: 20.5, a: 0 }); await sleep(300); ok(r2.got.some(m => m.type === 'ride' && m.k === 'out'), 'when the driver gets out, so does everyone');
+    for (const x of [d, r1, r2, r3, seen]) x.w.close(); }
   // frames turn on the wall: portrait/landscape
   await pool.query('update citizens set home_id = (select id from buildings where type = $2 limit 1) where id = $1', [A.id, 'house']);
   const fr = await call('POST', '/api/me/room/buy', { k: 'bigframe', x: 2, y: 3, r: 1, o: 1 }, A.P); const it = fr.json.item;

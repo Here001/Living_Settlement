@@ -525,14 +525,14 @@ export const CAR_MODELS = {
   evsedan:{ name:'Aurora EV',  tier:'electric', electric:true, price:140000, upkeep:70, len:0.68, wid:0.31, h:5.5, glow:'#5FE3FF', colors:['#F4F4F2','#1E2228','#3D5A80','#A3343B','#8E9AA6'] },
   evsuv:  { name:'Terra EV',   tier:'electric', electric:true, price:190000, upkeep:95, len:0.7, wid:0.34, h:7.5, glow:'#5FE3FF', colors:['#E8E6E1','#22262C','#4B6B57','#6C7A89','#B08D57'] },
   luxury: { name:'Monarch',    tier:'luxury', price:260000, upkeep:260, len:0.76, wid:0.32, h:6, stripe:'#D8D2C2', colors:['#121418','#F2F0EA','#3A3F46','#4A1E22','#1D2C45'] },
-  sports: { name:'Sports car', tier:'luxury', price:300000, upkeep:300, len:0.66, wid:0.3,  h:5, colors:['#E4572E','#F2B33D','#2E5E8C','#F2F0EA','#2B2621'] },
-  gt:     { name:'Meridian GT',tier:'luxury', price:520000, upkeep:450, len:0.7, wid:0.32, h:4.8, colors:['#1E3A5F','#B3202A','#C9CDD2','#101215','#2F5D3A'] },
-  supercar:{ name:'Vortex',    tier:'super', price:900000, upkeep:800, len:0.68, wid:0.33, h:4.2, colors:['#F2C230','#E4572E','#2BB673','#F4F4F2','#16181B','#7A3CC7'] },
-  hyper:  { name:'Halo X',     tier:'super', electric:true, price:2200000, upkeep:1600, len:0.72, wid:0.34, h:4, glow:'#7CF3FF', colors:['#E9ECEF','#0F1114','#2A5BD7','#C21D3A'] },
-  concept:{ name:'Nova Concept',tier:'super', electric:true, price:4000000, upkeep:2500, len:0.74, wid:0.34, h:4, glow:'#B07CFF', colors:['#EDEFF2','#15171C','#5E3FD6','#0FA3A3'] },
+  sports: { name:'Sports car', seats:2, tier:'luxury', price:300000, upkeep:300, len:0.66, wid:0.3,  h:5, colors:['#E4572E','#F2B33D','#2E5E8C','#F2F0EA','#2B2621'] },
+  gt:     { name:'Meridian GT',seats:2, tier:'luxury', price:520000, upkeep:450, len:0.7, wid:0.32, h:4.8, colors:['#1E3A5F','#B3202A','#C9CDD2','#101215','#2F5D3A'] },
+  supercar:{ name:'Vortex',    seats:2, tier:'super', price:900000, upkeep:800, len:0.68, wid:0.33, h:4.2, colors:['#F2C230','#E4572E','#2BB673','#F4F4F2','#16181B','#7A3CC7'] },
+  hyper:  { name:'Halo X',     seats:2, tier:'super', electric:true, price:2200000, upkeep:1600, len:0.72, wid:0.34, h:4, glow:'#7CF3FF', colors:['#E9ECEF','#0F1114','#2A5BD7','#C21D3A'] },
+  concept:{ name:'Nova Concept',seats:2, tier:'super', electric:true, price:4000000, upkeep:2500, len:0.74, wid:0.34, h:4, glow:'#B07CFF', colors:['#EDEFF2','#15171C','#5E3FD6','#0FA3A3'] },
   // two wheels: ridden on trips like a car
-  bicycle:   { name:'Bicycle',   kind:'bike', price:3000,  upkeep:0,  shape:'bike', len:0.36, wid:0.1,  h:9, colors:['#D9544A','#4A7BD9','#2F7D63','#F2C94C'] },
-  motorbike: { name:'Motorbike', kind:'bike', price:18000, upkeep:15, shape:'moto', len:0.42, wid:0.14, h:9, colors:['#2B2621','#C8382E','#2F4A7A','#F2F0EA'] },
+  bicycle:   { name:'Bicycle',   kind:'bike', seats:1, price:3000,  upkeep:0,  shape:'bike', len:0.36, wid:0.1,  h:9, colors:['#D9544A','#4A7BD9','#2F7D63','#F2C94C'] },
+  motorbike: { name:'Motorbike', kind:'bike', seats:2, price:18000, upkeep:15, shape:'moto', len:0.42, wid:0.14, h:9, colors:['#2B2621','#C8382E','#2F4A7A','#F2F0EA'] },
   // boats and aircraft: kept at the water or in the sky over the colony, where everyone sees them (vtype: how they draw)
   speedboat: { name:'Motor boat',      kind:'water', vtype:'boat',       price:150000,  upkeep:150,  colors:['#F4F4F0'] },
   sailboat:  { name:'Sailing boat',    kind:'water', vtype:'sailboat',   price:120000,  upkeep:100,  colors:['#F4F4F0'] },
@@ -543,6 +543,8 @@ export const CAR_MODELS = {
 };
 export const carKind = m => CAR_MODELS[m]?.kind || 'car'; // 'car' | 'bike' (both ridden on trips) | 'water' | 'air'
 export const ridden = m => ['car', 'bike'].includes(carKind(m));
+// seats: how many people fit (the driver included): 2 in the sports cars, 4 in the rest (and a basic car)
+export const seatsOf = m => CAR_MODELS[m]?.seats || 4;
 export const needsHangar = m => !!CAR_MODELS[m]?.hangar;
 export const hangarCap = type => BUILDING_TYPES[type]?.hangar || 0;
 

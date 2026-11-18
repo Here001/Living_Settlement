@@ -62,7 +62,7 @@ function blockArea(bx, by, o) {
       else if (H(tx, ty, 4) < 120) { props.push({ k: 'bin', x: px(6.2), y: pz(6.2) }); solid.push({ c: [wx(px(6.2)), wz(pz(6.2)), 0.4] }); }
       else if (H(tx, ty, 5) < 70) { props.push({ k: 'hydrant', x: px(6.6), y: pz(6.6) }); solid.push({ c: [wx(px(6.6)), wz(pz(6.6)), 0.3] }); }
       // a car parked at this kerb (on a street with parking, most tiles; elsewhere now and then)
-      if (links === 2 && ((n.N && n.S) || (n.E && n.W)) && H(tx, ty, 6) < (R0.deco === 'cars' ? 700 : 110)) { const cx = along ? x0 + TILE / 2 : dx < 0 ? x0 + 1.15 : x0 + TILE - 1.15, cz = along ? (dy < 0 ? z0 + 1.15 : z0 + TILE - 1.15) : z0 + TILE / 2;
+      if (links === 2 && ((n.N && n.S) || (n.E && n.W)) && H(tx, ty, 6) < (R0.deco === 'cars' ? 700 : 110)) { const cx = along ? x0 + TILE / 2 : dx < 0 ? x0 + 0.95 : x0 + TILE - 0.95, cz = along ? (dy < 0 ? z0 + 0.95 : z0 + TILE - 0.95) : z0 + TILE / 2; /* tight to the kerb */
         parked.push({ kind: PARK[H(tx, ty, 7) % PARK.length], col: PAINT[H(tx, ty, 8) % PAINT.length], x: wx(cx), z: wz(cz), ry: along ? (H(tx, ty, 9) & 1 ? Math.PI / 2 : -Math.PI / 2) : (H(tx, ty, 9) & 1 ? 0 : Math.PI) });
         solid.push({ c: [wx(along ? cx - 1.3 : cx), wz(along ? cz : cz - 1.3), 1.1] }, { c: [wx(along ? cx + 1.3 : cx), wz(along ? cz : cz + 1.3), 1.1] }); } }
     if (links >= 3) { const corner = [[-1, -1], [1, -1], [-1, 1], [1, 1]].find(([dx, dy]) => free(tx + dx, ty) && free(tx, ty + dy) || free(tx + dx, ty + dy) && !isR(tx + dx, ty + dy) && (free(tx + dx, ty) || free(tx, ty + dy)));
@@ -135,9 +135,12 @@ export function createTown(host, opts) {
   const tileOf = v => Math.floor(v / TILE);
   const solidsNear = (x, z) => { const out = []; const bx = Math.floor(tileOf(x) / B) * B, by = Math.floor(tileOf(z) / B) * B;
     for (const dx of [-B, 0, B]) for (const dz of [-B, 0, B]) { const v = blocks.get((bx + dx) + ',' + (by + dz)); if (v) out.push(...v.solid); } return out; };
-  const hits = (x, z, S) => { const tx = tileOf(x), tz = tileOf(z); if (!opts.loaded(tx, tz)) return true; if (opts.water(tx, tz) && !opts.road(tx, tz)) return true;
-    for (const s of S) { if (s.r) { if (x > s.r[0] && x < s.r[2] && z > s.r[1] && z < s.r[3]) return true; } else if (Math.hypot(x - s.c[0], z - s.c[1]) < s.c[2]) return true; }
-    for (const t of traffic) if (Math.hypot(x - t.px, z - t.pz) < 1.9) return true; return false; };
+  // Would this point of the car be inside something? (x0, z0: where the same point is now.) A point that's already
+  // overlapping something may always move further out of it, so two cars that end up overlapping can always part.
+  const depth = (x, z, s) => s.r ? Math.min(x - s.r[0], s.r[2] - x, z - s.r[1], s.r[3] - z) : s.c[2] - Math.hypot(x - s.c[0], z - s.c[1]); /* > 0: inside, by this much */
+  const hits = (x, z, S, x0, z0) => { const tx = tileOf(x), tz = tileOf(z); if (!opts.loaded(tx, tz)) return true; if (opts.water(tx, tz) && !opts.road(tx, tz) && !(opts.water(tileOf(x0), tileOf(z0)) && !opts.road(tileOf(x0), tileOf(z0)))) return true;
+    for (const s of S) { const d = depth(x, z, s); if (d > 0 && d >= depth(x0, z0, s) - 1e-3) return true; }
+    for (const t of traffic) { const s = { c: [t.px, t.pz, 1.9] }, d = depth(x, z, s); if (d > 0 && d >= depth(x0, z0, s) - 1e-3) return true; } return false; };
   const keys = new Set(), inp = { thr: 0, steer: 0 }; let ctl = opts.controls || { layout: 'stick' }; /* inp: from the on-screen controls (steer +1 = left) */
   function drive(dt) {
     const K = ctl.keys || {}, on = (a, d) => keys.has(d) || keys.has(String(K[a] || '').toLowerCase());
@@ -149,7 +152,7 @@ export function createTown(host, opts) {
     car.steer += (st - car.steer) * Math.min(1, dt * 7); car.a += car.steer * 1.5 * Math.max(-1, Math.min(1, car.v / 5)) * dt;
     const fx = Math.cos(car.a), fz = -Math.sin(car.a), nx = car.x + fx * car.v * dt, nz = car.z + fz * car.v * dt, S = solidsNear(nx, nz), dir = Math.sign(car.v || 1);
     const pts = [[2.1 * dir, 0.85], [2.1 * dir, -0.85], [0, 0]]; /* the front corners (the back ones going backwards) and the middle */
-    if (pts.some(([u, w]) => hits(nx + fx * u + fz * w, nz + fz * u - fx * w, S))) { car.v = -car.v * 0.25; bump = 0.25; return; }
+    if (pts.some(([u, w]) => hits(nx + fx * u + fz * w, nz + fz * u - fx * w, S, car.x + fx * u + fz * w, car.z + fz * u - fx * w))) { car.v = -car.v * 0.25; bump = 0.25; return; }
     car.x = nx; car.z = nz; }
   let bump = 0, roll = 0, pitch = 0, accel0 = 0;
 
@@ -184,7 +187,7 @@ export function createTown(host, opts) {
       const opts2 = DIRS.filter(([dx, dy]) => drivable(tx + dx, ty + dy)); if (!opts2.length) continue; const [dx, dy] = opts2[Math.floor(Math.random() * opts2.length)];
       const m = MODELS[Math.floor(Math.random() * MODELS.length)], t = { kind: m, col: PAINTS[Math.floor(Math.random() * PAINTS.length)], fx: tx, fy: ty, tx: tx + dx, ty: ty + dy, u: Math.random(), v: 0, top: 6 + Math.random() * 6, px: 0, pz: 0, ry: 0 };
       place(t, 1); traffic.push(t); return; } }
-  function place(t, snap) { const ax = (t.fx + 0.5) * TILE, az = (t.fy + 0.5) * TILE, bx2 = (t.tx + 0.5) * TILE, bz2 = (t.ty + 0.5) * TILE, dx = t.tx - t.fx, dy = t.ty - t.fy, lane = 1.9;
+  function place(t, snap) { const ax = (t.fx + 0.5) * TILE, az = (t.fy + 0.5) * TILE, bx2 = (t.tx + 0.5) * TILE, bz2 = (t.ty + 0.5) * TILE, dx = t.tx - t.fx, dy = t.ty - t.fy, lane = 1.3; /* clear of the parked cars and of the oncoming lane */
     const x = ax + (bx2 - ax) * t.u - dy * lane, z = az + (bz2 - az) * t.u + dx * lane, ry = Math.atan2(-dx, -dy); /* keep to the right-hand lane */
     if (snap) { t.px = x; t.pz = z; t.ry = ry; return; } t.px += (x - t.px) * 0.3; t.pz += (z - t.pz) * 0.3; /* round the corner, not a jump to the next lane */
     let d = ry - t.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); t.ry += d * 0.18; }
@@ -194,8 +197,10 @@ export function createTown(host, opts) {
     for (const t of traffic) { const dx = t.tx - t.fx, dy = t.ty - t.fy, rt = opts.road(t.fx, t.fy), top = Math.min(t.top, 7 * ((ROAD_TYPES[rt] || {}).speed || 2) * 0.75);
       // something ahead (you, or another car in the same lane): slow down and stop behind it
       let gap = 99; const hx = -Math.sin(t.ry), hz = -Math.cos(t.ry);
-      for (const o of [{ px: car.x, pz: car.z }, ...traffic]) { if (o === t) continue; const ox = o.px - t.px, oz = o.pz - t.pz, ahead = ox * hx + oz * hz, side = Math.abs(ox * hz - oz * hx); if (ahead > 0 && ahead < gap && side < 2.2) gap = ahead; }
-      const want = gap < 6 ? 0 : gap < 14 ? top * (gap - 6) / 8 : top; t.v += Math.max(-9 * dt, Math.min(3 * dt, want - t.v));
+      let byMe = false; for (const o of [{ px: car.x, pz: car.z, me: 1 }, ...traffic]) { if (o === t) continue; const ox = o.px - t.px, oz = o.pz - t.pz, ahead = ox * hx + oz * hz, side = Math.abs(ox * hz - oz * hx); if (ahead > -1.5 && ahead < gap && side < (o.me ? 3.2 : 2.2)) { gap = Math.max(0, ahead); byMe = !!o.me; } }
+      const want = gap < 6.5 ? 0 : gap < 14 ? top * (gap - 6.5) / 7.5 : top; t.v += Math.max(-12 * dt, Math.min(3 * dt, want - t.v)); if (gap < 4.5) t.v = Math.min(t.v, 0);
+      t.wait = t.v < 0.3 && byMe ? (t.wait || 0) + dt : 0; /* stuck behind you a while: turn round and go another way */
+      if (t.wait > 4) { t.wait = 0; [t.fx, t.fy, t.tx, t.ty] = [t.tx, t.ty, t.fx, t.fy]; t.u = Math.max(0, 1 - t.u); t.v = 0; }
       t.u += t.v * dt / TILE;
       while (t.u >= 1) { t.u -= 1; const nx = [];
         for (const [ex, ey] of DIRS) { if (ex === -dx && ey === -dy) continue; if (drivable(t.tx + ex, t.ty + ey)) nx.push([ex, ey]); }
@@ -276,7 +281,7 @@ export function createTown(host, opts) {
     else { const high = mode === 2, a = car.a + lk.yaw, back = high ? 26 : 9, up = (high ? 18 : 3.4) + lk.pitch * -8, tx = car.x - Math.cos(a) * back, tz = car.z + Math.sin(a) * back, k = Math.min(1, dt * 4.5); /* one steady pace, dragging or not: no jumps */
       cam.x += (tx - cam.x) * k; cam.z += (tz - cam.z) * k; cam.y += (Math.max(1.2, up) - cam.y) * k; camera.position.copy(cam);
       const lx = car.x + Math.cos(a) * 6, lz = car.z - Math.sin(a) * 6; aim.x += (lx - aim.x) * k; aim.z += (lz - aim.z) * k; look.set(aim.x, 1.2, aim.z); camera.lookAt(look); /* look past the car the way the camera faces */
-      view.cut.A.value.set(car.x, 1.0, car.z); view.cut.B.value.copy(camera.position); view.cut.R.value = high ? 6 : 3.5; }
+      view.cut.A.value.set(car.x, 1.0, car.z); { const bx = camera.position.x - car.x, bz = camera.position.z - car.z, L = Math.hypot(bx, bz) || 1; view.cut.B.value.set(camera.position.x + bx / L * 3, camera.position.y + 1, camera.position.z + bz / L * 3); } view.cut.R.value = high ? 6 : 3.8; } /* see through what's between you and the car, and just behind the camera */
     if (bump > 0) { bump -= dt; camera.position.y += Math.sin(bump * 60) * 0.08; }
     const sp = Math.abs(car.v); if (sp > 16) { const t = now0() / 1000, k = (sp - 16) * 0.0016; camera.position.x += Math.sin(t * 37) * k; camera.position.y += Math.sin(t * 43) * k; } } /* a faint tremble at speed */
   const now0 = () => performance.now();
@@ -327,7 +332,10 @@ export function createTown(host, opts) {
   // ---- controls on screen, in the layout picked in Settings: a stick; pedals and steer buttons; or a steering wheel and
   // pedals (steering on the left unless it's swapped). The arrow keys and the keys picked in Settings always work too.
   let pad = null;
-  function controls() { if (pad) pad.remove(); inp.thr = inp.steer = 0; const lay = ctl.layout || 'stick'; pad = document.createElement('div'); pad.className = 'tpad ' + lay + (ctl.swap ? ' swap' : ''); host.append(pad);
+  function controls() { if (pad) pad.remove(); inp.thr = inp.steer = 0; const lay = ctl.layout || 'stick'; pad = document.createElement('div'); pad.className = 'tpad ' + lay + (ctl.swap ? ' swap' : ''); let ts = ctl.steerSize || 1, tp = ctl.pedalSize || 1; if (lay !== 'stick') { const W0 = host.clientWidth || innerWidth, need = (lay === 'wheel' ? 150 * ts : 170 * ts) + 168 * tp + 52; if (need > W0) { const f = (W0 - 52) / (need - 52); ts *= f; tp *= f; } } /* both fit side by side, however big you've made them */
+    pad.style.setProperty('--ts', String(ts)); pad.style.setProperty('--tp', String(tp)); host.append(pad); /* sizes picked in Settings */
+    { const right = lay === 'stick' ? (ctl.swap ? 28 + 128 * ts : 0) : ctl.swap ? (lay === 'wheel' ? 18 + 150 * ts : 24 + 78 * ts) : 20 + 118 * tp;
+      (host.parentElement || host).style.setProperty('--dhud', Math.max(24, right + 14) + 'px'); } /* the speed and Stop buttons sit above whatever is on the right */
     const mk = (cls, html) => { const d = document.createElement('div'); d.className = cls; if (html) d.innerHTML = html; pad.append(d); return d; };
     const hold = (elm, down, up) => { const on = new Set(); elm.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); try { elm.setPointerCapture(e.pointerId); } catch (x) {} on.add(e.pointerId); elm.classList.add('on'); down(e); });
       const off = e => { if (!on.delete(e.pointerId)) return; if (!on.size) { elm.classList.remove('on'); up(e); } }; elm.addEventListener('pointerup', off); elm.addEventListener('pointercancel', off); return on; };

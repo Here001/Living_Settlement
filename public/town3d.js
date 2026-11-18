@@ -91,9 +91,10 @@ export function createTown(host, opts) {
     for (const dx of [-B, 0, B]) for (const dz of [-B, 0, B]) { const v = blocks.get((bx + dx) + ',' + (by + dz)); if (v) out.push(...v.solid); } return out; };
   const hits = (x, z, S) => { const tx = tileOf(x), tz = tileOf(z); if (!opts.loaded(tx, tz)) return true; if (opts.water(tx, tz) && !opts.road(tx, tz)) return true;
     for (const s of S) { if (s.r) { if (x > s.r[0] && x < s.r[2] && z > s.r[1] && z < s.r[3]) return true; } else if (Math.hypot(x - s.c[0], z - s.c[1]) < s.c[2]) return true; } return false; };
-  const keys = new Set(), joy = { x: 0, y: 0 };
+  const keys = new Set(), inp = { thr: 0, steer: 0 }; let ctl = opts.controls || { layout: 'stick' }; /* inp: from the on-screen controls (steer +1 = left) */
   function drive(dt) {
-    const up = (keys.has('ArrowUp') || keys.has('w') ? 1 : 0) - (keys.has('ArrowDown') || keys.has('s') ? 1 : 0) - joy.y, turn = (keys.has('ArrowLeft') || keys.has('a') ? 1 : 0) - (keys.has('ArrowRight') || keys.has('d') ? 1 : 0) - joy.x;
+    const K = ctl.keys || {}, on = (a, d) => keys.has(d) || keys.has(String(K[a] || '').toLowerCase());
+    const up = (on('up', 'ArrowUp') ? 1 : 0) - (on('down', 'ArrowDown') ? 1 : 0) + inp.thr, turn = (on('left', 'ArrowLeft') ? 1 : 0) - (on('right', 'ArrowRight') ? 1 : 0) + inp.steer;
     const thr = Math.max(-1, Math.min(1, up)), st = Math.max(-1, Math.min(1, turn)), rt = opts.road(tileOf(car.x), tileOf(car.z)), R = rt && ROAD_TYPES[rt];
     const top = R ? 7 * (R.speed || 2) : 6; /* metres a second: a street 14 (50 km/h), a highway 28; off the road, slower */
     if (thr > 0.05) car.v += (car.v < 0 ? 14 : 5) * thr * dt; else if (thr < -0.05) car.v += (car.v > 0 ? 14 : 3) * thr * dt; else car.v *= Math.pow(0.45, dt);
@@ -119,15 +120,46 @@ export function createTown(host, opts) {
       const vx = dx * k / Math.max(dt, 1e-3), vz = dz * k / Math.max(dt, 1e-3); g.position.x += dx * k; g.position.z += dz * k;
       if (f.P) f.P.animate(dt, vx, vz); else if (Math.hypot(vx, vz) > 0.4) { const want = Math.atan2(-vx, -vz); let d = want - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * Math.min(1, dt * 5); for (const w of g.userData.wheels || []) w.rotation.x -= Math.hypot(vx, vz) * dt / 0.33; } } }
 
-  // ---- the camera follows behind (or from higher up), and buildings between it and you are cut away ----
-  let high = 0; const cam = new THREE.Vector3(car.x - Math.cos(car.a) * 9, 3.6, car.z + Math.sin(car.a) * 9), look = new THREE.Vector3();
-  function chase(dt) { const back = high ? 26 : 9, up = high ? 18 : 3.4, tx = car.x - Math.cos(car.a) * back, tz = car.z + Math.sin(car.a) * back, k = Math.min(1, dt * 3.2);
-    cam.x += (tx - cam.x) * k; cam.z += (tz - cam.z) * k; cam.y += (up - cam.y) * k; camera.position.copy(cam);
-    if (bump > 0) { bump -= dt; camera.position.y += Math.sin(bump * 60) * 0.08; }
-    look.set(car.x + Math.cos(car.a) * 6, 1.2, car.z - Math.sin(car.a) * 6); camera.lookAt(look);
-    view.cut.A.value.set(car.x, 1.0, car.z); view.cut.B.value.copy(camera.position); view.cut.R.value = high ? 6 : 3.5; }
+  // ---- the camera: behind the car, from the driver's seat, or higher up; drag anywhere to look round as you drive ----
+  let mode = 0; const cam = new THREE.Vector3(car.x - Math.cos(car.a) * 9, 3.6, car.z + Math.sin(car.a) * 9), look = new THREE.Vector3();
+  const lk = { yaw: 0, pitch: 0, id: null, x: 0, y: 0, at: 0 };
+  // the driver's seat: a dashboard and a steering wheel that turns as you steer (the car's body is hidden in there)
+  const cockpit = new THREE.Group(), dashM = new THREE.MeshStandardMaterial({ color: '#23252a', roughness: 0.7 }), wheelM = new THREE.MeshStandardMaterial({ color: '#15161a', roughness: 0.5 });
+  { const dash = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.42, 0.7), dashM); dash.position.set(0, -0.66, -0.95); cockpit.add(dash);
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.04, 1.6), new THREE.MeshStandardMaterial({ color: opts.car.col || '#c8382e', roughness: 0.3, metalness: 0.5 })); hood.position.set(0, -0.5, -2.0); hood.rotation.x = 0.08; cockpit.add(hood);
+    const gauge = new THREE.Mesh(new THREE.CircleGeometry(0.07, 20), new THREE.MeshBasicMaterial({ color: '#9fe3ff' })); gauge.position.set(-0.3, -0.42, -0.72); gauge.rotation.x = -0.45; cockpit.add(gauge); }
+  const sw = new THREE.Group(); sw.add(new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.026, 10, 32), wheelM)); for (const a of [0, 2.1, 4.2]) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.19, 0.02), wheelM); sp.position.set(Math.sin(a) * 0.095, Math.cos(a) * 0.095, 0); sp.rotation.z = -a; sw.add(sp); }
+  sw.position.set(0, -0.36, -0.58); sw.rotation.x = -0.32; cockpit.add(sw); cockpit.visible = false; camera.add(cockpit); scene.add(camera);
+  function chase(dt) {
+    if (lk.id == null && now0() - lk.at > 1500 && Math.abs(car.v) > 2) { lk.yaw *= Math.pow(0.15, dt); lk.pitch *= Math.pow(0.15, dt); } /* let go: the view comes back round to the road */
+    const fp = mode === 1; me.visible = !fp; cockpit.visible = fp; sw.rotation.z = car.steer * 1.4;
+    if (fp) { const a = car.a + lk.yaw; camera.position.set(car.x + Math.cos(car.a) * 0.15 - Math.sin(car.a) * 0.36, 1.18, car.z - Math.sin(car.a) * 0.15 - Math.cos(car.a) * 0.36); /* the driver's seat, on the left */
+      look.set(camera.position.x + Math.cos(a) * 10, 1.18 + Math.tan(lk.pitch - 0.04) * 10, camera.position.z - Math.sin(a) * 10); camera.lookAt(look); cam.copy(camera.position); view.cut.R.value = 0; }
+    else { const high = mode === 2, a = car.a + lk.yaw, back = high ? 26 : 9, up = (high ? 18 : 3.4) + lk.pitch * -8, tx = car.x - Math.cos(a) * back, tz = car.z + Math.sin(a) * back, k = Math.min(1, dt * (lk.id != null ? 10 : 3.2));
+      cam.x += (tx - cam.x) * k; cam.z += (tz - cam.z) * k; cam.y += (Math.max(1.2, up) - cam.y) * k; camera.position.copy(cam);
+      look.set(car.x + Math.cos(car.a) * (lk.id != null ? 0 : 6), 1.2, car.z - Math.sin(car.a) * (lk.id != null ? 0 : 6)); camera.lookAt(look);
+      view.cut.A.value.set(car.x, 1.0, car.z); view.cut.B.value.copy(camera.position); view.cut.R.value = high ? 6 : 3.5; }
+    if (bump > 0) { bump -= dt; camera.position.y += Math.sin(bump * 60) * 0.08; } }
+  const now0 = () => performance.now();
+  canvas.style.touchAction = 'none';
+  canvas.addEventListener('pointerdown', e => { if (lk.id != null) return; lk.id = e.pointerId; lk.x = e.clientX; lk.y = e.clientY; try { canvas.setPointerCapture(e.pointerId); } catch (x) {} });
+  canvas.addEventListener('pointermove', e => { if (e.pointerId !== lk.id) return; lk.yaw = Math.max(-Math.PI, Math.min(Math.PI, lk.yaw - (e.clientX - lk.x) * 0.006)); lk.pitch = Math.max(-0.5, Math.min(0.45, lk.pitch - (e.clientY - lk.y) * 0.004)); lk.x = e.clientX; lk.y = e.clientY; });
+  const lkEnd = e => { if (e.pointerId === lk.id) { lk.id = null; lk.at = now0(); } }; canvas.addEventListener('pointerup', lkEnd); canvas.addEventListener('pointercancel', lkEnd);
+  canvas.addEventListener('dblclick', () => { lk.yaw = 0; lk.pitch = 0; });
 
-  // ---- the loop ----
+  // ---- the way to where you're going: arrows along the road, and a beam of light where it ends ----
+  const routeG = new THREE.Group(); scene.add(routeG); let routeMesh = null, routeEnd = null;
+  const chevron = (() => { const sh = new THREE.Shape(); sh.moveTo(1.1, 0); sh.lineTo(-0.5, 1.0); sh.lineTo(-0.1, 0); sh.lineTo(-0.5, -1.0); sh.closePath(); const g = new THREE.ShapeGeometry(sh); g.rotateX(-Math.PI / 2); return g; })();
+  const routeMat = new THREE.MeshBasicMaterial({ color: '#2f9bff', transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6, toneMapped: false });
+  const beamMat = new THREE.MeshBasicMaterial({ color: '#2f9bff', transparent: true, opacity: 0.35, depthWrite: false, toneMapped: false });
+  function setRoute(path) { if (routeMesh) { routeG.remove(routeMesh); routeMesh.dispose(); routeMesh = null; } if (routeEnd) { routeG.remove(routeEnd); routeEnd.geometry.dispose(); routeEnd = null; }
+    if (!path || path.length < 2) return; const pts = path.map(([x, y]) => [(x + 0.5) * TILE, (y + 0.5) * TILE]), spots = [];
+    for (let i = 1; i < pts.length; i++) { const [ax, az] = pts[i - 1], [bx2, bz2] = pts[i], L2 = Math.hypot(bx2 - ax, bz2 - az), ang = Math.atan2(-(bz2 - az), bx2 - ax); for (let d = 2; d < L2; d += 4) spots.push([ax + (bx2 - ax) * d / L2, az + (bz2 - az) * d / L2, ang]); }
+    routeMesh = new THREE.InstancedMesh(chevron, routeMat, Math.max(1, spots.length)); const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), sc = new THREE.Vector3(1, 1, 1);
+    spots.forEach(([x, z, a], i) => { q.setFromAxisAngle(up, a); m.compose(new THREE.Vector3(x, 0.09, z), q, sc); routeMesh.setMatrixAt(i, m); }); routeMesh.count = spots.length; routeMesh.frustumCulled = false; routeG.add(routeMesh);
+    const [ex, ez] = pts[pts.length - 1]; routeEnd = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 60, 16, 1, true), beamMat); routeEnd.position.set(ex, 30, ez); routeG.add(routeEnd); }
+
+  // ---- the loop ----  // ---- the loop ----
   let sent = 0, nearAt = 0, nearId = null, chk = 0, timeAt = 0, shadowAt = { x: 1e9, z: 1e9 }, shadowsDue = true, frames = 0, spent = 0, dead = false;
   const minute = () => (opts.minute ? opts.minute() : 720);
   function sunNow(force) { if (!(force || shadowsDue || Math.hypot(car.x - shadowAt.x, car.z - shadowAt.z) > 40)) return; shadowAt = { x: car.x, z: car.z }; shadowsDue = false;
@@ -136,7 +168,7 @@ export function createTown(host, opts) {
   view.start((dt, now) => {
     if (dead) return; drive(dt);
     me.position.set(car.x, 0, car.z); me.rotation.y = car.a - Math.PI / 2; for (const w of me.userData.wheels || []) w.rotation.x -= car.v * dt / 0.33;
-    chase(dt); crowd(now, dt); ground.position.set(Math.round(car.x / 50) * 50, -0.08, Math.round(car.z / 50) * 50);
+    chase(dt); crowd(now, dt); routeMat.opacity = 0.6 + 0.3 * Math.sin(now / 250); ground.position.set(Math.round(car.x / 50) * 50, -0.08, Math.round(car.z / 50) * 50);
     if (now - chk > 600) { chk = now; around(); }
     if (queue.length) { const [bx, by] = queue.shift().split(',').map(Number); if (opts.loaded(bx + B / 2, by + B / 2) || opts.loaded(bx, by)) build(bx, by); else queue.push(bx + ',' + by); }
     if (now - timeAt > 20000) { timeAt = now; shadowsDue = true; } sunNow(false);
@@ -148,14 +180,32 @@ export function createTown(host, opts) {
   });
   const refresh = setInterval(() => { if (!dead) for (const k of blocks.keys()) if (!queue.includes(k)) queue.push(k); }, 8000); /* pick up changes to the town */
 
-  // ---- controls: a stick on phones (forward and back, left and right), the arrow keys or WASD on computers ----
-  const stick = document.createElement('div'); stick.className = 'tjoy'; stick.innerHTML = '<i></i>'; host.append(stick); const knob = stick.firstChild; let jid = null;
-  const jmove = e => { const r = stick.getBoundingClientRect(), R = r.width / 2; let dx = (e.clientX - r.left - R) / R, dy = (e.clientY - r.top - R) / R; const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; } joy.x = dx; joy.y = dy; knob.style.transform = `translate(${dx * R * 0.6}px,${dy * R * 0.6}px)`; };
-  stick.addEventListener('pointerdown', e => { e.preventDefault(); jid = e.pointerId; stick.setPointerCapture(jid); jmove(e); });
-  stick.addEventListener('pointermove', e => { if (e.pointerId === jid) jmove(e); });
-  const jend = () => { jid = null; joy.x = joy.y = 0; knob.style.transform = ''; }; stick.addEventListener('pointerup', jend); stick.addEventListener('pointercancel', jend);
+  // ---- controls on screen, in the layout picked in Settings: a stick; pedals and steer buttons; or a steering wheel and
+  // pedals (steering on the left unless it's swapped). The arrow keys and the keys picked in Settings always work too.
+  let pad = null;
+  function controls() { if (pad) pad.remove(); inp.thr = inp.steer = 0; const lay = ctl.layout || 'stick'; pad = document.createElement('div'); pad.className = 'tpad ' + lay + (ctl.swap ? ' swap' : ''); host.append(pad);
+    const mk = (cls, html) => { const d = document.createElement('div'); d.className = cls; if (html) d.innerHTML = html; pad.append(d); return d; };
+    const hold = (elm, down, up) => { const on = new Set(); elm.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); try { elm.setPointerCapture(e.pointerId); } catch (x) {} on.add(e.pointerId); elm.classList.add('on'); down(e); });
+      const off = e => { if (!on.delete(e.pointerId)) return; if (!on.size) { elm.classList.remove('on'); up(e); } }; elm.addEventListener('pointerup', off); elm.addEventListener('pointercancel', off); return on; };
+    if (lay === 'stick') { const st = mk('tjoy', '<i></i>'), knob = st.firstChild; let id = null;
+      const mv = e => { const r = st.getBoundingClientRect(), R = r.width / 2; let dx = (e.clientX - r.left - R) / R, dy = (e.clientY - r.top - R) / R; const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; } inp.thr = -dy; inp.steer = -dx; knob.style.transform = `translate(${dx * R * 0.6}px,${dy * R * 0.6}px)`; };
+      st.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); id = e.pointerId; st.setPointerCapture(id); mv(e); }); st.addEventListener('pointermove', e => { if (e.pointerId === id) mv(e); });
+      const end = () => { id = null; inp.thr = inp.steer = 0; knob.style.transform = ''; }; st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end); return; }
+    // the pedals: brake (and reverse when stopped) and accelerator, held down
+    const pedals = mk('tpedals'), brake = document.createElement('div'), gas = document.createElement('div'); brake.className = 'tped brake'; brake.innerHTML = '<b>BRAKE</b>'; gas.className = 'tped gas'; gas.innerHTML = '<b>GAS</b>'; pedals.append(brake, gas);
+    hold(gas, () => { inp.thr = 1; }, () => { inp.thr = Math.min(0, inp.thr); }); hold(brake, () => { inp.thr = -1; }, () => { inp.thr = Math.max(0, inp.thr); });
+    if (lay === 'pedals') { const st = mk('tsteer'), l = document.createElement('div'), r = document.createElement('div'); l.className = 'tbtn'; l.textContent = '◀'; r.className = 'tbtn'; r.textContent = '▶'; st.append(l, r);
+      hold(l, () => { inp.steer = 1; }, () => { inp.steer = Math.min(0, inp.steer); }); hold(r, () => { inp.steer = -1; }, () => { inp.steer = Math.max(0, inp.steer); }); return; }
+    // a steering wheel: drag it round (up to about a turn and a half each way); it springs back when you let go
+    const wh = mk('twheel', '<svg viewBox="-50 -50 100 100"><circle r="44" fill="none" stroke="#1d1f24" stroke-width="10"/><circle r="44" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="2"/><path d="M-40 4 L-12 8 L-8 30 L8 30 L12 8 L40 4" fill="none" stroke="#1d1f24" stroke-width="8" stroke-linejoin="round"/><circle r="9" fill="#2a2d33"/><rect x="-3" y="-50" width="6" height="10" fill="#e8463a"/></svg>');
+    let wid = null, a0 = 0, turned = 0, last = 0; const ang = e => { const r = wh.getBoundingClientRect(); return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)); };
+    wh.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); wid = e.pointerId; wh.setPointerCapture(wid); last = ang(e); });
+    wh.addEventListener('pointermove', e => { if (e.pointerId !== wid) return; const a = ang(e); let d = a - last; d = Math.atan2(Math.sin(d), Math.cos(d)); last = a; turned = Math.max(-2.6, Math.min(2.6, turned + d)); inp.steer = -turned / 2.6; wh.style.transform = `rotate(${turned}rad)`; });
+    const wend = () => { wid = null; const from = turned, t0 = now0(); const back = () => { const k = Math.min(1, (now0() - t0) / 250); turned = from * (1 - k); inp.steer = -turned / 2.6; wh.style.transform = `rotate(${turned}rad)`; if (k < 1 && wid == null) requestAnimationFrame(back); }; back(); };
+    wh.addEventListener('pointerup', wend); wh.addEventListener('pointercancel', wend); }
+  controls();
   const keyOf = e => e.key.length === 1 ? e.key.toLowerCase() : e.key;
-  const kd = e => { if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return; const k = keyOf(e); if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd'].includes(k)) { keys.add(k); e.preventDefault(); } };
+  const kd = e => { if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; const k = keyOf(e), K = Object.values(ctl.keys || {}).map(x => String(x).toLowerCase()); if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(k) || K.includes(String(k).toLowerCase())) { keys.add(String(k).length === 1 ? String(k).toLowerCase() : k); e.preventDefault(); } };
   const ku = e => keys.delete(keyOf(e)), kb = () => keys.clear();
   addEventListener('keydown', kd); addEventListener('keyup', ku); addEventListener('blur', kb); addEventListener('resize', view.resize);
   canvas.addEventListener('webglcontextlost', () => { setTimeout(() => { if (!dead && renderer.getContext().isContextLost()) opts.onLost && opts.onLost(); }, 8000); }); /* the view tries to come back by itself first */
@@ -164,10 +214,12 @@ export function createTown(host, opts) {
     get pos() { return { x: car.x / TILE, y: car.z / TILE, a: car.a, v: car.v / TILE }; },
     kmh() { return Math.round(Math.abs(car.v) * 3.6); },
     stats() { return { ...stats, blocks: blocks.size, people: folk.size, radius: RAD, calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
-    toggleView() { high = high ? 0 : 1; return high; },
+    toggleView() { mode = (mode + 1) % 3; lk.yaw = lk.pitch = 0; return ['behind', 'driver', 'above'][mode]; },
+    setControls(c) { ctl = c || ctl; controls(); },
+    setRoute,
     stop() { car.v = 0; },
     dispose() { dead = true; clearInterval(refresh); view.stop(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); removeEventListener('blur', kb); removeEventListener('resize', view.resize);
       for (const v of blocks.values()) drop(v); blocks.clear(); for (const f of folk.values()) scene.remove(f.g); folk.clear();
-      ground.geometry.dispose(); ground.material.dispose(); try { view.dispose(); } catch (e) {} try { renderer.forceContextLoss(); } catch (e) {} canvas.remove(); stick.remove(); },
+      ground.geometry.dispose(); ground.material.dispose(); try { view.dispose(); } catch (e) {} try { renderer.forceContextLoss(); } catch (e) {} canvas.remove(); if (pad) pad.remove(); chevron.dispose(); routeMat.dispose(); beamMat.dispose(); },
   };
 }

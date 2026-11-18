@@ -1321,6 +1321,7 @@ function connect(){
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
     else if(m.type==='phone' && m.data) Phone.msg(m.data);
+    else if(m.type==='whereIn'){ if(m.all){ InsideNow.clear(); for(const [id,pl] of m.all) InsideNow.set(id,pl); } else if(m.place) InsideNow.set(m.id,m.place); else InsideNow.delete(m.id); }
     else if(m.type==='gm' && m.data) Chats.gincoming(m.data);
     else if(m.type==='chatInvite' && m.data) Chats.invited(m.data);
     else if(m.type==='notice' && m.data){ Notices.incoming(m.data); if((m.data.kind==='visit'||m.data.kind==='love')&&sel) setTimeout(()=>renderCard(true),300); } /* a visit asked for or answered: the open card shows it */
@@ -1572,8 +1573,16 @@ function getPlan(c, day){
   return plan;
 }
 // Where someone is at game minute gm: on a trip they chose (a visit), or following their usual day.
+// Who's inside a home, business or club right now (from the server): on the map they're in there, not out and about
+const InsideNow=new Map();
+function insideAt(c){ const pl=InsideNow.get(c.id); if(!pl) return null; let b=null;
+  if(pl.startsWith('b:')) b=D.buildings.get(pl.slice(2)); else { const h=pl.slice(2), o=[...S.citizens.values()].find(x=>x.handle.toLowerCase()===h); b=o&&bOf(o.home); }
+  if(!b||b.x==null) return null; const [w,d]=b.type&&BUILDING_TYPES[b.type]?sizeOf(b.type,b.rot||0):[1,1], name=b.name||(b.type&&BUILDING_TYPES[b.type]?T(b).name:'home'), pos=[b.x+w/2,b.y+d/2];
+  const p={ tile:[Math.floor(pos[0]),Math.floor(pos[1])], pos, indoor:true, bid:b.id, name };
+  return { x:pos[0], y:pos[1], visible:false, act:`Inside ${pl.startsWith('h:')?`${c.handle.toLowerCase()===pl.slice(2)?'their':'@'+pl.slice(2)+'’s'} home`:name}`, where:name, bid:b.id, moving:false, seg:{type:'stay',p,from:0,to:1440,act:'inside'}, plan:null }; }
 function citizenAt(c, gm){
   const joinGm=gmAt(c.joinedAt); if(gm<joinGm) return null;
+  if(InsideNow.size&&InsideNow.has(c.id)&&Math.abs(gm-gmNow())<3){ const st=insideAt(c); if(st) return st; } /* inside a place right now */
   const v=visiting(c); if(v){ const st=tripAt(c, v, gm); if(st) return st; }
   return dayAt(c, gm); }
 function dayAt(c, gm){
@@ -5123,10 +5132,12 @@ const Fight={ info:null, skew:0, loadAt:0, view:'races', pick:{}, amount:{}, bus
   live(){ return !!this.liveBout(); } };
 let fightTimer=null;
 function fightSoon(d){ clearTimeout(fightTimer); fightTimer=setTimeout(()=>loadFight(d),400); }
+// News for the whole colony (a race, Fight Night, the lottery): not while you're inside a place, where it would only get in the way
+const newsToast=(...a)=>{ if(Phone.inside()) return; toast(...a); };
 async function loadFight(d){ try{ const r=await api('/api/fight'); Fight.info=r; Fight.skew=r.now-Date.now(); Fight.loadAt=Date.now(); }catch(e){ return; }
   const I=Fight.info, nt=I.night;
-  if(d&&d.stage==='card'&&nt&&!Fight.toasted.has('c'+nt.n)){ Fight.toasted.add('c'+nt.n); const m=(I.bouts||[]).find(b=>b.i===2); toast(`🥊 Fight Night #${nt.no} is set!${m?` Main event: @${m.a.handle} vs @${m.b.handle}.`:''} Bets are open.`,'Fight Night',()=>{ Fight.view='fight'; openTab('races'); }); }
-  if(d&&d.stage==='bell'&&activeTab!=='races'){ const b=(I.bouts||[]).find(x=>x.i===d.i); if(b&&!Fight.toasted.has('b'+nt.n+':'+b.i)){ Fight.toasted.add('b'+nt.n+':'+b.i); toast(`🔔 ${b.name} is on: @${b.a.handle} vs @${b.b.handle}!`,'Watch',()=>{ Fight.view='fight'; openTab('races'); }); } }
+  if(d&&d.stage==='card'&&nt&&!Fight.toasted.has('c'+nt.n)){ Fight.toasted.add('c'+nt.n); const m=(I.bouts||[]).find(b=>b.i===2); newsToast(`🥊 Fight Night #${nt.no} is set!${m?` Main event: @${m.a.handle} vs @${m.b.handle}.`:''} Bets are open.`,'Fight Night',()=>{ Fight.view='fight'; openTab('races'); }); }
+  if(d&&d.stage==='bell'&&activeTab!=='races'){ const b=(I.bouts||[]).find(x=>x.i===d.i); if(b&&!Fight.toasted.has('b'+nt.n+':'+b.i)){ Fight.toasted.add('b'+nt.n+':'+b.i); newsToast(`🔔 ${b.name} is on: @${b.a.handle} vs @${b.b.handle}!`,'Watch',()=>{ Fight.view='fight'; openTab('races'); }); } }
   if(d&&d.stage==='settled'&&Me&&Me.handle) loadMyMoney();
   renderRaces(); }
 setInterval(()=>{ if(!document.hidden && (activeTab==='races'||STREAM) && Date.now()-Fight.loadAt>60000 && (Fight.view==='fight'||!Fight.loadAt)) loadFight(); },10000); // only while the Races tab is open (live news still arrives)
@@ -5204,8 +5215,8 @@ const Lotto={ info:null, count:1, busy:false, toastId:0 };
 let lottoTimer=null;
 function lotterySoon(d){ clearTimeout(lottoTimer); lottoTimer=setTimeout(()=>loadLottery(d),400); }
 async function loadLottery(d){ try{ Lotto.info=await api('/api/lottery'); }catch(e){ return; } const L=Lotto.info.lottery;
-  if(d&&L&&d.stage==='announced'&&Lotto.toastId!==L.id){ Lotto.toastId=L.id; toast(`🎟️ The lottery draw is in 2 minutes! Prize: ${fmt(L.pot)} coins.`,'Tickets',()=>openTab('races')); }
-  if(d&&L&&d.stage==='open') toast(`🎟️ A lottery just opened. Tickets ${fmt(L.price)} coins.`,'Tickets',()=>openTab('races'));
+  if(d&&L&&d.stage==='announced'&&Lotto.toastId!==L.id){ Lotto.toastId=L.id; newsToast(`🎟️ The lottery draw is in 2 minutes! Prize: ${fmt(L.pot)} coins.`,'Tickets',()=>openTab('races')); }
+  if(d&&L&&d.stage==='open') newsToast(`🎟️ A lottery just opened. Tickets ${fmt(L.price)} coins.`,'Tickets',()=>openTab('races'));
   if(d&&L&&d.stage==='drawn'&&L.winner){ if(Me&&Me.handle&&Me.handle.toLowerCase()===L.winner.toLowerCase()) toast(`🎉 You won the lottery: ${fmt(L.prize)} coins!`,'Share',()=>Share.win(`Won the lottery!`,`${fmt(L.prize)} coins`,`I just won the ${S.meta?S.meta.name:'colony'} lottery on Resurgence: ${fmt(L.prize)} coins 🎟️`,null));
     else toast(`🎉 @${L.winner} won the lottery: ${fmt(L.prize)} coins!`); }
   if(d&&d.stage==='drawn'&&Me&&Me.handle) loadMyMoney();
@@ -5226,8 +5237,8 @@ async function loadRace(d){ try{ const r=await api('/api/race'+(Race.track?'?tra
   const I=Race.info, many=(I.tracks||[]).length>1, at=t=>many?` at ${t.name}`:'';
   // The call to the track, a couple of minutes before the gates open (for every track).
   for(const t of I.tracks||[]){ const nx=t.next; if(!nx) continue; const key=t.id+':'+nx.n, left=nx.start-raceNow();
-    if(!Race.toasted.has(key) && left>0 && left<=I.announce+5000){ Race.toasted.add(key); toast(`🏁 Race #${nx.no}${at(t)} in ${Math.max(1,Math.floor(left/60000))} min. Pick your creature!`,'Races',()=>{ Race.track=t.id; openTab('races'); loadRace(); }); } }
-  if(d&&d.stage==='settled'){ const t=(I.tracks||[]).find(x=>x.id===d.track), lr=t&&t.live; if(lr&&lr.result&&activeTab!=='races') toast(`🏆 ${CREATURES[lr.result.order[0]].name} won Race #${lr.no}${at(t)}!`,'Results',()=>{ Race.track=t.id; openTab('races'); loadRace(); }); }
+    if(!Race.toasted.has(key) && left>0 && left<=I.announce+5000){ Race.toasted.add(key); newsToast(`🏁 Race #${nx.no}${at(t)} in ${Math.max(1,Math.floor(left/60000))} min. Pick your creature!`,'Races',()=>{ Race.track=t.id; openTab('races'); loadRace(); }); } }
+  if(d&&d.stage==='settled'){ const t=(I.tracks||[]).find(x=>x.id===d.track), lr=t&&t.live; if(lr&&lr.result&&activeTab!=='races') newsToast(`🏆 ${CREATURES[lr.result.order[0]].name} won Race #${lr.no}${at(t)}!`,'Results',()=>{ Race.track=t.id; openTab('races'); loadRace(); }); }
   renderRaces(); }
 setInterval(()=>{ if(!document.hidden && (activeTab==='races'||STREAM) && Date.now()-Race.loadAt>60000){ loadRace(); loadLottery(); } },10000); // only while the Races tab is open
 // Where the race is now: each creature's share of the lap. The order at the line is the server's; how they get there

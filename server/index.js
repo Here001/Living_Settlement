@@ -381,6 +381,7 @@ wss.on('connection', (ws, req) => {
   wsByIp.set(ip, open + 1); ws.once('close', () => { const n = (wsByIp.get(ip) || 1) - 1; if (n > 0) wsByIp.set(ip, n); else wsByIp.delete(ip); });
   const wsKey = 'ws:' + crypto.randomBytes(6).toString('hex');
   ws.isAlive = true; ws.subs = new Set(); ws.out = [];
+  if (whereIn.size) try { ws.send(JSON.stringify({ type: 'whereIn', all: [...whereIn] })); } catch {} /* who's inside places right now */
   ws.on('error', () => { try { ws.terminate(); } catch {} });
   ws.on('pong', () => { ws.isAlive = true; });
   ws.on('message', raw => {
@@ -401,6 +402,7 @@ wss.on('connection', (ws, req) => {
       try { world.rooms.seen(place, who, ws.playerHandle || null); } catch {}
       const p = { id: who, h: ws.playerHandle || null, x: +x.toFixed(2), y: +y.toFixed(2), a: +a.toFixed(2) };
       { const pose = String(m.pose || ''), ph = Number(m.ph); if (/^[sulprdo]$/.test(pose)) { p.pose = pose; p.ph = Number.isFinite(ph) ? +Math.max(-1.5, Math.min(1.5, ph)).toFixed(2) : 0; } } /* sitting, lying, using, playing, running */
+      if (first && ws.playerId) bus.publish([{ whereIn: true, id: ws.playerId, place }]); /* the map: they're inside here, not out and about */
       if (first) { const list = []; for (const w of wss.clients) if (w !== ws && w.inside === place && w.insidePos) list.push(w.insidePos); try { ws.send(JSON.stringify({ type: 'inside', k: 'all', place, list })); } catch {} }
       ws.insidePos = p; bus.publish([{ inside: true, place, skip: who, k: 'pos', p }]); return; }
     if (m?.type === 'out') { insideLeave(ws); return; }
@@ -417,7 +419,8 @@ wss.on('connection', (ws, req) => {
 function insideLeave(ws) { if (!ws.inside) return; const place = ws.inside, who = ws.insideWho; ws.inside = null; ws.insidePos = null;
   const m = world.rooms?.here.get(place); if (m && who && ![...wss.clients].some(w => w !== ws && w.inside === place && w.insideWho === who)) m.delete(who);
   bus.publish([{ inside: true, place, skip: who, k: 'gone', id: who }]);
-  if (who && who.startsWith('p:') && ![...wss.clients].some(w => w !== ws && w.inside === place && w.insideWho === who)) world.voice?.drop(who.slice(2), place); } /* their voice goes with them */
+  if (who && who.startsWith('p:') && ![...wss.clients].some(w => w !== ws && w.inside === place && w.insideWho === who)) { world.voice?.drop(who.slice(2), place); bus.publish([{ whereIn: true, id: who.slice(2), place: null }]); } } /* their voice goes with them, and the map shows them outside again */
+const whereIn = new Map(); /* citizen id → the place they're inside ('b:<building>' or 'h:<owner>') */
 const localOnline = id => [...wss.clients].some(w => w.readyState === 1 && w.playerId === id);
 world.phone.online = localOnline; /* you can only ring someone who has the game open */
 // Every minute, everyone with the colony open is marked as seen (that's what "online" means).
@@ -434,6 +437,10 @@ bus.on(ops => {
   if (ops.some(o => o.inside)) { for (const o of ops.filter(o => o.inside)) { const json = JSON.stringify({ type: 'inside', k: o.k, place: o.place, p: o.p, id: o.id, chat: o.chat, club: o.club }); /* club: money sprayed, money raining, the DJ */
       for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.inside !== o.place || (o.skip && ws.insideWho === o.skip) || ws.bufferedAmount > MAX_BUFFER) continue; if (o.only && !(ws.playerHandle && o.only.includes(ws.playerHandle.toLowerCase()))) continue; /* a private message: just the two of them */ try { ws.send(json); } catch {} } }
     ops = ops.filter(o => !o.inside); if (!ops.length) return; }
+  // Who's inside a place right now: everyone's map shows them in there instead of out and about (kept here for newcomers)
+  if (ops.some(o => o.whereIn)) { for (const o of ops.filter(o => o.whereIn)) { if (o.place) whereIn.set(o.id, o.place); else whereIn.delete(o.id);
+      const json = JSON.stringify({ type: 'whereIn', id: o.id, place: o.place }); for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.bufferedAmount > MAX_BUFFER) continue; try { ws.send(json); } catch {} } }
+    ops = ops.filter(o => !o.whereIn); if (!ops.length) return; }
   // Private chat messages go only to the two people's own connections.
   const priv = ops.filter(o => o.private); if (priv.length) ops = ops.filter(o => !o.private);
   for (const o of priv) { const msg = JSON.stringify({ type: o.op, data: o.data, id: o.id }); for (const ws of wss.clients) if (ws.readyState === 1 && o.to.includes(ws.playerId)) { try { ws.send(msg); } catch {} } }

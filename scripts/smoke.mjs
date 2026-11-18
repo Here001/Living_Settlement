@@ -2201,6 +2201,8 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
   const ball = b.got.find(m => m.k === 'all'), apos = a.got.find(m => m.k === 'pos');
   ok(ball && ball.list.some(p => p.h === 'live_amy' && p.x === 2), 'walking in, you see who is already there', JSON.stringify(ball));
   ok(apos && apos.p.h === 'live_ben' && apos.p.x === 4, '…and they see you come in', JSON.stringify(apos));
+  const seenIn = [], watch = new WebSocket(BASE.replace('http', 'ws') + '/ws'); watch.on('message', d => { const m = JSON.parse(d); if (m.type === 'whereIn') seenIn.push(m); }); await new Promise(r => watch.once('open', r)); await sleep(300);
+  ok(seenIn.some(m => m.all && m.all.some(([id, pl]) => id === A.id && pl === place)), 'anyone opening the map is told who is inside a place (so they aren’t shown out and about)', JSON.stringify(seenIn).slice(0, 200));
   b.w.send(JSON.stringify({ type: 'in', place, x: 4.5, y: 5, a: 1 })); await sleep(300); ok(a.got.filter(m => m.k === 'pos' && m.p.h === 'live_ben').some(m => m.p.x === 4.5), '…and see you move');
   b.w.send(JSON.stringify({ type: 'in', place, x: 4.5, y: 5.2, a: 1, pose: 's', ph: -0.32 })); await sleep(300); ok(a.got.filter(m => m.k === 'pos' && m.p.h === 'live_ben').some(m => m.p.pose === 's' && m.p.ph === -0.32), '…and see you sit down');
   b.w.send(JSON.stringify({ type: 'in', place, x: 4.5, y: 5.4, a: 1, pose: 'zz', ph: 99 })); await sleep(300); { const last = a.got.filter(m => m.k === 'pos' && m.p.h === 'live_ben').pop(); ok(last && last.p.y === 5.4 && !('pose' in last.p), 'a made-up pose is dropped'); }
@@ -2225,6 +2227,7 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
     ok((await call('POST', '/api/inside/chat', { place, text: 'hi', to: 'live_cat' }, A.P)).status === 403, 'not to someone who has blocked you');
     c.w.close(); }
   b.w.send(JSON.stringify({ type: 'out' })); await sleep(300); ok(a.got.some(m => m.k === 'gone'), 'leaving: the others see you go');
+  ok(seenIn.some(m => m.id === Bq.id && m.place === null), '…and the map shows them out and about again'); watch.close();
   a.w.close(); b.w.close();
   // frames turn on the wall: portrait/landscape
   await pool.query('update citizens set home_id = (select id from buildings where type = $2 limit 1) where id = $1', [A.id, 'house']);

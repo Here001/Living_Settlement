@@ -290,16 +290,28 @@ export function createTown(host, opts) {
   // ---- the camera: behind the car, from the driver's seat, or higher up; drag anywhere to look round as you drive ----
   let mode = 0; const cam = new THREE.Vector3(car.x - Math.cos(car.a) * 9, 3.6, car.z + Math.sin(car.a) * 9), look = new THREE.Vector3();
   const lk = { yaw: foot ? car.a : 0, pitch: 0, id: null, x: 0, y: 0, at: 0 }, /* yaw: on foot, where the camera faces; driving, how far it's turned from the car */ aim = { x: car.x + Math.cos(car.a) * 6, z: car.z - Math.sin(car.a) * 6 };
-  // the driver's seat: a dashboard and a steering wheel that turns as you steer (the car's body is hidden in there)
+  // the driver's seat: the inside of the car, fixed to the car (not to your eyes), so you can look round the cabin as you drive:
+  // the dashboard and its dials, a steering wheel that turns as you steer, the bonnet ahead, the pillars, doors, roof, seats and mirror
   const cockpit = new THREE.Group(), dashM = new THREE.MeshStandardMaterial({ color: '#23252a', roughness: 0.7 }), wheelM = new THREE.MeshStandardMaterial({ color: '#15161a', roughness: 0.5 });
-  { const dash = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.42, 0.7), dashM); dash.position.set(0, -0.66, -0.95); cockpit.add(dash);
-    const hood = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.04, 1.6), new THREE.MeshStandardMaterial({ color: opts.car.col || '#c8382e', roughness: 0.3, metalness: 0.5 })); hood.position.set(0, -0.5, -2.0); hood.rotation.x = 0.08; cockpit.add(hood);
-    const gauge = new THREE.Mesh(new THREE.CircleGeometry(0.07, 20), new THREE.MeshBasicMaterial({ color: '#9fe3ff' })); gauge.position.set(-0.3, -0.42, -0.72); gauge.rotation.x = -0.45; cockpit.add(gauge); }
-  const sw = new THREE.Group(); sw.add(new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.026, 10, 32), wheelM)); for (const a of [0, 2.1, 4.2]) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.19, 0.02), wheelM); sp.position.set(Math.sin(a) * 0.095, Math.cos(a) * 0.095, 0); sp.rotation.z = -a; sw.add(sp); }
-  sw.position.set(0, -0.44, -0.72); sw.rotation.x = -0.32; cockpit.add(sw); cockpit.visible = false; camera.add(cockpit); scene.add(camera);
+  { const trimM = new THREE.MeshStandardMaterial({ color: '#2e3036', roughness: 0.8 }), seatM = new THREE.MeshStandardMaterial({ color: '#3a3430', roughness: 0.9 }), roofM = new THREE.MeshStandardMaterial({ color: '#d9d4c9', roughness: 0.95 }),
+      paintM = new THREE.MeshStandardMaterial({ color: opts.car.col || '#c8382e', roughness: 0.3, metalness: 0.5 }), glowM = new THREE.MeshBasicMaterial({ color: '#9fe3ff' }), mirM = new THREE.MeshStandardMaterial({ color: '#9fb4c4', roughness: 0.15, metalness: 0.8 });
+    const box = (w, h, d, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.rotation.set(rx, ry, rz); cockpit.add(b); return b; };
+    box(1.84, 0.34, 0.62, dashM, 0, 0.56, -1.12); box(1.84, 0.06, 0.5, trimM, 0, 0.75, -1.2, -0.12); /* the dashboard, and its top */
+    box(1.9, 0.05, 1.7, paintM, 0, 0.7, -2.25, 0.07); /* the bonnet out ahead */
+    box(0.34, 0.12, 0.04, trimM, -0.36, 0.79, -1.02, -0.5); for (const x of [-0.43, -0.29]) { const g = new THREE.Mesh(new THREE.CircleGeometry(0.04, 20), glowM); g.position.set(x, 0.8, -0.995); g.rotation.x = -0.5; cockpit.add(g); } /* the dials, behind the wheel */
+    { const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.16), glowM); sc.position.set(0.05, 0.72, -0.82); sc.rotation.x = -0.35; cockpit.add(sc); } box(0.26, 0.26, 1.0, trimM, 0, 0.36, -0.2); /* the middle screen, and the console between the seats */
+    for (const sd of [-1, 1]) { box(0.06, 0.5, 2.3, trimM, sd * 0.9, 0.6, -0.05); /* the door, up to the window */ box(0.07, 0.06, 2.3, dashM, sd * 0.9, 0.86, -0.05); /* the window sill */
+      box(0.07, 0.07, 0.95, dashM, sd * 0.84, 1.15, -0.85, -0.82); /* the windscreen pillar */ box(0.08, 0.62, 0.12, dashM, sd * 0.88, 1.18, 0.45); /* the pillar behind the doors */
+      box(0.5, 0.12, 0.5, seatM, sd * 0.36, 0.4, 0.1); box(0.5, 0.7, 0.12, seatM, sd * 0.36, 0.78, 0.42, 0.12); box(0.26, 0.2, 0.1, seatM, sd * 0.36, 1.25, 0.47, 0.12); } /* the seats and headrests */
+    box(1.7, 0.4, 0.5, seatM, 0, 0.62, 1.15, 0.1); box(1.74, 0.05, 1.8, roofM, 0, 1.5, 0.25); box(1.74, 0.06, 0.08, dashM, 0, 1.47, -0.66); /* the back seat, the roof lining and its front edge */
+    box(0.24, 0.07, 0.02, mirM, 0, 1.38, -0.62); box(0.02, 0.08, 0.02, dashM, 0, 1.44, -0.62); for (const x of [-0.42, 0.42]) box(0.36, 0.02, 0.2, roofM, x, 1.45, -0.55, 0.25); /* the mirror and the sun visors */ }
+  const sw = new THREE.Group(); sw.add(new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.026, 10, 32), wheelM)); for (const a of [0, 2.1, 4.2]) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.18, 0.02), wheelM); sp.position.set(Math.sin(a) * 0.09, Math.cos(a) * 0.09, 0); sp.rotation.z = -a; sw.add(sp); }
+  { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.3, 10), wheelM); col.rotation.x = Math.PI / 2; col.position.z = -0.15; sw.add(col); }
+  sw.position.set(-0.36, 0.74, -0.86); sw.rotation.x = -0.42; cockpit.add(sw); cockpit.visible = false; scene.add(cockpit);
   function chase(dt) {
     if (lk.id == null && !foot) { const back = Math.exp(-dt * Math.min(0.8, Math.abs(car.v) / 22)); lk.yaw *= back; lk.pitch *= back; } /* let go: the view stays where you turned it, and drifts gently back behind the car as you drive (not at all while you're stopped) */
-    const fp = mode === 1; cockpit.visible = fp && !foot; sw.rotation.z = car.steer * 1.4;
+    const fp = mode === 1; cockpit.visible = fp && !foot; sw.rotation.z = car.steer * 1.4; if (cockpit.visible) { cockpit.position.set(car.x, 0, car.z); cockpit.rotation.set(0, car.a - Math.PI / 2, 0); }
+    { const near = fp ? 0.08 : 0.5; if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); } } /* in the car, close enough to see the wheel */
     if (fp && foot) { const a = lk.yaw; camera.position.set(car.x + Math.cos(a) * 0.1, 1.62, car.z - Math.sin(a) * 0.1); look.set(camera.position.x + Math.cos(a) * 10, 1.62 + Math.tan(lk.pitch - 0.02) * 10, camera.position.z - Math.sin(a) * 10); camera.lookAt(look); cam.copy(camera.position); view.cut.R.value = 0; } /* through your own eyes */
     else if (fp) { const a = car.a + lk.yaw; camera.position.set(car.x + Math.cos(car.a) * 0.15 - Math.sin(car.a) * 0.36, 1.18, car.z - Math.sin(car.a) * 0.15 - Math.cos(car.a) * 0.36); /* the driver's seat, on the left */
       look.set(camera.position.x + Math.cos(a) * 10, 1.18 + Math.tan(lk.pitch - 0.04) * 10, camera.position.z - Math.sin(a) * 10); camera.lookAt(look); cam.copy(camera.position); view.cut.R.value = 0; }
@@ -343,7 +355,7 @@ export function createTown(host, opts) {
     const night = view.night || 0; for (const blk of blocks.values()) for (const c of blk.parked) pushCar(c.kind, c.col, c.x, c.z, c.ry);
     driveTraffic(dt); walk(dt); skyLife(dt, now, night);
     head.intensity = foot ? 0 : night * 60; if (night > 0.02) { const fx = Math.cos(car.a), fz = -Math.sin(car.a); head.position.set(car.x + fx * 1.8, 0.9, car.z + fz * 1.8); head.target.position.set(car.x + fx * 14, 0, car.z + fz * 14); }
-    const fov = foot ? 62 : 60 + Math.min(14, Math.abs(car.v) * 0.45); if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); } /* the view widens with speed */
+    const fov = mode === 1 && camera.aspect < 1 ? 72 + (foot ? 0 : Math.min(8, Math.abs(car.v) * 0.3)) : foot ? 62 : 60 + Math.min(14, Math.abs(car.v) * 0.45); if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); } /* the view widens with speed */
     GRASS.time.value = now / 1000; chase(dt); crowd(now, dt); drawFleet(night); routeMat.opacity = 0.6 + 0.3 * Math.sin(now / 250); ground.position.set(Math.round(car.x / 50) * 50, -0.08, Math.round(car.z / 50) * 50);
     if (now - chk > 600) { chk = now; around(); }
     if (queue.length) { const [bx, by] = queue.shift().split(',').map(Number); if (opts.loaded(bx + B / 2, by + B / 2) || opts.loaded(bx, by)) build(bx, by); else queue.push(bx + ',' + by); }

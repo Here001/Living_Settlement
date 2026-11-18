@@ -7093,7 +7093,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     if(m.k==='riders'){ const was=new Set(this.riders.map(r=>r.h)), now=new Set((m.list||[]).map(r=>r.h)); this.riders=m.list||[];
       for(const h of now) if(!was.has(h)) toast(`👥 @${h} got in. Drive on!`); for(const h of was) if(!now.has(h)) toast(`👋 @${h} got out.`);
       if(this.T.pos.mode==='car') this.sub.textContent=this.riders.length?`👥 ${this.riders.map(r=>'@'+r.h).join(', ')} riding with you (${this.riders.length+1} of ${m.seats||4} seats)`:'Steer with the stick'; return; }
-    if(m.k==='in'){ this.nearBy(null); this.nearRide(null); this.riding={id:m.id,h:m.h,seat:m.seat}; this.T.ride({id:m.id,seat:m.seat,col:m.col,x:m.x,y:m.y,a:m.a});
+    if(m.k==='in'){ this.nearBy(null); this.nearRide(null); this.riding={id:m.id,h:m.h,seat:m.seat}; this.T.ride({id:m.id,seat:m.seat,m:m.m,col:m.col,x:m.x,y:m.y,a:m.a});
       this.title.textContent=`🚗 Riding with @${m.h}`; this.sub.textContent=`${m.seat===1?'In the front seat':'In the back seat'} · 🎥 to see from your seat`; this.paintMode(); toast(`🚗 You’re in @${m.h}’s car. They drive; tap 🚶 Get out when you like.`); return; }
     if(m.k==='out'){ if(!this.riding) return; const h=this.riding.h; this.riding=null; this.T.unride(m.x,m.y,m.a); this.title.textContent='🚶 Out on foot'; this.sub.textContent='Stick to walk, drag the screen to look round'; this.paintMode(); toast(`🚶 You got out of @${h||'their'}’s car.`); } },
   // the driver: someone wants a ride

@@ -625,10 +625,9 @@ body.clean #djBubble{display:none}
 .driveview .dhud{bottom:calc(var(--dhud,150px) + env(safe-area-inset-bottom))}
 .dminiw{position:absolute;top:calc(64px + env(safe-area-inset-top));right:12px;z-index:5;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .dmini{width:130px;height:130px;border-radius:50%;opacity:.82;border:3px solid rgba(255,255,255,.85);box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;background:#cfe3b8}
-.dminirow{display:flex;align-items:flex-start;gap:6px}.dminiz{display:flex;flex-direction:column;gap:6px;margin-top:20px}.dminiz button{width:34px;height:34px;border-radius:50%;border:2px solid rgba(255,255,255,.85);background:rgba(20,22,28,.6);color:#fff;font-size:18px;font-weight:800;display:grid;place-items:center;padding:0;cursor:pointer}
-.dmini{touch-action:none}
 .dminfo{background:rgba(20,22,28,.75);color:#fff;font-weight:700;font-size:12.5px;padding:4px 10px;border-radius:10px}
 .dbig{position:absolute;inset:56px 10px calc(10px + env(safe-area-inset-bottom)) 10px;z-index:8;background:#fff;border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden}
+.dbigbar .webbtn{font-size:22px;font-weight:900;min-width:40px;height:40px;border-radius:50%;background:#f1f3f5}
 .dbigbar{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid rgba(0,0,0,.1)}.dbigbar b{flex:1;font-size:15px}.dbigc{flex:1;min-height:0;width:100%;touch-action:none;cursor:crosshair;display:block}
 .dbigfoot{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid rgba(0,0,0,.1)}
 .drivectl .spchips{flex-wrap:wrap}
@@ -6837,18 +6836,8 @@ const DriveCtl={ DEF:{ layout:'stick', swap:false, steerSize:1, pedalSize:1, key
 // (tap the small one) where you tap anywhere to set where you're going. The way there is worked out along the roads and
 // shown on both maps and as arrows on the road; go off it and it finds a new way from where you are.
 const DriveMap={ route:null, idx:0, dest:null, off:0, rerouteAt:0, big:null, bv:null,
-  z:(()=>{ try{ return Number(ls.get('resurgence-minimap-z'))||7; }catch(e){ return 7; } })(), /* pixels a tile on the small map: + and − (or pinch) zoom it */
-  zoom(f){ this.z=Math.max(2.5,Math.min(16,this.z*f)); try{ ls.set('resurgence-minimap-z',this.z); }catch(e){} this.draw(); },
-  mount(root){ this.cv=el('canvas',{class:'dmini',width:'260',height:'260','aria-label':'Map: tap to open it and pick where to go; pinch or + and − to zoom'}); this.info=el('div',{class:'dminfo',hidden:true});
-    // one finger tapping opens the big map; two fingers pinching zoom the small one
-    const pts=new Map(); let pinch=0, moved=0;
-    this.cv.addEventListener('pointerdown',e=>{ e.stopPropagation(); this.cv.setPointerCapture(e.pointerId); pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(pts.size===1){ moved=0; pinch=0; } });
-    this.cv.addEventListener('pointermove',e=>{ if(!pts.has(e.pointerId)) return; const was=[...pts.values()]; const before=was.length===2?Math.hypot(was[0].x-was[1].x,was[0].y-was[1].y):0; const p0=pts.get(e.pointerId); moved+=Math.abs(e.clientX-p0.x)+Math.abs(e.clientY-p0.y); pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
-      if(pts.size===2){ const now=[...pts.values()], d=Math.hypot(now[0].x-now[1].x,now[0].y-now[1].y); if(before>0&&d>0){ this.zoom(d/before); pinch=1; } } });
-    const up=e=>{ if(!pts.delete(e.pointerId)) return; if(!pts.size&&!pinch&&moved<8) this.open(); }; this.cv.addEventListener('pointerup',up); this.cv.addEventListener('pointercancel',e=>{ pts.delete(e.pointerId); pinch=1; });
-    this.cv.addEventListener('wheel',e=>{ e.preventDefault(); this.zoom(e.deltaY<0?1.15:1/1.15); },{passive:false});
-    const zb=el('div',{class:'dminiz'}, el('button',{text:'＋','aria-label':'Zoom the map in',onclick:e=>{ e.stopPropagation(); this.zoom(1.35); }}), el('button',{text:'－','aria-label':'Zoom the map out',onclick:e=>{ e.stopPropagation(); this.zoom(1/1.35); }}));
-    root.append(el('div',{class:'dminiw'}, el('div',{class:'dminirow'}, zb, this.cv), this.info)); this.draw(); },
+  mount(root){ this.cv=el('canvas',{class:'dmini',width:'260',height:'260','aria-label':'Map: tap to open it, zoom in and pick where to go',onclick:()=>this.open()}); this.info=el('div',{class:'dminfo',hidden:true});
+    root.append(el('div',{class:'dminiw'}, this.cv, this.info)); this.draw(); },
   reset(){ this.route=null; this.idx=0; this.dest=null; this.off=0; this.big&&this.big.remove(); this.big=null; },
   // the tiles round a point, drawn on a canvas: roads, water, buildings, the way to go, and where it ends
   paint(g,W,H,cx,cy,s,rot){ g.save(); g.clearRect(0,0,W,H); g.translate(W/2,H/2); if(rot) g.rotate(rot); g.scale(s,s); g.translate(-cx,-cy);
@@ -6859,7 +6848,7 @@ const DriveMap={ route:null, idx:0, dest:null, off:0, rerouteAt:0, big:null, bv:
     if(this.dest){ g.fillStyle='#e8463a'; g.beginPath(); g.arc(this.dest.x+0.5,this.dest.y+0.5,Math.max(0.7,5/s),0,7); g.fill(); }
     g.restore(); },
   draw(){ const T=Drive.T; if(!this.cv||!T) return; const p=T.pos, g=this.cv.getContext('2d'), W=this.cv.width, H=this.cv.height;
-    this.paint(g,W,H,p.x,p.y,this.z,-Math.PI/2+p.a); /* heading up */
+    this.paint(g,W,H,p.x,p.y,7,-Math.PI/2+p.a); /* heading up */
     g.fillStyle='#e8463a'; g.strokeStyle='#fff'; g.lineWidth=3; g.beginPath(); g.moveTo(W/2,H/2-13); g.lineTo(W/2+9,H/2+10); g.lineTo(W/2,H/2+5); g.lineTo(W/2-9,H/2+10); g.closePath(); g.fill(); g.stroke();
     if(this.route){ const left=this.left(p); this.info.hidden=false; this.info.textContent=`${left<1000?Math.round(left/10)*10+' m':(left/1000).toFixed(1)+' km'} · ${Math.max(1,Math.round(left/1000/40*60))} min`; } else this.info.hidden=true;
     if(this.big) this.drawBig(); },
@@ -6869,11 +6858,17 @@ const DriveMap={ route:null, idx:0, dest:null, off:0, rerouteAt:0, big:null, bv:
     const cv=el('canvas',{class:'dbigc'}), title=el('b',{text:this.dest?`To ${this.dest.name}`:'Tap where you want to go'});
     const box=el('div',{class:'dbig'}, el('div',{class:'dbigbar'}, title, el('button',{class:'webbtn',text:'＋',title:'Zoom in',onclick:()=>{ this.bv.s=Math.min(28,this.bv.s*1.4); this.drawBig(); }}), el('button',{class:'webbtn',text:'－',title:'Zoom out',onclick:()=>{ this.bv.s=Math.max(2.5,this.bv.s/1.4); this.drawBig(); }}),
       el('button',{class:'webbtn',text:'⌖',title:'Back to your car',onclick:()=>{ const q=Drive.T.pos; this.bv.x=q.x; this.bv.y=q.y; this.drawBig(); }}), el('button',{class:'webx',text:'✕','aria-label':'Close the map',onclick:()=>this.close()})), cv,
-      el('div',{class:'dbigfoot'}, this.clearBtn=el('button',{class:'btn sm',text:'Clear the route',hidden:!this.route,onclick:()=>{ this.clear(); this.close(); }}), el('span',{class:'hint',text:'Drag to look about. Tap a place to go there.'})));
+      el('div',{class:'dbigfoot'}, this.clearBtn=el('button',{class:'btn sm',text:'Clear the route',hidden:!this.route,onclick:()=>{ this.clear(); this.close(); }}), el('span',{class:'hint',text:'Drag to look about, pinch or ＋ － to zoom. Tap a place to go there.'})));
     this.title=title; this.bcv=cv; this.big=box; Drive.el.append(box);
-    let drag=null; cv.addEventListener('pointerdown',e=>{ drag={ id:e.pointerId, x:e.clientX, y:e.clientY, moved:0 }; cv.setPointerCapture(e.pointerId); });
-    cv.addEventListener('pointermove',e=>{ if(!drag||e.pointerId!==drag.id) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; drag.moved+=Math.abs(dx)+Math.abs(dy); drag.x=e.clientX; drag.y=e.clientY; this.bv.x-=dx/this.bv.s; this.bv.y-=dy/this.bv.s; this.drawBig(); });
-    cv.addEventListener('pointerup',e=>{ if(!drag||e.pointerId!==drag.id) return; const moved=drag.moved; drag=null; if(moved>8) return; const r=cv.getBoundingClientRect(), tx=Math.floor(this.bv.x+(e.clientX-r.left-r.width/2)/this.bv.s), ty=Math.floor(this.bv.y+(e.clientY-r.top-r.height/2)/this.bv.s); this.go(tx,ty); });
+    // one finger drags the map about, two fingers pinch to zoom, and a tap picks where to go
+    const pts=new Map(); let moved=0, pinched=false;
+    cv.addEventListener('pointerdown',e=>{ cv.setPointerCapture(e.pointerId); pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(pts.size===1){ moved=0; pinched=false; } else pinched=true; });
+    cv.addEventListener('pointermove',e=>{ const p0=pts.get(e.pointerId); if(!p0) return; const was=[...pts.values()], d0=was.length===2?Math.hypot(was[0].x-was[1].x,was[0].y-was[1].y):0;
+      const dx=e.clientX-p0.x, dy=e.clientY-p0.y; moved+=Math.abs(dx)+Math.abs(dy); pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(pts.size===2){ const now=[...pts.values()], d1=Math.hypot(now[0].x-now[1].x,now[0].y-now[1].y); if(d0>0&&d1>0) this.bv.s=Math.max(2.5,Math.min(28,this.bv.s*d1/d0)); this.bv.x-=dx/2/this.bv.s; this.bv.y-=dy/2/this.bv.s; }
+      else { this.bv.x-=dx/this.bv.s; this.bv.y-=dy/this.bv.s; } this.drawBig(); });
+    cv.addEventListener('pointerup',e=>{ if(!pts.delete(e.pointerId)) return; if(pts.size||pinched||moved>8) return; const r=cv.getBoundingClientRect(), tx=Math.floor(this.bv.x+(e.clientX-r.left-r.width/2)/this.bv.s), ty=Math.floor(this.bv.y+(e.clientY-r.top-r.height/2)/this.bv.s); this.go(tx,ty); });
+    cv.addEventListener('pointercancel',e=>{ pts.delete(e.pointerId); pinched=true; });
     cv.addEventListener('wheel',e=>{ e.preventDefault(); this.bv.s=Math.max(2.5,Math.min(28,this.bv.s*(e.deltaY<0?1.15:1/1.15))); this.drawBig(); },{passive:false});
     requestAnimationFrame(()=>this.drawBig()); },
   close(){ this.big&&this.big.remove(); this.big=null; },

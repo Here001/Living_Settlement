@@ -6855,7 +6855,7 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
   ptt:(()=>{ try{ return !!ls.get('resurgence-voice-ptt'); }catch(e){ return false; } })(), /* hold to talk, instead of an open mic */
   async enter(R){ this.leave(); if(!(Me&&Me.token)||typeof RTCPeerConnection==='undefined') return; this.R=R;
     try{ this.cfg=await api('/api/voice/config'); }catch(e){ return; } if(!this.cfg.on||this.R!==R) return;
-    this.micBtn=el('button',{class:'vbtn vmic',title:'Your microphone',onclick:()=>{ if(!this.ptt) this.talk(); }}); this.peopleBtn=el('button',{class:'vbtn vpeople',title:'Who hears you, and who you hear',onclick:()=>this.panel()});
+    this.micBtn=el('button',{class:'vbtn vmic',title:'Your microphone',onclick:()=>{ if(!this.ptt) this.talk(); }}); this.peopleBtn=el('button',{class:'vbtn vpeople',title:'Voice: open mic or hold to talk, and who you hear',onclick:()=>this.panel()});
     const hold=on=>e=>{ if(!this.ptt) return; e.preventDefault(); this.hold(on); };
     this.micBtn.addEventListener('pointerdown',hold(true)); for(const ev of ['pointerup','pointercancel','pointerleave']) this.micBtn.addEventListener(ev,hold(false));
     { const col=(R.stage.closest('.webview')||R.stage).querySelector('.sidecol'); if(col){ this.micBtn.classList.add('sidebtn','sidehide'); this.peopleBtn.classList.add('sidebtn','sidehide'); /* (they hide with ▴ too) */ col.append(this.micBtn,this.peopleBtn); } else R.stage.append(this.micBtn,this.peopleBtn); } this.paint(); /* (in the column on the right, under 📱) */
@@ -6923,13 +6923,11 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
   // who hears you, open mic or hold to talk, and each voice's volume (or muting it) for yourself
   panel(){ if(this.vp&&this.vp.isConnected){ this.vp.remove(); this.vp=null; return; } const R=this.R; if(!R) return; const P=el('div',{class:'voicepanel'}); this.vp=P; R.stage.append(P); this.fillPanel(); },
   fillPanel(){ const P=this.vp, R=this.R; if(!P||!R) return; const people=[...(R.others?R.others.values():[])].map(p=>p.h).filter(h=>h&&(!Me||h.toLowerCase()!==String(Me.handle||'').toLowerCase())).filter((h,i,a)=>a.indexOf(h)===i);
-    const sel=new Set(this.to||[]), setTo=async to=>{ try{ const r=await api('/api/voice/audience',{method:'POST',body:{place:R.spot,to}}); this.to=r.to; this.paint(); this.fillPanel(); }catch(e){ toast(e.message); } };
+    if(this.to&&!this.toReset){ this.toReset=true; api('/api/voice/audience',{method:'POST',body:{place:R.spot,to:null}}).then(()=>{ this.to=null; this.toReset=false; this.paint(); }).catch(()=>{ this.toReset=false; }); } /* (anyone who had picked people: back to everyone) */
     const setPtt=v=>{ this.ptt=v; try{ ls.set('resurgence-voice-ptt',v?1:0); }catch(e){} if(this.mic) this.setLive(!v); this.paint(); this.fillPanel(); };
     P.replaceChildren(el('div',{class:'sphead'}, el('b',{text:'🎙️ Voice'}), el('button',{class:'x',text:'✕','aria-label':'Close',onclick:()=>this.panel()})),
       el('div',{class:'spchips'}, el('button',{class:'spchip'+(this.ptt?'':' on'),text:'🎙️ Open mic',onclick:()=>setPtt(false)}), el('button',{class:'spchip'+(this.ptt?' on':''),text:'✋ Hold to talk',onclick:()=>setPtt(true)})),
-      el('p',{class:'hint',text:this.to?`Only ${this.to.map(h=>'@'+h).join(', ')||'nobody'} can hear you.`:'Everyone here can hear you.'}),
-      el('div',{class:'spchips'}, el('button',{class:'spchip'+(this.to?'':' on'),text:'Everyone',onclick:()=>setTo(null)}),
-        ...people.map(h=>el('button',{class:'spchip'+(sel.has(h.toLowerCase())?' on':''),text:'@'+h,onclick:()=>{ const s2=new Set(this.to||[]); s2.has(h.toLowerCase())?s2.delete(h.toLowerCase()):s2.add(h.toLowerCase()); setTo([...s2]); }}))),
+      el('p',{class:'hint',text:'One mic for everyone: when it’s on, everyone here hears you.'}), /* (no picking who hears you, person by person) */
       this.myQ?el('p',{class:'hint vq-me',text:`Your connection: ${this.myQ}`}):'',
       el('div',{class:'sphr'}), el('b',{text:'People you hear'}),
       people.length?el('div',{class:'vlistv'}, ...people.map(h=>{ const m=this.muted.has(h.toLowerCase()), v=Math.round(VoiceOut.vol(h)*100);

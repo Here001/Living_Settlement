@@ -515,11 +515,21 @@ export const VEHICLE_TYPES = {
 export const OLD_CAR_PRICES = { hatch: 1500, sedan: 3000, pickup: 5000, suv: 6500, sports: 14000 };
 export const carPaid = car => Number(car?.paid) || OLD_CAR_PRICES[car?.m] || 0;
 export const CAR_MODELS = {
-  hatch:  { name:'Hatchback',  price:25000, upkeep:25,  len:0.54, wid:0.28, h:6, colors:['#D9544A','#5B8DB8','#E6C35C','#3E7A4B','#F2F0EA','#2B2621'] },
-  sedan:  { name:'Sedan',      price:45000, upkeep:45,  len:0.64, wid:0.3,  h:6, colors:['#7C8288','#2F4A7A','#F2F0EA','#8C2F1B','#2B2621','#3E7A4B'] },
-  pickup: { name:'Pickup',     price:70000, upkeep:70,  len:0.72, wid:0.32, h:7, cargo:'#8C7B66', colors:['#C8382E','#2F4A7A','#E2A23B','#F2F0EA','#4A5A44'] },
-  suv:    { name:'SUV',        price:95000, upkeep:95,  len:0.7,  wid:0.33, h:8, colors:['#2B2621','#F2F0EA','#5E7C99','#8C2F1B','#7C8288'] },
-  sports: { name:'Sports car', price:300000, upkeep:300, len:0.66, wid:0.3,  h:5, colors:['#E4572E','#F2B33D','#2E5E8C','#F2F0EA','#2B2621'] },
+  // tier: how the showroom groups them (everyday, electric, luxury, super); electric: no fuel stop smell, a light bar;
+  // glow: an accent line on the map (electric and concept cars). In 3D each has its own body (public/world3d.js).
+  hatch:  { name:'Hatchback',  tier:'everyday', price:25000, upkeep:25,  len:0.54, wid:0.28, h:6, colors:['#D9544A','#5B8DB8','#E6C35C','#3E7A4B','#F2F0EA','#2B2621'] },
+  sedan:  { name:'Sedan',      tier:'everyday', price:45000, upkeep:45,  len:0.64, wid:0.3,  h:6, colors:['#7C8288','#2F4A7A','#F2F0EA','#8C2F1B','#2B2621','#3E7A4B'] },
+  pickup: { name:'Pickup',     tier:'everyday', price:70000, upkeep:70,  len:0.72, wid:0.32, h:7, cargo:'#8C7B66', colors:['#C8382E','#2F4A7A','#E2A23B','#F2F0EA','#4A5A44'] },
+  suv:    { name:'SUV',        tier:'everyday', price:95000, upkeep:95,  len:0.7,  wid:0.33, h:8, colors:['#2B2621','#F2F0EA','#5E7C99','#8C2F1B','#7C8288'] },
+  ev:     { name:'Spark EV',   tier:'electric', electric:true, price:65000, upkeep:30, len:0.55, wid:0.29, h:6, glow:'#5FE3FF', colors:['#F2F0EA','#7FC8C2','#F2C94C','#2B2621','#E86A5A','#9FB4C2'] },
+  evsedan:{ name:'Aurora EV',  tier:'electric', electric:true, price:140000, upkeep:70, len:0.68, wid:0.31, h:5.5, glow:'#5FE3FF', colors:['#F4F4F2','#1E2228','#3D5A80','#A3343B','#8E9AA6'] },
+  evsuv:  { name:'Terra EV',   tier:'electric', electric:true, price:190000, upkeep:95, len:0.7, wid:0.34, h:7.5, glow:'#5FE3FF', colors:['#E8E6E1','#22262C','#4B6B57','#6C7A89','#B08D57'] },
+  luxury: { name:'Monarch',    tier:'luxury', price:260000, upkeep:260, len:0.76, wid:0.32, h:6, stripe:'#D8D2C2', colors:['#121418','#F2F0EA','#3A3F46','#4A1E22','#1D2C45'] },
+  sports: { name:'Sports car', tier:'luxury', price:300000, upkeep:300, len:0.66, wid:0.3,  h:5, colors:['#E4572E','#F2B33D','#2E5E8C','#F2F0EA','#2B2621'] },
+  gt:     { name:'Meridian GT',tier:'luxury', price:520000, upkeep:450, len:0.7, wid:0.32, h:4.8, colors:['#1E3A5F','#B3202A','#C9CDD2','#101215','#2F5D3A'] },
+  supercar:{ name:'Vortex',    tier:'super', price:900000, upkeep:800, len:0.68, wid:0.33, h:4.2, colors:['#F2C230','#E4572E','#2BB673','#F4F4F2','#16181B','#7A3CC7'] },
+  hyper:  { name:'Halo X',     tier:'super', electric:true, price:2200000, upkeep:1600, len:0.72, wid:0.34, h:4, glow:'#7CF3FF', colors:['#E9ECEF','#0F1114','#2A5BD7','#C21D3A'] },
+  concept:{ name:'Nova Concept',tier:'super', electric:true, price:4000000, upkeep:2500, len:0.74, wid:0.34, h:4, glow:'#B07CFF', colors:['#EDEFF2','#15171C','#5E3FD6','#0FA3A3'] },
   // two wheels: ridden on trips like a car
   bicycle:   { name:'Bicycle',   kind:'bike', price:3000,  upkeep:0,  shape:'bike', len:0.36, wid:0.1,  h:9, colors:['#D9544A','#4A7BD9','#2F7D63','#F2C94C'] },
   motorbike: { name:'Motorbike', kind:'bike', price:18000, upkeep:15, shape:'moto', len:0.42, wid:0.14, h:9, colors:['#2B2621','#C8382E','#2F4A7A','#F2F0EA'] },

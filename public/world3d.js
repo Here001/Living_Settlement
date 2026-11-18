@@ -301,6 +301,10 @@ function building(B, view, b, face, r) {
     B.roof.box(x0, z0, x1, z1, H - 0.01, H, roofC, { su: 6, sv: 6, sides: false });
     const p = 0.35, ph = 0.9; for (const [a, bb, c, d] of [[x0, z0, x1, z0 + p], [x0, z1 - p, x1, z1], [x0, z0, x0 + p, z1], [x1 - p, z0, x1, z1]]) B.solid.box(a, bb, c, d, H, H + ph, darken(C.roof || '#8c8783', 0.85));
     if (T.mansard) B.tiles.box(x0 + 1, z0 + 1, x1 - 1, z1 - 1, H, H + 3, roofC, { su: 4, sv: 2 });
+    if (H > 14 && r() < 0.5) { const tx = x0 + 1.6 + r() * Math.max(0.1, b.w - 3.2), tz = z0 + 1.6 + r() * Math.max(0.1, b.h - 3.2); bake(B.shiny, GEO.cyl, { x: tx, y: H + 1.9, z: tz, sx: 0.9, sy: 1.6, sz: 0.9, color: col('#8f7a62') }); bake(B.solid, GEO.cone, { x: tx, y: H + 2.95, z: tz, sx: 0.95, sy: 0.5, sz: 0.95, color: col('#5d5048') });
+      for (const [dx, dz] of [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]]) bake(B.shiny, GEO.cyl, { x: tx + dx, y: H + 0.55, z: tz + dz, sx: 0.06, sy: 1.1, sz: 0.06, color: col('#3a3f45') }); } /* a water tank on legs */
+    if (H > 22) { const ax = x0 + b.w * (0.2 + r() * 0.6), az = z0 + b.h * (0.2 + r() * 0.6); bake(B.shiny, GEO.cyl, { x: ax, y: H + 3, z: az, sx: 0.06, sy: 6, sz: 0.06, color: col('#c9ccd0') }); bake(B.glow, GEO.ball, { x: ax, y: H + 6.1, z: az, sx: 0.14, sy: 0.14, sz: 0.14, color: col('#ff4b3a') }); } /* an antenna with a warning light */
+    if (T.cat === 'housing' && H > 6 && H < 30 && r() < 0.45) for (let k = 0; k < 3; k++) { const px = x0 + 1 + k * Math.max(1.2, (b.w - 2) / 3); if (px + 1.1 > x1 - 0.5) break; B.shiny.box(px, z0 + 1, px + 1.1, z0 + Math.min(3.2, b.h - 1), H + 0.15, H + 0.3, col('#22324a')); } /* solar panels */
     if (H > 10) for (let k = 0; k < Math.min(4, Math.floor(b.w * b.h / 60)); k++) { const ux = x0 + 2 + r() * (b.w - 5), uz = z0 + 2 + r() * (b.h - 5); B.shiny.box(ux, uz, ux + 1.6, uz + 1.2, H, H + 1.1, col('#b8bcc0')); }
     if (st === 'dome' || st === 'globe' || st === 'atom') bake(B.shiny, GEO.half, { x: (x0 + x1) / 2, y: H, z: (z0 + z1) / 2, sx: Math.min(b.w, b.h) * 0.42, sy: Math.min(b.w, b.h) * 0.42, sz: Math.min(b.w, b.h) * 0.42, color: roofC });
     if (st === 'factory') { for (let k = 0; k < (T.chimneys || 1); k++) bake(B.brick, GEO.cyl, { x: x0 + 2 + k * 3, y: H + 5, z: z0 + 2, sx: 0.9, sy: 10, sz: 0.9, color: col('#8a4a3a') }); }
@@ -319,13 +323,13 @@ function sign(view, text, bg, neon, pos, face) {
   const w = Math.min(6, 0.9 * text.length + 1.2), mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 4), m);
   mesh.position.set(pos[0], pos[1], pos[2]); mesh.rotation.y = { S: 0, N: Math.PI, E: Math.PI / 2, W: -Math.PI / 2 }[face]; view.scene.add(mesh);
 }
-function tree(B, x, z, s, leaf, kind, r) {
+function tree(B, x, z, s, leaf, kind, r, lite) { /* lite: a street tree (fewer leaf clumps, for the long rows of them) */
   const lc = col(leaf), trunk = col('#6b4a32');
   if (kind === 'pine') { bake(B.solid, GEO.cyl, { x, y: 1.2 * s, z, sx: 0.22 * s, sy: 2.4 * s, sz: 0.22 * s, color: trunk }); for (let i = 0; i < 3; i++) bake(B.solid, GEO.cone, { x, y: (2.6 + i * 1.6) * s, z, sx: (2.3 - i * 0.6) * s, sy: 2.6 * s, sz: (2.3 - i * 0.6) * s, color: lc.clone().multiplyScalar(0.85 + i * 0.08) }); return; }
   if (kind === 'palm') { bake(B.solid, GEO.cyl, { x, y: 3 * s, z, sx: 0.2 * s, sy: 6 * s, sz: 0.2 * s, color: col('#8a6a48') }); for (let i = 0; i < 6; i++) bake(B.solid, GEO.box, { x: x + Math.cos(i) * 1.4 * s, y: 6 * s, z: z + Math.sin(i) * 1.4 * s, ry: -i, sx: 3 * s, sy: 0.12 * s, sz: 0.7 * s, color: lc }); return; }
   if (kind === 'poplar') { bake(B.solid, GEO.cyl, { x, y: 1 * s, z, sx: 0.2 * s, sy: 2 * s, sz: 0.2 * s, color: trunk }); bake(B.solid, GEO.ball, { x, y: 4.6 * s, z, sx: 1.4 * s, sy: 3.8 * s, sz: 1.4 * s, color: lc }); return; }
   bake(B.solid, GEO.cyl, { x, y: 1.4 * s, z, sx: 0.26 * s, sy: 2.8 * s, sz: 0.26 * s, color: trunk });
-  for (let i = 0; i < 4; i++) { const a = r() * 6.28, d = i ? 0.9 * s : 0; bake(B.solid, GEO.ball, { x: x + Math.cos(a) * d, y: (3.6 + r() * 1.2) * s, z: z + Math.sin(a) * d, sx: (1.5 + r() * 0.6) * s, sy: (1.3 + r() * 0.5) * s, sz: (1.5 + r() * 0.6) * s, color: lc.clone().multiplyScalar(0.85 + r() * 0.3) }); }
+  for (let i = 0, n = lite ? 2 : 4; i < n; i++) { const a = r() * 6.28, d = i ? 0.9 * s : 0; bake(B.solid, GEO.ball, { x: x + Math.cos(a) * d, y: (3.6 + r() * 1.2) * s, z: z + Math.sin(a) * d, sx: (1.5 + r() * 0.6) * s, sy: (1.3 + r() * 0.5) * s, sz: (1.5 + r() * 0.6) * s, color: lc.clone().multiplyScalar(0.85 + r() * 0.3) }); }
 }
 function car(B, x, z, ang, c) {
   const body = col(c), glass = col('#26313b'), tyre = col('#1b1c1e'), ca = Math.cos(ang), sa = Math.sin(ang), P = (u, v) => [x + u * ca - v * sa, z + u * sa + v * ca];
@@ -335,12 +339,17 @@ function car(B, x, z, ang, c) {
 }
 function prop(B, view, p, r) {
   const k = p.k;
-  if (k === 'tree' || k === 'pine' || k === 'palm' || k === 'poplar') return tree(B, p.x, p.y, p.s || 1, p.c, k, r);
+  if (k === 'tree' || k === 'pine' || k === 'palm' || k === 'poplar') return tree(B, p.x, p.y, p.s || 1, p.c, k, r, p.lite);
   if (k === 'car') return car(B, p.x, p.y, p.ang || 0, p.c);
   if (k === 'lamp') return lamp(B, view, p.x, p.y);
   if (k === 'bench' || k === 'bistro') { B.solid.box(p.x - 1, p.y - 0.25, p.x + 1, p.y + 0.25, 0.45, 0.55, col('#8a5a33')); B.solid.box(p.x - 1, p.y + 0.2, p.x + 1, p.y + 0.3, 0.55, 1.0, col('#8a5a33')); B.shiny.box(p.x - 0.9, p.y - 0.2, p.x - 0.8, p.y + 0.2, 0, 0.45, col('#2b2f33')); B.shiny.box(p.x + 0.8, p.y - 0.2, p.x + 0.9, p.y + 0.2, 0, 0.45, col('#2b2f33')); return; }
   if (k === 'fence') { const c = col(p.c); B.solid.box(p.x - 4, p.y - 0.06, p.x + 4, p.y + 0.06, 0.5, 0.65, c); B.solid.box(p.x - 4, p.y - 0.06, p.x + 4, p.y + 0.06, 0.9, 1.05, c); for (let i = -4; i <= 4; i += 1) B.solid.box(p.x + i - 0.06, p.y - 0.08, p.x + i + 0.06, p.y + 0.08, 0, 1.2, c); return; }
   if (k === 'fountain') { bake(B.paving, GEO.cyl, { x: p.x, y: 0.35, z: p.y, sx: 2.6, sy: 0.7, sz: 2.6, color: col('#cfc9bb') }); bake(B.water, GEO.cyl, { x: p.x, y: 0.62, z: p.y, sx: 2.3, sy: 0.1, sz: 2.3, color: col('#ffffff') }); bake(B.paving, GEO.cyl, { x: p.x, y: 1.4, z: p.y, sx: 0.35, sy: 2, sz: 0.35, color: col('#cfc9bb') }); bake(B.paving, GEO.cyl, { x: p.x, y: 2.4, z: p.y, sx: 1, sy: 0.2, sz: 1, color: col('#cfc9bb') }); return; }
+  if (k === 'signal') { const a = p.ang || 0, ca = Math.cos(a), sa = Math.sin(a); bake(B.shiny, GEO.cyl, { x: p.x, y: 1.9, z: p.y, sx: 0.08, sy: 3.8, sz: 0.08, color: col('#2b2e33') }); /* a traffic light on the corner */
+    const hx = p.x + ca * 0.25, hz = p.y + sa * 0.25; bake(B.shiny, GEO.box, { x: hx, y: 3.3, z: hz, ry: -a, sx: 0.32, sy: 1.0, sz: 0.3, color: col('#1d1f23') });
+    ['#ff3b30', '#ffb020', '#36d27a'].forEach((c, i) => bake(B.glow, GEO.ball, { x: hx + ca * 0.16, y: 3.62 - i * 0.31, z: hz + sa * 0.16, sx: 0.09, sy: 0.09, sz: 0.09, color: col(c).multiplyScalar(i === p.on ? 1 : 0.22) })); return; }
+  if (k === 'bin') { bake(B.shiny, GEO.cyl, { x: p.x, y: 0.45, z: p.y, sx: 0.28, sy: 0.9, sz: 0.28, color: col('#3c4a3f') }); bake(B.shiny, GEO.cyl, { x: p.x, y: 0.92, z: p.y, sx: 0.3, sy: 0.06, sz: 0.3, color: col('#2b352d') }); return; }
+  if (k === 'hedge') { const c = col(p.c || '#3f7d32'), w = p.w || 8; if (p.ns) B.solid.box(p.x - 0.35, p.y - w / 2, p.x + 0.35, p.y + w / 2, 0, 0.9, c); else B.solid.box(p.x - w / 2, p.y - 0.35, p.x + w / 2, p.y + 0.35, 0, 0.9, c); return; }
   if (k === 'hydrant') { bake(B.shiny, GEO.cyl, { x: p.x, y: 0.4, z: p.y, sx: 0.2, sy: 0.8, sz: 0.2, color: col('#c8382e') }); return; }
   if (k === 'mailbox') { B.shiny.box(p.x - 0.3, p.y - 0.3, p.x + 0.3, p.y + 0.3, 0, 1.2, col('#c8382e')); return; }
   if (k === 'phone') { B.glass.box(p.x - 0.55, p.y - 0.55, p.x + 0.55, p.y + 0.55, 0, 2.4, col('#c8382e'), { su: 4, sv: 4 }); return; }
@@ -508,41 +517,103 @@ const CARS = {
   bus: { L: 11, W: 2.5, y0: 0.36, r: 0.5, xr: -3.6, xf: 3.5, top: [[-5.5, 0.6], [-5.5, 2.9], [-5.38, 3.02], [5.35, 3.02], [5.5, 2.88], [5.5, 0.6]], glass: [[-5.6, 1.45], [-5.6, 2.6], [5.6, 2.6], [5.6, 1.45]], lamp: 0.85, tail: 1.1 },
 };
 CARS.police = CARS.car;
+// The colony's own cars (shared/catalog.js CAR_MODELS), each with its own body. Style: grille (plain, chrome or none), led
+// (a light bar across the front and back), spoiler (lip or wing), intakes, diffuser, rails, bed (a pickup's covered bed),
+// glow (underglow and glowing rims), wheel (steel, alloy, sport, aero, turbine), paint [roughness, metalness, reflections],
+// exhaust (tail pipes; none for electric). A cheap car is plain; the dearer it is, the more it gleams.
+Object.assign(CARS, {
+  hatch: { L: 3.9, W: 1.72, y0: 0.3, r: 0.3, xr: -1.22, xf: 1.25, top: [[-1.95, 0.62], [-1.95, 1.05], [-1.88, 1.34], [-1.62, 1.5], [-0.2, 1.53], [0.42, 1.48], [0.98, 1.03], [1.72, 0.93], [1.95, 0.8], [1.95, 0.56]],
+    glass: [[-1.84, 1.06], [-1.6, 1.47], [0.42, 1.46], [0.96, 1.04]], pillar: -0.35, lamp: 0.78, tail: 1.02, grille: 'plain', wheel: 'steel', paint: [0.55, 0.15, 0.6], exhaust: 1 },
+  sedan: { ...CARS.car, grille: 'plain', wheel: 'alloy', paint: [0.38, 0.35, 0.9], exhaust: 1 },
+  pickup: { L: 5.3, W: 1.95, y0: 0.42, r: 0.42, xr: -1.75, xf: 1.6, top: [[-2.65, 0.72], [-2.65, 1.2], [-0.62, 1.2], [-0.62, 1.86], [0.58, 1.88], [1.2, 1.36], [2.38, 1.18], [2.65, 1.02], [2.65, 0.72]],
+    glass: [[-0.52, 1.36], [-0.5, 1.82], [0.58, 1.83], [1.16, 1.37]], lamp: 0.98, tail: 1.02, grille: 'plain', bed: true, wheel: 'steel', paint: [0.45, 0.25, 0.7], exhaust: 1 },
+  suv: { L: 4.7, W: 1.95, y0: 0.4, r: 0.4, xr: -1.5, xf: 1.48, top: [[-2.35, 0.66], [-2.35, 1.55], [-2.26, 1.8], [0.55, 1.82], [1.2, 1.32], [2.15, 1.12], [2.35, 1.0], [2.35, 0.66]],
+    glass: [[-2.2, 1.33], [-2.1, 1.78], [0.55, 1.79], [1.17, 1.33]], pillar: -0.45, lamp: 0.98, tail: 1.3, grille: 'plain', rails: true, wheel: 'alloy', paint: [0.4, 0.35, 0.9], exhaust: 1 },
+  ev: { L: 4.0, W: 1.78, y0: 0.3, r: 0.32, xr: -1.3, xf: 1.3, top: [[-2.0, 0.6], [-2.0, 1.0], [-1.86, 1.3], [-1.5, 1.48], [0.2, 1.52], [0.8, 1.32], [1.45, 0.96], [2.0, 0.8], [2.0, 0.52]],
+    glass: [[-1.8, 1.05], [-1.46, 1.45], [0.2, 1.49], [1.36, 0.97]], pillar: -0.2, lamp: 0.8, tail: 1.05, grille: 'none', led: '#dff6ff', wheel: 'aero', paint: [0.3, 0.3, 1.0], exhaust: 0 },
+  evsedan: { L: 4.8, W: 1.92, y0: 0.26, r: 0.35, xr: -1.5, xf: 1.45, top: [[-2.4, 0.55], [-2.4, 0.9], [-2.2, 1.0], [-1.3, 1.24], [-0.5, 1.44], [0.4, 1.45], [1.1, 1.05], [2.0, 0.82], [2.4, 0.65], [2.4, 0.5]],
+    glass: [[-1.3, 1.02], [-0.5, 1.41], [0.4, 1.42], [1.1, 1.03]], pillar: -0.05, lamp: 0.7, tail: 0.92, grille: 'none', led: '#dff6ff', wheel: 'aero', paint: [0.2, 0.55, 1.3], exhaust: 0 },
+  evsuv: { L: 4.85, W: 2.0, y0: 0.38, r: 0.4, xr: -1.52, xf: 1.5, top: [[-2.42, 0.65], [-2.42, 1.25], [-2.3, 1.62], [-1.9, 1.75], [0.5, 1.76], [1.2, 1.3], [2.2, 1.08], [2.42, 0.95], [2.42, 0.65]],
+    glass: [[-2.22, 1.3], [-1.86, 1.72], [0.5, 1.73], [1.18, 1.31]], pillar: -0.35, lamp: 0.94, tail: 1.2, grille: 'none', led: '#dff6ff', rails: true, wheel: 'aero', paint: [0.25, 0.5, 1.2], exhaust: 0 },
+  luxury: { L: 5.2, W: 1.95, y0: 0.3, r: 0.38, xr: -1.6, xf: 1.75, top: [[-2.6, 0.62], [-2.6, 0.95], [-2.45, 1.05], [-1.6, 1.1], [-1.0, 1.48], [0.6, 1.5], [1.25, 1.1], [2.3, 0.98], [2.6, 0.86], [2.6, 0.6]],
+    glass: [[-1.55, 1.1], [-1.0, 1.45], [0.6, 1.46], [1.22, 1.1]], pillar: -0.15, lamp: 0.8, tail: 0.92, grille: 'chrome', chrome: true, wheel: 'alloy', paint: [0.12, 0.7, 1.6], exhaust: 2 },
+  sports: { L: 4.5, W: 1.9, y0: 0.24, r: 0.34, xr: -1.38, xf: 1.42, top: [[-2.25, 0.55], [-2.25, 0.85], [-2.1, 0.95], [-1.5, 1.0], [-0.85, 1.05], [-0.35, 1.28], [0.3, 1.3], [0.85, 1.0], [1.7, 0.82], [2.15, 0.68], [2.25, 0.48]],
+    glass: [[-0.85, 1.04], [-0.35, 1.26], [0.3, 1.27], [0.85, 1.0]], lamp: 0.66, tail: 0.84, grille: 'plain', spoiler: 'lip', diffuser: true, wheel: 'sport', paint: [0.15, 0.6, 1.4], exhaust: 2 },
+  gt: { L: 4.7, W: 1.95, y0: 0.24, r: 0.36, xr: -1.5, xf: 1.4, top: [[-2.35, 0.55], [-2.35, 0.88], [-2.15, 0.98], [-1.4, 1.05], [-0.6, 1.28], [0.2, 1.3], [0.75, 1.05], [1.8, 0.85], [2.3, 0.68], [2.35, 0.5]],
+    glass: [[-1.3, 1.04], [-0.6, 1.26], [0.2, 1.27], [0.75, 1.03]], lamp: 0.68, tail: 0.86, grille: 'chrome', spoiler: 'lip', diffuser: true, wheel: 'sport', paint: [0.1, 0.7, 1.6], exhaust: 4 },
+  supercar: { L: 4.6, W: 2.0, y0: 0.2, r: 0.35, xr: -1.45, xf: 1.35, top: [[-2.3, 0.5], [-2.3, 0.92], [-2.0, 0.98], [-1.2, 1.02], [-0.6, 1.12], [-0.15, 1.16], [0.35, 1.1], [1.0, 0.86], [1.9, 0.66], [2.3, 0.5], [2.3, 0.38]],
+    glass: [[-0.75, 1.0], [-0.15, 1.13], [0.35, 1.08], [1.0, 0.85]], lamp: 0.56, tail: 0.8, grille: 'none', led: '#ffffff', spoiler: 'wing', intakes: true, diffuser: true, wheel: 'sport', paint: [0.08, 0.75, 1.8], exhaust: 2 },
+  hyper: { L: 4.8, W: 2.04, y0: 0.18, r: 0.36, xr: -1.55, xf: 1.45, top: [[-2.4, 0.45], [-2.4, 0.88], [-2.1, 0.95], [-1.3, 1.0], [-0.7, 1.08], [-0.2, 1.12], [0.3, 1.06], [1.0, 0.82], [1.95, 0.6], [2.4, 0.42], [2.4, 0.34]],
+    glass: [[-0.75, 1.0], [-0.2, 1.1], [0.3, 1.04], [1.0, 0.82]], lamp: 0.52, tail: 0.78, grille: 'none', led: '#9ff8ff', spoiler: 'lip', fin: true, intakes: true, diffuser: true, wheel: 'aero', paint: [0.06, 0.8, 2.0], exhaust: 0 },
+  concept: { L: 4.9, W: 2.05, y0: 0.22, r: 0.37, xr: -1.6, xf: 1.6, top: [[-2.45, 0.5], [-2.45, 0.8], [-2.2, 0.9], [-1.4, 1.05], [-0.9, 1.25], [-0.2, 1.34], [0.5, 1.28], [1.2, 0.95], [2.0, 0.7], [2.45, 0.5], [2.45, 0.4]],
+    glass: [[-1.2, 1.08], [-0.2, 1.32], [0.5, 1.26], [1.25, 0.93]], lamp: 0.6, tail: 0.82, grille: 'none', led: '#c9b2ff', glow: '#8f6bff', diffuser: true, wheel: 'turbine', paint: [0.05, 0.85, 2.2], exhaust: 0 },
+});
+// A car's body, shaped like a car rather than a slab: the cabin narrows above the waist (the sides lean in), and the
+// corners at each end round in a little. g: a body or glass extruded across the car (front at -z, across is x).
+function shapeBody(g, S) { const p = g.attributes.position, belt = S.glass[0][1] - 0.06, half = S.L / 2, cabin = S.bed || S === CARS.van || S === CARS.bus ? 0.06 : 0.15;
+  for (let i = 0; i < p.count; i++) { const y = p.getY(i), z = p.getZ(i); let k = 1;
+    if (y > belt) k *= 1 - cabin * Math.min(1, (y - belt) / 0.4);
+    const t = Math.max(0, (Math.abs(z) - (half - 0.7)) / 0.7); k *= 1 - 0.09 * t * t; p.setX(i, p.getX(i) * k); }
+  p.needsUpdate = true; g.computeVertexNormals(); return g; }
+// how high a car's top is at a point along it (x: metres from the middle, front +)
+const topAt = (S, x) => { const t = S.top; for (let i = 1; i < t.length; i++) { const [x0, y0] = t[i - 1], [x1, y1] = t[i]; if ((x - x0) * (x - x1) <= 0 && x0 !== x1) return y0 + (y1 - y0) * (x - x0) / (x1 - x0); } return t[t.length - 1][1]; };
 const CARGEO = new Map(), CARMAT = new Map();
 const carMat = (key, make) => { let m = CARMAT.get(key); if (!m) { m = make(); CARMAT.set(key, m); } return m; };
 function carProfile(S) { // the outline: along the bottom from the front, over each wheel arch, then back along the top
   const sh = new THREE.Shape(), ar = S.r + 0.07, half = S.L / 2; sh.moveTo(half, S.y0);
   for (const xc of [S.xf, S.xr]) { sh.lineTo(xc + ar, S.y0); for (let k = 0; k <= 10; k++) { const a = Math.PI * k / 10; sh.lineTo(xc + ar * Math.cos(a), S.y0 + ar * Math.sin(a)); } } // over the wheel, from its front edge to its back
   sh.lineTo(-half, S.y0); for (const [x, y] of S.top) sh.lineTo(x, y); sh.closePath(); return sh; }
-function extrudeAcross(shape, width, bevel, size = bevel * 0.8) { const g = new THREE.ExtrudeGeometry(shape, { depth: width - bevel * 2, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: size, bevelSegments: 2, curveSegments: 6 });
+function extrudeAcross(shape, width, bevel, size = bevel * 0.8, segs = 2) { const g = new THREE.ExtrudeGeometry(shape, { depth: width - bevel * 2, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: size, bevelSegments: segs, curveSegments: segs === 1 ? 3 : 6 });
   g.translate(0, 0, -(width - bevel * 2) / 2); g.rotateY(Math.PI / 2); g.computeVertexNormals(); return g; } // +x (the front) turns to -z
 function carGeo(kind) {
   if (CARGEO.has(kind)) return CARGEO.get(kind); const S = CARS[kind] || CARS.car, L = S.L, W = S.W, half = L / 2, out = {};
-  out.body = extrudeAcross(carProfile(S), W, 0.09);
+  out.body = shapeBody(extrudeAcross(carProfile(S), W, 0.09), S);
   // the glass: the cabin's outline pushed a little outside the body, so it shows on the sides, windscreen and back window
   const gs = new THREE.Shape(), gp = S.glass.map(([x, y], i, A) => [x + (i === 0 ? -0.17 : i === A.length - 1 ? 0.17 : (i === 1 ? -0.12 : 0.12)), y]); /* clear of the body's rounded edge */ gs.moveTo(gp[0][0], gp[0][1]); for (const [x, y] of gp.slice(1)) gs.lineTo(x, y); gs.closePath();
-  out.glass = extrudeAcross(gs, W + 0.03, 0.02);
+  out.glass = shapeBody(extrudeAcross(gs, W + 0.03, 0.02), S);
   if (kind === 'getaway') { const st = extrudeAcross(carProfile(S), 0.2, 0.09, 0.082); const a = st.clone().translate(0.22, 0, 0), b = st.translate(-0.22, 0, 0); out.stripes = [a, b]; } // racing stripes, just proud of the paint
   // trim (dark, chrome and plastic parts, coloured per vertex) and lights, baked into one mesh each
   const T = new Bucket(), Lt = new Bucket(), dark = col('#16181b'), chrome = col('#c9ced4'), plate = col(kind === 'bus' ? '#f2c94c' : '#f4f4f0');
   const fz = -half, rz = half, lampY = S.lamp, tailY = S.tail; // the front is at -z
   T.box(-W * 0.47, fz - 0.06, W * 0.47, fz + 0.12, 0.28, 0.5, dark); T.box(-W * 0.47, rz - 0.12, W * 0.47, rz + 0.06, 0.28, 0.5, dark); // bumpers
-  T.box(-W * 0.24, fz - 0.03, W * 0.24, fz + 0.05, lampY - 0.2, lampY - 0.04, col('#0d0e10')); // the grille
+  if (S.grille === 'chrome') { T.box(-W * 0.28, fz - 0.05, W * 0.28, fz + 0.04, lampY - 0.34, lampY + 0.04, chrome); for (let k = -4; k <= 4; k++) T.box(k * W * 0.06 - 0.012, fz - 0.06, k * W * 0.06 + 0.012, fz - 0.045, lampY - 0.32, lampY + 0.02, col('#1a1c20')); } /* a proud chrome grille */
+  else if (S.grille !== 'none') T.box(-W * 0.24, fz - 0.03, W * 0.24, fz + 0.05, lampY - 0.2, lampY - 0.04, col('#0d0e10')); // the grille
+  if (S.bed) { const bz0 = 0.62, bz1 = half - 0.05; T.box(-W * 0.46, bz0, W * 0.46, bz1, 1.16, 1.22, col('#22252a')); T.box(-W * 0.5, bz0, -W * 0.44, bz1, 1.16, 1.25, col('#1a1c20')); T.box(W * 0.44, bz0, W * 0.5, bz1, 1.16, 1.25, col('#1a1c20')); } /* the covered bed */
+  if (S.rails) { const ry = Math.max(...S.top.map(p => p[1])); for (const sx of [-1, 1]) T.box(sx * W * 0.4 - 0.03, -0.3, sx * W * 0.4 + 0.03, half - 0.5, ry, ry + 0.06, S.led ? col('#2a2d33') : chrome); }
+  if (S.spoiler === 'lip') { const y = topAt(S, -half + 0.25); T.box(-W * 0.44, half - 0.32, W * 0.44, half - 0.04, y, y + 0.05, dark); }
+  if (S.spoiler === 'wing') { const y = topAt(S, -half + 0.3) + 0.32; T.box(-W * 0.47, half - 0.42, W * 0.47, half - 0.1, y, y + 0.04, col('#1b1d21')); for (const sx of [-1, 1]) { T.box(sx * W * 0.3 - 0.03, half - 0.3, sx * W * 0.3 + 0.03, half - 0.2, y - 0.32, y, col('#1b1d21')); T.box(sx * W * 0.47 - 0.02, half - 0.46, sx * W * 0.47 + 0.02, half - 0.06, y - 0.08, y + 0.1, col('#1b1d21')); } }
+  if (S.fin) { const y = topAt(S, -half + 0.9); T.box(-0.025, half - 1.7, 0.025, half - 0.15, y - 0.05, y + 0.28, col('#14161a')); } /* a shark fin down the middle of the tail */
+  if (S.intakes) for (const sx of [-1, 1]) T.box(sx * (W / 2 + 0.005) - 0.02, -(S.xr + 1.15), sx * (W / 2 + 0.005) + 0.02, -(S.xr + 0.5), 0.42, 0.74, col('#0e0f12')); /* air intakes ahead of the back wheels */
+  if (S.diffuser) { T.box(-W * 0.42, rz - 0.08, W * 0.42, rz + 0.07, 0.1, 0.28, col('#111214')); for (let k = -3; k <= 3; k++) T.box(k * W * 0.1 - 0.012, rz - 0.06, k * W * 0.1 + 0.012, rz + 0.1, 0.08, 0.3, col('#1d1f23')); }
+  if (S.chrome) for (const sx of [-1, 1]) T.box(sx * (W / 2 + 0.008) - 0.01, -half + 0.5, sx * (W / 2 + 0.008) + 0.01, half - 0.5, S.y0 + 0.2, S.y0 + 0.24, chrome); /* a chrome line along each side */
   T.box(-0.26, fz - 0.08, 0.26, fz - 0.05, 0.36, 0.48, plate); T.box(-0.26, rz + 0.05, 0.26, rz + 0.08, 0.38, 0.5, plate); // number plates
   T.box(-0.24, fz - 0.081, 0.24, fz - 0.079, 0.4, 0.44, col('#2b2b2b')); T.box(-0.24, rz + 0.079, 0.24, rz + 0.081, 0.42, 0.46, col('#2b2b2b'));
-  if (kind !== 'bus') { const mz = kind === 'van' ? -(half - 0.9) : -(S.glass[S.glass.length - 1][0]) + 0.05; for (const sx of [-1, 1]) { T.box(sx * W / 2, mz - 0.08, sx * (W / 2 + 0.16), mz + 0.08, 1.02, 1.14, dark); }
+  if (kind !== 'bus') { const mz = kind === 'van' ? -(half - 0.9) : -(S.glass[S.glass.length - 1][0]) + 0.05; const my = kind === 'van' ? 1.02 : S.glass[0][1] - 0.03; for (const sx of [-1, 1]) { T.box(sx * (W / 2 - 0.04), mz - 0.08, sx * (W / 2 + 0.14), mz + 0.08, my, my + 0.12, dark); } /* the mirrors, on the waistline */
     if (S.pillar != null) for (const sx of [-1, 1]) { const px = sx * (W / 2 + 0.018); T.box(Math.min(px, sx * W / 2), -S.pillar - 0.05, Math.max(px, sx * W / 2), -S.pillar + 0.05, S.glass[0][1], S.glass[1][1], col('#0f1012')); // the B-pillar
       for (const z of [-S.pillar + 0.02, -S.pillar - 1.05, -S.pillar + 1.0]) T.box(sx * (W / 2 + 0.004) - 0.003, z - 0.006, sx * (W / 2 + 0.004) + 0.003, z + 0.006, S.y0 + 0.15, S.glass[0][1] - 0.02, col('#0a0a0a')); // door lines
       for (const z of [-S.pillar - 0.3, -S.pillar + 0.75]) T.box(sx * (W / 2 + 0.01) - 0.01, z - 0.1, sx * (W / 2 + 0.01) + 0.01, z + 0.1, 0.86, 0.9, chrome); } } // door handles
   if (kind === 'bus') for (let z = -half + 1.2; z < half - 0.6; z += 1.3) for (const sx of [-1, 1]) T.box(sx * (W / 2 + 0.01) - 0.01, z - 0.04, sx * (W / 2 + 0.01) + 0.01, z + 0.04, 1.45, 2.6, dark); // window frames
-  bake(T, GEO.cyl, { x: W * 0.3, y: 0.3, z: rz + 0.05, sx: 0.04, sy: 0.12, sz: 0.04, color: chrome }); // the exhaust
-  for (const sx of [-1, 1]) { Lt.box(sx * W * 0.33 - 0.2, fz - 0.06, sx * W * 0.33 + 0.2, fz - 0.03, lampY - 0.07, lampY + 0.07, col('#fffbe8')); Lt.box(sx * W * 0.36 - 0.18, rz + 0.03, sx * W * 0.36 + 0.18, rz + 0.06, tailY - 0.07, tailY + 0.07, col('#ff2a1a'));
+  const pipes = S.exhaust ?? 1, pr = pipes >= 2 ? 0.06 : 0.04; for (let k = 0; k < pipes; k++) { const px = pipes === 1 ? W * 0.3 : (k < pipes / 2 ? -1 : 1) * W * (0.28 + (k % 2) * 0.09); bake(T, GEO.cyl, { x: px, y: 0.3, z: rz + 0.05, sx: pr, sy: 0.14, sz: pr, color: chrome }); } // the exhaust (none on an electric car)
+  if (S.led) { // a slim light bar right across the front and the back
+    Lt.box(-W * 0.4, fz - 0.11, W * 0.4, fz - 0.08, lampY - 0.02, lampY + 0.02, col(S.led)); Lt.box(-W * 0.41, rz + 0.08, W * 0.41, rz + 0.11, tailY - 0.03, tailY + 0.03, col('#ff2238'));
+    for (const sx of [-1, 1]) { Lt.box(sx * W * 0.33 - 0.15, fz - 0.105, sx * W * 0.33 + 0.15, fz - 0.075, lampY - 0.08, lampY - 0.035, col('#f6fbff')); Lt.box(sx * W * 0.36 - 0.12, rz + 0.075, sx * W * 0.36 + 0.12, rz + 0.105, tailY - 0.09, tailY - 0.035, col('#ff3a2a')); } }
+  else for (const sx of [-1, 1]) { Lt.box(sx * W * 0.33 - 0.2, fz - 0.1, sx * W * 0.33 + 0.2, fz - 0.07, lampY - 0.07, lampY + 0.07, col('#fffbe8')); Lt.box(sx * W * 0.34 - 0.18, rz + 0.07, sx * W * 0.34 + 0.18, rz + 0.1, tailY - 0.07, tailY + 0.07, col('#ff2a1a'));
     Lt.box(sx * W * 0.45 - 0.05, fz - 0.05, sx * W * 0.45 + 0.05, fz - 0.03, lampY - 0.05, lampY + 0.03, col('#ffb02a')); } // headlights, tail lights, indicators
+  if (S.glow) for (const sx of [-1, 1]) { Lt.box(sx * W * 0.42 - 0.03, -half + 0.7, sx * W * 0.42 + 0.03, half - 0.7, 0.1, 0.12, col(S.glow)); /* underglow */
+    for (const z of [-S.xf, -S.xr]) bake(Lt, GEO.ring, { x: sx * (W / 2 + 0.04), y: S.r, z, ry: Math.PI / 2, sx: S.r * 0.78, sy: S.r * 0.78, sz: S.r * 0.78, color: col(S.glow) }); } /* glowing rims */
   out.trim = T.geometry(); out.lights = Lt.geometry();
   // a wheel: tyre, alloy rim with five spokes and a hub, all in one mesh (spinning it turns the spokes, so you see it roll)
-  const Wb = new Bucket(), r = S.r; bake(Wb, new THREE.CylinderGeometry(1, 1, 1, 22), { sx: r, sy: 0.26, sz: r, color: col('#141414') }); bake(Wb, new THREE.CylinderGeometry(1, 1, 1, 16), { sx: r * 0.64, sy: 0.27, sz: r * 0.64, color: col('#9aa1a8') });
-  bake(Wb, new THREE.CylinderGeometry(1, 1, 1, 12), { sx: r * 0.5, sy: 0.275, sz: r * 0.5, color: col('#3a3e44') });
-  for (let k = 0; k < 5; k++) bake(Wb, GEO.box, { y: 0, sx: 0.07, sy: 0.28, sz: r * 1.0, ry: k * Math.PI * 2 / 5, color: col('#c9ced4') }); bake(Wb, new THREE.CylinderGeometry(1, 1, 1, 10), { sx: r * 0.16, sy: 0.29, sz: r * 0.16, color: col('#dfe3e8') });
+  const Wb = new Bucket(), r = S.r, ws = S.wheel || 'alloy', CY = n => new THREE.CylinderGeometry(1, 1, 1, n);
+  bake(Wb, CY(22), { sx: r, sy: 0.26, sz: r, color: col('#141414') }); // the tyre
+  if (ws === 'steel') { bake(Wb, CY(16), { sx: r * 0.62, sy: 0.27, sz: r * 0.62, color: col('#6f747a') }); bake(Wb, CY(12), { sx: r * 0.3, sy: 0.285, sz: r * 0.3, color: col('#a7acb2') }); /* a plain steel wheel and a small hubcap */
+    for (let k = 0; k < 6; k++) bake(Wb, CY(6), { x: Math.cos(k * 1.047) * r * 0.45, y: 0.002, z: Math.sin(k * 1.047) * r * 0.45, sx: 0.035, sy: 0.276, sz: 0.035, color: col('#3b3f44') }); }
+  else if (ws === 'aero') { bake(Wb, CY(20), { sx: r * 0.7, sy: 0.275, sz: r * 0.7, color: col('#d5d9de') }); bake(Wb, CY(20), { sx: r * 0.5, sy: 0.28, sz: r * 0.5, color: col('#2b2f35') }); bake(Wb, CY(12), { sx: r * 0.14, sy: 0.29, sz: r * 0.14, color: col('#e8ebee') }); /* smooth covers that cut through the air */
+    for (let k = 0; k < 3; k++) bake(Wb, GEO.box, { sx: 0.05, sy: 0.282, sz: r * 0.95, ry: k * Math.PI / 3, color: col('#aeb4ba') }); }
+  else if (ws === 'turbine') { bake(Wb, CY(24), { sx: r * 0.78, sy: 0.27, sz: r * 0.78, color: col('#16181c') }); for (let k = 0; k < 9; k++) bake(Wb, GEO.box, { sx: 0.03, sy: 0.28, sz: r * 1.35, ry: k * Math.PI / 9 + 0.2, color: col('#4a4f57') }); bake(Wb, CY(12), { sx: r * 0.18, sy: 0.29, sz: r * 0.18, color: col('#c9b2ff') }); }
+  else if (ws === 'sport') { bake(Wb, CY(22), { sx: r * 0.76, sy: 0.27, sz: r * 0.76, color: col('#c9ced4') }); bake(Wb, CY(18), { sx: r * 0.7, sy: 0.275, sz: r * 0.7, color: col('#26292e') }); /* a big rim with ten thin spokes */
+    for (let k = 0; k < 10; k++) bake(Wb, GEO.box, { sx: 0.035, sy: 0.282, sz: r * 1.36, ry: k * Math.PI / 10, color: col('#9aa0a7') }); bake(Wb, CY(10), { sx: r * 0.15, sy: 0.29, sz: r * 0.15, color: col('#e3e6ea') }); }
+  else { bake(Wb, CY(16), { sx: r * 0.64, sy: 0.27, sz: r * 0.64, color: col('#9aa1a8') }); bake(Wb, CY(12), { sx: r * 0.5, sy: 0.275, sz: r * 0.5, color: col('#3a3e44') });
+    for (let k = 0; k < 5; k++) bake(Wb, GEO.box, { y: 0, sx: 0.07, sy: 0.28, sz: r * 1.0, ry: k * Math.PI * 2 / 5, color: col('#c9ced4') }); bake(Wb, CY(10), { sx: r * 0.16, sy: 0.29, sz: r * 0.16, color: col('#dfe3e8') }); }
   const wg = Wb.geometry(); wg.rotateZ(Math.PI / 2); out.wheel = wg;
   CARGEO.set(kind, out); return out;
 }
@@ -550,7 +621,7 @@ function carGeo(kind) {
 // the light bar's red and blue lamps (bar[0], bar[1]: set their material's colour to flash them).
 export function makeCar(kind = 'car', color = '#c8382e') {
   const S = CARS[kind] || CARS.car, G = carGeo(kind), g = new THREE.Group(), paintC = kind === 'police' ? '#f4f4f0' : color;
-  const paint = carMat('paint' + paintC, () => new THREE.MeshStandardMaterial({ color: paintC, roughness: 0.26, metalness: 0.55, envMapIntensity: 1.3 }));
+  const P = S.paint || [0.26, 0.55, 1.3], paint = carMat('paint' + paintC + P.join(','), () => new THREE.MeshStandardMaterial({ color: paintC, roughness: P[0], metalness: P[1], envMapIntensity: P[2] }));
   const glass = carMat('glass', () => new THREE.MeshStandardMaterial({ color: '#16222b', roughness: 0.04, metalness: 0.9, envMapIntensity: 1.6 })), trim = carMat('trim', () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.4 }));
   const lights = carMat('lights', () => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false })), wheelM = carMat('wheel', () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.5 }));
   g.add(new THREE.Mesh(G.body, paint), new THREE.Mesh(G.glass, glass), new THREE.Mesh(G.trim, trim), new THREE.Mesh(G.lights, lights));
@@ -565,6 +636,37 @@ export function makeCar(kind = 'car', color = '#c8382e') {
     red.scale.set(0.55, 0.12, 0.26); red.position.set(-0.3, 1.58, -0.05); blue.scale.set(0.55, 0.12, 0.26); blue.position.set(0.3, 1.58, -0.05); g.add(red, blue); g.userData.bar = [red, blue]; }
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(S.W * 1.25, S.L * 1.08), carMat('blob', () => new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.4, depthWrite: false }))); blob.rotation.x = -Math.PI / 2; blob.position.y = 0.03; g.add(blob);
   g.userData.wheels = wheels; g.userData.len = S.L; return g;
+}
+// The same car as one merged shape for the traffic and other people's cars (one draw for many of them: see town3d.js).
+// The paint is white in it, so each car's own colour comes from its instance colour; glass, tyres and trim stay dark.
+const LITE = new Map();
+export function carLite(kind = 'car') {
+  if (LITE.has(kind)) return LITE.get(kind); const S = CARS[kind] || CARS.car, G = carGeo(kind), P = [], N = [], C = [];
+  // lighter than the car you drive: fewer curves on the body, and plain wheels (tyre and rim) without spokes
+  const body = shapeBody(extrudeAcross(carProfile(S), S.W, 0.08, 0.064, 1), S), wb = new Bucket(), CY = n => new THREE.CylinderGeometry(1, 1, 1, n);
+  bake(wb, CY(10), { sx: S.r, sy: 0.26, sz: S.r, color: col('#141414') }); bake(wb, CY(10), { sx: S.r * 0.66, sy: 0.27, sz: S.r * 0.66, color: col(S.wheel === 'steel' ? '#6f747a' : S.wheel === 'aero' ? '#d5d9de' : S.wheel === 'turbine' ? '#c9b2ff' : '#b4bac1') });
+  const wheel = wb.geometry(); wheel.rotateZ(Math.PI / 2);
+  const add = (geo, color, m) => { const g = (geo.index ? geo.toNonIndexed() : geo.clone()); if (m) g.applyMatrix4(m); const p = g.attributes.position, n = g.attributes.normal, c = g.attributes.color;
+    for (let i = 0; i < p.count; i++) { P.push(p.getX(i), p.getY(i), p.getZ(i)); N.push(n.getX(i), n.getY(i), n.getZ(i)); if (color) C.push(color.r, color.g, color.b); else C.push(c.getX(i), c.getY(i), c.getZ(i)); } g.dispose(); };
+  add(body, col('#ffffff')); add(G.glass, col('#0d1116')); add(G.trim); add(G.lights);
+  for (const [x, z] of [[-1, -S.xf], [1, -S.xf], [-1, -S.xr], [1, -S.xr]]) add(wheel, null, new THREE.Matrix4().makeTranslation(x * (S.W / 2 - 0.1), S.r, z)); body.dispose(); wheel.dispose();
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.computeBoundingSphere();
+  const out = { geo: g, L: S.L, W: S.W, paint: S.paint || [0.3, 0.5, 1.2] }; LITE.set(kind, out); return out;
+}
+// A picture of a car for the showroom, three-quarters on, in its colour (rendered once, then kept).
+const SHOTS = new Map();
+export function carPortrait(kind, color, w = 360, h = 220) {
+  const key = kind + color + w + 'x' + h; if (SHOTS.has(key)) return SHOTS.get(key);
+  let url = ''; const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  try { renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); renderer.setSize(w, h, false); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    const scene = new THREE.Scene(), pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose();
+    scene.add(new THREE.HemisphereLight('#ffffff', '#55606a', 1.1)); const sun = new THREE.DirectionalLight('#fff4e6', 2.4); sun.position.set(-4, 6, -3); scene.add(sun);
+    const car = makeCar(kind, color); scene.add(car); const fc = document.createElement('canvas'); fc.width = fc.height = 128; { const x = fc.getContext('2d'), gr = x.createRadialGradient(64, 64, 4, 64, 64, 64); gr.addColorStop(0, 'rgba(0,0,0,.32)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128); }
+    const ft = new THREE.CanvasTexture(fc), floor = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 6.4), new THREE.MeshBasicMaterial({ map: ft, transparent: true, depthWrite: false })); floor.rotation.x = -Math.PI / 2; floor.position.y = 0.01; scene.add(floor); /* a soft shadow under it */
+    const cam = new THREE.PerspectiveCamera(28, w / h, 0.1, 50), S = CARS[kind] || CARS.car, d = S.L * 1.32 + 1.6; cam.position.set(-d * 0.64, d * 0.3, -d * 0.76); cam.lookAt(0, 0.55, 0.15);
+    renderer.render(scene, cam); url = renderer.domElement.toDataURL('image/png'); scene.environment.dispose(); floor.geometry.dispose(); floor.material.dispose(); ft.dispose(); }
+  catch (e) {} finally { renderer.dispose(); try { renderer.forceContextLoss(); } catch (e) {} }
+  SHOTS.set(key, url); return url;
 }
 export function makeCones() { const g = new THREE.Group(); for (const x of [-1.1, 0, 1.1]) { const c = new THREE.Mesh(GEO.cone, pmat('#f2994a')); c.scale.set(0.32, 0.8, 0.32); c.position.set(x, 0.4, 0); g.add(c); const s = new THREE.Mesh(GEO.cyl, pmat('#f4f4f0')); s.scale.set(0.22, 0.12, 0.22); s.position.set(x, 0.45, 0); g.add(s); } return g; }
 

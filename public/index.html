@@ -630,6 +630,8 @@ body.clean #djBubble{display:none}
 .drivectl .spchips{flex-wrap:wrap}
 .dkeys{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;font-size:14px}
 body.drive-on .rsheet-bg{z-index:9750}
+.carshot{display:flex;flex-direction:column;align-items:center;gap:2px;margin:6px 0;padding:8px;border-radius:16px;background:radial-gradient(ellipse at 50% 70%,#ffffff 0%,#e9ecef 55%,#d5dae0 100%)}.carshot-img{width:100%;max-width:360px;height:auto;aspect-ratio:36/22}
+.driveview .drivestage::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 55%,rgba(0,0,0,0) 58%,rgba(0,0,0,.28) 100%);z-index:2}
 .driveview .drivestage{position:relative;flex:1;min-height:0;overflow:hidden;background:#A9D8F2}.drivestage canvas.town3d{display:block;width:100%;height:100%;touch-action:none}
 .driveview .webbar .hphonebtn{position:static;box-shadow:none}
 .tjoy{position:absolute;left:22px;bottom:calc(28px + env(safe-area-inset-bottom));width:128px;height:128px;border-radius:50%;background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.65);touch-action:none;z-index:3;box-shadow:0 4px 18px rgba(0,0,0,.18)}
@@ -2815,7 +2817,8 @@ function drawVehicle0(px,py,dx,dy,V,col,siren,scale=1,col2){ if(VIEW&&!RAW){ con
   else if(V===VEHICLE_TYPES.truck){ box(-1,0.45,1,z0,h,V.cargo); box(0.5,1,0.95,z0,h*0.75,col); }
   else if(V.ladder){ box(-1,1,1,z0,h*0.7,col); line(P(-0.9,0,h*0.85),P(0.6,0,h*0.85),'#C9CCCB',2); box(0.55,1,0.95,z0,h,col); }
   else if(V===VEHICLE_TYPES.van||V===VEHICLE_TYPES.ambulance){ box(-1,1,1,z0,h,col); const ws=[P(0.92,-0.8,h*0.55),P(0.92,0.8,h*0.55),P(0.92,0.8,h*0.9),P(0.92,-0.8,h*0.9)]; if(dx+dy>0) poly(ws,'#A9C6D8',INK,0.6); if(V.stripe) line(P(-0.95,1,h*0.45),P(0.95,1,h*0.45),V.stripe,2); }
-  else { box(-1,1,1,z0,h*0.55,col); const top=box(-0.5,0.4,0.82,h*0.55,h,'#A9C6D8'); windowQuads.push(top); if(V.stripe) line(P(-0.95,1,h*0.35),P(0.95,1,h*0.35),V.stripe,2); if(V.sign){ const s=P(-0.05,0,h+2); ctx.fillStyle='#FFE07A'; ctx.fillRect(s.x-3,s.y-2,6,3); } }
+  else { box(-1,1,1,z0,h*0.55,col); const top=box(-0.5,0.4,0.82,h*0.55,h,'#A9C6D8'); windowQuads.push(top); if(V.stripe) line(P(-0.95,1,h*0.35),P(0.95,1,h*0.35),V.stripe,2);
+    if(V.glow){ const side=(sx+sy>0)?1:-1; line(P(-0.95,side,z0+0.6),P(0.95,side,z0+0.6),V.glow,1.4); if(DARK>0.3){ const m=P(0,side,z0); lights.push({x:m.x,y:m.y,r:16,col:'140,220,255'}); } } /* an electric car's light line */ if(V.sign){ const s=P(-0.05,0,h+2); ctx.fillStyle='#FFE07A'; ctx.fillRect(s.x-3,s.y-2,6,3); } }
   if(V.siren && siren){ const s=P(0,0,h+2), on=Math.floor(T_NOW/250)%2; ctx.fillStyle=on?V.siren:'#F4F4F0'; ctx.beginPath(); ctx.arc(s.x-2,s.y,2,0,7); ctx.fill(); ctx.fillStyle=on?'#F4F4F0':'#4A7BD9'; ctx.beginPath(); ctx.arc(s.x+2,s.y,2,0,7); ctx.fill(); lights.push({x:s.x,y:s.y,r:34,col:on?'255,80,70':'90,140,255'}); }
   if(DARK>0.3){ const f=P(1.15,0,3); lights.push({x:f.x,y:f.y,r:26,col:'255,240,200'}); ctx.fillStyle='#FFF4C8'; ctx.fillRect(f.x-1.5,f.y-1,3,2); }
 }
@@ -6883,13 +6886,14 @@ const DriveMap={ route:null, idx:0, dest:null, off:0, rerouteAt:0, big:null, bv:
     if(bi-this.idx>=4){ this.idx=bi; Drive.T.setRoute(r.slice(bi)); }
     const end=r[r.length-1]; if(Math.hypot(end[0]+0.5-p.x,end[1]+0.5-p.y)<1.6){ const name=this.dest&&this.dest.name; this.clear(); toast(`🏁 You’ve arrived at ${name}.`); return; }
     if(best>2.5){ if(++this.off>=4&&Date.now()-this.rerouteAt>3000){ this.rerouteAt=Date.now(); this.off=0; this.plan(); } } else this.off=0; } };
+const CAR_KEY=new Map(Object.entries(CAR_MODELS).map(([k,v])=>[v,k])); /* a car model back to its name */
 const DrivingNow=new Map(); // citizen id → { x, y, a, m, col, t }
 function drivingAt(c){ const d=DrivingNow.get(c.id); if(!d) return null; if(Date.now()-d.t>5000){ DrivingNow.delete(c.id); return null; }
   const M=CAR_MODELS[d.m], V=M&&!M.vtype?M:VEHICLE_TYPES.car; return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:true, car:true, V, col:d.col||V.colors[0], act:'Driving around town', where:'the streets', bid:null, moving:true, seg:null, plan:null }; }
 const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
   // which car: the one you're driving if it's a road one, otherwise a basic car
-  ride(c){ const M=c&&c.car&&CAR_MODELS[c.car[0]]; if(M&&M.kind!=='water'&&M.kind!=='air'&&!M.vtype) return { m:c.car[0], col:c.car[1]||M.colors[0], kind:c.car[0]==='pickup'||c.car[0]==='suv'?'van':'car', name:M.name, own:true };
-    const V=VEHICLE_TYPES.car, col=V.colors[hash((c&&c.id)||'x')%V.colors.length]; return { m:'car', col, kind:'car', name:'a basic car', own:false }; },
+  ride(c){ const M=c&&c.car&&CAR_MODELS[c.car[0]]; if(M&&M.kind!=='water'&&M.kind!=='air'&&!M.vtype) return { m:c.car[0], col:c.car[1]||M.colors[0], kind:M.kind==='bike'?'hatch':c.car[0], name:M.name, own:true }; /* your own car, as itself */
+    const V=VEHICLE_TYPES.car, col=V.colors[hash((c&&c.id)||'x')%V.colors.length]; return { m:'car', col, kind:'hatch', name:'a basic car', own:false }; },
   // the road tile nearest to where you are (and which way it runs)
   startAt(x,y){ let best=null, bd=1e9; for(let r=0;r<=12&&!best;r++) for(let i=-r;i<=r;i++) for(let j=-r;j<=r;j++){ if(Math.max(Math.abs(i),Math.abs(j))!==r) continue; const tx=Math.floor(x)+i, ty=Math.floor(y)+j, k=tx+','+ty; if(!carOK(k)||D.occ.get(k)) continue; const d=Math.hypot(i,j); if(d<bd){ bd=d; best=[tx,ty]; } }
     if(!best) return { x, y, a:0 }; const [tx,ty]=best; let a=0, run=-1; /* face the way the road runs furthest */
@@ -6914,7 +6918,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
         road:(x,y)=>D.roads.get(x+','+y)||null, water:(x,y)=>D.water.has(x+','+y),
         building:(x,y)=>{ const id=D.occ.get(x+','+y); return id?D.buildings.get(id)||null:null; },
         buildings:(x0,y0,x1,y1)=>{ const out=[]; for(const b of D.buildings.values()) if(b.x>=x0&&b.x<x1&&b.y>=y0&&b.y<y1&&!b.ruin&&BUILDING_TYPES[b.type]) out.push(b); return out; },
-        byId:id=>D.buildings.get(id)||null, loaded:(x,y)=>S.chunks.has(ckTile(x,y)), minute:()=>((gmNow()%1440)+1440)%1440,
+        byId:id=>D.buildings.get(id)||null, loaded:(x,y)=>S.chunks.has(ckTile(x,y)), minute:()=>window.__driveMinute!=null?window.__driveMinute:((gmNow()%1440)+1440)%1440, /* (__driveMinute: for checking how it looks at a time of day) */
         people:(x,y)=>this.people(x,y), onMove:(x,y,a,v)=>this.moved(x,y,a,v), onNear:b=>this.nearBy(b), onLost:()=>{ this.close(); toast('Your phone needed the memory back. Tap 🚗 Drive to carry on.'); } }); }
     catch(e){ this.close(); toast('Your phone couldn’t show the 3D town.'); return; }
     try{ window.__drive=this; this.map=DriveMap; }catch(e){} /* (for checking how it runs) */
@@ -6923,7 +6927,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
   // who's about near you: the colonists the map has here, where it has them now (walking, or driving)
   people(x,y){ const gm=gmNow(), out=[], meH=(Me&&Me.handle||'').toLowerCase();
     for(const c of S.citizens.values()){ if(c.handle.toLowerCase()===meH||!c.home) continue; const st=citizenAt(c,gm); if(!st||!st.visible) continue; const d=Math.hypot(st.x-x,st.y-y); if(d>26) continue;
-      const V=st.V||null; out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, van:!!(V&&(V===CAR_MODELS.pickup||V===CAR_MODELS.suv)) }); }
+      const V=st.V||null, m=V&&CAR_KEY.get(V); out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, m:m&&CAR_MODELS[m].kind!=='bike'?m:V===VEHICLE_TYPES.taxi?'sedan':'hatch' }); }
     return out.sort((a,b)=>a.d-b.d).slice(0,40); },
   moved(x,y,a,v){ if(!this.el) return; if(this.last){ this.dist+=Math.hypot(x-this.last.x,y-this.last.y); } this.last={x,y};
     this.speed.textContent=`${this.T?this.T.kmh():0} km/h`;
@@ -7214,14 +7218,21 @@ function hangarSection(b,t){ const box=el('div',{class:'authbox'}, el('h3',{text
   else box.append(el('p',{class:'hint',text:b.owner?`Empty: room for ${d.cap} plane${d.cap===1?'':'s'}. ${isMe(b.owner)?'Buy one at a Car dealership and it’s parked here.':''}`:`Room for ${d.cap} plane${d.cap===1?'':'s'}.`}));
   return box; }
 // The Car dealership's card: buy a new car, or sell one of yours.
+// The showroom's 3D pictures of each car (drawn once per car and colour, the first time you look at it)
+const Showroom={ W:null, busy:false,
+  img(m,col){ const im=el('img',{class:'carshot-img',alt:CAR_MODELS[m].name,width:'360',height:'220'});
+    const set=()=>{ try{ const u=this.W.carPortrait(m,col); if(u) im.src=u; else im.replaceWith(el('span')); }catch(e){} };
+    if(this.W) setTimeout(set,0); else if(!this.busy){ this.busy=true; import('/world3d.js').then(W=>{ this.W=W; this.busy=false; if(sel) renderCard(true); }).catch(()=>{ this.busy=false; }); }
+    return im; } };
 function dealerSection(b){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚘 Showroom: cars, bikes, boats and aircraft'}));
   if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to buy a car.'})); return box; }
   const my=myCars(); if(!my.home){ box.append(el('p',{class:'hint',text:'You need a home (and a driveway) before you buy a car.'})); }
   else { const M=CAR_MODELS[carPick.m]; if(!carPick.col||!M.colors.includes(carPick.col)) carPick.col=M.colors[0];
-    const g=el('div',null); for(const [kind,label] of [['car','🚗 Cars'],['bike','🚲 Bikes'],['water','🚤 Boats & ships'],['air','🚁 Aircraft']]){ const gg=el('div',{class:'petgrid'}); g.append(el('h4',{class:'bgroup',text:label}),gg); for(const [k,m] of Object.entries(CAR_MODELS).filter(([k])=>carKind(k)===kind)) gg.append(el('button',{class:'petb'+(carPick.m===k?' on':''),'aria-pressed':String(carPick.m===k),onclick:()=>{ carPick={m:k,col:null}; renderCard(true); }}, el('img',{src:carThumb(k,k===carPick.m?carPick.col:m.colors[0]),alt:'',width:'54',height:'36'}), el('span',{text:`${m.name}`}), el('span',{class:'hint',text:`${fmt(m.price)}`}))); }
+    const g=el('div',null); for(const [kind,label,tier] of [['car','🚗 Everyday cars','everyday'],['car','⚡ Electric','electric'],['car','🎩 Luxury & sports','luxury'],['car','🏎️ Supercars & concepts','super'],['bike','🚲 Bikes'],['water','🚤 Boats & ships'],['air','🚁 Aircraft']]){ const gg=el('div',{class:'petgrid'}); g.append(el('h4',{class:'bgroup',text:label}),gg); for(const [k,m] of Object.entries(CAR_MODELS).filter(([k,m])=>carKind(k)===kind&&(!tier||(m.tier||'everyday')===tier))) gg.append(el('button',{class:'petb'+(carPick.m===k?' on':''),'aria-pressed':String(carPick.m===k),onclick:()=>{ carPick={m:k,col:null}; renderCard(true); }}, el('img',{src:carThumb(k,k===carPick.m?carPick.col:m.colors[0]),alt:'',width:'54',height:'36'}), el('span',{text:`${m.name}`}), el('span',{class:'hint',text:`${fmt(m.price)}`}))); }
     const sw=el('div',{class:'swatches'}); for(const col of M.colors) sw.append(el('button',{class:'sw'+(carPick.col===col?' on':''),style:`background:${col}`,'aria-label':'Colour','aria-pressed':String(carPick.col===col),onclick:()=>{ carPick.col=col; renderCard(true); }}));
     const why=needsHangar(carPick.m)?`Planes are kept in a hangar on your land and fly over the colony from there. Build a Plane hangar (holds ${BUILDING_TYPES.planehangar.hangar}) or a Private airport (holds ${BUILDING_TYPES.airport.hangar}) first: tap your plot, then Build here → Services → Aviation. `:M.kind==='water'?'It’s kept on the water nearest your home, where everyone can see it cruise. ':M.kind==='air'?'It flies over the colony from your home, for everyone to see. ':M.kind==='bike'?'You ride it on longer trips. ':'';
-    box.append(g, M.colors.length>1?sw:'', el('p',{class:'hint',text:`${why}Upkeep: ${fmt(M.upkeep)} coins a week. Resale value: 60% of what you paid. You can keep 3 cars and bikes, 3 boats and other aircraft, and as many planes as your hangars hold.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy the ${M.name.toLowerCase()} for ${fmt(M.price)}`,onclick:()=>meAction('/api/me/cars',{model:carPick.m,color:carPick.col,buildingId:b.id},r=>`Enjoy your new ${M.name.toLowerCase()}!`)}))); }
+    const shot=carKind(carPick.m)==='car'?Showroom.img(carPick.m,carPick.col):null; /* the chosen car in 3D, in its colour */
+    box.append(g, shot?el('div',{class:'carshot'}, shot, el('b',{text:`${M.name}${M.electric?' ⚡':''}`}), el('span',{class:'hint',text:`${fmt(M.price)} coins`})):'', M.colors.length>1?sw:'', el('p',{class:'hint',text:`${why}Upkeep: ${fmt(M.upkeep)} coins a week. Resale value: 60% of what you paid. You can keep 3 cars and bikes, 3 boats and other aircraft, and as many planes as your hangars hold.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy the ${M.name.toLowerCase()} for ${fmt(M.price)}`,onclick:()=>meAction('/api/me/cars',{model:carPick.m,color:carPick.col,buildingId:b.id},r=>`Enjoy your new ${M.name.toLowerCase()}!`)}))); }
   if(my.cars.length) box.append(el('h4',{class:'bgroup',text:'Sell one of yours'}), garageList(my.cars, my.active));
   return box; }
 async function meAction(path, body, ok, method){ try{ const r=await api(path,{method:method||'POST',body}); GuideUI.at=0; if(ok) toast(typeof ok==='function'?ok(r):ok); if(r&&typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }

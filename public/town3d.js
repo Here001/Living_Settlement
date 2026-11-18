@@ -25,7 +25,7 @@ const sizeOf = b => { const T = BUILDING_TYPES[b.type]; return b.rot ? [T.size[1
 // One block of town as the street games' builder wants it (see shared/arena.js): its ground, roads, buildings and
 // props in metres from the block's corner, and what solid things a car can't drive through (in world metres).
 function blockArea(bx, by, o) {
-  const r = rng((bx * 73856093) ^ (by * 19349663)), ground = new Uint8Array(B * B), roads = [], sroads = [], buildings = [], props = [], spots = [], solid = [];
+  const r = rng((bx * 73856093) ^ (by * 19349663)), ground = new Uint8Array(B * B), roads = [], sroads = [], buildings = [], props = [], spots = [], solid = [], parked = [];
   for (let ty = -1; ty <= B; ty++) for (let tx = -1; tx <= B; tx++) { const t = o.road(bx + tx, by + ty); if (!t) continue; const inside = tx >= 0 && ty >= 0 && tx < B && ty < B;
     if (inside) { roads.push([tx, ty, t]); ground[ty * B + tx] = 2; } else sroads.push([tx, ty, t]); }
   for (let ty = 0; ty < B; ty++) for (let tx = 0; tx < B; tx++) if (!ground[ty * B + tx] && o.water(bx + tx, by + ty)) ground[ty * B + tx] = 3;
@@ -33,7 +33,7 @@ function blockArea(bx, by, o) {
   for (const b of o.buildings(bx, by, bx + B, by + B)) {
     const T = BUILDING_TYPES[b.type]; if (!T) continue; const [w, h] = sizeOf(b), tx = b.x - bx, ty = b.y - by, st = T.style, x = tx * TILE, y = ty * TILE;
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const gx = tx + i, gy = ty + j; if (gx < 0 || gy < 0 || gx >= B || gy >= B || ground[gy * B + gx] === 2) continue;
-      ground[gy * B + gx] = st === 'farm' ? 4 : st === 'pitch' || st === 'stadium' || st === 'racetrack' ? 5 : GREEN.has(st) ? 0 : 1; }
+      ground[gy * B + gx] = st === 'farm' ? 4 : st === 'pitch' || st === 'stadium' || st === 'racetrack' ? 5 : GREEN.has(st) || (T.cat === 'housing' && (st === 'house' || st === 'gabled' || st === 'tent')) ? 0 : 1; } /* houses stand on lawns */
     if (TREES.has(st)) { const px = x + TILE / 2 + (r() - 0.5) * 2, py = y + TILE / 2 + (r() - 0.5) * 2; props.push({ k: st === 'pine' || st === 'xmastree' ? 'pine' : st === 'palm' ? 'palm' : st === 'poplar' ? 'poplar' : 'tree', x: px, y: py, c: T.colors?.leaf || '#6FAE45', s: 0.85 + r() * 0.35 }); solid.push({ c: [wx(px), wz(py), 0.8] }); continue; }
     if (st === 'bush' || st === 'hedge') { spots.push({ x: x + TILE / 2, y: y + TILE / 2, k: 'bush' }); solid.push({ c: [wx(x + TILE / 2), wz(y + TILE / 2), 1.4] }); continue; }
     if (st === 'fence') { props.push({ k: 'fence', x: x + TILE / 2, y: y + TILE / 2, c: T.colors?.wall || '#F4F1E8', w: TILE }); solid.push({ r: [wx(x), wz(y + TILE / 2 - 0.4), wx(x + TILE), wz(y + TILE / 2 + 0.4)] }); continue; }
@@ -46,11 +46,30 @@ function blockArea(bx, by, o) {
       if (st === 'fountain' || T.center === 'fountain') { const cx = x + w * TILE / 2, cy = y + h * TILE / 2; props.push({ k: 'fountain', x: cx, y: cy }); solid.push({ c: [wx(cx), wz(cy), 2.8] }); }
       continue; }
     buildings.push({ id: b.id, type: b.type, x: x + M, y: y + M, w: w * TILE - 2 * M, h: h * TILE - 2 * M, level: b.lv || 1, rot: b.rot || 0, name: b.name || null });
+    if (T.cat === 'housing' && (st === 'house' || st === 'gabled')) { /* a hedge round the garden, except on the side that faces the road */
+      const sides = [['N', x + w * TILE / 2, y + 0.4, false, w * TILE, [b.x, b.y - 1]], ['S', x + w * TILE / 2, y + h * TILE - 0.4, false, w * TILE, [b.x, b.y + h]], ['W', x + 0.4, y + h * TILE / 2, true, h * TILE, [b.x - 1, b.y]], ['E', x + w * TILE - 0.4, y + h * TILE / 2, true, h * TILE, [b.x + w, b.y]]];
+      for (const [, hx, hy, ns, len, [nx, ny]] of sides) { if (o.road(nx, ny) || r() < 0.35) continue; props.push({ k: 'hedge', x: hx, y: hy, w: len - 1.6, ns, c: ['#3f7d32', '#4a8a3a', '#356b2b'][Math.floor(r() * 3)] }); } }
     solid.push({ r: [wx(x + M), wz(y + M), wx(x + w * TILE - M), wz(y + h * TILE - M)], id: b.id });
   }
+  // the street: trees and bins on the pavements, traffic lights at junctions, and cars parked along the kerb
+  const isR = (tx, ty) => !!o.road(bx + tx, by + ty), free = (tx, ty) => !isR(tx, ty) && !o.water(bx + tx, by + ty), H = (tx, ty, k) => ((((bx + tx) * 73856093) ^ ((by + ty) * 19349663) ^ (k * 83492791)) >>> 0) % 1000;
+  const PARK = ['hatch', 'sedan', 'sedan', 'suv', 'pickup', 'ev', 'hatch', 'evsedan', 'luxury'], PAINT = ['#C8382E', '#2F5D9E', '#E9E4D8', '#2B2F33', '#E2B13C', '#3C8A5A', '#7C8288', '#F2F0EA', '#1E2228'];
+  for (const [tx, ty, type] of roads) { const R0 = ROAD_TYPES[type] || {}; if (R0.rail || R0.nocars || R0.kind !== 'street' && R0.kind !== 'highway') continue;
+    const x0 = tx * TILE, z0 = ty * TILE, n = { N: isR(tx, ty - 1), S: isR(tx, ty + 1), W: isR(tx - 1, ty), E: isR(tx + 1, ty) }, links = n.N + n.S + n.W + n.E;
+    const kerbs = [['N', 0, -1], ['S', 0, 1], ['W', -1, 0], ['E', 1, 0]].filter(([k, dx, dy]) => !n[k] && free(tx + dx, ty + dy));
+    for (const [k, dx, dy] of kerbs) { const along = dx === 0, px = (d) => along ? x0 + d : dx < 0 ? x0 - 0.8 : x0 + TILE + 0.8, pz = (d) => along ? (dy < 0 ? z0 - 0.8 : z0 + TILE + 0.8) : z0 + d;
+      if (R0.deco === 'trees' || R0.lanes === 'median' || H(tx, ty, 1) < 260) { props.push({ k: 'tree', lite: true, x: px(1.6), y: pz(1.6), c: ['#6FAE45', '#5E9E45', '#7DB656'][H(tx, ty, 2) % 3], s: 0.7 + (H(tx, ty, 3) % 30) / 100 }); solid.push({ c: [wx(px(1.6)), wz(pz(1.6)), 0.6] }); }
+      else if (H(tx, ty, 4) < 120) { props.push({ k: 'bin', x: px(6.2), y: pz(6.2) }); solid.push({ c: [wx(px(6.2)), wz(pz(6.2)), 0.4] }); }
+      else if (H(tx, ty, 5) < 70) { props.push({ k: 'hydrant', x: px(6.6), y: pz(6.6) }); solid.push({ c: [wx(px(6.6)), wz(pz(6.6)), 0.3] }); }
+      // a car parked at this kerb (on a street with parking, most tiles; elsewhere now and then)
+      if (links === 2 && ((n.N && n.S) || (n.E && n.W)) && H(tx, ty, 6) < (R0.deco === 'cars' ? 700 : 110)) { const cx = along ? x0 + TILE / 2 : dx < 0 ? x0 + 1.15 : x0 + TILE - 1.15, cz = along ? (dy < 0 ? z0 + 1.15 : z0 + TILE - 1.15) : z0 + TILE / 2;
+        parked.push({ kind: PARK[H(tx, ty, 7) % PARK.length], col: PAINT[H(tx, ty, 8) % PAINT.length], x: wx(cx), z: wz(cz), ry: along ? (H(tx, ty, 9) & 1 ? Math.PI / 2 : -Math.PI / 2) : (H(tx, ty, 9) & 1 ? 0 : Math.PI) });
+        solid.push({ c: [wx(along ? cx - 1.3 : cx), wz(along ? cz : cz - 1.3), 1.1] }, { c: [wx(along ? cx + 1.3 : cx), wz(along ? cz : cz + 1.3), 1.1] }); } }
+    if (links >= 3) { const corner = [[-1, -1], [1, -1], [-1, 1], [1, 1]].find(([dx, dy]) => free(tx + dx, ty) && free(tx, ty + dy) || free(tx + dx, ty + dy) && !isR(tx + dx, ty + dy) && (free(tx + dx, ty) || free(tx, ty + dy)));
+      if (corner) { const [dx, dy] = corner, sx = dx < 0 ? x0 - 0.7 : x0 + TILE + 0.7, sz = dy < 0 ? z0 - 0.7 : z0 + TILE + 0.7; props.push({ k: 'signal', x: sx, y: sz, ang: Math.atan2(-dy, -dx), on: H(tx, ty, 10) % 3 }); solid.push({ c: [wx(sx), wz(sz), 0.4] }); } } }
   // what's next door, so kerbs and riverbanks know whether to stop at the block's edge
   const gnd = (tx, ty) => o.road(bx + tx, by + ty) ? 2 : o.water(bx + tx, by + ty) ? 3 : o.building(bx + tx, by + ty) ? 1 : 0;
-  return { L: { seed: (bx * 31 + by) >>> 0, tw: B, th: B, ground: Array.from(ground).join(''), roads, sroads, buildings, props, spots, scenery: [], gnd }, solid };
+  return { L: { seed: (bx * 31 + by) >>> 0, tw: B, th: B, ground: Array.from(ground).join(''), roads, sroads, buildings, props, spots, scenery: [], gnd }, solid, parked };
 }
 
 // opts: start {x,y,a} (tiles; a: 0 = east, anticlockwise), car {kind,col}, road(x,y), water(x,y), building(x,y),
@@ -70,9 +89,9 @@ export function createTown(host, opts) {
   const o_road = (x, y) => opts.road(x, y);
   function build(bx, by) {
     const t0 = performance.now(), key = bx + ',' + by, old = blocks.get(key), s = sig(bx, by); if (old && old.sig === s) return;
-    const { L, solid } = blockArea(bx, by, opts), g = W.buildArea(view, L, { cordon: false, pad: 0, ring: false, add: false });
+    const { L, solid, parked } = blockArea(bx, by, opts), g = W.buildArea(view, L, { cordon: false, pad: 0, ring: false, add: false });
     g.position.set(bx * TILE, 0, by * TILE); g.updateMatrixWorld(true); scene.add(g);
-    if (old) drop(old); blocks.set(key, { g, sig: s, bx, by, solid }); shadowsDue = true; const ms = performance.now() - t0; stats.builds++; stats.maxMs = Math.max(stats.maxMs, ms); stats.totalMs += ms; }
+    if (old) drop(old); blocks.set(key, { g, sig: s, bx, by, solid, parked }); shadowsDue = true; const ms = performance.now() - t0; stats.builds++; stats.maxMs = Math.max(stats.maxMs, ms); stats.totalMs += ms; }
   const stats = { builds: 0, maxMs: 0, totalMs: 0 }; /* how long blocks take to build (for checking it stays smooth) */
   const drop = v => { scene.remove(v.g); v.g.traverse(m => m.geometry && m.geometry.dispose()); };
   const near = () => { const cx = Math.floor(car.x / TILE / B), cy = Math.floor(car.z / TILE / B), want = [];
@@ -90,7 +109,8 @@ export function createTown(host, opts) {
   const solidsNear = (x, z) => { const out = []; const bx = Math.floor(tileOf(x) / B) * B, by = Math.floor(tileOf(z) / B) * B;
     for (const dx of [-B, 0, B]) for (const dz of [-B, 0, B]) { const v = blocks.get((bx + dx) + ',' + (by + dz)); if (v) out.push(...v.solid); } return out; };
   const hits = (x, z, S) => { const tx = tileOf(x), tz = tileOf(z); if (!opts.loaded(tx, tz)) return true; if (opts.water(tx, tz) && !opts.road(tx, tz)) return true;
-    for (const s of S) { if (s.r) { if (x > s.r[0] && x < s.r[2] && z > s.r[1] && z < s.r[3]) return true; } else if (Math.hypot(x - s.c[0], z - s.c[1]) < s.c[2]) return true; } return false; };
+    for (const s of S) { if (s.r) { if (x > s.r[0] && x < s.r[2] && z > s.r[1] && z < s.r[3]) return true; } else if (Math.hypot(x - s.c[0], z - s.c[1]) < s.c[2]) return true; }
+    for (const t of traffic) if (Math.hypot(x - t.px, z - t.pz) < 1.9) return true; return false; };
   const keys = new Set(), inp = { thr: 0, steer: 0 }; let ctl = opts.controls || { layout: 'stick' }; /* inp: from the on-screen controls (steer +1 = left) */
   function drive(dt) {
     const K = ctl.keys || {}, on = (a, d) => keys.has(d) || keys.has(String(K[a] || '').toLowerCase());
@@ -104,21 +124,112 @@ export function createTown(host, opts) {
     const pts = [[2.1 * dir, 0.85], [2.1 * dir, -0.85], [0, 0]]; /* the front corners (the back ones going backwards) and the middle */
     if (pts.some(([u, w]) => hits(nx + fx * u + fz * w, nz + fz * u - fx * w, S))) { car.v = -car.v * 0.25; bump = 0.25; return; }
     car.x = nx; car.z = nz; }
-  let bump = 0;
+  let bump = 0, roll = 0, pitch = 0, accel0 = 0;
 
-  // ---- the people round you: colonists walking, and cars, moved smoothly to where the map has them ----
+  // ---- every car but yours, drawn together: one draw per model for all of them (parked, traffic, other people) ----
+  const fleetM = new Map(), fleetQ = new Map(), M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), V1 = new THREE.Vector3(1, 1, 1), P3 = new THREE.Vector3(), C3 = new THREE.Color();
+  const blobGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), blobMat = new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.38, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 });
+  const beamGeo = (() => { const g = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2); g.translate(0, 0, -0.5); return g; })(), beamTex = (() => { const c = document.createElement('canvas'); c.width = 64; c.height = 128; const x = c.getContext('2d'), gr = x.createRadialGradient(32, 128, 4, 32, 90, 90); gr.addColorStop(0, 'rgba(255,236,190,.9)'); gr.addColorStop(1, 'rgba(255,236,190,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 128); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+  const beamMat2 = new THREE.MeshBasicMaterial({ map: beamTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0, polygonOffset: true, polygonOffsetFactor: -7, polygonOffsetUnits: -7 });
+  let blobs = null, beams = null; const MAXC = 160;
+  const pushCar = (kind, colr, x, z, ry) => { let q = fleetQ.get(kind); if (!q) fleetQ.set(kind, q = []); q.push(kind, colr, x, z, ry); };
+  function drawFleet(night) {
+    let total = 0; for (const q of fleetQ.values()) total += q.length / 5;
+    if (!blobs) { blobs = new THREE.InstancedMesh(blobGeo, blobMat, MAXC); blobs.frustumCulled = false; scene.add(blobs); beams = new THREE.InstancedMesh(beamGeo, beamMat2, MAXC); beams.frustumCulled = false; scene.add(beams); }
+    let b = 0; beamMat2.opacity = night * 0.55;
+    for (const [kind, m] of fleetM) if (!fleetQ.has(kind)) m.count = 0;
+    for (const [kind, q] of fleetQ) { const n = q.length / 5; let m = fleetM.get(kind);
+      if (!m || m.userData.cap < n) { const lite = W.carLite(kind), cap = Math.max(8, 1 << Math.ceil(Math.log2(n + 1)));
+        if (m) { scene.remove(m); m.dispose(); } const mat = m ? m.material : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: Math.min(0.6, lite.paint[0] + 0.08), metalness: lite.paint[1] * 0.8, envMapIntensity: lite.paint[2] });
+        m = new THREE.InstancedMesh(lite.geo, mat, cap); m.userData = { cap, L: lite.L, W: lite.W }; m.frustumCulled = false; m.castShadow = false; m.receiveShadow = true; scene.add(m); fleetM.set(kind, m); }
+      for (let i = 0; i < n; i++) { const [, c, x, z, ry] = q.slice(i * 5, i * 5 + 5); Q.setFromAxisAngle(Y, ry); M4.compose(P3.set(x, 0, z), Q, V1); m.setMatrixAt(i, M4); m.setColorAt(i, C3.set(c));
+        if (b < MAXC) { M4.compose(P3.set(x, 0.02, z), Q, new THREE.Vector3(m.userData.W * 1.2, 1, m.userData.L * 1.05)); blobs.setMatrixAt(b, M4);
+          if (night > 0.05) { const L2 = m.userData.L / 2; M4.compose(P3.set(x - Math.sin(ry) * L2, 0.04, z - Math.cos(ry) * L2), Q, new THREE.Vector3(3.4, 1, 9)); beams.setMatrixAt(b, M4); } b++; } }
+      m.count = n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    blobs.count = b; blobs.instanceMatrix.needsUpdate = true; beams.count = night > 0.05 ? b : 0; beams.instanceMatrix.needsUpdate = true; fleetQ.clear(); }
+
+  // ---- the traffic: cars that drive the real roads round you, keep to their lane, stop behind you, and turn at junctions ----
+  const traffic = [], WANT_CARS = PHONE ? (HQ ? 12 : 7) : 22, MODELS = ['hatch', 'sedan', 'sedan', 'hatch', 'suv', 'pickup', 'ev', 'evsedan', 'evsuv', 'luxury', 'sports', 'gt', 'supercar'], PAINTS = ['#C8382E', '#2F5D9E', '#E9E4D8', '#2B2F33', '#E2B13C', '#3C8A5A', '#7C8288', '#F2F0EA', '#1E2228', '#5E3FD6', '#0FA3A3'];
+  let wantCars = WANT_CARS; const drivable = (tx, ty) => { const t = opts.road(tx, ty); return !!t && !(ROAD_TYPES[t] || {}).nocars && !(ROAD_TYPES[t] || {}).rail && opts.loaded(tx, ty); };
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  function spawnCar() { const ct = tileOf(car.x), cz = tileOf(car.z), R = Math.floor((RAD + 0.45) * B);
+    for (let k = 0; k < 30; k++) { const tx = ct + Math.round((Math.random() * 2 - 1) * R), ty = cz + Math.round((Math.random() * 2 - 1) * R); if (Math.hypot(tx - ct, ty - cz) < 7 || !drivable(tx, ty)) continue;
+      const opts2 = DIRS.filter(([dx, dy]) => drivable(tx + dx, ty + dy)); if (!opts2.length) continue; const [dx, dy] = opts2[Math.floor(Math.random() * opts2.length)];
+      const m = MODELS[Math.floor(Math.random() * MODELS.length)], t = { kind: m, col: PAINTS[Math.floor(Math.random() * PAINTS.length)], fx: tx, fy: ty, tx: tx + dx, ty: ty + dy, u: Math.random(), v: 0, top: 6 + Math.random() * 6, px: 0, pz: 0, ry: 0 };
+      place(t, 1); traffic.push(t); return; } }
+  function place(t, snap) { const ax = (t.fx + 0.5) * TILE, az = (t.fy + 0.5) * TILE, bx2 = (t.tx + 0.5) * TILE, bz2 = (t.ty + 0.5) * TILE, dx = t.tx - t.fx, dy = t.ty - t.fy, lane = 1.9;
+    const x = ax + (bx2 - ax) * t.u - dy * lane, z = az + (bz2 - az) * t.u + dx * lane, ry = Math.atan2(-dx, -dy); /* keep to the right-hand lane */
+    if (snap) { t.px = x; t.pz = z; t.ry = ry; return; } t.px += (x - t.px) * 0.3; t.pz += (z - t.pz) * 0.3; /* round the corner, not a jump to the next lane */
+    let d = ry - t.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); t.ry += d * 0.18; }
+  function driveTraffic(dt) {
+    const R = (RAD + 0.6) * B * TILE; for (let i = traffic.length - 1; i >= 0; i--) if (Math.hypot(traffic[i].px - car.x, traffic[i].pz - car.z) > R) traffic.splice(i, 1);
+    while (traffic.length < wantCars && Math.random() < 0.5) { const n = traffic.length; spawnCar(); if (traffic.length === n) break; }
+    for (const t of traffic) { const dx = t.tx - t.fx, dy = t.ty - t.fy, rt = opts.road(t.fx, t.fy), top = Math.min(t.top, 7 * ((ROAD_TYPES[rt] || {}).speed || 2) * 0.75);
+      // something ahead (you, or another car in the same lane): slow down and stop behind it
+      let gap = 99; const hx = -Math.sin(t.ry), hz = -Math.cos(t.ry);
+      for (const o of [{ px: car.x, pz: car.z }, ...traffic]) { if (o === t) continue; const ox = o.px - t.px, oz = o.pz - t.pz, ahead = ox * hx + oz * hz, side = Math.abs(ox * hz - oz * hx); if (ahead > 0 && ahead < gap && side < 2.2) gap = ahead; }
+      const want = gap < 6 ? 0 : gap < 14 ? top * (gap - 6) / 8 : top; t.v += Math.max(-9 * dt, Math.min(3 * dt, want - t.v));
+      t.u += t.v * dt / TILE;
+      while (t.u >= 1) { t.u -= 1; const nx = [];
+        for (const [ex, ey] of DIRS) { if (ex === -dx && ey === -dy) continue; if (drivable(t.tx + ex, t.ty + ey)) nx.push([ex, ey]); }
+        const straight = nx.find(([ex, ey]) => ex === dx && ey === dy), pick = straight && Math.random() < 0.65 ? straight : nx.length ? nx[Math.floor(Math.random() * nx.length)] : [-dx, -dy];
+        t.fx = t.tx; t.fy = t.ty; t.tx += pick[0]; t.ty += pick[1]; if (!drivable(t.tx, t.ty)) { t.tx = t.fx - dx; t.ty = t.fy - dy; } }
+      place(t, 0); pushCar(t.kind, t.col, t.px, t.pz, t.ry); } }
+
+  // ---- people on the pavements: walking along the kerbs, swinging their legs (four draws for all of them) ----
+  const peds = [], WANT_PEDS = PHONE ? (HQ ? 26 : 14) : 44;
+  const pedParts = (() => { const torso = new THREE.CapsuleGeometry(0.21, 0.5, 3, 8); torso.translate(0, 1.22, 0); const head = new THREE.SphereGeometry(0.13, 10, 8); head.translate(0, 1.72, 0);
+    const leg = new THREE.CapsuleGeometry(0.09, 0.62, 3, 6); leg.translate(0, -0.4, 0); /* hangs from the hip */
+    const mk = (g, c) => { const m = new THREE.InstancedMesh(g, new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 }), WANT_PEDS); m.frustumCulled = false; m.count = 0; scene.add(m); return m; };
+    return { torso: mk(torso, '#ffffff'), head: mk(head, '#ffffff'), legL: mk(leg, '#ffffff'), legR: mk(leg, '#ffffff') }; })();
+  const SHIRTS = ['#2f5d9e', '#3c8a5a', '#e2b13c', '#8e44ad', '#d35d6e', '#2ec4b6', '#f2994a', '#7f8c8d', '#c0392b', '#f4f1ea', '#1e2a3a'], SKINS = ['#8d5524', '#c68642', '#e0ac69', '#5c3a21', '#a0663d'], LEGS = ['#2b2f33', '#3b4a63', '#5c4a3b', '#4a4a4a', '#26313b', '#6b7b8c'];
+  const kerbOf = (tx, ty, side) => { const [dx, dy] = side; return drivable(tx, ty) && !opts.road(tx + dx, ty + dy) && !opts.water(tx + dx, ty + dy); };
+  function spawnPed() { const ct = tileOf(car.x), cz = tileOf(car.z), R = Math.floor((RAD + 0.3) * B);
+    for (let k = 0; k < 30; k++) { const tx = ct + Math.round((Math.random() * 2 - 1) * R), ty = cz + Math.round((Math.random() * 2 - 1) * R), side = DIRS[Math.floor(Math.random() * 4)]; if (!kerbOf(tx, ty, side)) continue;
+      const along = side[1] !== 0 ? [1, 0] : [0, 1], sgn = Math.random() < 0.5 ? 1 : -1, i = peds.length;
+      peds.push({ tx, ty, side, dir: [along[0] * sgn, along[1] * sgn], u: Math.random(), sp: 1.1 + Math.random() * 0.5, ph: Math.random() * 6, shirt: SHIRTS[Math.floor(Math.random() * SHIRTS.length)], skin: SKINS[Math.floor(Math.random() * SKINS.length)], legs: LEGS[Math.floor(Math.random() * LEGS.length)], h: 0.92 + Math.random() * 0.14, i });
+      return; } }
+  const E = new THREE.Euler(), SC = new THREE.Vector3();
+  function walk(dt) {
+    const R = (RAD + 0.5) * B * TILE; for (let i = peds.length - 1; i >= 0; i--) { const p = peds[i]; if (Math.hypot((p.tx + 0.5) * TILE - car.x, (p.ty + 0.5) * TILE - car.z) > R) peds.splice(i, 1); }
+    while (peds.length < WANT_PEDS && Math.random() < 0.4) { const n = peds.length; spawnPed(); if (peds.length === n) break; }
+    let n = 0; for (const p of peds) { p.u += p.sp * dt / TILE; p.ph += dt * p.sp * 4.2;
+      if (p.u >= 1) { p.u -= 1; const nx = p.tx + p.dir[0], ny = p.ty + p.dir[1]; if (kerbOf(nx, ny, p.side)) { p.tx = nx; p.ty = ny; } else { p.dir = [-p.dir[0], -p.dir[1]]; p.u = 1 - p.u; } } /* the pavement ends: turn round */
+      const [sx, sy] = p.side, off = TILE / 2 + 0.8, fx = p.dir[0] ? (p.dir[0] > 0 ? p.u : 1 - p.u) : 0.5, fy = p.dir[1] ? (p.dir[1] > 0 ? p.u : 1 - p.u) : 0.5;
+      const x = (p.tx + (p.dir[0] ? fx : 0.5)) * TILE + sx * off, z = (p.ty + (p.dir[1] ? fy : 0.5)) * TILE + sy * off, ry = Math.atan2(p.dir[0], p.dir[1]), bob = Math.abs(Math.sin(p.ph)) * 0.04, sw = Math.sin(p.ph) * 0.45;
+      Q.setFromAxisAngle(Y, ry); SC.set(1, p.h, 1); M4.compose(P3.set(x, bob, z), Q, SC); pedParts.torso.setMatrixAt(n, M4); pedParts.head.setMatrixAt(n, M4);
+      for (const [part, s2] of [[pedParts.legL, 1], [pedParts.legR, -1]]) { E.set(sw * s2, ry, 0, 'YXZ'); Q.setFromEuler(E); const lx = Math.cos(ry) * 0.1 * s2, lz = -Math.sin(ry) * 0.1 * s2; M4.compose(P3.set(x + lx, 0.84 * p.h + bob, z + lz), Q, SC.set(1, p.h, 1)); part.setMatrixAt(n, M4); }
+      pedParts.torso.setColorAt(n, C3.set(p.shirt)); pedParts.head.setColorAt(n, C3.set(p.skin)); pedParts.legL.setColorAt(n, C3.set(p.legs)); pedParts.legR.setColorAt(n, C3.set(p.legs)); n++; }
+    for (const m of Object.values(pedParts)) { m.count = n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; } }
+
+  // ---- the colonists round you (walking, as on the map) and other people's cars (in the fleet, as their own models) ----
   const folk = new Map(); let folkAt = 0;
   function crowd(now, dt) {
     if (now - folkAt > 400) { folkAt = now; const L = opts.people(car.x / TILE, car.z / TILE), seen = new Set();
       for (const p of L) { seen.add(p.id); const kind = p.car ? 'car' : 'walk'; let f = folk.get(p.id);
-        if (f && f.kind !== kind) { scene.remove(f.g); folk.delete(p.id); f = null; }
-        if (!f) { if (kind === 'walk') { const P = W.makePerson(p.id); f = { kind, P, g: P.group }; } else { const g = W.makeCar(p.van ? 'van' : 'car', p.col || '#7c8288'); f = { kind, g }; }
-          f.g.position.set(p.x * TILE, 0, p.y * TILE); scene.add(f.g); folk.set(p.id, f); }
-        f.tx = p.x * TILE; f.tz = p.y * TILE; }
-      for (const [id, f] of folk) if (!seen.has(id)) { scene.remove(f.g); folk.delete(id); } }
-    for (const f of folk.values()) { const g = f.g, dx = f.tx - g.position.x, dz = f.tz - g.position.z, k = Math.min(1, dt * 2.5); if (Math.hypot(dx, dz) > 40) { g.position.x = f.tx; g.position.z = f.tz; continue; }
-      const vx = dx * k / Math.max(dt, 1e-3), vz = dz * k / Math.max(dt, 1e-3); g.position.x += dx * k; g.position.z += dz * k;
-      if (f.P) f.P.animate(dt, vx, vz); else if (Math.hypot(vx, vz) > 0.4) { const want = Math.atan2(-vx, -vz); let d = want - g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); g.rotation.y += d * Math.min(1, dt * 5); for (const w of g.userData.wheels || []) w.rotation.x -= Math.hypot(vx, vz) * dt / 0.33; } } }
+        if (f && f.kind !== kind) { if (f.g) scene.remove(f.g); folk.delete(p.id); f = null; }
+        if (!f) { if (kind === 'walk') { const P = W.makePerson(p.id); f = { kind, P, g: P.group }; f.g.position.set(p.x * TILE, 0, p.y * TILE); scene.add(f.g); } else f = { kind, m: p.m || 'sedan', col: p.col || '#7c8288', x: p.x * TILE, z: p.y * TILE, ry: 0 }; folk.set(p.id, f); }
+        f.tx = p.x * TILE; f.tz = p.y * TILE; if (f.kind === 'car') { f.m = p.m || f.m; f.col = p.col || f.col; } }
+      for (const [id, f] of folk) if (!seen.has(id)) { if (f.g) scene.remove(f.g); folk.delete(id); } }
+    for (const f of folk.values()) { const k = Math.min(1, dt * 2.5);
+      if (f.kind === 'car') { const dx = f.tx - f.x, dz = f.tz - f.z; if (Math.hypot(dx, dz) > 40) { f.x = f.tx; f.z = f.tz; } else { f.x += dx * k; f.z += dz * k; if (Math.hypot(dx, dz) > 0.05) { let d = Math.atan2(-dx, -dz) - f.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); f.ry += d * Math.min(1, dt * 5); } } pushCar(f.m, f.col, f.x, f.z, f.ry); continue; }
+      const g = f.g, dx = f.tx - g.position.x, dz = f.tz - g.position.z; if (Math.hypot(dx, dz) > 40) { g.position.x = f.tx; g.position.z = f.tz; continue; }
+      const vx = dx * k / Math.max(dt, 1e-3), vz = dz * k / Math.max(dt, 1e-3); g.position.x += dx * k; g.position.z += dz * k; f.P.animate(dt, vx, vz); } }
+
+  // ---- the sky: slow clouds, and birds by day ----
+  const sky = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); for (let i = 0; i < 7; i++) { const gx = 30 + Math.random() * 68, gy = 40 + Math.random() * 48, r = 22 + Math.random() * 22, gr = x.createRadialGradient(gx, gy, 2, gx, gy, r); gr.addColorStop(0, 'rgba(255,255,255,.85)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const N = PHONE ? 10 : 18, m = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, fog: false, opacity: 0.8 }), N);
+    m.frustumCulled = false; scene.add(m); const cl = Array.from({ length: N }, () => ({ x: (Math.random() - 0.5) * 1400, z: (Math.random() - 0.5) * 1400, s: 120 + Math.random() * 180, y: 170 + Math.random() * 70 }));
+    const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.25, -0.7, 0.15, -0.1, 0, 0, -0.1, 0, 0, 0.25, 0.7, 0.15, -0.1, 0, 0, -0.1], 3)); bg.computeVertexNormals();
+    const birds = new THREE.InstancedMesh(bg, new THREE.MeshBasicMaterial({ color: '#2b2b30', side: THREE.DoubleSide, fog: false }), 9); birds.frustumCulled = false; scene.add(birds);
+    return { m, cl, birds, t }; })();
+  function skyLife(dt, now, night) { const S2 = sky; let i = 0; for (const c of S2.cl) { c.x += dt * 3; if (c.x - car.x > 700) c.x -= 1400; if (car.x - c.x > 700) c.x += 1400; if (c.z - car.z > 700) c.z -= 1400; if (car.z - c.z > 700) c.z += 1400;
+      M4.compose(P3.set(c.x, c.y, c.z), Q.identity(), SC.set(c.s, 1, c.s * 0.6)); S2.m.setMatrixAt(i++, M4); } S2.m.instanceMatrix.needsUpdate = true; S2.m.material.opacity = 0.8 * (1 - night * 0.85);
+    S2.birds.visible = night < 0.4; if (S2.birds.visible) { for (let k = 0; k < 9; k++) { const a = now / 9000 + k * 0.5, cx = car.x + 60 + Math.cos(now / 30000) * 40, cz = car.z - 50; E.set(0, -a + Math.PI / 2, 0); Q.setFromEuler(E);
+      M4.compose(P3.set(cx + Math.cos(a) * (30 + k * 2), 38 + Math.sin(now / 900 + k) * 2, cz + Math.sin(a) * (30 + k * 2)), Q, SC.set(1.4, 1 + Math.sin(now / 120 + k * 1.7) * 0.9, 1.4)); S2.birds.setMatrixAt(k, M4); } S2.birds.instanceMatrix.needsUpdate = true; } }
+
+  // your car's headlights after dark
+  const head = new THREE.SpotLight('#fff1d6', 0, 70, 0.55, 0.6, 1.2); head.castShadow = false; scene.add(head, head.target);
 
   // ---- the camera: behind the car, from the driver's seat, or higher up; drag anywhere to look round as you drive ----
   let mode = 0; const cam = new THREE.Vector3(car.x - Math.cos(car.a) * 9, 3.6, car.z + Math.sin(car.a) * 9), look = new THREE.Vector3();
@@ -129,7 +240,7 @@ export function createTown(host, opts) {
     const hood = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.04, 1.6), new THREE.MeshStandardMaterial({ color: opts.car.col || '#c8382e', roughness: 0.3, metalness: 0.5 })); hood.position.set(0, -0.5, -2.0); hood.rotation.x = 0.08; cockpit.add(hood);
     const gauge = new THREE.Mesh(new THREE.CircleGeometry(0.07, 20), new THREE.MeshBasicMaterial({ color: '#9fe3ff' })); gauge.position.set(-0.3, -0.42, -0.72); gauge.rotation.x = -0.45; cockpit.add(gauge); }
   const sw = new THREE.Group(); sw.add(new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.026, 10, 32), wheelM)); for (const a of [0, 2.1, 4.2]) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.19, 0.02), wheelM); sp.position.set(Math.sin(a) * 0.095, Math.cos(a) * 0.095, 0); sp.rotation.z = -a; sw.add(sp); }
-  sw.position.set(0, -0.36, -0.58); sw.rotation.x = -0.32; cockpit.add(sw); cockpit.visible = false; camera.add(cockpit); scene.add(camera);
+  sw.position.set(0, -0.44, -0.72); sw.rotation.x = -0.32; cockpit.add(sw); cockpit.visible = false; camera.add(cockpit); scene.add(camera);
   function chase(dt) {
     if (lk.id == null && now0() - lk.at > 1500 && Math.abs(car.v) > 2) { lk.yaw *= Math.pow(0.15, dt); lk.pitch *= Math.pow(0.15, dt); } /* let go: the view comes back round to the road */
     const fp = mode === 1; me.visible = !fp; cockpit.visible = fp; sw.rotation.z = car.steer * 1.4;
@@ -139,7 +250,8 @@ export function createTown(host, opts) {
       cam.x += (tx - cam.x) * k; cam.z += (tz - cam.z) * k; cam.y += (Math.max(1.2, up) - cam.y) * k; camera.position.copy(cam);
       look.set(car.x + Math.cos(car.a) * (lk.id != null ? 0 : 6), 1.2, car.z - Math.sin(car.a) * (lk.id != null ? 0 : 6)); camera.lookAt(look);
       view.cut.A.value.set(car.x, 1.0, car.z); view.cut.B.value.copy(camera.position); view.cut.R.value = high ? 6 : 3.5; }
-    if (bump > 0) { bump -= dt; camera.position.y += Math.sin(bump * 60) * 0.08; } }
+    if (bump > 0) { bump -= dt; camera.position.y += Math.sin(bump * 60) * 0.08; }
+    const sp = Math.abs(car.v); if (sp > 16) { const t = now0() / 1000, k = (sp - 16) * 0.0016; camera.position.x += Math.sin(t * 37) * k; camera.position.y += Math.sin(t * 43) * k; } } /* a faint tremble at speed */
   const now0 = () => performance.now();
   canvas.style.touchAction = 'none';
   canvas.addEventListener('pointerdown', e => { if (lk.id != null) return; lk.id = e.pointerId; lk.x = e.clientX; lk.y = e.clientY; try { canvas.setPointerCapture(e.pointerId); } catch (x) {} });
@@ -167,8 +279,13 @@ export function createTown(host, opts) {
   view.resize(); around(); sunNow(true);
   view.start((dt, now) => {
     if (dead) return; drive(dt);
-    me.position.set(car.x, 0, car.z); me.rotation.y = car.a - Math.PI / 2; for (const w of me.userData.wheels || []) w.rotation.x -= car.v * dt / 0.33;
-    chase(dt); crowd(now, dt); routeMat.opacity = 0.6 + 0.3 * Math.sin(now / 250); ground.position.set(Math.round(car.x / 50) * 50, -0.08, Math.round(car.z / 50) * 50);
+    me.position.set(car.x, 0, car.z); me.rotation.set(0, 0, 0); me.rotation.y = car.a - Math.PI / 2; for (const w of me.userData.wheels || []) w.rotation.x -= car.v * dt / 0.33;
+    roll += (car.steer * Math.min(1, Math.abs(car.v) / 14) * 0.05 - roll) * Math.min(1, dt * 5); pitch += ((accel0 - car.v) / Math.max(dt, 1e-3) * 0.0025 - pitch) * Math.min(1, dt * 4); accel0 = car.v; me.rotateZ(roll); me.rotateX(Math.max(-0.035, Math.min(0.035, pitch))); /* the body leans into a turn and dips when you brake */
+    const night = view.night || 0; for (const blk of blocks.values()) for (const c of blk.parked) pushCar(c.kind, c.col, c.x, c.z, c.ry);
+    driveTraffic(dt); walk(dt); skyLife(dt, now, night);
+    head.intensity = night * 60; if (night > 0.02) { const fx = Math.cos(car.a), fz = -Math.sin(car.a); head.position.set(car.x + fx * 1.8, 0.9, car.z + fz * 1.8); head.target.position.set(car.x + fx * 14, 0, car.z + fz * 14); }
+    const fov = 60 + Math.min(14, Math.abs(car.v) * 0.45); if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); } /* the view widens with speed */
+    chase(dt); crowd(now, dt); drawFleet(night); routeMat.opacity = 0.6 + 0.3 * Math.sin(now / 250); ground.position.set(Math.round(car.x / 50) * 50, -0.08, Math.round(car.z / 50) * 50);
     if (now - chk > 600) { chk = now; around(); }
     if (queue.length) { const [bx, by] = queue.shift().split(',').map(Number); if (opts.loaded(bx + B / 2, by + B / 2) || opts.loaded(bx, by)) build(bx, by); else queue.push(bx + ',' + by); }
     if (now - timeAt > 20000) { timeAt = now; shadowsDue = true; } sunNow(false);
@@ -176,7 +293,7 @@ export function createTown(host, opts) {
     if (now - nearAt > 300) { nearAt = now; let b = null; const fx = car.x + Math.cos(car.a) * 3, fz = car.z - Math.sin(car.a) * 3;
       if (Math.abs(car.v) < 5) { let bd = 7; for (const s of solidsNear(car.x, car.z)) { if (!s.id || !s.r) continue; const dx = Math.max(s.r[0] - fx, 0, fx - s.r[2]), dz = Math.max(s.r[1] - fz, 0, fz - s.r[3]), d = Math.hypot(dx, dz); if (d < bd) { bd = d; b = s.id; } } }
       if (b !== nearId) { nearId = b; opts.onNear(b ? opts.byId(b) : null); } }
-    frames++; spent += dt; if (frames >= 120) { const fps = frames / spent; frames = 0; spent = 0; if (fps < 24 && RAD > 1) { RAD--; haze(); around(); } } /* can't keep up: one block less far */
+    frames++; spent += dt; if (frames >= 120) { const fps = frames / spent; frames = 0; spent = 0; if (fps < 24) { if (wantCars > 4) wantCars = Math.max(4, Math.floor(wantCars * 0.6)); else if (RAD > 1) { RAD--; haze(); around(); } } } /* can't keep up: less traffic first, then a block less far */ /* can't keep up: one block less far */
   });
   const refresh = setInterval(() => { if (!dead) for (const k of blocks.keys()) if (!queue.includes(k)) queue.push(k); }, 8000); /* pick up changes to the town */
 
@@ -213,13 +330,13 @@ export function createTown(host, opts) {
   return {
     get pos() { return { x: car.x / TILE, y: car.z / TILE, a: car.a, v: car.v / TILE }; },
     kmh() { return Math.round(Math.abs(car.v) * 3.6); },
-    stats() { return { ...stats, blocks: blocks.size, people: folk.size, radius: RAD, calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
+    stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
     toggleView() { mode = (mode + 1) % 3; lk.yaw = lk.pitch = 0; return ['behind', 'driver', 'above'][mode]; },
     setControls(c) { ctl = c || ctl; controls(); },
     setRoute,
     stop() { car.v = 0; },
     dispose() { dead = true; clearInterval(refresh); view.stop(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); removeEventListener('blur', kb); removeEventListener('resize', view.resize);
       for (const v of blocks.values()) drop(v); blocks.clear(); for (const f of folk.values()) scene.remove(f.g); folk.clear();
-      ground.geometry.dispose(); ground.material.dispose(); try { view.dispose(); } catch (e) {} try { renderer.forceContextLoss(); } catch (e) {} canvas.remove(); if (pad) pad.remove(); chevron.dispose(); routeMat.dispose(); beamMat.dispose(); },
+      ground.geometry.dispose(); ground.material.dispose(); try { view.dispose(); } catch (e) {} try { renderer.forceContextLoss(); } catch (e) {} canvas.remove(); if (pad) pad.remove(); chevron.dispose(); routeMat.dispose(); beamMat.dispose(); for (const m of fleetM.values()) { scene.remove(m); m.dispose(); } blobGeo.dispose(); blobMat.dispose(); beamGeo.dispose(); beamMat2.dispose(); beamTex.dispose(); sky.t.dispose(); },
   };
 }

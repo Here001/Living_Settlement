@@ -65,8 +65,8 @@ function blockArea(bx, by, o) {
       else if (H(tx, ty, 5) < 70) { props.push({ k: 'hydrant', x: px(6.6), y: pz(6.6) }); solid.push({ c: [wx(px(6.6)), wz(pz(6.6)), 0.3] }); }
       // a car parked at this kerb (on a street with parking, most tiles; elsewhere now and then)
       if (links === 2 && ((n.N && n.S) || (n.E && n.W)) && H(tx, ty, 6) < (R0.deco === 'cars' ? 700 : 110)) { const cx = along ? x0 + TILE / 2 : dx < 0 ? x0 + 0.95 : x0 + TILE - 0.95, cz = along ? (dy < 0 ? z0 + 0.95 : z0 + TILE - 0.95) : z0 + TILE / 2; /* tight to the kerb */
-        parked.push({ kind: PARK[H(tx, ty, 7) % PARK.length], col: PAINT[H(tx, ty, 8) % PAINT.length], x: wx(cx), z: wz(cz), ry: along ? (H(tx, ty, 9) & 1 ? Math.PI / 2 : -Math.PI / 2) : (H(tx, ty, 9) & 1 ? 0 : Math.PI) });
-        solid.push({ c: [wx(along ? cx - 1.3 : cx), wz(along ? cz : cz - 1.3), 1.1] }, { c: [wx(along ? cx + 1.3 : cx), wz(along ? cz : cz + 1.3), 1.1] }); } }
+        const pc = { kind: PARK[H(tx, ty, 7) % PARK.length], col: PAINT[H(tx, ty, 8) % PAINT.length], x: wx(cx), z: wz(cz), ry: along ? (H(tx, ty, 9) & 1 ? Math.PI / 2 : -Math.PI / 2) : (H(tx, ty, 9) & 1 ? 0 : Math.PI) }; parked.push(pc);
+        solid.push({ car: pc }); } } /* (solid as the car's own body: you can drive past it close enough to brush it) */
     if (links >= 3) { const corner = [[-1, -1], [1, -1], [-1, 1], [1, 1]].find(([dx, dy]) => free(tx + dx, ty) && free(tx, ty + dy) || free(tx + dx, ty + dy) && !isR(tx + dx, ty + dy) && (free(tx + dx, ty) || free(tx, ty + dy)));
       if (corner) { const [dx, dy] = corner, sx = dx < 0 ? x0 - 0.7 : x0 + TILE + 0.7, sz = dy < 0 ? z0 - 0.7 : z0 + TILE + 0.7; props.push({ k: 'signal', x: sx, y: sz, ang: Math.atan2(-dy, -dx), on: H(tx, ty, 10) % 3 }); solid.push({ c: [wx(sx), wz(sz), 0.4] }); } } }
   // what's next door, so kerbs and riverbanks know whether to stop at the block's edge
@@ -143,14 +143,17 @@ export function createTown(host, opts) {
     for (const dx of [-B, 0, B]) for (const dz of [-B, 0, B]) { const v = blocks.get((bx + dx) + ',' + (by + dz)); if (v) out.push(...v.solid); } return out; };
   // Would this point of the car be inside something? (x0, z0: where the same point is now.) A point that's already
   // overlapping something may always move further out of it, so two cars that end up overlapping can always part.
-  const depth = (x, z, s) => s.r ? Math.min(x - s.r[0], s.r[2] - x, z - s.r[1], s.r[3] - z) : s.c[2] - Math.hypot(x - s.c[0], z - s.c[1]); /* > 0: inside, by this much */
+  const carDep = (kind, cx, cz, ry, px, pz, m) => { const [L, Wd] = W.carSize(kind), c = Math.cos(ry), s2 = Math.sin(ry), dx = px - cx, dz = pz - cz, along = -dx * s2 - dz * c, side = dx * c - dz * s2; return Math.min(L / 2 + m - Math.abs(along), Wd / 2 + m - Math.abs(side)); }; /* > 0: inside the car's body (m: extra room) */
+  const BRUSH = -0.1, SHOULDER = 0.28; /* driving: up to 10 cm of overlap is a brush; on foot: room for your shoulders */
+  const depth = (x, z, s) => s.car ? carDep(s.car.kind, s.car.x, s.car.z, s.car.ry, x, z, foot ? SHOULDER : BRUSH) : s.r ? Math.min(x - s.r[0], s.r[2] - x, z - s.r[1], s.r[3] - z) : s.c[2] - Math.hypot(x - s.c[0], z - s.c[1]); /* > 0: inside, by this much */
   const hits = (x, z, S, x0, z0) => { const tx = tileOf(x), tz = tileOf(z); if (!opts.loaded(tx, tz)) return true; if (opts.water(tx, tz) && !opts.road(tx, tz) && !(opts.water(tileOf(x0), tileOf(z0)) && !opts.road(tileOf(x0), tileOf(z0)))) return true;
     for (const s of S) { const d = depth(x, z, s); if (d > 0 && d >= depth(x0, z0, s) - 1e-3) return true; }
-    if (!foot) { for (const t of traffic) { const s = { c: [t.px, t.pz, 1.9] }, d = depth(x, z, s); if (d > 0 && d >= depth(x0, z0, s) - 1e-3) return true; } return false; }
+    if (!foot) { const box = (kind, cx, cz, ry) => { const d = carDep(kind, cx, cz, ry, x, z, BRUSH); return d > 0 && d >= carDep(kind, cx, cz, ry, x0, z0, BRUSH) - 1e-3; };
+      for (const t of traffic) if (Math.abs(t.px - x) < 5 && Math.abs(t.pz - z) < 5 && box(t.kind, t.px, t.pz, t.ry)) return true;
+      for (const f of folk.values()) if (f.kind === 'car' && Math.abs(f.x - x) < 5 && Math.abs(f.z - z) < 5 && box(f.m, f.x, f.z, f.ry)) return true; return false; } /* other cars: their real size, so you can squeeze past */
     // on foot, a car is solid all along its body (its own length and width, and a little for your shoulders): yours where
     // you parked it, other players' cars and the traffic
-    const carHit = (kind, cx, cz, ry) => { const [L, Wd] = W.carSize(kind), c = Math.cos(ry), s2 = Math.sin(ry), dep = (px, pz) => { const dx = px - cx, dz = pz - cz, along = -dx * s2 - dz * c, side = dx * c - dz * s2; return Math.min(L / 2 + 0.28 - Math.abs(along), Wd / 2 + 0.28 - Math.abs(side)); };
-      const d = dep(x, z); return d > 0 && d >= dep(x0, z0) - 1e-3; };
+    const carHit = (kind, cx, cz, ry) => { const d = carDep(kind, cx, cz, ry, x, z, SHOULDER); return d > 0 && d >= carDep(kind, cx, cz, ry, x0, z0, SHOULDER) - 1e-3; };
     if (parked && carHit(parked.kind, parked.x, parked.z, parked.ry)) return true;
     for (const t of traffic) if (Math.abs(t.px - x) < 4 && Math.abs(t.pz - z) < 4 && carHit(t.kind, t.px, t.pz, t.ry)) return true;
     for (const f of folk.values()) if (f.kind === 'car' && Math.abs(f.x - x) < 4 && Math.abs(f.z - z) < 4 && carHit(f.m, f.x, f.z, f.ry)) return true;
@@ -192,7 +195,7 @@ export function createTown(host, opts) {
     if (Math.abs(vf) < 0.05 && Math.abs(thr) < 0.05) vf = 0; car.slip = Math.abs(vl);
     car.vx = vf * fx + vl * lx; car.vz = vf * fz + vl * lz; car.v = vf;
     const nx = car.x + car.vx * dt, nz = car.z + car.vz * dt, S = solidsNear(nx, nz), dir = Math.sign(car.v || 1);
-    const pts = [[2.1 * dir, 0.85], [2.1 * dir, -0.85], [0, 0]]; /* the front corners (the back ones going backwards) and the middle */
+    const pts = [[2.1 * dir, 0.85], [2.1 * dir, -0.85], [0, 0.85], [0, -0.85], [-2.1 * dir, 0.85], [-2.1 * dir, -0.85], [0, 0]]; /* its corners and the middles of its sides (so it can slide past another car along its side, but not into it) */
     if (pts.some(([u, w]) => hits(nx + fx * u + fz * w, nz + fz * u - fx * w, S, car.x + fx * u + fz * w, car.z + fz * u - fx * w))) { car.vx = -car.vx * 0.25; car.vz = -car.vz * 0.25; car.v = -car.v * 0.25; bump = 0.25; return; }
     car.x = nx; car.z = nz; }
   let bump = 0, roll = 0, pitch = 0, accel0 = 0, accS = 0;

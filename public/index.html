@@ -1067,7 +1067,41 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .entitle{margin:6px 0 0;font-size:20px;font-weight:800;letter-spacing:.01em}.enstep{margin:0;min-height:20px;font-size:15px;color:#F3D9B4}
 .enbar{width:min(240px,70vw);height:6px;border-radius:999px;background:rgba(255,255,255,.14);overflow:hidden}.enfill{display:block;height:100%;width:100%;transform:scaleX(0);transform-origin:0 50%;background:linear-gradient(90deg,#F2C94C,#E4572E);border-radius:inherit;transition:transform .45s ease}
 .entip{margin:10px 0 0;font-size:12.5px;color:rgba(246,235,221,.6);max-width:280px}
-.bootload{z-index:9750;background:radial-gradient(ellipse at 50% 38%,#2F4A3A 0%,#17241C 60%,#0C130F 100%)}.blogo{display:flex;flex-direction:column;align-items:center;gap:4px;margin-bottom:6px}.blogo b{font-size:30px;letter-spacing:.18em;font-weight:900;color:#F2C94C;text-shadow:0 2px 0 #7A4A12,0 6px 24px rgba(242,201,76,.35)}.blogo small{font-size:14px;opacity:.85}.bspin{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.18);border-top-color:#F2C94C;animation:bspin .9s linear infinite;margin:6px 0}@keyframes bspin{to{transform:rotate(360deg)}}.bootload .entitle:empty{display:none}.bootload.open .bspin,.bootload.open .blogo{opacity:0;transition:opacity .25s}@media (prefers-reduced-motion:reduce){.bspin{animation-duration:3s}}
+.bootload{z-index:9750;background:linear-gradient(180deg,#04060c 0%,#0a1222 46%,#14213a 78%,#1d2b45 100%);overflow:hidden;padding:0;gap:0;transition:opacity .7s ease .2s,transform .9s cubic-bezier(.2,.7,.2,1) .2s}
+.bootload.open{transform:scale(1.05)}
+.bl-sky,.bl-win,.bl-vig{position:absolute;inset:0;pointer-events:none}
+.bl-aur{position:absolute;width:120vmax;height:60vmax;left:-10vmax;border-radius:50%;opacity:.55;mix-blend-mode:screen;will-change:transform}
+.bl-aur.a1{top:-28vmax;background:radial-gradient(closest-side,rgba(64,201,162,.55),rgba(64,201,162,0));animation:blDrift 18s ease-in-out infinite alternate}
+.bl-aur.a2{top:-20vmax;left:10vmax;background:radial-gradient(closest-side,rgba(110,92,231,.45),rgba(110,92,231,0));animation:blDrift 23s ease-in-out -6s infinite alternate-reverse}
+.bl-aur.a3{top:-34vmax;left:-30vmax;background:radial-gradient(closest-side,rgba(242,201,76,.22),rgba(242,201,76,0));animation:blDrift 27s ease-in-out -11s infinite alternate}
+@keyframes blDrift{from{transform:translate3d(-6vmax,0,0) scale(1)}to{transform:translate3d(8vmax,4vmax,0) scale(1.12)}}
+.bl-stars{position:absolute;inset:0 0 35% 0;background-image:radial-gradient(1px 1px at 12% 18%,#fff,transparent),radial-gradient(1px 1px at 32% 8%,#cfe0ff,transparent),radial-gradient(1.4px 1.4px at 58% 22%,#fff,transparent),radial-gradient(1px 1px at 76% 12%,#fff,transparent),radial-gradient(1px 1px at 88% 30%,#dfe8ff,transparent),radial-gradient(1.2px 1.2px at 22% 38%,#fff,transparent),radial-gradient(1px 1px at 46% 44%,#cfe0ff,transparent),radial-gradient(1px 1px at 68% 36%,#fff,transparent),radial-gradient(1px 1px at 6% 48%,#fff,transparent),radial-gradient(1.3px 1.3px at 94% 6%,#fff,transparent);opacity:.75;animation:blTwinkle 5s ease-in-out infinite alternate}
+@keyframes blTwinkle{from{opacity:.45}to{opacity:.85}}
+.bl-city{position:absolute;left:0;right:0;bottom:0;width:100%;height:24vh;fill:#03050a;opacity:.96}
+.bl-win{top:auto;height:24vh}.bl-win i{position:absolute;width:3px;height:4px;border-radius:1px;background:#ffd68a;box-shadow:0 0 6px rgba(255,200,110,.8);opacity:0;animation:blWin 4s ease-in-out infinite}
+@keyframes blWin{0%,100%{opacity:.15}40%,70%{opacity:.95}}
+.bl-vig{background:radial-gradient(ellipse at 50% 45%,transparent 40%,rgba(0,0,0,.55) 100%)}
+.bl-main{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;width:min(380px,calc(100vw - 40px));padding:0 0 9vh;animation:blRise .9s cubic-bezier(.2,.7,.2,1) both}
+@keyframes blRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.bl-mark{position:relative;width:76px;height:76px;margin-bottom:16px}.bl-mark img{width:76px;height:76px;border-radius:22px;display:block;box-shadow:0 10px 30px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.12)}
+.bl-ring{position:absolute;inset:-22px;border-radius:50%;background:radial-gradient(closest-side,rgba(242,201,76,.6),rgba(64,201,162,.22) 55%,transparent);z-index:-1;animation:blGlow 2.6s ease-in-out infinite}
+@keyframes blGlow{50%{transform:scale(1.12);opacity:.6}}
+.bl-word{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:800;font-size:clamp(28px,8.4vw,40px);letter-spacing:.3em;margin-right:-.3em;line-height:1;background:linear-gradient(100deg,#b8862b 0%,#f6d77a 30%,#fff4cf 45%,#f2c94c 55%,#b8862b 80%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:blShine 4.5s ease-in-out infinite;filter:drop-shadow(0 4px 18px rgba(242,201,76,.25))}
+@keyframes blShine{0%{background-position:100% 0}60%,100%{background-position:-50% 0}}
+.bl-kick{margin-top:10px;font-size:10.5px;letter-spacing:.42em;margin-right:-.42em;color:rgba(214,226,255,.55);font-weight:600}
+.bl-card{margin-top:28px;width:100%;padding:18px 20px 20px;border-radius:22px;text-align:left;background:linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.035));border:1px solid rgba(255,255,255,.12);box-shadow:0 20px 50px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.08);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2)}
+.bl-hi{margin:0;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:rgba(214,226,255,.6);font-weight:600}
+.bl-name{margin:4px 0 0;font-family:'Newsreader',Georgia,serif;font-style:italic;font-weight:500;font-size:30px;line-height:1.1;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bl-rule{height:1px;margin:14px 0 12px;background:linear-gradient(90deg,rgba(255,255,255,.18),rgba(255,255,255,0))}
+.bootload .entitle{margin:0 0 4px;font-size:15px;font-weight:700;color:#fff;letter-spacing:0}.bootload .entitle:empty{display:none}
+.bl-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.bootload .enstep{margin:0;min-height:18px;font-size:13.5px;color:rgba(230,236,255,.78);display:flex;align-items:center;gap:8px}.bootload .enstep::before{content:'';width:6px;height:6px;border-radius:50%;background:#40c9a2;box-shadow:0 0 10px #40c9a2;animation:blPulse 1.2s ease-in-out infinite;flex:none}
+@keyframes blPulse{50%{opacity:.35;transform:scale(.7)}}
+.bl-pct{font-size:12.5px;font-variant-numeric:tabular-nums;color:#f2c94c;font-weight:700}
+.bootload .enbar{width:100%;height:3px;margin-top:12px;background:rgba(255,255,255,.1);border-radius:999px;overflow:visible}.bootload .enfill{background:linear-gradient(90deg,#40c9a2,#f2c94c);box-shadow:0 0 12px rgba(242,201,76,.6);border-radius:999px}
+.bl-tip{margin:18px 0 0!important;font-size:12.5px!important;color:rgba(214,226,255,.72)!important;text-align:center;max-width:300px!important;min-height:34px;transition:opacity .35s ease,transform .35s ease}.bl-tip.out{opacity:0;transform:translateY(4px)}
+.bootload.open .bl-main{opacity:0;transform:translateY(-8px);transition:opacity .4s ease,transform .6s ease}
+@media (prefers-reduced-motion:reduce){.bl-aur,.bl-stars,.bl-win i,.bl-ring,.bl-word,.bl-main,.bootload .enstep::before{animation:none!important}.bl-win i{opacity:.7}}
 .enter.open{opacity:0;pointer-events:none}.enter.open .enscene{transform:scale(4.2) translateY(6%)}.enter.open .endoor{animation:none;transform:rotateY(-108deg);transition:transform .6s ease-in}
 .enter.open .entitle,.enter.open .enstep,.enter.open .enbar,.enter.open .entip{opacity:0;transition:opacity .25s}
 @media (prefers-reduced-motion:reduce){.endoor,.englow,.enlight{animation:none}.enscene,.enter .endoor{transition:none}}
@@ -1240,8 +1274,21 @@ body.room-on .toast,body.room-on .rsheet-bg.rreport{z-index:9700}
 /* Joining: a returning player (signed in, character made) opening the game itself sees a loading screen at once, and keeps
    seeing it while the game connects and builds their home (or the street they're on) behind it; it goes once that's ready. */
 (function(){ try{ var me=JSON.parse(localStorage.getItem('settlement-player')||'null'); if(!me||!me.token||!me.lookSet||location.search.length>1) return;
+  var esc=function(t){ return String(t).replace(/[<>&"']/g,function(c){ return '&#'+c.charCodeAt(0)+';'; }); }, h=me.handle?esc(me.handle):'', hr=new Date().getHours(), greet=hr<5?'Good evening':hr<12?'Good morning':hr<18?'Good afternoon':'Good evening';
   var d=document.createElement('div'); d.id='bootload'; d.className='enter bootload'; d.setAttribute('role','status'); d.setAttribute('aria-live','polite');
-  d.innerHTML='<div class="blogo"><b>RESURGENCE</b><small>Welcome back'+(me.handle?', @'+String(me.handle).replace(/[<>&"]/g,''):'')+'</small></div><div class="bspin" aria-hidden="true"></div><h3 class="entitle"></h3><p class="enstep">Connecting to the colony…</p><div class="enbar"><i class="enfill" style="transform:scaleX(.06)"></i></div><p class="entip">Getting everything ready, so it\u2019s all there when you arrive.</p>';
+  var win=''; for(var k=0;k<46;k++){ var x=(k*37)%100, y=(k*53)%26; win+='<i style="left:'+(x+1.2)+'%;bottom:'+(4+y)+'%;animation-delay:'+((k*0.37)%4).toFixed(2)+'s"></i>'; }
+  d.innerHTML='<div class="bl-sky" aria-hidden="true"><div class="bl-aur a1"></div><div class="bl-aur a2"></div><div class="bl-aur a3"></div><div class="bl-stars"></div></div>'
+    +'<svg class="bl-city" viewBox="0 0 400 120" preserveAspectRatio="none" aria-hidden="true"><path d="M0 120V78h14V62h10v16h8V50h18v28h6V70h12V40h6V30h4v10h6v38h10V58h16v20h8V44h20v34h6V66h10V24h4V14h2v10h4v54h8V60h14v18h10V52h22v26h6V72h10V36h16v42h8V64h12v14h10V48h18v30h6V70h10V56h14v22h10V42h16v36h8V66h12V58H400V120z"/></svg>'
+    +'<div class="bl-win" aria-hidden="true">'+win+'</div><div class="bl-vig" aria-hidden="true"></div>'
+    +'<div class="bl-main"><div class="bl-mark"><img src="/icon-192.png" alt="" width="64" height="64"><span class="bl-ring"></span></div>'
+    +'<div class="bl-word">RESURGENCE</div><div class="bl-kick">A LIVING COLONY</div>'
+    +'<div class="bl-card"><p class="bl-hi">'+greet+(h?',':'')+'</p>'+(h?'<p class="bl-name">@'+h+'</p>':'<p class="bl-name">Welcome back</p>')
+    +'<div class="bl-rule"></div><h3 class="entitle"></h3><div class="bl-row"><p class="enstep">Connecting to the colony…</p><b class="bl-pct">6%</b></div>'
+    +'<div class="enbar"><i class="enfill" style="transform:scaleX(.06)"></i></div></div>'
+    +'<p class="entip bl-tip">Your colony kept going while you were away.</p></div>';
+  var tips=['Your colony kept going while you were away.','Tip: tap 📱 for your phone: Maps, your Car, chats and more.','Tip: in a crowd you hear the six nearest people talking.','Tip: rename your business and its sign changes on the street.','Tip: tap someone to mute their voice or see their card.'], ti=0;
+  var tipT=setInterval(function(){ var e=d.querySelector('.bl-tip'); if(!e||!d.isConnected){ clearInterval(tipT); return; } e.classList.add('out'); setTimeout(function(){ ti=(ti+1)%tips.length; e.textContent=tips[ti]; e.classList.remove('out'); },350); },4200);
+  try{ var f=d.querySelector('.enfill'), pc=d.querySelector('.bl-pct'); new MutationObserver(function(){ var m=/scaleX\(([\d.]+)\)/.exec(f.style.transform); if(m) pc.textContent=Math.round(Math.min(1,+m[1])*100)+'%'; }).observe(f,{attributes:true,attributeFilter:['style']}); }catch(e){}
   document.body.appendChild(d); window.__bootAt=Date.now(); }catch(e){} })();
 </script>
 <canvas id="world" aria-label="Map of the colony on Gliese 12 b"></canvas>

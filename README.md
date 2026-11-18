@@ -1,6 +1,6 @@
 # RESURGENCE
 
-A living colony on Gliese 12 b, built by your followers. (Codebase: The Living Settlement.)
+A new beginning on Gliese 12 b, built by your followers. (Codebase: The Living Settlement.)
 
 An always-on city where every follower becomes a citizen. The server owns the world and keeps its clock running 24/7, and everyone who opens the page sees the same city, live. It's built to take millions of followers: see [ARCHITECTURE.md](ARCHITECTURE.md) for how, and for measured numbers.
 

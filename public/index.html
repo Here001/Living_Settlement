@@ -674,6 +674,7 @@ body.room-on .toast{z-index:9850} /* above the phone and the call screen, so a r
 .phstatus{display:flex;align-items:center;justify-content:space-between;padding:8px 20px 4px;font-size:13px;flex:none}.phclock{font-weight:800}.phnotch{width:96px;height:24px;border-radius:14px;background:#17181C}
 .phbody{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .phleft{display:flex;align-items:center;gap:6px}.phback{border:0;background:rgba(0,0,0,.09);color:inherit;border-radius:12px;padding:3px 9px 3px 7px;font:800 12.5px/1.2 inherit;cursor:pointer}.phback:active{background:rgba(0,0,0,.18)}.phone.pt0 .phback{border-radius:3px;font-family:ui-monospace,Menlo,monospace}
+.phwhere{display:flex;gap:7px;align-items:center;align-self:stretch;margin:-8px 0 18px;padding:9px 13px;border-radius:16px;background:rgba(255,255,255,.16);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-weight:700;font-size:13px;line-height:1.3}.phone.pt0 .phwhere{background:#c6cbd1;border-radius:4px;font-family:ui-monospace,Menlo,monospace;font-weight:500}.phone.pt5 .phwhere{background:rgba(40,25,5,.35);border:1px solid rgba(232,199,102,.5);color:#ffe8a8}
 .phhomescr{position:relative;flex:1;overflow:auto;color:#fff;padding:20px 18px 12px;display:flex;flex-direction:column}
 .phwall{position:absolute;inset:0;z-index:0;background:linear-gradient(160deg,#2b3a67 0%,#5b4b8a 45%,#c06c84 100%)}.phscreen>.phstatus,.phscreen>.phbody,.phscreen>.phhome{position:relative;z-index:1}.phone:not(.onhome) .phwall{display:none}
 .phone.onhome:not(.pt0) .phstatus{background:transparent;color:#fff}.phone.onhome:not(.pt0) .phhome::after{background:#fff}.phone.onhome:not(.pt0) .phscreen{background:#111}
@@ -6966,6 +6967,15 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
   // which phone you carry (the Brick until you buy one), kept on this device and refreshed from the server
   model(){ if(!this.mine){ try{ this.mine=ls.get('resurgence-phone')||null; }catch(e){} if(Me&&Me.token&&!this.asked){ this.asked=true; api('/api/me/phone').then(r=>{ this.setModel(r.phone); }).catch(()=>{}); } } const p=this.mine||{}; return phoneOf(p.m+'|'+p.col); },
   setModel(p){ this.mine=p||null; try{ ls.set('resurgence-phone',this.mine); }catch(e){} if(this.on){ const P=this.model(); if(this.elOf!==P.m+P.col){ const a=this.app; this.hide(); this.show(a==='card'?'me':a||undefined); } } },
+  // where you are, for the home screen: the place and the room inside, the street out on foot or in the car, or where
+  // your colonist is on the map
+  where(){ try{
+      if(Room.el&&!Room.el.hidden&&Room.d){ const d=Room.d, h=d.home||{}, place=d.mine&&d.place!=='business'&&d.place!=='building'?'Your home':d.place==='business'?h.name:d.owner?`@${d.owner}’s home`:h.name;
+        let rn=''; try{ const L=layoutOf(d.size,d.room.plan||'home'), m=Room.h&&Room.h.me; if(m&&L&&L.rooms){ const r=L.rooms.find(r=>m.x>=r.x&&m.x<r.x+r.w&&m.y>=r.y&&m.y<r.y+r.d); if(r) rn=r.name||r.label||''; } }catch(e){}
+        return `${place||'Inside'}${rn?' · '+rn:''}`; }
+      if(Drive.el&&Drive.T){ const p=Drive.T.pos, by=(()=>{ const b=Drive.near; if(b) return b.name||T(b).name; let best=null, bd=5; for(const x of D.buildings.values()){ const d=Math.hypot(x.x+0.5-p.x,x.y+0.5-p.y); if(d<bd&&(BUILDING_TYPES[x.type]||{}).cat!=='nature'){ bd=d; best=x; } } return best?(best.name||T(best).name):''; })();
+        const how=Drive.riding?`Riding with @${Drive.riding.h}`:p.mode==='walk'?'On foot':'Driving'; return `${how}${by?' · by '+by:' · out in the colony'}`; }
+      const c=myCitizen(), st=c&&citizenAt(c,gmNow()); if(st) return st.act&&st.where?`${st.act}`:st.where||'In the colony'; }catch(e){} return 'In the colony'; },
   back(){ if(this.app==='card'&&this.from){ const f=this.from; this.from=null; this.open(f); } else this.home(); },
   showBack(on){ if(this.backBtn) this.backBtn.hidden=!on; },
   home(){ if(!this.screen) return; this.leave(); this.from=null; this.showBack(false); const n=Chats.unread||0, P=this.model(), t=P.tier;
@@ -6979,7 +6989,7 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
       :t>=2?el('div',{class:'phlock'}, el('b',{text:time}), el('span',{text:date}))
       :el('div',{class:'phhello'}, el('b',{text:Me&&Me.handle?`Hi, @${Me.handle}`:'Hi there'}), el('span',{text:date}));
     const scr=this.screen.parentElement; if(scr&&!scr.querySelector(':scope>.phwall')) scr.prepend(el('div',{class:'phwall','aria-hidden':'true'})); this.el.classList.add('onhome'); /* the wallpaper fills the whole screen, behind the clock too */
-    this.screen.replaceChildren(el('div',{class:'phhomescr'}, top, grid, t>=2?dock:'', el('p',{class:'phmodel',text:`${P.name}${t<5?' · Upgrade at a Phone store':''}`}))); },
+    this.screen.replaceChildren(el('div',{class:'phhomescr'}, top, el('div',{class:'phwhere'}, el('span',{text:'📍'}), el('span',{text:this.where()})), grid, t>=2?dock:'', el('p',{class:'phmodel',text:`${P.name}${t<5?' · Upgrade at a Phone store':''}`}))); },
   open(app){ if(!this.on){ this.show(app); return; } this.leave(); this.el.classList.remove('onhome'); this.showBack(true); this.anchor(); this.screen.replaceChildren(); this.busy=true;
     try{ if(app==='me'||app==='card'){ this.app='card'; this.from=null; this.screen.append($('card')); const h=myHandle(); if(h) openCitizen(h,{stay:true}); else { this.home(); findMe(); } }
       else { this.app=app; this.screen.append($('pane')); openTab(app); } } finally{ this.busy=false; } },
@@ -7395,7 +7405,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     this.hereChip=el('button',{class:'hhere',text:'👥 …',onclick:()=>{ const n=this.hereNames||[]; toast(n.length>1?`Here now: ${n.slice(0,12).join(', ')}${n.length>12?'…':''}`:'Nobody else is here right now, just you.'); }});
     const apt=d.home&&d.home.unit?` · Apt ${d.home.unit}`:''; /* their own apartment in the building */
     const title=this.biz?(d.mine?`🏪 Your ${d.home.name.toLowerCase()}`:`🏪 ${d.home.name}${d.owner?` · @${d.owner}`:''}`):d.place==='building'?(d.mine?`🏠 Your ${d.home.name.toLowerCase()} (nobody lives here)`:`🏠 ${d.home.name} · empty${d.owner?` · @${d.owner}’s`:''}`):(d.mine?`🏠 Your home${apt}`:`🏠 @${d.owner}’s home${apt}`);
-    const bar=el('div',{class:'webbar rbar'}, el('button',{class:'webx','aria-label':'Go out of the door',title:'Go out of the door, onto the street',text:'✕',onclick:()=>this.exit()}),
+    const bar=el('div',{class:'webbar rbar'}, /* (no ✕: you go out by the front door, where 🚪 Exit shows) */
       el('span',{class:'dfill'}), this.hereChip, this.editBtn); /* (no title: you can see where you are) */
     const L=layoutOf(d.size,d.room.plan||'home');
     this.viewBtn=el('button',{class:'btn sm hview',text:'⬆ From above',onclick:()=>this.flip()});
@@ -7418,7 +7428,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     setTimeout(()=>{ if(this.d===d) Voice.enter(this); },1500); /* voice chat (once we've said we're here) */
     try{ if(!(history.state&&history.state.room)) history.pushState({room:1},''); }catch(e){}
     try{ this.h=H3.createHouse(this.stage,{ defer:true, size:d.size, plan:d.room.plan||'home', persp, me:(Me&&Me.handle)||'visitor', look:myLook||null, room:d.room, photos:d.photos, at:this.reAt||null, onLost:at=>this.reopen(at), check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
-      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.close(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onAction:a=>{ const b=this.actBtn; if(!b) return; b.hidden=!a; if(a){ b.replaceChildren(el('b',{text:a.icon}),el('span',{text:a.label})); b.title=a.label; } }, onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
+      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.exit(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onAction:a=>{ const b=this.actBtn; if(!b) return; b.hidden=!a; if(a){ b.replaceChildren(el('b',{text:a.icon}),el('span',{text:a.label})); b.title=a.label; } }, onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
     catch(e){ ent.cancel(); this.close(); toast('Your phone couldn’t show the 3D view.'); return; }
     this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false); this.hereTick(true); this.join();
     ent.step('Switching on the lights…',0.66); const h=this.h; try{ await h.ready((n,t)=>ent.step(n/t<0.6?'Switching on the lights…':'Saying hello to who’s here…',0.66+0.32*n/t)); }catch(e){} if(this.h===h) ent.done(); else ent.cancel(); /* the first picture is on screen: step through */

@@ -455,10 +455,17 @@ export function createTown(host, opts) {
       for (const [ex, ez] of DIRS) { const nx = x + ex, nz = z + ez, k = key(nx, nz); if (prev.has(k) || !drivable(nx, nz)) continue; prev.set(k, [x, z]); depth.set(k, d + 1); q.push([nx, nz]); } }
     if (depth.get(key(...far)) < 2) return false; const path = []; for (let p = far; p; p = prev.get(key(...p))) path.push(p); /* from where it sets off, to you */
     const pts = path.map(([x, z]) => [(x + 0.5) * TILE, (z + 0.5) * TILE]), [gx, gz] = pts[pts.length - 1], ox = car.x - gx, oz = car.z - gz, ol = Math.hypot(ox, oz) || 1;
-    pts.push([gx + ox / ol * Math.min(2.6, ol), gz + oz / ol * Math.min(2.6, ol)]); /* the last bit: in to the kerb, on your side */
+    const CLEAR = 3.4; /* it stops at least this far from you (middle of the car to you): never on top of you */
+    if (ol >= CLEAR + 0.2) { const k = Math.min(2.6, ol - CLEAR); if (k > 0.05) pts.push([gx + ox / ol * k, gz + oz / ol * k]); } /* the last bit: in towards the kerb, on your side, stopping short of you */
+    else { /* you're standing in the road (or right by where it'd stop): it pulls up just before you, a little to the side, rather than driving through you */
+      const [px2, pz2] = pts.length > 1 ? pts[pts.length - 2] : [gx - 1, gz]; let tx = gx - px2, tz = gz - pz2; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl; /* the way it's coming */
+      const nx = -tz, nz = tx, side = (ox * nx + oz * nz) >= 0 ? -1 : 1; /* (beside you, on the other side of the lane from you) */
+      pts.pop(); pts.push([car.x - tx * 4.4 + nx * side * 1.4, car.z - tz * 4.4 + nz * side * 1.4]);
+      while (pts.length > 2) { const [ax, az] = pts[pts.length - 2]; if ((ax - car.x) * tx + (az - car.z) * tz > -4.4) pts.splice(pts.length - 2, 1); else break; } } /* (no stops past you on the way in) */
     const [sx, sz] = pts[0], [nx2, nz2] = pts[1]; summon = { pts, i: 1, x: sx, z: sz, v: 0, ry: Math.atan2(-(nz2 - sz), nx2 - sx) - Math.PI / 2, kind: opts.car.kind || 'car', col: opts.car.col }; return true; }
   function comeUp(dt) { const S2 = summon, [tx, tz] = S2.pts[S2.i], dx = tx - S2.x, dz = tz - S2.z, d = Math.hypot(dx, dz); let left = d; for (let k = S2.i; k < S2.pts.length - 1; k++) left += Math.hypot(S2.pts[k + 1][0] - S2.pts[k][0], S2.pts[k + 1][1] - S2.pts[k][1]);
-    const want = Math.min(11, Math.max(1.2, left * 0.9)); S2.v += Math.max(-8 * dt, Math.min(4 * dt, want - S2.v)); /* speeds up, then slows to a stop */
+    let want = Math.min(11, Math.max(1.2, left * 0.9)); if (foot && d > 0.01) { const ahead = ((car.x - S2.x) * dx + (car.z - S2.z) * dz) / d, side = Math.abs(((car.x - S2.x) * dz - (car.z - S2.z) * dx) / d); if (ahead > 0 && ahead < 3.3 && side < 1.5) want = 0; } /* you're in its way: it waits for you to step aside */
+    S2.v += Math.max(-8 * dt, Math.min(4 * dt, want - S2.v)); /* speeds up, then slows to a stop */
     const step = S2.v * dt; if (d <= step || d < 0.05) { S2.x = tx; S2.z = tz; if (++S2.i >= S2.pts.length) { parked = { kind: S2.kind, col: S2.col, x: S2.x, z: S2.z, ry: S2.ry }; summon = null; opts.onCarHere && opts.onCarHere(); } return; }
     S2.x += dx / d * step; S2.z += dz / d * step; const ry = Math.atan2(-dz, dx) - Math.PI / 2; let da = ry - S2.ry; da = Math.atan2(Math.sin(da), Math.cos(da)); S2.ry += da * Math.min(1, dt * 6); }
   function chase(dt) {

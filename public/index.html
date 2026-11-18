@@ -623,9 +623,10 @@ body.clean #djBubble{display:none}
 .tbtn{width:calc(78px*var(--ts));height:calc(78px*var(--ts));border-radius:50%;background:rgba(255,255,255,.3);border:2px solid rgba(255,255,255,.7);color:#fff;font-size:30px;display:grid;place-items:center;touch-action:none;user-select:none;-webkit-user-select:none;box-shadow:0 4px 14px rgba(0,0,0,.2);text-shadow:0 1px 3px rgba(0,0,0,.5)}.tbtn.on{background:rgba(127,209,255,.55)}
 .twheel{position:absolute;left:14px;bottom:calc(18px + env(safe-area-inset-bottom));width:calc(150px*var(--ts));height:calc(150px*var(--ts));touch-action:none;filter:drop-shadow(0 5px 10px rgba(0,0,0,.35))}.twheel svg{width:100%;height:100%}.tpad.swap .twheel{left:auto;right:14px}
 .driveview .dhud{bottom:calc(var(--dhud,150px) + env(safe-area-inset-bottom))}.driveview .dspeed{position:fixed;left:calc(14px + env(safe-area-inset-left));top:calc(14px + env(safe-area-inset-top));z-index:7} /* (top left: nothing else is up there now) */
-.dminiw{position:absolute;top:calc(12px + env(safe-area-inset-top));right:12px;z-index:5;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.dminiw{position:absolute;top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:5;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .dmini{width:108px;height:108px;border-radius:50%;opacity:.82;border:3px solid rgba(255,255,255,.85);box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;background:#cfe3b8}
 .dminfo{background:rgba(20,22,28,.75);color:#fff;font-weight:700;font-size:12.5px;padding:4px 10px;border-radius:10px}
+.phbody>.dbig{position:relative!important;inset:auto!important;flex:1;border-radius:0;box-shadow:none}.phbody>.dbig .webx{display:none}.phmapsoff{padding:28px 22px;display:flex;flex-direction:column;gap:8px}.phmapsoff b{font-size:20px}
 .dbig{position:absolute;inset:56px 10px calc(10px + env(safe-area-inset-bottom)) 10px;z-index:8;background:#fff;border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden}
 .dbigbar .webbtn{font-size:22px;font-weight:900;min-width:40px;height:40px;border-radius:50%;background:#f1f3f5}
 .dbigbar{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid rgba(0,0,0,.1)}.dbigbar b{flex:1;font-size:15px}.dbigc{flex:1;min-height:0;width:100%;touch-action:none;cursor:crosshair;display:block}
@@ -651,7 +652,7 @@ body.room-on .toast{z-index:9850} /* above the phone and the call screen, so a r
   .rsheet{max-height:calc(100dvh - 20px)}
   .toast{max-width:min(560px,80vw)}
   /* driving: a smaller map in the corner, and the big map and the phone fit the short screen */
-  .dmini{width:90px;height:90px}.dminiw{top:calc(8px + env(safe-area-inset-top))}body.room-on.drive-on .worldbtn{top:calc(8px + 90px + 10px + env(safe-area-inset-top))!important}.driveview .sidecol{top:calc(8px + 90px + 10px + env(safe-area-inset-top))}.dminiw{top:calc(56px + env(safe-area-inset-top))}
+  .dmini{width:90px;height:90px}.dminiw{top:calc(8px + env(safe-area-inset-top))}body.room-on.drive-on .worldbtn{top:calc(8px + 90px + 10px + env(safe-area-inset-top))!important}.driveview .sidecol{top:calc(8px + env(safe-area-inset-top))}.dminiw{top:calc(56px + env(safe-area-inset-top))}
   .dbig{inset:52px 10px 8px 10px}
   .phframe{height:calc(100dvh - 16px)}.phstatus{padding:4px 18px 2px}.phhome{height:16px}
   .phcall{top:8px}
@@ -1116,9 +1117,10 @@ body.phone-on .worldbtn{display:none}
 .dfill{flex:1}.dbar .hphonebtn{position:static;box-shadow:none}
 .sidecol{position:absolute;right:calc(env(safe-area-inset-right,0px) + 14px);z-index:6;display:flex;flex-direction:column;gap:8px}
 .sidebtn,.sidecol .vbtn,.sidecol .worldbtn{position:static!important;width:40px;height:40px;border-radius:50%;border:2px solid #2B2621;background:#fff;font-size:18px;display:grid;place-items:center;padding:0;cursor:pointer;box-shadow:0 2px 0 #2B2621,0 4px 12px rgba(0,0,0,.2)}.sidebtn:active{transform:translateY(2px);box-shadow:none}
-.driveview .sidecol{top:calc(env(safe-area-inset-top,0px) + 12px + 108px + 10px)}.sidecol{gap:7px!important}.sidecol .worldbtn b{font-size:14px}.sidecol .worldbtn[data-k]{background:#fff;color:#2B2621;border-color:#2B2621;box-shadow:0 2px 0 #2B2621,0 4px 12px rgba(0,0,0,.2)}.sidecol.collapsed .sidehide{display:none!important}.sidetoggle{font-size:14px!important;background:rgba(255,255,255,.85)!important}.sidecol .vbtn.live{background:#2ECC71}.sidecol .phside2 .phbadge{top:-5px;right:-7px}.phside2{position:relative}.phside2 .phbadge{position:absolute;top:-4px;right:-6px;margin:0}.roomstage .sidecol{top:calc(env(safe-area-inset-top,0px) + 10px)}
+.driveview .sidecol{top:calc(env(safe-area-inset-top,0px) + 12px)}.sidecol{gap:7px!important}.sidecol .worldbtn b{font-size:14px}.sidecol .worldbtn[data-k]{background:#fff;color:#2B2621;border-color:#2B2621;box-shadow:0 2px 0 #2B2621,0 4px 12px rgba(0,0,0,.2)}.sidecol.collapsed .sidehide{display:none!important}.sidetoggle{font-size:14px!important;background:rgba(255,255,255,.85)!important}.sidecol .vbtn.live{background:#2ECC71}.sidecol .phside2 .phbadge{top:-5px;right:-7px}.phside2{position:relative}.phside2 .phbadge{position:absolute;top:-4px;right:-6px;margin:0}.roomstage .sidecol{top:calc(env(safe-area-inset-top,0px) + 10px)}
 /* inside a building: no banner either; ✕, who's here and Furnish float over the view */
 .roomview>.rbar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:calc(env(safe-area-inset-left,0px) + 10px);right:64px;z-index:7;background:none!important;border:0!important;box-shadow:none!important;padding:0!important;pointer-events:none}.roomview>.rbar>*{pointer-events:auto}.roomview>.rbar .hhere{box-shadow:0 2px 10px rgba(0,0,0,.25);background:rgba(255,253,248,.92)}.roomview>.rbar .btn{box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.tip.tipgo{opacity:0;transform:translateY(-6px);transition:opacity .5s,transform .5s}
 .hback{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);z-index:9650;box-shadow:0 4px 16px rgba(0,0,0,.3)}
 .rchoose{display:flex;flex-direction:column;gap:8px;margin:10px 0;max-height:50vh;overflow:auto}
 @media (max-width:520px){ .hhere .wide{display:none} }
@@ -6945,7 +6947,7 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
   // the phone in your hand: its home screen has the same five apps as the bar at the bottom of the map (Town Square,
   // My card, Colonists, Races, Chats). An app is the real thing, moved onto the phone's screen while it's open (the
   // panel or the card), so everything in it works just as it does on the map; the home bar takes you back to the apps.
-  APPS:[['feed','Town Square','#3D7BD9'],['me','My card','#E2783B'],['people','Colonists','#2F9E6A'],['races','Races','#C0392B'],['chats','Chats','#8E44AD']],
+  APPS:[['maps','Maps','#2E86DE'],['feed','Town Square','#3D7BD9'],['me','My card','#E2783B'],['people','Colonists','#2F9E6A'],['races','Races','#C0392B'],['chats','Chats','#8E44AD']],
   show(app){ if(!this.inside()){ if(app&&app!=='chats'){ app==='me'?openMyCard():openTab(app); } else openTab('chats'); return; } if(activeTab&&!this.app) openTab(null);
     try{ window.__phone=this; }catch(e){} /* (for checking how it looks) */
     const P=this.model(); if(this.el&&this.elOf!==P.m+P.col){ this.hide(); return this.show(app); } /* a new phone: take the new one out */
@@ -6963,7 +6965,7 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
   // the panel and the card live in the bar at the bottom of the map; an app borrows one of them for a while
   anchor(){ if(this.aP) return; this.aP=document.createComment('pane'); $('pane').before(this.aP); this.aC=document.createComment('card'); $('card').before(this.aC); },
   park(){ const P=$('pane'), C=$('card'); if(this.aP&&P.parentElement===this.screen) this.aP.after(P); if(this.aC&&C.parentElement===this.screen) this.aC.after(C); },
-  leave(){ const was=this.app; this.busy=true; this.app=null; try{ if(was==='card') closeCard(); else if(was) openTab(null); } finally{ this.busy=false; } this.park(); },
+  leave(){ const was=this.app; this.busy=true; this.app=null; try{ if(was==='maps') DriveMap.close(); else if(was==='card') closeCard(); else if(was) openTab(null); } finally{ this.busy=false; } this.park(); },
   // which phone you carry (the Brick until you buy one), kept on this device and refreshed from the server
   model(){ if(!this.mine){ try{ this.mine=ls.get('resurgence-phone')||null; }catch(e){} if(Me&&Me.token&&!this.asked){ this.asked=true; api('/api/me/phone').then(r=>{ this.setModel(r.phone); }).catch(()=>{}); } } const p=this.mine||{}; return phoneOf(p.m+'|'+p.col); },
   setModel(p){ this.mine=p||null; try{ ls.set('resurgence-phone',this.mine); }catch(e){} if(this.on){ const P=this.model(); if(this.elOf!==P.m+P.col){ const a=this.app; this.hide(); this.show(a==='card'?'me':a||undefined); } } },
@@ -6979,7 +6981,7 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
   back(){ if(this.app==='card'&&this.from){ const f=this.from; this.from=null; this.open(f); } else this.home(); },
   showBack(on){ if(this.backBtn) this.backBtn.hidden=!on; },
   home(){ if(!this.screen) return; this.leave(); this.from=null; this.showBack(false); const n=Chats.unread||0, P=this.model(), t=P.tier;
-    const icon=(id,name,bg)=>{ const ic=el('i',{style:`--ic:${bg}`}); ic.innerHTML=ICONS[id]||''; if(id==='chats'&&n) ic.append(el('b',{class:'phbadge',text:n>9?'9+':String(n)})); return el('button',{class:'phapp','aria-label':name,onclick:()=>this.open(id)}, ic, el('span',{text:name})); };
+    const icon=(id,name,bg)=>{ const ic=el('i',{style:`--ic:${bg}`}); ic.innerHTML=id==='maps'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>':ICONS[id]||''; if(id==='chats'&&n) ic.append(el('b',{class:'phbadge',text:n>9?'9+':String(n)})); return el('button',{class:'phapp','aria-label':name,onclick:()=>this.open(id)}, ic, el('span',{text:name})); };
     const apps=this.APPS.filter(([id])=>id!=='chats'||(Me&&Me.token)), dockIds=t>=2?['feed','me','chats']:[];
     const grid=el('div',{class:'phapps'}), dock=el('div',{class:'phdock'}); for(const [id,name,bg] of apps) (dockIds.includes(id)?dock:grid).append(icon(id,name,bg));
     const now=new Date(), time=now.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}), date=now.toLocaleDateString([],{weekday:'long',day:'numeric',month:'long'});
@@ -6991,7 +6993,8 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
     const scr=this.screen.parentElement; if(scr&&!scr.querySelector(':scope>.phwall')) scr.prepend(el('div',{class:'phwall','aria-hidden':'true'})); this.el.classList.add('onhome'); /* the wallpaper fills the whole screen, behind the clock too */
     this.screen.replaceChildren(el('div',{class:'phhomescr'}, top, el('div',{class:'phwhere'}, el('span',{text:'📍'}), el('span',{text:this.where()})), grid, t>=2?dock:'', el('p',{class:'phmodel',text:`${P.name}${t<5?' · Upgrade at a Phone store':''}`}))); },
   open(app){ if(!this.on){ this.show(app); return; } this.leave(); this.el.classList.remove('onhome'); this.showBack(true); this.anchor(); this.screen.replaceChildren(); this.busy=true;
-    try{ if(app==='me'||app==='card'){ this.app='card'; this.from=null; this.screen.append($('card')); const h=myHandle(); if(h) openCitizen(h,{stay:true}); else { this.home(); findMe(); } }
+    try{ if(app==='maps'){ this.app='maps'; if(Drive.T) DriveMap.open(this.screen); else this.screen.append(el('div',{class:'phmapsoff'}, el('b',{text:'🗺️ Maps'}), el('p',{text:'Maps shows the streets round you and the way to anywhere you pick, when you’re out on the street or driving. Inside, tap 2D for the colony map.'}))); }
+      else if(app==='me'||app==='card'){ this.app='card'; this.from=null; this.screen.append($('card')); const h=myHandle(); if(h) openCitizen(h,{stay:true}); else { this.home(); findMe(); } }
       else { this.app=app; this.screen.append($('pane')); openTab(app); } } finally{ this.busy=false; } },
   // a building's card on the phone (from the street, at its door): renting, buying, who lives there
   showBuilding(id){ this.show(); this.leave(); this.anchor(); this.app='card'; this.from=null; this.el.classList.remove('onhome'); this.showBack(true); this.screen.replaceChildren($('card')); selectBuilding(id); },
@@ -7134,8 +7137,8 @@ const DriveCtl={ DEF:{ layout:'stick', swap:false, steerSize:1, pedalSize:1, key
 // (tap the small one) where you tap anywhere to set where you're going. The way there is worked out along the roads and
 // shown on both maps and as arrows on the road; go off it and it finds a new way from where you are.
 const DriveMap={ route:null, idx:0, dest:null, off:0, rerouteAt:0, big:null, bv:null,
-  mount(root){ this.cv=el('canvas',{class:'dmini',width:'260',height:'260','aria-label':'Map: tap to open it, zoom in and pick where to go',onclick:()=>this.open()}); this.info=el('div',{class:'dminfo',hidden:true});
-    root.append(el('div',{class:'dminiw'}, this.cv, this.info)); this.draw(); },
+  mount(root){ this.cv=null; this.info=el('div',{class:'dminfo',hidden:true}); /* (the map itself is 🗺️ Maps on your phone; how far is left shows at the top) */
+    root.append(el('div',{class:'dminiw'}, this.info)); this.draw(); },
   reset(){ this.route=null; this.idx=0; this.dest=null; this.off=0; this.big&&this.big.remove(); this.big=null; },
   // the tiles round a point, drawn on a canvas: roads, water, buildings, the way to go, and where it ends
   paint(g,W,H,cx,cy,s,rot){ g.save(); g.clearRect(0,0,W,H); g.translate(W/2,H/2); if(rot) g.rotate(rot); g.scale(s,s); g.translate(-cx,-cy);
@@ -7145,19 +7148,19 @@ const DriveMap={ route:null, idx:0, dest:null, off:0, rerouteAt:0, big:null, bv:
     const r=this.route; if(r&&r.length>1){ g.strokeStyle='#2f9bff'; g.lineWidth=Math.max(0.55,3/s); g.lineJoin=g.lineCap='round'; g.beginPath(); for(let i=Math.max(0,this.idx);i<r.length;i++){ const [x,y]=r[i]; i===Math.max(0,this.idx)?g.moveTo(x+0.5,y+0.5):g.lineTo(x+0.5,y+0.5); } g.stroke(); }
     if(this.dest){ g.fillStyle='#e8463a'; g.beginPath(); g.arc(this.dest.x+0.5,this.dest.y+0.5,Math.max(0.7,5/s),0,7); g.fill(); }
     g.restore(); },
-  draw(){ const T=Drive.T; if(!this.cv||!T) return; const p=T.pos, g=this.cv.getContext('2d'), W=this.cv.width, H=this.cv.height;
+  draw(){ const T=Drive.T; if(!T) return; const p=T.pos; if(this.cv){ const g=this.cv.getContext('2d'), W=this.cv.width, H=this.cv.height;
     this.paint(g,W,H,p.x,p.y,3.6,-Math.PI/2+p.a); /* heading up; about 70 tiles across */
-    g.fillStyle='#e8463a'; g.strokeStyle='#fff'; g.lineWidth=3; g.beginPath(); g.moveTo(W/2,H/2-13); g.lineTo(W/2+9,H/2+10); g.lineTo(W/2,H/2+5); g.lineTo(W/2-9,H/2+10); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle='#e8463a'; g.strokeStyle='#fff'; g.lineWidth=3; g.beginPath(); g.moveTo(W/2,H/2-13); g.lineTo(W/2+9,H/2+10); g.lineTo(W/2,H/2+5); g.lineTo(W/2-9,H/2+10); g.closePath(); g.fill(); g.stroke(); }
     if(this.route){ const left=this.left(p); this.info.hidden=false; this.info.textContent=`${left<1000?Math.round(left/10)*10+' m':(left/1000).toFixed(1)+' km'} · ${Math.max(1,Math.round(left/1000/40*60))} min`; } else this.info.hidden=true;
     if(this.big) this.drawBig(); },
   left(p){ const r=this.route; if(!r) return 0; let d=0, i=Math.max(0,this.idx); if(r[i]) d+=Math.hypot(r[i][0]+0.5-p.x,r[i][1]+0.5-p.y); for(;i<r.length-1;i++) d+=Math.hypot(r[i+1][0]-r[i][0],r[i+1][1]-r[i][1]); return d*8; },
   // the big map: north up, drag to look about, + and − to zoom, tap to set where you're going
-  open(){ if(this.big){ this.close(); return; } const T=Drive.T; if(!T) return; const p=T.pos; this.bv={ x:p.x, y:p.y, s:9 };
+  open(host){ if(this.big) this.close(); const T=Drive.T; if(!T) return; const p=T.pos; this.bv={ x:p.x, y:p.y, s:9 }; this.host=host||null; /* host: the phone's screen (🗺️ Maps) */
     const cv=el('canvas',{class:'dbigc'}), title=el('b',{text:this.dest?`To ${this.dest.name}`:'Tap where you want to go'});
     const box=el('div',{class:'dbig'}, el('div',{class:'dbigbar'}, title, el('button',{class:'webbtn',text:'＋',title:'Zoom in',onclick:()=>{ this.bv.s=Math.min(28,this.bv.s*1.4); this.drawBig(); }}), el('button',{class:'webbtn',text:'－',title:'Zoom out',onclick:()=>{ this.bv.s=Math.max(0.8,this.bv.s/1.4); this.drawBig(); }}),
-      el('button',{class:'webbtn',text:'⌖',title:'Back to your car',onclick:()=>{ const q=Drive.T.pos; this.bv.x=q.x; this.bv.y=q.y; this.drawBig(); }}), el('button',{class:'webx',text:'✕','aria-label':'Close the map',onclick:()=>this.close()})), cv,
-      el('div',{class:'dbigfoot'}, this.clearBtn=el('button',{class:'btn sm',text:'Clear the route',hidden:!this.route,onclick:()=>{ this.clear(); this.close(); }}), el('span',{class:'hint',text:'Drag to look about, pinch or ＋ － to zoom. Tap a place to go there.'})));
-    this.title=title; this.bcv=cv; this.big=box; Drive.el.append(box);
+      el('button',{class:'webbtn',text:'⌖',title:'Back to your car',onclick:()=>{ const q=Drive.T.pos; this.bv.x=q.x; this.bv.y=q.y; this.drawBig(); }}), el('button',{class:'webx',text:'✕','aria-label':'Close the map',onclick:()=>this.host?Phone.home():this.close()})), cv,
+      el('div',{class:'dbigfoot'}, this.clearBtn=el('button',{class:'btn sm',text:'Clear the route',hidden:!this.route,onclick:()=>{ this.clear(); this.done(); }}), el('span',{class:'hint',text:'Drag to look about, pinch or ＋ － to zoom. Tap a place to go there.'})));
+    this.title=title; this.bcv=cv; this.big=box; (this.host||Drive.el).append(box);
     // one finger drags the map about, two fingers pinch to zoom, and a tap picks where to go
     const pts=new Map(); let moved=0, pinched=false;
     cv.addEventListener('pointerdown',e=>{ cv.setPointerCapture(e.pointerId); pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(pts.size===1){ moved=0; pinched=false; } else pinched=true; });
@@ -7169,7 +7172,8 @@ const DriveMap={ route:null, idx:0, dest:null, off:0, rerouteAt:0, big:null, bv:
     cv.addEventListener('pointercancel',e=>{ pts.delete(e.pointerId); pinched=true; });
     cv.addEventListener('wheel',e=>{ e.preventDefault(); this.bv.s=Math.max(0.8,Math.min(28,this.bv.s*(e.deltaY<0?1.15:1/1.15))); this.drawBig(); },{passive:false});
     requestAnimationFrame(()=>this.drawBig()); },
-  close(){ this.big&&this.big.remove(); this.big=null; },
+  close(){ this.big&&this.big.remove(); this.big=null; this.host=null; },
+  done(){ if(this.host) Phone.hide(); else this.close(); }, /* a route set (or cleared): back to the road */
   drawBig(){ const cv=this.bcv; if(!cv||!this.big) return; const r=cv.getBoundingClientRect(), dpr=Math.min(2,devicePixelRatio||1); if(cv.width!==Math.round(r.width*dpr)){ cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr); }
     const g=cv.getContext('2d'); g.setTransform(1,0,0,1,0,0); this.paint(g,cv.width,cv.height,this.bv.x,this.bv.y,this.bv.s*dpr,0);
     const p=Drive.T&&Drive.T.pos; if(p){ const sx=cv.width/2+(p.x-this.bv.x)*this.bv.s*dpr, sy=cv.height/2+(p.y-this.bv.y)*this.bv.s*dpr; 
@@ -7186,7 +7190,7 @@ const DriveMap={ route:null, idx:0, dest:null, off:0, rerouteAt:0, big:null, bv:
     else goal=nearestRoad(tx,ty,6);
     if(!goal){ if(this.title) this.title.textContent='No road near there: tap nearer a road'; toast('There’s no road near there. Pick a spot by a road.'); return; }
     this.dest={ x:tx, y:ty, gx:goal[0], gy:goal[1], name, bid:b?b.id:null }; if(!this.plan()){ this.dest=null; if(this.title) this.title.textContent=`No way to drive to ${name} from here`; toast(`There’s no way to drive to ${name} from here.`); return; }
-    toast(`🧭 Route set to ${name}. Follow the blue arrows.`); this.close(); this.draw(); },
+    toast(`🧭 Route set to ${name}. Follow the blue arrows.`); this.done(); this.draw(); },
   plan(){ const T=Drive.T, d=this.dest; if(!T||!d) return false; const p=T.pos, cx=Math.floor(p.x), cy=Math.floor(p.y), near=[];
     for(let j=-6;j<=6;j++) for(let i=-6;i<=6;i++) if(carOK((cx+i)+','+(cy+j))) near.push([cx+i,cy+j,Math.hypot(i,j)]); near.sort((a,b)=>a[2]-b[2]);
     let path=null; for(const [sx,sy] of near.slice(0,10)){ path=findRoadPath(sx,sy,d.gx,d.gy,true); if(path) break; } /* the nearest road that goes there */ if(!path) return false; this.route=path; this.idx=0; this.off=0; T.setRoute(path); if(this.clearBtn) this.clearBtn.hidden=false; if(this.title) this.title.textContent=`To ${d.name}`; return true; },
@@ -7553,7 +7557,8 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
       el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Cancel',onclick:()=>finish(null)}), el('button',{class:'btn primary',text:'✓ Use this photo',onclick:()=>{ clamp(); const s=fit*z, w=vw/s, h=vh/s; finish({ x:img.width/2-ox/s-w/2, y:img.height/2-oy/s-h/2, w, h }); }}))));
     document.body.append(wrap); draw(); }); },
   paintTools(){ this.paintTools0(); const t=this.tools; if(!t||this.pick||this.sel) return; this.tipOff||=new Set();
-    for(const tip of [...t.querySelectorAll('.tip')]){ const k=tip.textContent; if(this.tipOff.has(k)){ tip.remove(); continue; } tip.append(el('button',{class:'tipx','aria-label':'Close',text:'✕',onclick:()=>{ this.tipOff.add(k); tip.remove(); }})); } },
+    this.tipT||=new Map(); for(const tip of [...t.querySelectorAll('.tip')]){ const k=tip.textContent; if(this.tipOff.has(k)){ tip.remove(); continue; }
+      if(!this.tipT.has(k)) this.tipT.set(k,setTimeout(()=>{ this.tipOff.add(k); for(const e of [...(this.tools?this.tools.querySelectorAll('.tip'):[])]) if(e.textContent.startsWith(k)){ e.classList.add('tipgo'); setTimeout(()=>e.remove(),600); } },4500)); /* a tip shows for a few seconds, then goes */ tip.append(el('button',{class:'tipx','aria-label':'Close',text:'✕',onclick:()=>{ this.tipOff.add(k); tip.remove(); }})); } },
   paintTools0(){ const t=this.tools; if(!t) return; t.innerHTML=''; const d=this.d; if(!d) return; const up=this.h&&this.h.view==='above';
     if(!d.mine){ const s=this.sel; if(s&&s.ph) t.append(el('span',{class:'tip',text:'A photo'}), el('button',{class:'btn sm',text:'⚑ Report this photo',onclick:()=>reportSheet({kind:'photo',id:s.ph,handle:d.owner})}), el('button',{class:'btn sm',text:'✕',onclick:()=>{ this.sel=null; this.h&&this.h.setSelected(null); this.paintTools(); }}));
       else t.append(el('span',{class:'tip',text:up?'Drag to turn the house around. Tap 🎥 to go back inside.':`${this.biz?`Welcome to ${d.home.name}.`:`Just looking around @${d.owner}’s home.`} ${PHONE_UI?'Use the joystick to walk and drag to look.':'Walk with WASD or the arrows; drag to look.'}`})); return; }

@@ -416,7 +416,7 @@ export function playersRouter({ limit, send, admin, world }) {
   }));
   r.post('/me/casino', limit, send(async req => {
     const p = await me(req);
-    const now = Date.now(); if (now - (lastBet.get(p.id) || 0) < 1200) throw new HttpError(429, 'One bet at a time.');
+    const now = Date.now(); /* (no wait between bets) */
     lastBet.set(p.id, now);
     const b = req.body || {}; return world.casinoPlay(p.id, { game: b.game, pick: b.pick, bet: b.bet });
   }));
@@ -527,7 +527,6 @@ export function playersRouter({ limit, send, admin, world }) {
     if (/(https?:\/\/|www\.)/i.test(text)) throw new HttpError(400, 'Links can’t be posted in the Town Square.');
     await assertNotMuted(p.id);
     const now = Date.now(), last = lastPost.get(p.id) || 0;
-    if (now - last < 15000) throw new HttpError(429, `Wait ${Math.ceil((15000 - (now - last)) / 1000)} seconds before posting again.`);
     const prev = (await pool.query('select text from messages where citizen_id = $1 order by t desc limit 1', [p.id])).rows[0];
     if (prev && prev.text === text) throw new HttpError(409, 'You just posted that.');
     lastPost.set(p.id, now);

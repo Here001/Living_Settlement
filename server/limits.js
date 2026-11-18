@@ -22,11 +22,11 @@ const env = (k, d) => { const v = Number(process.env[k]); return Number.isFinite
 // it, so a test run started with RATE_PER_MIN=5000 isn't throttled while real players get the normal limits.
 const SCALE = Math.max(1, env('RATE_PER_MIN', 300) / 300);
 export const LIMITS = {
-  all:   { perMin: env('RATE_ALL', 1500 * SCALE), burst: 300 * SCALE },  // everything from one IP, pages and files included
-  api:   { perMin: env('RATE_API', 300 * SCALE), burst: 120 * SCALE }, // the game's API, per IP
-  heavy: { perMin: env('RATE_HEAVY', 60 * SCALE), burst: 20 * SCALE },   // searches, map chunks, quotes, the builder's stats, per IP
+  all:   { perMin: env('RATE_ALL', 6000 * SCALE), burst: 2000 * SCALE },  // everything from one IP, pages and files included
+  api:   { perMin: env('RATE_API', 3000 * SCALE), burst: 1000 * SCALE }, // the game's API, per IP (only a flood from a script reaches it: no person playing ever will)
+  heavy: { perMin: env('RATE_HEAVY', 600 * SCALE), burst: 200 * SCALE },   // searches, map chunks, quotes, the builder's stats, per IP (the same)
   auth:  { perMin: env('RATE_AUTH', 20 * SCALE), burst: 10 * SCALE },    // sign-in, sign-up, claims, per IP
-  act:   { perMin: env('RATE_ACT', 120 * SCALE), burst: 40 * SCALE },    // things a player does (POST/PUT/DELETE), per player
+  act:   { perMin: env('RATE_ACT', 3000 * SCALE), burst: 1000 * SCALE },    // things a player does (POST/PUT/DELETE), per player (the same: floods only)
   hook:  { perMin: env('RATE_HOOK', 600 * SCALE), burst: 200 * SCALE },  // webhooks, per IP
   wsConn: { perMin: env('RATE_WS_CONNECT', 30 * SCALE), burst: 15 * SCALE }, // new live connections, per IP
   wsMsg: { perMin: 2400, burst: 120 },                    // messages on one live connection (about 40 a second)

@@ -146,7 +146,6 @@ export class Earn {
     return this.world.personal(async ch => {
       const { c, hx, hy } = await this.lock(ch, id), e = this.stateOf(c), now = Date.now();
       if (e.catches >= EARN.catch.perDay) throw new HttpError(429, `You've brought in ${EARN.catch.perDay} catches today. The market's full until tomorrow.`);
-      if (now - (e.castAt || 0) < EARN.catch.gap) throw new HttpError(429, 'Catch your breath for a moment.');
       const ev = await this.event(); if (ev === 'storm') throw new HttpError(409, "It's far too stormy to go out there. Try a delivery instead: they pay extra in a storm.");
       let spot = null;
       if (kind === 'fish') { if (!(await ch.q('select 1 from water limit 1')).rowCount) throw new HttpError(409, 'The colony has no water to fish in yet.'); spot = await this.parkNear(ch, hx, hy); }

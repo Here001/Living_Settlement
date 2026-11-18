@@ -127,7 +127,7 @@ In developer view, **Colonists** (at the bottom) has:
 
 ## Town Square
 
-Colonists who have claimed their avatar (proved it's them and set a password) can post short messages (up to 280 characters) in **Town Square → Posts**; everyone sees them live with a blue ✓. One message per 15 seconds per colonist, no links. Colonists can delete their own; the developer can delete any.
+Colonists who have claimed their avatar (proved it's them and set a password) can post short messages (up to 280 characters) in **Town Square → Posts**; everyone sees them live with a blue ✓. No waiting between messages; no links. Colonists can delete their own; the developer can delete any.
 
 Colonists can set a **name** (first and last, or just one) on their own card; it shows on their avatar, card and posts, while the @username stays for search. The developer can change anyone's name from their card.
 
@@ -923,7 +923,7 @@ Everything is in `server/limits.js`, and any number can be changed with an envir
 | `SPAWN_KEYWORD` | no | The comment word that moves people in (default `spawn`) |
 | `REDIS_URL` | when running 2+ servers | Shares live updates between servers |
 | `PG_POOL_SIZE` | no | Database connections per server (default 16) |
-| `RATE_PER_MIN` | no | Requests per minute per visitor (default 240) |
+| `RATE_PER_MIN` | no | Scales the flood guards (requests per visitor per minute; default 300). They sit far above what anyone can do by hand, so players never see a "slow down" warning |
 
 ## API
 

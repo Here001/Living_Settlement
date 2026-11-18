@@ -315,7 +315,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
   ok((await call('POST', '/api/square', { text: 'hello colony' }, { auth: false })).status === 401, 'only signed-in colonists can post in the Town Square');
   const m1 = await call('POST', '/api/square', { text: 'Hello Gliese 12 b!' }, P);
   ok(m1.status === 200 && m1.json.h === 'zara_ng', 'a verified colonist posts a message');
-  ok((await call('POST', '/api/square', { text: 'again so soon' }, P)).status === 429, 'posting is slowed down to stop spam');
+  ok((await call('POST', '/api/square', { text: 'again so soon' }, P)).status === 200, 'posting again straight away is fine (no waiting)');
   ok((await call('GET', '/api/square', undefined, { auth: false })).json.some(x => x.id === m1.json.id), 'everyone can read the Town Square');
   ok((await call('DELETE', `/api/square/${m1.json.id}`)).status === 200, 'the developer can delete a message');
   ok((await call('POST', '/api/admin/square', { text: 'Welcome!' }, { auth: false })).status === 401, 'only the developer posts official updates');
@@ -372,10 +372,10 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     const tre0 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta;
     const r1 = await call('POST', '/api/me/casino', { game: 'coin', pick: 'heads', bet: 100 }, P);
     ok(r1.status === 200 && ['heads', 'tails'].includes(r1.json.result) && r1.json.coins === 1000 - 100 + r1.json.payout && (r1.json.won ? r1.json.payout === 190 : r1.json.payout === 0), 'a coin flip pays 1.9× or takes the bet', JSON.stringify(r1.json));
-    ok((await call('POST', '/api/me/casino', { game: 'coin', pick: 'heads', bet: 1 }, P)).status === 429, 'one bet at a time');
+    const r2 = await call('POST', '/api/me/casino', { game: 'coin', pick: 'heads', bet: 1 }, P); ok(r2.status === 200, 'betting again straight away is fine (no waiting)', JSON.stringify(r2.json));
     const tre1 = (await call('GET', '/api/meta', undefined, { auth: false })).json.meta;
-    ok(Math.round(tre1.treasuryBase - tre0.treasuryBase) === 100 - r1.json.payout || tre0.treasuryBase === undefined, 'the treasury takes losses and pays wins', `${tre0.treasuryBase} → ${tre1.treasuryBase}`);
-    ok((await whoDev('zara_ng')).coins === r1.json.coins, 'the balance sticks');
+    ok(Math.round(tre1.treasuryBase - tre0.treasuryBase) === 100 - r1.json.payout + 1 - (r2.json.payout || 0) || tre0.treasuryBase === undefined, 'the treasury takes losses and pays wins', `${tre0.treasuryBase} → ${tre1.treasuryBase}`);
+    ok((await whoDev('zara_ng')).coins === r2.json.coins, 'the balance sticks');
     ok((await who('zara_ng')).visit?.[0] === cas.json.building?.id, 'everyone can see the colonist is at the casino');
     await sleep(1300); const sl = await call('POST', '/api/me/casino', { game: 'slots', bet: 10 }, P);
     ok(sl.status === 200 && sl.json.result.length === 3, 'slots spin three reels');
@@ -1078,7 +1078,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     { const st = (await call('GET', '/api/me/stars', undefined, P)).json;
       ok(st.acts > 5 && st.stars >= 1 && st.stars <= 12 && st.score === st.acts + 20 * st.days && st.steps.length === 12, 'stars count the things you do yourself, plus the days you play', JSON.stringify(st));
       ok((await who('zara_ng')).stars === st.stars, 'and everyone sees your stars on your card'); }
-    await call('POST', '/api/dm/zara_ng', { text: 'one more thing' }, PB); ok((await call('POST', '/api/dm/zara_ng', { text: 'again' }, PB)).status === 429, 'sending is slowed down a little');
+    await call('POST', '/api/dm/zara_ng', { text: 'one more thing' }, PB); ok((await call('POST', '/api/dm/zara_ng', { text: 'again' }, PB)).status === 200, 'sending again straight away is fine (no waiting)');
     // ---- reporting and blocking ----
     ok((await call('POST', '/api/report', { kind: 'dm', id: sent.json.id, reason: 'nope' }, PB)).status === 400, 'a report needs a reason');
     ok((await call('POST', '/api/report', { kind: 'dm', id: sent.json.id, reason: 'abuse' }, P)).status === 404, "you can only report messages sent to you");

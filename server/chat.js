@@ -139,7 +139,7 @@ export class Chat {
     if (b.iBlocked) throw new HttpError(403, `You've blocked @${o.handle}. Unblock them to send a message.`);
     if (b.blockedMe) throw new HttpError(403, `You can't message @${o.handle}.`);
     await assertNotMuted(meP.id);
-    const now = Date.now(); if (now - (this.lastSend.get(meP.id) || 0) < 700) throw new HttpError(429, 'Slow down a little.');
+    const now = Date.now(); /* (no wait between messages) */
     this.lastSend.set(meP.id, now); if (this.lastSend.size > 5000) this.lastSend.clear();
     const pair = pairOf(meP.id, o.id), rq = await this.quote('dms', 'm.pair = $2', [pair], replyTo), cost = await this.dmFee(meP.id, o.id);
     await this.charge(meP.id, cost.fee);
@@ -287,7 +287,7 @@ export class Chat {
     const g = await this.group(gid), ms = await this.members(g.id); if (!ms.some(m => m.citizen_id === meP.id && m.status === 'member')) throw new HttpError(403, "You're not in this group.");
     if (g.closed_at) throw new HttpError(410, 'This chat has closed.');
     await assertNotMuted(meP.id);
-    const now = Date.now(); if (now - (this.lastSend.get(meP.id) || 0) < 700) throw new HttpError(429, 'Slow down a little.'); this.lastSend.set(meP.id, now);
+    const now = Date.now(); this.lastSend.set(meP.id, now); /* (no wait between messages) */
     const others = ms.filter(m => m.status === 'member' && m.citizen_id !== meP.id).map(m => m.citizen_id), cost = others.length ? await this.feeFor(meP.id, others) : { fee: 0 };
     const rq = await this.quote('group_msgs', 'm.group_id = $2', [g.id], replyTo);
     await this.charge(meP.id, cost.fee);

@@ -7,6 +7,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import * as AV from '/shared/avatar.js';
 import { buildAvatar } from '/avatar3d.js';
 import { pictureMode, blackGuard, guardContext } from '/safe3d.js';
+import { whereToBuy } from '/shared/stores.js';
 
 const fmt = n => Math.round(Number(n) || 0).toLocaleString('en-US');
 const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (v == null || v === false) continue; if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'style') e.style.cssText = v; else e.setAttribute(k, v === true ? '' : v); } for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
@@ -93,7 +94,8 @@ export async function openCreator({ api, toast = msg => alert(msg), required = f
   const chips = (names, cur, fn) => el('div', { class: 'cre-chips' }, ...names.map((n, i) => el('button', { class: i === cur ? 'on' : '', text: n, onclick: () => fn(i) })));
   const swatches = (cols, cur, fn, custom = true) => el('div', { class: 'cre-sw' }, ...cols.map(c => el('button', { class: c.toUpperCase() === String(cur).toUpperCase() ? 'on' : '', style: `background:${c}`, 'aria-label': c, onclick: () => fn(c) })),
     custom ? el('label', { title: 'Any colour' }, '🎨', el('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(cur) ? cur : '#888888', oninput: e => fn(e.target.value) })) : '');
-  const tag = (slot, k) => { const p = AV.priceOf(slot, k); return !p ? el('small', { class: 'free', text: 'Free' }) : ward.has(AV.wardKey(slot, k)) ? el('small', { class: 'own', text: 'Owned' }) : el('small', { class: 'cost', text: `🪙 ${fmt(p)}` }); };
+  const tag = (slot, k) => { const p = AV.priceOf(slot, k); return !p ? el('small', { class: 'free', text: 'Free' }) : ward.has(AV.wardKey(slot, k)) ? el('small', { class: 'own', text: 'Owned' }) : slot === 'hair' ? el('small', { class: 'cost', text: `🪙 ${fmt(p)}` }) : el('small', { class: 'cost', text: `🛍️ ${fmt(p)}` }); }; /* (clothes and jewellery: bought in the stores; a hairstyle: here) */
+  const storeOnly = () => AV.unpaid(L, [...ward]).filter(([s]) => s !== 'hair'); /* things on the look that are sold in the stores, not owned yet */
   const itemsOf = slot => { const g = L.g, list = Object.entries(AV.ITEMS[slot]); return list.sort((a, b) => ((a[1][2] && a[1][2] !== g) - (b[1][2] && b[1][2] !== g)) || a[1][1] - b[1][1]); };
   // a sensible first colour for each kind of thing (they can change it straight after)
   const startColour = (s, k) => ({ top: k === 'shirt' || k === 'blouse' ? 0 : k === 'dress' || k === 'sundress' || k === 'gown' ? 16 : 13, bot: k === 'jeans' ? 6 : k === 'skirt' || k === 'longskirt' ? 3 : 1, shoe: k === 'sneakers' || k === 'hightops' ? 0 : 18, out: k === 'denim' ? 7 : k === 'leather' ? 4 : 18, hat: 4, eye: 4, neck: 14, wrist: 4, bag: 18 })[s] ?? 4;
@@ -127,14 +129,15 @@ export async function openCreator({ api, toast = msg => alert(msg), required = f
     } else if (tab === 'photo') P.push(photoPanel());
     panel.replaceChildren(...P);
     // what saving costs, and whether they're dressed
-    const owed = AV.unpaid(L, [...ward]), total = owed.reduce((n, x) => n + x[2], 0), ok = AV.dressed(L);
-    note.textContent = total ? `${owed.length === 1 ? '1 new thing' : owed.length + ' new things'} to buy: 🪙 ${fmt(total)}${total > coins ? ` (you have ${fmt(coins)})` : ''}` : 'Everything here is yours.';
-    go.textContent = total ? `Buy & wear · 🪙 ${fmt(total)}` : required ? 'Done ✓' : 'Save my look';
-    go.disabled = !ok || busy;
+    const so = storeOnly(), owed = AV.unpaid(L, [...ward]).filter(([s]) => s === 'hair'), total = owed.reduce((n, x) => n + x[2], 0), ok = AV.dressed(L);
+    if (so.length) { const [s0, k0] = so[0], it0 = AV.itemOf(s0, k0); note.textContent = `Trying on: the ${it0[0].toLowerCase()}${so.length > 1 ? ` and ${so.length - 1} more` : ''} ${so.length > 1 ? 'are' : 'is'} sold in the stores. Buy ${so.length > 1 ? 'them' : 'it'} at ${whereToBuy('wear', s0, k0)}, then wear ${so.length > 1 ? 'them' : 'it'} here.`; }
+    else note.textContent = total ? `A new hairstyle: 🪙 ${fmt(total)}${total > coins ? ` (you have ${fmt(coins)})` : ''}` : 'Everything here is yours.';
+    go.textContent = so.length ? '🛍️ Buy those in a store first' : total ? `Buy & wear · 🪙 ${fmt(total)}` : required ? 'Done ✓' : 'Save my look';
+    go.disabled = !ok || busy || so.length > 0;
   }
   let busy = false;
   go.onclick = async () => {
-    const owed = AV.unpaid(L, [...ward]), total = owed.reduce((n, x) => n + x[2], 0);
+    if (storeOnly().length) return; const owed = AV.unpaid(L, [...ward]).filter(([s]) => s === 'hair'), total = owed.reduce((n, x) => n + x[2], 0);
     if (total > coins) { toast(`That look costs ${fmt(total)} coins and you have ${fmt(coins)}. Swap the priced things for free ones, or earn some more first.`); return; }
     if (total && !confirm(`Buy ${owed.map(([s, k]) => s === 'hair' ? AV.HAIR_STYLES[k][0] : AV.itemOf(s, k)[0]).join(', ')} for ${fmt(total)} coins?`)) return;
     busy = true; paint();

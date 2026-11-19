@@ -130,6 +130,8 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .news .kick{font-size:12px;color:var(--muted);font-family:'Bricolage Grotesque',system-ui,sans-serif}
 .news .head{font-size:16px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psheet{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 150px);transform:translateX(-50%);z-index:30;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 32px);padding:10px 12px;border-radius:18px;background:#FBF8F1;border:2px solid #2B2621;box-shadow:0 3px 0 #2B2621,0 8px 22px rgba(0,0,0,.25);animation:netin .2s ease-out}.psheet>b{width:100%;text-align:center;font-size:14px}.psheet .x{position:absolute;top:4px;right:6px}.sidecol .vspk.off,.sidecol .vmic.off{background:#F4D6D6!important}
+.rnote{margin:2px 14px 0;font-size:12px;color:var(--muted);line-height:1.3}
+.goods .gdepts{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}.glist{display:flex;flex-direction:column;gap:8px}.grow{display:flex;gap:10px;align-items:flex-start;padding:8px;border-radius:14px;background:color-mix(in srgb,var(--chip) 70%,transparent)}.grow.on{outline:2px solid #1E8449}.gpic{flex:none;width:64px;height:52px;border-radius:10px;display:grid;place-items:center;font-size:30px;background:#fff;object-fit:contain}.ginfo{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.ginfo .tints{display:flex;flex-wrap:wrap;gap:4px;margin:3px 0}
 .stocktag{display:inline-block;align-self:flex-start;width:max-content;font-size:11.5px;font-weight:700;color:#1E8449;background:#E3F4E8;border-radius:999px;padding:1px 8px;margin:3px 0}.stocktag.out{color:#9B2C1F;background:#F8E0DC}.stockroom{margin:6px 0 10px;padding:8px 10px;border:1.5px dashed var(--line);border-radius:12px;background:color-mix(in srgb,var(--chip) 60%,transparent)}.stockrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--line) 15%,transparent)}.stockrow .sn{flex:1;min-width:0;display:flex;flex-direction:column}.stockrow .sq{min-width:26px;text-align:center;font-size:15px}.stockrow .sq.out{color:#9B2C1F}.stockrow .sb{display:flex;gap:4px}
 .netbar{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);transform:translateX(-50%);z-index:9800;display:flex;gap:9px;align-items:center;width:max-content;max-width:calc(100vw - 32px);padding:6px 14px 6px 10px;border-radius:16px;background:#2B2621;color:#FBF8F1;box-shadow:0 6px 20px rgba(0,0,0,.3);pointer-events:none;animation:netin .25s ease-out}.netbar[hidden]{display:none}.netbar b{font-size:20px}.netbar span{display:flex;flex-direction:column;line-height:1.25}.netbar strong{font-size:14px}.netbar small{font-size:12px;opacity:.85}.netbar[data-k=none],.netbar[data-k=down]{background:#B03A2E}.netbar[data-k=slow]{background:#8A6D1E}.netbar[data-k=ok]{background:#1E8449}@keyframes netin{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
 .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 168px);transform:translateX(-50%);z-index:9;background:#2B2621;color:#FBF8F1;padding:8px 8px 8px 14px;border-radius:999px;box-shadow:var(--shadow);display:flex;gap:10px;align-items:center;font-size:14px;max-width:calc(100% - 24px)}
@@ -1361,7 +1363,7 @@ import { TABLE_GAMES, WHOT_SHAPES, LUDO_SAFE, RAKE, MAX_STAKE } from '/shared/bo
 import { GH_GAMES, GH_MAX_BET, WHEEL_PAID, WHEEL_FREE, SCRATCH_TIERS, SCRATCH_SYMBOLS, PEN_SPOTS, DART_ORDER, DART_RINGS } from '/shared/games.js';
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt, PLINKO, PLINKO_ROWS, MINES_TILES, MINES_CHOICES, minesMultiple } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
-import { STORES, STOCK_MAX, isStore, productsOf, productOf, wholesale } from '/shared/stores.js';
+import { STORES, STOCK_MAX, isStore, productsOf, productOf, wholesale, whereToBuy, isHomeGood } from '/shared/stores.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
 import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
@@ -7752,7 +7754,12 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
       for(const [k,w] of Object.entries(WALLS)) row.append(sw(`${w.name} walls`,w.cost,st.w===k,w.c,()=>{ if(st.w!==k) this.send(this.base+'style',{room:ri,wall:k},null,true); })); }
     else if(this.cat==='box'){ if(!R.box.length) row.append(el('p',{class:'hint',text:'Nothing in storage. Pieces you store, and any that don’t fit after you move house, wait here.'}));
       for(const it of R.box){ const f=FURNITURE[it.k]; row.append(card(pic(it.k,it.c),f.name,'Set it out',false,()=>this.start({i:it.i,k:it.k,c:it.c,ph:it.ph}))); } }
-    else for(const [k,f] of Object.entries(FURNITURE)) if(f.cat===this.cat) row.append(card(pic(k),f.name,fmt(f.cost),this.pick&&!this.pick.i&&this.pick.k===k,()=>this.start({k})));
+    else { const home=!this.bld&&!this.d.dev; /* a home: its furniture and appliances come from the stores (in storage, ready to set out) */
+      if(home&&this.cat!=='box') s.append(el('p',{class:'rnote',text:'🛍️ Bought at the stores (Furniture, Electronics, supermarkets, malls) · placed from here'}));
+      for(const [k,f] of Object.entries(FURNITURE)) if(f.cat===this.cat){
+        if(home&&isHomeGood(k)){ const have=R.box.filter(x=>x.k===k), it=have[0];
+          row.append(card(pic(k,it?it.c:0),f.name,it?`📦 ${have.length} stored · place`:`🛍️ ${fmt(f.cost)} at a store`,this.pick&&this.pick.k===k,()=>it?this.start({i:it.i,k:it.k,c:it.c,ph:it.ph}):toast(`The ${f.name.toLowerCase()} is sold at ${whereToBuy('home',null,k)}. Buy it there and it waits in your storage, ready to place.`))); continue; }
+        row.append(card(pic(k),f.name,fmt(f.cost),this.pick&&!this.pick.i&&this.pick.k===k,()=>this.start({k}))); } }
     s.append(row); keep(); } };
 const PHONE_UI=matchMedia('(pointer: coarse)').matches;
 addEventListener('popstate',()=>{ if(Room.el) Room.close(true); });
@@ -7920,11 +7927,39 @@ const StoreStock={ m:new Map(), /* building id → { at, busy, d } */
   async buy(b,P,q){ const u=wholesale(P.price); try{ const r=await api('/api/me/stock',{method:'POST',body:{buildingId:b.id,item:P.k,qty:q}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
       toast(`📦 ${q} × ${P.name} in stock (${fmt(r.paid)} coins). You have ${r.qty} now.`); this.stale(b.id); renderCard(true); }catch(e){ toast(e.message); } },
   sold(b){ this.stale(b.id); setTimeout(()=>{ this.of(b); },300); } };
+// ---- A store of things to wear, furniture or appliances (or a supermarket's departments): the goods, by department,
+// each with its price, a picture, what's in stock, and Buy. Clothes and jewellery go to your wardrobe (wear them from
+// ✏️ on your card); furniture and appliances go to your home's storage (place them from 🛋️ Furnish). ----
+const SLOT_ICON2={ top:'👕', bot:'👖', out:'🧥', hat:'🧢', eye:'🕶️', bag:'👜', shoe:'👟', wrist:'⌚', neck:'📿', ear:'💎', ring:'💍' };
+const GoodsStore={ dept:new Map(), pick:new Map(), ward:null, wardAt:0, H3:null, h3busy:false,
+  wardrobe(){ if(!(Me&&Me.token)) return new Set(); if(!this.wardBusy&&(!this.ward||Date.now()-this.wardAt>60000)){ this.wardBusy=true; api('/api/me/look').then(r=>{ this.ward=new Set(r.wardrobe||[]); this.wardAt=Date.now(); }).catch(()=>{}).finally(()=>{ this.wardBusy=false; this.redraw(); }); } return this.ward||new Set(); },
+  redraw(){ if(sel&&sel.kind==='b') renderCard(true); if(StoreSheet.el) StoreSheet.paint(); },
+  pic(P){ if(P.kind==='home'){ if(!this.H3){ if(!this.h3busy){ this.h3busy=true; import('/house3d.js').then(m=>{ this.H3=m; this.redraw(); }).catch(()=>{}); } return el('span',{class:'gpic',text:'🛋️'}); }
+      const u=this.H3.thumb(P.key,this.pick.get(P.k)||0); return u?el('img',{class:'gpic',src:u,alt:''}):el('span',{class:'gpic',text:'🛋️'}); }
+    if(P.kind==='phone') return el('span',{class:'gpic phmini pt'+(P.tier||0),style:`--pc:${(P.colors||['#333'])[0]}`},el('i'));
+    return el('span',{class:'gpic',text:SLOT_ICON2[P.slot]||'🛍️'}); },
+  section(b){ const S0=STORES[b.type], box=el('div',{class:'authbox goods'}, el('h3',{text:`${S0.icon} ${S0.name}`}), StoreStock.head(b));
+    if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to buy here.'})); return box; }
+    const all=productsOf(b.type), depts=[...new Set(all.map(P=>P.dept))], d=depts.includes(this.dept.get(b.type))?this.dept.get(b.type):depts[0], ward=this.wardrobe();
+    if(depts.length>1) box.append(el('div',{class:'chips gdepts'}, ...depts.map(x=>el('button',{class:'pill'+(x===d?' on':''),text:x,onclick:()=>{ this.dept.set(b.type,x); this.redraw(); }}))));
+    const kinds=new Set(all.filter(P=>P.dept===d).map(P=>P.kind)); box.append(el('p',{class:'hint',text:kinds.has('home')?'Furniture and appliances go into your home’s storage: set them out from 🛋️ Furnish.':kinds.has('wear')?'Clothes and jewellery go into your wardrobe: wear them from ✏️ on your card.':''}));
+    const list=el('div',{class:'glist'});
+    for(const P of all.filter(P=>P.dept===d)){ const own=P.kind==='wear'&&ward.has(P.slot+':'+P.key), left=StoreStock.left(b,P.k), out=left===0, c=this.pick.get(P.k)||0, f=P.kind==='home'?FURNITURE[P.key]:null;
+      const btn=own?el('button',{class:'btn sm',text:'✓ In your wardrobe',disabled:true}):out?el('button',{class:'btn sm',text:'Sold out here',disabled:true}):el('button',{class:'btn sm primary',text:`Buy · ${fmt(P.price)}`,onclick:()=>this.buy(b,P)});
+      list.append(el('div',{class:'grow'+(own?' on':'')}, this.pic(P), el('div',{class:'ginfo'}, el('b',{text:P.name}), el('span',{class:'hint',text:`${fmt(P.price)} coins${P.note?' · '+P.note:''}`}), StoreStock.tag(b,P.k),
+        f&&f.tint?el('div',{class:'tints'}, ...TINTS.slice(0,10).map((col,i)=>el('button',{class:'tint'+(c===i?' on':''),style:`background:${col}`,'aria-label':'Colour',onclick:()=>{ this.pick.set(P.k,i); this.redraw(); }}))):'', el('div',{class:'row-actions'}, btn)))); }
+    box.append(list); return box; },
+  async buy(b,P){ if(P.kind==='phone'){ PhoneStore.buy(b,P.k,(P.colors||[])[0]); return; }
+    try{ const r=await api('/api/me/store/buy',{method:'POST',body:{buildingId:b.id,item:P.k,c:this.pick.get(P.k)||0}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
+      if(r.wardrobe){ this.ward=new Set(r.wardrobe); this.wardAt=Date.now(); }
+      toast(r.kind==='wear'?`🛍️ The ${r.name.toLowerCase()} is in your wardrobe. Wear it from ✏️ on your card.`:`📦 The ${r.name.toLowerCase()} is in your home’s storage. Place it from 🛋️ Furnish at home.`); StoreStock.sold(b); this.redraw(); }
+    catch(e){ toast(e.message); } } };
 // The shop inside a store (3D): the same goods as on its card, in a sheet over the store, opened by its 🛍️ Shop button
 // or by tapping something on display. A new kind of store adds its card section here.
 const STORE_UI={ phonestore:{ kind:'phone', section:b=>PhoneStore.section(b), pick:k=>{ const M=PHONE_MODELS[k]; if(M) PhoneStore.pick={m:k,col:M.colors[0]}; } },
   cardealer:{ kind:'car', section:b=>dealerSection(b), pick:k=>{ if(CAR_MODELS[k]) carPick={m:k,col:null}; } },
   petstore:{ kind:'pet', section:b=>PetStore.section(b), pick:k=>{ if(CREATURES[k]) petPick=k; } } };
+for(const t of Object.keys(STORES)) if(!STORE_UI[t]) STORE_UI[t]={ kind:'goods', section:b=>GoodsStore.section(b), pick:k=>{ const P=productOf(t,k); if(P) GoodsStore.dept.set(t,P.dept); } }; /* every other store: its goods, by department */
 const StoreSheet={ el:null, b:null,
   open(b,k){ const U=STORE_UI[b.type]; if(!U) return; if(k) U.pick(k); this.close(); this.b=b; const wrap=el('div',{class:'rsheet-bg storesheet'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) this.close(); });
     this.box=el('div',{class:'panel rsheet roomview'}); wrap.append(this.box); document.body.append(wrap); this.el=wrap;
@@ -8123,6 +8158,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(b.type==='petstore' && b.done!==false && !b.ruin && !Store.canWrite) card.append(PetStore.section(b));
     if(b.type==='phonestore' && b.done!==false && !b.ruin && !Store.canWrite) card.append(PhoneStore.section(b));
     if(b.type==='cardealer' && b.done!==false && !b.ruin && !Store.canWrite) card.append(dealerSection(b));
+    if(STORE_UI[b.type]&&STORE_UI[b.type].kind==='goods' && b.done!==false && !b.ruin && !Store.canWrite) card.append(GoodsStore.section(b));
     if(kindOf(b.type)==='gamehouse' && b.done!==false && !b.ruin && !Store.canWrite) card.append(GH.section(b));
     if(kindOf(b.type)==='casino' && b.done!==false && !b.ruin && !Store.canWrite){ // the games are played right here, on the casino's own card
       if(!(Me&&Me.token&&Me.handle)) card.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to play here.'}));

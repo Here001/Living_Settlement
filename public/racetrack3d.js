@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import * as W from '/world3d.js';
 import { build, follower } from '/creature3d.js';
+import { decorate } from '/racedecor.js';
 
 export function createTrack(host, opts) {
   const canvas = document.createElement('canvas'); canvas.className = 'track3d'; host.append(canvas);
@@ -20,15 +21,7 @@ export function createTrack(host, opts) {
   const tex = (draw, n = 256) => { const c = document.createElement('canvas'); c.width = c.height = n; draw(c.getContext('2d'), n); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
   const grassT = tex((g, n) => { g.fillStyle = '#6FA84B'; g.fillRect(0, 0, n, n); for (let i = 0; i < 2600; i++) { g.fillStyle = `rgba(${40 + Math.random() * 60},${110 + Math.random() * 70},${30 + Math.random() * 30},.35)`; g.fillRect(Math.random() * n, Math.random() * n, 2, 2); } });
   const dirtT = tex((g, n) => { g.fillStyle = '#C49A63'; g.fillRect(0, 0, n, n); for (let i = 0; i < 3500; i++) { const k = Math.random(); g.fillStyle = `rgba(${150 + k * 70},${110 + k * 50},${70 + k * 30},.4)`; g.fillRect(Math.random() * n, Math.random() * n, 2 + Math.random() * 2, 1 + Math.random()); } });
-  grassT.repeat.set(60, 60); const ground = add(new THREE.PlaneGeometry(900, 900), new THREE.MeshStandardMaterial({ map: grassT, roughness: 1 }), 0, -0.02, 0); ground.rotation.x = -Math.PI / 2; ground.castShadow = false; view.mats.push(ground.material);
-  const ell = (rx, rz, n = 160) => { const s = new THREE.Shape(); for (let i = 0; i <= n; i++) { const a = i / n * Math.PI * 2; i ? s.lineTo(Math.cos(a) * rx, Math.sin(a) * rz) : s.moveTo(Math.cos(a) * rx, Math.sin(a) * rz); } return s; };
-  { const s = ell(RX + WID / 2, RZ + WID / 2), hole = new THREE.Path(); for (let i = 0; i <= 160; i++) { const a = i / 160 * Math.PI * 2; i ? hole.lineTo(Math.cos(a) * (RX - WID / 2), Math.sin(a) * (RZ - WID / 2)) : hole.moveTo(Math.cos(a) * (RX - WID / 2), Math.sin(a) * (RZ - WID / 2)); } s.holes.push(hole);
-    const g = new THREE.ShapeGeometry(s, 4); g.rotateX(-Math.PI / 2); const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 6, uv.getY(i) / 6); dirtT.repeat.set(1, 1);
-    const m = new THREE.MeshStandardMaterial({ map: dirtT, roughness: 1 }); view.mats.push(m); const o = add(g, m, 0, 0.02, 0); o.castShadow = false;
-    const inf = new THREE.ShapeGeometry(ell(RX - WID / 2, RZ - WID / 2), 4); inf.rotateX(-Math.PI / 2); const im = new THREE.MeshStandardMaterial({ color: '#7DBA55', roughness: 1 }); view.mats.push(im); add(inf, im, 0, 0.03, 0).castShadow = false;
-    /* stripes mown into the infield, a pond and flower beds */ for (let i = -3; i <= 3; i += 2) { const st = new THREE.Mesh(new THREE.PlaneGeometry((RX - WID / 2) * 1.5, (RZ - WID / 2) * 0.22), std('#89C562', 1)); st.rotation.x = -Math.PI / 2; st.position.set(0, 0.035, i * (RZ - WID / 2) * 0.2); scene.add(st); }
-    const pond = new THREE.Mesh(new THREE.CircleGeometry(1, 40), new THREE.MeshStandardMaterial({ color: '#4B8FB8', roughness: 0.08, metalness: 0.3 })); view.mats.push(pond.material); pond.scale.set(RX * 0.18, RZ * 0.22, 1); pond.rotation.x = -Math.PI / 2; pond.position.set(-RX * 0.35, 0.04, 0); scene.add(pond);
-    for (let i = 0; i < 26; i++) { const a = i / 26 * Math.PI * 2; add(new THREE.SphereGeometry(0.5, 8, 6), std(['#E4572E', '#F2C94C', '#D98BA8', '#FFFFFF'][i % 4], 0.8), RX * 0.35 + Math.cos(a) * RX * 0.12, 0.25, Math.sin(a) * RZ * 0.25); } }
+  /* (the ground, the racing surface and the infield: see racedecor.js) */
   // the rails: white, round both edges, on posts
   for (const r of [-WID / 2 - 0.3, WID / 2 + 0.3]) { const pts = []; for (let i = 0; i < 120; i++) { const a = i / 120 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * (RX + r), 1.05, Math.sin(a) * (RZ + r))); }
     add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 240, 0.09, 6, true), std('#F4F4F2', 0.4), 0, 0, 0);
@@ -37,11 +30,10 @@ export function createTrack(host, opts) {
   // the chequered finish line, across the home straight (where the race starts and ends)
   { const t = tex((g, n) => { for (let y = 0; y < 8; y++) for (let x = 0; x < 2; x++) { g.fillStyle = (x + y) % 2 ? '#111' : '#fff'; g.fillRect(x * n / 2, y * n / 8, n / 2, n / 8); } }, 64); t.repeat.set(1, 1);
     const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.9 }); view.mats.push(m); const o = add(new THREE.PlaneGeometry(1.2, WID), m, 0, 0.05, RZ); o.rotation.x = -Math.PI / 2; o.castShadow = false;
-    for (const s of [-1, 1]) { add(new THREE.CylinderGeometry(0.12, 0.12, 6, 8), std('#2B2621', 0.5), 0, 3, RZ + s * (WID / 2 + 0.8)); } add(new THREE.BoxGeometry(0.4, 0.8, WID + 2), std('#C0392B', 0.5), 0, 6, RZ); } /* the gantry over the line */
+    /* (the finish: the photo-finish tower and the winning post are in racedecor.js) */ }
   // ---- the grandstand: tiers of seats along the home straight, a roof, a scoreboard ----
   const STAND_Z = RZ + WID / 2 + 6, rows = opts.grand ? 7 : 5, perRow = Math.ceil(SEATS / rows), standW = Math.max(28, perRow * 1.4 + 6) * (opts.grand ? 1.2 : 1), seats = [];
   for (let r = 0; r < rows; r++) { const y = 0.6 + r * 0.9, z = STAND_Z + r * 1.4; add(new THREE.BoxGeometry(standW, 0.9 + r * 0.9, 1.4), std('#B9B3A8', 0.9), 0, (0.9 + r * 0.9) / 2, z);
-    const bench = add(new THREE.BoxGeometry(standW - 2, 0.12, 0.5), std(opts.colour || '#B5523B', 0.6), 0, y + 0.46, z - 0.25); bench.castShadow = false;
     for (let i = 0; i < perRow; i++) seats.push(new THREE.Vector3(-((perRow - 1) / 2) * 1.4 + i * 1.4, y + 0.5, z - 0.2)); }
   const back = STAND_Z + rows * 1.4 + 0.4, roofY = 0.6 + rows * 0.9 + 3.4;
   add(new THREE.BoxGeometry(standW + 2, roofY, 0.4), std('#8C857A', 0.9), 0, roofY / 2, back);
@@ -60,9 +52,12 @@ export function createTrack(host, opts) {
     const lamp = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.1), new THREE.MeshBasicMaterial({ color: '#FFF6D8', toneMapped: false })); lamp.position.set(x * 0.985, 18, z * 0.985); lamp.lookAt(0, 0, 0); scene.add(lamp); view.mats.push(lamp.material); }
   const flags = []; for (let i = 0; i < 8; i++) { const x = -standW / 2 + i * standW / 7; add(new THREE.CylinderGeometry(0.06, 0.06, 4, 6), std('#E8E8E4', 0.4), x, roofY + 2, back);
     const f = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1, 6, 1), new THREE.MeshStandardMaterial({ color: ['#E4572E', '#2E86C1', '#F2C94C', '#27AE60'][i % 4], side: THREE.DoubleSide, roughness: 0.7 })); view.mats.push(f.material); f.position.set(x + 0.8, roofY + 3.4, back); scene.add(f); flags.push(f); }
-  // trees round the edge
-  { const trunk = std('#7A5233', 0.9), leaves = std('#3E7A4B', 0.9); for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2, r = 1 + 0.25 + (i % 3) * 0.06, x = Math.cos(a) * (RX + WID) * r * 1.15, z = Math.sin(a) * (RZ + WID) * r * 1.45; if (z > RZ + WID / 2 && Math.abs(x) < standW / 2 + 6) continue;
-      add(new THREE.CylinderGeometry(0.3, 0.4, 3, 6), trunk, x, 1.5, z); add(new THREE.IcosahedronGeometry(2.4, 0), leaves, x, 4.6, z); } }
+  // ---- the scenery (racedecor.js): the track, hedge, infield lake and fountain, flowerbeds, bandstand, parade ring,
+  // stables, stalls, lamps and bunting, fence, trees, hills and balloons; and what in it you can't walk through ----
+  const deco = decorate(view, { G, RX, RZ, WID, STAND_Z, rows, standW, back, roofY, colour: opts.colour, EDGE: [RX + WID / 2 + 42, RZ + WID / 2 + 42] });
+  { const sc = new THREE.Mesh(new THREE.PlaneGeometry(7, 4), new THREE.MeshBasicMaterial({ map: sbT, toneMapped: false })); view.mats.push(sc.material); sc.position.set(deco.screen.x, deco.screen.y, deco.screen.z); sc.rotation.y = deco.screen.ry; scene.add(sc); } /* the stand's TV screen shows the scoreboard too */
+  { try { const st = build('starcrest', { scale: 1.9 }), bronze = new THREE.MeshStandardMaterial({ color: '#9C6B3A', roughness: 0.35, metalness: 0.85 }); view.mats.push(bronze); st.group.traverse(o => { if (o.isMesh) { o.material = bronze; o.castShadow = true; } }); st.group.position.set(deco.statue.x, deco.statue.y, deco.statue.z); st.group.rotation.y = 0.6; scene.add(st.group); } catch (e) {} } /* a bronze champion in the parade ring */
+  const blocked = (x, z) => { for (const c of deco.colliders) { if (c.ell) { if (((x - c.ell.x) / c.ell.rx) ** 2 + ((z - c.ell.z) / c.ell.rz) ** 2 < 1) return true; } else if (c.r != null) { if (Math.hypot(x - c.x, z - c.z) < c.r + 0.3) return true; } else if (x > c.x0 - 0.3 && x < c.x1 + 0.3 && z > c.z0 - 0.3 && z < c.z1 + 0.3) return true; } return false; };
   // ---- the people in the stands (the nearest seats first), and the runners ----
   const crowd = new Map(); let crowdKey = '';
   function seatPeople() { const L = (opts.people && opts.people()) || [], key = L.map(p => p.id + (p.look ? 'L' : '') + (others.has(p.id) ? 'W' : '')).join(','); if (key === crowdKey) return; crowdKey = key; const keep = new Set();
@@ -83,9 +78,10 @@ export function createTrack(host, opts) {
   // screen looks round; you can't step onto the dirt while it's a racetrack, and the stand's tiers lift you as you climb ----
   const me = { x: (Math.random() - 0.5) * standW * 0.8, z: STAND_Z - 2.2 - Math.random() * 2.2, /* (somewhere along the front of the stand: not all on one spot) */ y: 0, yaw: 0, pitch: -0.12, sit: false, P: W.makePerson('me', null, opts.look || null) }; scene.add(me.P.group); me.P.group.traverse(o => { if (o.isMesh) o.castShadow = true; });
   let myPet = null; if (opts.pet) { try { myPet = follower(opts.pet); scene.add(myPet.group); } catch (e) {} }
+  const inField = (x, z) => (x / (RX - WID / 2 - 0.9)) ** 2 + (z / (RZ - WID / 2 - 0.9)) ** 2 < 1; /* (the infield's yours to explore too: but not the dirt) */
   const OUT = [RX + WID / 2 + 0.7, RZ + WID / 2 + 0.7], EDGE = [RX + WID / 2 + 42, RZ + WID / 2 + 42];
   const tierY = (x, z) => (Math.abs(x) < standW / 2 && z > STAND_Z - 0.7 && z < back + 0.2) ? 0.9 + Math.min(rows - 1, Math.floor((z - (STAND_Z - 0.7)) / 1.4)) * 0.9 : 0; /* (the top tier runs back to the wall) */
-  const free = (x, z) => { if ((x / OUT[0]) ** 2 + (z / OUT[1]) ** 2 < 1) return false; if ((x / EDGE[0]) ** 2 + (z / EDGE[1]) ** 2 > 1) return false; if (Math.abs(x) < standW / 2 + 1.2 && z > back - 0.4 && z < back + 0.6) return false; return true; };
+  const free = (x, z) => { if ((x / OUT[0]) ** 2 + (z / OUT[1]) ** 2 < 1 && !inField(x, z)) return false; if (blocked(x, z)) return false; if ((x / EDGE[0]) ** 2 + (z / EDGE[1]) ** 2 > 1) return false; if (Math.abs(x) < standW / 2 + 1.2 && z > back - 0.4 && z < back + 0.6) return false; return true; };
   const keys = new Set(), joy = { x: 0, y: 0 }; const kd = e => { if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return; keys.add(e.key.toLowerCase()); }, ku = e => keys.delete(e.key.toLowerCase()); addEventListener('keydown', kd); addEventListener('keyup', ku);
   const stick = document.createElement('div'); stick.className = 'hjoy'; stick.innerHTML = '<i></i>'; host.append(stick); { let id = null; const knob = stick.firstChild;
     const mv = e => { const r = stick.getBoundingClientRect(), Rr = r.width / 2; let dx = (e.clientX - r.left - Rr) / Rr, dy = (e.clientY - r.top - Rr) / Rr; const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; } joy.x = dx; joy.y = dy; knob.style.transform = `translate(${dx * Rr * 0.6}px,${dy * Rr * 0.6}px)`; };
@@ -124,7 +120,7 @@ export function createTrack(host, opts) {
     g.fillStyle = 'rgba(255,255,255,.96)'; if (g.roundRect) { g.beginPath(); g.roundRect((512 - w) / 2, 20, w, 80, 24); g.fill(); } else g.fillRect((512 - w) / 2, 20, w, 80); g.fillStyle = '#1C1C1E'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(t, 256, 60);
     const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, depthTest: false, transparent: true })); sp.scale.set(2.6, 0.65, 1); sp.position.set(0, 2.6, 0); sp.renderOrder = 6; on.add(sp); bubbles.set(id, { sp, until: performance.now() + 7000 }); }
   // ---- the camera: behind you, through your eyes, from the stands (turning to follow the leader), behind the leader, or from above ----
-  const MODES = ['third', 'first', 'stand', 'follow', 'above']; let mode = 'third', aim = new THREE.Vector3(0, 0, 0); const eye = new THREE.Vector3(-standW * 0.28, 9.5 * G, STAND_Z - 2); /* (along the stand from the finish-line gantry) */
+  const MODES = ['third', 'first', 'stand', 'follow', 'above']; let mode = 'third', aim = new THREE.Vector3(0, 0, 0); const eye = new THREE.Vector3(-standW * 0.28, 11 * G, STAND_Z - 1); /* (along the stand from the finish-line gantry) */
   function placeCamera(dt) { const k = Math.min(1, dt * 4), tgt = new THREE.Vector3(), pos = new THREE.Vector3(), fx = -Math.sin(me.yaw), fz = -Math.cos(me.yaw);
     me.P.group.visible = mode !== 'first';
     if (mode === 'first') { pos.set(me.x, me.y + (me.sit ? 1.15 : 1.62), me.z); tgt.set(me.x + fx * 10, me.y + 1.6 + Math.tan(me.pitch) * 10, me.z + fz * 10); camera.position.copy(pos); aim.copy(tgt); }
@@ -134,12 +130,14 @@ export function createTrack(host, opts) {
     else { camera.position.copy(eye); tgt.set(lead ? lead.x : 0, 0.5, lead ? lead.z * 0.85 : 0); aim.lerp(tgt, k); }
     camera.lookAt(aim); const fov = mode === 'stand' ? 40 : 55; if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); } }
   let tSb = 0; view.resize(); if (opts.weather) view.setWeather(opts.weather()); view.setTime(opts.minute ? opts.minute() : 720);
-  view.start((dt, now) => { walkMe(dt); stepOthers(dt); placeRunners(dt); placeCamera(dt); for (const f of flags) { const p = f.geometry.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i) + 0.8; p.setZ(i, Math.sin(now / 300 + x * 3 + f.position.x) * 0.12 * x); } p.needsUpdate = true; }
+  let sunAt = -99, wxNow = null; const sunTime = () => { const m = opts.minute ? opts.minute() : 720, w = opts.weather ? opts.weather() : null; if (w !== wxNow) { wxNow = w; if (w) view.setWeather(w); } if (Math.abs(m - sunAt) >= 3) { sunAt = m; view.setTime(m); } }; /* (the sun and its shadows: only when they've moved) */
+  view.start((dt, now) => { walkMe(dt); deco.update(dt, now, !!(lead && lead.run)); stepOthers(dt); placeRunners(dt); placeCamera(dt); for (const f of flags) { const p = f.geometry.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i) + 0.8; p.setZ(i, Math.sin(now / 300 + x * 3 + f.position.x) * 0.12 * x); } p.needsUpdate = true; }
     for (const [id, b] of bubbles) if (performance.now() > b.until) { b.sp.parent && b.sp.parent.remove(b.sp); b.sp.material.map.dispose(); bubbles.delete(id); }
-    tSb += dt; if (tSb > 0.5) { tSb = 0; paintBoard(); seatPeople(); if (opts.weather) view.setWeather(opts.weather()); view.setTime(opts.minute ? opts.minute() : 720); if (opts.onTick) opts.onTick(); } });
+    tSb += dt; if (tSb > 0.5) { tSb = 0; paintBoard(); seatPeople(); sunTime(); if (opts.onTick) opts.onTick(); } });
   const onResize = () => view.resize(); addEventListener('resize', onResize);
   return { view(m) { mode = m || MODES[(MODES.indexOf(mode) + 1) % MODES.length]; return mode; }, stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, runners: runners.size, crowd: crowd.size, others: others.size, cam: camera.position.toArray().map(v => +v.toFixed(2)), aim: aim.toArray().map(v => +v.toFixed(2)), mode, back, roofY, STAND_Z }; },
     get me() { return { x: me.x, z: me.z, a: me.P.group.rotation.y, sit: me.sit, bench: !!nearBench() }; }, sit() { if (me.sit) { standUp(); return false; } return sitDown(); },
+    goto(x, z, yaw) { if (Number.isFinite(x) && Number.isFinite(z)) { me.x = x; me.z = z; } if (Number.isFinite(yaw)) me.yaw = yaw; }, /* (for checking a view) */
     upsertOther, removeOther, setPet, say, near(r) { let n = 0; for (const o of others.values()) if (Math.hypot(o.x - me.x, o.z - me.z) <= r) n++; return n; },
     close() { removeEventListener('resize', onResize); removeEventListener('keydown', kd); removeEventListener('keyup', ku); stick.remove(); if (myPet) myPet.dispose(); for (const R of runners.values()) R.C.dispose(); view.dispose(); canvas.remove(); } };
 }

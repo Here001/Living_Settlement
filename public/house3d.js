@@ -248,7 +248,7 @@ export function createHouse(host, opts) {
   const reflections = () => { const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); scene.environmentIntensity = PLAN_CLUB ? 0.1 : 0.38; }; /* a night club is dark, lit by its own lights */
   reflections();
   const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 140); camera.rotation.order = 'YXZ';
-  scene.add(new THREE.HemisphereLight('#FFF8EE', '#7A6E62', PLAN_CLUB ? 0.13 : 0.5));
+  const hemiL = new THREE.HemisphereLight('#FFF8EE', '#7A6E62', PLAN_CLUB ? 0.13 : 0.5); scene.add(hemiL);
   const sun = new THREE.DirectionalLight('#FFE9C8', PLAN_CLUB ? 0.28 : 2.35); if (PLAN_CLUB) { renderer.toneMappingExposure = 0.9; scene.add(new THREE.AmbientLight('#C8B8FF', 0.6)); } /* a soft violet fill so people show up in the dark */ sun.position.set(S / 2 - S * 0.9, 7.5, S / 2 + S * 0.7); sun.target.position.set(S / 2, 0, S / 2); scene.add(sun, sun.target);
   if (HQ) { sun.castShadow = true; const sc = sun.shadow.camera, R = S * 0.85 + 1; sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 0.5; sc.far = 30; sun.shadow.mapSize.set(PHONE ? 1024 : 2048, PHONE ? 1024 : 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.025; sun.shadow.radius = 3; }
   const reshadow = () => { if (HQ) renderer.shadowMap.needsUpdate = true; };
@@ -734,6 +734,26 @@ export function createHouse(host, opts) {
   const ku = e => keys.delete(e.key.toLowerCase()); addEventListener('keydown', kd); addEventListener('keyup', ku);
   el.addEventListener('wheel', e => { if (view === 'walk') { me.pitch = Math.max(-1.2, Math.min(1.1, me.pitch - e.deltaY * 0.001)); moved(); } }, { passive: true });
 
+  // ---- the weather outside, the same as on the map: through the windows the sky turns grey, the sunlight coming in
+  // softens, rain falls outside (never inside), a storm flashes and fog hides the street. Fog starts beyond the house's
+  // own walls, so the rooms themselves stay clear. The rain is drawn 20 times a second, and only while it rains. ----
+  const WXH = { sunny: { sky: '#BFE3F7', sun: 1, hemi: 1, fog: 0, rain: 0 }, cloudy: { sky: '#C3CBD2', sun: 0.45, hemi: 0.95, fog: 0, rain: 0 }, rain: { sky: '#8F99A2', sun: 0.2, hemi: 0.86, fog: 70, rain: PHONE ? 500 : 800 },
+    storm: { sky: '#646D77', sun: 0.08, hemi: 0.76, fog: 40, rain: PHONE ? 900 : 1400, wind: 0.3 }, fog: { sky: '#D7DBDE', sun: 0.3, hemi: 0.95, fog: 9, rain: 0 } };
+  const sunBase = sun.intensity, hemiBase = hemiL.intensity, fogNear = S * 1.45 + 1; let wx = 'sunny', rainM = null, rainT = 0, rainAt = 0, flashH = 0, flashNext = 0;
+  function setWeather(k) { k = WXH[k] ? k : 'sunny'; if (k === wx) return; wx = k; const w = WXH[k];
+    scene.background = col(w.sky); if (!PLAN_CLUB) { sun.intensity = sunBase * w.sun; hemiL.intensity = hemiBase * w.hemi; }
+    if (w.fog) { if (!scene.fog) scene.fog = new THREE.Fog(w.sky, fogNear, fogNear + w.fog); scene.fog.color.set(w.sky); fogView(); } else scene.fog = null;
+    if (rainM) { scene.remove(rainM); rainM.geometry.dispose(); rainM.material.dispose(); rainM = null; }
+    if (w.rain) { const n = w.rain, P = new Float32Array(n * 6), seed = new Float32Array(n * 3); let r = 9; const rr = () => (r = (r * 16807) % 2147483647) / 2147483647;
+      for (let i = 0; i < n; i++) { let x, z; do { x = -14 + rr() * (S + 28); z = -14 + rr() * (S + 28); } while (x > -0.6 && x < S + 0.6 && z > -0.6 && z < S + 0.6); seed[i * 3] = x; seed[i * 3 + 1] = rr() * (H + 9); seed[i * 3 + 2] = z; } /* (all round the house, none inside it) */
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.boundingSphere = new THREE.Sphere(new THREE.Vector3(S / 2, 0, S / 2), 1e4);
+      rainM = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#D4DEE8', transparent: true, opacity: k === 'storm' ? 0.6 : 0.48, depthWrite: false })); rainM.frustumCulled = false; rainM.userData = { seed, wind: w.wind || 0.06, L: k === 'storm' ? 0.75 : 0.55 }; scene.add(rainM); stepRain(0); }
+    reshadow(); dirty = true; wake(); }
+  function fogView() { if (!scene.fog) return; const w = WXH[wx], up = view !== 'walk'; scene.fog.near = up ? 400 : fogNear; scene.fog.far = up ? 600 : fogNear + w.fog; } /* (from above: no fog over the house) */
+  function stepRain(dt) { if (!rainM) return; rainT += dt; const D = rainM.userData, P = rainM.geometry.attributes.position.array, Sd = D.seed, n = Sd.length / 3, top = H + 9;
+    for (let i = 0; i < n; i++) { const y = ((Sd[i * 3 + 1] - rainT * (9 + (i % 4) * 1.3)) % top + top) % top, x = Sd[i * 3] + y * D.wind, z = Sd[i * 3 + 2], j = i * 6; P[j] = x; P[j + 1] = y; P[j + 2] = z; P[j + 3] = x - D.L * D.wind; P[j + 4] = y - D.L; P[j + 5] = z; }
+    rainM.geometry.attributes.position.needsUpdate = true; }
+  const wxTimer = opts.weather ? setInterval(() => { try { setWeather(opts.weather()); } catch (e) {} }, 15000) : 0; if (opts.weather) setTimeout(() => { if (!dead) try { setWeather(opts.weather()); } catch (e) {} }, 0);
   // ---- the loop: runs only while something moves or changes ----
   const shown = () => host.isConnected && host.getClientRects().length > 0; /* not hidden (behind the map) */
   // Exactly one frame is ever waiting: while a frame runs, asking for another (moving, a change) only marks it as wanted.
@@ -764,7 +784,9 @@ export function createHouse(host, opts) {
     if (me3.visible) { const mv = (fw || st) && view === 'walk'; if (mv) { me3.userData.av.animate(dt, 0, 2.3 * Math.min(1, Math.hypot(fw, st)), false); meStill = false; } else if (!meStill && !act) { me3.userData.av.pose(); meStill = true; dirty = true; } } /* your legs move as you walk */
     // at most 60 frames a second (a 120 Hz screen would otherwise draw twice as many)
     const now = performance.now(), active = moving || joy.on || keys.size > 0 || now - lastInput < 160;
-    const gap = active ? 15.5 : othersMoving || party.length ? 32 : 0; /* you moving: up to 60 a second; only other people moving: 30 (still smooth); nothing moving: just the one frame */
+    const raining = !!rainM && view === 'walk' && shown(); if (raining && now - rainAt >= 50) { stepRain(Math.min(0.1, (now - (rainAt || now)) / 1000)); rainAt = now; dirty = true; } /* the rain outside (20 a second) */
+    if (wx === 'storm' && shown()) { if (now > flashNext) { flashH = 1; flashNext = now + 6000 + Math.random() * 9000; } if (flashH > 0) { flashH = Math.max(0, flashH - dt * 5); hemiL.intensity = hemiBase * WXH.storm.hemi + flashH * 2; scene.background.set(flashH > 0.5 ? '#C9D2DC' : WXH.storm.sky); dirty = true; } } /* lightning */
+    const gap = active ? 15.5 : othersMoving || party.length ? 32 : raining || flashH > 0 ? 48 : 0; /* you moving: up to 60 a second; only other people moving: 30 (still smooth); nothing moving: just the one frame */
     if (dirty && shown() && now - lastDraw >= gap) { placeCamera(); for (const g of show.children) { const m = g.userData.turn; if (m) m.rotation.y = Math.atan2(camera.position.x - g.position.x, camera.position.z - g.position.z); } /* phones on display turn to face you */ renderer.render(scene, camera); dirty = false; lastDraw = now; if (guard.after()) dirty = true; if (firstDrawn) { const f = firstDrawn; firstDrawn = null; requestAnimationFrame(() => f()); } } /* not while the map is showing */
     // other players: glide towards where they last said they were
     let gliding = false; for (const o of others.values()) if (o.g.visible) { const dx = o.tx - o.g.position.x, dz = o.ty - o.g.position.z; let da = o.ta - o.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
@@ -783,7 +805,7 @@ export function createHouse(host, opts) {
     if (party.length && shown()) { const t = performance.now() / 1000;
       for (const q of party) { if (q.pv) { q.pv.rotation.x = Math.sin(t * 0.8 + q.n) * 0.38; q.pv.rotation.z = Math.cos(t * 0.63 + q.n * 1.3) * 0.38; } else if (q.strobe) q.m.material.color.set(Math.floor(t * 9) % 4 === 0 ? '#FFFFFF' : '#1A1A1A'); else partyAt(t, q.n, q.m.material.color); }
       for (const pl of pool) if (pl.userData.party) partyAt(t * 0.7, pl.userData.party, pl.color); dirty = true; }
-    return moving || doorsMoving || (act && (act.kind === 'run' || act.kind === 'dance' || act.kind === 'pole')) || (party.length > 0 && shown()) || joy.on || keys.size > 0 || dirty || gliding || [...others.values()].some(o => o.bubble) || !!meBubble;
+    return moving || doorsMoving || (!!rainM && view === 'walk' && shown()) || (wx === 'storm' && shown()) || (act && (act.kind === 'run' || act.kind === 'dance' || act.kind === 'pole')) || (party.length > 0 && shown()) || joy.on || keys.size > 0 || dirty || gliding || [...others.values()].some(o => o.bubble) || !!meBubble;
   }
   const ro = new ResizeObserver(resize); ro.observe(host);
   // never a dark screen: a black picture steps the lighting down; a view the phone threw away is rebuilt (see safe3d.js)
@@ -807,7 +829,7 @@ export function createHouse(host, opts) {
       if (p) { placeCamera(); if (p.x == null) aim(); showGhost(); opts.onPick && opts.onPick(pick); } else showGhost(); wake(); },
     refreshGhost() { showGhost(); },
     setSelected(i) { sel = i; showSel(); wake(); },
-    setView(v) { view = v; applyView(); moved(); },
+    setView(v) { view = v; applyView(); fogView(); moved(); }, setWeather,
     setSurroundings(A) { buildAround(A); },
     setPeople(list) { buildPeople(list); },
     // With opts.defer: build the shaders and send the textures to the graphics chip in the background, a few at a time,
@@ -840,7 +862,7 @@ export function createHouse(host, opts) {
     get view() { return view; },
     check: { at(x, y) { me.x = x; me.y = y; moved(); }, face(x, y) { me.yaw = Math.atan2(-(x - me.x), -(y - me.y)); me.pitch = -0.25; moved(); }, blocked: (x, y) => blocked(x, y), get show() { return show.children.map(g => [g.userData.product, +g.position.x.toFixed(2), +g.position.y.toFixed(2), +g.position.z.toFixed(2), g.children.length]); }, get me() { return [me.x, me.y]; } }, /* (for checking) */
     goRoom, roomHere: () => roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN),
-    dispose() { dead = true; cancelAnimationFrame(raf); ro.disconnect(); ctx.dispose(); checks.forEach(clearTimeout); removeEventListener('keydown', kd); removeEventListener('keyup', ku);
+    dispose() { dead = true; clearInterval(wxTimer); cancelAnimationFrame(raf); ro.disconnect(); ctx.dispose(); checks.forEach(clearTimeout); removeEventListener('keydown', kd); removeEventListener('keyup', ku);
       scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); for (const t of photoTex.values()) t.dispose(); renderer.dispose(); renderer.domElement.remove(); stick.remove(); },
   };
 }

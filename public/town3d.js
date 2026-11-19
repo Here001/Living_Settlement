@@ -11,6 +11,7 @@
 //  - if a phone can't keep up, it sees one block less far (the haze hides the edge). The sharpness is never lowered.
 // The map's own data comes from index.html through the callbacks in `opts`; this file only draws and drives.
 import * as W from '/world3d.js';
+import { follower } from '/creature3d.js';
 import { BUILDING_TYPES, ROAD_TYPES, CAR_MODELS } from '/shared/catalog.js';
 const THREE = W.THREE;
 
@@ -139,6 +140,7 @@ export function createTown(host, opts) {
   let foot = opts.mode === 'walk', parked = null, riding = null, summon = null; /* summon: your car, driving up to you after you called it */ /* riding: in someone else's car ({ id, seat }), going where they drive */ /* foot: walking (your character), not driving; parked: your car, where you got out */
   let feet = null; const mkFeet = () => { if (feet) return feet; feet = W.makePerson('me', null, opts.look || null); feet.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); scene.add(feet.group); return feet; };
   if (foot) mkFeet();
+  let myPet = null; if (opts.pet) { try { myPet = follower(opts.pet); myPet.group.visible = false; scene.add(myPet.group); } catch (e) { myPet = null; } } /* your pet: with you on foot (in the car while you drive) */
   const me = W.makeCar(opts.car.kind || 'car', opts.car.col || '#c8382e'); scene.add(me); me.traverse(m => { if (m.isMesh) m.castShadow = true; });
   // on a bike, you ride it: your own character sits on the saddle, hands on the bars, feet down to the pedals
   if (BIKE) { const P = W.makePerson('me', null, opts.look || null); const A = P.av || P; if (A.pose) { A.pose('play'); if (A.legL) for (const l of [A.legL, A.legR]) { l.rotation.x = -0.95; if (l.children[0]) l.children[0].rotation.x = 1.15; } for (const a of [A.armL, A.armR]) if (a) a.rotation.x = -0.62; }
@@ -332,15 +334,15 @@ export function createTown(host, opts) {
   function crowd(now, dt) {
     if (now - folkAt > 400) { folkAt = now; const L = opts.people(car.x / TILE, car.z / TILE), seen = new Set();
       for (const p of L) { seen.add(p.id); const kind = p.car ? 'car' : 'walk'; let f = folk.get(p.id);
-        if (f && f.kind !== kind) { if (f.g) scene.remove(f.g); folk.delete(p.id); f = null; }
-        if (f && kind === 'walk' && p.look && !f.look) { scene.remove(f.g); folk.delete(p.id); f = null; } /* their own look arrived: show them as themselves */
-        if (!f) { if (kind === 'walk') { const P = W.makePerson(p.id, null, p.look || null); f = { kind, P, g: P.group, look: !!p.look }; if (p.tag) P.group.add(tag(p.tag, p.online, 2.15)); f.g.position.set(p.x * TILE, 0, p.y * TILE); scene.add(f.g); } else f = { kind, m: p.m || 'sedan', col: p.col || '#7c8288', x: p.x * TILE, z: p.y * TILE, ry: p.a != null ? p.a - Math.PI / 2 : 0 }; folk.set(p.id, f); }
+        if (f && f.kind !== kind) { if (f.g) scene.remove(f.g); if (f.pet) f.pet.dispose(); folk.delete(p.id); f = null; }
+        if (f && kind === 'walk' && p.look && !f.look) { scene.remove(f.g); if (f.pet) f.pet.dispose(); folk.delete(p.id); f = null; } /* their own look arrived: show them as themselves */
+        if (!f) { if (kind === 'walk') { const P = W.makePerson(p.id, null, p.look || null); f = { kind, P, g: P.group, look: !!p.look }; if (p.pet && [...folk.values()].filter(q => q.pet).length < 8) { try { f.pet = follower(p.pet, { side: -1 }); scene.add(f.pet.group); } catch (e) {} } /* their pet walks with them (the nearest eight) */ if (p.tag) P.group.add(tag(p.tag, p.online, 2.15)); f.g.position.set(p.x * TILE, 0, p.y * TILE); scene.add(f.g); } else f = { kind, m: p.m || 'sedan', col: p.col || '#7c8288', x: p.x * TILE, z: p.y * TILE, ry: p.a != null ? p.a - Math.PI / 2 : 0 }; folk.set(p.id, f); }
         f.tx = p.x * TILE; f.tz = p.y * TILE; if (f.kind === 'car') { f.m = p.m || f.m; f.col = p.col || f.col; f.drv = !!p.drv; f.h = p.h || null; f.full = !!p.full; f.ta = p.drv && p.a != null ? p.a - Math.PI / 2 : null; /* a player's car: the way they say it faces */ if (p.tag && f.tagT !== p.tag) { if (f.tagO) { scene.remove(f.tagO); f.tagO.material.map.dispose(); f.tagO.material.dispose(); } f.tagO = tag(p.tag, p.online, 0); f.tagT = p.tag; scene.add(f.tagO); } } }
-      for (const [id, f] of folk) if (!seen.has(id)) { if (f.g) scene.remove(f.g); if (f.tagO) { scene.remove(f.tagO); f.tagO.material.map.dispose(); f.tagO.material.dispose(); } folk.delete(id); } }
+      for (const [id, f] of folk) if (!seen.has(id)) { if (f.g) scene.remove(f.g); if (f.pet) f.pet.dispose(); if (f.tagO) { scene.remove(f.tagO); f.tagO.material.map.dispose(); f.tagO.material.dispose(); } folk.delete(id); } }
     for (const [id, f] of folk) { const k = Math.min(1, dt * 2.5); if (f.kind === 'car' && f.tagO) { f.tagO.position.set(f.x, 2.4, f.z); }
       if (f.kind === 'car') { const dx = f.tx - f.x, dz = f.tz - f.z; if (Math.hypot(dx, dz) > 40) { f.x = f.tx; f.z = f.tz; } else { f.x += dx * k; f.z += dz * k; if (f.ta != null || Math.hypot(dx, dz) > 0.05) { let d = (f.ta != null ? f.ta : Math.atan2(-dx, -dz)) - f.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); f.ry += d * Math.min(1, dt * 5); } } if (f.tagO) f.tagO.visible = !(riding && riding.id === id && mode === 1); if (!(riding && riding.id === id && mode === 1)) pushCar(f.m, f.col, f.x, f.z, f.ry); continue; }
       const g = f.g, dx = f.tx - g.position.x, dz = f.tz - g.position.z; if (Math.hypot(dx, dz) > 40) { g.position.x = f.tx; g.position.z = f.tz; continue; }
-      const vx = dx * k / Math.max(dt, 1e-3), vz = dz * k / Math.max(dt, 1e-3); g.position.x += dx * k; g.position.z += dz * k; f.P.animate(dt, vx, vz); } }
+      const vx = dx * k / Math.max(dt, 1e-3), vz = dz * k / Math.max(dt, 1e-3); g.position.x += dx * k; g.position.z += dz * k; f.P.animate(dt, vx, vz); if (f.pet) f.pet.step(dt, g.position.x, g.position.z); } }
 
   // ---- talking on the street: what someone says shows over their head (yours over yours) for 7 seconds ----
   const bubbles = new Map(); /* who → { sp, until } */
@@ -535,6 +537,7 @@ export function createTown(host, opts) {
   view.resize(); around(); sunNow(true);
   view.start((dt, now) => {
     if (dead) return; drive(dt);
+    if (myPet) { const onFoot = foot && feet && !riding; myPet.group.visible = onFoot; if (onFoot) myPet.step(dt, feet.group.position.x, feet.group.position.z); }
     me.visible = !foot && !riding && mode !== 1; if (feet) { feet.group.visible = foot && mode !== 1; if (foot) { feet.setPos(car.x, car.z); { const m = car.mv == null ? car.a : car.mv; feet.animate(dt, Math.cos(m) * car.v, -Math.sin(m) * car.v); } feet.group.rotation.y = car.a + Math.PI / 2; } } /* your character walks (and faces where you're going) */
     if (parked) pushCar(parked.kind, parked.col, parked.x, parked.z, parked.ry);
     if (summon) { comeUp(dt); if (summon) pushCar(summon.kind, summon.col, summon.x, summon.z, summon.ry); }

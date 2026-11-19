@@ -9,9 +9,36 @@ export const CREATURES = {
   ironshell:  { name: 'Ironshell',  blurb: 'An armoured roller. Slow, steady, never far behind.', speed: 0.92, wobble: 0.04, weather: { storm: 0.04, rain: 0.01 }, color: '#7C8288', accent: '#B9BEC3' },
   glimmerhop: { name: 'Glimmerhop', blurb: 'A glowing hopper with a mind of its own. Anything can happen.', speed: 0.86, wobble: 0.17, weather: { fog: 0.06 }, color: '#3FBFA0', accent: '#C8FFF0' },
 };
+// The racers: the six above run at the Racetrack (and are pets too). The list is fixed, so races, odds and form stay
+// the same whatever pets are added below.
 export const CREATURE_IDS = Object.keys(CREATURES);
+// Pets only (they don't race): the stranger creatures of the planet, from its ancient past, its myths and its machines.
+// group: ancient | mythic | scifi (how the Pet store sorts them)
+Object.assign(CREATURES, {
+  thunderjaw:      { name: 'Thunderjaw',       group: 'ancient', blurb: 'A striped little hunter from the planet’s first age. Loud, loyal and all teeth.', color: '#5E7C4A', accent: '#E4572E' },
+  mossmammoth:     { name: 'Moss Mammoth',     group: 'ancient', blurb: 'Shaggy, tusked and slow, with moss growing in its coat. Gentle as a cloud.', color: '#7A5A3A', accent: '#8DBF5A' },
+  crystaltortoise: { name: 'Crystal Tortoise', group: 'ancient', blurb: 'Its shell grows glowing crystals, one for every century it has lived.', color: '#6C7A5E', accent: '#7FE3FF' },
+  pteroglider:     { name: 'Pteroglider',      group: 'ancient', blurb: 'A leather-winged glider from the old cliffs. It circles over your head.', color: '#8C6A4E', accent: '#D9A06A' },
+  emberdrake:      { name: 'Ember Drake',      group: 'mythic',  blurb: 'A small dragon with a burning tail. Warm to the touch, hot in temper.', color: '#9B2F2A', accent: '#FFB347' },
+  moonfox:         { name: 'Moonfox',          group: 'mythic',  blurb: 'Nine glowing tails, one for each moon in the old stories.', color: '#E9E4F2', accent: '#8FD3FF' },
+  gryphling:       { name: 'Gryphling',        group: 'mythic',  blurb: 'Half lion, half eagle, all pride. Guards whatever you own.', color: '#C99A55', accent: '#F4EBDD' },
+  starhorn:        { name: 'Starhorn',         group: 'mythic',  blurb: 'A tall horned runner with a mane of starlight. Its horn glows at night.', color: '#F4F1F8', accent: '#B9A7FF' },
+  phoenixlet:      { name: 'Phoenixlet',       group: 'mythic',  blurb: 'A firebird chick. It flies above you trailing sparks and never burns out.', color: '#E4572E', accent: '#FFD45C' },
+  hydraling:       { name: 'Hydraling',        group: 'mythic',  blurb: 'Three heads, one appetite. They argue about everything.', color: '#2F7D63', accent: '#C7E86B' },
+  krakenling:      { name: 'Krakenling',       group: 'mythic',  blurb: 'A young sky-kraken that swims through the air on eight glowing arms.', color: '#7A3C8E', accent: '#FF8FD1' },
+  orbling:         { name: 'Orbling',          group: 'scifi',   blurb: 'A floating eye inside spinning rings. Nobody knows who built the first one.', color: '#3A3F4A', accent: '#5FE3FF' },
+  mechapup:        { name: 'Mecha Pup',        group: 'scifi',   blurb: 'A robot dog with a glowing visor. Fetches, guards and never needs feeding.', color: '#B9C2CC', accent: '#4FD1FF' },
+  voidjelly:       { name: 'Void Jelly',       group: 'scifi',   blurb: 'A see-through jellyfish that drifts through the air, glowing softly.', color: '#6D7BFF', accent: '#B8F2FF' },
+  plasmawyrm:      { name: 'Plasma Wyrm',      group: 'scifi',   blurb: 'A serpent of living light. It hums when it’s happy.', color: '#2A1E5C', accent: '#FF4FD8' },
+  nebulynx:        { name: 'Nebulynx',         group: 'scifi',   blurb: 'A starry cat with antennae. Its spots glow like a galaxy.', color: '#24305E', accent: '#7FF0FF' },
+  quartzling:      { name: 'Quartzling',       group: 'scifi',   blurb: 'A walking cluster of crystal with one glowing eye. Strong and very quiet.', color: '#8C93A8', accent: '#9DFFB0' },
+  hoverbeetle:     { name: 'Hover Beetle',     group: 'scifi',   blurb: 'A metal-shelled beetle with glassy wings. It buzzes along at your heel.', color: '#3F7F6E', accent: '#C9F2FF' },
+});
+export const PET_IDS = Object.keys(CREATURES);
 // What each creature costs at a Pet store (never under 500).
-export const PET_PRICES = { mudgulper: 2500, ironshell: 3500, dustrunner: 4500, skyskimmer: 6000, starcrest: 7500, glimmerhop: 10000 };
+export const PET_PRICES = { mudgulper: 2500, ironshell: 3500, dustrunner: 4500, skyskimmer: 6000, starcrest: 7500, glimmerhop: 10000,
+  crystaltortoise: 25000, thunderjaw: 30000, pteroglider: 35000, orbling: 40000, mossmammoth: 45000, hoverbeetle: 50000, mechapup: 60000, voidjelly: 70000, nebulynx: 80000,
+  krakenling: 90000, quartzling: 95000, plasmawyrm: 110000, moonfox: 120000, gryphling: 150000, phoenixlet: 160000, emberdrake: 180000, hydraling: 200000, starhorn: 220000 };
 export const PET_MIN = 2500;
 export const petPrice = kind => Math.max(PET_MIN, PET_PRICES[kind] || PET_MIN);
 // How fast a creature runs today, before luck.

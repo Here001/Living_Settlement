@@ -14,6 +14,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { pictureMode, blackGuard, guardContext } from '/safe3d.js';
 import { buildAvatar } from '/avatar3d.js';
+import { build as buildCreature, follower } from '/creature3d.js';
 import { defaultLook } from '/shared/avatar.js';
 import { FURNITURE, FLOORS, WALLS, TINTS, WALL_H, WALL_T, EYE, layoutOf, styleOf, placedParts, footOf, roomAt } from '/shared/furniture.js';
 import { BUILDING_TYPES, ROAD_TYPES } from '/shared/catalog.js';
@@ -391,7 +392,10 @@ export function createHouse(host, opts) {
     if (!o) { const g = figure(p.h || id, p.look); const tag = nameTag(p.h ? '@' + p.h : 'a visitor'); tag.position.set(0, 2.0, 0); g.add(tag); g.position.set(p.x, 0, p.y); g.rotation.y = p.a; scene.add(g); o = { g, tx: p.x, ty: p.y, ta: p.a, lookKey: p.look ? JSON.stringify(p.look) : '' }; others.set(id, o); }
     { const pk = p.pose || ''; if (o.pose !== pk) { o.pose = pk; o.posed = false; } o.g.position.y = pk ? Number(p.ph) || 0 : 0; } /* sitting, lying… */
     o.tx = p.x; o.ty = p.y; o.ta = p.a; nearest(false); if (o.g.visible) { dirty = true; wake(); } }
-  function removeOther(id) { const o = others.get(id); if (!o) return; scene.remove(o.g); dropFigure(o.g); others.delete(id); nearest(true); dirty = true; wake(); }
+  // pets: each person's pet follows them round the room ('me' or someone's id → a follower), smaller indoors
+  const pets = new Map();
+  function setPet(id, kind) { const old = pets.get(id); if (old && old.kind === kind) return; if (old) { old.f.dispose(); pets.delete(id); } if (!kind) return; try { const f = follower(kind, { scale: 0.7, near: 0.75, side: id === 'me' ? 1 : -1 }); f.group.traverse(o => { if (o.isMesh) o.castShadow = true; }); scene.add(f.group); pets.set(id, { kind, f }); dirty = true; wake(); } catch (e) {} }
+  function removeOther(id) { setPet(id, null); const o = others.get(id); if (!o) return; scene.remove(o.g); dropFigure(o.g); others.delete(id); nearest(true); dirty = true; wake(); }
   function say(id, text) { const o = id === 'me' ? null : others.get(id), on = o ? o.g : me3; if (!on) return; const sp = bubbleSprite(text);
     if (o) { if (o.bubble) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); } o.bubble = sp; o.bubbleUntil = performance.now() + 7000; }
     else { if (meBubble) { me3.remove(meBubble); meBubble.material.map.dispose(); } meBubble = sp; meBubbleUntil = performance.now() + 7000; }
@@ -625,7 +629,8 @@ export function createHouse(host, opts) {
       let tagY = 0.6, tagS = 1;
       if (cls === 'phone') { const m = phoneModel(P); m.position.y = 0.19; m.rotation.y = s.face; g.add(m); g.userData.turn = m; }
       else if (cls === 'car') { const car = W3.makeCar(P.kind && P.kind !== 'car' && P.kind !== 'bike' ? 'car' : (P.model || 'car'), P.col || '#c8382e'), [Lc] = W3.carSize(P.model || 'car'), sc = Math.min(1, (s.len - 0.2) / Math.max(1, Lc)); car.scale.setScalar(sc); car.rotation.y = s.ry + Math.PI / 2; g.add(car); tagY = 1.6; }
-      else if (cls === 'pet' && P.img) { const t = new THREE.Texture(P.img); t.colorSpace = THREE.SRGBColorSpace; if (P.img.complete) t.needsUpdate = true; else P.img.addEventListener('load', () => { t.needsUpdate = true; dirty = true; wake(); }, { once: true }); const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, alphaTest: 0.05 })); sp.scale.set(0.5, 0.5, 1); sp.position.y = 0.26; sp.renderOrder = 3; g.add(sp); tagY = 0.78; } /* (standing on the cage floor, behind its glass) */
+      else if (cls === 'pet') { const C = buildCreature(P.k), b0 = new THREE.Box3().setFromObject(C.group), sz = b0.getSize(new THREE.Vector3()), fit = Math.min(1, 0.85 / Math.max(sz.x, sz.z, 0.01), 0.55 / Math.max(sz.y, 0.01)); C.animate(0.4, 0);
+        C.group.scale.setScalar(fit); C.group.position.y = 0.02 - b0.min.y * fit; C.group.rotation.y = s.face || 0; C.group.userData.shared = true; g.add(C.group); g.userData.creature = C; tagY = 0.78; } /* the creature itself, standing on the cage floor behind its glass */
       else if (s.k === 'mannequin') { const m = mannequinModel(P, n); m.rotation.y = s.face; g.add(m); tagY = 2.0; }
       else if (cls === 'garment') { const m = garmentModel(P); m.rotation.y = s.face; g.add(m); tagY = 0.22; tagS = 0.8; }
       else if (cls === 'shoe') { const m = shoeModel(P); m.rotation.y = s.face; m.scale.setScalar(0.9); g.add(m); tagY = 0.27; tagS = 0.62; }
@@ -762,6 +767,8 @@ export function createHouse(host, opts) {
       else if (o.pose === 'd' || o.pose === 'o') { o.g.userData.av.dance(dt, o.pose === 'o' ? 'pole' : 'floor'); gliding = true; dirty = true; } /* dancing */
       else if (!o.posed) { o.g.userData.av.pose(POSE[o.pose] || 'stand'); o.posed = true; dirty = true; }
       if (o.bubble && performance.now() > o.bubbleUntil) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); o.bubble = null; dirty = true; } }
+    for (const [id, pt] of pets) { const o = id === 'me' ? null : others.get(id); if (id !== 'me' && (!o || !o.g.visible)) { pt.f.group.visible = false; continue; } pt.f.group.visible = true;
+      const ox = o ? o.g.position.x : act ? act.x : me.x, oz = o ? o.g.position.z : act ? act.y : me.y; if (pt.f.step(dt, ox, oz)) { gliding = true; dirty = true; } } /* pets trot after their people */
     othersMoving = gliding;
     if (meBubble && performance.now() > meBubbleUntil) { me3.remove(meBubble); meBubble.material.map.dispose(); meBubble = null; dirty = true; }
     if (act && act.kind === 'run' && me3.visible) { me3.userData.av.animate(dt, 0, 3, false); dirty = true; }
@@ -815,7 +822,7 @@ export function createHouse(host, opts) {
       if (on && !sp) { const c = document.createElement('canvas'); c.width = c.height = 96; const x = c.getContext('2d'); x.fillStyle = 'rgba(30,20,50,.82)'; x.beginPath(); x.arc(48, 48, 44, 0, 7); x.fill(); x.font = '56px system-ui,"Apple Color Emoji","Segoe UI Emoji",sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('🔊', 48, 52);
         const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, depthTest: false, transparent: true })); sp.scale.set(0.34, 0.34, 1); sp.position.set(0, 2.38, 0); sp.renderOrder = 6; g.add(sp); g.userData.talk = sp; }
       else if (!on && sp) { g.remove(sp); sp.material.map.dispose(); sp.material.dispose(); g.userData.talk = null; } else return; dirty = true; wake(); },
-    upsertOther, removeOther, clearOthers() { for (const id of [...others.keys()]) removeOther(id); }, say, get me() { return { x: me.x, y: me.y, a: act ? act.wyaw : me.yaw, pose: act ? CODE[act.kind] : '', ph: act ? +act.wy.toFixed(2) : 0 }; },
+    setPet, upsertOther, removeOther, clearOthers() { for (const id of [...others.keys()]) removeOther(id); }, say, get me() { return { x: me.x, y: me.y, a: act ? act.wyaw : me.yaw, pose: act ? CODE[act.kind] : '', ph: act ? +act.wy.toFixed(2) : 0 }; },
     act() { doAct(); }, standUp() { standUp(); },
     // into bed (when your colonist is asleep as you come in): the first bed in the home; stand up beside it
     sleep() { if (act) return false; const it = room.items.find(x => { const A = actOf(x.k); return A && A.kind === 'lie' && /bed/.test(x.k); }) || room.items.find(x => (actOf(x.k) || {}).kind === 'lie'); if (!it) return false;

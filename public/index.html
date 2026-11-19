@@ -1733,10 +1733,10 @@ function changed(light){
 const pathCache = new Map();
 function walkable(x,y){ const k=x+','+y; if(D.water.has(k) && !D.roads.has(k)) return false; const id = D.occ.get(k); if(!id) return true; const b = D.buildings.get(id); return !b || !blocks(b) || b.ruin; }
 function stepCost(x,y){ const r = D.roads.get(x+','+y), R=r&&ROAD_TYPES[r]; return R ? (R.walkCost || 1/(R.speed*0.35)) : 1/GROUND_SPEED; } // a street (speed 2) is 0.7 tiles a minute on foot; cars do 1
-function findPath(sx,sy,gx,gy){
-  const key = `${sx},${sy}|${gx},${gy}`; if(pathCache.has(key)) return pathCache.get(key);
+function findPath(sx,sy,gx,gy,wide){
+  const key = `${sx},${sy}|${gx},${gy}`; if(!wide&&pathCache.has(key)) return pathCache.get(key);
   if(Math.abs(sx-gx)+Math.abs(sy-gy)>160){ const p=[[sx,sy],[gx,gy]]; pathCache.set(key,p); return p; } // long commutes skip pathfinding
-  const minX=Math.min(sx,gx)-12, minY=Math.min(sy,gy)-12, maxX=Math.max(sx,gx)+12, maxY=Math.max(sy,gy)+12;
+  const M=wide?48:12, minX=Math.min(sx,gx)-M, minY=Math.min(sy,gy)-M, maxX=Math.max(sx,gx)+M, maxY=Math.max(sy,gy)+M; /* (round a lake or a river: a wider search before giving up) */
   const Wd=maxX-minX+1, Ht=maxY-minY+1; const idx=(x,y)=>(x-minX)+(y-minY)*Wd;
   const g = new Float64Array(Wd*Ht).fill(Infinity), from = new Int32Array(Wd*Ht).fill(-1), closed = new Uint8Array(Wd*Ht);
   const heap=[]; const push=(f,i)=>{ heap.push([f,i]); let n=heap.length-1; while(n>0){ const p=(n-1)>>1; if(heap[p][0]<=heap[n][0]) break; [heap[p],heap[n]]=[heap[n],heap[p]]; n=p; } };
@@ -1749,7 +1749,7 @@ function findPath(sx,sy,gx,gy){
     for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+dx, ny=y+dy; if(nx<minX||ny<minY||nx>maxX||ny>maxY) continue; const ni=idx(nx,ny); if(closed[ni]) continue; if(ni!==goal && !walkable(nx,ny)) continue; const ng=g[i]+stepCost(nx,ny); if(ng<g[ni]){ g[ni]=ng; from[ni]=i; push(ng+H(nx,ny),ni); } } }
   let path;
   if(found){ path=[]; for(let i=goal;i!==-1;i=from[i]) path.push([i%Wd+minX, Math.floor(i/Wd)+minY]); path.reverse(); }
-  else path=[[sx,sy],[gx,gy]];
+  else { if(!wide) return findPath(sx,sy,gx,gy,true); path=[[sx,sy],[gx,gy]]; path.noWay=true; } /* (no way on foot: they're out of sight on the way, never walking on water) */
   if(pathCache.size>20000) pathCache.clear(); pathCache.set(key,path); return path;
 }
 
@@ -1769,13 +1769,16 @@ function placeFor(b, r, label){
   const t=T(b), [w,d]=t.size;
   if(t.outdoor){
     let tx,ty;
-    if(w===1&&d===1){ const n=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]][Math.floor(r()*8)]; tx=b.x+n[0]; ty=b.y+n[1]; }
-    else { tx=b.x+Math.floor(r()*w); ty=b.y+Math.floor(r()*d); }
+    for(let k=0;k<10;k++){ if(w===1&&d===1){ const n=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]][Math.floor(r()*8)]; tx=b.x+n[0]; ty=b.y+n[1]; }
+      else { tx=b.x+Math.floor(r()*w); ty=b.y+Math.floor(r()*d); } if(!wet(tx,ty)) break; } /* (somewhere dry: never out on the water by a beach or a pier) */
+    if(wet(tx,ty)){ tx=b.x+Math.floor(w/2); ty=b.y+d; }
     return { tile:[tx,ty], pos:[tx+0.3+r()*0.4, ty+0.3+r()*0.4], indoor:false, bid:b.id, name:(D.buildings.get(b.id)||b).name||t.name };
   }
   const tx=b.x+Math.floor(w/2), ty=b.y+d;
   return { tile:[tx,ty], pos:[tx+0.5,ty+0.35], indoor:true, bid:b.id, name:(D.buildings.get(b.id)||b).name||t.name };
 }
+// water nobody can walk on (a bridge's road over it is fine)
+const wet=(x,y)=>{ const k=Math.floor(x)+','+Math.floor(y); return D.water.has(k)&&!D.roads.has(k); };
 function wanderNear(b, r){
   const [w,d]=T(b).size, x0=b.x+Math.floor(w/2), y0=b.y+d;
   for(let k=0;k<12;k++){ const x=x0+Math.floor(r()*13)-6, y=y0+Math.floor(r()*13)-6; if(walkable(x,y)) return { tile:[x,y], pos:[x+0.3+r()*0.4,y+0.3+r()*0.4], indoor:false, bid:null, name:D.roads.has(x+','+y)?'the street':'the neighbourhood' }; }
@@ -1857,14 +1860,14 @@ function dayAt(c, gm){
   return segAt(c, seg, m, gm, plan); }
 // One part of a day or trip: staying put, driving, or walking. m is minutes on the same clock as seg.from/seg.to.
 function segAt(c, seg, m, gm, plan){
-  if(seg.type==='stay'){ const ph=hash(c.id)%1000; const sway=seg.p.indoor?0:Math.sin(gm*0.6+ph)*0.08; return { x:seg.p.pos[0]+sway, y:seg.p.pos[1]-sway*0.5, visible:!seg.p.indoor, act:seg.act, where:seg.p.name, bid:seg.p.bid, moving:false, seg, plan }; }
+  if(seg.type==='stay'){ const ph=hash(c.id)%1000; const sway=seg.p.indoor?0:Math.sin(gm*0.6+ph)*0.08; return { x:seg.p.pos[0]+sway, y:seg.p.pos[1]-sway*0.5, visible:!seg.p.indoor&&!wet(seg.p.pos[0],seg.p.pos[1]), act:seg.act, where:seg.p.name, bid:seg.p.bid, moving:false, seg, plan }; }
   if(seg.mode==='car'){ const st=alongRoad(seg.path, Math.max(0,m-seg.from-1)); return { x:st.x, y:st.y, dx:st.dx, dy:st.dy, visible:true, car:true, V:seg.V, col:seg.col, siren:seg.siren, act:seg.verb||`Driving to ${seg.toP.name}`, where:seg.toP.name, bid:null, moving:true, seg, plan }; }
   const u=Math.min(Math.max(m-seg.from,0), seg.cum[seg.cum.length-1]); let k=0; while(k<seg.cum.length-2 && seg.cum[k+1]<u) k++;
   const a=seg.path[k], b=seg.path[Math.min(k+1,seg.path.length-1)]; const span=(seg.cum[k+1]-seg.cum[k])||1; const f=Math.min(1,(u-seg.cum[k])/span);
   let x=a[0]+0.5+(b[0]-a[0])*f, y=a[1]+0.5+(b[1]-a[1])*f;
   if(D.roads.has(a[0]+','+a[1]) && D.roads.has(b[0]+','+b[1])){ const side=(hash(c.id)&1)?0.34:-0.34, ddx=b[0]-a[0], ddy=b[1]-a[1]; x+=-ddy*side; y+=ddx*side; }
   if(k===0){ const p=seg.fromP.pos, q=[a[0]+0.5,a[1]+0.5]; const g=Math.min(1,f*2); x=p[0]+(x-p[0])*g; y=p[1]+(y-p[1])*g; }
-  return { x, y, visible:true, act:seg.verb||`Heading to ${seg.toP.name}`, where:seg.toP.name, bid:null, moving:true, seg, plan };
+  return { x, y, visible:!wet(x,y), act:seg.verb||`Heading to ${seg.toP.name}`, where:seg.toP.name, bid:null, moving:true, seg, plan }; /* (a straight line across water: out of sight until they're on land) */
 }
 // ---- Trips: going somewhere they chose (Go out, the Casino) or being taken to the Jail, and coming back afterwards ----
 // Short trips are walked. Longer ones (14+ tiles) are driven by car owners; everyone else takes a cab. The Jail is a police car.
@@ -7454,6 +7457,8 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     if(!c||(!c.home&&!(at&&at.x!=null))){ toast('Your colonist needs a home before they can drive about.'); return; }
     const st=citizenAt(c,gmNow()); if(st&&st.bid&&String(st.where||'').toLowerCase().includes('jail')){ toast('You can’t drive while you’re in jail.'); return; }
     const here=st||{ x:bOf(c.home).x+1, y:bOf(c.home).y+1 }, s=at&&at.x!=null?{x:at.x,y:at.y,a:at.a||0}:this.startAt(here.x,here.y), car=at&&at.boat?at.boat:this.ride(c); /* at: back in the car where you parked it */
+    if(!(at&&at.boat)&&wet(s.x,s.y)){ let best=null, bd=1e9; for(let r=1;r<=14&&!best;r++) for(let i=-r;i<=r;i++) for(let j=-r;j<=r;j++){ if(Math.max(Math.abs(i),Math.abs(j))!==r) continue; const tx=Math.floor(s.x)+i, ty=Math.floor(s.y)+j; if(wet(tx,ty)||!walkable(tx,ty)) continue; const d=Math.hypot(i,j); if(d<bd){ bd=d; best=[tx,ty]; } }
+      if(best){ s.x=best[0]+0.5; s.y=best[1]+0.5; } } /* never out on the water (only in your boat): the nearest dry land */
     this.send({type:'ride',a:'leave'}); /* (in case the server still has you in someone's car) */
     Phone.hide(); MyHome.load(); /* (which home is yours, for its door) */ this.camWas={x:cam.x,y:cam.y,z:cam.z}; DriveMap.reset(); this.foot=walk; this.parked=false; let look=null; try{ [look]=await Looks.want([Me.handle]); }catch(e){}
     closeCard(); openTab(null);

@@ -278,14 +278,26 @@ export function shot(kind, size = 256) {
 // they get far ahead (and jumps to them if they're very far, after a drive or a door), and turns to look at them when
 // they stop. step(dt, x, z) each frame with the owner's position (metres); it returns true when the pet moved.
 export function follower(kind, opts = {}) {
-  const C = build(kind, opts), g = C.group, side = opts.side || 1, near = opts.near || 1.1; let px = null, pz = 0, ry = 0, ox = 0, oz = 0, dirx = 0, dirz = 1, v = 0;
+  // Smooth following: the owner's heading is averaged over a moment (so a jittery step doesn't swing the pet about),
+  // the pet's spot (just behind and to one side) is chased with a critically damped spring (it eases in and out and
+  // never overshoots, at any frame rate), and its speed, gait and the way it faces all ease too. It keeps up with
+  // someone running (up to 16 m/s) and jumps to them only when it's left far behind (a teleport, a new room).
+  const C = build(kind, opts), g = C.group, side = opts.side || 1, near = opts.near || 1.1;
+  let px = null, pz = 0, vx = 0, vz = 0, ox = 0, oz = 0, ovx = 0, ovz = 0, dirx = 0, dirz = 1, ry = 0, sp = 0;
+  const damp = (cur, tgt, vel, T, dt) => { const w = 2 / T, x = w * dt, e = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x), ch = cur - tgt, tmp = (vel + w * ch) * dt; return [tgt + (ch + tmp) * e, (vel - w * tmp) * e]; };
   return { C, group: g,
-    step(dt, x, z) { dt = Math.min(0.1, Math.max(0, dt)); if (px === null || Math.hypot(x - px, z - pz) > 25) { px = x - dirx * near; pz = z - dirz * near; ox = x; oz = z; }
-      const mx = x - ox, mz = z - oz, ml = Math.hypot(mx, mz); if (ml > 0.02) { dirx = mx / ml; dirz = mz / ml; } ox = x; oz = z;
-      const tx = x - dirx * near + dirz * side * near * 0.55, tz = z - dirz * near - dirx * side * near * 0.55, dx = tx - px, dz = tz - pz, d = Math.hypot(dx, dz);
-      const want = d < 0.08 ? 0 : Math.min(9, d * 2.6 + (d > 3 ? d : 0)); v += (want - v) * Math.min(1, dt * 6); let moved = false;
-      if (v > 0.02 && d > 0.01) { const k = Math.min(d, v * dt); px += dx / d * k; pz += dz / d * k; moved = true; ry = Math.atan2(dx, dz); }
-      else if (Math.hypot(x - px, z - pz) > 0.3) { const a = Math.atan2(x - px, z - pz); let dd = a - ry; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); ry += dd * Math.min(1, dt * 3); }
-      g.position.set(px, 0, pz); let dr = ry - g.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); g.rotation.y += dr * Math.min(1, dt * 8); C.animate(dt, moved ? v : 0); return moved; },
+    step(dt, x, z) { dt = Math.min(0.1, Math.max(0, dt)); if (!dt) return false;
+      if (px === null || Math.hypot(x - px, z - pz) > 25) { px = x - dirx * near; pz = z - dirz * near; vx = vz = 0; ox = x; oz = z; ovx = ovz = 0; }
+      // the owner's velocity, smoothed, and from it the way they're heading
+      const k = Math.min(1, dt * 7); ovx += ((x - ox) / dt - ovx) * k; ovz += ((z - oz) / dt - ovz) * k; ox = x; oz = z;
+      const os = Math.hypot(ovx, ovz); if (os > 0.4) { const kd = Math.min(1, dt * (2.5 + os * 0.4)); dirx += (ovx / os - dirx) * kd; dirz += (ovz / os - dirz) * kd; const dl = Math.hypot(dirx, dirz) || 1; dirx /= dl; dirz /= dl; }
+      const back = near * (1 + Math.min(0.8, os * 0.08)); /* (a little further back at a run) */
+      const tx = x - dirx * back + dirz * side * near * 0.55, tz = z - dirz * back - dirx * side * near * 0.55;
+      const T = Math.hypot(tx - px, tz - pz) > 4 ? 0.22 : 0.32; [px, vx] = damp(px, tx, vx, T, dt); [pz, vz] = damp(pz, tz, vz, T, dt);
+      let v = Math.hypot(vx, vz); if (v > 16) { vx *= 16 / v; vz *= 16 / v; v = 16; }
+      sp += (v - sp) * Math.min(1, dt * 8); const moving = sp > 0.12;
+      // face where it's going; standing, turn slowly to look at its owner
+      const want = v > 0.35 ? Math.atan2(vx, vz) : Math.hypot(x - px, z - pz) > 0.3 ? Math.atan2(x - px, z - pz) : ry; let dd = want - ry; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); ry += dd * Math.min(1, dt * (v > 0.35 ? 9 : 3));
+      g.position.set(px, 0, pz); g.rotation.y = ry; C.animate(dt, moving ? sp : 0); return moving || Math.abs(dd) > 0.01; },
     dispose() { if (g.parent) g.parent.remove(g); C.dispose(); } };
 }

@@ -10,6 +10,7 @@
 // Returns { colliders: [{ x, z, r } | { x0, z0, x1, z1 }], update(dt, now) }.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { makeCrowd } from '/crowdfig.js';
 
 export function decorate(view, P) {
   const { scene } = view, { G, RX, RZ, WID, STAND_Z, rows, standW, back, roofY } = P, [EX, EZ] = P.EDGE, colour = P.colour || '#B5523B';
@@ -183,18 +184,17 @@ export function decorate(view, P) {
       for (const [x, z] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 2.6, 4), dark); r.position.set(x, -3.6, z); g.add(r); }
       scene.add(g); const r0 = (1.25 + i * 0.35), ph = i * 2.1, h0 = 34 + i * 9; movers.push((dt, now) => { const t = now / 1000 / (90 + i * 30) + ph; g.position.set(Math.cos(t) * EX * r0, h0 + Math.sin(now / 4000 + i) * 1.5, Math.sin(t) * EZ * r0); }); }); }
 
-  // ---- a crowd: racegoers in the stand and along the rail (one draw for all of them); they jump up during a race ----
-  const crowdU = { value: 0 }, timeU = { value: 0 };
-  { const bodyG = new THREE.CapsuleGeometry(0.17, 0.52, 3, 8).translate(0, 0.5, 0), headG = new THREE.SphereGeometry(0.12, 8, 6).translate(0, 1.04, 0), hatG = new THREE.CylinderGeometry(0.15, 0.15, 0.06, 8).translate(0, 1.15, 0);
-    const g = mergeGeometries([bodyG.toNonIndexed(), hatG.toNonIndexed()].map(x => { x.deleteAttribute('uv'); return x; }), false); /* (the heads are a second batch, in skin tones: they move with the bodies) */
-    const m = new THREE.MeshStandardMaterial({ roughness: 0.85 }), hm = new THREE.MeshStandardMaterial({ roughness: 0.7 }); view.mats.push(m, hm);
-    hm.onBeforeCompile = sh => { sh.uniforms.uJ = crowdU; sh.uniforms.uT = timeU; sh.vertexShader = 'uniform float uJ; uniform float uT;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed.y += abs(sin(uT * 6.0 + float(gl_InstanceID) * 2.3)) * 0.18 * uJ;'); };
-    m.onBeforeCompile = sh => { sh.uniforms.uJ = crowdU; sh.uniforms.uT = timeU; sh.vertexShader = 'uniform float uJ; uniform float uT;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed.y += abs(sin(uT * 6.0 + float(gl_InstanceID) * 2.3)) * 0.18 * uJ;'); };
-    const spots = []; for (let r = 0; r < rows; r++) for (let i = 0; i < 40; i++) { if (rnd() < 0.3) continue; const x = -standW / 2 + 2 + rnd() * (standW - 4); if ([-1, 0, 1].some(k => Math.abs(x - k * standW * 0.3) < 0.8)) continue; spots.push([x, 0.6 + r * 0.9 + 0.08, STAND_Z + r * 1.4 - 0.15, Math.PI + (rnd() - 0.5) * 0.4]); }
-    for (let i = 0; i < 40; i++) { const a = Math.PI / 2 + (rnd() - 0.5) * 1.6, o = WID / 2 + 1.6 + rnd() * 1.4; spots.push([Math.cos(a) * (RX + o), 0, Math.sin(a) * (RZ + o), Math.atan2(-Math.cos(a), -Math.sin(a)) + (rnd() - 0.5) * 0.5]); }
-    const C = ['#C0392B', '#2E86C1', '#F1C40F', '#ECF0F1', '#8E44AD', '#27AE60', '#E67E22', '#34495E', '#D98BA8', '#1ABC9C'];
-    inst(g, m, spots, false, spots.map((_, i) => C[(i * 7 + (i >> 2)) % C.length])); inst(headG, hm, spots, false, spots.map((_, i) => ['#8D5524', '#C68642', '#E0AC69', '#5C3A21', '#F1C27D', '#A0663D'][(i * 5 + 1) % 6])); }
+  // ---- a crowd: racegoers sitting in the stand's seats and standing along the rail, whole people (crowdfig.js: a
+  // handful of draws); they cheer, arms up, during a race ----
+  const crowdU = { value: 0 }, timeU = { value: 0 }, crowds = [];
+  { const rowsY = r => 0.6 + r * 0.9, rowZ = r => STAND_Z + r * 1.4, n = Math.floor((standW - 3) / 0.62), sit = [], stand = [];
+    for (let r = 0; r < rows; r++) for (let i = 0; i < n; i++) { const x = -standW / 2 + 1.5 + i * 0.62 + 0.31; if ([-1, 0, 1].some(k => Math.abs(x - k * standW * 0.3) < 0.6)) continue; if (rnd() < 0.42) continue;
+      sit.push([x, rowsY(r) + 0.46, rowZ(r) - 0.04, Math.PI]); } /* (on a seat, facing the track) */
+    for (let i = 0; i < 40; i++) { const a = Math.PI / 2 + (rnd() - 0.5) * 1.6, o = WID / 2 + 1.6 + rnd() * 1.4; stand.push([Math.cos(a) * (RX + o), 0, Math.sin(a) * (RZ + o), Math.atan2(-Math.cos(a), -Math.sin(a)) + (rnd() - 0.5) * 0.5]); }
+    const tops = ['#C0392B', '#2E86C1', '#F1C40F', '#ECF0F1', '#8E44AD', '#27AE60', '#E67E22', '#34495E', '#D98BA8', '#1ABC9C'];
+    crowds.push(makeCrowd({ scene, spots: sit, pose: 'sit', hype: crowdU, time: timeU, tops, mats: view.mats, sectors: 6 }), makeCrowd({ scene, spots: stand, pose: 'stand', hype: crowdU, time: timeU, tops, mats: view.mats, sectors: 4 })); }
+  let folk = null; movers.push((dt, now) => { for (const c of crowds) if (c.update) c.update(view.camera, now, folk); }); /* (folk: where the real people are, so no stand-in sits on them) */
   movers.push((dt, now) => { timeU.value = now / 1000; });
   flush(shadowMats);
-  return { colliders, statue: { x: PR.x, y: 1.28, z: PR.z }, screen: { x: -standW / 2 - 4, y: 6.2, z: STAND_Z + 1.21, ry: 0.35 + Math.PI }, update(dt, now, racing) { crowdU.value += ((racing ? 1 : 0.08) - crowdU.value) * Math.min(1, dt * 2); for (const f of movers) f(dt, now); } };
+  return { colliders, statue: { x: PR.x, y: 1.28, z: PR.z }, screen: { x: -standW / 2 - 4, y: 6.2, z: STAND_Z + 1.21, ry: 0.35 + Math.PI }, update(dt, now, racing, people) { folk = people || null; crowdU.value += ((racing ? 1 : 0.08) - crowdU.value) * Math.min(1, dt * 2); for (const f of movers) f(dt, now); } };
 }

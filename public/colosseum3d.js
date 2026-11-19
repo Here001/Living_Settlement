@@ -14,6 +14,7 @@ import * as W from '/world3d.js';
 import { follower, pickPet } from '/creature3d.js';
 import * as BR from '/shared/brawl.js';
 import { decorate, mergeStatic } from '/colodecor.js';
+import { makeCrowd } from '/crowdfig.js';
 
 const SX = 1.22; // the bowl is an ellipse: x is stretched this much
 export function createColosseum(host, opts) {
@@ -106,21 +107,17 @@ export function createColosseum(host, opts) {
       const bar = (y, h, v, col) => { g.fillStyle = '#2a2f3a'; g.fillRect(x0, y, 432, h); g.fillStyle = col; const w = 432 * Math.max(0, Math.min(1, v)); g.fillRect(k ? x0 + 432 - w : x0, y, w, h); };
       bar(206, 34, f[3] / 100, f[3] > 50 ? '#3FBF6A' : f[3] > 25 ? '#F2C94C' : '#E0453A'); bar(250, 14, f[4] / 100, '#4FC3F7'); bar(272, 10, f[9], c); }
     g.textAlign = 'center'; g.fillStyle = '#E8F4FF'; g.font = '600 34px system-ui, sans-serif'; (S.lines || []).slice(0, 3).forEach((l, i) => g.fillText(l, 512, 350 + i * 46)); scrT.needsUpdate = true; }
-  // ---- the crowd: a few hundred simple figures in the seats nobody real is in (one draw); they jump when the crowd roars ----
-  const hypeU = { value: 0 }, timeU = { value: 0 };
-  { const body = new THREE.CylinderGeometry(0.12, 0.17, 0.74, 7, 1); body.translate(0, 0.45, 0); const head = new THREE.SphereGeometry(0.125, 7, 4); head.translate(0, 0.98, 0); /* (640 of them: 70 triangles a person, not 190; they're mostly far off) */
-    const geo = body, N = 640, mat = new THREE.MeshStandardMaterial({ roughness: 0.85 }), hmat = new THREE.MeshStandardMaterial({ roughness: 0.7 }); view.mats.push(mat, hmat); /* (heads: a second batch in skin tones, moving with the bodies) */
-    hmat.onBeforeCompile = sh => { sh.uniforms.uHype = hypeU; sh.uniforms.uTime = timeU; sh.vertexShader = 'uniform float uHype; uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed.y += abs(sin(uTime * 7.0 + float(gl_InstanceID) * 1.7)) * 0.22 * uHype;'); };
-    mat.onBeforeCompile = sh => { sh.uniforms.uHype = hypeU; sh.uniforms.uTime = timeU; sh.vertexShader = 'uniform float uHype; uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed.y += abs(sin(uTime * 7.0 + float(gl_InstanceID) * 1.7)) * 0.22 * uHype;'); };
-    const crowd = new THREE.InstancedMesh(geo, mat, N), M = new THREE.Matrix4(), col = new THREE.Color(), C = ['#F1EBDD', '#C8B48A', '#8A2A22', '#E8DCC0', '#4F6E8C', '#B5743A', '#5B2A6E', '#D9C9A6', '#7A8B3C'], heads = new THREE.InstancedMesh(head, hmat, N), SK = ['#8D5524', '#C68642', '#E0AC69', '#5C3A21', '#F1C27D', '#A0663D'];
-    let n = 0; for (let r = 0; r < ROWS && n < N; r++) { const rr = R0 + 0.7 + r * ROW_D + 0.55, cnt = Math.floor(2 * Math.PI * rr * 1.1 / 0.62); for (let i = 0; i < cnt && n < N; i++) { const a = i / cnt * Math.PI * 2 + r * 0.13;
+  // ---- the crowd: a few hundred whole people sitting in the seats nobody real is in (crowdfig.js: a handful of draws);
+  // they bounce and throw their arms up when the crowd roars ----
+  const hypeU = { value: 0 }, timeU = { value: 0 }; let crowd = null; const FOLK = [];
+  { const spots = [], N = 600; for (let r = 0; r < ROWS && spots.length < N; r++) { const rr = R0 + 0.7 + r * ROW_D + 0.4, cnt = Math.floor(2 * Math.PI * rr * 1.1 / 0.62); for (let i = 0; i < cnt && spots.length < N; i++) { const a = i / cnt * Math.PI * 2 + r * 0.13;
       if (Math.random() < 0.38) continue; const x = Math.cos(a) * rr * SX, z = Math.sin(a) * rr; if (Math.abs(x) < 3.2 && z < 0 && r < 4) continue; /* (the imperial box) */ if (Math.abs(z) < 2.2 && r < 3) continue; /* (the gates) */
-      M.makeRotationY(Math.atan2(-x, -z)); M.setPosition(x, Y0 + r * ROW_H + 0.05, z); crowd.setMatrixAt(n, M); crowd.setColorAt(n, col.set(C[(i * 7 + r) % C.length])); heads.setMatrixAt(n, M); heads.setColorAt(n, col.set(SK[(i * 5 + r) % SK.length])); n++; } }
-    crowd.count = n; crowd.castShadow = false; scene.add(crowd); heads.count = n; scene.add(heads); }
+      spots.push([x, Y0 + (r + 1) * ROW_H + 0.01, z, Math.atan2(-x, -z)]); } } /* (on the step's front edge, legs over it, facing the sand) */
+    crowd = makeCrowd({ scene, spots, pose: 'sit', hype: hypeU, time: timeU, shoes: false, mats: view.mats, tops: ['#F1EBDD', '#C8B48A', '#8A2A22', '#E8DCC0', '#4F6E8C', '#B5743A', '#5B2A6E', '#D9C9A6', '#7A8B3C', '#A8352B'] }); } /* (Roman tunics; sandals don't show from the stands) */
   function mergeTwo(a, b) { const g = new THREE.BufferGeometry(), pa = a.toNonIndexed(), pb = b.toNonIndexed(); for (const k of ['position', 'normal']) { const A = pa.attributes[k].array, B = pb.attributes[k].array, out = new Float32Array(A.length + B.length); out.set(A); out.set(B, A.length); g.setAttribute(k, new THREE.BufferAttribute(out, 3)); } return g; }
   // ---- you, walking about the stands (like at the races): the stick or WASD walks, dragging looks round ----
   const tierAt = (x, z) => { const r = er(x, z); if (r < R0 + 0.7) return -1; if (r >= RT) return ROWS; return Math.floor((r - R0 - 0.7) / ROW_D); };
-  const floorY = (x, z) => { const t = tierAt(x, z); return t < 0 ? 0 : t >= ROWS ? YT : Y0 + t * ROW_H + (t < 0 ? 0 : 0); };
+  const floorY = (x, z) => { const t = tierAt(x, z); return t < 0 ? 0 : t >= ROWS ? YT : Y0 + (t + 1) * ROW_H + (t < 0 ? 0 : 0); };
   const free = (x, z) => { const r = er(x, z); if (r < R0 + 0.75) return false; if (r > ROUT - 0.3) return false; return true; };
   const spawnA = -Math.PI / 2 + (Math.random() - 0.5) * 2.2, spawnR = R0 + 0.7 + ROW_D * (2.5 + Math.random() * 2);
   const me = { x: Math.cos(spawnA) * spawnR * SX, z: Math.sin(spawnA) * spawnR, y: 0, yaw: 0, pitch: -0.25, sit: false, P: W.makePerson('me', null, opts.look || null) }; scene.add(me.P.group);
@@ -142,7 +139,7 @@ export function createColosseum(host, opts) {
     const yaw = fighting() ? camYaw : me.yaw, fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = -fz, rz = fx, m = Math.min(1, Math.hypot(f, st)); if (m < 0.08) return { mx: 0, mz: 0 }; const l = Math.max(1, Math.hypot(f, st));
     return { mx: (fx * f + rx * st) / l, mz: (fz * f + rz * st) / l }; };
   let sitAt = null; const bench = () => { const t = tierAt(me.x, me.z); return t >= 0 && t < ROWS ? t : -1; };
-  function sitDown() { const t = bench(); if (t < 0) return false; const r = R0 + 0.7 + t * ROW_D + 0.55, a = Math.atan2(me.z, me.x / SX); me.x = Math.cos(a) * r * SX; me.z = Math.sin(a) * r; me.sit = true; sitAt = Y0 + t * ROW_H + 0.02; me.yaw = Math.atan2(me.x, me.z);
+  function sitDown() { const t = bench(); if (t < 0) return false; const r = R0 + 0.7 + t * ROW_D + 0.4, a = Math.atan2(me.z, me.x / SX); /* (on the step's front edge, legs over it) */ me.x = Math.cos(a) * r * SX; me.z = Math.sin(a) * r; me.sit = true; sitAt = Y0 + (t + 1) * ROW_H - 0.46; /* (a sitting character's hips are 0.48 above its feet: they rest on the stone) */ me.yaw = Math.atan2(me.x, me.z);
     const A = me.P.av || me.P; if (A.pose) A.pose('sit'); me.P.group.rotation.y = Math.atan2(-me.x, -me.z); return true; }
   function standUp() { if (!me.sit) return; me.sit = false; sitAt = null; const A = me.P.av || me.P; if (A.pose) A.pose('stand'); }
   let moved = 0, mineSide = null;
@@ -161,7 +158,7 @@ export function createColosseum(host, opts) {
     o.tx = p.x; o.tz = p.z; const s2 = p.pose === 's'; if (s2 !== o.sit) { o.sit = s2; const A = o.P.av || o.P; if (A.pose) A.pose(s2 ? 'sit' : 'stand'); } }
   function removeOther(id) { const o = others.get(id); if (!o) return; scene.remove(o.P.group); if (o.pet) o.pet.dispose(); others.delete(id); }
   function setPet(id, kind) { const o = others.get(id); if (!o || (o.pet && o.pet.kind === kind)) return; if (o.pet) { o.pet.dispose(); o.pet = null; } if (kind) try { o.pet = follower(kind, { side: -1 }); o.pet.kind = kind; scene.add(o.pet.group); } catch (e) {} }
-  function stepOthers(dt) { const k = Math.min(1, dt * 6); for (const o of others.values()) { const dx = o.tx - o.x, dz = o.tz - o.z; o.x += dx * k; o.z += dz * k; o.P.setPos(o.x, o.z); const t = tierAt(o.x, o.z); o.P.group.position.y = t < 0 ? 0 : t >= ROWS ? YT : Y0 + t * ROW_H + (o.sit ? 0.02 : 0);
+  function stepOthers(dt) { const k = Math.min(1, dt * 6); for (const o of others.values()) { const dx = o.tx - o.x, dz = o.tz - o.z; o.x += dx * k; o.z += dz * k; o.P.setPos(o.x, o.z); const t = tierAt(o.x, o.z); o.P.group.position.y = t < 0 ? 0 : t >= ROWS ? YT : Y0 + (t + 1) * ROW_H + (o.sit ? -0.46 : 0);
       if (o.sit) o.P.group.rotation.y = Math.atan2(-o.x, -o.z); else o.P.animate(dt, dx * k / Math.max(dt, 1e-3), dz * k / Math.max(dt, 1e-3)); if (o.pet) { o.pet.step(dt, o.x, o.z); o.pet.group.position.y = o.P.group.position.y; } } }
   const bubbles = new Map();
   function say(id, text) { const on = id === 'me' ? me.P.group : others.get(id)?.P.group; if (!on) return; const old = bubbles.get(id); if (old) { old.sp.parent && old.sp.parent.remove(old.sp); old.sp.material.map.dispose(); }
@@ -268,14 +265,14 @@ export function createColosseum(host, opts) {
     // sparks and dust
     for (let i = sparks.length - 1; i >= 0; i--) { const p = sparks[i]; p.t -= dt; p.vy -= 9 * dt; p.m.position.x += p.vx * dt; p.m.position.y = Math.max(0.02, p.m.position.y + p.vy * dt); p.m.position.z += p.vz * dt; p.m.scale.setScalar(Math.max(0.1, p.t * 2)); if (p.t <= 0) { scene.remove(p.m); p.m.geometry.dispose(); if (p.own) p.m.material.dispose(); sparks.splice(i, 1); } }
     // the torches flicker; the crowd jumps with the roar
-    tw += dt; if (tw > 0.06) { tw = 0; for (const f of flames) f.scale.set(1, 0.8 + Math.random() * 0.45, 1); } timeU.value = now / 1000; const h = s ? Math.max(s.f[0][9], s.f[1][9]) : 0; hypeU.value += ((h * 0.8 + roar) - hypeU.value) * Math.min(1, dt * 3); roar = Math.max(0, roar - dt * 0.5);
+    tw += dt; if (tw > 0.06) { tw = 0; for (const f of flames) f.scale.set(1, 0.8 + Math.random() * 0.45, 1); } timeU.value = now / 1000; if (crowd) { FOLK.length = 0; FOLK.push(me.P.group.position); for (const o of others.values()) FOLK.push(o.P.group.position); crowd.update(camera, now, FOLK); } /* (the stand-ins make room for real people) */ const h = s ? Math.max(s.f[0][9], s.f[1][9]) : 0; hypeU.value += ((h * 0.8 + roar) - hypeU.value) * Math.min(1, dt * 3); roar = Math.max(0, roar - dt * 0.5);
     for (const [id, b] of bubbles) if (performance.now() > b.until) { b.sp.parent && b.sp.parent.remove(b.sp); b.sp.material.map.dispose(); bubbles.delete(id); }
     placeCamera(dt, s);
     tSlow += dt; if (tSlow > 0.5) { tSlow = 0; paintScreen(now); paintBillboard(now); sunTime(); torchL.forEach(l => l.intensity = view.night > 0.3 ? 12 : 0); if (opts.onTick) opts.onTick(); } });
   const onResize = () => view.resize(); addEventListener('resize', onResize);
   return { view(m) { mode = m || MODES[(MODES.indexOf(mode) + 1) % MODES.length]; return mode; }, get mode() { return mode; },
     _heavy() { const out = []; scene.traverse(o => { if (!o.isMesh && !o.isPoints && !o.isLine) return; const g = o.geometry, n = (g.index ? g.index.count : g.attributes.position.count) / 3 * (o.isInstancedMesh ? o.count : 1); out.push([Math.round(n), o.isInstancedMesh ? 'I' + o.count : '', o.material && o.material.color ? '#' + o.material.color.getHexString() : '', o.name || '', o.visible]); }); return out.sort((a, b) => b[0] - a[0]).slice(0, 25); }, /* (for checking: the heaviest meshes) */
-    stats() { return { merged, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, others: others.size, snaps: snaps.length, fighters: F.filter(Boolean).length, cam: camera.position.toArray().map(v => +v.toFixed(1)) }; },
+    stats() { return { crowd: crowd && { lo: crowd.tris, hi: crowd.nearTris, near: crowd.near }, merged, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, others: others.size, snaps: snaps.length, fighters: F.filter(Boolean).length, cam: camera.position.toArray().map(v => +v.toFixed(1)) }; },
     get me() { return { x: me.x, z: me.z, a: me.P.group.rotation.y, sit: me.sit, bench: bench() >= 0 }; }, sit() { if (me.sit) { standUp(); return false; } return sitDown(); },
     petHappy() { if (tapped) tapped.happy(); }, setMyPet(kind) { if (myPet && (!kind || myPet.kind !== kind)) { myPet.dispose(); myPet = null; } if (kind && !myPet) { try { myPet = follower(kind); scene.add(myPet.group); } catch (e) { myPet = null; } } },
     upsertOther, removeOther, setPet, say, brawl, setFighters, cheer(k) { roar = Math.min(1, roar + (k === 'boo' ? 0.1 : 0.25)); },

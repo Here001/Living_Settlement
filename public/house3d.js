@@ -396,7 +396,7 @@ export function createHouse(host, opts) {
     list.forEach((o, i) => { const v = i < MAX_SHOWN; if (o.g.visible !== v) { o.g.visible = v; if (v) { o.g.position.x = o.tx; o.g.position.z = o.ty; } dirty = true; } }); }
   function upsertOther(id, p) { let o = others.get(id);
     if (o && p.look && o.lookKey !== JSON.stringify(p.look)) { const old = o.g.userData.av; o.g.remove(old.group); old.dispose(); const av = buildAvatar(p.look); av.group.rotation.y = Math.PI; o.g.add(av.group); o.g.userData.av = av; o.lookKey = JSON.stringify(p.look); dirty = true; } /* their own character arrived */
-    if (!o) { const g = figure(p.h || id, p.look); const tag = nameTag(p.h ? '@' + p.h : 'a visitor'); tag.position.set(0, 2.0, 0); g.add(tag); g.position.set(p.x, 0, p.y); g.rotation.y = p.a; scene.add(g); o = { g, tx: p.x, ty: p.y, ta: p.a, lookKey: p.look ? JSON.stringify(p.look) : '' }; others.set(id, o); }
+    if (!o) { const g = figure(p.h || id, p.look); const tag = nameTag(p.h ? '@' + p.h : 'a visitor'); tag.position.set(0, 2.0, 0); g.add(tag); g.position.set(p.x, 0, p.y); g.rotation.y = p.a; scene.add(g); o = { g, h: p.h || null, tx: p.x, ty: p.y, ta: p.a, lookKey: p.look ? JSON.stringify(p.look) : '' }; others.set(id, o); }
     { const pk = p.pose || ''; if (o.pose !== pk) { o.pose = pk; o.posed = false; } o.g.position.y = pk ? Number(p.ph) || 0 : 0; } /* sitting, lying… */
     o.tx = p.x; o.ty = p.y; o.ta = p.a; nearest(false); if (o.g.visible) { dirty = true; wake(); } }
   // pets: each person's pet follows them round the room ('me' or someone's id → a follower), smaller indoors
@@ -724,6 +724,8 @@ export function createHouse(host, opts) {
   el.addEventListener('pointerup', e => { const p = ptrs.get(e.pointerId); ptrs.delete(e.pointerId); if (!p) return;
     if (Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < 8 && performance.now() - p.t < 450) { const r = el.getBoundingClientRect(), nx = (e.clientX - r.left) / r.width * 2 - 1, ny = -((e.clientY - r.top) / r.height) * 2 + 1;
       if (pick) { tapAim = true; aim(nx, ny); } else { ray.setFromCamera(v2.set(nx, ny), camera); ray.near = camera.near; const hit = ray.intersectObjects([stuff, wallStuff, ceilStuff].filter(g => g.visible), true)[0], wallHit = ray.intersectObjects(walls.children, false)[0];
+        if (opts.onPet) { let best = null; for (const [pid, pt] of pets) { if (!pt.f.group.visible) continue; const hp = ray.intersectObject(pt.f.group, true)[0]; if (hp && (!best || hp.distance < best.d)) best = { d: hp.distance, pid, pt }; }
+          if (best && (!hit || best.d < hit.distance + 0.2)) { const o = others.get(best.pid); opts.onPet({ mine: best.pid === 'me', id: best.pid, owner: o ? o.h || null : null, kind: best.pt.kind }); return; } } /* a pet: yours (follow or stay home) or someone else's (a pat) */
         { const og = [...others.values()].filter(o => o.g.visible).map(o => o.g), ph = og.length ? ray.intersectObjects(og, true)[0] : null;
           if (ph && (!hit || ph.distance < hit.distance + 0.3) && opts.onPerson) { let g = ph.object; while (g && !og.includes(g)) g = g.parent; for (const [id, o] of others) if (o.g === g) { opts.onPerson(id); return; } } } /* someone here: what to do about them (their voice, their card) */
         if (show.children.length && opts.onProduct) { const pr = ray.intersectObjects(show.children, true)[0]; if (pr && (!hit || pr.distance <= hit.distance + 0.8)) { opts.onProduct(pr.object.userData.product); return; } } /* a product on display (even behind its counter's glass): its shop */
@@ -852,7 +854,7 @@ export function createHouse(host, opts) {
         const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, depthTest: false, transparent: true })); sp.scale.set(0.34, 0.34, 1); sp.position.set(0, 2.38, 0); sp.renderOrder = 6; g.add(sp); g.userData.talk = sp; }
       else if (!on && sp) { g.remove(sp); sp.material.map.dispose(); sp.material.dispose(); g.userData.talk = null; } else return; dirty = true; wake(); },
     setPet, upsertOther, removeOther, clearOthers() { for (const id of [...others.keys()]) removeOther(id); }, say, get me() { return { x: me.x, y: me.y, a: act ? act.wyaw : me.yaw, pose: act ? CODE[act.kind] : '', ph: act ? +act.wy.toFixed(2) : 0 }; },
-    act() { doAct(); }, standUp() { standUp(); },
+    act() { doAct(); }, standUp() { standUp(); }, petHappy(id) { const pt = pets.get(id); if (pt) { pt.f.happy(); dirty = true; wake(); } },
     // into bed (when your colonist is asleep as you come in): the first bed in the home; stand up beside it
     sleep() { if (act) return false; const it = room.items.find(x => { const A = actOf(x.k); return A && A.kind === 'lie' && /bed/.test(x.k); }) || room.items.find(x => (actOf(x.k) || {}).kind === 'lie'); if (!it) return false;
       const b = boxOf(it); for (const [x, y] of [[b.x1 + 0.45, b.cy], [b.x0 - 0.45, b.cy], [b.cx, b.y1 + 0.45], [b.cx, b.y0 - 0.45]]) if (!blocked(x, y)) { me.x = x; me.y = y; break; }

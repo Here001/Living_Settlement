@@ -2279,7 +2279,7 @@ function drawCitizen(c, st, selected, ghost){
   const big=SPR.step>5; // very close up there are only a few people: draw them directly, crisp
   const put=(name,a,b,px,py)=>{ const pc=big?null:part(name,a,b); if(pc) stamp(pc,px,py); else { ctx.save(); ctx.translate(px,py); ctx.strokeStyle=INK; ctx.lineWidth=0.9; ctx.lineJoin='round'; PART_DRAW[name](a,b); ctx.restore(); } };
   if(!ghost) put('shadow',0,0,p.x,p.y);
-  if(c.pet && !ghost && CREATURES[c.pet.k]){ ctx.save(); ctx.translate(p.x-14,p.y+4); drawCreature(c.pet.k,0,0,0.56,T_NOW+hc*7,!!st.moving); ctx.restore(); } // their pet trots alongside
+  if(c.pet && !c.pet.home && !ghost && CREATURES[c.pet.k]){ ctx.save(); ctx.translate(p.x-14,p.y+4); drawCreature(c.pet.k,0,0,0.56,T_NOW+hc*7,!!st.moving); ctx.restore(); } // their pet trots alongside
   if(selected){ ctx.strokeStyle='#F2B33D'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.ellipse(p.x,p.y,11,5.5,0,0,7); ctx.stroke(); }
   if(L.f){
     put('legsF',L.dress?L.skin:L.pants,sw,x,y);
@@ -7490,7 +7490,7 @@ const TrackView={ el:null, T:null, b:null, g:null,
     const root=el('div',{class:'webview trackview',role:'dialog','aria-label':'At the races'}, stage, el('div',{class:'trhud'}, el('b',{class:'trname',text:`🏟️ ${g.name}`}), this.status, this.board, bet), side, this.chatBtn, this.chatBox, this.sitBtn, leave);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
     let M, myLook=null; try{ [M,[myLook]]=await Promise.all([import('/racetrack3d.js'), Me&&Me.handle?Looks.want([Me.handle]).catch(()=>[null]):[null]]); }catch(e){ this.close(true); toast('The track couldn’t load. Check your connection.'); return; } if(this.el!==root) return; /* (and your own character, to walk about as) */
-    try{ this.T=M.createTrack(stage,{ grand:!!(BUILDING_TYPES[b.type]||{}).grand, colour:(T(b).colors||{}).stand, minute:()=>((gmNow()%1440)+1440)%1440, weather:()=>window.__driveWx||(S.meta?weatherAt(S.meta,gmNow()):'sunny'), runners:()=>this.runners(), people:()=>this.seated(), board:()=>this.boardLines(), look:myLook||null, pet:(()=>{ const c=myCitizen(); return c&&c.pet&&CREATURES[c.pet.k]?c.pet.k:null; })(), onMove:()=>{ this.sendPos(false); this.talkNear(); this.paintSit(); } }); }catch(e){ this.close(true); toast('Your phone couldn’t show the 3D track.'); return; }
+    try{ this.T=M.createTrack(stage,{ grand:!!(BUILDING_TYPES[b.type]||{}).grand, colour:(T(b).colors||{}).stand, minute:()=>((gmNow()%1440)+1440)%1440, weather:()=>window.__driveWx||(S.meta?weatherAt(S.meta,gmNow()):'sunny'), runners:()=>this.runners(), people:()=>this.seated(), board:()=>this.boardLines(), look:myLook||null, pet:petOut(myCitizen()), onMove:()=>{ this.sendPos(false); this.talkNear(); this.paintSit(); }, onPet:x=>petTap(x,this.T) }); }catch(e){ this.close(true); toast('Your phone couldn’t show the 3D track.'); return; }
     try{ window.__track=this; }catch(e){}
     // live, like inside any place: where you walk goes to everyone else here, theirs comes to you, and the voice chat
     const Tr=this.T; this.others=new Map(); this.h={ get me(){ const m=Tr.me; return { x:m.x, y:m.z, a:m.a, pose:m.sit?'s':'' }; }, talking(){}, say:(id,t)=>Tr.say(id,t) };
@@ -7513,7 +7513,7 @@ const TrackView={ el:null, T:null, b:null, g:null,
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'in',place:this.spot,x:this.enc(m.x),y:this.enc(m.z),a:((m.a%6.2832)+6.2832)%6.2832,...(pose?{pose,ph:0}:{})})); }catch(e){} },
   insideMsg(m){ if(!this.el||!this.T||m.place!==this.spot) return; const blocked=h=>h&&typeof Blocks!=='undefined'&&Blocks.has(h);
     const show=q=>{ if(blocked(q.h)) return; const p={ id:q.id, h:q.h, x:this.dec(q.x), y:this.dec(q.y), a:q.a, pose:q.pose }; this.others.set(p.id,p); const Lk=p.h&&Looks.m.get(p.h.toLowerCase());
-      this.T.upsertOther(p.id,{ x:p.x, z:p.y, a:p.a, pose:p.pose, h:p.h, look:Lk||null }); const c=p.h&&[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===p.h.toLowerCase()); this.T.setPet(p.id,c&&c.pet&&CREATURES[c.pet.k]?c.pet.k:null);
+      this.T.upsertOther(p.id,{ x:p.x, z:p.y, a:p.a, pose:p.pose, h:p.h, look:Lk||null }); const c=p.h&&[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===p.h.toLowerCase()); this.T.setPet(p.id,petOut(c));
       if(p.h&&!Lk) Looks.want([p.h]).then(([L2])=>{ const o=this.others.get(p.id); if(L2&&this.T&&o) this.T.upsertOther(p.id,{ x:o.x, z:o.y, a:o.a, pose:o.pose, h:o.h, look:L2 }); }).catch(()=>{}); };
     if(m.k==='all'){ for(const q of m.list||[]) show(q); }
     else if(m.k==='pos'&&m.p) show(m.p);
@@ -7597,8 +7597,8 @@ const ArenaView={ el:null, T:null, b:null, g:null, bb:[], act:null, blocking:fal
       if(e.type==='keydown'&&map[k]){ this.act=map[k]; this.sendIn(); e.preventDefault(); } if(k==='shift'){ this.blocking=e.type==='keydown'; this.sendIn(); } };
     addEventListener('keydown',this.keys); addEventListener('keyup',this.keys);
     let M, myLook=null; try{ [M,[myLook]]=await Promise.all([import('/colosseum3d.js'), Me&&Me.handle?Looks.want([Me.handle]).catch(()=>[null]):[null]]); }catch(e){ this.close(true); toast('The Colosseum couldn’t load. Check your connection.'); return; } if(this.el!==root) return;
-    try{ this.T=M.createColosseum(stage,{ look:myLook||null, pet:(()=>{ const c=myCitizen(); return c&&c.pet&&CREATURES[c.pet.k]?c.pet.k:null; })(), minute:()=>((gmNow()%1440)+1440)%1440, weather:()=>window.__driveWx||(S.meta?weatherAt(S.meta,gmNow()):'sunny'),
-      onMove:()=>{ this.sendPos(false); this.talkNear(); this.paintSit(); }, screen:()=>this.screen(), billboard:()=>this.bbUrls||[], onHit:e=>{ if(this.side!=null&&e.by===1-this.side) try{ navigator.vibrate&&navigator.vibrate(e.k==='big'?60:25); }catch(x){} } }); }
+    try{ this.T=M.createColosseum(stage,{ look:myLook||null, pet:petOut(myCitizen()), minute:()=>((gmNow()%1440)+1440)%1440, weather:()=>window.__driveWx||(S.meta?weatherAt(S.meta,gmNow()):'sunny'),
+      onMove:()=>{ this.sendPos(false); this.talkNear(); this.paintSit(); }, onPet:x=>petTap(x,this.T), screen:()=>this.screen(), billboard:()=>this.bbUrls||[], onHit:e=>{ if(this.side!=null&&e.by===1-this.side) try{ navigator.vibrate&&navigator.vibrate(e.k==='big'?60:25); }catch(x){} } }); }
     catch(e){ this.close(true); toast('Your phone couldn’t show the Colosseum in 3D.'); return; }
     try{ window.__arena=this; }catch(e){}
     const Tr=this.T; this.others=new Map(); this.h={ get me(){ const m=Tr.me; return { x:m.x, y:m.z, a:m.a, pose:m.sit?'s':'' }; }, talking(){}, say:(id,t)=>Tr.say(id,t) };
@@ -7686,7 +7686,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     const root=el('div',{class:'webview driveview',role:'dialog','aria-label':'Driving around town'}, bar, side, this.doorBtn, this.carBtn, stage, el('div',{class:'dhud'}, this.speed, el('div',{class:'dacts'}, this.rideBtn, this.goBtn, this.inBtn)), this.modeBtn, this.chatBtn, this.pickBtn, this.chatBox);
     document.body.append(root); document.body.classList.add('room-on','drive-on'); this.el=root; this.dist=0; this.last={x:s.x,y:s.y}; this.car=car; DriveMap.mount(root);
     let T3; try{ T3=await import('/town3d.js'); }catch(e){ this.close(); toast('Driving couldn’t load. Check your connection and try again.'); return; } if(this.el!==root) return;
-    try{ this.T=T3.createTown(stage,{ start:s, car, controls:DriveCtl.get(), mode:walk?'walk':'car', look, pet:(c&&c.pet&&CREATURES[c.pet.k]&&c.pet.k)||null, onCar:near=>{ this.atCar=near; this.paintMode(); }, onCarHere:()=>{ toast(`🚗 Your ${this.car.own?this.car.name.toLowerCase():'car'} is here. Get in when you’re ready.`); this.paintMode(); }, onRide:c=>this.nearRide(c),
+    try{ this.T=T3.createTown(stage,{ start:s, car, controls:DriveCtl.get(), mode:walk?'walk':'car', look, pet:petOut(c), onPet:x=>petTap(x,this.T), onCar:near=>{ this.atCar=near; this.paintMode(); }, onCarHere:()=>{ toast(`🚗 Your ${this.car.own?this.car.name.toLowerCase():'car'} is here. Get in when you’re ready.`); this.paintMode(); }, onRide:c=>this.nearRide(c),
         road:(x,y)=>D.roads.get(x+','+y)||null, water:(x,y)=>D.water.has(x+','+y),
         building:(x,y)=>{ const id=D.occ.get(x+','+y); return id?D.buildings.get(id)||null:null; },
         buildings:(x0,y0,x1,y1)=>{ const out=[]; for(const b of D.buildings.values()) if(b.x>=x0&&b.x<x1&&b.y>=y0&&b.y<y1&&!b.ruin&&BUILDING_TYPES[b.type]) out.push(b); return out; },
@@ -7717,7 +7717,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
       const V=st.V||null, m=V&&CAR_KEY.get(V), live=DrivingNow.has(c.id), online=live||LiveOnline.has(c.id), L=c.claimed!==false&&(live||online)?Looks.m.get(c.handle.toLowerCase()):null;
       if(online&&!L) Looks.want([c.handle]); /* their own look, for next time */
       const drv=!!(dn&&dn.mode==='car'), n=aboard.get(c.id)||0;
-      out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, m:V&&V.mode==='water'?Object.keys(VEHICLE_TYPES).find(k=>VEHICLE_TYPES[k]===V):m&&ridden(m)?m:V===VEHICLE_TYPES.taxi?'sedan':'hatch', look:L||null, pet:!st.car&&c.pet&&CREATURES[c.pet.k]?c.pet.k:null, tag:online||live?'@'+c.handle+(n?` +${n}`:''):null, online, h:c.handle, drv, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, full:drv&&n>=seatsOf(dn.m)-1 }); }
+      out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, m:V&&V.mode==='water'?Object.keys(VEHICLE_TYPES).find(k=>VEHICLE_TYPES[k]===V):m&&ridden(m)?m:V===VEHICLE_TYPES.taxi?'sedan':'hatch', look:L||null, pet:!st.car?petOut(c):null, petOwner:c.handle, tag:online||live?'@'+c.handle+(n?` +${n}`:''):null, online, h:c.handle, drv, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, full:drv&&n>=seatsOf(dn.m)-1 }); }
     const near=out.sort((a,b)=>a.d-b.d).slice(0,40); this.talkNear(near); return near; },
   // talking on the street: what you say shows over your head for the people near you (and in their street chat)
   async say(){ const t=this.chatIn.value.trim(); if(!t||!this.T) return; this.chatIn.value=''; const p=this.T.pos;
@@ -7920,7 +7920,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     setTimeout(()=>{ if(this.d===d) Voice.enter(this); },1500); /* voice chat (once we've said we're here) */
     try{ if(!(history.state&&history.state.room)) history.pushState({room:1},''); }catch(e){}
     try{ this.h=H3.createHouse(this.stage,{ defer:true, size:d.size, plan:d.room.plan||'home', persp, me:(Me&&Me.handle)||'visitor', look:myLook||null, room:d.room, photos:d.photos, at:this.reAt||null, onLost:at=>this.reopen(at), weather:()=>window.__driveWx||(S.meta?weatherAt(S.meta,gmNow()):'sunny'), /* (the map's weather, through the windows) */ check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
-      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.exit(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onAction:a=>{ const b=this.actBtn; if(!b) return; b.hidden=!a; if(a){ b.replaceChildren(el('b',{text:a.icon}),el('span',{text:a.label})); b.title=a.label; } }, onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onPerson:id=>Voice.person(id), onDo:k=>this.train(k), onProduct:k=>{ const b=this.storeB(); if(b) StoreSheet.open(b,k); }, onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
+      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.exit(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onAction:a=>{ const b=this.actBtn; if(!b) return; b.hidden=!a; if(a){ b.replaceChildren(el('b',{text:a.icon}),el('span',{text:a.label})); b.title=a.label; } }, onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onPerson:id=>Voice.person(id), onDo:k=>this.train(k), onPet:x=>petTap(x,this.h), onProduct:k=>{ const b=this.storeB(); if(b) StoreSheet.open(b,k); }, onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
     catch(e){ ent.cancel(); this.close(); toast('Your phone couldn’t show the 3D view.'); return; }
     this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false); this.hereTick(true); this.join();
     ent.step('Switching on the lights…',0.66); const h=this.h; try{ await h.ready((n,t)=>ent.step(n/t<0.6?'Switching on the lights…':'Saying hello to who’s here…',0.66+0.32*n/t)); }catch(e){} if(this.h===h) ent.done(); else ent.cancel(); /* the first picture is on screen: step through */
@@ -7950,8 +7950,8 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'in',place:this.spot,x:m.x,y:m.y,a:m.a,...(m.pose?{pose:m.pose,ph:m.ph}:{})})); }catch(e){} },
   moveSoon(){ this.sendPos(false); this.talkNear(); },
   // pets: everyone's pet follows them inside too (yours from your colonist, theirs from the map's colonists)
-  petOf(p){ if(!this.h||!this.h.setPet||!p||!p.h) return; const c=[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===p.h.toLowerCase()), k=c&&c.pet&&CREATURES[c.pet.k]?c.pet.k:null; this.h.setPet(p.id,k); },
-  myPet(){ if(!this.h||!this.h.setPet) return; const c=myCitizen(); this.h.setPet('me',c&&c.pet&&CREATURES[c.pet.k]?c.pet.k:null); },
+  petOf(p){ if(!this.h||!this.h.setPet||!p||!p.h) return; const c=[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===p.h.toLowerCase()), home=!!(this.d&&this.d.owner&&c&&c.handle&&this.d.owner.toLowerCase()===c.handle.toLowerCase()); this.h.setPet(p.id,petOut(c,home)); }, /* (a pet left at home is there in its home) */
+  myPet(){ if(!this.h||!this.h.setPet) return; const c=myCitizen(); this.h.setPet('me',petOut(c,!!(this.d&&this.d.mine))); },
   // 💬 Chat shows only when a real person (signed in, here now) is close enough to read the words over your head; it stays
   // while the chat is open
   talkNear(){ const b=this.chatBtn; if(!b||!this.h||!this.h.me) return; const m=this.h.me, R=6;
@@ -8836,6 +8836,15 @@ var GuideUI={ data:null, at:0, busy:false, open:false, /* folded: just the next 
 
 // "Go here" on a building's card: how far it is from your colonist right now, and a button that sends them there with
 // the camera locked on them until they arrive.
+// Tapping a pet in 3D: your own offers 🏠 Go home (or 🐾 Follow, if it's at home); someone else's, 🤗 Pet (it's happy).
+function petTap(x,T3){ if(x.mine){ const c=myCitizen(); if(!c||!c.pet||!CREATURES[c.pet.k]) return; const home=!!c.pet.home; if(T3&&T3.petHappy) T3.petHappy(x.id);
+    toast(`🐾 ${c.pet.n} the ${CREATURES[c.pet.k].name.toLowerCase()}${home?' is staying at home.':' is with you.'}`, home?'🐾 Follow':'🏠 Go home', ()=>petFollow(!home)); return; }
+  const name=CREATURES[x.kind]?CREATURES[x.kind].name.toLowerCase():'pet'; toast(`🐾 ${x.owner?`@${x.owner}’s ${name}`:`A ${name}`}`,'🤗 Pet',()=>{ if(T3&&T3.petHappy) T3.petHappy(x.id); }); }
+async function petFollow(on){ try{ const r=await api('/api/me/pet/follow',{method:'POST',body:{on}}); const c=myCitizen(); if(c) c.pet=r.pet; PetStore.at=0;
+    const k=petOut(c); if(Drive.T&&Drive.T.setMyPet) Drive.T.setMyPet(k); if(Room.el) Room.myPet(); if(TrackView.T&&TrackView.T.setMyPet) TrackView.T.setMyPet(k); if(ArenaView.T&&ArenaView.T.setMyPet) ArenaView.T.setMyPet(k);
+    toast(on?`🐾 ${r.pet.n} is following you again.`:`🏠 ${r.pet.n} has gone home, and waits for you there.`); }catch(e){ toast(e.message); } }
+// a colonist's pet, if it's out with them (one sent home stays there: it shows only in its own home)
+function petOut(c,atHome){ return c&&c.pet&&CREATURES[c.pet.k]&&(!c.pet.home||atHome)?c.pet.k:null; }
 function myCitizen(){ const h=Me&&Me.handle; if(!h) return null; const c=[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===h.toLowerCase()); return c||PetStore.get(); }
 function goHereRow(b){ const me=myCitizen(), [w,d]=T(b).size, bx=b.x+w/2, by=b.y+d/2;
   const st=me&&citizenAt(me,gmNow()), from=st?[st.x,st.y]:me&&me.home?[me.home[2]+0.5,me.home[3]+0.5]:null;

@@ -397,6 +397,13 @@ export class Actions {
       const pet = { ...c.pet, n }; await ch.q('update citizens set pet = $2 where id = $1', [id, JSON.stringify(pet)]); ch.touch(c); return { ok: true, pet };
     });
   }
+  // your pet follows you about, or stays at home (where it waits for you in the house)
+  async petFollow(id, on) {
+    return this.world.personal(async ch => {
+      const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c?.pet) throw new HttpError(400, "You don't have a pet.");
+      const pet = { ...c.pet }; if (on) delete pet.home; else pet.home = true; await ch.q('update citizens set pet = $2 where id = $1', [id, JSON.stringify(pet)]); ch.touch(c); return { ok: true, pet };
+    });
+  }
   async release(id) {
     return this.world.personal(async ch => {
       const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c?.pet) throw new HttpError(400, "You don't have a pet.");

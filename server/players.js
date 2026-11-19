@@ -222,6 +222,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/pet', limit, send(async req => { const b = req.body || {}; return world.actions.adopt((await me(req)).id, { kind: b.kind, name: b.name, buildingId: b.buildingId }); }));
   r.put('/me/pet', limit, quota('rename'), send(async req => world.actions.renamePet((await me(req)).id, (req.body || {}).name)));
   r.delete('/me/pet', limit, send(async req => world.actions.release((await me(req)).id)));
+  r.post('/me/pet/follow', limit, send(async req => world.actions.petFollow((await me(req)).id, !!(req.body || {}).on)));
   // The Bank, cars, moving home, and owning buildings.
   // Private chats between verified colonists, and who's online.
   r.get('/online', limit, send(async req => world.chat.online(60, (await playerFrom(req))?.id || null)));

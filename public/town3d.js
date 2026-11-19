@@ -11,7 +11,7 @@
 //  - if a phone can't keep up, it sees one block less far (the haze hides the edge). The sharpness is never lowered.
 // The map's own data comes from index.html through the callbacks in `opts`; this file only draws and drives.
 import * as W from '/world3d.js';
-import { follower } from '/creature3d.js';
+import { follower, pickPet } from '/creature3d.js';
 import { BUILDING_TYPES, ROAD_TYPES, CAR_MODELS } from '/shared/catalog.js';
 const THREE = W.THREE;
 
@@ -360,7 +360,7 @@ export function createTown(host, opts) {
       for (const p of L) { seen.add(p.id); const kind = p.car ? 'car' : 'walk'; let f = folk.get(p.id);
         if (f && f.kind !== kind) { if (f.g) scene.remove(f.g); if (f.pet) f.pet.dispose(); folk.delete(p.id); f = null; }
         if (f && kind === 'walk' && p.look && !f.look) { scene.remove(f.g); if (f.pet) f.pet.dispose(); folk.delete(p.id); f = null; } /* their own look arrived: show them as themselves */
-        if (!f) { if (kind === 'walk') { const P = W.makePerson(p.id, null, p.look || null); f = { kind, P, g: P.group, look: !!p.look }; if (p.pet && [...folk.values()].filter(q => q.pet).length < 8) { try { f.pet = follower(p.pet, { side: -1 }); scene.add(f.pet.group); } catch (e) {} } /* their pet walks with them (the nearest eight) */ if (p.tag) P.group.add(tag(p.tag, p.online, 2.15)); f.g.position.set(p.x * TILE, 0, p.y * TILE); scene.add(f.g); } else f = { kind, m: p.m || 'sedan', col: p.col || '#7c8288', x: p.x * TILE, z: p.y * TILE, ry: p.a != null ? p.a - Math.PI / 2 : 0 }; folk.set(p.id, f); }
+        if (!f) { if (kind === 'walk') { const P = W.makePerson(p.id, null, p.look || null); f = { kind, P, g: P.group, look: !!p.look }; if (p.pet && [...folk.values()].filter(q => q.pet).length < 8) { try { f.pet = follower(p.pet, { side: -1 }); f.owner = p.petOwner || null; scene.add(f.pet.group); } catch (e) {} } /* their pet walks with them (the nearest eight) */ if (p.tag) P.group.add(tag(p.tag, p.online, 2.15)); f.g.position.set(p.x * TILE, 0, p.y * TILE); scene.add(f.g); } else f = { kind, m: p.m || 'sedan', col: p.col || '#7c8288', x: p.x * TILE, z: p.y * TILE, ry: p.a != null ? p.a - Math.PI / 2 : 0 }; folk.set(p.id, f); }
         f.tx = p.x * TILE; f.tz = p.y * TILE; if (f.kind === 'car') { f.m = p.m || f.m; f.col = p.col || f.col; f.drv = !!p.drv; f.h = p.h || null; f.full = !!p.full; f.ta = p.drv && p.a != null ? p.a - Math.PI / 2 : null; /* a player's car: the way they say it faces */ if (p.tag && f.tagT !== p.tag) { if (f.tagO) { scene.remove(f.tagO); f.tagO.material.map.dispose(); f.tagO.material.dispose(); } f.tagO = tag(p.tag, p.online, 0); f.tagT = p.tag; scene.add(f.tagO); } } }
       for (const [id, f] of folk) if (!seen.has(id)) { if (f.g) scene.remove(f.g); if (f.pet) f.pet.dispose(); if (f.tagO) { scene.remove(f.tagO); f.tagO.material.map.dispose(); f.tagO.material.dispose(); } folk.delete(id); } }
     for (const [id, f] of folk) { const k = Math.min(1, dt * 2.5); if (f.kind === 'car' && f.tagO) { f.tagO.position.set(f.x, 2.4, f.z); }
@@ -536,9 +536,12 @@ export function createTown(host, opts) {
   } /* (no tremble at speed: it read as the car hopping) */
   const now0 = () => performance.now();
   canvas.style.touchAction = 'none';
-  canvas.addEventListener('pointerdown', e => { if (lk.id != null) return; lk.id = e.pointerId; lk.x = e.clientX; lk.y = e.clientY; try { canvas.setPointerCapture(e.pointerId); } catch (x) {} });
+  canvas.addEventListener('pointerdown', e => { if (lk.id != null) return; lk.id = e.pointerId; lk.x = e.clientX; lk.y = e.clientY; lk.x0 = e.clientX; lk.y0 = e.clientY; lk.t0 = now0(); try { canvas.setPointerCapture(e.pointerId); } catch (x) {} });
   canvas.addEventListener('pointermove', e => { if (e.pointerId !== lk.id) return; lk.yaw = foot ? lk.yaw - (e.clientX - lk.x) * 0.006 : Math.max(-Math.PI, Math.min(Math.PI, lk.yaw - (e.clientX - lk.x) * 0.006)); lk.pitch = Math.max(-0.5, Math.min(1.2, lk.pitch - (e.clientY - lk.y) * 0.004)); /* (up to well over your head: the aircraft in the sky) */ lk.x = e.clientX; lk.y = e.clientY; });
-  const lkEnd = e => { if (e.pointerId === lk.id) { lk.id = null; lk.at = now0(); } }; canvas.addEventListener('pointerup', lkEnd); canvas.addEventListener('pointercancel', lkEnd);
+  // a tap (not a drag) on a pet: yours (follow or go home) or someone else's (give it a pat)
+  let tapped = null; const tapPet = e => { if (!opts.onPet) return; const list = []; if (myPet && myPet.group.visible) list.push({ group: myPet.group, mine: true, pet: myPet }); for (const f of folk.values()) if (f.pet && f.pet.group.visible) list.push({ group: f.pet.group, mine: false, owner: f.owner, pet: f.pet });
+    const hit = pickPet(camera, canvas, e, list); if (!hit) return; tapped = hit.pet; opts.onPet({ mine: hit.mine, owner: hit.owner || null, kind: hit.pet.kind }); };
+  const lkEnd = e => { if (e.pointerId === lk.id) { lk.id = null; lk.at = now0(); if (e.type === 'pointerup' && Math.hypot(e.clientX - lk.x0, e.clientY - lk.y0) < 9 && now0() - lk.t0 < 450) tapPet(e); } }; canvas.addEventListener('pointerup', lkEnd); canvas.addEventListener('pointercancel', lkEnd);
   canvas.addEventListener('dblclick', () => { lk.yaw = foot ? car.a : 0; lk.pitch = 0; });
 
   // ---- the way to where you're going: arrows along the road, and a beam of light where it ends ----
@@ -673,6 +676,8 @@ export function createTown(host, opts) {
     project(tx, ty, h = 0) { const v = PRJ.set(tx * TILE, h, ty * TILE).project(camera), w = canvas.clientWidth, hh = canvas.clientHeight; return { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * hh, on: v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 }; },
     get parkedAt() { return parked ? { x: parked.x / TILE, y: parked.z / TILE } : null; },
     doorOf(id) { for (const v of blocks.values()) for (const s of v.solid) if (s.id === id && s.door) return { x: s.door[0] / TILE, y: s.door[1] / TILE, a: s.out }; return null; },
+    petHappy() { if (tapped) tapped.happy(); }, /* (the pet you just tapped) */
+    setMyPet(kind) { if (myPet && (!kind || myPet.kind !== kind)) { myPet.dispose(); myPet = null; } if (kind && !myPet) { try { myPet = follower(kind); myPet.group.visible = false; scene.add(myPet.group); } catch (e) { myPet = null; } } },
     kmh() { return Math.round(Math.abs(car.v) * 3.6); }, gear() { return !CARPHYS || foot || riding ? '' : car.v < -0.3 ? 'R' : Math.abs(car.v) < 0.3 && box.pedal < 0.05 ? 'N' : String(box.g); },
     say(who, text) { sayOver(who, text); }, /* talking on the street: 'me' or a colonist's id */
     stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, fleet: Object.fromEntries([...fleetM].filter(([, m]) => m.count).map(([k, m]) => [k, m.count])), calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },

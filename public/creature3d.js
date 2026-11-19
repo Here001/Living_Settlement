@@ -277,12 +277,18 @@ export function shot(kind, size = 256) {
 // A pet that keeps up with its owner: it trots after them a little behind and to one side, hurries to catch up when
 // they get far ahead (and jumps to them if they're very far, after a drive or a door), and turns to look at them when
 // they stop. step(dt, x, z) each frame with the owner's position (metres); it returns true when the pet moved.
+let HEART = null; const heartTex = () => { if (HEART) return HEART; const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.font = '52px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('❤️', 32, 36); HEART = new THREE.CanvasTexture(c); HEART.colorSpace = THREE.SRGBColorSpace; return HEART; };
+// Which pet a tap landed on: list = [{ group, ...anything }]; returns that entry or null. (Cheap: only pets are tested.)
+const RAY = new THREE.Raycaster(), V2 = new THREE.Vector2();
+export function pickPet(camera, canvas, e, list) { const r = canvas.getBoundingClientRect(); V2.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); RAY.setFromCamera(V2, camera);
+  let best = null, bd = 1e9; for (const it of list) { if (!it || !it.group || !it.group.visible) continue; const hit = RAY.intersectObject(it.group, true)[0]; if (hit && hit.distance < bd) { bd = hit.distance; best = it; } } return best; }
 export function follower(kind, opts = {}) {
   // Smooth following: the owner's heading is averaged over a moment (so a jittery step doesn't swing the pet about),
   // the pet's spot (just behind and to one side) is chased with a critically damped spring (it eases in and out and
   // never overshoots, at any frame rate), and its speed, gait and the way it faces all ease too. It keeps up with
   // someone running (up to 16 m/s) and jumps to them only when it's left far behind (a teleport, a new room).
-  const C = build(kind, opts), g = C.group, side = opts.side || 1, near = opts.near || 1.1;
+  const C = build(kind, opts), g = new THREE.Group(), side = opts.side || 1, near = opts.near || 1.1; g.add(C.group); g.userData.pet = true; /* (the creature in a holder: whoever places the holder, the creature can still hop inside it) */
+  let joy = 0, jt = 0, hearts = [];
   let px = null, pz = 0, vx = 0, vz = 0, ox = 0, oz = 0, ovx = 0, ovz = 0, dirx = 0, dirz = 1, ry = 0, sp = 0;
   const damp = (cur, tgt, vel, T, dt) => { const w = 2 / T, x = w * dt, e = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x), ch = cur - tgt, tmp = (vel + w * ch) * dt; return [tgt + (ch + tmp) * e, (vel - w * tmp) * e]; };
   return { C, group: g,
@@ -298,6 +304,12 @@ export function follower(kind, opts = {}) {
       sp += (v - sp) * Math.min(1, dt * 8); const moving = sp > 0.12;
       // face where it's going; standing, turn slowly to look at its owner
       const want = v > 0.35 ? Math.atan2(vx, vz) : Math.hypot(x - px, z - pz) > 0.3 ? Math.atan2(x - px, z - pz) : ry; let dd = want - ry; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); ry += dd * Math.min(1, dt * (v > 0.35 ? 9 : 3));
-      g.position.set(px, 0, pz); g.rotation.y = ry; C.animate(dt, moving ? sp : 0); return moving || Math.abs(dd) > 0.01; },
+      g.position.set(px, 0, pz); g.rotation.y = ry; C.animate(dt, moving ? sp : 0);
+      // happy: a few bounces, a spin and hearts floating up
+      if (joy > 0) { joy -= dt; jt += dt; const k = Math.max(0, joy) / 1.6; C.group.position.y = Math.abs(Math.sin(jt * 11)) * 0.38 * k; C.group.rotation.y = (1 - k) * Math.PI * 2; C.group.scale.setScalar(1 + Math.sin(jt * 22) * 0.05 * k);
+        for (const h of hearts) { h.position.y += dt * 0.9; h.material.opacity = Math.max(0, joy / 1.6); } if (joy <= 0) { C.group.position.y = 0; C.group.rotation.y = 0; C.group.scale.setScalar(1); for (const h of hearts) { g.remove(h); h.material.dispose(); } hearts = []; } }
+      return moving || Math.abs(dd) > 0.01 || joy > 0; },
+    happy() { joy = 1.6; jt = 0; for (const h of hearts) { g.remove(h); h.material.dispose(); } hearts = []; for (let i = 0; i < 3; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: heartTex(), transparent: true, depthWrite: false })); sp.scale.setScalar(0.38); sp.position.set((i - 1) * 0.35, 1.0 + i * 0.25, 0); g.add(sp); hearts.push(sp); } },
+    get kind() { return kind; },
     dispose() { if (g.parent) g.parent.remove(g); C.dispose(); } };
 }

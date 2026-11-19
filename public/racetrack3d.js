@@ -7,7 +7,7 @@
 //   board() → [lines] (the scoreboard). Returns { view(mode) → the camera mode, stats(), close() }.
 import * as THREE from 'three';
 import * as W from '/world3d.js';
-import { build, follower } from '/creature3d.js';
+import { build, follower, pickPet } from '/creature3d.js';
 import { decorate } from '/racedecor.js';
 
 export function createTrack(host, opts) {
@@ -88,9 +88,11 @@ export function createTrack(host, opts) {
     stick.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); id = e.pointerId; stick.setPointerCapture(id); mv(e); }); stick.addEventListener('pointermove', e => { if (e.pointerId === id) mv(e); });
     const end = () => { id = null; joy.x = joy.y = 0; knob.style.transform = ''; }; stick.addEventListener('pointerup', end); stick.addEventListener('pointercancel', end); }
   const lk = { id: null, x: 0, y: 0 }; canvas.style.touchAction = 'none';
-  canvas.addEventListener('pointerdown', e => { if (lk.id != null) return; lk.id = e.pointerId; lk.x = e.clientX; lk.y = e.clientY; try { canvas.setPointerCapture(e.pointerId); } catch (x) {} });
+  canvas.addEventListener('pointerdown', e => { if (lk.id != null) return; lk.id = e.pointerId; lk.x = e.clientX; lk.y = e.clientY; lk.x0 = e.clientX; lk.y0 = e.clientY; lk.t0 = performance.now(); try { canvas.setPointerCapture(e.pointerId); } catch (x) {} });
   canvas.addEventListener('pointermove', e => { if (e.pointerId !== lk.id) return; me.yaw -= (e.clientX - lk.x) * 0.006; me.pitch = Math.max(-1.1, Math.min(1.1, me.pitch - (e.clientY - lk.y) * 0.004)); lk.x = e.clientX; lk.y = e.clientY; });
-  const lkEnd = e => { if (e.pointerId === lk.id) lk.id = null; }; canvas.addEventListener('pointerup', lkEnd); canvas.addEventListener('pointercancel', lkEnd);
+  let tapped = null; const tapPet = e => { if (!opts.onPet) return; const list = []; if (myPet && myPet.group.visible) list.push({ group: myPet.group, mine: true, id: 'me', pet: myPet }); for (const [id, o] of others) if (o.pet) list.push({ group: o.pet.group, mine: false, id, owner: o.h || null, pet: o.pet });
+    const hit = pickPet(camera, canvas, e, list); if (!hit) return; tapped = hit.pet; opts.onPet({ mine: hit.mine, id: hit.id, owner: hit.owner, kind: hit.pet.kind }); }; /* a tap on a pet: yours (follow or go home) or someone else's (a pat) */
+  const lkEnd = e => { if (e.pointerId === lk.id) { lk.id = null; if (e.type === 'pointerup' && Math.hypot(e.clientX - lk.x0, e.clientY - lk.y0) < 9 && performance.now() - lk.t0 < 450) tapPet(e); } }; canvas.addEventListener('pointerup', lkEnd); canvas.addEventListener('pointercancel', lkEnd);
   let sitAt = null; const nearBench = () => { const ty = tierY(me.x, me.z); return ty > 0 ? ty : 0; };
   function sitDown() { const ty = nearBench(); if (!ty) return false; const row = Math.round((ty - 0.9) / 0.9), z = STAND_Z + row * 1.4 - 0.2; me.sit = true; me.x = Math.max(-standW / 2 + 1.2, Math.min(standW / 2 - 1.2, me.x)); me.z = z; me.yaw = 0; sitAt = 0.6 + row * 0.9 + 0.5 - 0.48;
     const A = me.P.av || me.P; if (A.pose) A.pose('sit'); return true; }
@@ -107,7 +109,7 @@ export function createTrack(host, opts) {
   // ---- other people here: they walk (or sit) where they say they are, with their name over them and their pet ----
   const others = new Map();
   function upsertOther(id, p) { let o = others.get(id); if (o && p.look && !o.look) { scene.remove(o.P.group); if (o.tag) o.tag.material.map.dispose(); others.delete(id); o = null; }
-    if (!o) { const P = W.makePerson(id, null, p.look || null); scene.add(P.group); const tag = W.nameTag(p.h ? '@' + p.h : 'a visitor'); tag.scale.set(1.6, 0.4, 1); tag.position.set(0, 2.15, 0); P.group.add(tag); o = { P, look: !!p.look, x: p.x, z: p.z, tx: p.x, tz: p.z, a: p.a || 0, sit: false, tag }; P.setPos(p.x, p.z); others.set(id, o); }
+    if (!o) { const P = W.makePerson(id, null, p.look || null); scene.add(P.group); const tag = W.nameTag(p.h ? '@' + p.h : 'a visitor'); tag.scale.set(1.6, 0.4, 1); tag.position.set(0, 2.15, 0); P.group.add(tag); o = { P, h: p.h || null, look: !!p.look, x: p.x, z: p.z, tx: p.x, tz: p.z, a: p.a || 0, sit: false, tag }; P.setPos(p.x, p.z); others.set(id, o); }
     o.tx = p.x; o.tz = p.z; o.a = p.a || 0; const s2 = p.pose === 's'; if (s2 !== o.sit) { o.sit = s2; const A = o.P.av || o.P; if (A.pose) A.pose(s2 ? 'sit' : 'stand'); } }
   function removeOther(id) { const o = others.get(id); if (!o) return; scene.remove(o.P.group); if (o.pet) o.pet.dispose(); others.delete(id); }
   function setPet(id, kind) { const o = others.get(id); if (!o || (o.pet && o.pet.kind === kind)) return; if (o.pet) { o.pet.dispose(); o.pet = null; } if (kind) try { o.pet = follower(kind, { side: -1 }); o.pet.kind = kind; scene.add(o.pet.group); } catch (e) {} }
@@ -138,6 +140,7 @@ export function createTrack(host, opts) {
   return { view(m) { mode = m || MODES[(MODES.indexOf(mode) + 1) % MODES.length]; return mode; }, stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, runners: runners.size, crowd: crowd.size, others: others.size, cam: camera.position.toArray().map(v => +v.toFixed(2)), aim: aim.toArray().map(v => +v.toFixed(2)), mode, back, roofY, STAND_Z }; },
     get me() { return { x: me.x, z: me.z, a: me.P.group.rotation.y, sit: me.sit, bench: !!nearBench() }; }, sit() { if (me.sit) { standUp(); return false; } return sitDown(); },
     goto(x, z, yaw) { if (Number.isFinite(x) && Number.isFinite(z)) { me.x = x; me.z = z; } if (Number.isFinite(yaw)) me.yaw = yaw; }, /* (for checking a view) */
+    petHappy() { if (tapped) tapped.happy(); }, setMyPet(kind) { if (myPet && (!kind || myPet.kind !== kind)) { myPet.dispose(); myPet = null; } if (kind && !myPet) { try { myPet = follower(kind); scene.add(myPet.group); } catch (e) { myPet = null; } } },
     upsertOther, removeOther, setPet, say, near(r) { let n = 0; for (const o of others.values()) if (Math.hypot(o.x - me.x, o.z - me.z) <= r) n++; return n; },
     close() { removeEventListener('resize', onResize); removeEventListener('keydown', kd); removeEventListener('keyup', ku); stick.remove(); if (myPet) myPet.dispose(); for (const R of runners.values()) R.C.dispose(); view.dispose(); canvas.remove(); } };
 }

@@ -362,6 +362,8 @@ const MIGRATIONS = [
   `alter table club_rains add column if not exists to_id text; alter table club_rains add column if not exists to_handle text;`,
   // v79: the phone you carry ('model|colour'; none: the Brick everyone starts with)
   `alter table citizens add column if not exists phone text;`,
+  // v80: what each player-owned store has in stock (shared/stores.js): bought from the colony at wholesale, sold at the shop price
+  `create table if not exists store_stock (building_id text not null, item text not null, qty int not null default 0, primary key (building_id, item));`,
 ];
 
 export async function migrate() {

@@ -130,6 +130,7 @@ body.news-on .cevent{top:calc(env(safe-area-inset-top,0px) + 152px)}
 .news .kick{font-size:12px;color:var(--muted);font-family:'Bricolage Grotesque',system-ui,sans-serif}
 .news .head{font-size:16px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psheet{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 150px);transform:translateX(-50%);z-index:30;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 32px);padding:10px 12px;border-radius:18px;background:#FBF8F1;border:2px solid #2B2621;box-shadow:0 3px 0 #2B2621,0 8px 22px rgba(0,0,0,.25);animation:netin .2s ease-out}.psheet>b{width:100%;text-align:center;font-size:14px}.psheet .x{position:absolute;top:4px;right:6px}.sidecol .vspk.off,.sidecol .vmic.off{background:#F4D6D6!important}
+.stocktag{display:inline-block;align-self:flex-start;width:max-content;font-size:11.5px;font-weight:700;color:#1E8449;background:#E3F4E8;border-radius:999px;padding:1px 8px;margin:3px 0}.stocktag.out{color:#9B2C1F;background:#F8E0DC}.stockroom{margin:6px 0 10px;padding:8px 10px;border:1.5px dashed var(--line);border-radius:12px;background:color-mix(in srgb,var(--chip) 60%,transparent)}.stockrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--line) 15%,transparent)}.stockrow .sn{flex:1;min-width:0;display:flex;flex-direction:column}.stockrow .sq{min-width:26px;text-align:center;font-size:15px}.stockrow .sq.out{color:#9B2C1F}.stockrow .sb{display:flex;gap:4px}
 .netbar{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);transform:translateX(-50%);z-index:9800;display:flex;gap:9px;align-items:center;width:max-content;max-width:calc(100vw - 32px);padding:6px 14px 6px 10px;border-radius:16px;background:#2B2621;color:#FBF8F1;box-shadow:0 6px 20px rgba(0,0,0,.3);pointer-events:none;animation:netin .25s ease-out}.netbar[hidden]{display:none}.netbar b{font-size:20px}.netbar span{display:flex;flex-direction:column;line-height:1.25}.netbar strong{font-size:14px}.netbar small{font-size:12px;opacity:.85}.netbar[data-k=none],.netbar[data-k=down]{background:#B03A2E}.netbar[data-k=slow]{background:#8A6D1E}.netbar[data-k=ok]{background:#1E8449}@keyframes netin{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
 .toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 168px);transform:translateX(-50%);z-index:9;background:#2B2621;color:#FBF8F1;padding:8px 8px 8px 14px;border-radius:999px;box-shadow:var(--shadow);display:flex;gap:10px;align-items:center;font-size:14px;max-width:calc(100% - 24px)}
 .toast[hidden]{display:none}
@@ -385,6 +386,7 @@ body.pane-max .composer textarea{height:70px}
 .shvid{display:block;max-height:34vh;max-width:100%;margin:8px auto 0;border-radius:14px;background:#000}
 .shprog{height:6px;border-radius:3px;background:rgba(0,0,0,.1);overflow:hidden;margin:8px 0}.shprog i{display:block;height:100%;width:0;background:#e53935;transition:width .2s linear}
 .rsheet-bg.recording{background:transparent;pointer-events:none}.rsheet-bg.recording .rsheet{opacity:.35}
+.rsheet-bg.storesheet{z-index:9690;background:rgba(10,20,15,.45)}.storesheet .rsheet{width:min(420px,100%);background:#FBF8F1;color:#2B2621;border:2px solid #2B2621;border-radius:20px;box-shadow:0 4px 0 #2B2621,0 18px 40px rgba(0,0,0,.35)}.storesheet .shhead{display:flex;align-items:center;justify-content:space-between;gap:8px}.storesheet .authbox{background:transparent;border:0;box-shadow:none;padding:0}.hshop{bottom:calc(236px + env(safe-area-inset-bottom))}
 .rsheet-bg{position:fixed;inset:0;z-index:300;display:flex;align-items:center;justify-content:center;background:rgba(10,20,15,.28);padding:16px}
 .rsheet{width:min(380px,100%);padding:14px 16px;max-height:86vh;overflow:auto}.rsheet h3{margin:0 0 8px;font-size:16px}
 .rsheet.wide{width:min(560px,100%)}
@@ -1359,6 +1361,7 @@ import { TABLE_GAMES, WHOT_SHAPES, LUDO_SAFE, RAKE, MAX_STAKE } from '/shared/bo
 import { GH_GAMES, GH_MAX_BET, WHEEL_PAID, WHEEL_FREE, SCRATCH_TIERS, SCRATCH_SYMBOLS, PEN_SPOTS, DART_ORDER, DART_RINGS } from '/shared/games.js';
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt, PLINKO, PLINKO_ROWS, MINES_TILES, MINES_CHOICES, minesMultiple } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
+import { STORES, STOCK_MAX, isStore, productsOf, productOf, wholesale } from '/shared/stores.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
 import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
@@ -7563,8 +7566,9 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     this.chatBtn=el('button',{class:'btn sm hchatbtn',text:'💬 Chat',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden){ this.whoOpts(); setTimeout(()=>this.chatIn.focus(),50); } }});
     this.exitBtn=el('button',{class:'hexit',hidden:true,text:'🚪 Exit',title:'Go out of the door, onto the street',onclick:()=>this.exit()}); /* shown by the front door */
     this.actBtn=el('button',{class:'hact',hidden:true,onclick:()=>{ this.h&&this.h.act(); this.sendPos(true,true); }}); /* sit, lie down, use: shown next to things you can use */
+    this.shopBtn=isStore(d.home.type)&&!Store.canWrite?el('button',{class:'hact hshop',title:'Shop','aria-label':'Shop',onclick:()=>{ const b=this.storeB(); if(b) StoreSheet.open(b); }}, el('b',{text:'🛍️'}), el('span',{text:'Shop'})):null; /* in a store: its goods, right here */
     this.camBtn=el('button',{class:'sidebtn',text:'🎥',title:'Camera: through your eyes, behind you, or from above','aria-label':'Camera',onclick:()=>this.camera()});
-    this.stage=el('div',{class:'roomstage'}, sideCol(this.camBtn, Phone.sideBtn()), this.chatBtn, this.chatBox, this.tools, this.cross, this.exitBtn, this.actBtn);
+    this.stage=el('div',{class:'roomstage'}, sideCol(this.camBtn, Phone.sideBtn()), this.chatBtn, this.chatBox, this.tools, this.cross, this.exitBtn, this.actBtn, this.shopBtn||'');
     this.file=el('input',{type:'file',accept:'image/*',hidden:true,onchange:()=>this.upload()});
     const root=el('div',{class:'webview roomview',role:'dialog','aria-label':title}, bar, this.stage, this.shop, this.file);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
@@ -7572,12 +7576,21 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     setTimeout(()=>{ if(this.d===d) Voice.enter(this); },1500); /* voice chat (once we've said we're here) */
     try{ if(!(history.state&&history.state.room)) history.pushState({room:1},''); }catch(e){}
     try{ this.h=H3.createHouse(this.stage,{ defer:true, size:d.size, plan:d.room.plan||'home', persp, me:(Me&&Me.handle)||'visitor', look:myLook||null, room:d.room, photos:d.photos, at:this.reAt||null, onLost:at=>this.reopen(at), check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
-      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.exit(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onAction:a=>{ const b=this.actBtn; if(!b) return; b.hidden=!a; if(a){ b.replaceChildren(el('b',{text:a.icon}),el('span',{text:a.label})); b.title=a.label; } }, onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onPerson:id=>Voice.person(id), onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
+      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.exit(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onAction:a=>{ const b=this.actBtn; if(!b) return; b.hidden=!a; if(a){ b.replaceChildren(el('b',{text:a.icon}),el('span',{text:a.label})); b.title=a.label; } }, onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onPerson:id=>Voice.person(id), onProduct:k=>{ const b=this.storeB(); if(b) StoreSheet.open(b,k); }, onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
     catch(e){ ent.cancel(); this.close(); toast('Your phone couldn’t show the 3D view.'); return; }
     this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false); this.hereTick(true); this.join();
     ent.step('Switching on the lights…',0.66); const h=this.h; try{ await h.ready((n,t)=>ent.step(n/t<0.6?'Switching on the lights…':'Saying hello to who’s here…',0.66+0.32*n/t)); }catch(e){} if(this.h===h) ent.done(); else ent.cancel(); /* the first picture is on screen: step through */
     clearInterval(this.hereTimer); this.hereTimer=setInterval(()=>this.hereTick(),25000);
-    if(d.mine&&!d.room.items.length&&!d.room.box.length) this.toggle(true); },
+    if(d.mine&&!d.room.items.length&&!d.room.box.length) this.toggle(true); this.storeShow(); },
+  // a store: the building it is (for its stock and its shop), and its goods on display
+  storeB(){ const h=this.d&&this.d.home; if(!h||!isStore(h.type)) return null; return D.buildings.get(h.id)||h; },
+  storeChanged(id){ const b=this.storeB(); if(b&&b.id===id){ this.storeShow(); if(StoreSheet.el&&StoreSheet.b&&StoreSheet.b.id===id) StoreSheet.paint(); } },
+  storeShow(){ const b=this.storeB(), h=this.h; if(!b||!h||!h.setShowcase) return; const U=STORE_UI[b.type], sd=StoreStock.of(b); if(!U||!sd) return;
+    let list=productsOf(b.type).filter(P=>U.kind!=='car'||carKind(P.k)==='car').filter(P=>!sd.owned||(sd.stock[P.k]||0)>0); /* a player's store shows what it has; the colony's shows everything (cars: the road cars, the rest are bought from the Shop) */
+    if(list.length>1){ const o=Math.floor(Date.now()/3600000)%list.length; list=[...list.slice(o),...list.slice(0,o)]; } /* (more goods than stands: a different few each hour) */
+    const key=b.type+'|'+list.map(P=>P.k).join(',')+'|'+(sd.owned?1:0); if(key===this.showKey) return; this.showKey=key;
+    const imgOf=k=>{ const im=new Image(); im.src=creatureThumb(k); return im; };
+    h.setShowcase({ kind:U.kind, products:list.map((P,i)=>({ k:P.k, name:P.name, priceText:`${fmt(P.price)} coins`, out:false, col:P.colors?P.colors[i%P.colors.length]:null, tier:P.tier||0, model:P.k, kind:P.kind, img:U.kind==='pet'?imgOf(P.k):null })) }); },
   /* the phone threw the 3D view away and never gave it back: build it again, standing where you were */
   reopen(at){ const d=this.d; if(!d||!this.el) return; this.reAt=at; Promise.resolve(this.open(null,null,d)).finally(()=>{ this.reAt=null; }); },
   // ---- live: where you stand goes to everyone else in here, and theirs comes to you; and the chat ----
@@ -7626,12 +7639,12 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     const me=((Me&&Me.handle)||'').toLowerCase(), live=new Set([...(this.others||new Map()).values()].map(p=>(p.h||'').toLowerCase()).filter(Boolean)); /* you're "you", and players walking round in here show as themselves, not twice */
     for(const c of S.citizens.values()){ const st=citizenAt(c,gm); if(!st||st.bid!==bid) continue; const h=c.handle.toLowerCase(); if(h===me||live.has(h)||(this.d.place==='home'&&h!==owner)) continue; out.push({name:c.handle,label:'@'+c.handle,g:c.gender,own:!!c.a}); }
     return out; },
-  async hereTick(first){ if(!this.d||(document.hidden&&!first)) return; const place=this.bld?'b:'+this.d.home.id:'h:'+(this.d.owner||'').toLowerCase(); let live={viewers:0,names:[]};
+  async hereTick(first){ if(!this.d||(document.hidden&&!first)) return; { const sb=this.storeB(); if(sb&&!first){ StoreStock.stale(sb.id); StoreStock.of(sb); } } /* (a store: its stock looked at again, so its display keeps up with sales) */ const place=this.bld?'b:'+this.d.home.id:'h:'+(this.d.owner||'').toLowerCase(); let live={viewers:0,names:[]};
     try{ live=await api('/api/inside/here',{method:'POST',body:{place}}); }catch(e){} if(!this.d) return;
     const sim=this.people(), lv=[...(this.others||new Map()).values()], named=lv.filter(p=>p.h).map(p=>'@'+p.h+' (walking round)'), anon=Math.max(lv.length,live.viewers)-named.length; live.viewers=Math.max(lv.length,live.viewers);
     this.hereNames=[...sim.map(p=>p.label), ...named, ...(anon>0?[`${anon} visitor${anon===1?'':'s'} looking round`]:[])];
     this.hereNames.unshift('you'); const n=sim.length+live.viewers+1; if(this.hereChip){ this.hereChip.textContent=`👥 ${fmt(n)}`; this.hereChip.append(el('span',{class:'wide',text:n===1?' (just you)':' here now'})); this.hereChip.title=n===1?'Just you here':`${fmt(n)} here now`; } if(this.h){ const own=sim.filter(p=>p.own).map(p=>p.name); const put=()=>this.h&&this.h.setPeople(sim.map(p=>({...p,look:p.own?Looks.m.get(p.name.toLowerCase())||null:null}))); put(); if(own.some(h=>!Looks.m.has(h.toLowerCase()))) Looks.want(own).then(put); } },
-  close(quiet){ if(!this.el) return; const was=this.d&&this.d.home&&this.d.home.id; if(Drive.resume&&Drive.resume.bid===was) Drive.back(); else Drive.resume=null; /* you drove here in your own car: back in it */ setTimeout(mapResume,0); clearInterval(this.hereTimer); Club.leave(); Voice.leave(); Phone.hide(); this.leave(); this.mapPill&&this.mapPill.remove(); this.mapPill=null; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
+  close(quiet){ if(!this.el) return; this.showKey=null; StoreSheet.close(); const was=this.d&&this.d.home&&this.d.home.id; if(Drive.resume&&Drive.resume.bid===was) Drive.back(); else Drive.resume=null; /* you drove here in your own car: back in it */ setTimeout(mapResume,0); clearInterval(this.hereTimer); Club.leave(); Voice.leave(); Phone.hide(); this.leave(); this.mapPill&&this.mapPill.remove(); this.mapPill=null; try{ this.h&&this.h.dispose(); this.H3&&this.H3.disposeThumbs(); }catch(e){} this.h=null; this.el.remove(); this.el=null; this.d=null; document.body.classList.remove('room-on'); if(!quiet){ try{ if(history.state&&history.state.room) history.back(); }catch(e){} } },
   toggle(on){ this.edit=on===undefined?!this.edit:on; this.setPick(null); this.select(null); this.shop.hidden=!this.edit; if(this.editBtn) this.editBtn.textContent=this.edit?'✓ Done':this.editWord; if(this.edit) this.paintShop(); this.paintTools(); },
   // the streets and buildings round the home: from what the map has loaded, or fetched once (only when looking from above)
   async around(fetch){ const h=this.d&&this.d.home; if(!h||h.x==null||this.aroundDone||!this.h) return; const R=8, x0=h.x-R, y0=h.y-R, x1=h.x+(h.w||1)+R, y1=h.y+(h.d||1)+R;
@@ -7759,7 +7772,7 @@ const Showroom={ W:null, busy:false,
     const set=()=>{ try{ const u=this.W.carPortrait(m,col); if(u) im.src=u; else im.replaceWith(el('span')); }catch(e){} };
     if(this.W) setTimeout(set,0); else if(!this.busy){ this.busy=true; import('/world3d.js').then(W=>{ this.W=W; this.busy=false; if(sel) renderCard(true); }).catch(()=>{ this.busy=false; }); }
     return im; } };
-function dealerSection(b){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚘 Showroom: cars, bikes, boats and aircraft'}));
+function dealerSection(b){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚘 Showroom: cars, bikes, boats and aircraft'}), StoreStock.head(b));
   if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to buy a car.'})); return box; }
   const my=myCars(); if(!my.home){ box.append(el('p',{class:'hint',text:'You need a home (and a driveway) before you buy a car.'})); }
   else { const M=CAR_MODELS[carPick.m]; if(!carPick.col||!M.colors.includes(carPick.col)) carPick.col=M.colors[0];
@@ -7767,7 +7780,7 @@ function dealerSection(b){ const box=el('div',{class:'authbox'}, el('h3',{text:'
     const sw=el('div',{class:'swatches'}); for(const col of M.colors) sw.append(el('button',{class:'sw'+(carPick.col===col?' on':''),style:`background:${col}`,'aria-label':'Colour','aria-pressed':String(carPick.col===col),onclick:()=>{ carPick.col=col; renderCard(true); }}));
     const why=needsHangar(carPick.m)?`Planes are kept in a hangar on your land and fly over the colony from there. Build a Plane hangar (holds ${BUILDING_TYPES.planehangar.hangar}) or a Private airport (holds ${BUILDING_TYPES.airport.hangar}) first: tap your plot, then Build here → Services → Aviation. `:M.kind==='water'?'It’s kept on the water nearest your home, where everyone can see it cruise. ':M.kind==='air'?'It flies over the colony from your home, for everyone to see. ':M.kind==='bike'?'You ride it on longer trips. ':'';
     const shot=carKind(carPick.m)==='car'?Showroom.img(carPick.m,carPick.col):null; /* the chosen car in 3D, in its colour */
-    box.append(g, shot?el('div',{class:'carshot'}, shot, el('b',{text:`${M.name}${M.electric?' ⚡':''}`}), el('span',{class:'hint',text:`${fmt(M.price)} coins · 👥 ${seatsOf(carPick.m)} seats`})):'', M.colors.length>1?sw:'', el('p',{class:'hint',text:`${why}Upkeep: ${fmt(M.upkeep)} coins a week. Resale value: 60% of what you paid. You can keep 3 cars and bikes, 3 boats and other aircraft, and as many planes as your hangars hold.`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`Buy the ${M.name.toLowerCase()} for ${fmt(M.price)}`,onclick:()=>meAction('/api/me/cars',{model:carPick.m,color:carPick.col,buildingId:b.id},r=>`Enjoy your new ${M.name.toLowerCase()}!`)}))); }
+    box.append(g, shot?el('div',{class:'carshot'}, shot, el('b',{text:`${M.name}${M.electric?' ⚡':''}`}), el('span',{class:'hint',text:`${fmt(M.price)} coins · 👥 ${seatsOf(carPick.m)} seats`})):'', M.colors.length>1?sw:'', el('p',{class:'hint',text:`${why}Upkeep: ${fmt(M.upkeep)} coins a week. Resale value: 60% of what you paid. You can keep 3 cars and bikes, 3 boats and other aircraft, and as many planes as your hangars hold.`}), el('div',{class:'row-actions'}, StoreStock.tag(b,carPick.m), StoreStock.left(b,carPick.m)===0?el('button',{class:'btn',text:'Sold out here',disabled:true}):el('button',{class:'btn primary',text:`Buy the ${M.name.toLowerCase()} for ${fmt(M.price)}`,onclick:()=>meAction('/api/me/cars',{model:carPick.m,color:carPick.col,buildingId:b.id},r=>{ StoreStock.sold(b); return `Enjoy your new ${M.name.toLowerCase()}!`; })}))); }
   if(my.cars.length) box.append(el('h4',{class:'bgroup',text:'Sell one of yours'}), garageList(my.cars, my.active));
   return box; }
 async function meAction(path, body, ok, method){ try{ const r=await api(path,{method:method||'POST',body}); GuideUI.at=0; if(ok) toast(typeof ok==='function'?ok(r):ok); if(r&&typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
@@ -7884,19 +7897,54 @@ let petPick='glimmerhop';
 // ---- The Pet store: adopting (and renaming or letting go of) a pet happens on a Pet store's own card ----
 // The Phone store's card: every phone in miniature, in its colours; buy one (your old one is traded in for a fifth of
 // what it cost), or change the colour of the one you have. The phone you carry is how your in-game phone looks.
+// ---- Store stock (shared/stores.js): a store a player owns sells only what its owner has bought in from the colony
+// (at 25% off the shop price); a store nobody owns sells from the colony and always has everything ----
+const StoreStock={ m:new Map(), /* building id → { at, busy, d } */
+  of(b){ if(!b||!isStore(b.type)) return null; let e=this.m.get(b.id); if(!e) this.m.set(b.id,e={at:0,busy:false,d:null});
+    if(!e.busy&&Date.now()-e.at>15000){ e.busy=true; api(`/api/stores/${encodeURIComponent(b.id)}/stock`).then(d=>{ e.d=d; e.at=Date.now(); }).catch(()=>{ e.at=Date.now(); }).finally(()=>{ e.busy=false; if(sel&&sel.kind==='b'&&sel.id===b.id) renderCard(true); try{ Room.storeChanged&&Room.storeChanged(b.id); }catch(x){} }); }
+    return e.d; },
+  stale(id){ const e=this.m.get(id); if(e) e.at=0; },
+  // how many of one thing it has: Infinity at a store the colony runs; null while it's being looked up
+  left(b,k){ const d=this.of(b); if(!d) return null; return d.owned?(d.stock[k]||0):Infinity; },
+  mine(b){ const d=this.of(b); return !!(d&&d.owned&&Me&&Me.handle&&d.owner&&d.owner.toLowerCase()===Me.handle.toLowerCase()); },
+  // under a product: "3 in stock" / "Sold out" at a player's store (nothing at the colony's)
+  tag(b,k){ const n=this.left(b,k); if(n==null||n===Infinity) return ''; return el('small',{class:'stocktag'+(n?'':' out'),text:n?`${n} in stock`:'Sold out'}); },
+  // above the store's goods: who runs it, and (for its owner) the stockroom
+  head(b){ const d=this.of(b); if(!d) return ''; if(!d.owned) return el('p',{class:'hint',text:`The colony runs this ${STORES[b.type].name.toLowerCase()}: everything is in stock.`});
+    if(!this.mine(b)) { const n=Object.values(d.stock).reduce((a,x)=>a+x,0); return el('p',{class:'hint',text:`@${d.owner}’s ${STORES[b.type].name.toLowerCase()}: ${n?`${n} ${STORES[b.type].noun} in stock`:'nothing in stock right now'}.`}); }
+    const box=el('div',{class:'stockroom'}, el('h4',{class:'bgroup',text:'📦 Your stockroom'}), el('p',{class:'hint',text:`You sell what you stock. Buy it in from the colony at 25% off the shop price; each sale puts the full price in this store’s till (tap its coin to collect). Up to ${STOCK_MAX} of each.`}));
+    for(const P of productsOf(b.type)){ const n=d.stock[P.k]||0, u=wholesale(P.price);
+      box.append(el('div',{class:'stockrow'}, el('span',{class:'sn'}, el('b',{text:P.name}), el('small',{class:'hint',text:`Costs you ${fmt(u)} · sells for ${fmt(P.price)} · you make ${fmt(P.price-u)}`})), el('b',{class:'sq'+(n?'':' out'),text:String(n)}),
+        el('span',{class:'sb'}, ...[1,5].map(q=>el('button',{class:'btn sm',text:`+${q}`,disabled:n+q>STOCK_MAX,title:`Buy ${q} for ${fmt(u*q)}`,onclick:()=>this.buy(b,P,q)}))))); }
+    return box; },
+  async buy(b,P,q){ const u=wholesale(P.price); try{ const r=await api('/api/me/stock',{method:'POST',body:{buildingId:b.id,item:P.k,qty:q}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
+      toast(`📦 ${q} × ${P.name} in stock (${fmt(r.paid)} coins). You have ${r.qty} now.`); this.stale(b.id); renderCard(true); }catch(e){ toast(e.message); } },
+  sold(b){ this.stale(b.id); setTimeout(()=>{ this.of(b); },300); } };
+// The shop inside a store (3D): the same goods as on its card, in a sheet over the store, opened by its 🛍️ Shop button
+// or by tapping something on display. A new kind of store adds its card section here.
+const STORE_UI={ phonestore:{ kind:'phone', section:b=>PhoneStore.section(b), pick:k=>{ const M=PHONE_MODELS[k]; if(M) PhoneStore.pick={m:k,col:M.colors[0]}; } },
+  cardealer:{ kind:'car', section:b=>dealerSection(b), pick:k=>{ if(CAR_MODELS[k]) carPick={m:k,col:null}; } },
+  petstore:{ kind:'pet', section:b=>PetStore.section(b), pick:k=>{ if(CREATURES[k]) petPick=k; } } };
+const StoreSheet={ el:null, b:null,
+  open(b,k){ const U=STORE_UI[b.type]; if(!U) return; if(k) U.pick(k); this.close(); this.b=b; const wrap=el('div',{class:'rsheet-bg storesheet'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) this.close(); });
+    this.box=el('div',{class:'panel rsheet roomview'}); wrap.append(this.box); document.body.append(wrap); this.el=wrap;
+    wrap.addEventListener('click',()=>{ clearTimeout(this.t1); clearTimeout(this.t2); this.t1=setTimeout(()=>this.paint(),450); this.t2=setTimeout(()=>this.paint(),1800); }); /* (a colour picked, something bought: drawn again) */
+    this.paint(); },
+  paint(){ if(!this.el||!this.b) return; const U=STORE_UI[this.b.type], top=this.box.scrollTop; this.box.replaceChildren(el('div',{class:'shhead'}, el('h3',{text:`${STORES[this.b.type].icon} ${this.b.name||STORES[this.b.type].name}`}), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>this.close()})), U.section(this.b)); this.box.scrollTop=top; },
+  close(){ clearTimeout(this.t1); clearTimeout(this.t2); if(this.el) this.el.remove(); this.el=null; this.b=null; } };
 const PhoneStore={ pick:null,
-  section(b){ const box=el('div',{class:'authbox phshop'}, el('h3',{text:'📱 Phones'}));
+  section(b){ const box=el('div',{class:'authbox phshop'}, el('h3',{text:'📱 Phones'}), StoreStock.head(b));
     if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to buy a phone.'})); return box; }
     const mine=Phone.model(), back=Math.floor((mine.price||0)/5);
     box.append(el('p',{class:'hint',text:`You carry a ${mine.name}. The phone you carry is the one that comes out when you tap 📱 Phone: the dearer it is, the finer it looks.${back?` Your ${mine.name} is worth ${fmt(back)} coins against a new one.`:''}`}));
     for(const [k,M] of Object.entries(PHONE_MODELS)){ if(!M.price) continue; const own=mine.m===k, pk=this.pick&&this.pick.m===k?this.pick.col:(own?mine.col:M.colors[0]);
       const sw=el('div',{class:'swatches'}); if(M.colors.length>1) for(const col of M.colors) sw.append(el('button',{class:'sw'+(pk===col?' on':''),style:`background:${col}`,'aria-label':'Colour','aria-pressed':String(pk===col),onclick:()=>{ this.pick={m:k,col}; renderCard(true); }}));
-      const cost=Math.max(0,M.price-back), label=own?(pk===mine.col?'✓ Yours':'🎨 Change to this colour (free)'):`Buy for ${fmt(cost)}${back?' with your trade-in':''}`;
+      const cost=Math.max(0,M.price-back), left=StoreStock.left(b,k), out=!own&&left===0, label=own?(pk===mine.col?'✓ Yours':'🎨 Change to this colour (free)'):out?'Sold out here':`Buy for ${fmt(cost)}${back?' with your trade-in':''}`;
       box.append(el('div',{class:'phrow'+(own?' on':'')}, el('span',{class:'phmini pt'+M.tier,style:`--pc:${pk}`}, el('i')),
-        el('div',{class:'phinfo'}, el('b',{text:M.name}), el('span',{class:'hint',text:`${fmt(M.price)} coins · ${M.note}`}), sw,
-          el('div',{class:'row-actions'}, el('button',{class:'btn sm'+(own&&pk===mine.col?'':' primary'),text:label,disabled:own&&pk===mine.col,onclick:()=>this.buy(b,k,pk)})))));
+        el('div',{class:'phinfo'}, el('b',{text:M.name}), el('span',{class:'hint',text:`${fmt(M.price)} coins · ${M.note}`}), StoreStock.tag(b,k), sw,
+          el('div',{class:'row-actions'}, el('button',{class:'btn sm'+(own&&pk===mine.col||out?'':' primary'),text:label,disabled:own&&pk===mine.col||out,onclick:()=>this.buy(b,k,pk)})))));
     } return box; },
-  async buy(b,m,col){ try{ const r=await api('/api/me/phone',{method:'POST',body:{model:m,color:col,buildingId:b.id}}); Phone.setModel(r.phone); this.pick=null;
+  async buy(b,m,col){ try{ const r=await api('/api/me/phone',{method:'POST',body:{model:m,color:col,buildingId:b.id}}); Phone.setModel(r.phone); this.pick=null; StoreStock.sold(b);
       if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
       toast(r.recolour?'🎨 New colour, same phone.':`📱 Your new ${PHONE_MODELS[m].name} is in your pocket.${r.tradeIn?` (${fmt(r.tradeIn)} coins off for your old one.)`:''} Tap 📱 Phone inside a place or out on the street to use it.`); renderCard(true); }
     catch(e){ toast(e.message); } } };
@@ -7904,7 +7952,7 @@ const PetStore={ me:null, at:0, busy:false,
   load(){ if(this.busy||!(Me&&Me.handle)) return; this.busy=true; api('/api/citizens/'+encodeURIComponent(Me.handle)).then(d=>{ this.me=normC(d); this.at=Date.now(); }).catch(()=>{}).finally(()=>{ this.busy=false; if(sel&&sel.kind==='b') renderCard(true); }); },
   get(){ if(!this.me||Date.now()-this.at>20000) this.load(); return this.me; },
   async act(path, body, ok, method){ const r=await meAction(path, body, ok, method); if(r){ this.at=0; this.load(); } return r; },
-  section(b){ const box=el('div',{class:'authbox petstore'}, el('h3',{text:'🐾 Adopt a pet'}));
+  section(b){ const box=el('div',{class:'authbox petstore'}, el('h3',{text:'🐾 Adopt a pet'}), StoreStock.head(b)); /* (the stockroom shows for its owner, whatever else) */
     if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to adopt a pet.'})); return box; }
     const c=this.get(); if(!c){ box.append(el('p',{class:'hint',text:'Opening the pens…'})); return box; }
     if(!c.home){ box.append(el('p',{class:'hint',text:'You can adopt a pet once you have a home.'})); return box; }
@@ -7913,9 +7961,9 @@ const PetStore={ me:null, at:0, busy:false,
         el('div',{class:'cbet'}, ni, el('button',{class:'btn',text:'Rename',onclick:()=>this.act('/api/me/pet',{name:ni.value},'Renamed.','PUT')}), el('button',{class:'linkb',text:'Let it go',onclick:()=>toast(`Let ${c.pet.n} go back to the wild? You won't get your coins back.`,'Let go',()=>this.act('/api/me/pet',null,`${c.pet.n} went back to the wild.`,'DELETE'))})),
         el('p',{class:'hint',text:'One pet at a time: let this one go to adopt a different creature.'})); return box; }
     box.append(el('p',{class:'hint',text:'Adopt one of Gliese 12 b’s native creatures. It walks with you wherever you go. Paid in cash.'}));
-    const g=el('div',{class:'petgrid'}); for(const k of CREATURE_IDS) g.append(el('button',{class:'petb'+(petPick===k?' on':''),'aria-pressed':String(petPick===k),onclick:()=>{ petPick=k; renderCard(true); }}, el('img',{src:creatureThumb(k),alt:'',width:'48',height:'48'}), el('span',{text:CREATURES[k].name}), el('small',{class:'petprice',text:`${fmt(petPrice(k))} coins`})));
+    const g=el('div',{class:'petgrid'}); for(const k of CREATURE_IDS) g.append(el('button',{class:'petb'+(petPick===k?' on':''),'aria-pressed':String(petPick===k),onclick:()=>{ petPick=k; renderCard(true); }}, el('img',{src:creatureThumb(k),alt:'',width:'48',height:'48'}), el('span',{text:CREATURES[k].name}), el('small',{class:'petprice',text:`${fmt(petPrice(k))} coins`}), StoreStock.tag(b,k)));
     const ni=el('input',{type:'text',maxlength:'20',placeholder:`Name (e.g. ${CREATURES[petPick].name})`,'aria-label':'Pet name'});
-    box.append(g, el('p',{class:'hint',text:CREATURES[petPick].blurb}), el('div',{class:'cbet'}, ni, el('button',{class:'btn primary',text:`Adopt for ${fmt(petPrice(petPick))}`,onclick:()=>this.act('/api/me/pet',{kind:petPick,name:ni.value,buildingId:b.id},r=>`Say hello to ${r.pet.n}!`)})));
+    box.append(g, el('p',{class:'hint',text:CREATURES[petPick].blurb}), el('div',{class:'cbet'}, ni, StoreStock.left(b,petPick)===0?el('button',{class:'btn',text:'Sold out here',disabled:true}):el('button',{class:'btn primary',text:`Adopt for ${fmt(petPrice(petPick))}`,onclick:()=>this.act('/api/me/pet',{kind:petPick,name:ni.value,buildingId:b.id},r=>{ StoreStock.sold(b); return `Say hello to ${r.pet.n}!`; })})));
     return box; } };
 function nearestOf(type,c){ let best=null, bd=1e9; const at=(c&&(c.home||c.job))||null, ox=at?at[2]:0, oy=at?at[3]:0;
   for(const b of D.buildings.values()){ if(b.type!==type||b.done===false||b.ruin) continue; const dd=Math.abs(b.x-ox)+Math.abs(b.y-oy); if(dd<bd){ bd=dd; best=b; } } return best; }

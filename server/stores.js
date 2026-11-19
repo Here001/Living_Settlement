@@ -1,0 +1,59 @@
+// Store stock (the rule is in shared/stores.js): a store a player owns sells only what its owner has bought in from the
+// colony; a store nobody owns sells from the colony, as it always has.
+import { pool } from './db.js';
+import { HttpError } from './world.js';
+import { STORES, STOCK_MAX, productOf, productsOf, wholesale } from '../shared/stores.js';
+import { treasuryAdd } from './races.js';
+import { track } from './stats.js';
+
+const fmt = n => Math.round(n).toLocaleString('en-US');
+
+// What a store has: who owns it, and (owned) how many of each product
+export async function stockOf(buildingId) {
+  const b = (await pool.query('select id, type, owner_id, owner_handle from buildings where id = $1 and done and not ruin', [String(buildingId || '')])).rows[0];
+  if (!b || !STORES[b.type]) throw new HttpError(404, 'That isn’t an open store.');
+  if (!b.owner_id) return { id: b.id, type: b.type, owned: false, owner: null, stock: null };
+  const rows = (await pool.query('select item, qty from store_stock where building_id = $1', [b.id])).rows, stock = {};
+  for (const r of rows) if (r.qty > 0) stock[r.item] = r.qty;
+  return { id: b.id, type: b.type, owned: true, owner: b.owner_handle, stock };
+}
+
+// Inside a sale (ch: the sale's transaction; the store's row is locked). Returns how the money goes:
+//   { owned: false }               the colony sells: the buyer's money goes to the treasury, as before
+//   { owned: true, till: price }   one item came off the shelf; the full shop price goes into the store's till
+export async function sell(ch, store, item, price) {
+  if (!store.owner_id) return { owned: false };
+  const r = (await ch.q('update store_stock set qty = qty - 1 where building_id = $1 and item = $2 and qty > 0 returning qty', [store.id, item])).rows[0];
+  if (!r) throw new HttpError(409, `Sold out here: @${store.owner_handle} hasn’t got any in stock. Try another ${STORES[store.type].name.toLowerCase()}, or one the colony runs.`);
+  await ch.q('update buildings set till = till + $2 where id = $1', [store.id, price]);
+  return { owned: true, till: price, left: r.qty };
+}
+
+// The owner buys stock from the colony at wholesale
+export async function restock(world, playerId, { buildingId, item, qty }) {
+  const n = Math.floor(Number(qty)); if (!(n >= 1 && n <= STOCK_MAX)) throw new HttpError(400, `Buy between 1 and ${STOCK_MAX}.`);
+  return world.change(async ch => {
+    const b = (await ch.q('select id, type, owner_id from buildings where id = $1 and done and not ruin for update', [String(buildingId || '')])).rows[0];
+    if (!b || !STORES[b.type]) throw new HttpError(404, 'That isn’t an open store.');
+    if (b.owner_id !== playerId) throw new HttpError(403, 'Only the store’s owner can buy in stock.');
+    const P = productOf(b.type, String(item || '')); if (!P) throw new HttpError(400, 'This store doesn’t sell that.');
+    const have = (await ch.q('select qty from store_stock where building_id = $1 and item = $2 for update', [b.id, P.k])).rows[0]?.qty || 0;
+    if (have + n > STOCK_MAX) throw new HttpError(400, `A store holds up to ${STOCK_MAX} of each. You have ${have}.`);
+    const unit = wholesale(P.price), cost = unit * n;
+    const c = (await ch.q('select * from citizens where id = $1 for update', [playerId])).rows[0]; if (!c) throw new HttpError(404, 'Who are you?');
+    ch.coins(c); if (c.coins_base < cost) throw new HttpError(400, `${n} × ${P.name} costs ${fmt(cost)} coins from the colony (${fmt(unit)} each, 25% off the shop price). You have ${fmt(c.coins_base)} on you.`);
+    c.coins_base -= cost; treasuryAdd(ch, cost); track(ch, 'store:stock', cost, c.id); ch.touch(c); await ch.saveCitizen(c);
+    const q = (await ch.q('insert into store_stock (building_id, item, qty) values ($1, $2, $3) on conflict (building_id, item) do update set qty = store_stock.qty + $3 returning qty', [b.id, P.k, n])).rows[0].qty;
+    return { ok: true, item: P.k, qty: q, paid: cost, unit, coins: c.coins_base };
+  });
+}
+
+// A store goes back to the colony (sold to it, or knocked down): the colony takes its unsold stock back at what the owner
+// paid for it, and the money goes to them. (Sold to another player, the stock goes with the store.)
+export async function returnStock(ch, b, ownerId) {
+  const rows = (await ch.q('delete from store_stock where building_id = $1 returning item, qty', [b.id])).rows; if (!ownerId || !STORES[b.type]) return 0;
+  let back = 0; for (const r of rows) { const P = productOf(b.type, r.item); if (P && r.qty > 0) back += wholesale(P.price) * r.qty; } if (!back) return 0;
+  const c = (await ch.q('select * from citizens where id = $1 for update', [ownerId])).rows[0]; if (!c) return 0;
+  ch.coins(c); c.coins_base += back; treasuryAdd(ch, -back); track(ch, 'store:return', back, c.id); ch.touch(c); await ch.saveCitizen(c); return back; }
+
+export { productsOf };

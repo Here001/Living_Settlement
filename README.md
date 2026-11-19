@@ -430,6 +430,16 @@ A signed-in colonist's own card opens with **🧭 Getting started**: six first s
   - **If they were caught:** "🚓 @thief picked your pocket but got caught by the police. Your N coins have been refunded". The thief is named only when caught, and you never actually lose the coins.
 - **Miles.** Distances players see (Go here, homes, jobs, delivery gigs, crime odds) are in game miles, at 20 tiles to the mile (`miles()` in `shared/rules.js`). The developer's build tools still count tiles.
 
+## Stores: stock, display and selling
+
+One rule for every store that sells to players (Phone stores, Car dealerships and Pet stores today; a fashion store, a jewellery store or any store added later follows it by being listed in `shared/stores.js` with its products and prices):
+
+- **A store nobody owns** (the colony's own, or one up for sale) is run by the colony: everything is always in stock, and the money goes to the treasury.
+- **A store a player owns sells only what its owner has stocked.** The owner buys stock from the colony at **25% off the shop price** (📦 Your stockroom on the store's card: +1 or +5 of anything, up to 50 of each). Every sale takes one off the shelf and puts the **full shop price into the store's till**, which the owner collects like any other till (tap its coin). So on a 90,000 phone the owner pays 67,500 and makes 22,500 each time one sells. With nothing in stock, shoppers see **Sold out here**. A phone trade-in is paid by the colony, so the owner always gets the full price.
+- **On display inside, in 3D.** Walk into a store and its goods are there: phones on the display counters (each turns to face you, with its name and price over it), real cars on the showroom stands, and the creatures in the pet cages. A store a player runs shows only what's in stock (a sale takes it off the counter); a colony store shows everything (more goods than stands: a different few each hour). Tap anything on display, or the round **🛍️ Shop** button, and the store's shop opens right there, on that product.
+- **Shoppers see stock everywhere:** on the store's card on the map ("@owner's phone store: 3 phones in stock", "2 in stock" / "Sold out" under each), and in the shop inside.
+- **When a store leaves its owner**, sold back to the colony or knocked down, the colony buys back the unsold stock at what the owner paid for it. Sold to another player, the stock goes with the store.
+
 ## Money: the Bank, cars, homes and buildings
 
 **The scale.** A game day is 30 real minutes, so 48 pass in a real day. Prices are set against what a player can earn in a real day, not a game day: an active player (job, shifts, deliveries, fishing, scavenging, the daily reward) makes roughly 4,000–5,000 coins a real day. A first small home or a hatchback takes several days of play, a block of flats months, and the towers and the car plant are for the colony's richest. Everything else follows the same scale: pets 2,500–10,000, running for mayor 5,000, daily rewards 200–1,600, gifts up to 10,000 a real day, Getting started rewards 250–500, badges at 10,000 / 50,000 in the bank / 1,000,000 (a casino Jackpot is a 10,000 win), lottery tickets up to 10,000.

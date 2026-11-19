@@ -540,6 +540,41 @@ export function createHouse(host, opts) {
     for (const it of room.items) { const f = FURNITURE[it.k]; if (f.mount !== 'floor' || f.rug) continue; const [w, d] = footOf(it.k, it.r); if (px > it.x + 0.12 - R && px < it.x + w - 0.12 + R && py > it.y + 0.12 - R && py < it.y + d - 0.12 + R) return true; }
     return false;
   }
+  // ---- a store's goods on display (shared/stores.js): phones on the display counters, a real car on each showroom
+  // stand (in place of the stand's own model), pets in the cages; a price tag over each, "Sold out" where an owner has
+  // none left. Tapping one opens the store's shop on that product (opts.onProduct). ----
+  const show = new THREE.Group(); scene.add(show); let showSpec = null, showHidden = new Set(), showTok = 0;
+  const SCREENS = new Map(), screenTex = tier => { let t = SCREENS.get(tier); if (t) return t; const c = document.createElement('canvas'); c.width = 64; c.height = 128; const g = c.getContext('2d');
+    const cols = [['#9fbf6a', '#7da24a'], ['#8ec5fc', '#e0c3fc'], ['#ff5f6d', '#3a1c71'], ['#00c6ff', '#7f00ff'], ['#43e97b', '#38f9d7'], ['#f7971e', '#b06ab3']][tier] || ['#444', '#222'], gr = g.createLinearGradient(0, 0, 64, 128);
+    gr.addColorStop(0, cols[0]); gr.addColorStop(1, cols[1]); g.fillStyle = gr; g.fillRect(0, 0, 64, 128); if (tier >= 2) { g.fillStyle = 'rgba(255,255,255,.85)'; g.font = '700 14px system-ui'; g.textAlign = 'center'; g.fillText('9:41', 32, 30); }
+    t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; SCREENS.set(tier, t); return t; };
+  const priceTag = (name, price, out) => { const c = document.createElement('canvas'); c.width = 256; c.height = 72; const g = c.getContext('2d'); g.fillStyle = out ? 'rgba(120,30,25,.9)' : 'rgba(20,18,16,.82)'; if (g.roundRect) { g.beginPath(); g.roundRect(4, 4, 248, 64, 18); g.fill(); } else g.fillRect(4, 4, 248, 64);
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = '700 24px system-ui, sans-serif'; g.fillText(name.length > 18 ? name.slice(0, 17) + '…' : name, 128, 32); g.font = '600 20px system-ui, sans-serif'; g.fillStyle = out ? '#ffd0c8' : '#f2c94c'; g.fillText(out ? 'Sold out' : price, 128, 58);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false })); sp.scale.set(0.46, 0.13, 1); return sp; };
+  function phoneModel(P) { const g = new THREE.Group(), body = new THREE.Mesh(new RoundedBoxGeometry(0.17, 0.35, 0.02, 2, 0.026), new THREE.MeshStandardMaterial({ color: P.col || '#333', roughness: 0.35, metalness: P.tier >= 3 ? 0.7 : 0.15 }));
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.32), new THREE.MeshBasicMaterial({ map: screenTex(P.tier || 0), toneMapped: false })); scr.position.z = 0.0105; g.add(body, scr);
+    const stand = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.08), new THREE.MeshStandardMaterial({ color: '#d5d8dc', roughness: 0.4, metalness: 0.6 })); stand.position.set(0, -0.175, -0.02); g.add(stand); g.rotation.x = -0.18; return g; }
+  function clearShow() { for (const c of [...show.children]) { show.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { for (const m of [].concat(o.material)) { if (m.map && !SCREENS_HAS(m.map)) m.map.dispose(); m.dispose(); } } }); } }
+  const SCREENS_HAS = t => { for (const v of SCREENS.values()) if (v === t) return true; return false; };
+  // where things stand: the slots on each piece of display furniture (in the room, whatever way it's turned)
+  function slotsOf(kind) { const per = [];
+    for (const it of room.items) { const k = it.k; if (!((kind === 'phone' && k === 'display') || (kind === 'car' && k === 'showcar') || (kind === 'pet' && k === 'petcages'))) continue;
+      const b = boxOf(it), ps = placedParts(it, '#ffffff'), top = Math.max(...ps.map(p => p.z + p.h)), long = (b.x1 - b.x0) >= (b.y1 - b.y0), len = long ? b.x1 - b.x0 : b.y1 - b.y0, n = kind === 'phone' ? 3 : kind === 'pet' ? 2 : 1, ry = long ? 0 : Math.PI / 2;
+      const face = kind === 'phone' ? (it.r || 0) : 0, fy = [0, -Math.PI / 2, Math.PI, Math.PI / 2][face % 4]; /* phones face the way the counter does */
+      const mine = []; per.push(mine); for (let k2 = 0; k2 < n; k2++) { const u = (k2 + 0.5) / n; mine.push({ it, x: long ? b.x0 + len * u : b.cx, y: long ? b.cy : b.y0 + len * u, z: kind === 'phone' ? top : kind === 'pet' ? 0.5 : 0.12, ry: kind === 'car' ? ry : fy, len: long ? b.x1 - b.x0 : b.y1 - b.y0, wid: long ? b.y1 - b.y0 : b.x1 - b.x0 }); } }
+    const out = []; for (let k2 = 0; per.some(l => l[k2]); k2++) for (const l of per) if (l[k2]) out.push(l[k2]); /* one on each counter first, then the next along: the goods spread round the store */
+    return out; }
+  async function buildShow() { const tok = ++showTok; clearShow(); for (const i of showHidden) for (const g of stuff.children) if (g.userData.i === i) g.visible = true; showHidden = new Set(); const spec = showSpec; if (!spec || !spec.products.length) { dirty = true; wake(); return; }
+    const kind = spec.kind, slots = slotsOf(kind); if (!slots.length) return; let W3 = null; if (kind === 'car') { try { W3 = await import('/world3d.js'); } catch (e) { return; } if (tok !== showTok) return; }
+    spec.products.slice(0, slots.length).forEach((P, n) => { const s = slots[n], g = new THREE.Group(); g.position.set(s.x, s.z, s.y); g.userData.product = P.k;
+      if (kind === 'phone') { const m = phoneModel(P); m.position.y = 0.19; m.rotation.y = s.ry; g.add(m); g.userData.turn = m; }
+      else if (kind === 'car') { const car = W3.makeCar(P.kind && P.kind !== 'car' ? 'car' : (P.model || 'car'), P.col || '#c8382e'), [L] = W3.carSize(P.model || 'car'), sc = Math.min(1, (s.len - 0.2) / Math.max(1, L)); car.scale.setScalar(sc); car.rotation.y = s.ry + Math.PI / 2; g.add(car); showHidden.add(s.it.i); }
+      else if (kind === 'pet' && P.img) { const t = new THREE.Texture(P.img); t.colorSpace = THREE.SRGBColorSpace; if (P.img.complete) t.needsUpdate = true; else P.img.addEventListener('load', () => { t.needsUpdate = true; dirty = true; wake(); }, { once: true }); const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, alphaTest: 0.05 })); sp.scale.set(0.5, 0.5, 1); sp.position.y = 0.26; sp.renderOrder = 3; g.add(sp); } /* (standing on the cage floor, behind its glass) */
+      const tag = priceTag(P.name, P.priceText, P.out); tag.position.y = kind === 'car' ? 1.6 : kind === 'pet' ? 0.78 : 0.6; g.add(tag);
+      g.traverse(o => { if (o !== g) o.userData.product = P.k; }); show.add(g); });
+    for (const i of showHidden) for (const g of stuff.children) if (g.userData.i === i) g.visible = false; /* (the stand's own model car makes way for the real one) */
+    dirty = true; wake(); }
+
   // something put down where you're standing: step aside to the nearest free spot (not stuck inside it)
   const crossesWall = (x0, y0, x1, y1) => solidEdges.some(([a, b, c, d]) => { const o = (px, py, qx, qy, rx, ry) => Math.sign((qx - px) * (ry - py) - (qy - py) * (rx - px)); return o(x0, y0, x1, y1, a, b) !== o(x0, y0, x1, y1, c, d) && o(a, b, c, d, x0, y0) !== o(a, b, c, d, x1, y1); });
   function unstick() { if (act || !blocked(me.x, me.y)) return false; for (let r = 0.25; r <= 3.5; r += 0.25) for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, x = me.x + Math.cos(a) * r, y = me.y + Math.sin(a) * r; if (!blocked(x, y) && !crossesWall(me.x, me.y, x, y)) { /* (on your side of the wall) */ me.x = x; me.y = y; moved(); dirty = true; wake(); return true; } } return false; }
@@ -615,6 +650,7 @@ export function createHouse(host, opts) {
       if (pick) { tapAim = true; aim(nx, ny); } else { ray.setFromCamera(v2.set(nx, ny), camera); ray.near = camera.near; const hit = ray.intersectObjects([stuff, wallStuff, ceilStuff].filter(g => g.visible), true)[0], wallHit = ray.intersectObjects(walls.children, false)[0];
         { const og = [...others.values()].filter(o => o.g.visible).map(o => o.g), ph = og.length ? ray.intersectObjects(og, true)[0] : null;
           if (ph && (!hit || ph.distance < hit.distance + 0.3) && opts.onPerson) { let g = ph.object; while (g && !og.includes(g)) g = g.parent; for (const [id, o] of others) if (o.g === g) { opts.onPerson(id); return; } } } /* someone here: what to do about them (their voice, their card) */
+        if (show.children.length && opts.onProduct) { const pr = ray.intersectObjects(show.children, true)[0]; if (pr && (!hit || pr.distance <= hit.distance + 0.8)) { opts.onProduct(pr.object.userData.product); return; } } /* a product on display (even behind its counter's glass): its shop */
         if (wallHit && (!hit || wallHit.distance < hit.distance) && frontAt && Math.hypot(wallHit.point.x - frontAt.x, wallHit.point.z - frontAt.y) < 0.55 && wallHit.point.y < 2.15) { opts.onExit && opts.onExit(true, true); return; } /* the front door: the way out */
         let dg = hit && hit.object; while (dg && !dg.userData.door) dg = dg.parent; if (dg) { const D = dg.userData.door; D.until = performance.now() + 4500; wake(); } /* a door: open it (it closes again by itself) */
         opts.onTap && opts.onTap(hit ? { i: hit.object.userData.i, photo: !!hit.object.userData.photo, door: !!dg } : null); } } });
@@ -654,7 +690,7 @@ export function createHouse(host, opts) {
     // at most 60 frames a second (a 120 Hz screen would otherwise draw twice as many)
     const now = performance.now(), active = moving || joy.on || keys.size > 0 || now - lastInput < 160;
     const gap = active ? 15.5 : othersMoving || party.length ? 32 : 0; /* you moving: up to 60 a second; only other people moving: 30 (still smooth); nothing moving: just the one frame */
-    if (dirty && shown() && now - lastDraw >= gap) { placeCamera(); renderer.render(scene, camera); dirty = false; lastDraw = now; if (guard.after()) dirty = true; if (firstDrawn) { const f = firstDrawn; firstDrawn = null; requestAnimationFrame(() => f()); } } /* not while the map is showing */
+    if (dirty && shown() && now - lastDraw >= gap) { placeCamera(); for (const g of show.children) { const m = g.userData.turn; if (m) m.rotation.y = Math.atan2(camera.position.x - g.position.x, camera.position.z - g.position.z); } /* phones on display turn to face you */ renderer.render(scene, camera); dirty = false; lastDraw = now; if (guard.after()) dirty = true; if (firstDrawn) { const f = firstDrawn; firstDrawn = null; requestAnimationFrame(() => f()); } } /* not while the map is showing */
     // other players: glide towards where they last said they were
     let gliding = false; for (const o of others.values()) if (o.g.visible) { const dx = o.tx - o.g.position.x, dz = o.ty - o.g.position.z; let da = o.ta - o.g.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da));
       if (Math.abs(dx) + Math.abs(dz) + Math.abs(da) > 0.01) { const k = Math.min(1, dt * 8); o.g.position.x += dx * k; o.g.position.z += dz * k; o.g.rotation.y += da * k; gliding = true; dirty = true; if (!o.pose) o.g.userData.av.animate(dt, 0, Math.min(3, Math.hypot(dx, dz) * k / Math.max(dt, 1e-3)), false); o.posed = false; }
@@ -687,7 +723,8 @@ export function createHouse(host, opts) {
   { const a = opts.at; if (a && Number.isFinite(a.x) && Number.isFinite(a.y) && !blocked(a.x, a.y)) { me.x = a.x; me.y = a.y; me.yaw = Number.isFinite(a.a) ? a.a : me.yaw; stepIn(); moved(); } } /* back where you stood (after the phone dropped the 3D view) */
 
   return {
-    setRoom(r, ph, shellToo) { room = r; photos = { ...photos, ...(ph || {}) }; if (shellToo) buildShell(); buildStuff(); unstick(); wake(); },
+    setRoom(r, ph, shellToo) { room = r; photos = { ...photos, ...(ph || {}) }; if (shellToo) buildShell(); buildStuff(); unstick(); if (showSpec) buildShow(); wake(); },
+    setShowcase(spec) { showSpec = spec || null; buildShow(); }, /* a store's goods on display: { kind: 'phone'|'car'|'pet', products: [{ k, name, priceText, out, col, tier, model, img }] } */
     setPick(p) { pick = p; tapAim = false; const m = p && FURNITURE[p.k].mount; showGrid(m === 'floor'); buildStuff();
       if (p && view === 'walk' && p.x == null) me.pitch = m === 'ceil' ? 0.75 : m === 'floor' ? -0.45 : 0.02; // look where this kind of piece goes
       if (p) { placeCamera(); if (p.x == null) aim(); showGhost(); opts.onPick && opts.onPick(pick); } else showGhost(); wake(); },
@@ -724,7 +761,7 @@ export function createHouse(host, opts) {
     setPerspective(p) { persp = p === 'third' ? 'third' : 'first'; stepIn(); moved(); },
     get perspective() { return persp; },
     get view() { return view; },
-    check: { at(x, y) { me.x = x; me.y = y; moved(); }, blocked: (x, y) => blocked(x, y) }, /* (for checking) */
+    check: { at(x, y) { me.x = x; me.y = y; moved(); }, face(x, y) { me.yaw = Math.atan2(-(x - me.x), -(y - me.y)); me.pitch = -0.25; moved(); }, blocked: (x, y) => blocked(x, y), get show() { return show.children.map(g => [g.userData.product, +g.position.x.toFixed(2), +g.position.y.toFixed(2), +g.position.z.toFixed(2), g.children.length]); }, get me() { return [me.x, me.y]; } }, /* (for checking) */
     goRoom, roomHere: () => roomAt(S, Math.floor(me.x), Math.floor(me.y), PLAN),
     dispose() { dead = true; cancelAnimationFrame(raf); ro.disconnect(); ctx.dispose(); checks.forEach(clearTimeout); removeEventListener('keydown', kd); removeEventListener('keyup', ku);
       scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); for (const t of photoTex.values()) t.dispose(); renderer.dispose(); renderer.domElement.remove(); stick.remove(); },

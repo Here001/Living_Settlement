@@ -2130,6 +2130,24 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   const b3 = await call('POST', '/api/me/phone', { model: 'aura', color: '#C8B79A', buildingId: st.id }, P1.P), g1 = await call('GET', '/api/me/phone', undefined, P1.P);
   ok(b3.status === 200 && b3.json.recolour && g1.json.phone.m === 'aura' && g1.json.phone.col === '#C8B79A', '…and a new colour for the one you have is free', JSON.stringify(g1.json));
   ok((await call('POST', '/api/me/phone', { model: 'brick', buildingId: st.id }, P1.P)).status === 400 && (await call('POST', '/api/me/phone', { model: 'zenith', buildingId: st.id }, P1.P)).status === 400, '…the Brick isn’t for sale, and the finest phone costs more than you have');
+  // ---- stores a player owns sell only what they've stocked (shared/stores.js) ----
+  { const own = await player('store_sam', 1000), buyer = await player('store_bo', 1000), S0 = (await import('../shared/stores.js'));
+    const u0 = (await call('GET', `/api/stores/${st.id}/stock`, undefined, { auth: false })).json; ok(u0.owned === false && u0.stock === null, 'a store nobody owns sells from the colony (always in stock)', JSON.stringify(u0));
+    await pool.query('update buildings set owner_id = $2, owner_handle = $3, till = 0 where id = $1', [st.id, own.id, 'store_sam']); await pool.query('update citizens set coins_base = 5000000, net = 0 where id = any($1)', [[own.id, buyer.id]]);
+    const e0 = (await call('GET', `/api/stores/${st.id}/stock`, undefined, { auth: false })).json; ok(e0.owned && e0.owner === 'store_sam' && Object.keys(e0.stock).length === 0, 'a store a player owns starts empty', JSON.stringify(e0));
+    const no = await call('POST', '/api/me/phone', { model: 'pulse', buildingId: st.id }, buyer.P); ok(no.status === 409 && /Sold out/.test(no.json.error), '…so nobody can buy there until its owner stocks it', JSON.stringify(no.json));
+    ok((await call('POST', '/api/me/stock', { buildingId: st.id, item: 'pulse', qty: 2 }, buyer.P)).status === 403, '…and only the owner can stock it');
+    ok((await call('POST', '/api/me/stock', { buildingId: st.id, item: 'carrot', qty: 1 }, own.P)).status === 400 && (await call('POST', '/api/me/stock', { buildingId: st.id, item: 'pulse', qty: 999 }, own.P)).status === 400, '…with things the store sells, a sensible number at a time');
+    const r1 = await call('POST', '/api/me/stock', { buildingId: st.id, item: 'pulse', qty: 2 }, own.P), unit = Math.ceil(PM.pulse.price * 0.75);
+    ok(r1.status === 200 && r1.json.qty === 2 && r1.json.unit === unit && r1.json.paid === unit * 2 && r1.json.coins === 5000000 - unit * 2, 'the owner buys stock from the colony at 25% off the shop price', JSON.stringify(r1.json));
+    const sale = await call('POST', '/api/me/phone', { model: 'pulse', color: '#7C5CFF', buildingId: st.id }, buyer.P), till = Number((await pool.query('select till from buildings where id = $1', [st.id])).rows[0].till);
+    ok(sale.status === 200 && sale.json.paid === PM.pulse.price && sale.json.store?.left === 1 && till === PM.pulse.price, '…a sale takes one off the shelf and puts the full shop price in the store’s till', JSON.stringify({ s: sale.json, till }));
+    const e1 = (await call('GET', `/api/stores/${st.id}/stock`, undefined, { auth: false })).json; ok(e1.stock.pulse === 1, '…and everyone sees what’s left', JSON.stringify(e1));
+    const col = await call('POST', '/api/me/collect', { buildingId: st.id }, own.P); ok(col.status === 200 && col.json.got >= PM.pulse.price, '…which the owner collects like any till', JSON.stringify(col.json));
+    const back = await call('POST', '/api/me/properties/sell', { buildingId: st.id }, own.P), left = (await pool.query('select count(*)::int n from store_stock where building_id = $1', [st.id])).rows[0].n;
+    ok(back.status === 200 && left === 0 && (await call('GET', `/api/stores/${st.id}/stock`, undefined, { auth: false })).json.owned === false, 'sold back to the colony: the colony runs it again, and buys back the unsold stock', JSON.stringify({ b: back.json, left }));
+    const sam = (await pool.query('select coins_base from citizens where id = $1', [own.id])).rows[0].coins_base;
+    ok(Number(sam) >= 5000000 - unit * 2 + PM.pulse.price + unit + back.json.back - 1, '…at what the owner paid for it', String(sam)); }
 }
 { // the developer can walk into any building (even one the public can't, or a locked home) and furnish it, for nothing
   const pol = (await call('POST', '/api/admin/buildings', { type: 'police', x: 1460, y: 1300, instant: true })).json.building, bak = (await call('POST', '/api/admin/buildings', { type: 'bakery', x: 1480, y: 1300, instant: true })).json.building;

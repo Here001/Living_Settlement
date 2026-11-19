@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import { returnStock } from './stores.js';
+import { isStore } from '../shared/stores.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { pool, worldTx, personalTx } from './db.js';
 import { treasuryAdd } from './races.js';
@@ -209,6 +211,7 @@ class Change {
   // before the owner changes (old = the previous owner's id) and it settles both.
   async ownerChanged(buildingId, oldOwner, newOwner) {
     const b = (await this.q('select id, type, owner_id from buildings where id = $1', [buildingId])).rows[0]; if (!b) return;
+    if (oldOwner && !newOwner && isStore(b.type)) await returnStock(this, b, oldOwner); /* a store back to the colony: its unsold stock is bought back */
     if (oldOwner && oldOwner !== newOwner) await this.giveBackApartment(b.id, oldOwner);
     const rent = R.capacities(b.type).rent || 0; if (!rent) return;
     for (const id of [oldOwner, newOwner]) { if (!id) continue;
@@ -642,6 +645,7 @@ export class World {
   }
 
   async demolishIn(ch, b) {
+    if (isStore(b.type)) await returnStock(ch, b, b.owner_id); /* a store knocked down: its unsold stock is bought back from its owner */
     if (this.economy) await this.economy.refundDemolished(ch, b); // an owner gets back what they paid
     await this.evict(ch, b);
     await ch.giveBackApartment(b.id, null);

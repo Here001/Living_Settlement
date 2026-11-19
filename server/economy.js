@@ -5,6 +5,7 @@ import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES, carPaid, carKind, ridden, needsHangar, hangarCap, PHONE_MODELS, phoneOf } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
+import { sell } from './stores.js';
 import { track, snapshot, ledger, econTick } from './stats.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
@@ -194,15 +195,16 @@ export class Economy {
     const M = PHONE_MODELS[model]; if (!M || !M.price) throw new HttpError(400, 'Pick a phone from the store.');
     if (!M.colors.includes(color)) color = M.colors[0];
     return this.world.change(async ch => {
-      const shop = (await ch.q("select id from buildings where id = $1 and type = 'phonestore' and done and not ruin", [String(buildingId || '')])).rows[0];
+      const shop = (await ch.q("select id, type, owner_id, owner_handle from buildings where id = $1 and type = 'phonestore' and done and not ruin for update", [String(buildingId || '')])).rows[0];
       if (!shop) throw new HttpError(409, 'Phones are sold at a Phone store. Tap one on the map.');
       const c = await this.lockMe(ch, id), now = phoneOf(c.phone);
       if (now.m === model) { await ch.q('update citizens set phone = $2 where id = $1', [c.id, model + '|' + color]); return { ok: true, phone: { m: model, col: color }, recolour: true }; } /* the same phone: a new colour, free */
       const back = Math.floor((now.price || 0) / 5), cost = M.price - back;
       ch.coins(c); if (c.coins_base < cost) throw new HttpError(400, `The ${M.name} costs ${fmt(M.price)} coins${back ? ` (${fmt(cost)} with your ${now.name} traded in)` : ''}. You have ${fmt(c.coins_base)} on you.`);
-      c.coins_base -= cost; treasuryAdd(ch, cost); track(ch, 'phone:buy', cost, c.id);
+      const sold = await sell(ch, shop, model, M.price); /* (an owned store: off its shelf, the shop price into its till; the colony pays the trade-in) */
+      c.coins_base -= cost; treasuryAdd(ch, sold.owned ? -back : cost); track(ch, 'phone:buy', cost, c.id);
       await ch.q('update citizens set phone = $2 where id = $1', [c.id, model + '|' + color]); ch.touch(c); await ch.saveCitizen(c);
-      return { ok: true, phone: { m: model, col: color }, paid: cost, tradeIn: back, coins: c.coins_base };
+      return { ok: true, phone: { m: model, col: color }, paid: cost, tradeIn: back, coins: c.coins_base, store: sold.owned ? { left: sold.left } : null };
     });
   }
 
@@ -212,7 +214,7 @@ export class Economy {
     const M = CAR_MODELS[model]; if (!M) throw new HttpError(400, 'Pick a car from the dealer.');
     if (!M.colors.includes(color)) color = M.colors[0];
     return this.world.change(async ch => {
-      const lot = (await ch.q("select id from buildings where id = $1 and type = 'cardealer' and done and not ruin", [String(buildingId || '')])).rows[0];
+      const lot = (await ch.q("select id, type, owner_id, owner_handle from buildings where id = $1 and type = 'cardealer' and done and not ruin for update", [String(buildingId || '')])).rows[0];
       if (!lot) throw new HttpError(409, 'Cars are sold at a Car dealership. Tap one on the map.');
       const c = await this.lockMe(ch, id); if (!c.home_id) throw new HttpError(400, 'You need a home (and a driveway) before you buy a car.');
       const cars = Array.isArray(c.cars) ? c.cars : [], road = ridden(model), plane = needsHangar(model), same = cars.filter(x => ridden(x.m) === road && !needsHangar(x.m)).length;
@@ -230,7 +232,8 @@ export class Economy {
       else if (M.kind === 'water') { spot = (await ch.q('select x, y from water order by (x - $1) * (x - $1) + (y - $2) * (y - $2) limit 1', [home.x, home.y])).rows[0];
         if (!spot) throw new HttpError(409, 'The colony has no water for a boat yet.'); }
       else if (M.kind === 'air') spot = { x: home.x, y: home.y };
-      c.coins_base -= M.price; treasuryAdd(ch, M.price); track(ch, 'car:buy', M.price, c.id);
+      const sold = await sell(ch, lot, model, M.price); /* (an owned dealership: off its forecourt, the price into its till) */
+      c.coins_base -= M.price; if (!sold.owned) treasuryAdd(ch, M.price); track(ch, 'car:buy', M.price, c.id);
       const car = { id: crypto.randomUUID().slice(0, 8), m: model, col: color, at: Date.now(), paid: M.price, ...(hangar ? { hangar: hangar.id } : {}) }; cars.push(car); await bump(ch, c.id, { cars_bought: 1 });
       await ch.q('update citizens set cars = $2, car_active = coalesce(car_active, $3) where id = $1', [c.id, JSON.stringify(cars), road ? car.id : null]);
       if (spot) { const [cx, cy] = R.chunkOf(spot.x, spot.y), vid = crypto.randomUUID();

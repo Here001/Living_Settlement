@@ -1,5 +1,6 @@
 // What a signed-in colonist can do themself: commit a crime, go somewhere, and keep a pet.
 import crypto from 'node:crypto';
+import { sell } from './stores.js';
 import { pool } from './db.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
@@ -376,12 +377,13 @@ export class Actions {
     if (!buildingId) throw new HttpError(400, 'Pets are adopted at a Pet store: tap one on the map.');
     const price = petPrice(kind);
     return this.world.personal(async ch => {
-      const store = (await ch.q("select id from buildings where id = $1 and type = 'petstore' and done and not ruin", [buildingId])).rows[0];
+      const store = (await ch.q("select id, type, owner_id, owner_handle from buildings where id = $1 and type = 'petstore' and done and not ruin", [buildingId])).rows[0];
       if (!store) throw new HttpError(409, "That isn't an open Pet store.");
       const { c } = await this.load(ch, id);
       if (c.pet) throw new HttpError(409, 'You already have a pet. Let it go first if you want a different one.');
       ch.coins(c); if (c.coins_base < price) throw new HttpError(400, `A ${CREATURES[kind].name} costs ${fmt(price)} coins. You have ${fmt(c.coins_base)} on you.`);
-      c.coins_base -= price; treasuryAdd(ch, price); track(ch, 'pet', price, c.id); ch.touch(c); await ch.saveCitizen(c);
+      const sold = await sell(ch, store, kind, price); /* (an owned pet store: one fewer in, the price into its till) */
+      c.coins_base -= price; if (!sold.owned) treasuryAdd(ch, price); track(ch, 'pet', price, c.id); ch.touch(c); await ch.saveCitizen(c);
       const pet = { k: kind, n: n || CREATURES[kind].name }; await ch.q('update citizens set pet = $2 where id = $1', [c.id, JSON.stringify(pet)]); await bump(ch, c.id, { pets: 1 });
       await ch.event(`🐾 @${c.handle} adopted a ${CREATURES[kind].name.toLowerCase()} called ${pet.n}.`, 'pet'); // News flash
       return { ok: true, pet, price, coins: c.coins_base };

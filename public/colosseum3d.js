@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import * as W from '/world3d.js';
 import { follower, pickPet } from '/creature3d.js';
 import * as BR from '/shared/brawl.js';
+import { decorate, mergeStatic } from '/colodecor.js';
 
 const SX = 1.22; // the bowl is an ellipse: x is stretched this much
 export function createColosseum(host, opts) {
@@ -20,7 +21,7 @@ export function createColosseum(host, opts) {
   const view = W.createView(canvas), { scene, camera, renderer } = view; camera.fov = 55; camera.near = 0.2; camera.far = 700; camera.updateProjectionMatrix();
   view.center.set(0, 0, 0); view.span = 60;
   const std = (c, r = 0.85, m = 0, extra = {}) => { const x = new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m, ...extra }); view.mats.push(x); return x; };
-  const add = (g, m, x, y, z, ry = 0, shadow = true) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.rotation.y = ry; o.castShadow = o.receiveShadow = shadow; scene.add(o); return o; };
+  const add = (g, m, x, y, z, ry = 0, shadow = true) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.rotation.y = ry; o.castShadow = o.receiveShadow = shadow; o.userData.static = true; /* (merged with the rest once it's all built: see colodecor.js) */ scene.add(o); return o; };
   const tex = (draw, n = 256, rep = true) => { const c = document.createElement('canvas'); c.width = c.height = n; draw(c.getContext('2d'), n); const t = new THREE.CanvasTexture(c); if (rep) t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
   const R0 = 10, PODIUM = 2.6, ROWS = 10, ROW_D = 1.25, ROW_H = 0.78, Y0 = PODIUM + 0.3, RT = R0 + 0.7 + ROWS * ROW_D, YT = Y0 + ROWS * ROW_H, ROUT = RT + 3.2;
   const er = (x, z) => Math.hypot(x / SX, z); /* "radius" on the ellipse */
@@ -67,9 +68,9 @@ export function createColosseum(host, opts) {
     const f = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.55, 8), flameM); f.position.set(x, PODIUM + 1.3, z); scene.add(f); flames.push(f); }
   const torchL = [new THREE.PointLight('#FFB060', 0, 26, 1.6), new THREE.PointLight('#FFB060', 0, 26, 1.6)]; torchL[0].position.set(-8, 5, -4); torchL[1].position.set(8, 5, 4); scene.add(...torchL);
   for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; add(new THREE.CylinderGeometry(0.12, 0.15, 7, 8), std('#7A5233', 0.8), Math.cos(a) * (ROUT + 1.6) * SX, YT + 9.4, Math.sin(a) * (ROUT + 1.6), 0, false); }
-  { const vel = new THREE.Mesh(new THREE.RingGeometry(RT - 4, ROUT + 1.6, 72, 1), std('#EDE3CF', 0.9, 0, { side: THREE.DoubleSide, transparent: true, opacity: 0.92 })); vel.rotation.x = -Math.PI / 2; vel.scale.set(SX, 1, 1); vel.position.y = YT + 12.6; scene.add(vel); }
+  /* (the awning: sails on ropes, in colodecor.js) */
   // ---- the fire jets: grates in the sand that glow, then roar (gladiator nights) ----
-  const jets = BR.JETS.map(J => { const grate = add(new THREE.CylinderGeometry(0.62, 0.62, 0.05, 20), std('#7C766E', 0.45, 0.75, { emissive: '#FF5A1F', emissiveIntensity: 0 }), J.x, 0.03, J.z, 0, false);
+  const jets = BR.JETS.map(J => { const grate = add(new THREE.CylinderGeometry(0.62, 0.62, 0.05, 20), std('#7C766E', 0.45, 0.75, { emissive: '#FF5A1F', emissiveIntensity: 0 }), J.x, 0.03, J.z, 0, false); grate.userData.static = false; /* (it glows: not merged) */
     const fire = new THREE.Mesh(new THREE.ConeGeometry(0.6, 3.6, 12, 1, true), new THREE.MeshBasicMaterial({ color: '#FF7A1F', transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     fire.position.set(J.x, 1.8, J.z); fire.visible = false; scene.add(fire); const core = new THREE.Mesh(new THREE.ConeGeometry(0.32, 2.4, 10, 1, true), new THREE.MeshBasicMaterial({ color: '#FFE38A', transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })); core.position.y = -0.4; fire.add(core); return { grate, fire }; });
   const jetLight = new THREE.PointLight('#FF6A1F', 0, 14, 1.5); jetLight.position.y = 2; scene.add(jetLight); let gladiator = false; jets.forEach(j => j.grate.visible = false);
@@ -107,14 +108,15 @@ export function createColosseum(host, opts) {
     g.textAlign = 'center'; g.fillStyle = '#E8F4FF'; g.font = '600 34px system-ui, sans-serif'; (S.lines || []).slice(0, 3).forEach((l, i) => g.fillText(l, 512, 350 + i * 46)); scrT.needsUpdate = true; }
   // ---- the crowd: a few hundred simple figures in the seats nobody real is in (one draw); they jump when the crowd roars ----
   const hypeU = { value: 0 }, timeU = { value: 0 };
-  { const body = new THREE.CapsuleGeometry(0.16, 0.5, 3, 8); body.translate(0, 0.48, 0); const head = new THREE.SphereGeometry(0.115, 8, 6); head.translate(0, 1.0, 0);
-    const geo = W.THREE ? mergeTwo(body, head) : body, N = 640, mat = new THREE.MeshStandardMaterial({ roughness: 0.85 }); view.mats.push(mat);
+  { const body = new THREE.CapsuleGeometry(0.16, 0.5, 2, 6); body.translate(0, 0.48, 0); const head = new THREE.IcosahedronGeometry(0.12, 1); head.translate(0, 1.0, 0); /* (few triangles: they're far off) */
+    const geo = body, N = 640, mat = new THREE.MeshStandardMaterial({ roughness: 0.85 }), hmat = new THREE.MeshStandardMaterial({ roughness: 0.7 }); view.mats.push(mat, hmat); /* (heads: a second batch in skin tones, moving with the bodies) */
+    hmat.onBeforeCompile = sh => { sh.uniforms.uHype = hypeU; sh.uniforms.uTime = timeU; sh.vertexShader = 'uniform float uHype; uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed.y += abs(sin(uTime * 7.0 + float(gl_InstanceID) * 1.7)) * 0.22 * uHype;'); };
     mat.onBeforeCompile = sh => { sh.uniforms.uHype = hypeU; sh.uniforms.uTime = timeU; sh.vertexShader = 'uniform float uHype; uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed.y += abs(sin(uTime * 7.0 + float(gl_InstanceID) * 1.7)) * 0.22 * uHype;'); };
-    const crowd = new THREE.InstancedMesh(geo, mat, N), M = new THREE.Matrix4(), col = new THREE.Color(), C = ['#C0392B', '#2E86C1', '#F1C40F', '#ECF0F1', '#8E44AD', '#27AE60', '#E67E22', '#34495E', '#D98BA8'];
+    const crowd = new THREE.InstancedMesh(geo, mat, N), M = new THREE.Matrix4(), col = new THREE.Color(), C = ['#F1EBDD', '#C8B48A', '#8A2A22', '#E8DCC0', '#4F6E8C', '#B5743A', '#5B2A6E', '#D9C9A6', '#7A8B3C'], heads = new THREE.InstancedMesh(head, hmat, N), SK = ['#8D5524', '#C68642', '#E0AC69', '#5C3A21', '#F1C27D', '#A0663D'];
     let n = 0; for (let r = 0; r < ROWS && n < N; r++) { const rr = R0 + 0.7 + r * ROW_D + 0.55, cnt = Math.floor(2 * Math.PI * rr * 1.1 / 0.62); for (let i = 0; i < cnt && n < N; i++) { const a = i / cnt * Math.PI * 2 + r * 0.13;
       if (Math.random() < 0.38) continue; const x = Math.cos(a) * rr * SX, z = Math.sin(a) * rr; if (Math.abs(x) < 3.2 && z < 0 && r < 4) continue; /* (the imperial box) */ if (Math.abs(z) < 2.2 && r < 3) continue; /* (the gates) */
-      M.makeRotationY(Math.atan2(-x, -z)); M.setPosition(x, Y0 + r * ROW_H + 0.05, z); crowd.setMatrixAt(n, M); crowd.setColorAt(n, col.set(C[(i * 7 + r) % C.length])); n++; } }
-    crowd.count = n; crowd.castShadow = false; scene.add(crowd); }
+      M.makeRotationY(Math.atan2(-x, -z)); M.setPosition(x, Y0 + r * ROW_H + 0.05, z); crowd.setMatrixAt(n, M); crowd.setColorAt(n, col.set(C[(i * 7 + r) % C.length])); heads.setMatrixAt(n, M); heads.setColorAt(n, col.set(SK[(i * 5 + r) % SK.length])); n++; } }
+    crowd.count = n; crowd.castShadow = false; scene.add(crowd); heads.count = n; scene.add(heads); }
   function mergeTwo(a, b) { const g = new THREE.BufferGeometry(), pa = a.toNonIndexed(), pb = b.toNonIndexed(); for (const k of ['position', 'normal']) { const A = pa.attributes[k].array, B = pb.attributes[k].array, out = new Float32Array(A.length + B.length); out.set(A); out.set(B, A.length); g.setAttribute(k, new THREE.BufferAttribute(out, 3)); } return g; }
   // ---- you, walking about the stands (like at the races): the stick or WASD walks, dragging looks round ----
   const tierAt = (x, z) => { const r = er(x, z); if (r < R0 + 0.7) return -1; if (r >= RT) return ROWS; return Math.floor((r - R0 - 0.7) / ROW_D); };
@@ -250,8 +252,9 @@ export function createColosseum(host, opts) {
     if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake * 0.25; camera.position.y += (Math.random() - 0.5) * shake * 0.2; shake = Math.max(0, shake - dt * 1.6); }
     camera.lookAt(aim); }
   // ---- the loop ----
-  let tSlow = 0, tw = 0; view.resize(); const sunTime = () => { if (opts.weather) view.setWeather(opts.weather()); view.setTime(opts.minute ? opts.minute() : 720); }; sunTime();
-  view.start((dt, now) => { walkMe(dt); stepOthers(dt);
+  const deco = decorate(view, { SX, R0, PODIUM, ROWS, ROW_D, ROW_H, Y0, RT, YT, ROUT }); const merged = mergeStatic(scene); /* (tens of still pieces into a handful of draws) */
+  let tSlow = 0, tw = 0; view.resize(); let sunAt = -99, wxNow = null; const sunTime = () => { const m = opts.minute ? opts.minute() : 720, w = opts.weather ? opts.weather() : null; if (w !== wxNow) { wxNow = w; if (w) view.setWeather(w); } if (Math.abs(m - sunAt) >= 3) { sunAt = m; view.setTime(m); } }; sunTime(); /* (the sun and its shadows: only when they've moved) */
+  view.start((dt, now) => { walkMe(dt); stepOthers(dt); deco.update(dt, now);
     // the fight: the live picture a tenth of a second behind, or a replay
     let s = null; if (replay) { replay.t += dt * 1000 / 2; const at = replay.t0 + replay.t; if (replay.t >= replay.len) replay = null; else s = sample(at); }
     if (!s) s = sample(now - 110); cur = s;
@@ -271,7 +274,7 @@ export function createColosseum(host, opts) {
     tSlow += dt; if (tSlow > 0.5) { tSlow = 0; paintScreen(now); paintBillboard(now); sunTime(); torchL.forEach(l => l.intensity = view.night > 0.3 ? 12 : 0); if (opts.onTick) opts.onTick(); } });
   const onResize = () => view.resize(); addEventListener('resize', onResize);
   return { view(m) { mode = m || MODES[(MODES.indexOf(mode) + 1) % MODES.length]; return mode; }, get mode() { return mode; },
-    stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, others: others.size, snaps: snaps.length, fighters: F.filter(Boolean).length, cam: camera.position.toArray().map(v => +v.toFixed(1)) }; },
+    stats() { return { merged, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, others: others.size, snaps: snaps.length, fighters: F.filter(Boolean).length, cam: camera.position.toArray().map(v => +v.toFixed(1)) }; },
     get me() { return { x: me.x, z: me.z, a: me.P.group.rotation.y, sit: me.sit, bench: bench() >= 0 }; }, sit() { if (me.sit) { standUp(); return false; } return sitDown(); },
     petHappy() { if (tapped) tapped.happy(); }, setMyPet(kind) { if (myPet && (!kind || myPet.kind !== kind)) { myPet.dispose(); myPet = null; } if (kind && !myPet) { try { myPet = follower(kind); scene.add(myPet.group); } catch (e) { myPet = null; } } },
     upsertOther, removeOther, setPet, say, brawl, setFighters, cheer(k) { roar = Math.min(1, roar + (k === 'boo' ? 0.1 : 0.25)); },

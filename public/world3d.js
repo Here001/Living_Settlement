@@ -244,7 +244,7 @@ const darken = (c, f) => col(c).multiplyScalar(f);
 // A block of town for driving (town3d.js) passes pad 0, ring false and add false: just its own tiles, no ground or roads
 // beyond its edges (the next block draws those), and it's added to the scene by the caller; L.gnd tells what's next door.
 export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add = true } = {}) {
-  const M = materials(view), B = {}; for (const k of Object.keys(M)) B[k] = new Bucket();
+  const M = materials(view), B = {}; for (const k of Object.keys(M)) B[k] = new Bucket(); L.lamps = [];
   const r = rnd(L.seed || 1), TILE = 8, tw = L.tw, th = L.th, gAt = (tx, ty) => (tx < 0 || ty < 0 || tx >= tw || ty >= th) ? (L.gnd ? L.gnd(tx, ty) : -1) : L.ground.charCodeAt(ty * tw + tx) - 48;
   const roadSet = new Map([...L.roads, ...(L.sroads || [])].map(([x, y, t]) => [x + ',' + y, t])), isRoad = (x, y) => roadSet.has(x + ',' + y);
   const kindAt = (x, y) => (ROAD_TYPES[roadSet.get(x + ',' + y)] || {}).kind, isRail = (x, y) => kindAt(x, y) === 'rail', railish = (x, y) => isRail(x, y) || kindAt(x, y) === 'crossing'; /* tracks, and where a road crosses them */
@@ -283,7 +283,7 @@ export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add =
       if (s === 'W') B.paint.quad([x0 + 0.2, y, z0 + a + 0.55], [x0 + 1.6, y, z0 + a + 0.55], [x0 + 1.6, y, z0 + a], [x0 + 0.2, y, z0 + a], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], white);
       if (s === 'E') B.paint.quad([x0 + 6.4, y, z0 + a + 0.55], [x0 + 7.8, y, z0 + a + 0.55], [x0 + 7.8, y, z0 + a], [x0 + 6.4, y, z0 + a], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], white); } }
     // street lamps along straight streets (they light up after dark)
-    if ((ew || ns) && ((tx * 7 + ty * 13) % 3 === 0)) { const lx = ew ? x0 + 4 : (n.W ? x0 - 0.9 : x0 + TILE + 0.9), lz = ew ? (z0 + TILE + 0.9) : z0 + 4; lamp(B, view, lx, lz); }
+    if ((ew || ns) && ((tx * 7 + ty * 13) % 3 === 0)) { const lx = ew ? x0 + 4 : (n.W ? x0 - 0.9 : x0 + TILE + 0.9), lz = ew ? (z0 + TILE + 0.9) : z0 + 4; const s0 = marks(B); lamp(B, view, lx, lz); L.lamps.push({ x: lx, z: lz, rng: since(B, s0) }); }
   }
   // buildings and open spaces
   const front = b => { const tx0 = Math.floor(b.x / TILE), ty0 = Math.floor(b.y / TILE), tx1 = Math.floor((b.x + b.w) / TILE), ty1 = Math.floor((b.y + b.h) / TILE); let best = 'S', bv = -1;
@@ -292,17 +292,23 @@ export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add =
   view.signs = []; for (const b of L.buildings) building(B, view, b, front(b), r);
   for (const b of L.scenery || []) building(B, view, b, 'S', r);
   // trees, cars, benches, lamps, fences, fountains, and the hiding places
-  for (const p of L.props) prop(B, view, p, r);
+  for (const p of L.props) { if (!p.brk) { prop(B, view, p, r); continue; } const s0 = marks(B); prop(B, view, p, r); p.rng = since(B, s0); } /* (a prop a car can knock over: where its corners are kept, so it can be taken out of the merged mesh) */
   for (const s of L.spots) spot(B, s);
   // the play area is cordoned off with barriers, with the town carrying on beyond them
   if (cordon) { const W = tw * TILE, H = th * TILE, c1 = col('#e9e4d8'), c2 = col('#c8382e');
     for (let x = 0; x < W; x += 3) { B.solid.box(x + 0.2, -0.3, x + 2.8, 0.1, 0.6, 1.0, (x / 3) % 2 ? c1 : c2); B.solid.box(x + 0.2, H - 0.1, x + 2.8, H + 0.3, 0.6, 1.0, (x / 3) % 2 ? c1 : c2); B.solid.box(x + 0.3, -0.2, x + 0.5, 0, 0, 0.6, c1); B.solid.box(x + 0.3, H, x + 0.5, H + 0.2, 0, 0.6, c1); }
     for (let z = 0; z < H; z += 3) { B.solid.box(-0.3, z + 0.2, 0.1, z + 2.8, 0.6, 1.0, (z / 3) % 2 ? c1 : c2); B.solid.box(W - 0.1, z + 0.2, W + 0.3, z + 2.8, 0.6, 1.0, (z / 3) % 2 ? c1 : c2); } }
   // merge each bucket into one mesh
-  const group = new THREE.Group(); for (const sg of view.signs || []) group.add(sg); view.signs = null; /* (the name boards, with the rest of the area) */
-  for (const [k, b] of Object.entries(B)) { const g = b.geometry(); if (!g) continue; const m = new THREE.Mesh(g, M[k]); m.castShadow = !['grass', 'asphalt', 'field', 'pitch', 'water', 'paint', 'pool', 'ao'].includes(k); if (k === 'pool' || k === 'ao') { m.renderOrder = 2; m.receiveShadow = false; } m.receiveShadow = true; m.matrixAutoUpdate = false; group.add(m); if (k === 'water') view.water = m; }
+  const group = new THREE.Group(), meshOf = {}; for (const sg of view.signs || []) group.add(sg); view.signs = null; /* (the name boards, with the rest of the area) */
+  for (const [k, b] of Object.entries(B)) { const g = b.geometry(); if (!g) continue; const m = new THREE.Mesh(g, M[k]); m.castShadow = !['grass', 'asphalt', 'field', 'pitch', 'water', 'paint', 'pool', 'ao'].includes(k); if (k === 'pool' || k === 'ao') { m.renderOrder = 2; m.receiveShadow = false; } m.receiveShadow = true; m.matrixAutoUpdate = false; group.add(m); if (k === 'water') view.water = m; meshOf[k] = m; }
+  group.userData.meshOf = meshOf; group.userData.lamps = L.lamps;
   if (add) { view.scene.add(group); view.area = group; renderer_shadow(view); } return group;
 }
+// Where each bucket's corners are up to (marks), and what was added since (since): [[bucket, from, to], ...].
+const marks = B => { const m = {}; for (const k in B) m[k] = B[k].p.length / 3; return m; };
+const since = (B, m) => { const out = []; for (const k in B) { const n = B[k].p.length / 3; if (n > m[k]) out.push([k, m[k], n]); } return out; };
+// Take a knocked-over prop out of its area: its corners fold into a point under the ground (no rebuild, no new draw).
+export function hideRanges(group, rng) { const M = group.userData.meshOf || {}; for (const [k, a, b] of rng || []) { const m = M[k]; if (!m) continue; const P = m.geometry.attributes.position; for (let i = a; i < b; i++) P.setXYZ(i, 0, -50, 0); P.addUpdateRange(a * 3, (b - a) * 3); P.needsUpdate = true; } }
 function renderer_shadow(view) { view.renderer.shadowMap.needsUpdate = true; }
 
 function lamp(B, view, x, z) {

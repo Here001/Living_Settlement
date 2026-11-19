@@ -133,10 +133,10 @@ export function createTrack(host, opts) {
     else if (mode === 'above') { pos.set(0, 70 * G, RZ * 1.6); tgt.set(0, 0, 0); camera.position.lerp(pos, k); aim.lerp(tgt, k); }
     else { camera.position.copy(eye); tgt.set(lead ? lead.x : 0, 0.5, lead ? lead.z * 0.85 : 0); aim.lerp(tgt, k); }
     camera.lookAt(aim); const fov = mode === 'stand' ? 40 : 55; if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); } }
-  let tSb = 0; view.resize(); view.setTime(opts.minute ? opts.minute() : 720);
+  let tSb = 0; view.resize(); if (opts.weather) view.setWeather(opts.weather()); view.setTime(opts.minute ? opts.minute() : 720);
   view.start((dt, now) => { walkMe(dt); stepOthers(dt); placeRunners(dt); placeCamera(dt); for (const f of flags) { const p = f.geometry.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i) + 0.8; p.setZ(i, Math.sin(now / 300 + x * 3 + f.position.x) * 0.12 * x); } p.needsUpdate = true; }
     for (const [id, b] of bubbles) if (performance.now() > b.until) { b.sp.parent && b.sp.parent.remove(b.sp); b.sp.material.map.dispose(); bubbles.delete(id); }
-    tSb += dt; if (tSb > 0.5) { tSb = 0; paintBoard(); seatPeople(); view.setTime(opts.minute ? opts.minute() : 720); if (opts.onTick) opts.onTick(); } });
+    tSb += dt; if (tSb > 0.5) { tSb = 0; paintBoard(); seatPeople(); if (opts.weather) view.setWeather(opts.weather()); view.setTime(opts.minute ? opts.minute() : 720); if (opts.onTick) opts.onTick(); } });
   const onResize = () => view.resize(); addEventListener('resize', onResize);
   return { view(m) { mode = m || MODES[(MODES.indexOf(mode) + 1) % MODES.length]; return mode; }, stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, runners: runners.size, crowd: crowd.size, others: others.size, cam: camera.position.toArray().map(v => +v.toFixed(2)), aim: aim.toArray().map(v => +v.toFixed(2)), mode, back, roofY, STAND_Z }; },
     get me() { return { x: me.x, z: me.z, a: me.P.group.rotation.y, sit: me.sit, bench: !!nearBench() }; }, sit() { if (me.sit) { standUp(); return false; } return sitDown(); },

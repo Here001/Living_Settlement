@@ -557,7 +557,7 @@ export function createTown(host, opts) {
   let nearCar = false, nearRide = null, sent = 0, nearAt = 0, nearId = null, chk = 0, timeAt = 0, shadowAt = { x: 1e9, z: 1e9 }, shadowsDue = true, frames = 0, spent = 0, dead = false;
   const minute = () => (opts.minute ? opts.minute() : 720);
   function sunNow(force) { const fast = Math.min(90, Math.abs(car.v) * 1.6); if (!(force || shadowsDue || Math.hypot(car.x - shadowAt.x, car.z - shadowAt.z) > 40 + fast)) return; /* (redone less often the faster you go: each redo is a hitch) */ shadowAt = { x: car.x, z: car.z }; shadowsDue = false;
-    view.center.set(car.x + Math.cos(car.a) * Math.min(40, Math.abs(car.v)), 0, car.z - Math.sin(car.a) * Math.min(40, Math.abs(car.v))); view.span = 110 + Math.min(70, Math.abs(car.v) * 1.2); /* at speed: a wider patch, ahead of you */ view.setTime(minute()); haze(); }
+    view.center.set(car.x + Math.cos(car.a) * Math.min(40, Math.abs(car.v)), 0, car.z - Math.sin(car.a) * Math.min(40, Math.abs(car.v))); view.span = 110 + Math.min(70, Math.abs(car.v) * 1.2); /* at speed: a wider patch, ahead of you */ if (opts.weather) view.setWeather(opts.weather()); view.setTime(minute()); haze(); }
   view.resize(); around(); sunNow(true);
   view.start((dt, now) => {
     if (dead) return; drive(dt);

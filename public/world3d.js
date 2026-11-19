@@ -122,7 +122,7 @@ export function createView(canvas) {
   const cut = { A: { value: new THREE.Vector3() }, B: { value: new THREE.Vector3() }, R: { value: 0 } };
   const view = { cut, renderer, scene, camera, sun, hemi, sky, stars, night: 0, mats: [], lamps: [], center: new THREE.Vector3(), span: 200, onFrame: null, running: false };
   // the time of day: the sun's height, the sky, and (after dark) lit windows and street lamps
-  view.setTime = minute => {
+  view.setTime = minute => { view.minute = minute;
     const dayT = ((minute % 1440) + 1440) % 1440 / 1440, ang = (dayT - 0.25) * Math.PI * 2, elev = Math.sin(ang); // sunrise 06:00, noon high, sunset 18:00
     const night = Math.max(0, Math.min(1, (-elev + 0.08) / 0.22)); view.night = night;
     const dir = new THREE.Vector3(Math.cos(ang) * 0.8, Math.max(0.12, elev), 0.55).normalize();
@@ -136,14 +136,40 @@ export function createView(canvas) {
     for (const m of view.mats) if (m.userData.glow) m.emissiveIntensity = m.userData.glow * night;
     for (const m of view.mats) if (m.userData.pool) m.opacity = night;
     const s = sun.shadow.camera, h = view.span * 0.75; s.left = -h; s.right = h; s.top = h; s.bottom = -h; s.near = 1; s.far = view.span * 2.5; s.updateProjectionMatrix();
-    renderer.shadowMap.needsUpdate = true;
+    renderer.shadowMap.needsUpdate = true; weatherLight();
   };
+  // ---- the weather, the same as on the 2D map: cloudy greys the sky and softens the sun; rain and storms darken it and
+  // bring rain falling round you (and lightning in a storm); fog closes in. One line mesh for the rain, moved on the
+  // CPU (a couple of thousand points: nothing for a phone), and only while it rains. ----
+  const WX = { sunny: { sun: 1, hemi: 1, exp: 1, sky: null, fog: 1, rain: 0 }, cloudy: { sun: 0.42, hemi: 0.92, exp: 0.94, sky: '#b9c2ca', night: '#151a24', fog: 0.85, rain: 0 },
+    rain: { sun: 0.2, hemi: 0.78, exp: 0.84, sky: '#8a949d', night: '#10141b', fog: 0.6, rain: PHONE ? 700 : 1100 }, storm: { sun: 0.08, hemi: 0.62, exp: 0.74, sky: '#5d6670', night: '#0b0e14', fog: 0.45, rain: PHONE ? 1300 : 2000, wind: 0.35 },
+    fog: { sun: 0.3, hemi: 0.95, exp: 0.95, sky: '#d3d7da', night: '#20242a', fog: 0.16, rain: 0 } };
+  view.weather = 'sunny'; let fogBase = null, fogSet = null, rainMesh = null, flash = 0, nextFlash = 0, hemiBase = hemi.intensity;
+  function weatherLight() { const w = WX[view.weather] || WX.sunny, night = view.night;
+    sun.intensity *= w.sun; hemi.intensity *= w.hemi; hemiBase = hemi.intensity; renderer.toneMappingExposure *= w.exp; scene.environmentIntensity *= 0.6 + 0.4 * w.hemi;
+    if (w.sky) { const c = new THREE.Color(w.sky).lerp(new THREE.Color(w.night), Math.min(1, night * 1.2)); sky.visible = false; scene.background = c; if (scene.fog) scene.fog.color.copy(c); }
+    weatherFog(); }
+  function weatherFog() { const w = WX[view.weather] || WX.sunny; if (!scene.fog) return; if (!fogSet || scene.fog.near !== fogSet[0] || scene.fog.far !== fogSet[1]) fogBase = [scene.fog.near, scene.fog.far]; /* (whoever owns the view may set its own haze: that is the clear-day distance) */
+    scene.fog.near = fogBase[0] * w.fog * (view.weather === 'fog' ? 0.2 : 1); scene.fog.far = fogBase[1] * w.fog; fogSet = [scene.fog.near, scene.fog.far]; }
+  view.setWeather = k => { k = WX[k] ? k : 'sunny'; if (k === view.weather) return; view.weather = k; const w = WX[k];
+    if (rainMesh) { scene.remove(rainMesh); rainMesh.geometry.dispose(); rainMesh.material.dispose(); rainMesh = null; }
+    if (w.rain) { const n = w.rain, pos = new Float32Array(n * 6), seed = new Float32Array(n * 3); const r = rnd(7);
+      for (let i = 0; i < n; i++) { seed[i * 3] = (r() - 0.5) * 70; seed[i * 3 + 1] = r() * 30; seed[i * 3 + 2] = (r() - 0.5) * 70; }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
+      rainMesh = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#c8d6e4', transparent: true, opacity: k === 'storm' ? 0.55 : 0.42, fog: false, depthWrite: false })); rainMesh.frustumCulled = false; rainMesh.userData = { seed, t: 0, wind: w.wind || 0.08 }; scene.add(rainMesh); }
+    flash = 0; if (view.minute != null) view.setTime(view.minute); else renderer.shadowMap.needsUpdate = true; };
+  function stepWeather(dt, now) { if (scene.fog && fogSet && (scene.fog.near !== fogSet[0] || scene.fog.far !== fogSet[1])) weatherFog(); /* (the haze was reset: put the weather's back) */
+    if (rainMesh) { const D = rainMesh.userData, P = rainMesh.geometry.attributes.position.array, S = D.seed, n = S.length / 3, c = camera.position, L = view.weather === 'storm' ? 1.1 : 0.8; D.t += dt;
+      for (let i = 0; i < n; i++) { const sp = 16 + (i % 5) * 2.2, y = ((S[i * 3 + 1] - D.t * sp) % 30 + 30) % 30 - 8, x = c.x + S[i * 3] + y * D.wind, z = c.z + S[i * 3 + 2], j = i * 6;
+        P[j] = x; P[j + 1] = c.y + y; P[j + 2] = z; P[j + 3] = x - L * D.wind; P[j + 4] = c.y + y - L; P[j + 5] = z; }
+      rainMesh.geometry.attributes.position.needsUpdate = true; }
+    if (view.weather === 'storm') { if (now > nextFlash) { flash = 1; nextFlash = now + 5000 + Math.random() * 9000; } if (flash > 0) { flash = Math.max(0, flash - dt * 6); hemi.intensity = hemiBase + flash * 2.4; } } }
   view.resize = () => { const box = canvas.parentElement || canvas, w = box.clientWidth || innerWidth, h = box.clientHeight || innerHeight; renderer.setSize(w, h, true); camera.aspect = w / h; camera.updateProjectionMatrix(); };
   // the loop: always at full sharpness (the resolution is never lowered), and it stops while the page is hidden
   let last = performance.now();
   view.start = fn => { view.onFrame = fn; if (view.running) return; view.running = true;
     renderer.setAnimationLoop(now => { if (document.hidden) { last = now; return; } const dt = Math.min(0.1, (now - last) / 1000); last = now;
-      const t0 = performance.now(); view.onFrame && view.onFrame(dt, now);
+      const t0 = performance.now(); view.onFrame && view.onFrame(dt, now); if (view.weather !== 'sunny') stepWeather(dt, now);
       // a hit shakes the camera just for this frame: "trauma" fades by itself, and the nudge is trauma² (see juice.js)
       let sx = 0, sy = 0, sz = 0; if (view.trauma > 0) { view.trauma = Math.max(0, view.trauma - 1.5 * dt); const k = view.trauma * view.trauma * (view.shakeAmp || 0.6), t = now / 1000 * 30; sx = k * Math.sin(t * 1.7); sy = k * Math.sin(t * 2.3) * 0.7; sz = k * Math.sin(t * 1.3); camera.position.x += sx; camera.position.y += sy; camera.position.z += sz; }
       renderer.render(scene, camera); guard.after(); if (sx || sy || sz) { camera.position.x -= sx; camera.position.y -= sy; camera.position.z -= sz; } view.ms = (view.ms || 0) * 0.9 + (performance.now() - t0) * 0.1; view.frames = (view.frames || 0) + 1; }); };

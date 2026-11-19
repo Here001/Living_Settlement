@@ -1207,6 +1207,8 @@ body.phone-on .worldbtn{display:none}
 .arbtn b{font-size:22px;line-height:1.05}.arbtn:active{transform:scale(.9);background:rgba(255,255,255,.35)}.arbtn.sp{grid-area:sp;border-color:#F2C94C}.arbtn.jb{grid-area:jb}.arbtn.hv{grid-area:hv}.arbtn.dg{grid-area:dg}.arbtn.bk{grid-area:bk;border-color:#4FC3F7}
 .arenaview.fight .trleave,.arenaview.fight .sidecol{display:none}
 @media (orientation:landscape) and (max-height:560px){ .arfans{bottom:calc(14px + env(safe-area-inset-bottom));left:auto;right:calc(env(safe-area-inset-right,0px) + 80px);transform:none} .arenaview .trleave{left:auto;right:calc(env(safe-area-inset-right,0px) + 80px);bottom:calc(84px + env(safe-area-inset-bottom));transform:none} }
+.cartbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0;padding:8px 10px;border-radius:12px;background:#FFF4E2;border:1px solid #E8C99A}.cartbar.empty{display:block;background:none;border:0;padding:0}
+.cartrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.08)}.cartrow .cinfo{flex:1;display:flex;flex-direction:column}.cartrow .cprice{white-space:nowrap}.cartrow .x{position:static}
 .bbadmin{margin-top:10px;border-top:1px solid rgba(0,0,0,.1);padding-top:8px}.bbadmin h4{margin:0 0 6px;font-size:13px}.bbslots{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
 .bbslot{flex:0 0 112px;display:flex;flex-direction:column;gap:4px}.bbslot img,.bbempty{width:112px;height:56px;border-radius:8px;object-fit:cover;background:#2B2621;color:#fff;display:grid;place-items:center;font-weight:800}
 .trackview .hjoy{bottom:calc(26px + env(safe-area-inset-bottom));left:calc(env(safe-area-inset-left,0px) + 18px)}
@@ -8137,7 +8139,7 @@ function dealerSection(b){ const box=el('div',{class:'authbox'}, el('h3',{text:'
     const sw=el('div',{class:'swatches'}); for(const col of M.colors) sw.append(el('button',{class:'sw'+(carPick.col===col?' on':''),style:`background:${col}`,'aria-label':'Colour','aria-pressed':String(carPick.col===col),onclick:()=>{ carPick.col=col; renderCard(true); }}));
     const why=needsHangar(carPick.m)?`Planes are kept in a hangar on your land and fly over the colony from there. Build a Plane hangar (holds ${BUILDING_TYPES.planehangar.hangar}) or a Private airport (holds ${BUILDING_TYPES.airport.hangar}) first: tap your plot, then Build here → Services → Aviation. `:M.kind==='water'?'It’s kept on the water nearest your home, where everyone can see it cruise. ':M.kind==='air'?'It flies over the colony from your home, for everyone to see. ':M.kind==='bike'?'You ride it on longer trips. ':'';
     const shot=carKind(carPick.m)==='car'?Showroom.img(carPick.m,carPick.col):null; /* the chosen car in 3D, in its colour */
-    box.append(g, shot?el('div',{class:'carshot'}, shot, el('b',{text:`${M.name}${M.electric?' ⚡':''}`}), el('span',{class:'hint',text:`${fmt(M.price)} coins · 👥 ${seatsOf(carPick.m)} seats`})):'', M.colors.length>1?sw:'', el('p',{class:'hint',text:`${why}Upkeep: ${fmt(M.upkeep)} coins a week. Resale value: 60% of what you paid. You can keep 3 cars and bikes, 3 boats and other aircraft, and as many planes as your hangars hold.`}), el('div',{class:'row-actions'}, StoreStock.tag(b,carPick.m), StoreStock.left(b,carPick.m)===0?el('button',{class:'btn',text:'Sold out here',disabled:true}):el('button',{class:'btn primary',text:`Buy the ${M.name.toLowerCase()} for ${fmt(M.price)}`,onclick:()=>meAction('/api/me/cars',{model:carPick.m,color:carPick.col,buildingId:b.id},r=>{ StoreStock.sold(b); return `Enjoy your new ${M.name.toLowerCase()}!`; })}))); }
+    box.append(g, shot?el('div',{class:'carshot'}, shot, el('b',{text:`${M.name}${M.electric?' ⚡':''}`}), el('span',{class:'hint',text:`${fmt(M.price)} coins · 👥 ${seatsOf(carPick.m)} seats`})):'', M.colors.length>1?sw:'', el('p',{class:'hint',text:`${why}Upkeep: ${fmt(M.upkeep)} coins a week. Resale value: 60% of what you paid. You can keep 3 cars and bikes, 3 boats and other aircraft, and as many planes as your hangars hold.`}), el('div',{class:'row-actions'}, StoreStock.tag(b,carPick.m), StoreStock.left(b,carPick.m)===0?el('button',{class:'btn',text:'Sold out here',disabled:true}):el('button',{class:'btn primary',text:`🛒 Add the ${M.name.toLowerCase()} · ${fmt(M.price)}`,onclick:()=>Cart.add(b,{ kind:'car', k:carPick.m, col:carPick.col, name:M.name, price:M.price, icon:'🚗' })})), Cart.bar(b)); }
   if(my.cars.length) box.append(el('h4',{class:'bgroup',text:'Sell one of yours'}), garageList(my.cars, my.active));
   return box; }
 async function meAction(path, body, ok, method){ try{ const r=await api(path,{method:method||'POST',body}); GuideUI.at=0; if(ok) toast(typeof ok==='function'?ok(r):ok); if(r&&typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
@@ -8281,6 +8283,40 @@ const StoreStock={ m:new Map(), /* building id → { at, busy, d } */
 // each with its price, a picture, what's in stock, and Buy. Clothes and jewellery go to your wardrobe (wear them from
 // ✏️ on your card); furniture and appliances go to your home's storage (place them from 🛋️ Furnish). ----
 const SLOT_ICON2={ top:'👕', bot:'👖', out:'🧥', hat:'🧢', eye:'🕶️', bag:'👜', shoe:'👟', wrist:'⌚', neck:'📿', ear:'💎', ring:'💍' };
+// ---- The cart: what you pick in a store waits in your cart (one per store); you pay for it all at once at checkout.
+// Clothes, furniture and appliances are paid in one go (all or nothing); a phone, a vehicle or a pet then goes through
+// as it always does (trade-ins, colours, names), once the total is checked against the coins on you.
+const Cart={ lines:new Map(),
+  of(b){ return (b&&this.lines.get(b.id))||[]; }, total(b){ return this.of(b).reduce((a,l)=>a+l.price,0); }, has(b,k){ return this.of(b).some(l=>l.k===k); },
+  add(b,line){ const L=[...this.of(b)];
+    if(line.kind==='phone'||line.kind==='pet') for(let i=L.length-1;i>=0;i--) if(L[i].kind===line.kind) L.splice(i,1); /* (one phone in your pocket, one pet at a time: the newer pick replaces the other) */
+    if(line.wear&&L.some(l=>l.k===line.k)){ toast(`The ${line.name.toLowerCase()} is already in your cart.`); return; }
+    L.push({ ...line, id:Math.random().toString(36).slice(2) }); this.lines.set(b.id,L); toast(`🛒 ${line.name} is in your cart (${L.length} item${L.length===1?'':'s'}, ${fmt(this.total(b))} coins).`,'Pay now',()=>this.sheet(b)); this.redraw(); },
+  remove(b,id){ this.lines.set(b.id,this.of(b).filter(l=>l.id!==id)); this.redraw(); },
+  redraw(){ if(sel&&sel.kind==='b') renderCard(true); if(StoreSheet.el) StoreSheet.paint(); if(this.box&&this.box.isConnected&&this.b) this.fill(); },
+  bar(b){ const L=this.of(b); if(!L.length) return el('p',{class:'hint cartbar empty',text:'🛒 Add what you want to your cart, then pay for it all at once.'});
+    return el('div',{class:'cartbar'}, el('b',{text:`🛒 ${L.length} item${L.length===1?'':'s'} · ${fmt(this.total(b))} coins`}), el('button',{class:'btn primary sm',text:'View cart & pay',onclick:()=>this.sheet(b)})); },
+  sheet(b){ const {box,close}=sheetBox('🛒 Your cart'); this.box=box; this.b=b; this.close=close; this.fill(); },
+  fill(){ const b=this.b, box=this.box, L=this.of(b); box.querySelectorAll('.cartlist,.cartfoot,.cartempty').forEach(x=>x.remove());
+    if(!L.length){ box.append(el('p',{class:'hint cartempty',text:'Your cart is empty.'})); return; }
+    box.append(el('div',{class:'cartlist'}, ...L.map(l=>el('div',{class:'cartrow'}, el('span',{text:l.icon||'🛍️'}), el('div',{class:'cinfo'}, el('b',{text:l.name}), l.note?el('span',{class:'hint',text:l.note}):''), el('b',{class:'cprice',text:fmt(l.price)}), el('button',{class:'x','aria-label':`Take the ${l.name} out`,text:'×',onclick:()=>this.remove(b,l.id)})))));
+    const tot=this.total(b), have=myMoney&&typeof myMoney.coins==='number'?myMoney.coins:null;
+    box.append(el('div',{class:'cartfoot'}, el('p',{class:'jobnow',text:`Total: ${fmt(tot)} coins${have!=null?` · you have ${fmt(have)} on you`:''}`}), el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:`💳 Pay ${fmt(tot)} coins`,disabled:this.busy||(have!=null&&have<tot),onclick:()=>this.checkout(b)}), el('button',{class:'btn',text:'Keep shopping',onclick:()=>this.close()}))));
+    if(have!=null&&have<tot) box.append(el('p',{class:'hint cartfoot',text:'Not enough coins on you for all of it: take something out, or withdraw some at a Bank.'})); },
+  async checkout(b){ if(this.busy) return; const L=this.of(b); if(!L.length) return; this.busy=true; this.fill(); const done=[], bad=[];
+    try{ const goods=L.filter(l=>l.kind==='goods');
+      if(goods.length){ const r=await api('/api/me/store/checkout',{method:'POST',body:{buildingId:b.id,items:goods.map(l=>({item:l.k,c:l.c||0}))}}); done.push(...goods.map(l=>l.id)); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } if(r.wardrobe){ GoodsStore.ward=new Set(r.wardrobe); GoodsStore.wardAt=Date.now(); } }
+      for(const l of L.filter(l=>l.kind!=='goods')){ try{ let r=null;
+          if(l.kind==='phone') r=await api('/api/me/phone',{method:'POST',body:{model:l.k,color:l.col,buildingId:b.id}}), Phone.setModel(r.phone);
+          else if(l.kind==='car') r=await api('/api/me/cars',{method:'POST',body:{model:l.k,color:l.col,buildingId:b.id}});
+          else if(l.kind==='pet') r=await api('/api/me/pet',{method:'POST',body:{kind:l.k,name:l.petName||'',buildingId:b.id}}), PetStore.at=0;
+          if(r&&typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } done.push(l.id); }catch(e){ bad.push(`${l.name}: ${e.message}`); } } }
+    catch(e){ bad.push(e.message); }
+    this.lines.set(b.id,this.of(b).filter(l=>!done.includes(l.id))); this.busy=false; StoreStock.sold(b); loadMyMoney&&loadMyMoney();
+    if(done.length){ const got=L.filter(l=>done.includes(l.id)), where=[]; if(got.some(l=>l.wear)) where.push('clothes are in your wardrobe (✏️ on your card)'); if(got.some(l=>l.kind==='goods'&&!l.wear)) where.push('furniture is in your home’s storage (🛋️ Furnish)'); if(got.some(l=>l.kind==='phone')) where.push('your new phone is in your pocket'); if(got.some(l=>l.kind==='car')) where.push('your new vehicle is in 🚗 My vehicles'); if(got.some(l=>l.kind==='pet')) where.push('your new pet is with you');
+      toast(`🧾 Paid ${fmt(got.reduce((a,l)=>a+l.price,0))} coins for ${done.length} item${done.length===1?'':'s'}: ${where.join('; ')}.`+(bad.length?` Not bought: ${bad.join(' · ')}`:'')); }
+    else if(bad.length) toast(bad.join(' · '));
+    if(!this.of(b).length&&this.close) this.close(); else this.fill(); this.redraw(); } };
 const GoodsStore={ dept:new Map(), pick:new Map(), ward:null, wardAt:0, H3:null, h3busy:false,
   wardrobe(){ if(!(Me&&Me.token)) return new Set(); if(!this.wardBusy&&(!this.ward||Date.now()-this.wardAt>60000)){ this.wardBusy=true; api('/api/me/look').then(r=>{ this.ward=new Set(r.wardrobe||[]); this.wardAt=Date.now(); }).catch(()=>{}).finally(()=>{ this.wardBusy=false; this.redraw(); }); } return this.ward||new Set(); },
   redraw(){ if(sel&&sel.kind==='b') renderCard(true); if(StoreSheet.el) StoreSheet.paint(); },
@@ -8295,11 +8331,12 @@ const GoodsStore={ dept:new Map(), pick:new Map(), ward:null, wardAt:0, H3:null,
     const kinds=new Set(all.filter(P=>P.dept===d).map(P=>P.kind)); box.append(el('p',{class:'hint',text:kinds.has('home')?'Furniture and appliances go into your home’s storage: set them out from 🛋️ Furnish.':kinds.has('wear')?'Clothes and jewellery go into your wardrobe: wear them from ✏️ on your card.':''}));
     const list=el('div',{class:'glist'});
     for(const P of all.filter(P=>P.dept===d)){ const own=P.kind==='wear'&&ward.has(P.slot+':'+P.key), left=StoreStock.left(b,P.k), out=left===0, c=this.pick.get(P.k)||0, f=P.kind==='home'?FURNITURE[P.key]:null;
-      const btn=own?el('button',{class:'btn sm',text:'✓ In your wardrobe',disabled:true}):out?el('button',{class:'btn sm',text:'Sold out here',disabled:true}):el('button',{class:'btn sm primary',text:`Buy · ${fmt(P.price)}`,onclick:()=>this.buy(b,P)});
+      const inCart=P.kind==='wear'&&Cart.has(b,P.k), btn=own?el('button',{class:'btn sm',text:'✓ In your wardrobe',disabled:true}):out?el('button',{class:'btn sm',text:'Sold out here',disabled:true}):inCart?el('button',{class:'btn sm',text:'✓ In your cart',disabled:true}):el('button',{class:'btn sm primary',text:`🛒 Add · ${fmt(P.price)}`,onclick:()=>this.buy(b,P)});
       list.append(el('div',{class:'grow'+(own?' on':'')}, this.pic(P), el('div',{class:'ginfo'}, el('b',{text:P.name}), el('span',{class:'hint',text:`${fmt(P.price)} coins${P.note?' · '+P.note:''}`}), StoreStock.tag(b,P.k),
         f&&f.tint?el('div',{class:'tints'}, ...TINTS.slice(0,10).map((col,i)=>el('button',{class:'tint'+(c===i?' on':''),style:`background:${col}`,'aria-label':'Colour',onclick:()=>{ this.pick.set(P.k,i); this.redraw(); }}))):'', el('div',{class:'row-actions'}, btn)))); }
-    box.append(list); return box; },
-  async buy(b,P){ if(P.kind==='phone'){ PhoneStore.buy(b,P.k,(P.colors||[])[0]); return; }
+    box.append(list, Cart.bar(b)); box.insertBefore(Cart.bar(b), box.children[2]||null); return box; },
+  async buy(b,P){ if(P.kind==='phone'){ Cart.add(b,{ kind:'phone', k:P.k, name:P.name, price:P.price, col:(P.colors||[])[0], icon:'📱' }); return; }
+    if(P.kind==='wear'||P.kind==='home'){ Cart.add(b,{ kind:'goods', k:P.k, name:P.name, price:P.price, c:this.pick.get(P.k)||0, wear:P.kind==='wear', icon:P.kind==='wear'?(SLOT_ICON2[P.slot]||'👕'):'🛋️', note:P.kind==='home'?'Goes into your home’s storage':'Goes into your wardrobe' }); return; }
     try{ const r=await api('/api/me/store/buy',{method:'POST',body:{buildingId:b.id,item:P.k,c:this.pick.get(P.k)||0}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
       if(r.wardrobe){ this.ward=new Set(r.wardrobe); this.wardAt=Date.now(); }
       toast(r.kind==='wear'?`🛍️ The ${r.name.toLowerCase()} is in your wardrobe. Wear it from ✏️ on your card.`:`📦 The ${r.name.toLowerCase()} is in your home’s storage. Place it from 🛋️ Furnish at home.`); StoreStock.sold(b); this.redraw(); }
@@ -8338,8 +8375,8 @@ const PhoneStore={ pick:null,
       const cost=Math.max(0,M.price-back), left=StoreStock.left(b,k), out=!own&&left===0, label=own?(pk===mine.col?'✓ Yours':'🎨 Change to this colour (free)'):out?'Sold out here':`Buy for ${fmt(cost)}${back?' with your trade-in':''}`;
       box.append(el('div',{class:'phrow'+(own?' on':'')}, el('span',{class:'phmini pt'+M.tier,style:`--pc:${pk}`}, el('i')),
         el('div',{class:'phinfo'}, el('b',{text:M.name}), el('span',{class:'hint',text:`${fmt(M.price)} coins · ${M.note}`}), StoreStock.tag(b,k), sw,
-          el('div',{class:'row-actions'}, el('button',{class:'btn sm'+(own&&pk===mine.col||out?'':' primary'),text:label,disabled:own&&pk===mine.col||out,onclick:()=>this.buy(b,k,pk)})))));
-    } return box; },
+          el('div',{class:'row-actions'}, el('button',{class:'btn sm'+(own&&pk===mine.col||out?'':' primary'),text:own?label:out?label:`🛒 Add · ${fmt(cost)}${back?' with trade-in':''}`,disabled:own&&pk===mine.col||out,onclick:()=>own?this.buy(b,k,pk):Cart.add(b,{ kind:'phone', k, name:M.name, price:cost, col:pk, icon:'📱', note:back?`${fmt(back)} off for your ${mine.name}`:'' })})))));
+    } box.append(Cart.bar(b)); return box; },
   async buy(b,m,col){ try{ const r=await api('/api/me/phone',{method:'POST',body:{model:m,color:col,buildingId:b.id}}); Phone.setModel(r.phone); this.pick=null; StoreStock.sold(b);
       if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
       toast(r.recolour?'🎨 New colour, same phone.':`📱 Your new ${PHONE_MODELS[m].name} is in your pocket.${r.tradeIn?` (${fmt(r.tradeIn)} coins off for your old one.)`:''} Tap 📱 Phone inside a place or out on the street to use it.`); renderCard(true); }
@@ -8360,7 +8397,7 @@ const PetStore={ me:null, at:0, busy:false,
     const g=el('div',{class:'petgrid'}); let grp=null; for(const k of PET_IDS){ const gp=CREATURES[k].group||'racer'; if(gp!==grp){ grp=gp; g.append(el('h4',{class:'petgroup',text:({racer:'🏁 Racers',ancient:'🦴 Ancient',mythic:'🐉 Mythic',scifi:'🛸 Sci-fi'})[gp]||gp})); }
       g.append(el('button',{class:'petb'+(petPick===k?' on':''),'aria-pressed':String(petPick===k),onclick:()=>{ petPick=k; renderCard(true); }}, el('img',{src:creatureThumb(k),'data-ck':k,alt:'',width:'64',height:'64'}), el('span',{text:CREATURES[k].name}), el('small',{class:'petprice',text:`${fmt(petPrice(k))} coins`}), StoreStock.tag(b,k))); }
     const ni=el('input',{type:'text',maxlength:'20',placeholder:`Name (e.g. ${CREATURES[petPick].name})`,'aria-label':'Pet name'});
-    box.append(g, el('p',{class:'hint',text:CREATURES[petPick].blurb}), el('div',{class:'cbet'}, ni, StoreStock.left(b,petPick)===0?el('button',{class:'btn',text:'Sold out here',disabled:true}):el('button',{class:'btn primary',text:`Adopt for ${fmt(petPrice(petPick))}`,onclick:()=>this.act('/api/me/pet',{kind:petPick,name:ni.value,buildingId:b.id},r=>{ StoreStock.sold(b); return `Say hello to ${r.pet.n}!`; })})));
+    box.append(g, el('p',{class:'hint',text:CREATURES[petPick].blurb}), el('div',{class:'cbet'}, ni, StoreStock.left(b,petPick)===0?el('button',{class:'btn',text:'Sold out here',disabled:true}):el('button',{class:'btn primary',text:`🛒 Add · ${fmt(petPrice(petPick))}`,onclick:()=>Cart.add(b,{ kind:'pet', k:petPick, name:CREATURES[petPick].name, petName:ni.value, price:petPrice(petPick), icon:'🐾', note:ni.value?`Named ${ni.value}`:'' })})), Cart.bar(b));
     return box; } };
 function nearestOf(type,c){ let best=null, bd=1e9; const at=(c&&(c.home||c.job))||null, ox=at?at[2]:0, oy=at?at[3]:0;
   for(const b of D.buildings.values()){ if(b.type!==type||b.done===false||b.ruin) continue; const dd=Math.abs(b.x-ox)+Math.abs(b.y-oy); if(dd<bd){ bd=dd; best=b; } } return best; }

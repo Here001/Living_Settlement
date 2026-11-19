@@ -1,6 +1,6 @@
 import { noteActive, history, track } from './stats.js';
 import { treasuryAdd } from './races.js';
-import { stockOf, restock, buyGoods } from './stores.js';
+import { stockOf, restock, buyGoods, checkoutGoods } from './stores.js';
 import { whereToBuy } from '../shared/stores.js';
 import * as AV from '../shared/avatar.js';
 import { assertNotMuted } from './chat.js';
@@ -278,6 +278,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.get('/stores/:id/stock', limit, send(async req => stockOf(req.params.id)));
   r.post('/me/stock', limit, send(async req => restock(world, (await me(req)).id, req.body || {})));
   r.post('/me/store/buy', limit, send(async req => buyGoods(world, (await me(req)).id, req.body || {})));
+  r.post('/me/store/checkout', limit, send(async req => checkoutGoods(world, (await me(req)).id, req.body || {})));
   r.post('/me/phone', limit, send(async req => { const b = req.body || {}; return world.economy.buyPhone((await me(req)).id, String(b.model || ''), String(b.color || ''), b.buildingId); }));
   r.post('/me/cars', limit, send(async req => { const b = req.body || {}; return world.economy.buyCar((await me(req)).id, String(b.model || ''), String(b.color || ''), b.buildingId); }));
   r.delete('/me/cars/:id', limit, send(async req => world.economy.sellCar((await me(req)).id, req.params.id)));

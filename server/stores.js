@@ -73,6 +73,32 @@ export async function buyGoods(world, playerId, { buildingId, item, c: tint }) {
   });
 }
 
+// Checkout: everything in your cart at this store, paid for at once. All of it or none of it: the total is checked
+// against the coins on you, every piece against the stock (and your wardrobe and storage) before anything is sold.
+export async function checkoutGoods(world, playerId, { buildingId, items }) {
+  if (!Array.isArray(items) || !items.length) throw new HttpError(400, 'Your cart is empty.'); if (items.length > 30) throw new HttpError(400, 'Thirty things at a time, at most.');
+  return world.change(async ch => {
+    const b = (await ch.q('select id, type, owner_id, owner_handle from buildings where id = $1 and done and not ruin for update', [String(buildingId || '')])).rows[0];
+    if (!b || !STORES[b.type]) throw new HttpError(404, 'That isn’t an open store.');
+    const c = (await ch.q('select * from citizens where id = $1 for update', [playerId])).rows[0]; if (!c) throw new HttpError(404, 'Who are you?');
+    const ward = [...(c.wardrobe || [])], lines = [];
+    for (const it of items) { const P = productOf(b.type, String((it && it.item) || '')); if (!P || !(P.kind === 'wear' || P.kind === 'home')) throw new HttpError(400, 'This store doesn’t sell something in your cart.'); lines.push({ P, tint: it.c }); }
+    const wears = lines.filter(l => l.P.kind === 'wear').map(l => wardKey(l.P.slot, l.P.key)), homes = lines.filter(l => l.P.kind === 'home');
+    for (const w of wears) if (ward.includes(w)) throw new HttpError(409, 'Something in your cart is already in your wardrobe. Take it out of the cart.');
+    if (new Set(wears).size !== wears.length) throw new HttpError(409, 'The same piece is in your cart twice.');
+    let room = null; if (homes.length) { if (!c.home_id) throw new HttpError(409, 'You need a home first: furniture goes into your home’s storage.');
+      room = c.room && typeof c.room === 'object' ? { ...c.room } : { items: [], box: [] }; room.items = room.items || []; room.box = [...(room.box || [])];
+      if (room.box.length + homes.length > MAX_STORED) throw new HttpError(409, `Your storage has room for ${Math.max(0, MAX_STORED - room.box.length)} more. Place some things from 🛋️ Furnish first.`); }
+    const total = lines.reduce((a, l) => a + l.P.price, 0); ch.coins(c);
+    if (Number(c.coins_base) < total) throw new HttpError(400, `Your cart comes to ${fmt(total)} coins. You have ${fmt(c.coins_base)} on you${Number(c.bank) ? ' (withdraw some at a Bank first)' : ''}.`);
+    let owned = false; for (const l of lines) { const sold = await sell(ch, b, l.P.k, l.P.price); owned = owned || sold.owned; if (!sold.owned) treasuryAdd(ch, l.P.price); track(ch, l.P.kind === 'wear' ? 'look:wardrobe' : 'home:furniture', l.P.price, c.id);
+      if (l.P.kind === 'wear') ward.push(wardKey(l.P.slot, l.P.key)); else { const f = FURNITURE[l.P.key], col = f.tint && Number.isInteger(+l.tint) && +l.tint >= 0 && +l.tint < TINTS.length ? +l.tint : 0; room.box.push({ i: crypto.randomUUID().slice(0, 8), k: l.P.key, c: col }); } }
+    c.coins_base = Number(c.coins_base) - total; if (wears.length) await ch.q('update citizens set wardrobe = $2 where id = $1', [c.id, ward]); if (room) await ch.q('update citizens set room = $2 where id = $1', [c.id, JSON.stringify(room)]);
+    ch.touch(c); await ch.saveCitizen(c);
+    return { ok: true, paid: total, count: lines.length, wear: wears.length, home: homes.length, coins: Math.round(Number(c.coins_base)), wardrobe: wears.length ? ward : undefined };
+  });
+}
+
 // A store goes back to the colony (sold to it, or knocked down): the colony takes its unsold stock back at what the owner
 // paid for it, and the money goes to them. (Sold to another player, the stock goes with the store.)
 export async function returnStock(ch, b, ownerId) {

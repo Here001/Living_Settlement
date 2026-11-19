@@ -67,6 +67,38 @@ const ground = {
   tiles: () => canvasTex('tiles', 256, (g, S) => { g.fillStyle = '#efe9e4'; g.fillRect(0, 0, S, S); for (let y = 0; y < S; y += 16) { g.fillStyle = 'rgba(0,0,0,.22)'; g.fillRect(0, y + 13, S, 3); for (let x = (y / 16) % 2 ? 8 : 0; x < S; x += 16) g.fillRect(x, y, 1.5, 14); } }),
 };
 
+// ---------------- path and paving surfaces (the map's surface roads: brick, cobbles, decking, sand...) ----------------
+// One small repeating picture per kind (painted only when a block uses it), 4 m across, in the map's own colours.
+const SURF = { pedestrian: 'cobble', cobble: 'cobble', plaza: 'brick', stone: 'slabs', grasspave: 'grasspave', sand: 'sand', gravel: 'gravel', dirt: 'dirt', herringbone: 'herring', terracotta: 'tiles', marble: 'marble',
+  checker: 'checker', mosaic: 'mosaic', deck: 'deck', slate: 'flags', crazypave: 'crazy', pebbles: 'pebbles', stepping: 'stepping', hexpave: 'hex', terrazzo: 'terrazzo', flowerpath: 'flowers', playmat: 'rubber', goldtile: 'gold' };
+function surfaceTex(type, R0) {
+  const pat = SURF[type] || (R0.kind === 'dirt' ? 'dirt' : 'cobble'), top = R0.top || '#c9c3b7', edge = R0.edge || '#999';
+  return canvasTex('surf-' + type, 256, (g, S) => { const r = rnd(hashS(type)), C = col(top), sh = (f, a = 1) => `rgba(${C.r * 255 * f | 0},${C.g * 255 * f | 0},${C.b * 255 * f | 0},${a})`;
+    g.fillStyle = top; g.fillRect(0, 0, S, S);
+    const grout = (w = 2) => { g.fillStyle = edge; g.globalAlpha = 0.55; };
+    if (pat === 'cobble') { g.fillStyle = edge; g.globalAlpha = 0.5; g.fillRect(0, 0, S, S); g.globalAlpha = 1; for (let y = 0; y < S; y += 21.33) for (let x = (Math.round(y / 21.33) % 2) * -10; x < S; x += 21.33) { g.fillStyle = sh(0.9 + r() * 0.2); if (g.roundRect) { g.beginPath(); g.roundRect(x + 1.5, y + 1.5, 18, 18, 6); g.fill(); } else g.fillRect(x + 1.5, y + 1.5, 18, 18); /* (older phones: square setts) */ } }
+    else if (pat === 'brick') { grout(); g.fillRect(0, 0, S, S); g.globalAlpha = 1; for (let y = 0, i = 0; y < S; y += 16, i++) for (let x = i % 2 ? -16 : 0; x < S; x += 32) { g.fillStyle = sh(0.88 + r() * 0.24); g.fillRect(x + 1, y + 1, 30, 14); } }
+    else if (pat === 'slabs' || pat === 'flags') { grout(); g.fillRect(0, 0, S, S); g.globalAlpha = 1; const n = pat === 'slabs' ? 2 : 4; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const w = S / n, o = pat === 'flags' && y % 2 ? w / 2 : 0; for (const k of [0, 1]) { g.fillStyle = sh(0.9 + r() * 0.2); g.fillRect(x * w + o - k * S + 2, y * w + 2, w - 4, w - 4); } } }
+    else if (pat === 'grasspave') { g.fillStyle = '#7fae5c'; g.fillRect(0, 0, S, S); g.fillStyle = '#c9c6bd'; for (let i = 0; i <= 8; i++) { g.fillRect(i * 32 - 3, 0, 6, S); g.fillRect(0, i * 32 - 3, S, 6); } for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(60,110,40,${0.3 + r() * 0.4})`; g.fillRect(r() * S, r() * S, 1.5, 3); } }
+    else if (pat === 'sand' || pat === 'dirt' || pat === 'gravel' || pat === 'rubber' || pat === 'terrazzo' || pat === 'flowers') { const n = pat === 'gravel' || pat === 'flowers' ? 2600 : 1800, big = pat === 'gravel' || pat === 'flowers' ? 3 : 2;
+      for (let i = 0; i < n; i++) { g.fillStyle = pat === 'terrazzo' ? ['#7a6a5a', '#b4483a', '#4a6a8a', '#efe8d8', '#2f2f2f'][i % 5] : sh(0.75 + r() * 0.45, 0.7); const s2 = 1 + r() * big; g.fillRect(r() * S, r() * S, s2, s2); }
+      if (pat === 'flowers') for (let i = 0; i < 40; i++) { const x = r() * S, y = r() * S; g.fillStyle = ['#e85a8a', '#f2c94c', '#ffffff', '#9b6ad8', '#ff8a3a'][i % 5]; for (let k = 0; k < 5; k++) { g.beginPath(); g.arc(x + Math.cos(k * 1.26) * 3, y + Math.sin(k * 1.26) * 3, 2.4, 0, 7); g.fill(); } g.fillStyle = '#f5d76e'; g.beginPath(); g.arc(x, y, 1.6, 0, 7); g.fill(); }
+      if (pat === 'sand') for (let i = 0; i < 30; i++) { g.strokeStyle = sh(0.9, 0.35); g.lineWidth = 1.5; g.beginPath(); const y = r() * S; g.moveTo(0, y); g.bezierCurveTo(S / 3, y - 6, S * 2 / 3, y + 6, S, y); g.stroke(); } }
+    else if (pat === 'herring') { grout(); g.fillRect(0, 0, S, S); g.globalAlpha = 1; for (let y = -64; y < S + 64; y += 16) for (let x = -64; x < S + 64; x += 32) { g.fillStyle = sh(0.86 + r() * 0.26); g.save(); g.translate(x + (y / 16 % 2 ? 16 : 0), y); g.rotate(Math.PI / 4 * ((x / 32 + y / 16) % 2 ? 1 : -1)); g.fillRect(-15, -6, 30, 12); g.restore(); } }
+    else if (pat === 'tiles' || pat === 'gold') { grout(); g.fillRect(0, 0, S, S); g.globalAlpha = 1; for (let y = 0; y < S; y += 32) for (let x = 0; x < S; x += 32) { const gr = g.createLinearGradient(x, y, x + 32, y + 32); gr.addColorStop(0, sh(pat === 'gold' ? 1.15 : 1.02)); gr.addColorStop(1, sh(pat === 'gold' ? 0.8 : 0.92 + r() * 0.1)); g.fillStyle = gr; g.fillRect(x + 1.5, y + 1.5, 29, 29); } }
+    else if (pat === 'marble') { for (let i = 0; i < 14; i++) { g.strokeStyle = `rgba(150,140,130,${0.15 + r() * 0.25})`; g.lineWidth = 0.6 + r() * 1.4; g.beginPath(); let x = r() * S, y = r() * S; g.moveTo(x, y); for (let k = 0; k < 6; k++) { x += (r() - 0.3) * 50; y += (r() - 0.5) * 40; g.lineTo(x, y); } g.stroke(); } g.fillStyle = 'rgba(160,150,140,.35)'; for (let i = 0; i <= 2; i++) { g.fillRect(i * 128 - 1, 0, 2, S); g.fillRect(0, i * 128 - 1, S, 2); } }
+    else if (pat === 'checker') { for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { g.fillStyle = (x + y) % 2 ? edge : top; g.fillRect(x * 32, y * 32, 32, 32); } }
+    else if (pat === 'mosaic') { for (let y = 0; y < S; y += 8) for (let x = 0; x < S; x += 8) { const d = Math.hypot((x % 64) - 32, (y % 64) - 32); g.fillStyle = d < 12 || (d > 22 && d < 28) ? edge : r() < 0.08 ? '#7FB0D8' : top; g.fillRect(x + 0.6, y + 0.6, 6.8, 6.8); } }
+    else if (pat === 'deck') { for (let y = 0; y < S; y += 21.33) { g.fillStyle = sh(0.85 + r() * 0.25); g.fillRect(0, y + 1, S, 19); for (let k = 0; k < 6; k++) { g.fillStyle = sh(0.7, 0.35); g.fillRect(r() * S, y + 3 + r() * 14, 20 + r() * 40, 1); } g.fillStyle = edge; g.fillRect(((y / 21.33) % 4) * 64 + 30, y + 1, 2, 19); } }
+    else if (pat === 'crazy' || pat === 'pebbles' || pat === 'stepping') { if (pat === 'stepping') { g.fillStyle = '#7fae5c'; g.fillRect(0, 0, S, S); } else { g.fillStyle = edge; g.globalAlpha = 0.6; g.fillRect(0, 0, S, S); g.globalAlpha = 1; }
+      const n = pat === 'pebbles' ? 260 : pat === 'crazy' ? 46 : 4, R = pat === 'pebbles' ? 7 : pat === 'crazy' ? 26 : 44;
+      for (let i = 0; i < n; i++) { const x = pat === 'stepping' ? (i % 2) * 128 + 64 : r() * S, y = pat === 'stepping' ? (i >> 1) * 128 + 64 : r() * S; g.fillStyle = pat === 'stepping' ? (edge) : sh(0.82 + r() * 0.36); for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) { g.beginPath(); const k = pat === 'crazy' ? 7 : 12; for (let j = 0; j < k; j++) { const a = j / k * 6.283, rr = R * (0.75 + r() * 0.25) * (pat === 'pebbles' ? (j % 2 ? 0.7 : 1) : 1); g.lineTo(x + ox + Math.cos(a) * rr, y + oy + Math.sin(a) * rr); } g.fill(); } } }
+    else if (pat === 'hex') { grout(); g.fillRect(0, 0, S, S); g.globalAlpha = 1; const R = 16, w = R * Math.sqrt(3); for (let row = -1; row < S / (R * 1.5) + 1; row++) for (let c = -1; c < S / w + 1; c++) { const x = c * w + (row % 2 ? w / 2 : 0), y = row * R * 1.5; g.fillStyle = sh(0.88 + r() * 0.22); g.beginPath(); for (let j = 0; j < 6; j++) { const a = Math.PI / 6 + j * Math.PI / 3; g.lineTo(x + Math.cos(a) * (R - 1.5), y + Math.sin(a) * (R - 1.5)); } g.fill(); } }
+    g.globalAlpha = 1; noise(g, 1.5, 1400, '0,0,0', 0.08, r); });
+}
+function surfaceMat(view, type, R0) { const key = 'surf:' + type; if (view.M[key]) return view.M[key]; const m = new THREE.MeshStandardMaterial({ vertexColors: true, map: surfaceTex(type, R0), roughness: SURF[type] === 'marble' || SURF[type] === 'gold' ? 0.35 : 0.9, metalness: SURF[type] === 'gold' ? 0.5 : 0 }); view.mats.push(m); return (view.M[key] = m); }
+const isSurface = R0 => !!R0 && (R0.kind === 'cobble' || R0.kind === 'dirt'); /* (paths and paving: no kerbs, no lane lines) */
+
 // ---------------- a geometry builder: quads and boxes, grouped by material, merged into one mesh each ----------------
 class Bucket {
   constructor() { this.p = []; this.n = []; this.u = []; this.c = []; this.i = []; }
@@ -244,7 +276,7 @@ const darken = (c, f) => col(c).multiplyScalar(f);
 // A block of town for driving (town3d.js) passes pad 0, ring false and add false: just its own tiles, no ground or roads
 // beyond its edges (the next block draws those), and it's added to the scene by the caller; L.gnd tells what's next door.
 export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add = true } = {}) {
-  const M = materials(view), B = {}; for (const k of Object.keys(M)) B[k] = new Bucket(); L.lamps = [];
+  const M = materials(view), B = {}, SB = {}; for (const k of Object.keys(M)) { if (!k.startsWith('surf:')) B[k] = new Bucket(); } L.lamps = [];
   const r = rnd(L.seed || 1), TILE = 8, tw = L.tw, th = L.th, gAt = (tx, ty) => (tx < 0 || ty < 0 || tx >= tw || ty >= th) ? (L.gnd ? L.gnd(tx, ty) : -1) : L.ground.charCodeAt(ty * tw + tx) - 48;
   const roadSet = new Map([...L.roads, ...(L.sroads || [])].map(([x, y, t]) => [x + ',' + y, t])), isRoad = (x, y) => roadSet.has(x + ',' + y);
   const kindAt = (x, y) => (ROAD_TYPES[roadSet.get(x + ',' + y)] || {}).kind, isRail = (x, y) => kindAt(x, y) === 'rail', railish = (x, y) => isRail(x, y) || kindAt(x, y) === 'crossing'; /* tracks, and where a road crosses them */
@@ -253,6 +285,11 @@ export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add =
   for (let ty = -pad; ty < th + pad; ty++) for (let tx = -pad; tx < tw + pad; tx++) {
     const k = (tx >= 0 && ty >= 0 && tx < tw && ty < th) ? gAt(tx, ty) : isRoad(tx, ty) ? 2 : (L.swater || []).some(w => w[0] === tx && w[1] === ty) ? 3 : 0, x0 = tx * TILE, z0 = ty * TILE, x1 = x0 + TILE, z1 = z0 + TILE, b = k === 2 ? B.asphalt : k === 3 ? B.water : k === 4 ? B.field : k === 5 ? B.pitch : k === 1 ? B.paving : B.grass, y = k === 3 ? -0.05 : 0; /* (water just above the far ground sheet, below the banks) */
     if (k === 2 && isRail(tx, ty)) { B.solid.box(x0, z0, x1, z1, -0.05, 0.06, col('#8a8276')); continue; } /* a railway: a bed of grey ballast */
+    if (k === 2) { const type = roadSet.get(tx + ',' + ty), R0 = ROAD_TYPES[type]; if (isSurface(R0)) { const sb = SB[type] || (SB[type] = new Bucket()), q = 4; /* (a path or paving: its own look, 4 m to a repeat) */
+        sb.quad([x0, 0.012, z1], [x1, 0.012, z1], [x1, 0.012, z0], [x0, 0.012, z0], [0, 1, 0], [x0 / q, z1 / q, x1 / q, z1 / q, x1 / q, z0 / q, x0 / q, z0 / q], col('#ffffff'));
+        const ec = col(R0.edge || R0.top), e = 0.28; for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) { if (roadSet.get((tx + dx) + ',' + (ty + dy)) === type) continue; /* (a border where it meets something else) */
+          const a = dx > 0 ? x1 - e : x0, c = dy > 0 ? z1 - e : z0; if (dx) B.paving.box(a, z0, a + e, z1, 0, 0.035, ec, { su: 2, sv: 2 }); else B.paving.box(x0, c, x1, c + e, 0, 0.035, ec, { su: 2, sv: 2 }); }
+        continue; } }
     const s = k === 2 ? 8 : 6; b.quad([x0, y, z1], [x1, y, z1], [x1, y, z0], [x0, y, z0], [0, 1, 0], [x0 / s, z1 / s, x1 / s, z1 / s, x1 / s, z0 / s, x0 / s, z0 / s], col('#ffffff'));
     if (k === 3) for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) { const n = gAt(tx + dx, ty + dy); if (n === 3) continue; // banks (and a line of foam along them)
       { const fw = 0.9, fy = y + 0.04, fc = col('#ffffff'); if (dx) { const a = dx > 0 ? x1 - fw : x0; B.foam.quad([a, fy, z1], [a + fw, fy, z1], [a + fw, fy, z0], [a, fy, z0], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], fc); } else { const a = dy > 0 ? z1 - fw : z0; B.foam.quad([x0, fy, a + fw], [x1, fy, a + fw], [x1, fy, a], [x0, fy, a], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], fc); } }
@@ -260,7 +297,8 @@ export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add =
   }
   // streets: pavements and kerbs where a street meets anything else, lane markings, and zebra crossings at junctions
   for (const [tx, ty, type] of ring ? [...L.roads, ...(L.sroads || [])] : L.roads) {
-    const R0 = ROAD_TYPES[type] || {}, x0 = tx * TILE, z0 = ty * TILE, n = { N: isRoad(tx, ty - 1), S: isRoad(tx, ty + 1), W: isRoad(tx - 1, ty), E: isRoad(tx + 1, ty) }, white = col('#f2f0e8'), yellow = col('#f2c94c');
+    const R0 = ROAD_TYPES[type] || {}; if (isSurface(R0)) continue; /* (paths and paving were drawn with the ground) */
+    const x0 = tx * TILE, z0 = ty * TILE, n = { N: isRoad(tx, ty - 1), S: isRoad(tx, ty + 1), W: isRoad(tx - 1, ty), E: isRoad(tx + 1, ty) }, white = col('#f2f0e8'), yellow = col('#f2c94c');
     const kerb = (side) => { const w = 1.6, hgt = 0.14, c = col(R0.walk || '#d6d1c6');
       if (side === 'N') B.paving.box(x0, z0 - w, x0 + TILE, z0, 0, hgt, c, { su: 2, sv: 2 }); if (side === 'S') B.paving.box(x0, z0 + TILE, x0 + TILE, z0 + TILE + w, 0, hgt, c, { su: 2, sv: 2 });
       if (side === 'W') B.paving.box(x0 - w, z0, x0, z0 + TILE, 0, hgt, c, { su: 2, sv: 2 }); if (side === 'E') B.paving.box(x0 + TILE, z0, x0 + TILE + w, z0 + TILE, 0, hgt, c, { su: 2, sv: 2 }); };
@@ -273,17 +311,18 @@ export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add =
         for (const o of [-0.72, 0.72]) { const y0 = cross ? 0 : 0.16, y1 = cross ? 0.045 : 0.3; if (ew) B.solid.box(cx + a - 0.05, cz + o - 0.05, cx + a + 4.05, cz + o + 0.05, y0, y1, steel); else B.solid.box(cx + o - 0.05, cz + a - 0.05, cx + o + 0.05, cz + a + 4.05, y0, y1, steel); } }
       if (R0.platform) { const ew = r.E || r.W || !(r.N || r.S); for (const o of [-1, 1]) { if (ew) B.paving.box(x0, cz + o * 3.15 - 0.95, x0 + TILE, cz + o * 3.15 + 0.95, 0, 0.9, col('#cfc9bc'), { su: 2, sv: 2 }); else B.paving.box(cx + o * 3.15 - 0.95, z0, cx + o * 3.15 + 0.95, z0 + TILE, 0, 0.9, col('#cfc9bc'), { su: 2, sv: 2 }); } } /* the platforms either side */
       if (!cross) continue; }
-    const ew = (n.E || n.W) && !n.N && !n.S, ns = (n.N || n.S) && !n.E && !n.W, y = 0.02;
+    const car = (x, y) => isRoad(x, y) && !isSurface(ROAD_TYPES[roadSet.get(x + ',' + y)]), m = { N: car(tx, ty - 1), S: car(tx, ty + 1), W: car(tx - 1, ty), E: car(tx + 1, ty) }; /* (lane lines and crossings follow the roads cars use) */
+    const ew = (m.E || m.W) && !m.N && !m.S, ns = (m.N || m.S) && !m.E && !m.W, y = 0.02;
     if (ew) for (let i = 0; i < 2; i++) { const a = x0 + 0.8 + i * 4; B.paint.quad([a, y, z0 + 4.08], [a + 2.2, y, z0 + 4.08], [a + 2.2, y, z0 + 3.92], [a, y, z0 + 3.92], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], R0.lanes ? white : yellow); }
     if (ns) for (let i = 0; i < 2; i++) { const a = z0 + 0.8 + i * 4; B.paint.quad([x0 + 3.92, y, a + 2.2], [x0 + 4.08, y, a + 2.2], [x0 + 4.08, y, a], [x0 + 3.92, y, a], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], R0.lanes ? white : yellow); }
-    const junction = (n.N || n.S) && (n.E || n.W);
-    if (junction) for (const s of ['N', 'S', 'W', 'E']) { if (!n[s]) continue; for (let i = 0; i < 6; i++) { const a = 1 + i * 1.1;
+    const junction = (m.N || m.S) && (m.E || m.W);
+    if (junction) for (const s of ['N', 'S', 'W', 'E']) { if (!m[s]) continue; for (let i = 0; i < 6; i++) { const a = 1 + i * 1.1;
       if (s === 'N') B.paint.quad([x0 + a, y, z0 + 1.6], [x0 + a + 0.55, y, z0 + 1.6], [x0 + a + 0.55, y, z0 + 0.2], [x0 + a, y, z0 + 0.2], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], white);
       if (s === 'S') B.paint.quad([x0 + a, y, z0 + 7.8], [x0 + a + 0.55, y, z0 + 7.8], [x0 + a + 0.55, y, z0 + 6.4], [x0 + a, y, z0 + 6.4], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], white);
       if (s === 'W') B.paint.quad([x0 + 0.2, y, z0 + a + 0.55], [x0 + 1.6, y, z0 + a + 0.55], [x0 + 1.6, y, z0 + a], [x0 + 0.2, y, z0 + a], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], white);
       if (s === 'E') B.paint.quad([x0 + 6.4, y, z0 + a + 0.55], [x0 + 7.8, y, z0 + a + 0.55], [x0 + 7.8, y, z0 + a], [x0 + 6.4, y, z0 + a], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], white); } }
     // street lamps along straight streets (they light up after dark)
-    if ((ew || ns) && ((tx * 7 + ty * 13) % 3 === 0)) { const lx = ew ? x0 + 4 : (n.W ? x0 - 0.9 : x0 + TILE + 0.9), lz = ew ? (z0 + TILE + 0.9) : z0 + 4; const s0 = marks(B); lamp(B, view, lx, lz); L.lamps.push({ x: lx, z: lz, rng: since(B, s0) }); }
+    if ((ew || ns) && ((tx * 7 + ty * 13) % 3 === 0)) { const lx = ew ? x0 + 4 : (m.W ? x0 - 0.9 : x0 + TILE + 0.9), lz = ew ? (z0 + TILE + 0.9) : z0 + 4; const s0 = marks(B); lamp(B, view, lx, lz); L.lamps.push({ x: lx, z: lz, rng: since(B, s0) }); }
   }
   // buildings and open spaces
   const front = b => { const tx0 = Math.floor(b.x / TILE), ty0 = Math.floor(b.y / TILE), tx1 = Math.floor((b.x + b.w) / TILE), ty1 = Math.floor((b.y + b.h) / TILE); let best = 'S', bv = -1;
@@ -301,6 +340,7 @@ export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add =
   // merge each bucket into one mesh
   const group = new THREE.Group(), meshOf = {}; for (const sg of view.signs || []) group.add(sg); view.signs = null; /* (the name boards, with the rest of the area) */
   for (const [k, b] of Object.entries(B)) { const g = b.geometry(); if (!g) continue; const m = new THREE.Mesh(g, M[k]); m.castShadow = !['grass', 'asphalt', 'field', 'pitch', 'water', 'paint', 'pool', 'ao'].includes(k); if (k === 'pool' || k === 'ao') { m.renderOrder = 2; m.receiveShadow = false; } m.receiveShadow = true; m.matrixAutoUpdate = false; group.add(m); if (k === 'water') view.water = m; meshOf[k] = m; }
+  for (const [type, b] of Object.entries(SB)) { const g = b.geometry(); if (!g) continue; const m = new THREE.Mesh(g, surfaceMat(view, type, ROAD_TYPES[type])); m.receiveShadow = true; m.matrixAutoUpdate = false; group.add(m); } /* (one draw per kind of paving a block uses) */
   group.userData.meshOf = meshOf; group.userData.lamps = L.lamps;
   if (add) { view.scene.add(group); view.area = group; renderer_shadow(view); } return group;
 }

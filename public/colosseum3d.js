@@ -110,9 +110,10 @@ export function createColosseum(host, opts) {
   // ---- the crowd: a few hundred whole people sitting in the seats nobody real is in (crowdfig.js: a handful of draws);
   // they bounce and throw their arms up when the crowd roars ----
   const hypeU = { value: 0 }, timeU = { value: 0 }; let crowd = null; const FOLK = [];
-  { const spots = [], N = 600; for (let r = 0; r < ROWS && spots.length < N; r++) { const rr = R0 + 0.7 + r * ROW_D + 0.4, cnt = Math.floor(2 * Math.PI * rr * 1.1 / 0.62); for (let i = 0; i < cnt && spots.length < N; i++) { const a = i / cnt * Math.PI * 2 + r * 0.13;
-      if (Math.random() < 0.38) continue; const x = Math.cos(a) * rr * SX, z = Math.sin(a) * rr; if (Math.abs(x) < 3.2 && z < 0 && r < 4) continue; /* (the imperial box) */ if (Math.abs(z) < 2.2 && r < 3) continue; /* (the gates) */
-      spots.push([x, Y0 + (r + 1) * ROW_H + 0.01, z, Math.atan2(-x, -z)]); } } /* (on the step's front edge, legs over it, facing the sand) */
+  { const all = [], N = 450; for (let r = 0; r < ROWS; r++) { const rr = R0 + 0.7 + r * ROW_D + 0.4, cnt = Math.floor(2 * Math.PI * rr * 1.1 / 0.62); for (let i = 0; i < cnt; i++) { const a = i / cnt * Math.PI * 2 + r * 0.13;
+      const x = Math.cos(a) * rr * SX, z = Math.sin(a) * rr; if (Math.abs(x) < 3.2 && z < 0 && r < 4) continue; /* (the imperial box) */ if (Math.abs(z) < 2.2 && r < 3) continue; /* (the gates) */
+      all.push([x, Y0 + (r + 1) * ROW_H + 0.01, z, Math.atan2(-x, -z)]); } }
+    for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; } const spots = all.slice(0, N); /* (450 seats picked at random from every row, so the whole bowl looks evenly full) */ /* (on the step's front edge, legs over it, facing the sand) */
     crowd = makeCrowd({ scene, spots, pose: 'sit', hype: hypeU, time: timeU, shoes: false, mats: view.mats, tops: ['#F1EBDD', '#C8B48A', '#8A2A22', '#E8DCC0', '#4F6E8C', '#B5743A', '#5B2A6E', '#D9C9A6', '#7A8B3C', '#A8352B'] }); } /* (Roman tunics; sandals don't show from the stands) */
   function mergeTwo(a, b) { const g = new THREE.BufferGeometry(), pa = a.toNonIndexed(), pb = b.toNonIndexed(); for (const k of ['position', 'normal']) { const A = pa.attributes[k].array, B = pb.attributes[k].array, out = new Float32Array(A.length + B.length); out.set(A); out.set(B, A.length); g.setAttribute(k, new THREE.BufferAttribute(out, 3)); } return g; }
   // ---- you, walking about the stands (like at the races): the stick or WASD walks, dragging looks round ----

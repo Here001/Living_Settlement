@@ -136,7 +136,8 @@ export function createTown(host, opts) {
   const car = { x: (opts.start.x) * TILE, z: (opts.start.y) * TILE, a: opts.start.a || 0, v: 0, steer: 0 };
   // what you're in: a car, a bike (your character rides it) or a boat (it only goes on water)
   const VK = opts.car.kind || 'car', BOAT = W.vehOn(VK) === 'water', BIKE = W.isVeh(VK) && !BOAT;
-  const PERF = (() => { if (BIKE || BOAT) return ({ bicycle: { top: 9, acc: 2.6, grip: 6 }, motorbike: { top: 46, acc: 9.5, grip: 9 }, boat: { top: 24, acc: 4.5, grip: 3 }, sailboat: { top: 11, acc: 1.8, grip: 2.2 }, ferry: { top: 13, acc: 1.4, grip: 1.6 } })[VK] || { top: 12, acc: 3, grip: 3 }; const P = (CAR_MODELS[opts.car.m] || {}).price || 0, t = P >= 800000 ? 3 : P >= 200000 ? 2 : P >= 50000 ? 1 : 0; return { top: [36, 42, 54, 68][t], acc: [5.5, 6.6, 8.6, 11][t], grip: [7.6, 8.3, 9.6, 11.2][t] }; })(); /* how your car goes: top speed (m/s), pull, grip */
+  const PERF = (() => { if (BIKE || BOAT) return ({ bicycle: { top: 9, acc: 2.6, grip: 6 }, motorbike: { top: 46, acc: 9.5, grip: 9 }, boat: { top: 24, acc: 4.5, grip: 3 }, sailboat: { top: 11, acc: 1.8, grip: 2.2 }, ferry: { top: 13, acc: 1.4, grip: 1.6 } })[VK] || { top: 12, acc: 3, grip: 3 }; const P = (CAR_MODELS[opts.car.m] || {}).price || 0, t = P >= 800000 ? 3 : P >= 200000 ? 2 : P >= 50000 ? 1 : 0; return { top: [36, 42, 54, 68][t], acc: [5.5, 6.6, 8.6, 11][t], grip: [8.6, 9.2, 10.4, 11.8][t], pw: [62, 95, 190, 380][t], trac: [4.4, 5.4, 7.6, 9.6][t], brk: [8.8, 9.3, 10.2, 11.2][t], gears: [5, 6, 7, 8][t] }; })(); /* how your car goes: top speed (m/s), pull, tyre grip (m/s² sideways), power per kg (W), traction and brakes (m/s²), gears */
+  const CARPHYS = !BIKE && !BOAT; /* a car (not a bike or a boat): the full engine, gearbox and brakes below */
   let foot = opts.mode === 'walk', parked = null, riding = null, summon = null; /* summon: your car, driving up to you after you called it */ /* riding: in someone else's car ({ id, seat }), going where they drive */ /* foot: walking (your character), not driving; parked: your car, where you got out */
   let feet = null; const mkFeet = () => { if (feet) return feet; feet = W.makePerson('me', null, opts.look || null); feet.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); scene.add(feet.group); return feet; };
   if (foot) mkFeet();
@@ -171,6 +172,28 @@ export function createTown(host, opts) {
     return false; };
   const OUTLINE_F = [[2.1, 0.85], [2.1, -0.85], [0, 0.85], [0, -0.85], [-2.1, 0.85], [-2.1, -0.85], [0, 0]], OUTLINE_B = OUTLINE_F.map(([u, w]) => [-u || 0, w]); /* the car's outline, going forwards and backwards (made once) */
   const keys = new Set(), inp = { thr: 0, steer: 0 }; let ctl = opts.controls || { layout: 'pedalstick' }; /* inp: from the on-screen controls (steer +1 = left) */
+  // ---- the engine, the gearbox and the brakes, as a real car's: ----
+  //  - the engine makes its power over a rev band; each gear trades pull for speed, so it pulls hardest in first, shifts up
+  //    (a quarter-second with no drive) near the redline and pulls a little less in each gear after; at low speed the
+  //    tyres, not the engine, limit how hard it can launch (traction);
+  //  - air drag grows with the square of speed (so it tails off towards top speed by itself) and the tyres roll with a
+  //    little resistance;
+  //  - lift off and you're still in gear: engine braking plus drag slow you firmly (from 50 km/h to a stop in about
+  //    3 seconds), and below walking pace the car settles to a stop rather than creeping on;
+  //  - the brake pedal squeezes in over a tenth of a second up to the tyres' limit (about 0.9–1.1 g, with ABS), and held
+  //    at a stop it reverses (slowly, in reverse gear).
+  const box = { g: 1, shift: 0, rpm: 0.2, pedal: 0, brake: 0 };
+  function engine(vf, thr, top, rough, dt) { const P = PERF, n = P.gears, gTop = top * 1.04, drag = P.pw * 0.94 / (top ** 3), roll = rough ? 1.6 : 0.15;
+    box.pedal += ((thr > 0.05 ? thr : 0) - box.pedal) * Math.min(1, dt * 9); box.brake += ((thr < -0.05 ? -thr : 0) - box.brake) * Math.min(1, dt * 10);
+    const gas = box.pedal > 0.05, brk = box.brake > 0.05, v = Math.abs(vf), gMax = k => gTop * Math.pow(k / n, 0.85); /* (the speed at the redline in gear k: the gears close up as they go higher) */
+    if (vf < -0.3) { box.g = 1; box.shift = 0; if (gas) return Math.min(0, vf + P.brk * box.pedal * dt); /* rolling back and you press on: the brakes catch it first */
+      if (brk) return Math.max(-6, vf - 2.6 * box.brake * dt); return Math.min(0, vf + (2.5 + roll) * dt); } /* reversing, up to about 20 km/h */
+    if (brk && !gas && vf <= 0.3) { box.g = 1; return Math.max(-6, vf - 2.6 * box.brake * dt); } /* stopped and holding the brake: into reverse */
+    if (box.shift > 0) box.shift -= dt; else if (gas && box.g < n && v > gMax(box.g) * 0.97) { box.g++; box.shift = 0.25; } else if (box.g > 1 && v < gMax(box.g - 1) * (box.pedal > 0.6 ? 0.8 : 0.55)) box.g--;
+    box.rpm = Math.max(0.16, Math.min(1, v / gMax(box.g)));
+    const curve = box.rpm * (1.75 - 0.75 * box.rpm), push = gas && box.shift <= 0 ? Math.min(P.trac * (rough ? 0.6 : 1), P.pw * box.pedal * Math.max(0.55, curve) / Math.max(4, v)) : 0; /* power over the revs; at low speed the tyres limit it */
+    const hold = drag * v * v + roll + (!gas && !brk ? 3.4 + 0.09 * v + (v < 4 ? 2.5 : 0) : 0) + (brk ? P.brk * box.brake * (rough ? 0.7 : 1) : 0); /* drag, rolling, engine braking in gear (off the pedals), the brakes */
+    return Math.max(0, vf + (push - hold) * dt); }
   function drive(dt) { if (riding) return;
     const K = ctl.keys || {}, on = (a, d) => keys.has(d) || keys.has(String(K[a] || '').toLowerCase());
     const up = (on('up', 'ArrowUp') ? 1 : 0) - (on('down', 'ArrowDown') ? 1 : 0) + inp.thr, turn = (on('left', 'ArrowLeft') ? 1 : 0) - (on('right', 'ArrowRight') ? 1 : 0) + inp.steer;
@@ -195,13 +218,14 @@ export function createTown(host, opts) {
     const rough = !BOAT && (!rt || (R && R.kind === 'rail')), top = rough ? PERF.top * 0.5 : PERF.top, hb = keys.has(' ') && Math.abs(car.v) > 4;
     let fx = Math.cos(car.a), fz = -Math.sin(car.a), lx = fz, lz = -fx; /* forward, and across to the side */
     let vf = (car.vx || 0) * fx + (car.vz || 0) * fz, vl = (car.vx || 0) * lx + (car.vz || 0) * lz;
+    if (CARPHYS) vf = engine(vf, thr, top, rough, dt); else {
     if (thr > 0.05) vf += vf < -0.5 ? 16 * thr * dt : PERF.acc * thr * Math.max(0.12, 1 - (vf / top) ** 2) * dt; /* (pressing on while rolling back brakes first) */
     else if (thr < -0.05) vf += vf > 0.5 ? 16 * thr * dt : Math.max(-9 - vf, 4.5 * thr * dt);
-    else { const d = (BOAT ? 1.4 + 0.05 * Math.abs(vf) : 3.0 + 0.1 * Math.abs(vf) + (rough ? 2.5 : 0)) * dt; vf = Math.abs(vf) <= d ? 0 : vf - Math.sign(vf) * d; } /* let go and it slows down by itself, like a real car: engine braking and the tyres' drag (from 70 km/h it stops in about 45 m); a boat drifts on further */
+    else { const d = (BOAT ? 1.4 + 0.05 * Math.abs(vf) : 3.0 + 0.1 * Math.abs(vf) + (rough ? 2.5 : 0)) * dt; vf = Math.abs(vf) <= d ? 0 : vf - Math.sign(vf) * d; } /* let go and it slows down by itself, like a real car: engine braking and the tyres' drag (from 70 km/h it stops in about 45 m); a boat drifts on further */ }
     if (hb) { const d = 7 * dt; vf = Math.abs(vf) <= d ? 0 : vf - Math.sign(vf) * d; }
     if (vf > top) vf = Math.max(top, vf - 7 * dt);
-    const maxA = 0.6 / (1 + Math.abs(vf) / 11), want = st * maxA, rate = (st === 0 ? 4.5 : 2.6) * dt; car.wa = (car.wa || 0) + Math.max(-rate, Math.min(rate, want - (car.wa || 0))); car.steer = car.wa / 0.6;
-    let yr = vf / 2.7 * Math.tan(car.wa); const yl = (hb ? PERF.grip * 2.2 : PERF.grip * 1.08) / Math.max(1.5, Math.abs(vf)); yr = Math.max(-yl, Math.min(yl, yr)); /* the tyres can only turn you so hard */
+    const maxA = CARPHYS ? 0.62 / (1 + (Math.abs(vf) / 16) ** 2) : 0.6 / (1 + Math.abs(vf) / 11), want = st * maxA, rate = (st === 0 ? 5 : CARPHYS ? 3.4 : 2.6) * dt; /* (a car: full lock is about 35° at walking pace, a 5 m turn, and less only gently as you speed up) */ car.wa = (car.wa || 0) + Math.max(-rate, Math.min(rate, want - (car.wa || 0))); car.steer = car.wa / 0.6;
+    let yr = vf / 2.7 * Math.tan(car.wa); const wt = CARPHYS ? (thr < -0.05 ? 1.18 : thr > 0.05 ? 0.94 : 1.08) : 1.08; /* (weight on the front wheels: braking into a corner turns you in tighter, flooring it pushes wide) */ const yl = (hb ? PERF.grip * 2.2 : PERF.grip * wt) / Math.max(1.5, Math.abs(vf)); yr = Math.max(-yl, Math.min(yl, yr)); /* the tyres can only turn you so hard */
     car.a += yr * dt; const wx2 = vf * fx + vl * lx, wz2 = vf * fz + vl * lz; fx = Math.cos(car.a); fz = -Math.sin(car.a); lx = fz; lz = -fx; /* the car turns; where it was going lags behind a little */
     vf = wx2 * fx + wz2 * fz; vl = wx2 * lx + wz2 * lz; const g = (hb ? PERF.grip * 0.3 : PERF.grip * (rough ? 0.7 : 1)) * dt; vl = Math.abs(vl) <= g ? 0 : vl - Math.sign(vl) * g; /* grip pulls it back in line */
     if (Math.abs(vf) < 0.05 && Math.abs(thr) < 0.05) vf = 0; car.slip = Math.abs(vl);
@@ -625,7 +649,7 @@ export function createTown(host, opts) {
     project(tx, ty, h = 0) { const v = PRJ.set(tx * TILE, h, ty * TILE).project(camera), w = canvas.clientWidth, hh = canvas.clientHeight; return { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * hh, on: v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 }; },
     get parkedAt() { return parked ? { x: parked.x / TILE, y: parked.z / TILE } : null; },
     doorOf(id) { for (const v of blocks.values()) for (const s of v.solid) if (s.id === id && s.door) return { x: s.door[0] / TILE, y: s.door[1] / TILE, a: s.out }; return null; },
-    kmh() { return Math.round(Math.abs(car.v) * 3.6); },
+    kmh() { return Math.round(Math.abs(car.v) * 3.6); }, gear() { return !CARPHYS || foot || riding ? '' : car.v < -0.3 ? 'R' : Math.abs(car.v) < 0.3 && box.pedal < 0.05 ? 'N' : String(box.g); },
     say(who, text) { sayOver(who, text); }, /* talking on the street: 'me' or a colonist's id */
     stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, fleet: Object.fromEntries([...fleetM].filter(([, m]) => m.count).map(([k, m]) => [k, m.count])), calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
     toggleView() { mode = (mode + 1) % 3; lk.yaw = foot ? lk.yaw : 0; lk.pitch = 0; return ['behind', 'driver', 'above'][mode]; },

@@ -624,7 +624,7 @@ export function createHouse(host, opts) {
       const g = new THREE.Group(); g.position.set(s.x, s.z, s.y); g.userData.product = P.k; used.add(s.it.i);
       let tagY = 0.6, tagS = 1;
       if (cls === 'phone') { const m = phoneModel(P); m.position.y = 0.19; m.rotation.y = s.face; g.add(m); g.userData.turn = m; }
-      else if (cls === 'car') { const car = W3.makeCar(P.kind && P.kind !== 'car' ? 'car' : (P.model || 'car'), P.col || '#c8382e'), [Lc] = W3.carSize(P.model || 'car'), sc = Math.min(1, (s.len - 0.2) / Math.max(1, Lc)); car.scale.setScalar(sc); car.rotation.y = s.ry + Math.PI / 2; g.add(car); tagY = 1.6; }
+      else if (cls === 'car') { const car = W3.makeCar(P.kind && P.kind !== 'car' && P.kind !== 'bike' ? 'car' : (P.model || 'car'), P.col || '#c8382e'), [Lc] = W3.carSize(P.model || 'car'), sc = Math.min(1, (s.len - 0.2) / Math.max(1, Lc)); car.scale.setScalar(sc); car.rotation.y = s.ry + Math.PI / 2; g.add(car); tagY = 1.6; }
       else if (cls === 'pet' && P.img) { const t = new THREE.Texture(P.img); t.colorSpace = THREE.SRGBColorSpace; if (P.img.complete) t.needsUpdate = true; else P.img.addEventListener('load', () => { t.needsUpdate = true; dirty = true; wake(); }, { once: true }); const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, alphaTest: 0.05 })); sp.scale.set(0.5, 0.5, 1); sp.position.y = 0.26; sp.renderOrder = 3; g.add(sp); tagY = 0.78; } /* (standing on the cage floor, behind its glass) */
       else if (s.k === 'mannequin') { const m = mannequinModel(P, n); m.rotation.y = s.face; g.add(m); tagY = 2.0; }
       else if (cls === 'garment') { const m = garmentModel(P); m.rotation.y = s.face; g.add(m); tagY = 0.22; tagS = 0.8; }

@@ -499,7 +499,7 @@ export function nameTag(text, color = '#ffffff') {
 }
 export { THREE };
 // a car's length and width in metres (for bumping into it on foot)
-export const carSize = kind => { const S = CARS[kind] || CARS.car; return [S.L, S.W]; };
+export const carSize = kind => { const vk = String(kind).replace('!', ''); if (VEH[vk]) return [VEH[vk].L, VEH[vk].W]; const S = CARS[kind] || CARS.car; return [S.L, S.W]; };
 
 // ---------------- the getaway: a straight road out of town, lined with the colony's own kinds of buildings ----------------
 // The road runs away from the camera (towards -z). `types` are building types to line it with (the town's own).
@@ -665,9 +665,85 @@ function carGeo(kind) {
   const wg = Wb.geometry(); wg.rotateZ(Math.PI / 2); out.wheel = wg;
   CARGEO.set(kind, out); return out;
 }
+// ---------------- two wheels, boats and aircraft ----------------
+// Bicycles and motorbikes on the roads, boats on the water and aircraft in the sky, built like the cars: a few simple
+// shapes merged into one mesh, so many of them draw in one go (see town3d.js). paint: the body colour (white for the
+// shared version, which takes each one's own colour from its instance colour). An aircraft's height is built in.
+const bk = (B, geo, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1, color }) => {
+  const g = geo.index ? geo.toNonIndexed() : geo, P = g.attributes.position, N = g.attributes.normal, m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz));
+  const nm = new THREE.Matrix3().getNormalMatrix(m), v = new THREE.Vector3(), base = B.p.length / 3;
+  for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(m); B.p.push(v.x, v.y, v.z); v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); B.n.push(v.x, v.y, v.z); B.u.push(0, 0); B.c.push(color.r, color.g, color.b); B.i.push(base + i); } };
+const VG = { cyl: new THREE.CylinderGeometry(1, 1, 1, 12), tor: new THREE.TorusGeometry(1, 0.1, 6, 20), ball: new THREE.SphereGeometry(1, 16, 10), box: GEO.box, cone: new THREE.ConeGeometry(1, 1, 12) };
+// a rod from one point to another
+const rod = (B, a, b, r, color) => { const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), L = d.length(), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()), e = new THREE.Euler().setFromQuaternion(q);
+  bk(B, VG.cyl, { x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2, z: (a[2] + b[2]) / 2, rx: e.x, ry: e.y, rz: e.z, sx: r, sy: L, sz: r, color }); };
+// a hull seen from above (pointed at the front, -z), stood up `h` high from `y0`
+const hullGeo = (L, W, h, bow = 0.3) => { const s = new THREE.Shape(); s.moveTo(-W / 2, -L / 2); s.lineTo(W / 2, -L / 2); s.lineTo(W / 2, L / 2 - L * bow); s.quadraticCurveTo(W / 2, L / 2, 0, L / 2); s.quadraticCurveTo(-W / 2, L / 2, -W / 2, L / 2 - L * bow); s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, { depth: h, bevelEnabled: false, curveSegments: 6 }); g.rotateX(Math.PI / 2); /* depth goes down, the bow to -z */ g.translate(0, h, 0); return g; };
+const triGeo = (pts) => { const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) s.lineTo(p[0], p[1]); s.closePath(); return new THREE.ExtrudeGeometry(s, { depth: 0.04, bevelEnabled: false }); };
+const ALT = { helicopter: 46, plane: 85, balloon: 62 }; /* metres up */
+// a rider for the shared bikes (other people out on two wheels)
+function riderInto(B, seatY, seatZ, barY, barZ, col0) { const jacket = col(col0 || '#2F4A7A'), skin = col('#B07A52'), jeans = col('#2B3550');
+  bk(B, VG.ball, { y: seatY + 0.33, z: seatZ - 0.12, sx: 0.2, sy: 0.32, sz: 0.15, color: jacket }); bk(B, VG.ball, { y: seatY + 0.78, z: seatZ - 0.24, sx: 0.12, sy: 0.14, sz: 0.13, color: skin });
+  bk(B, VG.ball, { y: seatY + 0.86, z: seatZ - 0.24, sx: 0.13, sy: 0.09, sz: 0.14, color: col('#1d1b19') });
+  for (const s of [-1, 1]) { rod(B, [s * 0.18, seatY + 0.5, seatZ - 0.18], [s * 0.24, barY, barZ], 0.05, jacket); rod(B, [s * 0.1, seatY + 0.05, seatZ], [s * 0.13, seatY - 0.15, seatZ - 0.42], 0.065, jeans); rod(B, [s * 0.13, seatY - 0.15, seatZ - 0.42], [s * 0.15, 0.2, seatZ - 0.3], 0.055, jeans); } }
+const VEH = {
+  bicycle: { L: 1.75, W: 0.6, road: true, build(B, P, rider) { const dark = col('#1d1b19'), grey = col('#9aa1a8'), r = 0.34;
+    for (const z of [-0.55, 0.55]) { bk(B, VG.tor, { y: r, z, ry: Math.PI / 2, sx: r, sy: r, sz: 0.5, color: dark }); bk(B, VG.cyl, { y: r, z, rz: Math.PI / 2, sx: 0.04, sy: 0.08, sz: 0.04, color: grey }); for (let k = 0; k < 4; k++) bk(B, VG.box, { y: r, z, rx: k * Math.PI / 4, sx: 0.01, sy: r * 1.9, sz: 0.01, color: grey }); }
+    const bb = [0, 0.32, 0.05], seat = [0, 0.82, 0.3], head = [0, 0.86, -0.42]; rod(B, bb, seat, 0.025, P); rod(B, seat, head, 0.025, P); rod(B, bb, head, 0.028, P); rod(B, bb, [0, r, 0.55], 0.02, P); rod(B, seat, [0, r, 0.55], 0.02, P); rod(B, head, [0, r, -0.55], 0.022, P);
+    bk(B, VG.box, { y: 0.88, z: 0.32, sx: 0.12, sy: 0.05, sz: 0.24, color: dark }); rod(B, head, [0, 1.0, -0.45], 0.02, grey); rod(B, [-0.27, 1.0, -0.45], [0.27, 1.0, -0.45], 0.018, dark);
+    if (rider) riderInto(B, 0.9, 0.3, 1.0, -0.45); } },
+  motorbike: { L: 2.1, W: 0.8, road: true, build(B, P, rider) { const dark = col('#151515'), grey = col('#8b9198'), chrome = col('#d5d9de'), r = 0.32;
+    for (const z of [-0.72, 0.68]) { bk(B, VG.tor, { y: r, z, ry: Math.PI / 2, sx: r, sy: r, sz: 1.0, color: dark }); bk(B, VG.cyl, { y: r, z, rz: Math.PI / 2, sx: 0.17, sy: 0.1, sz: 0.17, color: grey }); }
+    bk(B, VG.ball, { y: 0.88, z: -0.18, sx: 0.2, sy: 0.15, sz: 0.36, color: P }); /* the tank */ bk(B, VG.box, { y: 0.86, z: 0.33, sx: 0.28, sy: 0.08, sz: 0.55, color: dark }); /* the seat */
+    bk(B, VG.box, { y: 0.52, z: 0.0, sx: 0.32, sy: 0.32, sz: 0.5, color: grey }); /* the engine */ bk(B, VG.box, { y: 0.66, z: 0.62, sx: 0.24, sy: 0.12, sz: 0.36, color: P }); /* the tail */
+    rod(B, [0.16, 0.4, 0.1], [0.2, 0.42, 0.85], 0.045, chrome); rod(B, [0, 0.95, -0.42], [0, r, -0.72], 0.04, chrome); rod(B, [-0.36, 1.08, -0.44], [0.36, 1.08, -0.44], 0.022, dark); rod(B, [0, 0.95, -0.42], [0, 1.08, -0.44], 0.03, dark);
+    bk(B, VG.ball, { y: 0.98, z: -0.6, sx: 0.09, sy: 0.08, sz: 0.06, color: col('#fffbe8') }); bk(B, VG.box, { y: 0.98, z: -0.48, sx: 0.3, sy: 0.12, sz: 0.04, color: P });
+    if (rider) riderInto(B, 0.92, 0.32, 1.08, -0.44, '#1d1b19'); } },
+  boat: { L: 7, W: 2.5, water: true, build(B, P) { const wood = col('#A0703F'), dark = col('#1c2a36'), white = col('#F4F4F0');
+    bk(B, hullGeo(7, 2.5, 1.0, 0.32), { y: -0.45, color: P }); bk(B, hullGeo(7.02, 2.52, 0.14, 0.32), { y: 0.1, color: col('#2F4A7A') }); /* a stripe */
+    bk(B, hullGeo(6.6, 2.1, 0.06, 0.3), { y: 0.55, color: wood }); /* the deck */ bk(B, VG.box, { y: 0.95, z: 0.3, sx: 1.7, sy: 0.7, sz: 1.6, color: white }); bk(B, VG.box, { y: 1.15, z: -0.55, rx: -0.6, sx: 1.7, sy: 0.06, sz: 0.8, color: dark });
+    bk(B, VG.box, { y: 0.85, z: 2.6, sx: 2.0, sy: 0.4, sz: 1.2, color: col('#EDE6D6') }); bk(B, VG.box, { y: 0.4, z: 3.55, sx: 0.4, sy: 0.6, sz: 0.4, color: col('#2b2b2b') }); } },
+  sailboat: { L: 8, W: 2.4, water: true, build(B, P) { const wood = col('#A0703F'), sail = col('#F8F6EE');
+    bk(B, hullGeo(8, 2.4, 1.0, 0.4), { y: -0.45, color: P }); bk(B, hullGeo(7.6, 2.0, 0.06, 0.38), { y: 0.55, color: wood }); bk(B, VG.box, { y: 0.85, z: 1.2, sx: 1.4, sy: 0.5, sz: 2.0, color: col('#EDE6D6') });
+    bk(B, VG.cyl, { y: 5.6, z: -0.6, sx: 0.08, sy: 10, sz: 0.08, color: col('#d5d9de') }); rod(B, [0, 1.6, -0.6], [0, 1.6, 3.2], 0.06, col('#d5d9de'));
+    bk(B, triGeo([[0, 0], [0, 8.6], [3.6, 0]]), { x: 0.02, y: 1.7, z: -0.55, ry: -Math.PI / 2, color: sail }); bk(B, triGeo([[0, 0], [0, 8.2], [-2.8, 0]]), { x: 0.02, y: 1.0, z: -0.68, ry: -Math.PI / 2, color: sail }); } },
+  ferry: { L: 30, W: 9, water: true, build(B, P) { const white = col('#F4F4F0'), dark = col('#1c2a36');
+    bk(B, hullGeo(30, 9, 3.2, 0.22), { y: -1.6, color: col('#2F4A7A') }); bk(B, hullGeo(30.05, 9.05, 0.5, 0.22), { y: 1.1, color: P });
+    for (const [y, L, W] of [[1.6, 22, 8.2], [4.2, 16, 7.4]]) { bk(B, VG.box, { y: y + 1.2, z: 1, sx: W, sy: 2.4, sz: L, color: white }); bk(B, VG.box, { y: y + 1.5, z: 1, sx: W + 0.05, sy: 0.7, sz: L - 1, color: dark }); }
+    bk(B, VG.cyl, { y: 9.0, z: 5, sx: 1.1, sy: 3, sz: 1.1, color: col('#C8382E') }); bk(B, VG.box, { y: 7.6, z: -6.5, sx: 6.5, sy: 1.2, sz: 2.4, color: white }); } },
+  cargoship: { L: 46, W: 11, water: true, build(B, P) { const white = col('#F4F4F0'), C = ['#C8382E', '#2F4A7A', '#E2A23B', '#3E7A4B', '#7C8288', '#8C2F2A'];
+    bk(B, hullGeo(46, 11, 4, 0.18), { y: -2, color: P }); bk(B, hullGeo(46.05, 11.05, 0.6, 0.18), { y: 1.5, color: col('#8C2F2A') });
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) for (let k = 0; k < 2; k++) bk(B, VG.box, { x: (j - 1) * 3.2, y: 3.4 + k * 2.6, z: -14 + i * 4.6, sx: 3.0, sy: 2.5, sz: 4.4, color: col(C[(i * 3 + j + k * 2) % 6]) });
+    bk(B, VG.box, { y: 6.5, z: 17, sx: 9, sy: 9, sz: 5, color: white }); bk(B, VG.box, { y: 9.5, z: 14.4, sx: 9.05, sy: 1, sz: 0.2, color: col('#1c2a36') }); bk(B, VG.cyl, { y: 12.5, z: 19, sx: 0.9, sy: 3, sz: 0.9, color: col('#1d1b19') }); } },
+  helicopter: { L: 11, W: 3, air: true, build(B, P) { const y = ALT.helicopter, dark = col('#1c2a36'), grey = col('#5c6168');
+    bk(B, VG.ball, { y, z: -0.4, sx: 1.3, sy: 1.2, sz: 2.4, color: P }); bk(B, VG.ball, { y: y + 0.25, z: -1.6, sx: 1.05, sy: 0.85, sz: 1.2, color: dark }); rod(B, [0, y + 0.3, 1.5], [0, y + 0.7, 6.2], 0.28, P);
+    bk(B, VG.box, { y: y + 1.3, z: 6.2, sx: 0.1, sy: 1.6, sz: 0.9, color: P }); bk(B, VG.cyl, { y: y + 1.4, z: -0.3, sx: 0.12, sy: 0.6, sz: 0.12, color: grey });
+    for (const a of [0.3, 0.3 + Math.PI / 2]) bk(B, VG.box, { y: y + 1.72, z: -0.3, ry: a, sx: 0.35, sy: 0.04, sz: 10.5, color: grey });
+    for (const s of [-1, 1]) { rod(B, [s * 1.0, y - 1.7, -2.2], [s * 1.0, y - 1.7, 1.6], 0.07, grey); rod(B, [s * 0.7, y - 0.9, -1.2], [s * 1.0, y - 1.7, -1.2], 0.05, grey); rod(B, [s * 0.7, y - 0.9, 0.6], [s * 1.0, y - 1.7, 0.6], 0.05, grey); } } },
+  plane: { L: 20, W: 22, air: true, build(B, P) { const y = ALT.plane, dark = col('#1c2a36'), grey = col('#aeb4ba'), stripe = col('#2F4A7A');
+    bk(B, VG.cyl, { y, rx: Math.PI / 2, sx: 1.4, sy: 16, sz: 1.4, color: P }); bk(B, VG.ball, { y, z: -8, sx: 1.4, sy: 1.4, sz: 2.6, color: P }); bk(B, VG.cone, { y, z: 9.5, rx: Math.PI / 2, sx: 1.4, sy: 3.2, sz: 1.4, color: P });
+    bk(B, VG.box, { y: y - 0.5, z: -0.5, sx: 22, sy: 0.3, sz: 3.2, color: P }); bk(B, VG.box, { y: y + 0.1, z: 9.6, sx: 7, sy: 0.22, sz: 1.8, color: P }); bk(B, VG.box, { y: y + 2.2, z: 9.8, sx: 0.25, sy: 3.8, sz: 2.4, color: stripe });
+    bk(B, VG.box, { y: y + 0.55, z: -1, sx: 2.85, sy: 0.35, sz: 13, color: stripe }); bk(B, VG.box, { y: y + 0.55, z: -8.6, sx: 2.2, sy: 0.4, sz: 0.9, color: dark });
+    for (const s of [-1, 1]) bk(B, VG.cyl, { x: s * 4.5, y: y - 1.1, z: -0.8, rx: Math.PI / 2, sx: 0.55, sy: 2.6, sz: 0.55, color: grey }); } },
+  balloon: { L: 12, W: 12, air: true, build(B, P) { const y = ALT.balloon, cane = col('#8C6A3F');
+    for (let k = 0; k < 8; k++) bk(B, new THREE.SphereGeometry(1, 4, 14, k * Math.PI / 4, Math.PI / 4), { y: y + 7, sx: 6, sy: 7, sz: 6, color: k % 2 ? P : col('#F2C94C') });
+    bk(B, VG.cone, { y: y + 1.1, rx: Math.PI, sx: 3, sy: 2.6, sz: 3, color: P }); bk(B, VG.box, { y: y - 2.6, sx: 1.4, sy: 1.0, sz: 1.4, color: cane });
+    for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) rod(B, [a * 0.65, y - 2.1, b * 0.65], [a * 2.2, y + 0.4, b * 2.2], 0.03, col('#3b3b3b')); } },
+};
+export const isVeh = kind => !!VEH[kind];
+export const vehOn = kind => VEH[kind] ? (VEH[kind].water ? 'water' : VEH[kind].air ? 'air' : 'road') : 'road';
+const VLITE = new Map();
+function vehLite(kind) { let o = VLITE.get(kind); if (o) return o; const V = VEH[kind.replace('!', '')], B = new Bucket(); V.build(B, col('#ffffff'), !kind.endsWith('!')); /* 'bicycle!': a bike nobody's on */ const g = B.geometry();
+  o = { geo: g, L: V.L, W: V.W, paint: [0.4, 0.3, 1.0], noBlob: !V.road }; VLITE.set(kind, o); return o; }
+// your own: in its colour, with the wheels apart (to spin them) for a bike
+function vehModel(kind, color) { const V = VEH[kind], B = new Bucket(); V.build(B, col(color), false); const g = new THREE.Group();
+  g.add(new THREE.Mesh(B.geometry(), carMat('veh', () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.3 }))));
+  g.userData.wheels = []; g.userData.len = V.L; g.userData.veh = kind; return g; }
 // A car you'd recognise. kind: car, van, bus, police, getaway. userData: wheels (spin them on x), len, and for the police
 // the light bar's red and blue lamps (bar[0], bar[1]: set their material's colour to flash them).
 export function makeCar(kind = 'car', color = '#c8382e') {
+  if (VEH[kind]) return vehModel(kind, color);
   const S = CARS[kind] || CARS.car, G = carGeo(kind), g = new THREE.Group(), paintC = kind === 'police' ? '#f4f4f0' : color;
   const P = S.paint || [0.26, 0.55, 1.3], paint = carMat('paint' + paintC + P.join(','), () => new THREE.MeshStandardMaterial({ color: paintC, roughness: P[0], metalness: P[1], envMapIntensity: P[2] }));
   const glass = carMat('glass', () => new THREE.MeshStandardMaterial({ color: '#16222b', roughness: 0.04, metalness: 0.9, envMapIntensity: 1.6 })), trim = carMat('trim', () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.4 }));
@@ -689,6 +765,7 @@ export function makeCar(kind = 'car', color = '#c8382e') {
 // The paint is white in it, so each car's own colour comes from its instance colour; glass, tyres and trim stay dark.
 const LITE = new Map();
 export function carLite(kind = 'car') {
+  if (VEH[kind.replace('!', '')]) return vehLite(kind);
   if (LITE.has(kind)) return LITE.get(kind); const S = CARS[kind] || CARS.car, G = carGeo(kind), P = [], N = [], C = [];
   // lighter than the car you drive: fewer curves on the body, and plain wheels (tyre and rim) without spokes
   const body = shapeBody(extrudeAcross(carProfile(S), S.W, 0.08, 0.064, 1), S), wb = new Bucket(), CY = n => new THREE.CylinderGeometry(1, 1, 1, n);

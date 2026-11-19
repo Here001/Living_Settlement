@@ -6707,7 +6707,7 @@ function garageList(cars, active){ const ul=el('ul',{class:'joblist'}); for(cons
     const where=M.kind==='water'?' · on the water':needsHangar(car.m)&&car.hangar?' · in your hangar':M.kind==='air'?' · in the sky':car.id===active?(M.kind==='bike'?' · riding':' · driving'):'';
     const find=()=>{ const v=[...D.vehicles.values()].find(x=>x.owner&&Me&&x.owner.toLowerCase()===Me.handle.toLowerCase()&&x.type===M.vtype); if(!v){ toast('It’s out of sight right now.'); return; } const p=iso(v.x,v.y); cam.x=p.x; cam.y=p.y-(VEHICLE_TYPES[v.type].alt||0); follow=null; sel={kind:'v',id:v.id}; renderCard(true); };
     ul.append(el('li',null, el('img',{src:carThumb(car.m,car.col),alt:'',width:'48',height:'32'}), el('div',{class:'jt'}, el('b',{text:M.name+where}), el('span',{text:`Sells for ${fmt(Math.floor(carPaid(car)*0.6))}`})),
-      !road?el('button',{class:'btn',text:'Find it',onclick:find}):car.id===active?'':el('button',{class:'btn',text:M.kind==='bike'?'Ride':'Drive',onclick:()=>meAction('/api/me/cars/active',{id:car.id},`You're ${M.kind==='bike'?'riding':'driving'} the ${M.name.toLowerCase()} now.`,'PUT')}),
+      !road?el('span',{class:'gbtns'}, M.kind==='water'?el('button',{class:'btn',text:'⛵ Take it out',onclick:()=>Drive.boatOut(car)}):'', el('button',{class:'btn',text:'Find it',onclick:find})):car.id===active?'':el('button',{class:'btn',text:M.kind==='bike'?'Ride':'Drive',onclick:()=>meAction('/api/me/cars/active',{id:car.id},`You're ${M.kind==='bike'?'riding':'driving'} the ${M.name.toLowerCase()} now.`,'PUT')}),
       el('button',{class:'linkb',text:'Sell',onclick:()=>toast(`Sell your ${M.name.toLowerCase()} for ${fmt(Math.floor(carPaid(car)*0.6))} coins?`,'Sell',()=>meAction(`/api/me/cars/${car.id}`,null,r=>`Sold for ${fmt(r.back)} coins.`,'DELETE'))}))); }
   return ul; }
 function carsPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🚗 Your cars'})); const d=detail.get(c.id); const cars=(d&&d.cars)||[], active=d&&d.carActive;
@@ -7332,11 +7332,17 @@ const DrivingNow=new Map(); // citizen id → { x, y, a, m, col, t }
 function drivingAt(c){ const d=DrivingNow.get(c.id); if(!d) return null; if(Date.now()-d.t>5000){ DrivingNow.delete(c.id); return null; }
   if(d.mode==='ride'){ const by=d.by&&S.citizens.get(d.by); return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:false, act:by?`Riding with @${by.handle}`:'Riding in a car', where:'the streets', bid:null, moving:true, seg:null, plan:null }; } /* in someone's car: it's their car you see */
   if(d.mode==='walk') return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:true, act:'Walking around town', where:'the streets', bid:null, moving:true, seg:null, plan:null }; /* out on foot, as themselves */
-  const M=CAR_MODELS[d.m], V=M&&!M.vtype?M:VEHICLE_TYPES.car; return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:true, car:true, V, col:d.col||V.colors[0], act:'Driving around town', where:'the streets', bid:null, moving:true, seg:null, plan:null }; }
+  const M=CAR_MODELS[d.m], V=M?(M.vtype?VEHICLE_TYPES[M.vtype]||VEHICLE_TYPES.car:M):VEHICLE_TYPES.car; /* (out in a boat: a boat) */ return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:true, car:true, V, col:d.col||V.colors[0], act:'Driving around town', where:'the streets', bid:null, moving:true, seg:null, plan:null }; }
 const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
   // which car: the one you're driving if it's a road one, otherwise a basic car
-  ride(c){ const M=c&&c.car&&CAR_MODELS[c.car[0]]; if(M&&M.kind!=='water'&&M.kind!=='air'&&!M.vtype) return { m:c.car[0], col:c.car[1]||M.colors[0], kind:M.kind==='bike'?'hatch':c.car[0], name:M.name, own:true }; /* your own car, as itself */
+  ride(c){ const M=c&&c.car&&CAR_MODELS[c.car[0]]; if(M&&M.kind!=='water'&&M.kind!=='air'&&!M.vtype) return { m:c.car[0], col:c.car[1]||M.colors[0], kind:c.car[0], name:M.name, own:true, bike:M.kind==='bike' }; /* your own car (or bike), as itself */
     const V=VEHICLE_TYPES.car, col=V.colors[hash((c&&c.id)||'x')%V.colors.length]; return { m:'car', col, kind:'hatch', name:'a basic car', own:false }; },
+  // your own boat, out on the water in 3D: from where it is on the map, on the nearest open water
+  boatOut(car){ const M=CAR_MODELS[car.m]; if(!M||M.kind!=='water') return; const v=[...D.vehicles.values()].find(x=>x.owner&&Me&&x.owner.toLowerCase()===Me.handle.toLowerCase()&&x.type===M.vtype);
+    if(!v){ toast('Your boat is out of sight right now. Try again in a moment.'); return; } const st=sailRoam(v.id,v.x,v.y,gmNow(),VEHICLE_TYPES[v.type])||{x:v.x+0.5,y:v.y+0.5};
+    let best=null, bd=1e9; for(let r=0;r<=14&&!best;r++) for(let i=-r;i<=r;i++) for(let j=-r;j<=r;j++){ if(Math.max(Math.abs(i),Math.abs(j))!==r) continue; const tx=Math.floor(st.x)+i, ty=Math.floor(st.y)+j, k=tx+','+ty; if(!D.water.has(k)||D.roads.has(k)) continue; let open=0; for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) if(D.water.has((tx+dx)+','+(ty+dy))) open++; if(open<2) continue; const d=Math.hypot(i,j); if(d<bd){ bd=d; best=[tx,ty]; } }
+    if(!best){ toast('There’s no open water near your boat.'); return; } let a=0, run=-1; for(const [dx,dy,ang] of [[1,0,0],[0,-1,Math.PI/2],[-1,0,Math.PI],[0,1,-Math.PI/2]]){ let n=0; while(n<12&&D.water.has((best[0]+dx*(n+1))+','+(best[1]+dy*(n+1)))) n++; if(n>run){ run=n; a=ang; } } /* bow to the open water */
+    closeCard(); this.start({ x:best[0]+0.5, y:best[1]+0.5, a, boat:{ m:car.m, col:car.col||M.colors[0], kind:M.vtype, name:M.name, own:true, water:true } }); },
   // the road tile nearest to where you are (and which way it runs)
   startAt(x,y){ let best=null, bd=1e9; for(let r=0;r<=12&&!best;r++) for(let i=-r;i<=r;i++) for(let j=-r;j<=r;j++){ if(Math.max(Math.abs(i),Math.abs(j))!==r) continue; const tx=Math.floor(x)+i, ty=Math.floor(y)+j, k=tx+','+ty; if(!carOK(k)||D.occ.get(k)) continue; const d=Math.hypot(i,j); if(d<bd){ bd=d; best=[tx,ty]; } }
     if(!best) return { x, y, a:0 }; const [tx,ty]=best; let a=0, run=-1; /* face the way the road runs furthest */
@@ -7346,11 +7352,11 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     let c=myCitizen(); if(!c&&Me.handle){ try{ const d=await loadDetail(Me.handle); if(d){ c=normC(d); S.citizens.set(c.id,c); } }catch(e){} } /* (you, even if the map hasn't loaded your part of town) */
     if(!c||(!c.home&&!(at&&at.x!=null))){ toast('Your colonist needs a home before they can drive about.'); return; }
     const st=citizenAt(c,gmNow()); if(st&&st.bid&&String(st.where||'').toLowerCase().includes('jail')){ toast('You can’t drive while you’re in jail.'); return; }
-    const here=st||{ x:bOf(c.home).x+1, y:bOf(c.home).y+1 }, s=at&&at.x!=null?{x:at.x,y:at.y,a:at.a||0}:this.startAt(here.x,here.y), car=this.ride(c); /* at: back in the car where you parked it */
+    const here=st||{ x:bOf(c.home).x+1, y:bOf(c.home).y+1 }, s=at&&at.x!=null?{x:at.x,y:at.y,a:at.a||0}:this.startAt(here.x,here.y), car=at&&at.boat?at.boat:this.ride(c); /* at: back in the car where you parked it */
     this.send({type:'ride',a:'leave'}); /* (in case the server still has you in someone's car) */
     Phone.hide(); MyHome.load(); /* (which home is yours, for its door) */ this.camWas={x:cam.x,y:cam.y,z:cam.z}; DriveMap.reset(); this.foot=walk; this.parked=false; let look=null; try{ [look]=await Looks.want([Me.handle]); }catch(e){}
     closeCard(); openTab(null);
-    const stage=el('div',{class:'drivestage'}), title=el('b',{text:walk?'🚶 Out on foot':`🚗 Driving ${car.own?'your '+car.name.toLowerCase():car.name}`}), sub=el('span',{class:'dsub',text:walk?'Stick to walk, drag the screen to look round':'Steer with the stick'}); this.title=title;
+    const stage=el('div',{class:'drivestage'}), title=el('b',{text:walk?'🚶 Out on foot':car.water?`⛵ Out in your ${car.name.toLowerCase()}`:car.bike?`🚲 Riding your ${car.name.toLowerCase()}`:`🚗 Driving ${car.own?'your '+car.name.toLowerCase():car.name}`}), sub=el('span',{class:'dsub',text:walk?'Stick to walk, drag the screen to look round':car.water?'Steer with the stick: it only goes on water':'Steer with the stick'}); this.title=title;
     this.modeBtn=el('button',{class:'btn dgo dmode',onclick:()=>this.switchMode()}); /* get out and walk, or get (back) in the car */
     this.goBtn=el('button',{class:'btn primary dgo',hidden:true}); this.inBtn=el('button',{class:'btn dgo',hidden:true}); this.rideBtn=el('button',{class:'btn primary dgo',hidden:true}); this.riding=null; this.riders=[];
     this.doorBtn=el('button',{class:'floatbtn',hidden:true}); this.carBtn=el('button',{class:'floatbtn',hidden:true,'aria-label':'Get in the car',onclick:()=>this.switchMode()}, el('b',{text:'🚗'}), el('span',{text:'Get in'})); /* rides: asking someone for one, or riding along */
@@ -7379,7 +7385,12 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     for(const v of D.vehicles.values()){ if(Math.abs(v.x-x)>30||Math.abs(v.y-y)>30) continue; const V=VEHICLE_TYPES[v.type]; if(!V||V.mode==='water'||V.mode==='air'||v.owner) continue;
       let st=null; try{ st=roam(v.id,v.x,v.y,gm,V,false); }catch(e){} if(!st) continue; out.push({ id:'v:'+v.id, type:v.type, x:st.x, y:st.y, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, col:V.colors[hash(v.id)%V.colors.length], siren:v.type==='police'&&Math.floor(gm/LEG)%5===0 }); }
     try{ let i=0; for(const r of responders(gm)){ i++; if(Math.abs(r.st.x-x)>30||Math.abs(r.st.y-y)>30) continue; out.push({ id:'r:'+i+':'+key(r.V), type:key(r.V), x:r.st.x, y:r.st.y, a:r.st.dx!=null?Math.atan2(-r.st.dy,r.st.dx):null, col:r.V.colors[0], siren:!!r.siren }); } }catch(e){}
-    return out.slice(0,40); },
+    const road=out.slice(0,40);
+    /* boats on the water and aircraft in the sky, where the map has them now (everyone's own ones too), and the boats out on the colony's water */
+    try{ for(const v of D.vehicles.values()){ const V=VEHICLE_TYPES[v.type]; if(!V||(V.mode!=='water'&&V.mode!=='air')||Math.abs(v.x-x)>45||Math.abs(v.y-y)>45) continue; const st=V.mode==='water'?sailRoam(v.id,v.x,v.y,gm,V):skyRoam(v.id,v.x,v.y,gm,V); if(!st) continue;
+        road.push({ id:'v:'+v.id, type:v.type, x:st.x, y:st.y, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, col:V.colors[hash(v.id)%V.colors.length] }); }
+      for(const w of tileList(D.water)){ if(w.h%97!==0||Math.abs(w.x-x)>40||Math.abs(w.y-y)>40) continue; const vt=['boat','sailboat','boat','ferry'][w.h%4], V=VEHICLE_TYPES[vt]; if(waterCands(w.x,w.y).length<40) continue; const st=sailRoam('aw:'+w.k,w.x,w.y,gm,V); if(st) road.push({ id:'w:'+w.k, type:vt, x:st.x, y:st.y, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, col:V.colors[w.h%V.colors.length] }); } }catch(e){}
+    return road.slice(0,64); },
   // who's about near you: the colonists the map has here, where it has them now (walking, or driving)
   people(x,y){ const gm=gmNow(), out=[], meH=(Me&&Me.handle||'').toLowerCase(), aboard=new Map();
     for(const d of DrivingNow.values()) if(d.mode==='ride'&&d.by&&Date.now()-d.t<5000) aboard.set(d.by,(aboard.get(d.by)||0)+1); /* how many are riding with each driver */
@@ -7387,7 +7398,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
       const V=st.V||null, m=V&&CAR_KEY.get(V), live=DrivingNow.has(c.id), online=live||LiveOnline.has(c.id), L=c.claimed!==false&&(live||online)?Looks.m.get(c.handle.toLowerCase()):null;
       if(online&&!L) Looks.want([c.handle]); /* their own look, for next time */
       const drv=!!(dn&&dn.mode==='car'), n=aboard.get(c.id)||0;
-      out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, m:m&&CAR_MODELS[m].kind!=='bike'?m:V===VEHICLE_TYPES.taxi?'sedan':'hatch', look:L||null, tag:online||live?'@'+c.handle+(n?` +${n}`:''):null, online, h:c.handle, drv, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, full:drv&&n>=seatsOf(dn.m)-1 }); }
+      out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, m:V&&V.mode==='water'?Object.keys(VEHICLE_TYPES).find(k=>VEHICLE_TYPES[k]===V):m&&ridden(m)?m:V===VEHICLE_TYPES.taxi?'sedan':'hatch', look:L||null, tag:online||live?'@'+c.handle+(n?` +${n}`:''):null, online, h:c.handle, drv, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, full:drv&&n>=seatsOf(dn.m)-1 }); }
     return out.sort((a,b)=>a.d-b.d).slice(0,40); },
   moved(x,y,a,v){ if(!this.el) return; if(this.last){ this.dist+=Math.hypot(x-this.last.x,y-this.last.y); } this.last={x,y};
     const foot=this.T&&this.T.pos.mode==='walk'; this.speed.hidden=!!foot; if(!foot) this.speed.textContent=`${this.T?this.T.kmh():0} km/h`; this.voiceSync(); /* on foot: no speed to show */
@@ -7405,7 +7416,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     this.goBtn.hidden=false; this.goBtn.textContent=`🅿️ Stop at ${name}`; this.goBtn.onclick=()=>this.arrive(b,false);
     this.inBtn.hidden=!enter; this.inBtn.textContent='🚪 Go inside'; this.inBtn.onclick=()=>this.arrive(b,true); },
   // walking and driving: get out (your own car stays parked where you left it) and get back in when you walk up to it
-  paintMode(){ const B=this.modeBtn; if(!B||!this.T) return; if(this.riding){ B.hidden=false; B.textContent='🚶 Get out'; return; } const foot=this.T.pos.mode==='walk';
+  paintMode(){ const B=this.modeBtn; if(!B||!this.T) return; if(this.car&&this.car.water){ B.hidden=false; B.textContent='⚓ Back to shore'; return; } if(this.riding){ B.hidden=false; B.textContent='🚶 Get out'; return; } const foot=this.T.pos.mode==='walk';
     if(!foot){ B.hidden=false; B.textContent='🚶 Get out'; return; }
     B.hidden=true; /* on foot: get in with the round 🚗 on the car itself; call it from your phone (🚗 Car) */ },
   // the car: called from the phone's 🚗 Car app
@@ -7423,7 +7434,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
       const place=(btn,pt,h)=>{ if(!pt){ if(!btn.hidden) btn.hidden=true; return; } const q=T3.project(pt.x,pt.y,h); if(btn.hidden!==!q.on) btn.hidden=!q.on; if(q.on){ const tr=`translate(${Math.round(q.x+F.ox)}px,${Math.round(q.y+F.oy)}px)`; if(btn.dataset.tr!==tr){ btn.dataset.tr=tr; btn.style.transform=tr; } } };
       place(this.doorBtn, dpt, 1.5); place(this.carBtn, cpt, 1.9); }
     requestAnimationFrame(()=>this.floats(id)); },
-  switchMode(){ const T3=this.T; if(!T3) return; if(this.riding){ this.send({type:'ride',a:'leave'}); return; } if(T3.pos.mode==='car'&&this.riders.length) toast('👥 Everyone riding with you gets out too.'); const foot=T3.pos.mode==='walk';
+  switchMode(){ const T3=this.T; if(!T3) return; if(this.car&&this.car.water){ this.close(); toast(`⚓ Your ${this.car.name.toLowerCase()} is moored again.`); return; } if(this.riding){ this.send({type:'ride',a:'leave'}); return; } if(T3.pos.mode==='car'&&this.riders.length) toast('👥 Everyone riding with you gets out too.'); const foot=T3.pos.mode==='walk';
     if(foot&&!T3.parked){ this.callCar(); return; } /* (a car is called from the phone) */
     if(foot){ T3.drive(); this.title.textContent=`🚗 Driving ${this.car.own?'your '+this.car.name.toLowerCase():this.car.name}`; this.sub.textContent='Steer with the stick'; }
     else { T3.walk(this.car.own); this.title.textContent='🚶 Out on foot'; this.sub.textContent='Stick to walk, drag the screen to look round'; if(this.car.own) toast(`🅿️ Your ${this.car.name.toLowerCase()} is parked here. Walk back to it to get in.`); }
@@ -7589,7 +7600,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
   storeB(){ const h=this.d&&this.d.home; if(!h||!isStore(h.type)) return null; return D.buildings.get(h.id)||h; },
   storeChanged(id){ const b=this.storeB(); if(b&&b.id===id){ this.storeShow(); if(StoreSheet.el&&StoreSheet.b&&StoreSheet.b.id===id) StoreSheet.paint(); } },
   storeShow(){ const b=this.storeB(), h=this.h; if(!b||!h||!h.setShowcase) return; const U=STORE_UI[b.type], sd=StoreStock.of(b); if(!U||!sd) return;
-    let list=productsOf(b.type).filter(P=>U.kind!=='car'||carKind(P.k)==='car').filter(P=>!sd.owned||(sd.stock[P.k]||0)>0); /* a player's store shows what it has; the colony's shows everything (cars: the road cars, the rest are bought from the Shop) */
+    let list=productsOf(b.type).filter(P=>U.kind!=='car'||ridden(P.k)).filter(P=>!sd.owned||(sd.stock[P.k]||0)>0); /* a player's store shows what it has; the colony's shows everything (vehicles: the road cars and bikes, the rest are bought from the Shop) */
     if(list.length>1){ const o=Math.floor(Date.now()/3600000)%list.length; list=[...list.slice(o),...list.slice(0,o)]; } /* (more goods than stands: a different few each hour) */
     const key=b.type+'|'+list.map(P=>P.k).join(',')+'|'+(sd.owned?1:0); if(key===this.showKey) return; this.showKey=key;
     const imgOf=k=>{ const im=new Image(); im.src=creatureThumb(k); return im; };

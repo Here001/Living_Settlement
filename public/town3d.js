@@ -133,11 +133,16 @@ export function createTown(host, opts) {
 
   // ---- your car ----
   const car = { x: (opts.start.x) * TILE, z: (opts.start.y) * TILE, a: opts.start.a || 0, v: 0, steer: 0 };
-  const PERF = (() => { const P = (CAR_MODELS[opts.car.m] || {}).price || 0, t = P >= 800000 ? 3 : P >= 200000 ? 2 : P >= 50000 ? 1 : 0; return { top: [36, 42, 54, 68][t], acc: [5.5, 6.6, 8.6, 11][t], grip: [7.6, 8.3, 9.6, 11.2][t] }; })(); /* how your car goes: top speed (m/s), pull, grip */
+  // what you're in: a car, a bike (your character rides it) or a boat (it only goes on water)
+  const VK = opts.car.kind || 'car', BOAT = W.vehOn(VK) === 'water', BIKE = W.isVeh(VK) && !BOAT;
+  const PERF = (() => { if (BIKE || BOAT) return ({ bicycle: { top: 9, acc: 2.6, grip: 6 }, motorbike: { top: 46, acc: 9.5, grip: 9 }, boat: { top: 24, acc: 4.5, grip: 3 }, sailboat: { top: 11, acc: 1.8, grip: 2.2 }, ferry: { top: 13, acc: 1.4, grip: 1.6 } })[VK] || { top: 12, acc: 3, grip: 3 }; const P = (CAR_MODELS[opts.car.m] || {}).price || 0, t = P >= 800000 ? 3 : P >= 200000 ? 2 : P >= 50000 ? 1 : 0; return { top: [36, 42, 54, 68][t], acc: [5.5, 6.6, 8.6, 11][t], grip: [7.6, 8.3, 9.6, 11.2][t] }; })(); /* how your car goes: top speed (m/s), pull, grip */
   let foot = opts.mode === 'walk', parked = null, riding = null, summon = null; /* summon: your car, driving up to you after you called it */ /* riding: in someone else's car ({ id, seat }), going where they drive */ /* foot: walking (your character), not driving; parked: your car, where you got out */
   let feet = null; const mkFeet = () => { if (feet) return feet; feet = W.makePerson('me', null, opts.look || null); feet.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); scene.add(feet.group); return feet; };
   if (foot) mkFeet();
   const me = W.makeCar(opts.car.kind || 'car', opts.car.col || '#c8382e'); scene.add(me); me.traverse(m => { if (m.isMesh) m.castShadow = true; });
+  // on a bike, you ride it: your own character sits on the saddle, hands on the bars, feet down to the pedals
+  if (BIKE) { const P = W.makePerson('me', null, opts.look || null); const A = P.av || P; if (A.pose) { A.pose('play'); if (A.legL) for (const l of [A.legL, A.legR]) { l.rotation.x = -0.95; if (l.children[0]) l.children[0].rotation.x = 1.15; } for (const a of [A.armL, A.armR]) if (a) a.rotation.x = -0.62; }
+    P.group.rotation.y = Math.PI; P.group.position.set(0, VK === 'motorbike' ? -0.02 : 0.0, VK === 'motorbike' ? 0.3 : 0.26); P.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); me.add(P.group); me.userData.rider = P; }
   const tileOf = v => Math.floor(v / TILE), PRJ = new THREE.Vector3();
   let blocksVer = 0, solidKey = '', solidList = []; /* the list is kept until you cross into another block or a block is built or dropped (it was rebuilt every frame) */
   const solidsNear = (x, z) => { const bx = Math.floor(tileOf(x) / B) * B, by = Math.floor(tileOf(z) / B) * B, key = bx + ',' + by + ',' + blocksVer; if (key === solidKey) return solidList; const out = [];
@@ -150,7 +155,7 @@ export function createTown(host, opts) {
   const carDep = (kind, cx, cz, ry, px, pz, m) => { const [L, Wd] = sizeOf(kind), c = Math.cos(ry), s2 = Math.sin(ry), dx = px - cx, dz = pz - cz, along = -dx * s2 - dz * c, side = dx * c - dz * s2; return Math.min(L / 2 + m - Math.abs(along), Wd / 2 + m - Math.abs(side)); }; /* > 0: inside the car's body (m: extra room) */
   const BRUSH = -0.1, SHOULDER = 0.28; /* driving: up to 10 cm of overlap is a brush; on foot: room for your shoulders */
   const depth = (x, z, s) => s.car ? carDep(s.car.kind, s.car.x, s.car.z, s.car.ry, x, z, foot ? SHOULDER : BRUSH) : s.r ? Math.min(x - s.r[0], s.r[2] - x, z - s.r[1], s.r[3] - z) : s.c[2] - Math.hypot(x - s.c[0], z - s.c[1]); /* > 0: inside, by this much */
-  const hits = (x, z, S, x0, z0) => { const tx = tileOf(x), tz = tileOf(z); if (!opts.loaded(tx, tz)) return true; if (opts.water(tx, tz) && !opts.road(tx, tz) && !(opts.water(tileOf(x0), tileOf(z0)) && !opts.road(tileOf(x0), tileOf(z0)))) return true;
+  const hits = (x, z, S, x0, z0) => { const tx = tileOf(x), tz = tileOf(z); if (!opts.loaded(tx, tz)) return true; if (BOAT && !foot) return !(opts.water(tx, tz) && !opts.road(tx, tz)); /* a boat: on the water only */ if (opts.water(tx, tz) && !opts.road(tx, tz) && !(opts.water(tileOf(x0), tileOf(z0)) && !opts.road(tileOf(x0), tileOf(z0)))) return true;
     for (const s of S) { const d = depth(x, z, s); if (d > 0 && d >= depth(x0, z0, s) - 1e-3) return true; }
     if (!foot) { const box = (kind, cx, cz, ry) => { const d = carDep(kind, cx, cz, ry, x, z, BRUSH); return d > 0 && d >= carDep(kind, cx, cz, ry, x0, z0, BRUSH) - 1e-3; };
       for (const t of traffic) if (Math.abs(t.px - x) < 5 && Math.abs(t.pz - z) < 5 && box(t.kind, t.px, t.pz, t.ry)) return true;
@@ -185,7 +190,7 @@ export function createTown(host, opts) {
     //  - the engine pulls hard from a stop and tails off near top speed; brakes bite hard; let go and it coasts;
     //  - no speed limit on any road (only grass and rough ground slow you); dearer cars pull harder, grip more, go faster.
     const thr = Math.max(-1, Math.min(1, up)), st = Math.max(-1, Math.min(1, turn)), rt = opts.road(tileOf(car.x), tileOf(car.z)), R = rt && ROAD_TYPES[rt];
-    const rough = !rt || (R && R.kind === 'rail'), top = rough ? PERF.top * 0.5 : PERF.top, hb = keys.has(' ') && Math.abs(car.v) > 4;
+    const rough = !BOAT && (!rt || (R && R.kind === 'rail')), top = rough ? PERF.top * 0.5 : PERF.top, hb = keys.has(' ') && Math.abs(car.v) > 4;
     let fx = Math.cos(car.a), fz = -Math.sin(car.a), lx = fz, lz = -fx; /* forward, and across to the side */
     let vf = (car.vx || 0) * fx + (car.vz || 0) * fz, vl = (car.vx || 0) * lx + (car.vz || 0) * lz;
     if (thr > 0.05) vf += vf < -0.5 ? 16 * thr * dt : PERF.acc * thr * Math.max(0.12, 1 - (vf / top) ** 2) * dt; /* (pressing on while rolling back brakes first) */
@@ -221,9 +226,9 @@ export function createTown(host, opts) {
     for (const [kind, q] of fleetQ) { if (!q.length) continue; const n = q.length / 5; let m = fleetM.get(kind);
       if (!m || m.userData.cap < n) { const lite = W.carLite(kind), cap = Math.max(8, 1 << Math.ceil(Math.log2(n + 1)));
         if (m) { scene.remove(m); m.dispose(); } const mat = m ? m.material : new THREE.MeshStandardMaterial({ vertexColors: true, roughness: Math.min(0.6, lite.paint[0] + 0.08), metalness: lite.paint[1] * 0.8, envMapIntensity: lite.paint[2] });
-        m = new THREE.InstancedMesh(lite.geo, mat, cap); m.userData = { cap, L: lite.L, W: lite.W }; m.frustumCulled = false; m.castShadow = false; m.receiveShadow = true; scene.add(m); fleetM.set(kind, m); }
+        m = new THREE.InstancedMesh(lite.geo, mat, cap); m.userData = { cap, L: lite.L, W: lite.W, noBlob: !!lite.noBlob }; m.frustumCulled = false; m.castShadow = false; m.receiveShadow = true; scene.add(m); fleetM.set(kind, m); }
       for (let i = 0; i < n; i++) { const o = i * 5, c = q[o + 1], x = q[o + 2], z = q[o + 3], ry = q[o + 4]; Q.setFromAxisAngle(Y, ry); M4.compose(P3.set(x, 0, z), Q, V1); m.setMatrixAt(i, M4); m.setColorAt(i, paint(c));
-        if (b < MAXC) { M4.compose(P3.set(x, 0.02, z), Q, FV.set(m.userData.W * 1.2, 1, m.userData.L * 1.05)); blobs.setMatrixAt(b, M4);
+        if (b < MAXC && !m.userData.noBlob) { M4.compose(P3.set(x, 0.02, z), Q, FV.set(m.userData.W * 1.2, 1, m.userData.L * 1.05)); blobs.setMatrixAt(b, M4);
           if (night > 0.05) { const L2 = m.userData.L / 2; M4.compose(P3.set(x - Math.sin(ry) * L2, 0.04, z - Math.cos(ry) * L2), Q, BEAMV); beams.setMatrixAt(b, M4); } b++; } }
       m.count = n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
     blobs.count = b; blobs.instanceMatrix.needsUpdate = true; beams.count = night > 0.05 ? b : 0; beams.instanceMatrix.needsUpdate = true; for (const q of fleetQ.values()) q.length = 0; } /* (the lists are kept and emptied, not thrown away) */
@@ -339,7 +344,7 @@ export function createTown(host, opts) {
 
   // ---- the colony's service vehicles, where the 2D map has them: police patrols, fire engines and ambulances (lights
   // flashing on a call), buses, taxis, vans and lorries. One light bar mesh and one ladder mesh for all of them. ----
-  const svc = new Map(); let svcAt = 0; const SV = { police: 'police', firetruck: 'firetruck', fire: 'firetruck', ambulance: 'ambulance', bus: 'bus', van: 'van', truck: 'truck', taxi: 'car', car: 'sedan' }, ROOF = { police: 1.52, firetruck: 3.05, ambulance: 2.66 };
+  const svc = new Map(); let svcAt = 0; const SV = { police: 'police', firetruck: 'firetruck', fire: 'firetruck', ambulance: 'ambulance', bus: 'bus', van: 'van', truck: 'truck', taxi: 'car', car: 'sedan', bike: 'bicycle', motorbike: 'motorbike', boat: 'boat', sailboat: 'sailboat', ferry: 'ferry', cargoship: 'cargoship', helicopter: 'helicopter', plane: 'plane', balloon: 'balloon' }, ROOF = { police: 1.52, firetruck: 3.05, ambulance: 2.66 };
   const svBars = (() => { const m = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 0.13, 0.26), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }), 64); m.frustumCulled = false; m.count = 0; scene.add(m); return m; })();
   const svLadder = (() => { const g = new THREE.BoxGeometry(0.7, 0.12, 5.6); const m = new THREE.InstancedMesh(g, new THREE.MeshStandardMaterial({ color: '#c9ced4', roughness: 0.35, metalness: 0.8 }), 16); m.frustumCulled = false; m.count = 0; scene.add(m); return m; })();
   function services(now, dt) {
@@ -471,7 +476,7 @@ export function createTown(host, opts) {
       const nx = -tz, nz = tx, side = (ox * nx + oz * nz) >= 0 ? -1 : 1; /* (beside you, on the other side of the lane from you) */
       pts.pop(); pts.push([car.x - tx * 4.4 + nx * side * 1.4, car.z - tz * 4.4 + nz * side * 1.4]);
       while (pts.length > 2) { const [ax, az] = pts[pts.length - 2]; if ((ax - car.x) * tx + (az - car.z) * tz > -4.4) pts.splice(pts.length - 2, 1); else break; } } /* (no stops past you on the way in) */
-    const [sx, sz] = pts[0], [nx2, nz2] = pts[1]; summon = { pts, i: 1, x: sx, z: sz, v: 0, ry: Math.atan2(-(nz2 - sz), nx2 - sx) - Math.PI / 2, kind: opts.car.kind || 'car', col: opts.car.col }; return true; }
+    const [sx, sz] = pts[0], [nx2, nz2] = pts[1]; summon = { pts, i: 1, x: sx, z: sz, v: 0, ry: Math.atan2(-(nz2 - sz), nx2 - sx) - Math.PI / 2, kind: BIKE ? VK + '!' : VK, col: opts.car.col }; return true; }
   function comeUp(dt) { const S2 = summon, [tx, tz] = S2.pts[S2.i], dx = tx - S2.x, dz = tz - S2.z, d = Math.hypot(dx, dz); let left = d; for (let k = S2.i; k < S2.pts.length - 1; k++) left += Math.hypot(S2.pts[k + 1][0] - S2.pts[k][0], S2.pts[k + 1][1] - S2.pts[k][1]);
     let want = Math.min(11, Math.max(1.2, left * 0.9)); if (foot && d > 0.01) { const ahead = ((car.x - S2.x) * dx + (car.z - S2.z) * dz) / d, side = Math.abs(((car.x - S2.x) * dz - (car.z - S2.z) * dx) / d); if (ahead > 0 && ahead < 3.3 && side < 1.5) want = 0; } /* you're in its way: it waits for you to step aside */
     S2.v += Math.max(-8 * dt, Math.min(4 * dt, want - S2.v)); /* speeds up, then slows to a stop */
@@ -479,12 +484,12 @@ export function createTown(host, opts) {
     S2.x += dx / d * step; S2.z += dz / d * step; const ry = Math.atan2(-dz, dx) - Math.PI / 2; let da = ry - S2.ry; da = Math.atan2(Math.sin(da), Math.cos(da)); S2.ry += da * Math.min(1, dt * 6); }
   function chase(dt) {
     if (lk.id == null && !foot) { const back = Math.exp(-dt * Math.min(0.8, Math.abs(car.v) / 22)); lk.yaw *= back; lk.pitch *= back; } /* let go: the view stays where you turned it, and drifts gently back behind the car as you drive (not at all while you're stopped) */
-    const fp = mode === 1; cockpit.visible = fp && !foot; sw.rotation.z = car.steer * 1.4; if (cockpit.visible) { cockpit.position.set(car.x, 0, car.z); cockpit.rotation.set(0, car.a - Math.PI / 2, 0); }
+    const fp = mode === 1; cockpit.visible = fp && !foot && !BIKE && !BOAT; /* (a bike or a boat: no dashboard, just the view ahead) */ sw.rotation.z = car.steer * 1.4; if (cockpit.visible) { cockpit.position.set(car.x, 0, car.z); cockpit.rotation.set(0, car.a - Math.PI / 2, 0); }
     { const near = fp ? 0.08 : 0.5; if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); } } /* in the car, close enough to see the wheel */
     if (fp && foot) { const a = lk.yaw; camera.position.set(car.x + Math.cos(a) * 0.1, 1.62, car.z - Math.sin(a) * 0.1); look.set(camera.position.x + Math.cos(a) * 10, 1.62 + Math.tan(lk.pitch - 0.02) * 10, camera.position.z - Math.sin(a) * 10); camera.lookAt(look); cam.copy(camera.position); view.cut.R.value = 0; } /* through your own eyes */
     else if (fp) { const a = car.a + lk.yaw, [sx, sz] = SEATS[riding ? riding.seat : 0] || SEATS[1]; camera.position.set(car.x - Math.cos(car.a) * sz + Math.sin(car.a) * sx, 1.18, car.z + Math.sin(car.a) * sz + Math.cos(car.a) * sx); /* your seat: the driver's on the left, or where you're riding */
       look.set(camera.position.x + Math.cos(a) * 10, 1.18 + Math.tan(lk.pitch - 0.15) * 10, camera.position.z - Math.sin(a) * 10); camera.lookAt(look); cam.copy(camera.position); view.cut.R.value = 0; }
-    else { const high = mode === 2, a = foot ? lk.yaw : car.a + lk.yaw, back = foot ? (high ? 14 : 4.2) : high ? 26 : 9, up = (foot ? (high ? 10 : 2.3) : high ? 18 : 3.4) + lk.pitch * -8, tx = car.x - Math.cos(a) * back, tz = car.z + Math.sin(a) * back, k = Math.min(1, dt * 4.5); /* one steady pace, dragging or not: no jumps */
+    else { const high = mode === 2, a = foot ? lk.yaw : car.a + lk.yaw, back = foot ? (high ? 14 : 4.2) : high ? 26 : BIKE ? 5.2 : BOAT ? (VK === 'ferry' ? 34 : 13) : 9, up = (foot ? (high ? 10 : 2.3) : high ? 18 : BIKE ? 2.5 : BOAT ? (VK === 'ferry' ? 14 : 4.6) : 3.4) + lk.pitch * -8, tx = car.x - Math.cos(a) * back, tz = car.z + Math.sin(a) * back, k = Math.min(1, dt * 4.5); /* one steady pace, dragging or not: no jumps */
       cam.x += (tx - cam.x) * k; cam.z += (tz - cam.z) * k; cam.y += (Math.max(1.2, up) - cam.y) * k; camera.position.copy(cam);
       const ahead = foot ? 3 : 6, lx = car.x + Math.cos(a) * ahead, lz = car.z - Math.sin(a) * ahead; aim.x += (lx - aim.x) * k; aim.z += (lz - aim.z) * k; look.set(aim.x, foot ? 1.45 : 1.2, aim.z); camera.lookAt(look); /* look past the car the way the camera faces */
       view.cut.A.value.set(car.x, 1.0, car.z); { const bx = camera.position.x - car.x, bz = camera.position.z - car.z, L = Math.hypot(bx, bz) || 1; view.cut.B.value.set(camera.position.x + bx / L * 3, camera.position.y + 1, camera.position.z + bz / L * 3); } view.cut.R.value = high ? 6 : 3.8; } /* see through what's between you and the car, and just behind the camera */
@@ -520,7 +525,7 @@ export function createTown(host, opts) {
     me.visible = !foot && !riding && mode !== 1; if (feet) { feet.group.visible = foot && mode !== 1; if (foot) { feet.setPos(car.x, car.z); { const m = car.mv == null ? car.a : car.mv; feet.animate(dt, Math.cos(m) * car.v, -Math.sin(m) * car.v); } feet.group.rotation.y = car.a + Math.PI / 2; } } /* your character walks (and faces where you're going) */
     if (parked) pushCar(parked.kind, parked.col, parked.x, parked.z, parked.ry);
     if (summon) { comeUp(dt); if (summon) pushCar(summon.kind, summon.col, summon.x, summon.z, summon.ry); }
-    me.position.set(car.x, 0, car.z); me.rotation.set(0, 0, 0); me.rotation.y = car.a - Math.PI / 2; for (const w of me.userData.wheels || []) w.rotation.x -= car.v * dt / 0.33;
+    me.position.set(car.x, BOAT ? Math.sin(now / 700) * 0.06 : 0, car.z); me.rotation.set(0, 0, 0); me.rotation.y = car.a - Math.PI / 2; if (BOAT) me.rotation.z = Math.sin(now / 900) * 0.025; /* (a boat rocks gently) */ for (const w of me.userData.wheels || []) w.rotation.x -= car.v * dt / 0.33;
     roll += (car.steer * Math.min(1, Math.abs(car.v) / 14) * 0.05 - roll) * Math.min(1, dt * 5); accS += ((car.v - accel0) / Math.max(dt, 1 / 30) - accS) * Math.min(1, dt * 2.5); accel0 = car.v; pitch += (-accS * 0.0022 - pitch) * Math.min(1, dt * 3); /* the body dips under braking and squats as it pulls away: smoothed, so it never twitches */ me.rotateZ(roll); me.rotateX(Math.max(-0.035, Math.min(0.035, pitch))); /* the body leans into a turn and dips when you brake */
     const night = view.night || 0; for (const blk of blocks.values()) for (const c of blk.parked) pushCar(c.kind, c.col, c.x, c.z, c.ry);
     driveTraffic(dt); walk(dt); skyLife(dt, now, night);
@@ -588,7 +593,7 @@ export function createTown(host, opts) {
       car.x += Math.sin(car.a) * 2.2 * side; car.z += Math.cos(car.a) * 2.2 * side; car.v = 0; foot = true; mkFeet(); lk.yaw = car.a; car.mv = null; buildCabin(opts.car.m, opts.car.col); controls(); },
     get riding() { return riding ? riding.id : null; },
     // get out of the car (it stays parked there if it's yours) and walk, or get back in (at your parked car, or a car appears)
-    walk(keep) { if (foot) return; parked = keep ? { kind: opts.car.kind || 'car', col: opts.car.col, x: car.x, z: car.z, ry: car.a - Math.PI / 2 } : null; foot = true; mkFeet(); lk.yaw = car.a; car.mv = null;
+    walk(keep) { if (foot) return; parked = keep ? { kind: BIKE ? VK + '!' : VK, col: opts.car.col, x: car.x, z: car.z, ry: car.a - Math.PI / 2 } : null; foot = true; mkFeet(); lk.yaw = car.a; car.mv = null;
       const sx = -Math.sin(car.a) * 2.2, sz = -Math.cos(car.a) * 2.2; car.x += sx; car.z += sz; car.v = 0; nearCar = false; controls(); },
     drive() { if (!foot) return; if (parked) { car.x = parked.x; car.z = parked.z; car.a = parked.ry + Math.PI / 2; parked = null; } foot = false; car.v = 0; car.vx = car.vz = 0; car.wa = 0; lk.yaw = 0; nearCar = false; opts.onCar && opts.onCar(false); controls(); },
     get parked() { return !!parked; },
@@ -598,7 +603,7 @@ export function createTown(host, opts) {
     get parkedAt() { return parked ? { x: parked.x / TILE, y: parked.z / TILE } : null; },
     doorOf(id) { for (const v of blocks.values()) for (const s of v.solid) if (s.id === id && s.door) return { x: s.door[0] / TILE, y: s.door[1] / TILE, a: s.out }; return null; },
     kmh() { return Math.round(Math.abs(car.v) * 3.6); },
-    stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
+    stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, fleet: Object.fromEntries([...fleetM].filter(([, m]) => m.count).map(([k, m]) => [k, m.count])), calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
     toggleView() { mode = (mode + 1) % 3; lk.yaw = foot ? lk.yaw : 0; lk.pitch = 0; return ['behind', 'driver', 'above'][mode]; },
     setControls(c) { ctl = c || ctl; controls(); if (riding && pad) pad.style.display = 'none'; },
     setRoute,

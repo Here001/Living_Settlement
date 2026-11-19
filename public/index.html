@@ -7941,7 +7941,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
         if(home&&isHomeGood(k)){ const have=R.box.filter(x=>x.k===k), it=have[0];
           row.append(card(pic(k,it?it.c:0),f.name,it?`📦 ${have.length} stored · place`:`🛍️ ${fmt(f.cost)} at a store`,this.pick&&this.pick.k===k,()=>it?this.start({i:it.i,k:it.k,c:it.c,ph:it.ph}):toast(`The ${f.name.toLowerCase()} is sold at ${whereToBuy('home',null,k)}. Buy it there and it waits in your storage, ready to place.`))); continue; }
         row.append(card(pic(k),f.name,fmt(f.cost),this.pick&&!this.pick.i&&this.pick.k===k,()=>this.start({k}))); } }
-    s.append(row); keep(); } };
+    s.append(row); keep(); { const on=s.querySelector('.rtab.on'), t=s.querySelector('.roomtabs'); if(on&&t){ const r=on.getBoundingClientRect(), tr=t.getBoundingClientRect(); if(r.left<tr.left) t.scrollLeft-=tr.left-r.left+8; else if(r.right>tr.right) t.scrollLeft+=r.right-tr.right+8; } } } }; /* (the tab you picked stays in sight) */
 const PHONE_UI=matchMedia('(pointer: coarse)').matches;
 addEventListener('popstate',()=>{ if(Room.el) Room.close(true); });
 addEventListener('keydown',e=>{ if(e.key==='Escape'&&Room.el) Room.close(); });

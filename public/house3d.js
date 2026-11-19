@@ -150,7 +150,7 @@ const glow = new Map(); const glowMat = c => { if (!glow.has(c)) glow.set(c, new
 const glassMat = new Map(); const tintedGlass = c => { if (!glassMat.has(c)) glassMat.set(c, std({ color: col(c), transparent: true, opacity: 0.35, roughness: 0.05, metalness: 0.1, depthWrite: false })); return glassMat.get(c); };
 const haloMat = new Map(); const halo = c => { if (!haloMat.has(c)) haloMat.set(c, new THREE.SpriteMaterial({ map: radialTex('halo', [[0, 'rgba(255,255,255,.9)'], [0.25, 'rgba(255,255,255,.35)'], [1, 'rgba(255,255,255,0)']]), color: col(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); return haloMat.get(c); };
 // which material a part is: upholstery and bedding are fabric, browns are wood, steel greys are metal, golds gold, whites and lacquer gloss, leaves leafy
-const UPHOLSTERED = new Set(['vipbooth', 'clubsofa', 'velvetsofa', 'chaise', 'sofa', 'cornersofa', 'armchair', 'beanbag', 'rug', 'roundrug', 'bigrug', 'bed', 'doublebed', 'bunkbed', 'cot', 'chair', 'officechair', 'catbed', 'booth', 'waiting', 'tablefour', 'cafetable', 'barstool', 'curtains', 'blinds', 'drapes', 'doorcurtain', 'towelrail', 'coathooks', 'hamper', 'bathmat', 'throne', 'meeting', 'mannequin', 'clothesrack']);
+const UPHOLSTERED = new Set(['loveseat', 'recliner', 'ottoman', 'diningchair', 'kingbed', 'daybed', 'blanketchest', 'gamingchair', 'readingchair', 'romanblind', 'cafecurtain', 'tapestry', 'archcurtain', 'ironing', 'vipbooth', 'clubsofa', 'velvetsofa', 'chaise', 'sofa', 'cornersofa', 'armchair', 'beanbag', 'rug', 'roundrug', 'bigrug', 'bed', 'doublebed', 'bunkbed', 'cot', 'chair', 'officechair', 'catbed', 'booth', 'waiting', 'tablefour', 'cafetable', 'barstool', 'curtains', 'blinds', 'drapes', 'doorcurtain', 'towelrail', 'coathooks', 'hamper', 'bathmat', 'throne', 'meeting', 'mannequin', 'clothesrack']);
 const METAL = new Set(['#3B3B40', '#BDC3C7', '#95A5A6', '#7F8C8D', '#A6ACAF']), GOLD = new Set(['#D4AC0D', '#C9A227', '#F1C40F', '#F4D03F']), GLOSS = new Set(['#F4F6F8', '#E5E8E8', '#DADDE2', '#D5D8DC', '#E8E4DC', '#1D1B1E', '#1C1C1E', '#4A4A4E', '#F5F5F0', '#2C2A2E']);
 const hsl = {}; function matKind(k, c, tint, s) {
   if (c === tint && UPHOLSTERED.has(k)) return 'fabric'; if (UPHOLSTERED.has(k) && /^#(F4F1EA|FFFFFF|F2E8D5)$/i.test(c)) return 'fabric';
@@ -185,6 +185,12 @@ ACT.glowtable = { kind: 'sit', icon: '🪑', label: 'Sit', seats: [2, 3], faceCe
 ACT.cinemaseats = { kind: 'sit', icon: '🍿', label: 'Sit', seats: [1, 4, 7], back: 2 }; ACT.diningset = { kind: 'sit', icon: '🪑', label: 'Sit', seats: [8, 11], faceCentre: true };
 ACT.dancefloor = ACT.bigdancefloor = { kind: 'dance', icon: '💃', label: 'Dance' }; ACT.dancepole = ACT.polestage = ACT.dancercage = { kind: 'pole', icon: '🕺', label: 'Dance on the pole' };
 ACT.tv = ACT.walltv = { kind: 'tv', icon: '📺', label: 'Turn on', labelOn: 'Turn off' };
+// the newer pieces: more seats and beds, a clawfoot bath, and things to use or play
+for (const k of ['loveseat', 'recliner', 'ottoman', 'diningchair', 'diningbench', 'gamingchair', 'readingchair']) ACT[k] = { kind: 'sit', icon: '🪑', label: 'Sit' }; ACT.chesterfield = { kind: 'sit', icon: '🛋️', label: 'Sit' };
+ACT.kingbed = ACT.daybed = { kind: 'lie', icon: '🛏️', label: 'Lie down' }; ACT.clawtub = { kind: 'lie', icon: '🛁', label: 'Take a bath', sink: 0.3 };
+ACT.coffeebar = { kind: 'use', icon: '☕', label: 'Make a coffee' }; ACT.doublesink = { kind: 'use', icon: '🚰', label: 'Wash your hands' }; ACT.walloven = { kind: 'use', icon: '🍳', label: 'Cook' };
+ACT.foosball = ACT.pinball = { kind: 'use', icon: '🕹️', label: 'Play' }; ACT.pingpong = { kind: 'use', icon: '🏓', label: 'Play' }; ACT.telescope = { kind: 'use', icon: '🔭', label: 'Look at the stars' };
+ACT.pcdesk = ACT.standingdesk = { kind: 'use', icon: '💻', label: 'Use the computer' }; ACT.ironing = { kind: 'use', icon: '👕', label: 'Iron' }; ACT.vanitytable = { kind: 'use', icon: '💄', label: 'Get ready' };
 const POSE = { s: 'sit', l: 'lie', u: 'use', p: 'play', r: 'stand', d: 'dance', o: 'pole' }, CODE = { sit: 's', lie: 'l', use: 'u', play: 'p', run: 'r', dance: 'd', pole: 'o' };
 export const actOf = k => ACT[k] || (FURNITURE[k]?.light ? { kind: 'light', icon: '💡', label: 'Switch off', labelOff: 'Switch on' } : null);
 function pieceGroup(it, photoTex, st = {}) { /* st.off: a lamp switched off; st.on: a TV switched on */

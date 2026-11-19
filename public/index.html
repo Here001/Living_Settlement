@@ -1190,7 +1190,10 @@ body.phone-on .worldbtn{display:none}
 .trackview{background:#c9d8e4}.trackstage{position:absolute;inset:0}.trackstage canvas{display:block;width:100%;height:100%}
 .trhud{position:absolute;left:calc(env(safe-area-inset-left,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 12px);z-index:4;background:rgba(20,22,28,.62);color:#fff;border-radius:14px;padding:9px 12px;max-width:min(260px,62vw);backdrop-filter:blur(4px);display:flex;flex-direction:column;gap:3px}
 .trhud .trname{font-size:14px}.trstatus{font-size:13px;color:#F2C94C;font-weight:800}.trboard{margin:2px 0 4px;padding-left:18px;font-size:12.5px;line-height:1.35}.trbet{align-self:flex-start}
-.rndbtn.trleave{left:calc(env(safe-area-inset-left,0px) + 18px);bottom:calc(30px + env(safe-area-inset-bottom))}
+.rndbtn.trleave{left:50%;bottom:calc(26px + env(safe-area-inset-bottom));transform:translateX(-50%)}.rndbtn.trleave:active{transform:translateX(-50%) scale(.95)}
+.trackview .hchat:not([hidden]) ~ .hact{display:none}
+.trackview .hjoy{bottom:calc(26px + env(safe-area-inset-bottom));left:calc(env(safe-area-inset-left,0px) + 18px)}
+@media (orientation:landscape) and (max-height:560px){ .trackview .rndbtn.hchatbtn,.trackview .hact{right:calc(env(safe-area-inset-right,0px) + 72px)} .trackview .hchat{right:calc(env(safe-area-inset-right,0px) + 72px)} }
 .rndbtn.dpick{width:44px;height:44px;left:calc(env(safe-area-inset-left,0px) + 84px);bottom:calc(200px + env(safe-area-inset-bottom))}.rndbtn.dpick b{font-size:19px}
 .rndbtn.dchat{width:52px;height:52px;left:calc(env(safe-area-inset-left,0px) + 18px);bottom:calc(196px + env(safe-area-inset-bottom))}.rndbtn.dchat b{font-size:22px}@keyframes floatin{from{opacity:0}to{opacity:1}}
 .hback{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);z-index:9650;box-shadow:0 4px 16px rgba(0,0,0,.3)}
@@ -1580,7 +1583,7 @@ function connect(){
     else if(m.type==='resync') reloadAll();
     else if(m.type==='arena') arenaMsg(m);
     else if(m.type==='authed'){ if(m.ok) resumeArena(arenaCtx()); if(typeof Room!=='undefined') Room.rejoin(); }
-    else if(m.type==='inside'){ if(typeof Room!=='undefined') Room.insideMsg(m); }
+    else if(m.type==='inside'){ if(TrackView.el&&m.place===TrackView.spot) TrackView.insideMsg(m); else if(typeof Room!=='undefined') Room.insideMsg(m); }
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
     else if(m.type==='phone' && m.data) Phone.msg(m.data);
@@ -7415,14 +7418,24 @@ const TrackView={ el:null, T:null, b:null, g:null,
     if(have||g.mine||!g.ticket) return go(); toast(`🎟️ A ticket to ${g.name} costs ${fmt(g.ticket)} coins (${g.seats-g.inside} seats left). It lasts until the next race has run.`,'Buy ticket',go); },
   async open(b,g){ if(this.el) this.close(true); if(Drive.el) Drive.close(true); if(Room.el) Room.close(true); closeCard(); openTab(null); this.b=b; this.g=g; Race.track=b.id; await loadRace();
     const stage=el('div',{class:'trackstage'}); this.status=el('div',{class:'trstatus'}); this.board=el('ol',{class:'trboard'});
-    const side=sideCol(el('button',{class:'sidebtn',title:'Camera: from the stands, behind the leader, or from above','aria-label':'Camera',text:'🎥',onclick:()=>{ if(!this.T) return; const m=this.T.view(); toast(m==='follow'?'🎥 Behind the leader':m==='above'?'🎥 From above':'🎥 From the stands'); }}), Phone.sideBtn());
+    const side=sideCol(el('button',{class:'sidebtn',title:'Camera: behind you, through your eyes, from the stands, behind the leader, or from above','aria-label':'Camera',text:'🎥',onclick:()=>{ if(!this.T) return; const m=this.T.view(); toast({third:'🎥 Behind you',first:'🎥 Through your eyes',stand:'🎥 From the stands',follow:'🎥 Behind the leader',above:'🎥 From above'}[m]||'🎥'); }}), Phone.sideBtn());
+    // 💬 the chat (Room's own, borrowed: the same box, private messages and bubbles over heads) and 🪑 sit on the benches
+    this.chatLog=el('div',{class:'hchatlog'}); this.chatIn=el('input',{class:'hchatin',maxlength:'200',placeholder:'Say something to everyone here…','aria-label':'Message'});
+    this.chatIn.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter') this.sendChat(); }); this.chatIn.addEventListener('keyup',e=>e.stopPropagation());
+    this.chatTo=el('select',{class:'hchatto','aria-label':'Who to send it to',onfocus:()=>this.whoOpts(),onchange:()=>this.chatIn.placeholder=this.chatTo.value?`Only @${this.chatTo.value} will see this…`:'Say something to everyone here…'}); this.whoOpts();
+    this.chatBox=el('div',{class:'hchat',hidden:true}, this.chatLog, el('div',{class:'hchatrow'}, this.chatTo, this.chatIn, el('button',{class:'btn primary sm',text:'Send',onclick:()=>this.sendChat()})));
+    this.chatBtn=el('button',{class:'rndbtn hchatbtn',hidden:true,'aria-label':'Chat',title:'Chat with the people near you',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden){ this.whoOpts(); setTimeout(()=>this.chatIn.focus(),50); } }}, el('b',{text:'💬'}), el('span',{text:'Chat'}));
+    this.sitBtn=el('button',{class:'hact',hidden:true,onclick:()=>{ if(!this.T) return; this.T.sit(); this.sendPos(true); this.paintSit(); }});
     const leave=el('button',{class:'rndbtn trleave','aria-label':'Leave the track',onclick:()=>this.close()}, el('b',{text:'🚪'}), el('span',{text:'Leave'}));
     const bet=el('button',{class:'btn primary sm trbet',text:'🏁 Bet on the next race',onclick:()=>{ Phone.show('races'); }});
-    const root=el('div',{class:'webview trackview',role:'dialog','aria-label':'At the races'}, stage, el('div',{class:'trhud'}, el('b',{class:'trname',text:`🏟️ ${g.name}`}), this.status, this.board, bet), side, leave);
+    const root=el('div',{class:'webview trackview',role:'dialog','aria-label':'At the races'}, stage, el('div',{class:'trhud'}, el('b',{class:'trname',text:`🏟️ ${g.name}`}), this.status, this.board, bet), side, this.chatBtn, this.chatBox, this.sitBtn, leave);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
-    let M; try{ M=await import('/racetrack3d.js'); }catch(e){ this.close(true); toast('The track couldn’t load. Check your connection.'); return; } if(this.el!==root) return;
-    try{ this.T=M.createTrack(stage,{ grand:!!(BUILDING_TYPES[b.type]||{}).grand, colour:(T(b).colors||{}).stand, minute:()=>((gmNow()%1440)+1440)%1440, runners:()=>this.runners(), people:()=>this.people||[], board:()=>this.boardLines() }); }catch(e){ this.close(true); toast('Your phone couldn’t show the 3D track.'); return; }
+    let M, myLook=null; try{ [M,[myLook]]=await Promise.all([import('/racetrack3d.js'), Me&&Me.handle?Looks.want([Me.handle]).catch(()=>[null]):[null]]); }catch(e){ this.close(true); toast('The track couldn’t load. Check your connection.'); return; } if(this.el!==root) return; /* (and your own character, to walk about as) */
+    try{ this.T=M.createTrack(stage,{ grand:!!(BUILDING_TYPES[b.type]||{}).grand, colour:(T(b).colors||{}).stand, minute:()=>((gmNow()%1440)+1440)%1440, runners:()=>this.runners(), people:()=>this.seated(), board:()=>this.boardLines(), look:myLook||null, pet:(()=>{ const c=myCitizen(); return c&&c.pet&&CREATURES[c.pet.k]?c.pet.k:null; })(), onMove:()=>{ this.sendPos(false); this.talkNear(); this.paintSit(); } }); }catch(e){ this.close(true); toast('Your phone couldn’t show the 3D track.'); return; }
     try{ window.__track=this; }catch(e){}
+    // live, like inside any place: where you walk goes to everyone else here, theirs comes to you, and the voice chat
+    const Tr=this.T; this.others=new Map(); this.h={ get me(){ const m=Tr.me; return { x:m.x, y:m.z, a:m.a, pose:m.sit?'s':'' }; }, talking(){}, say:(id,t)=>Tr.say(id,t) };
+    this.lastSent=null; this.sendPos(true); setTimeout(()=>{ if(this.T===Tr) Voice.enter(this); },1500);
     this.tick(); clearInterval(this.timer); this.timer=setInterval(()=>this.tick(),500); },
   // the race on the track now: the live one (or the one just run, for a little while), else the next one at the gates
   race(){ const I=Race.info; if(!I) return null; const live=liveRace(); if(live) return { r:live.r, el:live.el, live:true }; return I.next?{ r:I.next, el:(raceNow()-I.next.start)/1000, live:false }:null; },
@@ -7431,11 +7444,36 @@ const TrackView={ el:null, T:null, b:null, g:null,
     if(!R.live){ const left=R.r.start-raceNow(); return [`🏁 ${no}`, left>1000?`Starts in ${fmtLeft(left)}`:'They’re at the gates', ...fieldOf(R.r).slice(0,3).map(id=>`${CREATURES[id].name} · ${R.r.odds&&R.r.odds[id]?R.r.odds[id].pays+'×':''}`)]; }
     const order=this.runners().sort((a,b)=>b.p-a.p), done=R.el>=(Race.info.len/1000);
     return [`🏁 ${no}`, done?`🏆 ${CREATURES[(R.r.result&&R.r.result.order[0])||order[0].id].name} wins!`:'And they’re off!', ...(done&&R.r.result?R.r.result.order:order.map(o=>o.id)).slice(0,3).map((id,i)=>`${i+1}. ${CREATURES[id].name}`)]; },
+  // positions on the track (metres, the middle of the oval at 0,0) go over the live connection squeezed into the 0–16 a place allows
+  enc(m){ return Math.max(0,Math.min(16,8+m/16)); }, dec(v){ return (v-8)*16; },
+  get spot(){ return this.b?'b:'+this.b.id:null; }, range:30, floor:0,
+  get stage(){ return this.el; },
+  sendPos(force){ if(!this.T||!this.b) return; const m=this.T.me, now=Date.now(), L=this.lastSent, pose=m.sit?'s':'';
+    if(!force&&L&&L.pose===pose&&Math.hypot(m.x-L.x,m.z-L.z)<0.3&&Math.abs(m.a-L.a)<0.2) return;
+    if(!force&&now-(this.posAt||0)<200){ clearTimeout(this.posT); this.posT=setTimeout(()=>this.sendPos(true),200); return; } this.posAt=now; this.lastSent={x:m.x,z:m.z,a:m.a,pose};
+    try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'in',place:this.spot,x:this.enc(m.x),y:this.enc(m.z),a:((m.a%6.2832)+6.2832)%6.2832,...(pose?{pose,ph:0}:{})})); }catch(e){} },
+  insideMsg(m){ if(!this.el||!this.T||m.place!==this.spot) return; const blocked=h=>h&&typeof Blocks!=='undefined'&&Blocks.has(h);
+    const show=q=>{ if(blocked(q.h)) return; const p={ id:q.id, h:q.h, x:this.dec(q.x), y:this.dec(q.y), a:q.a, pose:q.pose }; this.others.set(p.id,p); const Lk=p.h&&Looks.m.get(p.h.toLowerCase());
+      this.T.upsertOther(p.id,{ x:p.x, z:p.y, a:p.a, pose:p.pose, h:p.h, look:Lk||null }); const c=p.h&&[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===p.h.toLowerCase()); this.T.setPet(p.id,c&&c.pet&&CREATURES[c.pet.k]?c.pet.k:null);
+      if(p.h&&!Lk) Looks.want([p.h]).then(([L2])=>{ const o=this.others.get(p.id); if(L2&&this.T&&o) this.T.upsertOther(p.id,{ x:o.x, z:o.y, a:o.a, pose:o.pose, h:o.h, look:L2 }); }).catch(()=>{}); };
+    if(m.k==='all'){ for(const q of m.list||[]) show(q); }
+    else if(m.k==='pos'&&m.p) show(m.p);
+    else if(m.k==='gone'){ this.others.delete(m.id); this.T.removeOther(m.id); }
+    else if(m.k==='chat'&&m.chat){ if(!blocked(m.chat.from)) this.addChat(m.chat); }
+    else if(m.k==='voice'&&m.club) Voice.msg(m.club);
+    this.talkNear(); },
+  // 💬 shows when someone real is near enough to read the words over your head (as in a house); the chat itself is the house's
+  talkNear(){ const b=this.chatBtn; if(!b||!this.T) return; const m=this.T.me, near=[...this.others.values()].some(p=>p.h&&Math.hypot(p.x-m.x,p.y-m.z)<=8), show=near||(this.chatBox&&!this.chatBox.hidden); if(b.hidden===show) b.hidden=!show; },
+  addChat(c){ return Room.addChat.call(this,c); }, whoOpts(p){ return Room.whoOpts.call(this,p); }, sendChat(){ return Room.sendChat.call(this); },
+  // 🪑 Sit when you're up in the stand (and Stand up once you're sitting)
+  paintSit(){ const b=this.sitBtn; if(!b||!this.T) return; const m=this.T.me, on=m.sit||m.bench; b.hidden=!on; if(!on) return; const k=m.sit?'up':'sit'; if(b.dataset.k===k) return; b.dataset.k=k; b.replaceChildren(el('b',{text:m.sit?'🧍':'🪑'}),el('span',{text:m.sit?'Stand up':'Sit'})); },
+  // the people with tickets who aren't walking about (on an older app, say): they sit in the stand
+  seated(){ const walking=new Set([...this.others.values()].map(p=>(p.h||'').toLowerCase())); return (this.people||[]).filter(p=>!walking.has(String(p.id).toLowerCase())); },
   tick(){ if(!this.el) return; const L=this.boardLines(); this.status.textContent=L[1]||''; this.board.replaceChildren(...L.slice(2).map(t=>el('li',{text:t.replace(/^\d\. /,'')})));
     const R=this.race(), now=Date.now(); if(!this.lastLoad||now-this.lastLoad>8000||(R&&!R.live&&raceNow()>=R.r.start&&now-this.lastLoad>1500)){ this.lastLoad=now; loadRace(); }
     if(!this.peopleAt||now-this.peopleAt>10000){ this.peopleAt=now; this.load(this.b).then(g=>{ if(!g||!this.el) return; const meH=((Me&&Me.handle)||'').toLowerCase(), hs=g.people.filter(h=>h.toLowerCase()!==meH);
       Looks.want(hs).catch(()=>{}); this.people=hs.map(h=>({ id:h, look:Looks.m.get(h.toLowerCase())||null })); }); } },
-  close(quiet){ if(!this.el) return; clearInterval(this.timer); try{ this.T&&this.T.close(); }catch(e){} this.T=null; this.el.remove(); this.el=null; document.body.classList.remove('room-on'); this.people=[];
+  close(quiet){ if(!this.el) return; clearInterval(this.timer); clearTimeout(this.posT); if(Voice.R===this) Voice.leave(); try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'out'})); }catch(e){} this.others=new Map(); this.h=null; try{ this.T&&this.T.close(); }catch(e){} this.T=null; this.el.remove(); this.el=null; document.body.classList.remove('room-on'); this.people=[];
     if(!quiet&&this.b) api('/api/tracks/'+encodeURIComponent(this.b.id)+'/leave',{method:'POST'}).catch(()=>{}); if(!quiet) toast('🚪 You left the track. Your seat is free for someone else.'); } };
 const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
   // which car: the one you're driving if it's a road one, otherwise a basic car

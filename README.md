@@ -25,7 +25,7 @@ Postgres (the truth) ◀─▶ web server(s) ─▶ WebSocket, per district ─�
 
 - **Pan, zoom, turn.**
   - Drag to move around, and pinch (or scroll) to zoom.
-  - **Twist two fingers** about 40° to turn the map a quarter turn that way; keep twisting for another.
+  - **Turning the map** is done with the turn button (or Q / E); two fingers only pinch to zoom, they never twist the map round.
   - On a computer, the **⟳** button by Full screen turns it, and so do **Q** (left) and **E** (right).
 - **How turning works.** The map turns in quarter turns, the way isometric games do. Free rotation would tip every building over sideways, because the buildings are drawn from one angle.
   - The ground, roads, water and people turn exactly.

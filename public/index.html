@@ -1345,7 +1345,7 @@ body.room-on .toast,body.room-on .rsheet-bg.rreport{z-index:9700}
 <div class="viewbtns" id="viewBtns">
   <button class="vbtn" id="undoBtn" aria-label="Undo" title="Undo (Ctrl+Z)" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
   <button class="vbtn" id="placesBtn" aria-label="Places and travel" title="Places and travel: the map legend"><span aria-hidden="true" style="font-size:20px;line-height:1">🧭</span></button>
-  <button class="vbtn" id="turnBtn" aria-label="Turn the map" title="Turn the map (Q / E, or twist two fingers)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
+  <button class="vbtn" id="turnBtn" aria-label="Turn the map" title="Turn the map (or Q / E)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
   <button class="vbtn" id="fsBtn" aria-label="Full screen" title="Full screen (F)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   <button class="vbtn" id="hideBtn" aria-label="Hide the interface" title="Hide the interface (H)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/><path d="M4 20 20 4"/></svg></button>
 </div>
@@ -4103,9 +4103,7 @@ cv.addEventListener('pointermove', e=>{
     else if(gesture.moved){ cam.x-=(e.clientX-gesture.lx)/cam.z; cam.y-=(e.clientY-gesture.ly)/cam.z; follow=null; }
     gesture.lx=e.clientX; gesture.ly=e.clientY; }
   else if(gesture&&gesture.type==='pinch'&&pointers.size>=2){ const [a,b]=[...pointers.values()];
-    // Twisting two fingers by about 40° turns the map a quarter turn that way (then twist on for another).
-    const ang=Math.atan2(b.y-a.y,b.x-a.x); let da=ang-gesture.a0; while(da>Math.PI) da-=2*Math.PI; while(da<-Math.PI) da+=2*Math.PI;
-    if(Math.abs(da)>0.7){ turnView(da>0?1:-1, (a.x+b.x)/2, (a.y+b.y)/2); gesture.a0=ang; const w=screenToWorld((a.x+b.x)/2,(a.y+b.y)/2); gesture.wx=w.x; gesture.wy=w.y; gesture.z0=cam.z; gesture.d0=Math.hypot(a.x-b.x,a.y-b.y); }
+    /* (two fingers only pinch to zoom and pan: the map turns with the turn button or Q / E, never by twisting) */
     cam.z=Math.min(4,Math.max(ZOOM_MIN,gesture.z0*Math.hypot(a.x-b.x,a.y-b.y)/gesture.d0)); const mx=(a.x+b.x)/2,my=(a.y+b.y)/2; cam.x=gesture.wx-(mx-cw/2)/cam.z; cam.y=gesture.wy-(my-ch/2)/cam.z; follow=null; }
 });
 function endPointer(e){ if(!pointers.has(e.pointerId)) return; pointers.delete(e.pointerId); clearTimeout(holdTimer);

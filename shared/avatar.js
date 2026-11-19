@@ -36,21 +36,30 @@ export const HAIR_ORDER = { m: ['short', 'side', 'buzz', 'curlyshort', 'afro', '
 
 // What can be worn, by slot. An item: [name, price, who it's shown to first ('' anyone, 'm', 'f'), extra]
 // extra: full: covers the legs too (a dress); long: long sleeves; shape notes for the 3D drawing.
-export const SLOTS = [['top', 'Tops'], ['bot', 'Bottoms'], ['shoe', 'Shoes'], ['out', 'Jackets'], ['hat', 'Hats'], ['eye', 'Glasses'], ['neck', 'Neck'], ['ear', 'Earrings'], ['wrist', 'Wrist'], ['bag', 'Bags']];
+export const SLOTS = [['top', 'Tops'], ['bot', 'Bottoms'], ['shoe', 'Shoes'], ['out', 'Jackets'], ['hat', 'Hats'], ['eye', 'Glasses'], ['neck', 'Neck'], ['ear', 'Earrings'], ['wrist', 'Wrist'], ['ring', 'Rings'], ['bag', 'Bags']];
 export const ITEMS = {
   top: { tee: ['T-shirt', 0, ''], tank: ['Vest top', 0, ''], longtee: ['Long-sleeve top', 0, '', { long: 1 }], shirt: ['Shirt', 0, '', { long: 1, collar: 1 }], blouse: ['Blouse', 0, 'f', { collar: 1 }],
     polo: ['Polo shirt', 300, '', { collar: 1 }], crop: ['Crop top', 400, 'f', { crop: 1 }], hoodie: ['Hoodie', 600, '', { long: 1, hood: 1 }], sweater: ['Jumper', 800, '', { long: 1 }],
     jersey: ['Football shirt', 900, '', { stripe: 1 }], bikini: ['Bikini top', 0, 'f', { bikini: 1 }], swimsuit: ['Swimsuit', 0, 'f', { swim: 1 }], dress: ['Dress', 0, 'f', { full: 1 }], sundress: ['Sundress', 700, 'f', { full: 1, straps: 1 }],
-    gown: ['Evening gown', 5000, 'f', { full: 1, long: 1, floor: 1 }], kaftan: ['Kaftan', 1500, '', { full: 1, long: 1, floor: 1 }] },
+    gown: ['Evening gown', 5000, 'f', { full: 1, long: 1, floor: 1 }], kaftan: ['Kaftan', 1500, '', { full: 1, long: 1, floor: 1 }],
+    tracktop: ['Tracksuit top', 1500, '', { long: 1, zip: 1, trim: 1 }], basketball: ['Basketball jersey', 1200, '', { vest: 1, number: 1 }], designertee: ['Designer T-shirt', 4500, '', { logo: 1 }],
+    designerhoodie: ['Designer hoodie', 9000, '', { long: 1, hood: 1, logo: 1 }], polodesigner: ['Designer polo', 6500, '', { collar: 1, logo: 1 }] },
   bot: { jeans: ['Jeans', 0, ''], trousers: ['Trousers', 0, ''], shorts: ['Shorts', 0, '', { short: 1 }], trunks: ['Swim shorts', 0, '', { short: 1, swim: 1 }], briefs: ['Swim briefs', 0, '', { briefs: 1 }], skirt: ['Skirt', 0, 'f', { skirt: 1 }], longskirt: ['Long skirt', 500, 'f', { skirt: 1, floor: 1 }],
-    joggers: ['Joggers', 400, ''], cargo: ['Cargo trousers', 700, '', { pockets: 1 }], leggings: ['Leggings', 300, 'f', { tight: 1 }] },
-  shoe: { sneakers: ['Trainers', 0, ''], sandals: ['Sandals', 0, ''], boots: ['Boots', 600, '', { high: 1 }], loafers: ['Loafers', 800, ''], heels: ['Heels', 900, 'f', { heel: 1 }], hightops: ['High-tops', 1200, '', { high: 1 }] },
-  out: { cardigan: ['Cardigan', 1200, ''], denim: ['Denim jacket', 1500, ''], puffer: ['Puffer jacket', 2500, '', { puffy: 1 }], blazer: ['Blazer', 3000, ''], coat: ['Long coat', 3500, '', { long: 1 }], leather: ['Leather jacket', 4000, '', { shiny: 1 }] },
+    joggers: ['Joggers', 400, ''], cargo: ['Cargo trousers', 700, '', { pockets: 1 }], leggings: ['Leggings', 300, 'f', { tight: 1 }],
+    trackpants: ['Tracksuit bottoms', 1200, '', { trim: 1 }], suittrousers: ['Suit trousers', 2500, '', { crease: 1 }], designerjeans: ['Designer jeans', 5500, '', { logo: 1 }] },
+  shoe: { sneakers: ['Trainers', 0, ''], sandals: ['Sandals', 0, ''], boots: ['Boots', 600, '', { high: 1 }], loafers: ['Loafers', 800, ''], heels: ['Heels', 900, 'f', { heel: 1 }], hightops: ['High-tops', 1200, '', { high: 1 }],
+    runners: ['Running shoes', 1500, '', { white: 1, trim: 1 }], designersneakers: ['Designer sneakers', 7000, '', { white: 1, trim: 1, logo: 1 }], slides: ['Slides', 300, '', { slide: 1 }],
+    chelsea: ['Chelsea boots', 2500, '', { high: 1 }], workboots: ['Work boots', 1800, '', { high: 1, chunky: 1 }], stilettos: ['Stilettos', 3500, 'f', { heel: 1, thin: 1 }] },
+  out: { cardigan: ['Cardigan', 1200, ''], denim: ['Denim jacket', 1500, ''], puffer: ['Puffer jacket', 2500, '', { puffy: 1 }], blazer: ['Blazer', 3000, ''], coat: ['Long coat', 3500, '', { long: 1 }], leather: ['Leather jacket', 4000, '', { shiny: 1 }],
+    suit: ['Suit jacket', 6000, '', { lapel: 1 }], tuxedo: ['Tuxedo jacket', 12000, '', { lapel: 1, satin: 1 }], designercoat: ['Designer coat', 15000, '', { long: 1, lapel: 1, logo: 1 }], furcoat: ['Faux-fur coat', 9000, '', { long: 1, puffy: 1 }] },
   hat: { cap: ['Cap', 300, ''], beanie: ['Beanie', 250, ''], bucket: ['Bucket hat', 400, ''], headwrap: ['Headwrap', 500, ''], sunhat: ['Sun hat', 900, ''], fedora: ['Fedora', 1500, ''], crown: ['Crown', 25000, '', { gold: 1 }] },
   eye: { specs: ['Glasses', 200, ''], round: ['Round glasses', 600, ''], shades: ['Sunglasses', 800, '', { dark: 1 }] },
-  neck: { scarf: ['Scarf', 500, ''], tie: ['Tie', 400, ''], chain: ['Gold chain', 3000, '', { gold: 1 }], pearls: ['Pearls', 6000, '', { pearl: 1 }] },
-  ear: { studs: ['Stud earrings', 1500, '', { gold: 1 }], hoops: ['Hoop earrings', 2000, '', { gold: 1 }] },
-  wrist: { bracelet: ['Bracelet', 1000, '', { gold: 1 }], watch: ['Watch', 2500, ''], goldwatch: ['Gold watch', 12000, '', { gold: 1 }] },
+  neck: { scarf: ['Scarf', 500, ''], tie: ['Tie', 400, ''], chain: ['Gold chain', 3000, '', { gold: 1 }], pearls: ['Pearls', 6000, '', { pearl: 1 }],
+    pendant: ['Pendant necklace', 4000, '', { gold: 1 }], cuban: ['Cuban link chain', 15000, '', { gold: 1 }], diamondpendant: ['Diamond pendant', 30000, '', { gold: 1, diamond: 1 }], iced: ['Iced-out chain', 80000, '', { gold: 1, diamond: 1 }] },
+  ear: { studs: ['Stud earrings', 1500, '', { gold: 1 }], hoops: ['Hoop earrings', 2000, '', { gold: 1 }], diamondstuds: ['Diamond studs', 18000, '', { gold: 1, diamond: 1 }], drops: ['Drop earrings', 5000, '', { gold: 1 }] },
+  wrist: { bracelet: ['Bracelet', 1000, '', { gold: 1 }], watch: ['Watch', 2500, ''], goldwatch: ['Gold watch', 12000, '', { gold: 1 }],
+    sportwatch: ['Sports watch', 1800, ''], smartwatch: ['Smartwatch', 6000, '', { screen: 1 }], rosewatch: ['Rose-gold watch', 20000, '', { gold: 1, rose: 1 }], diamondwatch: ['Diamond watch', 45000, '', { gold: 1, diamond: 1 }] },
+  ring: { silverring: ['Silver ring', 900, '', { gold: 1, silver: 1 }], band: ['Gold band', 2000, '', { gold: 1 }], signet: ['Signet ring', 5000, '', { gold: 1 }], diamondring: ['Diamond ring', 35000, '', { gold: 1, diamond: 1 }] },
   bag: { backpack: ['Backpack', 800, ''], crossbody: ['Cross-body bag', 1200, ''], handbag: ['Handbag', 2500, ''] },
 };
 export const itemOf = (slot, k) => ITEMS[slot] && ITEMS[slot][k] || null;

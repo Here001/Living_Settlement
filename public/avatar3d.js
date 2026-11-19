@@ -31,7 +31,7 @@ function mats() {
   if (MATS.cloth) return MATS;
   MATS.cloth = new THREE.MeshStandardMaterial({ vertexColors: true, map: fabric(), roughness: 0.86 });
   MATS.skin = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 }); // skin, hair sheen, leather, lenses
-  MATS.gold = new THREE.MeshStandardMaterial({ color: '#E2B13C', metalness: 1, roughness: 0.28 });
+  MATS.gold = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 1, roughness: 0.28 }); // gold, rose gold, silver and diamonds (their colours are in the vertices)
   return MATS;
 }
 
@@ -207,6 +207,21 @@ function wearParts(L, add, B, hd) {
     g.computeVertexNormals(); return g; };
   const w = L.w, C = s => CLOTH[w[s][1]], X = s => (itemOf(s, w[s][0]) || [])[3] || {}, k = s => w[s][0];
   const { torso, arm, leg, f } = B, top = w.top, bot = w.bot, full = top && X('top').full;
+  // how far the front (or back, z < 0) of the body is at a height, `x` to the side
+  const zAt = (yy, xx = 0) => Math.sqrt(Math.max(0, radiusAt(torso, yy) ** 2 - xx * xx)) * B.depth;
+  // a thin stripe down the outer side of an arm or leg (side -1 for the left), following its profile through the heights ys
+  const strip = (part, prof, ys, pad, side, c, wd = 0.013) => { for (let i = 1; i < ys.length; i++) { const r0 = radiusAt(prof, ys[i - 1]) + pad, r1 = radiusAt(prof, ys[i]) + pad, dx = side * (r1 - r0), dy = ys[i] - ys[i - 1];
+    add(part, 'cloth', at(new THREE.BoxGeometry(0.004, Math.hypot(dx, dy) + 0.004, wd), side * (r0 + r1) / 2, (ys[i - 1] + ys[i]) / 2, 0, 1, 1, 1, 0, 0, Math.atan2(-dx, dy)), c); } };
+  const sideOf = s => (s === 'armL' || s === 'legL' ? -1 : 1);
+  const GOLD = '#E2B13C', ROSE = '#E3A68C', SILVER = '#CDD3DB', ICE = '#F2F8FF';
+  // a necklace that lies on the body: round the neck at the back, down onto the chest at the front
+  const necklace = (drop, tube, c) => { const pad = w.out ? 0.03 : top ? 0.017 : 0.006, pts = [];
+    for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2, cf = Math.cos(a), yy = 1.525 - drop * Math.max(0, cf) ** 1.6, r = radiusAt(torso, yy) + pad; pts.push(new THREE.Vector3(Math.sin(a) * r, yy, cf * r * B.depth)); }
+    add('chest', 'gold', new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 60, tube, 5, true), c); return [1.525 - drop, zAt(1.525 - drop) + pad]; };
+  // digits made of bars (a jersey's number): which of the seven bars each digit lights
+  const SEG = { 2: 'abged', 3: 'abgcd' }, digit = (d, x0, y0, z, c, back) => { const W = 0.03, H = 0.03, t = 0.008, bars = { a: [0, H, W, t], g: [0, 0, W, t], d: [0, -H, W, t], b: [W / 2, H / 2, t, H], c: [W / 2, -H / 2, t, H], e: [-W / 2, -H / 2, t, H], f: [-W / 2, H / 2, t, H] };
+    for (const ch of SEG[d]) { const [bx, by, bw, bh] = bars[ch]; add('chest', 'cloth', at(new THREE.BoxGeometry(bw, bh + t * 0.5, 0.004), (back ? -1 : 1) * (x0 + bx), y0 + by, z), c); } };
+  const logo = (part, x, yy, z, c = GOLD) => add(part, 'gold', at(rbox(0.03, 0.022, 0.006), x, yy, z), c);
   // ---- underwear, where nothing covers it ----
   // (never naked: underwear is always there under whatever isn't worn; swimwear takes its place)
   const swimTop = top && (X('top').bikini || X('top').swim), onePiece = top && X('top').swim;
@@ -216,33 +231,50 @@ function wearParts(L, add, B, hd) {
   if (swimTop) { const c = C('top');
     if (onePiece) { add('body', 'cloth', shellT(0.835, 1.4, 0.007), c); for (const s of ['legL', 'legR']) add(s, 'cloth', shell(leg, -0.09, 0.02, 0.006), c); }
     else add('body', 'cloth', shellT(1.2, 1.345, 0.007), c); }
-  else if (top) { const x = X('top'), c = C('top'), y0 = x.crop ? 1.17 : full ? 0.86 : 0.9, sleeve = k('top') === 'tank' || x.straps ? 0 : x.long ? -0.55 : -0.2;
+  else if (top) { const x = X('top'), c = C('top'), y0 = x.crop ? 1.17 : full ? 0.86 : 0.9, bare = k('top') === 'tank' || x.straps || x.vest, sleeve = bare ? 0 : x.long ? -0.55 : -0.2;
     const stripe = x.stripe ? (yy => (Math.floor(yy * 22) % 2 ? c : '#F4F1EA')) : c;
-    add('body', 'cloth', shellT(y0, k('top') === 'tank' || x.straps ? 1.44 : 1.52, 0.012), stripe);
+    add('body', 'cloth', shellT(y0, bare ? 1.44 : 1.52, 0.012), stripe);
     if (sleeve) for (const s of ['armL', 'armR']) add(s, 'cloth', shell(arm, sleeve, 0.059, 0.01, { flare: x.long ? 0.004 : 0.012, closeTop: true }), c);
     if (x.collar) add('body', 'cloth', at(new THREE.TorusGeometry(0.072, 0.014, 8, 24), 0, 1.53, 0.005, 1, 1, 0.9, Math.PI / 2 - 0.25), c);
     if (x.hood) add('chest', 'cloth', at(sphere(1, 24, 14, Math.PI, Math.PI, 0.4, 1.5), 0, 1.5, -0.035, 0.135, 0.075, 0.075), c);
+    if (x.trim && sleeve) for (const s of ['armL', 'armR']) strip(s, arm, [0.03, -0.16, -0.35, sleeve + 0.01], 0.011, sideOf(s), '#F4F1EA');
+    if (x.zip) add('body', 'cloth', at(new THREE.TorusGeometry(0.07, 0.016, 8, 24), 0, 1.535, 0.003, 1, 1, 0.92, Math.PI / 2), c);
+    if (x.number) { const nc = new THREE.Color(c).getHSL({}).l > 0.6 ? '#1B1C1E' : '#F4F1EA'; for (const back of [false, true]) { const z = (back ? -1 : 1) * (zAt(1.18, 0.03) + 0.016); digit(2, -0.025, 1.18, z, nc, back); digit(3, 0.025, 1.18, z, nc, back); } }
+    if (x.logo) logo('chest', 0.07, 1.4, zAt(1.4, 0.07) + 0.016);
     if (full) { const len = x.floor ? 0.78 : 0.42; add('skirt', 'cloth', skirtGeo(1.0, 0.24 + (x.floor ? 0.06 : 0), 0.96 - len, 0.013), c); } }
   // ---- bottoms ----
   if (bot) { const x = X('bot'), c = C('bot');
     if (x.briefs) { add('body', 'cloth', shellT(0.835, 0.98, 0.008), c); for (const s of ['legL', 'legR']) add(s, 'cloth', shell(leg, -0.1, 0.02, 0.007), c); }
     else add('body', 'cloth', shellT(x.skirt ? 0.835 : 0.852, x.skirt ? 1.02 : 1.0, 0.013), c); /* trousers: the legs close the seat, so no dark point between them */
     if (x.skirt) { const len = x.floor ? 0.8 : 0.4; add('skirt', 'cloth', skirtGeo(1.02, 0.22 + (x.floor ? 0.07 : 0), 1.0 - len, 0.015), c); }
-    else if (!x.briefs) for (const s of ['legL', 'legR']) { const to = x.swim ? -0.24 : x.short ? -0.32 : -0.84, pad = x.tight ? 0.004 : 0.012; add(s, 'cloth', shell(leg, to, 0.06, pad, { flare: x.tight || x.short ? 0.004 : k('bot') === 'joggers' ? -0.004 : 0.008 }), c);
+    else if (!x.briefs) for (const s of ['legL', 'legR']) { const to = x.swim ? -0.24 : x.short ? -0.32 : -0.84, pad = x.tight ? 0.004 : 0.012; add(s, 'cloth', shell(leg, to, 0.06, pad, { flare: x.tight || x.short ? 0.004 : k('bot') === 'joggers' || x.trim ? -0.004 : 0.008 }), c);
+      if (x.trim) strip(s, leg, [-0.02, -0.24, -0.44, -0.56, -0.7, -0.82], 0.013, sideOf(s), '#F4F1EA');
+      if (x.crease) add(s, 'cloth', at(new THREE.BoxGeometry(0.003, 0.7, 0.003), 0, -0.45, radiusAt(leg, -0.45) + 0.012), new THREE.Color(c).multiplyScalar(0.8));
       if (x.pockets) add(s, 'cloth', at(rbox(0.05, 0.09, 0.03), (s === 'legL' ? -1 : 1) * 0.07, -0.3, 0.01), new THREE.Color(c).multiplyScalar(0.85)); }
-    if (!x.swim && !x.briefs && !x.tight) add('body', 'skin', shellT(0.985, 1.0, 0.016), '#2a2522'); } // a belt line
+    if (!x.swim && !x.briefs && !x.tight) add('body', 'skin', shellT(0.985, 1.0, 0.016), '#2a2522'); // a belt line
+    if (x.logo) add('body', 'skin', at(rbox(0.04, 0.026, 0.004), 0.055, 0.955, -(zAt(0.955, 0.055) + 0.015)), '#8C5B33'); } // a leather patch at the back
   // ---- jacket / coat ----
   if (w.out) { const x = X('out'), c = C('out'), pad = x.puffy ? 0.04 : 0.024, mat = x.shiny ? 'skin' : 'cloth';
     add('body', mat, shellT(x.long ? 0.86 : 0.92, 1.51, pad), c); for (const s of ['armL', 'armR']) add(s, mat, shell(arm, -0.53, 0.059, pad * 0.7, { flare: 0.006, closeTop: true }), c);
     if (x.long) add('skirt', mat, skirtGeo(0.94, 0.25, 0.5, pad), c);
-    add('body', mat, at(new THREE.TorusGeometry(0.082, 0.018, 8, 24, Math.PI * 1.4), 0, 1.5, 0.01, 1, 1, 0.95, Math.PI / 2 - 0.3, 0, Math.PI * 1.2), c); }
+    add('body', mat, at(new THREE.TorusGeometry(0.082, 0.018, 8, 24, Math.PI * 1.4), 0, 1.5, 0.01, 1, 1, 0.95, Math.PI / 2 - 0.3, 0, Math.PI * 1.2), c);
+    if (x.lapel) { const z = zAt(1.4) + pad, lc = x.satin ? '#121212' : new THREE.Color(c).multiplyScalar(0.82);
+      add('body', 'cloth', at(new THREE.CylinderGeometry(0.062, 0.062, 0.004, 3), 0, 1.43, z + 0.002, 1, 1, 1, Math.PI / 2), '#F4F1EA'); /* the shirt in the V */
+      for (const sd of [-1, 1]) add('body', x.satin ? 'skin' : 'cloth', at(rbox(0.032, 0.2, 0.006), sd * 0.045, 1.405, z + 0.004, 1, 1, 1, -0.08, 0, -sd * 0.4), lc); /* lapels: a V down to the top button */
+      for (const by of [1.2, 1.1]) add('body', 'skin', at(sphere(0.007, 8, 6), 0, by, zAt(by) + pad + 0.003), '#1d1b19');
+      if (x.satin && !w.neck) for (const sd of [-1, 1]) add('body', 'skin', at(sphere(1, 10, 8), sd * 0.016, 1.452, z + 0.008, 0.018, 0.011, 0.007), '#121212'); /* a bow tie */
+      if (x.logo) logo('body', 0.09, 1.2, zAt(1.2, 0.09) + pad + 0.01); } }
   // ---- shoes ----
-  for (const s of ['legL', 'legR']) { const sh = w.shoe, c = sh ? C('shoe') : null, x = sh ? X('shoe') : {};
-    if (!sh || k('shoe') === 'sandals') { add(s, 'skin', at(new THREE.CapsuleGeometry(0.035, 0.13, 4, 10), 0, -0.865, 0.04, 1, 0.8, 1, Math.PI / 2), L.sk); if (sh) add(s, 'skin', at(rbox(0.085, 0.015, 0.22), 0, -0.893, 0.04), c); continue; }
-    add(s, 'skin', at(new THREE.CapsuleGeometry(0.045, 0.15, 4, 12), 0, -0.86, 0.045, 1, 0.82, 1, Math.PI / 2), c);
-    add(s, 'skin', at(rbox(0.098, 0.024, 0.25, 0.011), 0, -0.888, 0.045), k('shoe') === 'sneakers' || k('shoe') === 'hightops' ? '#F2F0EA' : '#1d1b19');
-    if (x.high) add(s, 'skin', shell(leg, -0.86, k('shoe') === 'boots' ? -0.6 : -0.74, 0.016), c);
-    if (x.heel) add(s, 'skin', at(new THREE.CylinderGeometry(0.012, 0.008, 0.07, 8), 0, -0.88, -0.05), c); }
+  for (const s of ['legL', 'legR']) { const sh = w.shoe, c = sh ? C('shoe') : null, x = sh ? X('shoe') : {}, h = sh && k('shoe'), sd = sideOf(s);
+    if (!sh || h === 'sandals' || x.slide) { add(s, 'skin', at(new THREE.CapsuleGeometry(0.035, 0.13, 4, 10), 0, -0.865, 0.04, 1, 0.8, 1, Math.PI / 2), L.sk); if (sh) add(s, 'skin', at(rbox(0.085, 0.015, 0.22), 0, -0.893, 0.04), x.slide ? '#1d1b19' : c);
+      if (x.slide) add(s, 'skin', at(rbox(0.088, 0.03, 0.075, 0.012), 0, -0.862, 0.075), c); continue; }
+    add(s, 'skin', at(new THREE.CapsuleGeometry(0.045, 0.15, 4, 12), 0, -0.86, 0.045, 1, 0.82, x.thin ? 1.06 : 1, Math.PI / 2), c);
+    add(s, 'skin', at(rbox(0.098, x.chunky ? 0.036 : 0.024, x.chunky ? 0.26 : 0.25, 0.011), 0, x.chunky ? -0.884 : -0.888, 0.045), h === 'sneakers' || h === 'hightops' || x.white ? '#F2F0EA' : x.chunky ? '#3a2a1c' : '#1d1b19');
+    if (x.high) add(s, 'skin', shell(leg, -0.86, h === 'boots' ? -0.6 : x.chunky ? -0.68 : -0.74, 0.016), c);
+    if (h === 'chelsea') add(s, 'skin', at(rbox(0.004, 0.08, 0.04), sd * (radiusAt(leg, -0.8) + 0.018), -0.79, 0), '#1d1b19'); /* the elastic side */
+    if (x.trim) add(s, 'skin', at(rbox(0.004, 0.018, 0.12), sd * 0.05, -0.862, 0.035, 1, 1, 1, 0.25), new THREE.Color(c).getHSL({}).l > 0.6 ? '#1B1C1E' : '#F4F1EA');
+    if (x.logo) add(s, 'gold', at(rbox(0.004, 0.014, 0.02), sd * 0.05, -0.855, -0.03), GOLD);
+    if (x.heel) add(s, 'skin', at(new THREE.CylinderGeometry(x.thin ? 0.007 : 0.012, x.thin ? 0.003 : 0.008, x.thin ? 0.085 : 0.07, 8), 0, x.thin ? -0.885 : -0.88, -0.05), c); }
   // ---- on the head ----
   const { y, rx, ry, rz } = hd;
   if (w.hat) { const c = C('hat'), h = k('hat'), R = Math.max(rx, rz) + 0.02;
@@ -264,10 +296,29 @@ function wearParts(L, add, B, hd) {
     if (h === 'scarf') { add('chest', 'cloth', at(new THREE.TorusGeometry(0.068, 0.02, 10, 24), 0, 1.535, 0.0, 1, 1, 0.92, Math.PI / 2 - 0.15), c); add('chest', 'cloth', at(rbox(0.055, 0.22, 0.016), 0.045, 1.4, radiusAt(torso, 1.4) * B.depth + 0.03, 1, 1, 1, -0.08), c); }
     else if (h === 'tie') { add('chest', 'cloth', at(rbox(0.045, 0.3, 0.012), 0, 1.36, radiusAt(torso, 1.36) * B.depth + 0.018, 1, 1, 1, -0.06), c); add('chest', 'cloth', at(sphere(0.022, 10, 8), 0, 1.5, 0.07), c); }
     else if (h === 'chain') add('chest', 'gold', at(new THREE.TorusGeometry(0.09, 0.006, 6, 30), 0, 1.47, 0.03, 1, 1, 0.8, Math.PI / 2 - 0.6), '#E2B13C');
+    else if (h === 'pendant' || h === 'diamondpendant') { const [py, pz] = necklace(0.12, 0.0022, GOLD);
+      if (h === 'pendant') add('chest', 'gold', at(sphere(1, 10, 8), 0, py - 0.016, pz + 0.004, 0.011, 0.016, 0.005), GOLD);
+      else { add('chest', 'gold', at(sphere(0.013, 6, 4), 0, py - 0.016, pz + 0.007, 1, 1.3, 0.7), ICE); add('chest', 'gold', at(new THREE.TorusGeometry(0.014, 0.002, 4, 14), 0, py - 0.016, pz + 0.004, 1, 1.3), GOLD); } }
+    else if (h === 'cuban') necklace(0.08, 0.0065, GOLD);
+    else if (h === 'iced') { const [py, pz] = necklace(0.1, 0.0075, ICE); add('chest', 'gold', at(rbox(0.05, 0.05, 0.008), 0, py - 0.03, pz + 0.006, 1, 1, 1, 0, 0, Math.PI / 4), ICE); }
     else if (h === 'pearls') for (let i = 0; i < 22; i++) { const a = i / 22 * Math.PI * 2; add('chest', 'skin', at(sphere(0.008, 8, 6), Math.sin(a) * 0.085, 1.48 - Math.max(0, Math.cos(a)) * 0.05, Math.cos(a) * 0.075 + 0.01), '#F4EFE6'); } }
-  if (w.ear) for (const s of [-1, 1]) { if (k('ear') === 'hoops') add('head', 'gold', at(new THREE.TorusGeometry(0.014, 0.0025, 6, 16), s * (rx + 0.004), y - 0.04, 0, 1, 1, 1, 0, Math.PI / 2), '#E2B13C'); else add('head', 'gold', at(sphere(0.0055, 8, 6), s * (rx + 0.004), y - 0.025, 0.004), '#E2B13C'); }
-  if (w.wrist) { const h = k('wrist'), c = C('wrist'); add('armL', h === 'watch' ? 'skin' : 'gold', at(new THREE.TorusGeometry(0.036, h === 'bracelet' ? 0.004 : 0.008, 6, 18), 0, -0.53, 0, 1, 1, 1, Math.PI / 2), h === 'watch' ? c : '#E2B13C');
-    if (h !== 'bracelet') add('armL', h === 'watch' ? 'skin' : 'gold', at(new THREE.CylinderGeometry(0.014, 0.014, 0.008, 14), -0.038, -0.53, 0, 1, 1, 1, 0, 0, Math.PI / 2), h === 'watch' ? '#1d1b19' : '#E2B13C'); }
+  if (w.ear) for (const s of [-1, 1]) { const h = k('ear'), ex = s * (rx + 0.004);
+    if (h === 'hoops') add('head', 'gold', at(new THREE.TorusGeometry(0.014, 0.0025, 6, 16), ex, y - 0.04, 0, 1, 1, 1, 0, Math.PI / 2), GOLD);
+    else if (h === 'diamondstuds') add('head', 'gold', at(sphere(0.0075, 6, 4), ex, y - 0.025, 0.004), ICE);
+    else if (h === 'drops') { add('head', 'gold', at(sphere(0.005, 8, 6), ex, y - 0.025, 0.004), GOLD); add('head', 'gold', at(new THREE.CapsuleGeometry(0.0045, 0.022, 3, 8), ex, y - 0.05, 0.004), GOLD); }
+    else add('head', 'gold', at(sphere(0.0055, 8, 6), ex, y - 0.025, 0.004), GOLD); }
+  if (w.wrist) { const h = k('wrist'), c = C('wrist'), x = X('wrist'), metal = x.rose ? ROSE : GOLD, band = (r, mat, cc) => add('armL', mat, at(new THREE.TorusGeometry(0.036, r, 6, 18), 0, -0.53, 0, 1, 1, 1, Math.PI / 2), cc);
+    const face = (r, mat, cc, dx = -0.038, d = 0.008) => add('armL', mat, at(new THREE.CylinderGeometry(r, r, d, 16), dx, -0.53, 0, 1, 1, 1, 0, 0, Math.PI / 2), cc);
+    if (h === 'bracelet') band(0.004, 'gold', GOLD);
+    else if (h === 'watch') { band(0.008, 'skin', c); face(0.014, 'skin', '#1d1b19'); }
+    else if (h === 'sportwatch') { band(0.01, 'skin', c); face(0.017, 'skin', c, -0.039, 0.01); face(0.013, 'skin', '#1d1b19', -0.044, 0.002); }
+    else if (h === 'smartwatch') { band(0.009, 'skin', c); add('armL', 'skin', at(rbox(0.01, 0.034, 0.028, 0.004), -0.04, -0.53, 0), '#1d1b19'); add('armL', 'skin', at(new THREE.BoxGeometry(0.002, 0.026, 0.02), -0.0455, -0.53, 0), '#3E8EDE'); }
+    else { band(0.008, 'gold', metal); face(0.015, 'gold', metal); face(0.011, 'skin', h === 'diamondwatch' ? '#1F2E55' : '#F4F1EA', -0.043, 0.002);
+      if (x.diamond) for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; add('armL', 'gold', at(sphere(0.0028, 5, 4), -0.043, -0.53 + Math.cos(a) * 0.0135, Math.sin(a) * 0.0135), ICE); } } }
+  // a ring on the right hand (round the fingers, below the knuckles)
+  if (w.ring) { const h = k('ring'), mc = h === 'silverring' ? SILVER : GOLD; add('armR', 'gold', at(new THREE.TorusGeometry(1, 0.13, 6, 18), 0, -0.635, 0.002, 0.029, 0.021, 0.04, Math.PI / 2), mc);
+    if (h === 'signet') add('armR', 'gold', at(new THREE.CylinderGeometry(0.008, 0.008, 0.004, 12), 0.03, -0.635, 0.002, 1, 1, 1, 0, 0, Math.PI / 2), mc);
+    if (h === 'diamondring') add('armR', 'gold', at(sphere(0.0065, 6, 4), 0.031, -0.635, 0.002), ICE); }
   if (w.bag) { const h = k('bag'), c = C('bag'), d = radiusAt(torso, 1.25) * B.depth;
     if (h === 'backpack') { add('chest', 'cloth', at(rbox(0.26, 0.32, 0.12), 0, 1.24, -d - 0.07), c); add('chest', 'cloth', at(rbox(0.2, 0.12, 0.03), 0, 1.15, -d - 0.14), new THREE.Color(c).multiplyScalar(0.85));
       for (const s of [-1, 1]) add('chest', 'cloth', at(new THREE.TorusGeometry(0.13, 0.012, 6, 16, Math.PI), s * 0.09, 1.3, -0.0, 1, 1.1, d / 0.13 * 1.05, 0, Math.PI / 2), c); }
@@ -285,7 +336,7 @@ export function buildAvatar(rawLook, opts = {}) {
   const add = (grp, a, b, c) => { if (grp === 'hair') { parts.push(['hairM', skinTo(paint(a, b, true), 'head', B)]); return; } parts.push([a, skinTo(paint(b, c, a !== 'cloth'), grp, B)]); };
   // skin: body, neck, arms, hands, legs. Skin that clothes cover all over isn't drawn (they bend together, so nothing shows through).
   const W = L.w, xt = W.top ? (itemOf('top', W.top[0])?.[3] || {}) : {}, xb = W.bot ? (itemOf('bot', W.bot[0])?.[3] || {}) : {};
-  const cover = { torso: !!W.top && !xt.crop && !xt.straps && !xt.bikini && !xt.swim && W.top[0] !== 'tank' && (!!W.bot || !!xt.full), arms: (!!W.top && !!xt.long) || !!W.out, legs: !!W.bot && !xb.short && !xb.skirt && !xb.briefs };
+  const cover = { torso: !!W.top && !xt.crop && !xt.straps && !xt.bikini && !xt.swim && W.top[0] !== 'tank' && !xt.vest && (!!W.bot || !!xt.full), arms: (!!W.top && !!xt.long) || !!W.out, legs: !!W.bot && !xb.short && !xb.skirt && !xb.briefs };
   add('body', 'skin', B.shape(lathe(dense(cover.torso ? B.torso.filter(([, y]) => y >= 1.44) : B.torso), 32)), L.sk); /* under a top and trousers only the neck and collarbone can show */
   add('body', 'skin', at(new THREE.CylinderGeometry(0.048, 0.056, 0.12, 14), 0, 1.58, -0.005), L.sk);
   for (const s of ['armL', 'armR']) { if (!cover.arms) add(s, 'skin', lathe(dense(B.arm), 14), L.sk); add(s, 'skin', at(sphere(1, 18, 14), 0, -0.6, 0.005, 0.034, 0.058, 0.024), L.sk);

@@ -11,7 +11,7 @@ import { whereToBuy } from '/shared/stores.js';
 
 const fmt = n => Math.round(Number(n) || 0).toLocaleString('en-US');
 const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (v == null || v === false) continue; if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'style') e.style.cssText = v; else e.setAttribute(k, v === true ? '' : v); } for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c))); return e; };
-const SLOT_ICON = { top: '👕', bot: '👖', shoe: '👟', out: '🧥', hat: '🧢', eye: '👓', neck: '📿', ear: '💎', wrist: '⌚', bag: '🎒', hair: '💇' };
+const SLOT_ICON = { top: '👕', bot: '👖', shoe: '👟', out: '🧥', hat: '🧢', eye: '👓', neck: '📿', ear: '💎', wrist: '⌚', ring: '💍', bag: '🎒', hair: '💇' };
 
 const CSS = `
 .cre{position:fixed;inset:0;z-index:4000;display:flex;flex-direction:column;background:var(--paper,#F6F1E6);color:var(--ink,#2B2621);font-family:inherit}
@@ -99,7 +99,7 @@ export async function openCreator({ api, toast = msg => alert(msg), required = f
   const itemsOf = slot => { const g = L.g, list = Object.entries(AV.ITEMS[slot]); return list.sort((a, b) => ((a[1][2] && a[1][2] !== g) - (b[1][2] && b[1][2] !== g)) || a[1][1] - b[1][1]); };
   // a sensible first colour for each kind of thing (they can change it straight after)
   const startColour = (s, k) => ({ top: k === 'shirt' || k === 'blouse' ? 0 : k === 'dress' || k === 'sundress' || k === 'gown' ? 16 : 13, bot: k === 'jeans' ? 6 : k === 'skirt' || k === 'longskirt' ? 3 : 1, shoe: k === 'sneakers' || k === 'hightops' ? 0 : 18, out: k === 'denim' ? 7 : k === 'leather' ? 4 : 18, hat: 4, eye: 4, neck: 14, wrist: 4, bag: 18 })[s] ?? 4;
-  const OPTIONAL = { top: true, bot: true, shoe: true, out: true, hat: true, eye: true, neck: true, ear: true, wrist: true, bag: true };
+  const OPTIONAL = { top: true, bot: true, shoe: true, out: true, hat: true, eye: true, neck: true, ear: true, wrist: true, ring: true, bag: true };
 
   const TABS = [['body', '🧍 Body'], ['face', '🙂 Face'], ['hair', '💇 Hair'], ['clothes', '👕 Clothes'], ['wear', '🧢 Extras'], ['photo', '📷 From a photo']];
   let tab = 'body', sub = { clothes: 'top', wear: 'hat' };

@@ -142,6 +142,7 @@ export function createTown(host, opts) {
   let foot = opts.mode === 'walk', parked = null, riding = null, summon = null; /* summon: your car, driving up to you after you called it */ /* riding: in someone else's car ({ id, seat }), going where they drive */ /* foot: walking (your character), not driving; parked: your car, where you got out */
   let feet = null; const mkFeet = () => { if (feet) return feet; feet = W.makePerson('me', null, opts.look || null); feet.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); scene.add(feet.group); return feet; };
   if (foot) mkFeet();
+  let petGone = null; /* (your pet on its way home) */
   let myPet = null; if (opts.pet) { try { myPet = follower(opts.pet); myPet.group.visible = false; scene.add(myPet.group); } catch (e) { myPet = null; } } /* your pet: with you on foot (in the car while you drive) */
   const me = W.makeCar(opts.car.kind || 'car', opts.car.col || '#c8382e'); scene.add(me); me.traverse(m => { if (m.isMesh) m.castShadow = true; });
   // on a bike, you ride it: your own character sits on the saddle, hands on the bars, feet down to the pedals
@@ -572,7 +573,7 @@ export function createTown(host, opts) {
   canvas.addEventListener('pointermove', e => { if (e.pointerId !== lk.id) return; lk.yaw = foot ? lk.yaw - (e.clientX - lk.x) * 0.006 : Math.max(-Math.PI, Math.min(Math.PI, lk.yaw - (e.clientX - lk.x) * 0.006)); lk.pitch = Math.max(-0.5, Math.min(1.2, lk.pitch - (e.clientY - lk.y) * 0.004)); /* (up to well over your head: the aircraft in the sky) */ lk.x = e.clientX; lk.y = e.clientY; });
   // a tap (not a drag) on a pet: yours (follow or go home) or someone else's (give it a pat)
   let tapped = null; const tapPet = e => { if (!opts.onPet) return; const list = []; if (myPet && myPet.group.visible) list.push({ group: myPet.group, mine: true, pet: myPet }); for (const f of folk.values()) if (f.pet && f.pet.group.visible) list.push({ group: f.pet.group, mine: false, owner: f.owner, pet: f.pet });
-    const hit = pickPet(camera, canvas, e, list); if (!hit) return; tapped = hit.pet; opts.onPet({ mine: hit.mine, owner: hit.owner || null, kind: hit.pet.kind }); };
+    const hit = pickPet(camera, canvas, e, list); if (!hit) return; tapped = hit.pet; opts.onPet({ mine: hit.mine, owner: hit.owner || null, kind: hit.pet.kind, sx: e.clientX, sy: e.clientY }); };
   const lkEnd = e => { if (e.pointerId === lk.id) { lk.id = null; lk.at = now0(); if (e.type === 'pointerup' && Math.hypot(e.clientX - lk.x0, e.clientY - lk.y0) < 9 && now0() - lk.t0 < 450) tapPet(e); } }; canvas.addEventListener('pointerup', lkEnd); canvas.addEventListener('pointercancel', lkEnd);
   canvas.addEventListener('dblclick', () => { lk.yaw = foot ? car.a : 0; lk.pitch = 0; });
 
@@ -614,7 +615,8 @@ export function createTown(host, opts) {
   view.resize(); around(); sunNow(true);
   view.start((dt, now) => {
     if (dead) return; drive(dt); if (DEB.length) stepDebris(dt);
-    if (myPet) { const onFoot = foot && feet && !riding; myPet.group.visible = onFoot; if (onFoot) myPet.step(dt, feet.group.position.x, feet.group.position.z); }
+    if (myPet && petGone) { petGone.t += dt; myPet.group.visible = true; { const k = Math.min(70, 1.6 + petGone.t * 7.5); myPet.step(dt, petGone.x0 + petGone.dx * k, petGone.z0 + petGone.dz * k); } if (petGone.t > 5.5) { myPet.dispose(); myPet = null; petGone = null; } } /* sent home: it runs off out of sight, then it's gone */
+    else if (myPet) { const onFoot = foot && feet && !riding; myPet.group.visible = onFoot; if (onFoot) myPet.step(dt, feet.group.position.x, feet.group.position.z); }
     me.visible = !foot && !riding && mode !== 1; if (feet) { feet.group.visible = foot && mode !== 1; if (foot) { feet.setPos(car.x, car.z); { const m = car.mv == null ? car.a : car.mv; feet.animate(dt, Math.cos(m) * car.v, -Math.sin(m) * car.v); } feet.group.rotation.y = car.a + Math.PI / 2; } } /* your character walks (and faces where you're going) */
     if (parked) pushCar(parked.kind, parked.col, parked.x, parked.z, parked.ry);
     if (summon) { comeUp(dt); if (summon) pushCar(summon.kind, summon.col, summon.x, summon.z, summon.ry); }
@@ -709,7 +711,8 @@ export function createTown(host, opts) {
     get parkedAt() { return parked ? { x: parked.x / TILE, y: parked.z / TILE } : null; },
     doorOf(id) { for (const v of blocks.values()) for (const s of v.solid) if (s.id === id && s.door) return { x: s.door[0] / TILE, y: s.door[1] / TILE, a: s.out }; return null; },
     petHappy() { if (tapped) tapped.happy(); }, /* (the pet you just tapped) */
-    setMyPet(kind) { if (myPet && (!kind || myPet.kind !== kind)) { myPet.dispose(); myPet = null; } if (kind && !myPet) { try { myPet = follower(kind); myPet.group.visible = false; scene.add(myPet.group); } catch (e) { myPet = null; } } },
+    petLeave() { if (!myPet) return; if (!foot || riding || !myPet.group.visible) { myPet.dispose(); myPet = null; return; } const p = myPet.group.position; let dx = p.x - car.x, dz = p.z - car.z, d = Math.hypot(dx, dz); if (d < 0.3) { dx = -Math.cos(car.a); dz = Math.sin(car.a); d = 1; } petGone = { t: 0, x0: car.x, z0: car.z, dx: dx / d, dz: dz / d }; }, /* go home: it trots off away from you and out of view */
+    setMyPet(kind) { if (kind && petGone) petGone = null; if (myPet && (!kind || myPet.kind !== kind)) { myPet.dispose(); myPet = null; } if (kind && !myPet) { try { myPet = follower(kind); myPet.group.visible = false; scene.add(myPet.group); } catch (e) { myPet = null; } } },
     kmh() { return Math.round(Math.abs(car.v) * 3.6); }, gear() { return !CARPHYS || foot || riding ? '' : car.v < -0.3 ? 'R' : Math.abs(car.v) < 0.3 && box.pedal < 0.05 ? 'N' : String(box.g); },
     say(who, text) { sayOver(who, text); }, /* talking on the street: 'me' or a colonist's id */
     // for testing: line the car up 14 m from the nearest lamp/bin/hydrant/traffic light it could drive straight at
@@ -718,6 +721,7 @@ export function createTown(host, opts) {
           for (let t = 0; t <= 1.6 && ok; t += 0.05) { const x = sx + (o.c[0] - sx) * t, z = sz + (o.c[1] - sz) * t; for (const q of solidsNear(x, z)) { if (q === o || q.brk || q.car) continue; const d = depth(x, z, q); if (d > -1) { ok = false; break; } } }
           const dd = Math.hypot(sx - car.x, sz - car.z); if (ok && (!best || dd < best.dd)) best = { dd, sx, sz, a, o }; } }
       if (!best) return null; car.x = best.sx; car.z = best.sz; car.a = best.a; car.v = car.vx = car.vz = 0; car.wa = 0; return { kind: best.o.brk }; },
+    _myPet() { return myPet ? { x: myPet.group.position.x / TILE, y: myPet.group.position.z / TILE, on: myPet.group.visible } : null; }, /* (for testing) */
     _put(x, z, a) { car.x = x; car.z = z; car.a = a; car.v = car.vx = car.vz = 0; car.wa = 0; }, /* (for testing) */
     _broken() { let n = 0; for (const v of blocks.values()) for (const o of v.solid) if (o.gone) n++; return { broken: n, flying: DEB.length, deb: DEB.map(d => [d.x - car.x, d.y, d.z - car.z, d.th, d.G.parent === scene, d.G.children.length].map(v => typeof v === 'number' ? +v.toFixed(2) : v)) }; },
     stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, fleet: Object.fromEntries([...fleetM].filter(([, m]) => m.count).map(([k, m]) => [k, m.count])), calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },

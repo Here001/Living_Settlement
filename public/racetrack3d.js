@@ -77,6 +77,7 @@ export function createTrack(host, opts) {
   // ---- you, walking about as yourself (and your pet), like inside any place: the stick (or WASD) walks, dragging the
   // screen looks round; you can't step onto the dirt while it's a racetrack, and the stand's tiers lift you as you climb ----
   const me = { x: (Math.random() - 0.5) * standW * 0.8, z: STAND_Z - 2.2 - Math.random() * 2.2, /* (somewhere along the front of the stand: not all on one spot) */ y: 0, yaw: 0, pitch: -0.12, sit: false, P: W.makePerson('me', null, opts.look || null) }; scene.add(me.P.group); me.P.group.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  let petGone = null; /* (your pet on its way home) */
   let myPet = null; if (opts.pet) { try { myPet = follower(opts.pet); scene.add(myPet.group); } catch (e) {} }
   const inField = (x, z) => (x / (RX - WID / 2 - 0.9)) ** 2 + (z / (RZ - WID / 2 - 0.9)) ** 2 < 1; /* (the infield's yours to explore too: but not the dirt) */
   const OUT = [RX + WID / 2 + 0.7, RZ + WID / 2 + 0.7], EDGE = [RX + WID / 2 + 42, RZ + WID / 2 + 42];
@@ -91,7 +92,7 @@ export function createTrack(host, opts) {
   canvas.addEventListener('pointerdown', e => { if (lk.id != null) return; lk.id = e.pointerId; lk.x = e.clientX; lk.y = e.clientY; lk.x0 = e.clientX; lk.y0 = e.clientY; lk.t0 = performance.now(); try { canvas.setPointerCapture(e.pointerId); } catch (x) {} });
   canvas.addEventListener('pointermove', e => { if (e.pointerId !== lk.id) return; me.yaw -= (e.clientX - lk.x) * 0.006; me.pitch = Math.max(-1.1, Math.min(1.1, me.pitch - (e.clientY - lk.y) * 0.004)); lk.x = e.clientX; lk.y = e.clientY; });
   let tapped = null; const tapPet = e => { if (!opts.onPet) return; const list = []; if (myPet && myPet.group.visible) list.push({ group: myPet.group, mine: true, id: 'me', pet: myPet }); for (const [id, o] of others) if (o.pet) list.push({ group: o.pet.group, mine: false, id, owner: o.h || null, pet: o.pet });
-    const hit = pickPet(camera, canvas, e, list); if (!hit) return; tapped = hit.pet; opts.onPet({ mine: hit.mine, id: hit.id, owner: hit.owner, kind: hit.pet.kind }); }; /* a tap on a pet: yours (follow or go home) or someone else's (a pat) */
+    const hit = pickPet(camera, canvas, e, list); if (!hit) return; tapped = hit.pet; opts.onPet({ mine: hit.mine, id: hit.id, owner: hit.owner, kind: hit.pet.kind, sx: e.clientX, sy: e.clientY }); }; /* a tap on a pet: yours (follow or go home) or someone else's (a pat) */
   const lkEnd = e => { if (e.pointerId === lk.id) { lk.id = null; if (e.type === 'pointerup' && Math.hypot(e.clientX - lk.x0, e.clientY - lk.y0) < 9 && performance.now() - lk.t0 < 450) tapPet(e); } }; canvas.addEventListener('pointerup', lkEnd); canvas.addEventListener('pointercancel', lkEnd);
   let sitAt = null; const nearBench = () => { const ty = tierY(me.x, me.z); return ty > 0 ? ty : 0; };
   function sitDown() { const ty = nearBench(); if (!ty) return false; const row = Math.round((ty - 0.9) / 0.9), z = STAND_Z + row * 1.4 - 0.2; me.sit = true; me.x = Math.max(-standW / 2 + 1.2, Math.min(standW / 2 - 1.2, me.x)); me.z = z; me.yaw = 0; sitAt = 0.6 + row * 0.9 + 0.5 - 0.48;
@@ -104,7 +105,8 @@ export function createTrack(host, opts) {
       if (free(me.x + dx, me.z)) me.x += dx; if (free(me.x, me.z + dz)) me.z += dz; moved += Math.hypot(dx, dz); me.P.animate(dt, dx / dt, dz / dt); }
     else if (!me.sit) me.P.animate(dt, 0, 0);
     const ty = me.sit ? sitAt : tierY(me.x, me.z); me.y += (ty - me.y) * Math.min(1, dt * 12); me.P.setPos(me.x, me.z); me.P.group.position.y = me.y; if (me.sit) me.P.group.rotation.y = Math.PI;
-    if (myPet) { myPet.step(dt, me.x, me.z); myPet.group.position.y = me.sit ? 0 : me.y; }
+    if (myPet && petGone) { petGone.t += dt; myPet.group.visible = true; { const k = Math.min(70, 1.6 + petGone.t * 7.5); myPet.step(dt, petGone.x0 + petGone.dx * k, petGone.z0 + petGone.dz * k); } if (petGone.t > 5.5) { myPet.dispose(); myPet = null; petGone = null; } } /* sent home: it trots off out of sight */
+    else if (myPet) { myPet.step(dt, me.x, me.z); myPet.group.position.y = me.sit ? 0 : me.y; }
     if (opts.onMove && moved > 0.15) { moved = 0; opts.onMove(me.x, me.z, me.P.group.rotation.y, me.sit ? 's' : ''); } }
   // ---- other people here: they walk (or sit) where they say they are, with their name over them and their pet ----
   const others = new Map();
@@ -141,7 +143,7 @@ export function createTrack(host, opts) {
   return { view(m) { mode = m || MODES[(MODES.indexOf(mode) + 1) % MODES.length]; return mode; }, stats() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, runners: runners.size, crowd: crowd.size, others: others.size, cam: camera.position.toArray().map(v => +v.toFixed(2)), aim: aim.toArray().map(v => +v.toFixed(2)), mode, back, roofY, STAND_Z }; },
     get me() { return { x: me.x, z: me.z, a: me.P.group.rotation.y, sit: me.sit, bench: !!nearBench() }; }, sit() { if (me.sit) { standUp(); return false; } return sitDown(); },
     goto(x, z, yaw) { if (Number.isFinite(x) && Number.isFinite(z)) { me.x = x; me.z = z; } if (Number.isFinite(yaw)) me.yaw = yaw; }, /* (for checking a view) */
-    petHappy() { if (tapped) tapped.happy(); }, setMyPet(kind) { if (myPet && (!kind || myPet.kind !== kind)) { myPet.dispose(); myPet = null; } if (kind && !myPet) { try { myPet = follower(kind); scene.add(myPet.group); } catch (e) { myPet = null; } } },
+    petHappy() { if (tapped) tapped.happy(); }, petLeave() { if (!myPet) return; const q = myPet.group.position; let dx = q.x - me.x, dz = q.z - me.z, d = Math.hypot(dx, dz); if (d < 0.3) { dx = 1; dz = 0; d = 1; } petGone = { t: 0, x0: me.x, z0: me.z, dx: dx / d, dz: dz / d }; }, setMyPet(kind) { if (kind && petGone) petGone = null; if (myPet && (!kind || myPet.kind !== kind)) { myPet.dispose(); myPet = null; } if (kind && !myPet) { try { myPet = follower(kind); scene.add(myPet.group); } catch (e) { myPet = null; } } },
     upsertOther, removeOther, setPet, say, near(r) { let n = 0; for (const o of others.values()) if (Math.hypot(o.x - me.x, o.z - me.z) <= r) n++; return n; },
     close() { removeEventListener('resize', onResize); removeEventListener('keydown', kd); removeEventListener('keyup', ku); stick.remove(); if (myPet) myPet.dispose(); for (const R of runners.values()) R.C.dispose(); view.dispose(); canvas.remove(); } };
 }

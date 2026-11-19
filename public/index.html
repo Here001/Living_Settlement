@@ -1116,9 +1116,9 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .enter.open .entitle,.enter.open .enstep,.enter.open .enbar,.enter.open .entip{opacity:0;transition:opacity .25s}
 @media (prefers-reduced-motion:reduce){.endoor,.englow,.enlight{animation:none}.enscene,.enter .endoor{transition:none}}
 .hact{position:absolute;right:14px;bottom:calc(150px + env(safe-area-inset-bottom));z-index:4;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:none;padding:0;cursor:pointer}.hact.hshop{right:auto;left:14px;bottom:calc(200px + env(safe-area-inset-bottom))}
-.hact b{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;background:#fff;border:2px solid #2B2621;font-size:30px;box-shadow:0 4px 0 #2B2621}
-.hact:active b{transform:translateY(3px);box-shadow:0 1px 0 #2B2621}
-.hact span{font-size:12px;font-weight:800;color:#fff;background:rgba(43,38,33,.82);border-radius:999px;padding:3px 9px;white-space:nowrap}
+.hact b{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.88);font-size:28px;box-shadow:0 2px 12px rgba(0,0,0,.22);color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.55);filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))} /* (round and see-through, like 🚗 Get in) */
+.hact:active b{transform:scale(.94);background:rgba(255,255,255,.26)}.hact:disabled{opacity:.55}.dacts .hact{position:static;width:96px}.dacts .hact span{white-space:normal;text-align:center;line-height:1.15;max-width:96px}.dhud .dacts{flex-direction:row-reverse;align-items:flex-start;gap:4px}.dacts .hact{background:none!important;border:0!important;box-shadow:none!important;padding:0!important;min-height:0!important}@media (orientation:portrait){.driveview .dhud .dacts{margin-right:64px}} /* (clear of the column of side buttons) */ /* (side by side, so they stay under the side buttons) */
+.hact span{font-size:12px;font-weight:800;color:#fff;background:rgba(20,22,28,.5);border-radius:999px;padding:3px 9px;white-space:nowrap}
 .hexit-old{position:absolute;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:4;border:2px solid #2B2621;background:#E4572E;color:#fff;font-weight:800;font-size:17px;border-radius:999px;padding:12px 26px;box-shadow:0 4px 0 #2B2621,0 8px 20px rgba(0,0,0,.25);animation:hexit .35s ease-out}.hexit[hidden]{display:none}@keyframes hexit{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
 .btn.love{background:#FCE4EB;border-color:#D9346A;color:#B23A5E}.lovechip{align-items:center;flex-wrap:wrap}.lovechip .hearts{font-size:18px}
 .lovebox{border-color:#E8A0B4}.lovebox h3{color:#B23A5E}.hearts{font-size:22px;letter-spacing:2px;color:#E0496E;line-height:1}.hearts i{font-style:normal;color:#E7C9D2}
@@ -7683,7 +7683,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     this.chatBox=el('div',{class:'hchat dchatbox',hidden:true}, this.chatLog, el('div',{class:'hchatrow'}, this.chatIn, el('button',{class:'btn primary sm',text:'Send',disabled:!(Me&&Me.token),onclick:()=>this.say()})));
     this.pickBtn=el('button',{class:'rndbtn dpick',hidden:true,'aria-label':'Pick their pocket',title:'Pick their pocket'}, el('b',{text:'👛'})); /* close to someone on foot: a small round 👛 */
     this.chatBtn=el('button',{class:'rndbtn dchat',hidden:true,'aria-label':'Chat',title:'Talk to the people near you',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden) setTimeout(()=>this.chatIn.focus(),50); this.talkNear(); }}, el('b',{text:'💬'}), el('span',{text:'Chat'})); /* get out and walk, or get (back) in the car */
-    this.goBtn=el('button',{class:'btn primary dgo',hidden:true}); this.inBtn=el('button',{class:'btn dgo',hidden:true}); this.rideBtn=el('button',{class:'btn primary dgo',hidden:true}); this.riding=null; this.riders=[];
+    this.goBtn=el('button',{class:'hact dgo',hidden:true}); this.inBtn=el('button',{class:'hact dgo',hidden:true}); this.rideBtn=el('button',{class:'hact dgo',hidden:true}); /* (round see-through buttons, like 🚗 Get in) */ this.riding=null; this.riders=[];
     this.doorBtn=el('button',{class:'floatbtn',hidden:true}); this.carBtn=el('button',{class:'floatbtn',hidden:true,'aria-label':'Get in the car',onclick:()=>this.switchMode()}, el('b',{text:'🚗'}), el('span',{text:'Get in'})); /* rides: asking someone for one, or riding along */
     this.speed=el('div',{class:'dspeed'}); this.sub=sub;
     const bar=''; /* no banner on top: the 2D switch, the camera, the controls and the phone are on the right */
@@ -7747,9 +7747,9 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     if(foot){ /* at the front door: go in (or, where there's no inside to walk into, just go there) */
       this.goBtn.hidden=true; this.doorOk=true; this.doorBtn.replaceChildren(el('b',{text:enter?'🚪':'📍'}), el('span',{text:name})); this.doorBtn.setAttribute('aria-label',enter?`Enter ${name}`:`Visit ${name}`); this.doorBtn.onclick=()=>this.arrive(b,enter); /* the round 🚪 on its door */
       const t0=T(b), mine=Me&&Me.handle&&b.owner&&b.owner.toLowerCase()===Me.handle.toLowerCase(), myHome=(()=>{ const c=myCitizen(), H=MyHome.data; MyHome.load(); if(!H){ clearTimeout(this.nbT); this.nbT=setTimeout(()=>{ if(this.near===b) this.nearBy(b); },1500); } /* (look again once the server says which home is yours) */ return !!((c&&c.home&&c.home[0]===b.id)||(H&&H.home&&H.home.id===b.id)); })(), /* (from the map, or from the server) */ sale=BUYABLE.has(t0.cat)&&(t0.home||t0.work)&&!b.owner;
-      this.inBtn.hidden=!((t0.home&&!myHome)||sale)||mine; this.inBtn.textContent=t0.home?(myHome?'🏷️ Buy this home':sale?'🏷️ Rent or buy':'🔑 Rent here'):'🏷️ For sale'; this.inBtn.onclick=()=>Phone.showBuilding(b.id); return; } /* a home (or a business for sale): its card, with 🔑 Rent here and Buy, on your phone */
-    this.goBtn.hidden=false; this.goBtn.textContent=`🅿️ Stop at ${name}`; this.goBtn.onclick=()=>this.arrive(b,false);
-    this.inBtn.hidden=!enter; this.inBtn.textContent='🚪 Go inside'; this.inBtn.onclick=()=>this.arrive(b,true); },
+      this.inBtn.hidden=!((t0.home&&!myHome)||sale)||mine; rlabel(this.inBtn, t0.home&&!myHome&&!sale?'🔑':'🏷️', t0.home?(myHome?'Buy this home':sale?'Rent or buy':'Rent here'):'For sale'); this.inBtn.onclick=()=>Phone.showBuilding(b.id); return; } /* a home (or a business for sale): its card, with 🔑 Rent here and Buy, on your phone */
+    this.goBtn.hidden=false; rlabel(this.goBtn,'🅿️',`Stop at ${name}`); this.goBtn.onclick=()=>this.arrive(b,false);
+    this.inBtn.hidden=!enter; rlabel(this.inBtn,'🚪','Go inside'); this.inBtn.onclick=()=>this.arrive(b,true); },
   // walking and driving: get out (your own car stays parked where you left it) and get back in when you walk up to it
   paintMode(){ const B=this.modeBtn; if(!B||!this.T) return; const set=(ic,t)=>{ B.hidden=false; if(B.dataset.t!==t){ B.dataset.t=t; B.replaceChildren(el('b',{text:ic}), el('span',{text:t})); B.setAttribute('aria-label',t); } };
     if(this.car&&this.car.water){ set('⚓','Back to shore'); return; } if(this.riding){ set('🚶','Get out'); return; } const foot=this.T.pos.mode==='walk';
@@ -7788,7 +7788,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
   // ---- rides: in someone else's car, as many as it has seats (2 in sports cars, 4 in the rest, the driver included) ----
   send(o){ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }catch(e){} },
   nearRide(c){ const B=this.rideBtn; if(!B) return; if(!c||this.riding||!c.h){ B.hidden=true; return; } B.hidden=false; B.disabled=!!c.full;
-    B.textContent=c.full?`🚗 @${c.h}’s car is full`:`🙋 Ride with @${c.h}`; B.onclick=()=>{ if(c.full) return; this.send({type:'ride',a:'ask',id:c.id}); B.disabled=true; setTimeout(()=>{ B.disabled=false; },4000); }; },
+    rlabel(B, c.full?'🚗':'🙋', c.full?`@${c.h}’s car is full`:`Ride with @${c.h}`); B.onclick=()=>{ if(c.full) return; this.send({type:'ride',a:'ask',id:c.id}); B.disabled=true; setTimeout(()=>{ B.disabled=false; },4000); }; },
   rideMsg(m){ if(!this.el||!this.T){ if(m.k==='ask') this.send({type:'ride',a:'answer',id:m.id,yes:false}); return; }
     if(m.k==='asked'){ toast(`🙋 You asked @${m.h} for a ride. Waiting for them…`); return; }
     if(m.k==='no'){ toast(m.text||'No ride this time.'); return; }
@@ -7957,7 +7957,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
   moveSoon(){ this.sendPos(false); this.talkNear(); },
   // pets: everyone's pet follows them inside too (yours from your colonist, theirs from the map's colonists)
   petOf(p){ if(!this.h||!this.h.setPet||!p||!p.h) return; const c=[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===p.h.toLowerCase()), home=!!(this.d&&this.d.owner&&c&&c.handle&&this.d.owner.toLowerCase()===c.handle.toLowerCase()); this.h.setPet(p.id,petOut(c,home)); }, /* (a pet left at home is there in its home) */
-  myPet(){ if(!this.h||!this.h.setPet) return; const c=myCitizen(); this.h.setPet('me',petOut(c,!!(this.d&&this.d.mine))); },
+  myPet(){ if(!this.h||!this.h.setPet) return; const c=myCitizen(), home=!!(this.d&&this.d.mine); this.h.setPet('me',petOut(c,home)); if(this.h.petStay) this.h.petStay('me',!!(home&&c&&c.pet&&c.pet.home)); }, /* (at home, a pet that stays home waits where it is) */
   // 💬 Chat shows only when a real person (signed in, here now) is close enough to read the words over your head; it stays
   // while the chat is open
   talkNear(){ const b=this.chatBtn; if(!b||!this.h||!this.h.me) return; const m=this.h.me, R=6;
@@ -8843,11 +8843,21 @@ var GuideUI={ data:null, at:0, busy:false, open:false, /* folded: just the next 
 // "Go here" on a building's card: how far it is from your colonist right now, and a button that sends them there with
 // the camera locked on them until they arrive.
 // Tapping a pet in 3D: your own offers 🏠 Go home (or 🐾 Follow, if it's at home); someone else's, 🤗 Pet (it's happy).
-function petTap(x,T3){ if(x.mine){ const c=myCitizen(); if(!c||!c.pet||!CREATURES[c.pet.k]) return; const home=!!c.pet.home; if(T3&&T3.petHappy) T3.petHappy(x.id);
-    toast(`🐾 ${c.pet.n} the ${CREATURES[c.pet.k].name.toLowerCase()}${home?' is staying at home.':' is with you.'}`, home?'🐾 Follow':'🏠 Go home', ()=>petFollow(!home)); return; }
-  const name=CREATURES[x.kind]?CREATURES[x.kind].name.toLowerCase():'pet'; toast(`🐾 ${x.owner?`@${x.owner}’s ${name}`:`A ${name}`}`,'🤗 Pet',()=>{ if(T3&&T3.petHappy) T3.petHappy(x.id); }); }
+// a tap on a pet: a round see-through button right where you tapped (like 🚗 Get in on your car): yours gets 🐾 Follow or
+// 🏠 Go home, someone else's gets 🤗 Pet. It goes after a few seconds, or when tapped.
+function petTap(x,T3){ if(x.mine){ const c=myCitizen(); if(!c||!c.pet||!CREATURES[c.pet.k]) return; const home=!!c.pet.home;
+    PetBtn.show(x, home?'🐾':'🏠', home?'Follow':'Go home', ()=>petFollow(home)); return; } /* (at home: follow; with you: home) */
+  PetBtn.show(x, '🤗', 'Pet', ()=>{ if(T3&&T3.petHappy) T3.petHappy(x.id); }); }
+// a round button's look: the icon in the circle, its words underneath
+function rlabel(b,icon,text){ b.replaceChildren(el('b',{text:icon}), el('span',{text})); b.setAttribute('aria-label',text); }
+const PetBtn={ el:null, t:null,
+  show(x,icon,label,fn){ this.hide(); const b=el('button',{class:'floatbtn petbtn','aria-label':label,onclick:e=>{ e.stopPropagation(); this.hide(); fn(); }}, el('b',{text:icon}), el('span',{text:label}));
+    const W=innerWidth, H=innerHeight, sx=Math.max(40,Math.min(W-40,x.sx!=null?x.sx:W/2)), sy=Math.max(80,Math.min(H-60,(x.sy!=null?x.sy:H/2)-56)); /* (just above your finger, kept on the screen) */
+    b.style.cssText=`position:fixed;left:${sx}px;top:${sy}px;z-index:9800`; document.body.append(b); this.el=b; this.t=setTimeout(()=>this.hide(),5000); },
+  hide(){ clearTimeout(this.t); if(this.el){ this.el.remove(); this.el=null; } } };
 async function petFollow(on){ try{ const r=await api('/api/me/pet/follow',{method:'POST',body:{on}}); const c=myCitizen(); if(c) c.pet=r.pet; PetStore.at=0;
-    const k=petOut(c); if(Drive.T&&Drive.T.setMyPet) Drive.T.setMyPet(k); if(Room.el) Room.myPet(); if(TrackView.T&&TrackView.T.setMyPet) TrackView.T.setMyPet(k); if(ArenaView.T&&ArenaView.T.setMyPet) ArenaView.T.setMyPet(k);
+    const k=petOut(c); for(const T of [Drive.T,TrackView.T,ArenaView.T]){ if(!T) continue; if(!on&&T.petLeave) T.petLeave(); else if(T.setMyPet) T.setMyPet(k); } /* (sent home: it walks off out of sight) */
+    if(Room.el&&Room.h){ const atHome=!!(Room.d&&Room.d.mine); if(atHome){ Room.myPet(); if(Room.h.petStay) Room.h.petStay('me',!on); } else if(!on&&Room.h.petLeave) Room.h.petLeave('me'); else Room.myPet(); }
     toast(on?`🐾 ${r.pet.n} is following you again.`:`🏠 ${r.pet.n} has gone home, and waits for you there.`); }catch(e){ toast(e.message); } }
 // a colonist's pet, if it's out with them (one sent home stays there: it shows only in its own home)
 function petOut(c,atHome){ return c&&c.pet&&CREATURES[c.pet.k]&&(!c.pet.home||atHome)?c.pet.k:null; }

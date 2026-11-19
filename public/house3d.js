@@ -725,7 +725,7 @@ export function createHouse(host, opts) {
     if (Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < 8 && performance.now() - p.t < 450) { const r = el.getBoundingClientRect(), nx = (e.clientX - r.left) / r.width * 2 - 1, ny = -((e.clientY - r.top) / r.height) * 2 + 1;
       if (pick) { tapAim = true; aim(nx, ny); } else { ray.setFromCamera(v2.set(nx, ny), camera); ray.near = camera.near; const hit = ray.intersectObjects([stuff, wallStuff, ceilStuff].filter(g => g.visible), true)[0], wallHit = ray.intersectObjects(walls.children, false)[0];
         if (opts.onPet) { let best = null; for (const [pid, pt] of pets) { if (!pt.f.group.visible) continue; const hp = ray.intersectObject(pt.f.group, true)[0]; if (hp && (!best || hp.distance < best.d)) best = { d: hp.distance, pid, pt }; }
-          if (best && (!hit || best.d < hit.distance + 0.2)) { const o = others.get(best.pid); opts.onPet({ mine: best.pid === 'me', id: best.pid, owner: o ? o.h || null : null, kind: best.pt.kind }); return; } } /* a pet: yours (follow or stay home) or someone else's (a pat) */
+          if (best && (!hit || best.d < hit.distance + 0.2)) { const o = others.get(best.pid); opts.onPet({ mine: best.pid === 'me', id: best.pid, owner: o ? o.h || null : null, kind: best.pt.kind, sx: e.clientX, sy: e.clientY }); return; } } /* a pet: yours (follow or stay home) or someone else's (a pat) */
         { const og = [...others.values()].filter(o => o.g.visible).map(o => o.g), ph = og.length ? ray.intersectObjects(og, true)[0] : null;
           if (ph && (!hit || ph.distance < hit.distance + 0.3) && opts.onPerson) { let g = ph.object; while (g && !og.includes(g)) g = g.parent; for (const [id, o] of others) if (o.g === g) { opts.onPerson(id); return; } } } /* someone here: what to do about them (their voice, their card) */
         if (show.children.length && opts.onProduct) { const pr = ray.intersectObjects(show.children, true)[0]; if (pr && (!hit || pr.distance <= hit.distance + 0.8)) { opts.onProduct(pr.object.userData.product); return; } } /* a product on display (even behind its counter's glass): its shop */
@@ -799,6 +799,8 @@ export function createHouse(host, opts) {
       else if (!o.posed) { o.g.userData.av.pose(POSE[o.pose] || 'stand'); o.posed = true; dirty = true; }
       if (o.bubble && performance.now() > o.bubbleUntil) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); o.bubble = null; dirty = true; } }
     for (const [id, pt] of pets) { const o = id === 'me' ? null : others.get(id); if (id !== 'me' && (!o || !o.g.visible)) { pt.f.group.visible = false; continue; } pt.f.group.visible = true;
+      if (pt.leave) { pt.leave.t += dt; pt.f.step(dt, pt.leave.x, pt.leave.z); gliding = true; dirty = true; const q = pt.f.group.position; if (pt.leave.t > 5 || Math.hypot(q.x - pt.leave.x, q.z - pt.leave.z) < 0.9) { pt.f.dispose(); pets.delete(id); } continue; } /* sent home: it trots out of the front door */
+      if (pt.stay) { if (pt.f.step(dt, pt.stay.x, pt.stay.z)) { gliding = true; dirty = true; } continue; } /* staying home: it settles where it is */
       const ox = o ? o.g.position.x : act ? act.x : me.x, oz = o ? o.g.position.z : act ? act.y : me.y; if (pt.f.step(dt, ox, oz)) { gliding = true; dirty = true; } } /* pets trot after their people */
     othersMoving = gliding;
     if (meBubble && performance.now() > meBubbleUntil) { me3.remove(meBubble); meBubble.material.map.dispose(); meBubble = null; dirty = true; }
@@ -855,6 +857,8 @@ export function createHouse(host, opts) {
       else if (!on && sp) { g.remove(sp); sp.material.map.dispose(); sp.material.dispose(); g.userData.talk = null; } else return; dirty = true; wake(); },
     setPet, upsertOther, removeOther, clearOthers() { for (const id of [...others.keys()]) removeOther(id); }, say, get me() { return { x: me.x, y: me.y, a: act ? act.wyaw : me.yaw, pose: act ? CODE[act.kind] : '', ph: act ? +act.wy.toFixed(2) : 0 }; },
     act() { doAct(); }, standUp() { standUp(); }, petHappy(id) { const pt = pets.get(id); if (pt) { pt.f.happy(); dirty = true; wake(); } },
+    petLeave(id) { const pt = pets.get(id); if (!pt) return; pt.stay = null; pt.leave = frontAt ? { t: 0, x: frontAt.x, z: frontAt.y } : { t: 4.6, x: 0, z: 0 }; dirty = true; wake(); }, /* off home, out of the front door */
+    petStay(id, on) { const pt = pets.get(id); if (!pt) return; const q = pt.f.group.position, fresh = !q.x && !q.z; pt.leave = null; pt.stay = on ? (fresh ? { x: me.x + 0.9, z: me.y + 0.4 } : { x: q.x + 0.01, z: q.z }) : null; dirty = true; wake(); }, /* (a pet only just made waits beside you) */ /* at home: it stays put (or follows you again) */
     // into bed (when your colonist is asleep as you come in): the first bed in the home; stand up beside it
     sleep() { if (act) return false; const it = room.items.find(x => { const A = actOf(x.k); return A && A.kind === 'lie' && /bed/.test(x.k); }) || room.items.find(x => (actOf(x.k) || {}).kind === 'lie'); if (!it) return false;
       const b = boxOf(it); for (const [x, y] of [[b.x1 + 0.45, b.cy], [b.x0 - 0.45, b.cy], [b.cx, b.y1 + 0.45], [b.cx, b.y0 - 0.45]]) if (!blocked(x, y)) { me.x = x; me.y = y; break; }

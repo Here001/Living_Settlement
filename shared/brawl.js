@@ -91,6 +91,7 @@ export function step(s, inputs, dt, rand) {
     f.st = Math.min(ST_MAX, f.st + ST_REGEN * (1 + f.hype * 0.5) * (f.blk ? 0.4 : 1) * dt);
     // face the other fighter
     f.a = Math.atan2(o.x - f.x, o.z - f.z);
+    if (s.phase === 'walk' && k === 1 && s.pt > WALK_S * 0.5) { f.vx = f.vz = 0; continue; } /* (the walk-out: red first, then blue) */
     if (!fighting) { f.act = null; f.blk = false; const hx = k ? 3.2 : -3.2, d = Math.hypot(hx - f.x, -f.z); if (d > 0.1) { const sp = Math.min(d, 2.5 * dt); f.x += (hx - f.x) / d * sp; f.z += -f.z / d * sp; } f.vx = f.vz = 0; continue; } /* back to your corner */
     const free = !f.act && f.stun <= 0 && f.dodge <= 0;
     f.blk = !!inp.block && free && f.st > 1;

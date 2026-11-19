@@ -24,12 +24,17 @@ export function seeded(seed) { let s = seed >>> 0 || 1; return () => { s = (s + 
 
 // A fighter's make-up comes from who they are (so a colonist always fights the same way) and their record: every win
 // makes them a little sharper. Power hits harder, speed lands more often, chin takes more punishment.
+// Training (at a gym, or on gym equipment at home): each session adds a little to one stat, up to TRAIN_MAX in all for
+// that stat; a session for each stat once an hour. Treadmill and exercise bike: speed; weights and bench press: power;
+// the punch bag: chin.
+export const TRAIN_STEP = 0.01, TRAIN_MAX = 0.12, TRAIN_GAP_MS = 3600 * 1000;
+export const TRAIN_OF = { treadmill: 'speed', bike: 'speed', weights: 'power', benchpress: 'power', punchbag: 'chin' };
 export function fighterOf(id, handle, rec = {}) {
   const h = hashStr('fighter:' + id), r = seeded(h), wins = rec.wins || 0, losses = rec.losses || 0;
   const edge = Math.min(0.18, wins * 0.025) - Math.min(0.08, losses * 0.01);
-  const stat = () => Math.max(0.2, Math.min(0.98, 0.42 + r() * 0.4 + edge));
-  return { id, handle, style: STYLE_IDS[h % STYLE_IDS.length], nick: NICKS[(h >>> 4) % NICKS.length], power: stat(), speed: stat(), chin: stat(),
-    wins, losses, kos: rec.kos || 0, rating: Math.round(rec.rating || 1000) };
+  const stat = tr => Math.max(0.2, Math.min(0.98, 0.42 + r() * 0.4 + edge + Math.min(TRAIN_MAX, Number(tr) || 0))); /* + what they've trained (in a gym: up to TRAIN_MAX) */
+  return { id, handle, style: STYLE_IDS[h % STYLE_IDS.length], nick: NICKS[(h >>> 4) % NICKS.length], power: stat(rec.tr_power), speed: stat(rec.tr_speed), chin: stat(rec.tr_chin),
+    wins, losses, kos: rec.kos || 0, rating: Math.round(rec.rating || 1000), trained: { power: +(rec.tr_power || 0), speed: +(rec.tr_speed || 0), chin: +(rec.tr_chin || 0) } };
 }
 
 // One bout. Each round is a run of exchanges; a clean hit takes health, a big one can knock a fighter down, three

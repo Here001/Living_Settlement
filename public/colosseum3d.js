@@ -184,6 +184,12 @@ export function createColosseum(host, opts) {
       if (wpn && handR) { const wm = weaponMesh(wpn); wm.position.y += drop; handR.add(wm); if (BR.WEAPONS[wpn].shield && handL) { const sm = shieldMesh(); sm.position.y += drop; handL.add(sm); } if (wpn === 'daggers' && handL) { const d2 = weaponMesh('daggers'); d2.position.y += drop; handL.add(d2); } }
       /* a sash in their corner's colour, so you can always tell them apart */ const sash = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.045, 8, 20), std(k ? '#2E6FD8' : '#C0392B', 0.6)); sash.rotation.x = Math.PI / 2; sash.scale.set(1, 0.78, 1); sash.position.y = 1.0; (A.body || P.group).add(sash);
       F[k] = { P, A, x: k ? 9.4 : -9.4, z: 0, a: 0, vx: 0, vz: 0, down: 0, lay: 0, style: who.style, weapon: wpn || null, hitT: 0 }; P.setPos(F[k].x, 0); } }
+  // the walk-out: a spotlight on each fighter as they come out, and smoke from their gate
+  const beamM = new THREE.MeshBasicMaterial({ color: '#FFF6D8', transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const beams = [0, 1].map(() => { const b = new THREE.Mesh(new THREE.ConeGeometry(1.6, 16, 20, 1, true), beamM); b.position.y = 8; b.visible = false; scene.add(b); return b; });
+  const smokeM = new THREE.MeshStandardMaterial({ color: '#D9D4CC', roughness: 1, transparent: true, opacity: 0.55, depthWrite: false }); view.mats.push(smokeM); const puffs = []; let smoked = [false, false];
+  function smoke(side) { const x = (side ? 1 : -1) * (R0 - 0.3) * SX; for (let i = 0; i < 14; i++) { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 1), smokeM.clone()); m.position.set(x + (Math.random() - 0.5) * 1.2, 0.4 + Math.random(), (Math.random() - 0.5) * 2.4); scene.add(m);
+      puffs.push({ m, vx: -(side ? 1 : -1) * (0.6 + Math.random()), vy: 0.4 + Math.random() * 0.5, vz: (Math.random() - 0.5) * 0.6, t: 2.5 + Math.random() }); } }
   // the fight as it comes in: kept for a moment and drawn a tenth of a second behind, so it's smooth
   let roar = 0; const snaps = []; let cur = null, lastEv = [], replay = null, shake = 0;
   function brawl(s) { s.at = performance.now(); snaps.push(s); while (snaps.length > 90) snaps.shift(); if (s.ev) for (const e of s.ev) onEvent(e); }
@@ -236,6 +242,7 @@ export function createColosseum(host, opts) {
       tgt.set(me.x + fx * 3, me.y + 1.4 + Math.tan(me.pitch) * 6, me.z + fz * 3); camera.position.lerp(pos, k); aim.lerp(tgt, k); }
     else if (mode === 'ring' && s) { const a = Math.atan2(mid.z, mid.x) + 0.6; pos.set(Math.cos(a) * (R0 - 0.6) * SX, 1.7, Math.sin(a) * (R0 - 0.6)); tgt.copy(mid); camera.position.lerp(pos, k); aim.lerp(tgt, k); }
     else if (mode === 'above') { pos.set(12, 20, 12); tgt.set(0, 0, 0); camera.position.lerp(pos, k); aim.lerp(tgt, k); }
+    else if (mode === 'tv' && s && s.ph === 'walk') { const side = BR.WALK_S - s.pt < BR.WALK_S * 0.5 ? 0 : 1, f = s.f[side]; pos.set(f[0] * 0.35, 2.4, 6.5); tgt.set(f[0], 1.3, f[1]); camera.position.lerp(pos, Math.min(1, dt * 2)); aim.lerp(tgt, Math.min(1, dt * 4)); } /* the walk-out: from the side of the sand, on whoever is coming out */
     else { /* the TV camera: from the side, pulled back to frame both fighters, swinging slowly */ const t = performance.now() / 9000, a = Math.PI / 2 + Math.sin(t) * 0.7, dist = Math.min(9, 4.5 + sep * 0.7); pos.set(mid.x + Math.cos(a) * dist, 3.0 + sep * 0.22, mid.z + Math.sin(a) * dist); { const r = er(pos.x, pos.z), lim = R0 - 0.6; if (r > lim) { pos.x *= lim / r; pos.z *= lim / r; pos.y += (r - lim) * 0.5; } } /* (never out over the crowd) */ tgt.copy(mid); camera.position.lerp(pos, k); aim.lerp(tgt, k); }
     scrBox.visible = mode !== 'above' || fighting() || !!replay;
     if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake * 0.25; camera.position.y += (Math.random() - 0.5) * shake * 0.2; shake = Math.max(0, shake - dt * 1.6); }
@@ -247,6 +254,10 @@ export function createColosseum(host, opts) {
     let s = null; if (replay) { replay.t += dt * 1000 / 2; const at = replay.t0 + replay.t; if (replay.t >= replay.len) replay = null; else s = sample(at); }
     if (!s) s = sample(now - 110); cur = s;
     if (s) for (const k of [0, 1]) poseFighter(k, s, replay ? dt / 2 : dt);
+    // the walk-out: spotlights, smoke as each one comes out of their gate
+    { const walk = s && s.ph === 'walk', wt = walk ? BR.WALK_S - s.pt : 99; for (const k of [0, 1]) { const on = walk && F[k] && (k === 0 ? wt < 12 : wt >= BR.WALK_S * 0.5 - 0.3); beams[k].visible = !!on; if (on) beams[k].position.set(F[k].x, 8, F[k].z);
+        if (walk && !smoked[k] && (k === 0 ? wt > 0.2 : wt >= BR.WALK_S * 0.5)) { smoked[k] = true; smoke(k); roar = Math.min(1, roar + 0.6); } } if (!walk) smoked = [false, false]; }
+    for (let i = puffs.length - 1; i >= 0; i--) { const p = puffs[i]; p.t -= dt; p.m.position.x += p.vx * dt; p.m.position.y += p.vy * dt; p.m.position.z += p.vz * dt; p.m.scale.multiplyScalar(1 + dt * 0.6); p.m.material.opacity = Math.max(0, Math.min(0.55, p.t * 0.25)); if (p.t <= 0) { scene.remove(p.m); p.m.geometry.dispose(); p.m.material.dispose(); puffs.splice(i, 1); } }
     // the fire jets
     if (gladiator && s) { let any = false; jets.forEach((j, i) => { const warn = (s.j >> i) & 1, fire = (s.fi >> i) & 1; j.grate.material.emissiveIntensity = fire ? 2 : warn ? 0.6 + Math.sin(now / 60) * 0.4 : 0; j.fire.visible = !!fire; if (fire) { any = true; const q = 0.85 + Math.sin(now / 45 + i) * 0.15; j.fire.scale.set(q, 0.9 + Math.sin(now / 70 + i * 2) * 0.12, q); jetLight.position.set(BR.JETS[i].x, 2, BR.JETS[i].z); } }); jetLight.intensity = any ? 18 : 0; }
     // sparks and dust

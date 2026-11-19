@@ -12,14 +12,14 @@ import { HttpError } from './world.js';
 import { treasuryAdd } from './races.js';
 import * as R from '../shared/rules.js';
 import { pgList } from '../shared/catalog.js';
-import { BOUTS, BOUT_LEN_S, fighterOf, fight, oddsFor, rate, hashStr, STYLES } from '../shared/fights.js';
+import { BOUTS, BOUT_LEN_S, fighterOf, fight, oddsFor, rate, hashStr, STYLES, TRAIN_STEP, TRAIN_MAX, TRAIN_GAP_MS } from '../shared/fights.js';
 import * as BR from '../shared/brawl.js';
 
 export const FIGHT_EVERY = Math.max(10 * 60000, Number(process.env.FIGHT_EVERY_MS) || 3 * 3600 * 1000);
 export const FIGHT_OFFSET = Math.floor(FIGHT_EVERY * 0.75) % FIGHT_EVERY; // 2¼ hours into each 3-hour stretch: clear of the races on the hour
 export const CARD_LOCK = Math.min(30 * 60000, Math.floor(FIGHT_EVERY / 3)); // sign-ups close and the card is set this long before
 export const BOUT_GAP = (Math.max(BOUT_LEN_S, BR.LIVE_LEN_S) + 50) * 1000; // one bell to the next (a live bout that goes the distance, then a breather)
-export const MAX_FIGHT_BET = 100000;
+export const MAX_FIGHT_BET = 100000, FOTN_BONUS = 1500, FOTN_VOTE_MS = 5 * 60000; // Fight of the Night: the bonus to both fighters, and how long the vote stays open after the last bout
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const secureRand = () => crypto.randomInt(0, 2 ** 32) / 2 ** 32;
 const pub = f => f && ({ id: f.id, handle: f.handle, name: f.name || '', gender: f.gender || 'm', style: f.style, nick: f.nick, wins: f.wins, losses: f.losses, kos: f.kos, rating: f.rating,
@@ -65,6 +65,9 @@ export class Fights {
         }
         if (bouts.length && bouts.every(b => b.settled)) await pool.query('update fight_nights set done = true where n = $1', [nt.n]);
       }
+      // Fight of the Night: when the vote has closed, the bout with the most votes earns both its fighters a bonus
+      for (const dn of (await pool.query('select * from fight_nights where done and fotn is null and n > $1 order by n desc limit 3', [this.nextN(now) - 5])).rows) {
+        const bs = (await pool.query('select * from fight_bouts where n = $1 order by i', [dn.n])).rows; if (now < this.voteUntil(bs)) continue; await this.awardFotn(dn, bs); }
       if (!arena) return;
       const nt = await this.current(now);
       if (nt && !nt.made && now >= Number(nt.start_at) - CARD_LOCK) await this.makeCard(nt, arena);
@@ -82,17 +85,23 @@ export class Fights {
         const fill = (await ch.q(`select id from citizens where home_id is not null and pass_hash is null and not (id = any($1)) order by md5(id || $2) limit $3`, [ids, String(nt.n), need - ids.length])).rows.map(r => r.id);
         ids.push(...fill);
       }
-      if (ids.length < 2) return;
+      const g = (await ch.q(`select f.* from fight_challenges f join citizens a on a.id = f.from_id join citizens b on b.id = f.to_id where f.accepted and f.n is null and a.home_id is not null and b.home_id is not null order by f.t limit 1`)).rows[0];
+      if (g) ids = ids.filter(id => id !== g.from_id && id !== g.to_id); /* (the grudge match's two fight each other, nobody else) */
+      if (ids.length < 2 && !g) return;
       const people = new Map((await ch.q('select id, handle, display_name, gender, pass_hash is not null player from citizens where id = any($1)', [ids])).rows.map(r => [r.id, r])), rec = await this.record(ids, { query: (a, v) => ch.q(a, v) });
       const all = ids.filter(id => people.has(id)).map(id => { const p = people.get(id); return { ...fighterOf(id, p.handle, rec.get(id) || {}), name: p.display_name || '', gender: p.gender || 'm', player: !!p.player, signed: ups.includes(id) }; });
+      // a grudge match (a challenge both players accepted) headlines: the main event
+      let grudge = null; if (g) { const gp = new Map((await ch.q('select id, handle, display_name, gender from citizens where id = any($1)', [[g.from_id, g.to_id]])).rows.map(r => [r.id, r])), grec = await this.record([g.from_id, g.to_id], { query: (a, v) => ch.q(a, v) });
+        if (gp.size === 2) { grudge = [g.from_id, g.to_id].map(id => { const p = gp.get(id); return { ...fighterOf(id, p.handle, grec.get(id) || {}), name: p.display_name || '', gender: p.gender || 'm', player: true, signed: true, grudge: true }; }); await ch.q('update fight_challenges set n = $2 where id = $1', [g.id, nt.n]); } }
       // sign-ups first (best rated first), then the rest by rating; pairs from the top make the main event
-      all.sort((a, b) => (b.signed - a.signed) || (b.rating - a.rating)); const top = all.slice(0, need);
+      all.sort((a, b) => (b.signed - a.signed) || (b.rating - a.rating)); const top = all.filter(f => !grudge || !grudge.some(x => x.id === f.id)).slice(0, need - (grudge ? 2 : 0));
       const pairs = []; for (let k = 0; k + 1 < top.length; k += 2) pairs.push([top[k], top[k + 1]]);
       pairs.reverse(); // the last bout on the card is the main event
+      if (grudge) { pairs.push(grudge); if (pairs.length > BOUTS.length) pairs.shift(); top.push(...grudge); }
       const offset = BOUTS.length - pairs.length, gap = Number(row.gap || BOUT_GAP);
       for (let j = 0; j < pairs.length; j++) {
         const i = j + offset, [a, b] = pairs[j], start = Number(row.start_at) + i * gap, odds = oddsFor(a, b, hashStr(nt.n + ':' + i));
-        const strip = f => { const { signed, ...rest } = f; return rest; };
+        const strip = f => { const { signed, trained, ...rest } = f; return rest; };
         await ch.q('insert into fight_bouts (n, i, start_at, a, b, odds) values ($1, $2, $3, $4, $5, $6) on conflict do nothing', [nt.n, i, start, JSON.stringify(strip(a)), JSON.stringify(strip(b)), JSON.stringify(odds)]);
       }
       await ch.q('update fight_nights set made = true, arena_id = $2 where n = $1', [nt.n, arena.id]);
@@ -137,6 +146,10 @@ export class Fights {
         on conflict (citizen_id) do update set handle = $2, wins = fighters.wins + $3, losses = fighters.losses + $4, kos = fighters.kos + $5, rating = $6, purses = fighters.purses + $7`,
         [f.id, f.handle, win ? 1 : 0, win ? 0 : 1, win && /KO/.test(res.method) ? 1 : 0, rating, win ? card.purse : card.show]);
       await up(W, true, nw); await up(L, false, nl);
+      // the main event's winner is the champion (and wears the belt); a champion who loses it, doesn't
+      let crowned = false; if (r.i === BOUTS.length - 1) { const was = (await ch.q('select citizen_id from fighters where champion')).rows.map(x => x.citizen_id);
+        await ch.q('update fighters set champion = (citizen_id = $1) where champion or citizen_id = $1', [W.id]); crowned = !was.includes(W.id); }
+      if (crowned) await ch.event(`👑 @${W.handle} is the new Fight Night champion, and wears the belt!`, 'fight');
       await ch.event(`🏆 ${card.name}: @${W.handle} beat @${L.handle} by ${res.method}${/KO/.test(res.method) ? ` in round ${res.round}` : ''}!` + (won ? ` ${won} colonist${won === 1 ? '' : 's'} won their bets.` : ''), 'fight');
       ch.extraOps.push({ op: 'fight', data: { n: r.n, i: r.i, stage: 'settled' } });
       await ch.q('delete from fight_bets where n < $1', [r.n - 200]); await ch.q('delete from fight_bouts where n < $1', [r.n - 200]); await ch.q('delete from fight_signups where n < $1', [r.n - 5]);
@@ -182,6 +195,44 @@ export class Fights {
     return { ok: true, coins: out.coins, amount, to: f.handle }; }
   hype(side, amount) { for (const L of this.live.values()) { const f = L.s.f[side]; if (f) f.hype = Math.min(1, f.hype + amount); return true; } return false; }
   liveOf(n, i) { return this.live.get(n + ':' + i) || null; }
+  voteUntil(bs) { return Math.max(0, ...bs.map(b => Number(b.start_at) + ((b.result && b.result.len) || 0) * 1000)) + FOTN_VOTE_MS; }
+  async awardFotn(dn, bs) { await this.world.change(async ch => {
+      const row = (await ch.q('select fotn from fight_nights where n = $1 for update', [dn.n])).rows[0]; if (!row || row.fotn != null) return;
+      const v = (await ch.q('select i, count(*) n from fight_votes where n = $1 group by i order by n desc', [dn.n])).rows; if (!v.length || !bs.length) { await ch.q('update fight_nights set fotn = -1 where n = $1', [dn.n]); return; }
+      const best = Number(v[0].n), top = v.filter(x => Number(x.n) === best).map(x => x.i), dealt = b => (b.result?.dealt || [0, 0]).reduce((a, c) => a + c, 0);
+      const b = bs.filter(x => top.includes(x.i)).sort((x, y) => dealt(y) - dealt(x))[0]; if (!b) { await ch.q('update fight_nights set fotn = -1 where n = $1', [dn.n]); return; }
+      let paid = 0; for (const f of [b.a, b.b]) { const c = (await ch.q('select * from citizens where id = $1 for update', [f.id])).rows[0]; if (!c) continue; ch.coins(c); c.coins_base += FOTN_BONUS; ch.touch(c); await ch.saveCitizen(c); paid += FOTN_BONUS;
+        if (c.pass_hash) ch.pushes.push([[c.id], { kind: 'fight', title: '⭐ Fight of the Night!', body: `The crowd voted your bout the best of the night: ${fmt(FOTN_BONUS)} coins bonus.`, tag: 'fight' }]); }
+      treasuryAdd(ch, -paid); await ch.q('update fight_nights set fotn = $2 where n = $1', [dn.n, b.i]);
+      await ch.event(`⭐ Fight of the Night: @${b.a.handle} vs @${b.b.handle} (${BOUTS[b.i].name}), with ${best} vote${best === 1 ? '' : 's'}. Both fighters get ${fmt(FOTN_BONUS)} coins.`, 'fight');
+      ch.extraOps.push({ op: 'fight', data: { n: dn.n, stage: 'fotn' } }); }); }
+  async vote(playerId, i) { i = Math.floor(Number(i)); if (!BOUTS[i]) throw new HttpError(400, 'Pick a bout.');
+    const dn = (await pool.query('select * from fight_nights where done and fotn is null order by n desc limit 1')).rows[0]; if (!dn) throw new HttpError(409, 'The vote opens when the last bout of a Fight Night is over.');
+    const bs = (await pool.query('select * from fight_bouts where n = $1', [dn.n])).rows; if (!bs.some(b => b.i === i)) throw new HttpError(404, 'No such bout that night.'); if (Date.now() > this.voteUntil(bs)) throw new HttpError(409, 'The vote has closed.');
+    await pool.query('insert into fight_votes (n, citizen_id, i) values ($1, $2, $3) on conflict (n, citizen_id) do update set i = $3', [dn.n, playerId, i]); return { ok: true, n: dn.n, i }; }
+  // ---- Training: a session on gym equipment (at home or in a gym) adds a little to one stat; one session an hour ----
+  async train(playerId, kind) { if (!['power', 'speed', 'chin'].includes(kind)) throw new HttpError(400, 'Train power, speed or chin.');
+    const c = (await pool.query('select id, handle, pass_hash from citizens where id = $1', [playerId])).rows[0]; if (!c?.pass_hash) throw new HttpError(403, 'Claim your colonist first.');
+    const f = (await pool.query('select * from fighters where citizen_id = $1', [playerId])).rows[0], last = f && f.tr_day != null ? Number(f.tr_day) * 60000 : 0, now = Date.now();
+    if (now - last < TRAIN_GAP_MS) throw new HttpError(409, `You've trained recently. Rest up: your next session is in ${Math.ceil((TRAIN_GAP_MS - (now - last)) / 60000)} min.`);
+    const col = 'tr_' + kind, cur = f ? Number(f[col]) || 0 : 0; if (cur >= TRAIN_MAX - 1e-6) throw new HttpError(409, `Your ${kind} is as trained as it gets. Train something else.`);
+    const nv = Math.min(TRAIN_MAX, cur + TRAIN_STEP), mins = Math.floor(now / 60000);
+    await pool.query(`insert into fighters (citizen_id, handle, ${col}, tr_day) values ($1, $2, $3, $4) on conflict (citizen_id) do update set ${col} = $3, tr_day = $4, handle = $2`, [playerId, c.handle, nv, mins]);
+    return { ok: true, kind, level: Math.round(nv * 100), max: Math.round(TRAIN_MAX * 100) }; }
+  // ---- Grudge matches: challenge another player; if they accept, you headline the next Fight Night ----
+  async challenge(playerId, to) { to = String(to || '').replace(/^@/, '').trim().toLowerCase(); if (!/^[a-z0-9_.]{1,40}$/.test(to)) throw new HttpError(400, 'Who do you want to fight?');
+    const me = (await pool.query('select id, handle, home_id, pass_hash from citizens where id = $1', [playerId])).rows[0], them = (await pool.query('select id, handle, home_id, pass_hash from citizens where lower(handle) = $1', [to])).rows[0];
+    if (!me?.pass_hash || !me.home_id) throw new HttpError(403, 'Fighters need a home in the colony.'); if (!them) throw new HttpError(404, `No colonist called @${to}.`); if (them.id === playerId) throw new HttpError(400, 'You can’t fight yourself.');
+    if (!them.pass_hash || !them.home_id) throw new HttpError(409, `@${them.handle} isn’t a player with a home, so they can’t take a challenge.`);
+    if ((await pool.query('select 1 from fight_challenges where n is null and ((from_id = $1 and to_id = $2) or (from_id = $2 and to_id = $1))', [playerId, them.id])).rowCount) throw new HttpError(409, `There's already a challenge between you and @${them.handle}.`);
+    if (Number((await pool.query('select count(*) n from fight_challenges where from_id = $1 and n is null', [playerId])).rows[0].n) >= 3) throw new HttpError(409, 'You have three challenges out already.');
+    const id = crypto.randomUUID(); await pool.query('insert into fight_challenges (id, from_id, from_handle, to_id, to_handle, t) values ($1, $2, $3, $4, $5, $6)', [id, playerId, me.handle, them.id, them.handle, Date.now()]);
+    try { await this.world.change(async ch => { ch.pushes.push([[them.id], { kind: 'fight', title: '🔥 You’ve been challenged!', body: `@${me.handle} wants a grudge match at Fight Night. Accept it in the Fight Night tab.`, tag: 'fight' }]); }); } catch {}
+    return { ok: true, id, to: them.handle }; }
+  async answer(playerId, id, yes) { const r = (await pool.query('select * from fight_challenges where id = $1 and n is null', [String(id || '')])).rows[0]; if (!r) throw new HttpError(404, 'That challenge is gone.');
+    if (r.to_id !== playerId && !(r.from_id === playerId && !yes)) throw new HttpError(403, 'That challenge isn’t yours to answer.');
+    if (!yes) { await pool.query('delete from fight_challenges where id = $1', [r.id]); return { ok: true, accepted: false }; }
+    await pool.query('update fight_challenges set accepted = true where id = $1', [r.id]); return { ok: true, accepted: true, from: r.from_handle }; }
   // What the Fight Night tab shows.
   async info(playerId) {
     const now = Date.now(), arena = await this.arena(), nt = await this.current(now);
@@ -201,9 +252,16 @@ export class Fights {
     }
     const prev = (await pool.query('select * from fight_bouts where settled order by n desc, i desc limit 3')).rows;
     out.last = prev.map(b => ({ n: b.n, no: this.label(b.n), name: BOUTS[b.i].name, winner: (b.result.winner === 0 ? b.a : b.b).handle, loser: (b.result.winner === 0 ? b.b : b.a).handle, method: b.result.method, round: b.result.round }));
-    out.top = (await pool.query('select handle, wins, losses, kos, rating from fighters order by rating desc, wins desc limit 8')).rows;
+    out.top = (await pool.query('select handle, wins, losses, kos, rating, champion from fighters order by rating desc, wins desc limit 8')).rows;
+    out.champion = ((await pool.query('select handle, wins, losses from fighters where champion limit 1')).rows[0]) || null;
+    { const dn = (await pool.query('select * from fight_nights where done order by n desc limit 1')).rows[0]; if (dn) { const bs = (await pool.query('select * from fight_bouts where n = $1 order by i', [dn.n])).rows, until = this.voteUntil(bs);
+      if (dn.fotn == null && now < until) { const v = (await pool.query('select i, count(*) n from fight_votes where n = $1 group by i', [dn.n])).rows, mine = playerId ? (await pool.query('select i from fight_votes where n = $1 and citizen_id = $2', [dn.n, playerId])).rows[0] : null;
+        out.vote = { n: dn.n, no: this.label(dn.n), until, bouts: bs.map(b => ({ i: b.i, name: BOUTS[b.i].name, a: b.a.handle, b: b.b.handle, votes: Number((v.find(x => x.i === b.i) || {}).n || 0) })), mine: mine ? mine.i : null }; }
+      else if (dn.fotn != null && dn.fotn >= 0) { const b = bs.find(x => x.i === dn.fotn); if (b) out.fotn = { no: this.label(dn.n), name: BOUTS[b.i].name, a: b.a.handle, b: b.b.handle, bonus: FOTN_BONUS }; } } }
+    if (playerId) { out.challenges = (await pool.query('select id, from_id, from_handle, to_handle, accepted from fight_challenges where n is null and (from_id = $1 or to_id = $1) order by t', [playerId])).rows.map(r => ({ id: r.id, mine: r.from_id === playerId, from: r.from_handle, to: r.to_handle, accepted: r.accepted }));
+      const me0 = (await pool.query('select tr_day from fighters where citizen_id = $1', [playerId])).rows[0]; out.trainAt = me0 && me0.tr_day != null ? Number(me0.tr_day) * 60000 + TRAIN_GAP_MS : 0; }
     if (playerId) { const me = (await pool.query('select f.*, c.handle h from citizens c left join fighters f on f.citizen_id = c.id where c.id = $1', [playerId])).rows[0];
-      if (me) { const f = fighterOf(playerId, me.h, me.citizen_id ? me : {}); out.me = { style: f.style, styleName: STYLES[f.style].name, nick: f.nick, power: Math.round(f.power * 100), speed: Math.round(f.speed * 100), chin: Math.round(f.chin * 100), wins: f.wins, losses: f.losses, kos: f.kos, rating: f.rating }; } }
+      if (me) { const f = fighterOf(playerId, me.h, me.citizen_id ? me : {}); out.me = { style: f.style, styleName: STYLES[f.style].name, nick: f.nick, power: Math.round(f.power * 100), speed: Math.round(f.speed * 100), chin: Math.round(f.chin * 100), wins: f.wins, losses: f.losses, kos: f.kos, rating: f.rating, trained: f.trained, champion: !!me.champion }; } }
     return out;
   }
   async signup(playerId, on, blocked) {

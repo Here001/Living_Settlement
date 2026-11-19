@@ -190,6 +190,7 @@ for (const k of ['loveseat', 'recliner', 'ottoman', 'diningchair', 'diningbench'
 ACT.kingbed = ACT.daybed = { kind: 'lie', icon: '🛏️', label: 'Lie down' }; ACT.clawtub = { kind: 'lie', icon: '🛁', label: 'Take a bath', sink: 0.3 };
 ACT.coffeebar = { kind: 'use', icon: '☕', label: 'Make a coffee' }; ACT.doublesink = { kind: 'use', icon: '🚰', label: 'Wash your hands' }; ACT.walloven = { kind: 'use', icon: '🍳', label: 'Cook' };
 ACT.foosball = ACT.pinball = { kind: 'use', icon: '🕹️', label: 'Play' }; ACT.pingpong = { kind: 'use', icon: '🏓', label: 'Play' }; ACT.telescope = { kind: 'use', icon: '🔭', label: 'Look at the stars' };
+ACT.weights = ACT.benchpress = { kind: 'use', icon: '🏋️', label: 'Lift weights' }; ACT.punchbag = { kind: 'use', icon: '🥊', label: 'Hit the bag' };
 ACT.pcdesk = ACT.standingdesk = { kind: 'use', icon: '💻', label: 'Use the computer' }; ACT.ironing = { kind: 'use', icon: '👕', label: 'Iron' }; ACT.vanitytable = { kind: 'use', icon: '💄', label: 'Get ready' };
 const POSE = { s: 'sit', l: 'lie', u: 'use', p: 'play', r: 'stand', d: 'dance', o: 'pole' }, CODE = { sit: 's', lie: 'l', use: 'u', play: 'p', run: 'r', dance: 'd', pole: 'o' };
 export const actOf = k => ACT[k] || (FURNITURE[k]?.light ? { kind: 'light', icon: '💡', label: 'Switch off', labelOff: 'Switch on' } : null);
@@ -679,7 +680,7 @@ export function createHouse(host, opts) {
   const seatFwd = (hd, av, backrest) => { const k = av.hipY / 0.9, thigh = 0.45 * k, back = 0.13 * k, rest = backrest ? Math.min(0.22, hd * 0.4) : 0;
     return Math.max(-hd + rest + back, Math.min(hd - 0.05, hd - thigh + 0.06)); };
   function doAct(to) {
-    if (act) { standUp(); return; } nearAct = to || findNear(); if (!nearAct) return; /* to: a piece picked for you (into bed, say) */ const { it, A, b } = nearAct;
+    if (act) { standUp(); return; } nearAct = to || findNear(); if (!nearAct) return; /* to: a piece picked for you (into bed, say) */ const { it, A, b } = nearAct; if (A.kind !== 'tv' && A.kind !== 'light' && opts.onDo) try { opts.onDo(it.k, A); } catch (e) {} /* (gym equipment: a training session) */
     if (A.kind === 'tv' || A.kind === 'light') { const set = A.kind === 'tv' ? tvOn : offLights; set.has(it.i) ? set.delete(it.i) : set.add(it.i); buildStuff(); placeLights(true); actKey = ''; prompt(); dirty = true; wake(); return; }
     const av = me3.userData.av, back = { x: me.x, y: me.y, yaw: me.yaw }, fl = Math.hypot(b.cx - b.tx, b.cy - b.ty), F = fl > 0.05 ? { x: (b.cx - b.tx) / fl, y: (b.cy - b.ty) / fl } : null; /* the way it faces: away from its tallest part */
     const vl = Math.hypot(me.x - b.cx, me.y - b.cy) || 1, toMe = { x: (me.x - b.cx) / vl, y: (me.y - b.cy) / vl }; let x, y, wy, wyaw, yaw;

@@ -414,6 +414,10 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/lottery', limit, send(async req => world.lottery.buy((await me(req)).id, (req.body || {}).count, world.blockedReason?.bind(world))));
   // Fight Night: sign up to fight (until the card is set), and one bet per bout before its bell.
   r.post('/me/fight/signup', limit, send(async req => world.fights.signup((await me(req)).id, (req.body || {}).on !== false, world.blockedReason?.bind(world))));
+  r.post('/me/fight/train', limit, send(async req => world.fights.train((await me(req)).id, String((req.body || {}).kind || ''))));
+  r.post('/me/fight/challenge', limit, send(async req => world.fights.challenge((await me(req)).id, (req.body || {}).to)));
+  r.post('/me/fight/challenge/:id', limit, send(async req => world.fights.answer((await me(req)).id, req.params.id, !!(req.body || {}).yes)));
+  r.post('/me/fight/vote', limit, send(async req => world.fights.vote((await me(req)).id, (req.body || {}).bout)));
   r.post('/me/fight/bet', limit, send(async req => { const b = req.body || {}; return world.fights.bet((await me(req)).id, b.bout, String(b.side || ''), b.amount, world.blockedReason?.bind(world)); }));
   // Creature races: one bet per race, before the gates close.
   r.post('/me/race/bet', limit, send(async req => {
@@ -522,10 +526,11 @@ export function playersRouter({ limit, send, admin, world }) {
     });
   }));
   // other people's characters, for drawing them (up to 40 at once): handle → look
+  let champAt = 0, champH = null; const champion = async () => { if (Date.now() - champAt > 30000) { champAt = Date.now(); try { champH = ((await pool.query('select handle from fighters where champion limit 1')).rows[0] || {}).handle?.toLowerCase() || null; } catch { champH = null; } } return champH; };
   r.get('/looks', limit, send(async req => {
     const hs = String(req.query.h || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean).slice(0, 40); if (!hs.length) return {};
     const rows = (await pool.query('select handle, gender, look from citizens where lower(handle) = any($1)', [hs])).rows, out = {};
-    for (const c of rows) out[c.handle.toLowerCase()] = lookOf(c); return out;
+    const champ = await champion(); for (const c of rows) { const L = lookOf(c); out[c.handle.toLowerCase()] = L && champ && c.handle.toLowerCase() === champ ? { ...L, belt: true } : L; } return out; /* (the champion wears the belt everywhere) */
   }));
   r.delete('/session', limit, send(async req => { const t = req.get('x-player'); if (t) await pool.query('delete from sessions where token_hash = $1', [sha(t)]); return { ok: true }; }));
 

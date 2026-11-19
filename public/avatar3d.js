@@ -307,6 +307,10 @@ function wearParts(L, add, B, hd) {
     else if (h === 'diamondstuds') add('head', 'gold', at(sphere(0.0075, 6, 4), ex, y - 0.025, 0.004), ICE);
     else if (h === 'drops') { add('head', 'gold', at(sphere(0.005, 8, 6), ex, y - 0.025, 0.004), GOLD); add('head', 'gold', at(new THREE.CapsuleGeometry(0.0045, 0.022, 3, 8), ex, y - 0.05, 0.004), GOLD); }
     else add('head', 'gold', at(sphere(0.0055, 8, 6), ex, y - 0.025, 0.004), GOLD); }
+  // the Fight Night champion's belt: gold round the waist, with a big plate and a red stone in front (the server marks
+  // the champion's look with belt: true, so it shows wherever they're seen)
+  if (L.belt) { add('body', 'gold', shellT(0.95, 1.03, 0.032), GOLD); const zf = zAt(0.99) + 0.035; add('body', 'gold', at(rbox(0.17, 0.12, 0.025, 0.01), 0, 0.99, zf), '#E2B93B');
+    add('body', 'gold', at(sphere(0.022, 10, 8), 0, 0.99, zf + 0.018), '#C0392B'); for (const sx of [-1, 1]) add('body', 'gold', at(rbox(0.06, 0.08, 0.02, 0.008), sx * 0.12, 0.99, zf - 0.008), '#B8952A'); }
   if (w.wrist) { const h = k('wrist'), c = C('wrist'), x = X('wrist'), metal = x.rose ? ROSE : GOLD, band = (r, mat, cc) => add('armL', mat, at(new THREE.TorusGeometry(0.036, r, 6, 18), 0, -0.53, 0, 1, 1, 1, Math.PI / 2), cc);
     const face = (r, mat, cc, dx = -0.038, d = 0.008) => add('armL', mat, at(new THREE.CylinderGeometry(r, r, d, 16), dx, -0.53, 0, 1, 1, 1, 0, 0, Math.PI / 2), cc);
     if (h === 'bracelet') band(0.004, 'gold', GOLD);
@@ -329,7 +333,7 @@ function wearParts(L, add, B, hd) {
 // ---------------- the whole person ----------------
 // opts.own: give them their own materials (so they can fade without fading anyone else)
 export function buildAvatar(rawLook, opts = {}) {
-  const L = fixLook(rawLook), B = bodyShape(L), M = mats();
+  const L = fixLook(rawLook), B = bodyShape(L), M = mats(); if (rawLook && rawLook.belt) L.belt = true; /* (the champion's belt: not part of a look anyone saves) */
   const parts = []; // [material, geometry], every geometry already in body space with its bone weights
   // add(part, material, geometry, colour); hair: add('hair', geometry, colour). part: body (weighted by height), head, neck,
   // chest, skirt (follows the legs a little), armL/armR and legL/legR (built at the shoulder or hip, bent at the joints)

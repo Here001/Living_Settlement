@@ -1421,6 +1421,7 @@ import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
 import { WEAPONS as ARENA_W } from '/shared/brawl.js';
+import { TRAIN_OF } from '/shared/fights.js';
 import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, BIZ_CATS, bizTab, bizSize, roomSize, canEnter, canTurnOnWall, footOf, placeProblem, resaleOf, layoutOf, styleOf, photoAspect } from '/shared/furniture.js';
 import { paveCost, fullIncome, CRIME_FLOOR, FINE_MIN, FINE_MAX, nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
@@ -5439,6 +5440,7 @@ async function loadFight(d){ try{ const r=await api('/api/fight'); Fight.info=r;
   if(d&&d.stage==='card'&&nt&&!Fight.toasted.has('c'+nt.n)){ Fight.toasted.add('c'+nt.n); const m=(I.bouts||[]).find(b=>b.i===2); newsToast(`🥊 Fight Night #${nt.no} is set!${m?` Main event: @${m.a.handle} vs @${m.b.handle}.`:''} Bets are open.`,'Fight Night',()=>{ Fight.view='fight'; openTab('races'); }); }
   if(d&&d.stage==='bell'&&activeTab!=='races'){ const b=(I.bouts||[]).find(x=>x.i===d.i); if(b&&!Fight.toasted.has('b'+nt.n+':'+b.i)){ Fight.toasted.add('b'+nt.n+':'+b.i); newsToast(`🔔 ${b.name} is on: @${b.a.handle} vs @${b.b.handle}!`,'Watch',()=>{ Fight.view='fight'; openTab('races'); }); } }
   if(d&&d.stage==='settled'&&Me&&Me.handle) loadMyMoney();
+  if(d&&d.stage==='settled'&&d.i===2&&!Fight.toasted.has('v'+d.n)){ Fight.toasted.add('v'+d.n); newsToast('⭐ The main event is over! Vote for the Fight of the Night: both fighters in the best bout get a bonus.','Vote',()=>{ Fight.view='fight'; openTab('races'); }); }
   renderRaces(); }
 setInterval(()=>{ if(!document.hidden && (activeTab==='races'||STREAM) && Date.now()-Fight.loadAt>60000 && (Fight.view==='fight'||!Fight.loadAt)) loadFight(); },10000); // only while the Races tab is open (live news still arrives)
 const FSTYLE={ boxer:['🥊','Boxer'], kicker:['🦵','Kickboxer'], grappler:['🤼','Wrestler'], brawler:['💥','Brawler'] };
@@ -5455,8 +5457,24 @@ function renderFight(body){ const I=Fight.info;
   body.append(el('div',{class:'fhead'}, el('h3',{text:`🥊 Fight Night #${nt.no} · ${I.arena.name}`}),
     el('span',{class:'rcount',id:'fightCount',text:now<nt.start?`first bell in ${fmtLeft(nt.start-now)}`:'● on now'}),
     el('button',{class:'linkb',text:'📍 Show the Colosseum',onclick:()=>{ const t=D.buildings.get(I.arena.id)||{type:'colosseum',x:I.arena.x,y:I.arena.y}, [w,d]=T(t).size, p=iso(t.x+w/2,t.y+d/2); cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.1); follow=null; openTab(null); }})));
+  if(nt.gladiator) body.append(el('p',{class:'jobnow',text:'⚔️ A gladiator night: every fighter walks out with a weapon (and some with a shield), and from round 2 the fire jets in the sand roar into life.'}));
+  if(I.champion) body.append(el('p',{class:'jobnow',text:`👑 Champion: @${I.champion.handle} (${I.champion.wins}-${I.champion.losses}), who wears the belt until someone takes it in a main event.`}));
+  // Fight of the Night: the crowd's vote, after the last bout
+  if(I.vote){ const V=I.vote, box=el('div',{class:'rcard'}, el('h3',{text:`⭐ Fight of the Night #${V.no}: vote for the best bout`}), el('p',{class:'hint',text:`Both fighters in the winning bout get a bonus. Voting closes in ${fmtLeft(V.until-now)}.`}));
+    for(const b of V.bouts) box.append(el('div',{class:'row-actions'}, el('span',{text:`${b.name}: @${b.a} vs @${b.b} · ${b.votes} vote${b.votes===1?'':'s'}`}), el('button',{class:'btn sm'+(V.mine===b.i?' primary':''),text:V.mine===b.i?'⭐ Your vote':'⭐ Vote',onclick:async()=>{ try{ await api('/api/me/fight/vote',{method:'POST',body:{bout:b.i}}); toast('⭐ Vote counted.'); loadFight(); }catch(e){ toast(e.message); } }})));
+    body.append(box); }
+  else if(I.fotn) body.append(el('p',{class:'jobnow',text:`⭐ Last Fight of the Night (#${I.fotn.no}): @${I.fotn.a} vs @${I.fotn.b}, ${I.fotn.name}. Both got ${fmt(I.fotn.bonus)} coins.`}));
   // the bout on now
   const lb=Fight.liveBout(); if(lb) body.append(ringBox(lb));
+  // grudge matches and training
+  if(Me&&Me.token){ const gb=el('div',{class:'authbox'}, el('h3',{text:'🔥 Grudge matches'}), el('p',{class:'hint',text:'Challenge another player. If they accept, you headline the next Fight Night as its main event.'}));
+    for(const c of I.challenges||[]) gb.append(el('div',{class:'row-actions'}, el('span',{text:c.mine?`You challenged @${c.to}${c.accepted?': accepted, see you at the next Fight Night!':' (waiting)'}`:`@${c.from} challenges you${c.accepted?' (accepted)':''}`}),
+      !c.mine&&!c.accepted?el('button',{class:'btn primary sm',text:'Accept',onclick:async()=>{ try{ await api('/api/me/fight/challenge/'+c.id,{method:'POST',body:{yes:true}}); toast(`🔥 On! You and @${c.from} headline the next Fight Night.`); loadFight(); }catch(e){ toast(e.message); } }}):'',
+      !c.accepted?el('button',{class:'btn sm',text:c.mine?'Withdraw':'Decline',onclick:async()=>{ try{ await api('/api/me/fight/challenge/'+c.id,{method:'POST',body:{yes:false}}); loadFight(); }catch(e){ toast(e.message); } }}):''));
+    const inp=el('input',{type:'text',placeholder:'@player','aria-label':'Who to challenge',maxlength:'41'});
+    gb.append(el('div',{class:'cbet'}, inp, el('button',{class:'btn',text:'🔥 Challenge',onclick:async()=>{ try{ const r=await api('/api/me/fight/challenge',{method:'POST',body:{to:inp.value}}); toast(`🔥 Challenge sent to @${r.to}.`); inp.value=''; loadFight(); }catch(e){ toast(e.message); } }})));
+    if(I.me){ const T0=I.me.trained||{}; gb.append(el('h3',{text:'💪 Training'}), el('p',{class:'hint',text:`Train on gym equipment, at home or in a gym (one session an hour): 🏃 treadmill or exercise bike for speed, 🏋️ weights or bench press for power, 🥊 a punch bag for chin. Trained so far: power ${Math.round((T0.power||0)*100)}/12 · speed ${Math.round((T0.speed||0)*100)}/12 · chin ${Math.round((T0.chin||0)*100)}/12.${I.trainAt>now?` Next session in ${fmtLeft(I.trainAt-now)}.`:''}`})); }
+    body.append(gb); }
   if(!nt.made){
     const box=el('div',{class:'authbox'}, el('h3',{text:'Sign up to fight'}), el('p',{class:'hint',text:`Sign-ups close ${fmtLeft(nt.closes-now)} from now, when the card is set. The best-rated sign-ups get the main event (purse ${fmt(5000)} coins); colonists from around town fill any empty corners. Win or lose, you're paid for stepping in the ring.`}));
     if(I.signups.length) box.append(el('p',{class:'jobnow',text:'Signed up: '+I.signups.map(x=>`@${x.handle} (${x.wins}-${x.losses})`).join(', ')}));
@@ -5469,6 +5487,7 @@ function renderFight(body){ const I=Fight.info;
       const card=el('div',{class:'fbout'+(b.i===2?' main':'')}, el('div',{class:'fbtitle'}, el('b',{text:b.name}), el('span',{text:` · purse ${fmt(b.purse)}`}), el('span',{class:'rcount','data-fstart':b.start,text:b.settled?'':started?'● LIVE':fmtLeft(b.start-now)})));
       const pickable=mine&&!started&&!bet&&!mineB;
       card.append(el('div',{class:'fvs'}, fighterBox(b.a,'a',b,pickable), el('span',{class:'vs',text:'VS'}), fighterBox(b.b,'b',b,pickable)));
+      if(b.weapons) card.append(el('p',{class:'hint',text:`⚔️ ${ARENA_W[b.weapons[0]].icon} @${b.a.handle}: ${ARENA_W[b.weapons[0]].name} · ${ARENA_W[b.weapons[1]].icon} @${b.b.handle}: ${ARENA_W[b.weapons[1]].name}`}));
       if(b.settled&&b.result){ const w=b.result.winner===0?b.a:b.b; card.append(el('p',{class:'jobnow',text:`🏆 @${w.handle} won by ${b.result.method}${/KO/.test(b.result.method)?` in round ${b.result.round}`:''}.`})); }
       if(bet) card.append(el('p',{class:'rmine'+(bet.payout?' win':''),text:bet.payout!=null?(bet.payout?`You won ${fmt(bet.payout)} coins!`:`Your ${fmt(bet.amount)} on @${(bet.side==='a'?b.a:b.b).handle} is lost.`):`Your bet: ${fmt(bet.amount)} on @${(bet.side==='a'?b.a:b.b).handle} at ${bet.pays}×.`}));
       else if(mineB&&!b.settled) card.append(el('p',{class:'hint',text:"You're fighting in this one. Good luck!"}));
@@ -5480,7 +5499,7 @@ function renderFight(body){ const I=Fight.info;
             Fight.busy=false; loadFight(); }}))); }
       body.append(card); } }
   if(I.last&&I.last.length&&!(nt.made&&(I.bouts||[]).some(b=>b.settled))) body.append(el('div',{class:'rlast'}, el('h3',{text:'Last Fight Night'}), el('ul',{class:'flast'},...I.last.map(x=>el('li',{text:`${x.name}: @${x.winner} beat @${x.loser} by ${x.method}${/KO/.test(x.method)?` (round ${x.round})`:''}`})))));
-  if(I.top&&I.top.length) body.append(el('div',{class:'rlast'}, el('h3',{text:'🏆 Top fighters'}), el('ol',{class:'flast'},...I.top.map(x=>el('li',{text:`@${x.handle} · ${x.wins}-${x.losses}${x.kos?`, ${x.kos} KO`:''} · rating ${x.rating}`})))));
+  if(I.top&&I.top.length) body.append(el('div',{class:'rlast'}, el('h3',{text:'🏆 Top fighters'}), el('ol',{class:'flast'},...I.top.map(x=>el('li',{text:`${x.champion?'👑 ':''}@${x.handle} · ${x.wins}-${x.losses}${x.kos?`, ${x.kos} KO`:''} · rating ${x.rating}`})))));
   body.append(el('p',{class:'hint',text:`A Fight Night every ${Math.round(I.every/3600000)} hours: three bouts a few minutes apart, the main event last. Pays are what you get back for each coin if your fighter wins.`})); }
 // The ring: both fighters, their health, the round and the commentary, played from the bout's timeline.
 function ringBox(b){ const box=el('div',{class:'fring',id:'fRing','data-key':b.i+':'+b.start}), names=['@'+b.a.handle,'@'+b.b.handle];
@@ -7897,12 +7916,14 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     setTimeout(()=>{ if(this.d===d) Voice.enter(this); },1500); /* voice chat (once we've said we're here) */
     try{ if(!(history.state&&history.state.room)) history.pushState({room:1},''); }catch(e){}
     try{ this.h=H3.createHouse(this.stage,{ defer:true, size:d.size, plan:d.room.plan||'home', persp, me:(Me&&Me.handle)||'visitor', look:myLook||null, room:d.room, photos:d.photos, at:this.reAt||null, onLost:at=>this.reopen(at), weather:()=>window.__driveWx||(S.meta?weatherAt(S.meta,gmNow()):'sunny'), /* (the map's weather, through the windows) */ check:p=>placeProblem(this.d.room,this.d.size,p.k,p.x,p.y,p.r,p.i||null),
-      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.exit(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onAction:a=>{ const b=this.actBtn; if(!b) return; b.hidden=!a; if(a){ b.replaceChildren(el('b',{text:a.icon}),el('span',{text:a.label})); b.title=a.label; } }, onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onPerson:id=>Voice.person(id), onProduct:k=>{ const b=this.storeB(); if(b) StoreSheet.open(b,k); }, onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
+      onMove:(x,y,a)=>this.moveSoon(x,y,a), onExit:(near,tapped)=>{ if(tapped){ this.exit(); return; } this.exitBtn.hidden=!near; }, onHint:m=>toast(m), onAction:a=>{ const b=this.actBtn; if(!b) return; b.hidden=!a; if(a){ b.replaceChildren(el('b',{text:a.icon}),el('span',{text:a.label})); b.title=a.label; } }, onPick:()=>this.paintTools(), onTap:hit=>this.tap(hit), onPerson:id=>Voice.person(id), onDo:k=>this.train(k), onProduct:k=>{ const b=this.storeB(); if(b) StoreSheet.open(b,k); }, onRoom:i=>{ this.ri=i; const r=L.rooms[i]; this.sub.textContent=`${r?r.name:'Outside'} · ${d.home.name}`; if(this.edit&&this.cat==='style') this.paintShop(); } }); }
     catch(e){ ent.cancel(); this.close(); toast('Your phone couldn’t show the 3D view.'); return; }
     this.stage.append(this.tools,this.cross); this.paintTools(); this.aroundDone=false; this.around(false); this.hereTick(true); this.join();
     ent.step('Switching on the lights…',0.66); const h=this.h; try{ await h.ready((n,t)=>ent.step(n/t<0.6?'Switching on the lights…':'Saying hello to who’s here…',0.66+0.32*n/t)); }catch(e){} if(this.h===h) ent.done(); else ent.cancel(); /* the first picture is on screen: step through */
     clearInterval(this.hereTimer); this.hereTimer=setInterval(()=>this.hereTick(),25000);
     if(d.mine&&!d.room.items.length&&!d.room.box.length) this.toggle(true); this.storeShow(); this.myPet(); },
+  // gym equipment (at home or in a gym): a Fight Night training session (one an hour), a little more power, speed or chin
+  async train(k){ const kind=TRAIN_OF[k]; if(!kind||!(Me&&Me.token)) return; try{ const r=await api('/api/me/fight/train',{method:'POST',body:{kind}}); toast(`💪 Training: your ${kind} is up (${r.level} of ${r.max} trained). It counts at Fight Night.`); }catch(e){ if(!/recently|as trained/.test(e.message)) return; toast('💪 '+e.message); } },
   // a store: the building it is (for its stock and its shop), and its goods on display
   storeB(){ const h=this.d&&this.d.home; if(!h||!isStore(h.type)) return null; return D.buildings.get(h.id)||h; },
   storeChanged(id){ const b=this.storeB(); if(b&&b.id===id){ this.storeShow(); if(StoreSheet.el&&StoreSheet.b&&StoreSheet.b.id===id) StoreSheet.paint(); } },

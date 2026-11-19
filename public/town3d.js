@@ -137,7 +137,7 @@ export function createTown(host, opts) {
   const car = { x: (opts.start.x) * TILE, z: (opts.start.y) * TILE, a: opts.start.a || 0, v: 0, steer: 0 };
   // what you're in: a car, a bike (your character rides it) or a boat (it only goes on water)
   const VK = opts.car.kind || 'car', BOAT = W.vehOn(VK) === 'water', BIKE = W.isVeh(VK) && !BOAT;
-  const PERF = (() => { if (BIKE || BOAT) return ({ bicycle: { top: 9, acc: 2.6, grip: 6 }, motorbike: { top: 46, acc: 9.5, grip: 9 }, boat: { top: 24, acc: 4.5, grip: 3 }, sailboat: { top: 11, acc: 1.8, grip: 2.2 }, ferry: { top: 13, acc: 1.4, grip: 1.6 } })[VK] || { top: 12, acc: 3, grip: 3 }; const P = (CAR_MODELS[opts.car.m] || {}).price || 0, t = P >= 800000 ? 3 : P >= 200000 ? 2 : P >= 50000 ? 1 : 0; return { top: [36, 42, 54, 68][t], acc: [5.5, 6.6, 8.6, 11][t], grip: [8.6, 9.2, 10.4, 11.8][t], pw: [62, 95, 190, 380][t], trac: [4.4, 5.4, 7.6, 9.6][t], brk: [8.8, 9.3, 10.2, 11.2][t], gears: [5, 6, 7, 8][t] }; })(); /* how your car goes: top speed (m/s), pull, tyre grip (m/s² sideways), power per kg (W), traction and brakes (m/s²), gears */
+  const PERF = (() => { if (BIKE || BOAT) return ({ bicycle: { top: 9, acc: 2.6, grip: 6 }, motorbike: { top: 30, acc: 6, grip: 9 }, boat: { top: 24, acc: 4.5, grip: 3 }, sailboat: { top: 11, acc: 1.8, grip: 2.2 }, ferry: { top: 13, acc: 1.4, grip: 1.6 } })[VK] || { top: 12, acc: 3, grip: 3 }; const P = (CAR_MODELS[opts.car.m] || {}).price || 0, t = P >= 800000 ? 3 : P >= 200000 ? 2 : P >= 50000 ? 1 : 0; return { top: [22.5, 25.5, 29.5, 33.5][t], acc: [3.4, 3.8, 4.4, 5.2][t], grip: [8.6, 9.2, 10.4, 11.8][t], pw: [30, 40, 56, 80][t], trac: [3.4, 3.8, 4.4, 5.2][t], brk: [8.8, 9.3, 10.2, 11.2][t], gears: [4, 5, 5, 6][t] }; })(); /* (town speeds: about 80 km/h in an everyday car up to 120 in a supercar, and a steady pull, so there's time to steer) */ /* how your car goes: top speed (m/s), pull, tyre grip (m/s² sideways), power per kg (W), traction and brakes (m/s²), gears */
   const CARPHYS = !BIKE && !BOAT; /* a car (not a bike or a boat): the full engine, gearbox and brakes below */
   let foot = opts.mode === 'walk', parked = null, riding = null, summon = null; /* summon: your car, driving up to you after you called it */ /* riding: in someone else's car ({ id, seat }), going where they drive */ /* foot: walking (your character), not driving; parked: your car, where you got out */
   let feet = null; const mkFeet = () => { if (feet) return feet; feet = W.makePerson('me', null, opts.look || null); feet.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); scene.add(feet.group); return feet; };
@@ -234,9 +234,9 @@ export function createTown(host, opts) {
     const nx = car.x + car.vx * dt, nz = car.z + car.vz * dt, S = closeSolids(solidsNear(nx, nz), nx, nz, 3), dir = Math.sign(car.v || 1);
     for (const o of S) if (o.brk && !o.gone) { const dx = o.c[0] - nx, dz = o.c[1] - nz, al = dx * fx + dz * fz, sd = dx * lx + dz * lz; if (Math.abs(al) < 2.15 + o.c[2] && Math.abs(sd) < 0.9 + o.c[2]) smash(o); }
     const pts = dir < 0 ? OUTLINE_B : OUTLINE_F; /* its corners and the middles of its sides (so it can slide past another car along its side, but not into it) */
-    if (pts.some(([u, w]) => hits(nx + fx * u + fz * w, nz + fz * u - fx * w, S, car.x + fx * u + fz * w, car.z + fz * u - fx * w))) { car.vx = -car.vx * 0.25; car.vz = -car.vz * 0.25; car.v = -car.v * 0.25; bump = 0.25; return; }
+    if (pts.some(([u, w]) => hits(nx + fx * u + fz * w, nz + fz * u - fx * w, S, car.x + fx * u + fz * w, car.z + fz * u - fx * w))) { const hit = Math.hypot(car.vx || 0, car.vz || 0); car.vx = car.vz = car.v = 0; box.g = 1; if (hit > 1.5) { bump = 0.35; shake = Math.min(0.16, 0.03 + hit * 0.008); try { navigator.vibrate && navigator.vibrate(Math.min(60, 15 + hit * 2 | 0)); } catch { } } return; } /* (a crash: the car stops where it is, no bounce back; the camera jolts, harder the faster you hit) */
     car.x = nx; car.z = nz; }
-  let bump = 0, roll = 0, pitch = 0, accel0 = 0, accS = 0;
+  let bump = 0, shake = 0.08, roll = 0, pitch = 0, accel0 = 0, accS = 0;
 
   // ---- knocked-over street things: the lamp, bin, hydrant or traffic light leaves its merged block (its corners fold
   // away) and a loose copy of it flies off or topples, rests a few seconds, then sinks out of sight. At most 8 at once. ----
@@ -564,7 +564,7 @@ export function createTown(host, opts) {
       cam.x += (tx - cam.x) * k; cam.z += (tz - cam.z) * k; cam.y += (Math.max(1.2, up) - cam.y) * k; camera.position.copy(cam);
       const ahead = foot ? 3 : 6, lx = car.x + Math.cos(a) * ahead, lz = car.z - Math.sin(a) * ahead; aim.x += (lx - aim.x) * k; aim.z += (lz - aim.z) * k; look.set(aim.x, (foot ? 1.45 : 1.2) + Math.tan(Math.max(0, lk.pitch - 0.3) * 1.45) * (back + ahead), aim.z); camera.lookAt(look); /* drag up past a tilt: the camera looks up into the sky */ /* look past the car the way the camera faces */
       view.cut.A.value.set(car.x, 1.0, car.z); { const bx = camera.position.x - car.x, bz = camera.position.z - car.z, L = Math.hypot(bx, bz) || 1; view.cut.B.value.set(camera.position.x + bx / L * 3, camera.position.y + 1, camera.position.z + bz / L * 3); } view.cut.R.value = high ? 6 : 3.8; } /* see through what's between you and the car, and just behind the camera */
-    if (bump > 0) { bump -= dt; camera.position.y += Math.sin(bump * 60) * 0.08; }
+    if (bump > 0) { bump -= dt; const k = Math.max(0, bump / 0.35) * shake; camera.position.y += Math.sin(bump * 70) * k; camera.position.x += Math.sin(bump * 53 + 1) * k * 0.7; camera.position.z += Math.cos(bump * 61) * k * 0.7; } else shake = 0.08; /* (a short shake that dies away) */
   } /* (no tremble at speed: it read as the car hopping) */
   const now0 = () => performance.now();
   canvas.style.touchAction = 'none';
@@ -718,6 +718,7 @@ export function createTown(host, opts) {
           for (let t = 0; t <= 1.6 && ok; t += 0.05) { const x = sx + (o.c[0] - sx) * t, z = sz + (o.c[1] - sz) * t; for (const q of solidsNear(x, z)) { if (q === o || q.brk || q.car) continue; const d = depth(x, z, q); if (d > -1) { ok = false; break; } } }
           const dd = Math.hypot(sx - car.x, sz - car.z); if (ok && (!best || dd < best.dd)) best = { dd, sx, sz, a, o }; } }
       if (!best) return null; car.x = best.sx; car.z = best.sz; car.a = best.a; car.v = car.vx = car.vz = 0; car.wa = 0; return { kind: best.o.brk }; },
+    _put(x, z, a) { car.x = x; car.z = z; car.a = a; car.v = car.vx = car.vz = 0; car.wa = 0; }, /* (for testing) */
     _broken() { let n = 0; for (const v of blocks.values()) for (const o of v.solid) if (o.gone) n++; return { broken: n, flying: DEB.length, deb: DEB.map(d => [d.x - car.x, d.y, d.z - car.z, d.th, d.G.parent === scene, d.G.children.length].map(v => typeof v === 'number' ? +v.toFixed(2) : v)) }; },
     stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, fleet: Object.fromEntries([...fleetM].filter(([, m]) => m.count).map(([k, m]) => [k, m.count])), calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
     toggleView() { mode = (mode + 1) % 3; lk.yaw = foot ? lk.yaw : 0; lk.pitch = 0; return ['behind', 'driver', 'above'][mode]; },

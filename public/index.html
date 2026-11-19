@@ -1109,7 +1109,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .enter.open{opacity:0;pointer-events:none}.enter.open .enscene{transform:scale(4.2) translateY(6%)}.enter.open .endoor{animation:none;transform:rotateY(-108deg);transition:transform .6s ease-in}
 .enter.open .entitle,.enter.open .enstep,.enter.open .enbar,.enter.open .entip{opacity:0;transition:opacity .25s}
 @media (prefers-reduced-motion:reduce){.endoor,.englow,.enlight{animation:none}.enscene,.enter .endoor{transition:none}}
-.hact{position:absolute;right:14px;bottom:calc(150px + env(safe-area-inset-bottom));z-index:4;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:none;padding:0;cursor:pointer}
+.hact{position:absolute;right:14px;bottom:calc(150px + env(safe-area-inset-bottom));z-index:4;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:none;padding:0;cursor:pointer}.hact.hshop{right:auto;left:14px;bottom:calc(200px + env(safe-area-inset-bottom))}
 .hact b{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;background:#fff;border:2px solid #2B2621;font-size:30px;box-shadow:0 4px 0 #2B2621}
 .hact:active b{transform:translateY(3px);box-shadow:0 1px 0 #2B2621}
 .hact span{font-size:12px;font-weight:800;color:#fff;background:rgba(43,38,33,.82);border-radius:999px;padding:3px 9px;white-space:nowrap}
@@ -1363,7 +1363,8 @@ import { TABLE_GAMES, WHOT_SHAPES, LUDO_SAFE, RAKE, MAX_STAKE } from '/shared/bo
 import { GH_GAMES, GH_MAX_BET, WHEEL_PAID, WHEEL_FREE, SCRATCH_TIERS, SCRATCH_SYMBOLS, PEN_SPOTS, DART_ORDER, DART_RINGS } from '/shared/games.js';
 import { GAMES, SLOT_SYMBOLS, SLOT_PAYS, SLOT_TWO_CHERRIES, ROULETTE_RED, ROULETTE_BETS, rocketAt, PLINKO, PLINKO_ROWS, MINES_TILES, MINES_CHOICES, minesMultiple } from '/shared/casino.js';
 import { CREATURES, CREATURE_IDS, STYLES, paceCurve, hashStr, petPrice } from '/shared/creatures.js';
-import { STORES, STOCK_MAX, isStore, productsOf, productOf, wholesale, whereToBuy, isHomeGood } from '/shared/stores.js';
+import { STORES, STOCK_MAX, isStore, productsOf, productOf, wholesale, whereToBuy, isHomeGood, isJewel } from '/shared/stores.js';
+import { ITEMS as WEAR_ITEMS, CLOTH } from '/shared/avatar.js';
 import { ACHIEVEMENTS, BY_ID as BADGE, TIER_NAMES } from '/shared/achievements.js';
 import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
@@ -7592,7 +7593,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     if(list.length>1){ const o=Math.floor(Date.now()/3600000)%list.length; list=[...list.slice(o),...list.slice(0,o)]; } /* (more goods than stands: a different few each hour) */
     const key=b.type+'|'+list.map(P=>P.k).join(',')+'|'+(sd.owned?1:0); if(key===this.showKey) return; this.showKey=key;
     const imgOf=k=>{ const im=new Image(); im.src=creatureThumb(k); return im; };
-    h.setShowcase({ kind:U.kind, products:list.map((P,i)=>({ k:P.k, name:P.name, priceText:`${fmt(P.price)} coins`, out:false, col:P.colors?P.colors[i%P.colors.length]:null, tier:P.tier||0, model:P.k, kind:P.kind, img:U.kind==='pet'?imgOf(P.k):null })) }); },
+    h.setShowcase({ kind:U.kind, products:list.map((P,i)=>({ k:P.k, name:P.name, priceText:`${fmt(P.price)} coins`, out:false, col:P.colors?P.colors[i%P.colors.length]:null, tier:P.tier||0, model:P.k, kind:P.kind, img:U.kind==='pet'?imgOf(P.k):null, ...showLook(P,i) })) }); },
   /* the phone threw the 3D view away and never gave it back: build it again, standing where you were */
   reopen(at){ const d=this.d; if(!d||!this.el) return; this.reAt=at; Promise.resolve(this.open(null,null,d)).finally(()=>{ this.reAt=null; }); },
   // ---- live: where you stand goes to everyone else in here, and theirs comes to you; and the chat ----
@@ -7956,6 +7957,17 @@ const GoodsStore={ dept:new Map(), pick:new Map(), ward:null, wardAt:0, H3:null,
     catch(e){ toast(e.message); } } };
 // The shop inside a store (3D): the same goods as on its card, in a sheet over the store, opened by its 🛍️ Shop button
 // or by tapping something on display. A new kind of store adds its card section here.
+/* how a product looks on its stand inside a store (see house3d.js buildShow): what kind of stand it goes on, and its shape and colour */
+function showLook(P,i){
+  if(P.kind==='phone') return { cls:'phone' }; if(P.kind==='pet') return { cls:'pet' }; if(P.kind==='home') return { cls:'home', key:P.key, tint:P.tint?i%10:0 };
+  if(P.kind!=='wear') return { cls:'car' };
+  const it=WEAR_ITEMS[P.slot][P.key], x=it[3]||{}, s=P.slot, k=P.key, colour=(i*7+3)%CLOTH.length, col=CLOTH[colour], metal=x.rose?'#E3A68C':x.silver?'#CDD3DB':'#E2B13C';
+  const base={ slot:s, key:k, who:it[2], colour, col };
+  if(s==='shoe') return { ...base, cls:'shoe', white:!!x.white||k==='sneakers'||k==='hightops', high:!!x.high, boot:k==='boots', heel:!!x.heel, thin:!!x.thin };
+  if(isJewel(s,k)) return { ...base, cls:'jewel', metal, bracelet:k==='bracelet', leather:!x.gold&&s==='wrist', thick:k==='cuban'||k==='iced', gem:k==='pendant'||k==='diamondpendant', pearl:!!x.pearl };
+  if(s==='top'||s==='bot'||s==='out') return { ...base, cls:'garment', full:!!x.full, long:!!x.long, longSleeve:!!x.long||s==='out', short:!!x.short||!!x.briefs, bare:k==='tank'||!!x.straps||!!x.vest||!!x.bikini };
+  return { ...base, cls:'acc' };
+}
 const STORE_UI={ phonestore:{ kind:'phone', section:b=>PhoneStore.section(b), pick:k=>{ const M=PHONE_MODELS[k]; if(M) PhoneStore.pick={m:k,col:M.colors[0]}; } },
   cardealer:{ kind:'car', section:b=>dealerSection(b), pick:k=>{ if(CAR_MODELS[k]) carPick={m:k,col:null}; } },
   petstore:{ kind:'pet', section:b=>PetStore.section(b), pick:k=>{ if(CREATURES[k]) petPick=k; } } };

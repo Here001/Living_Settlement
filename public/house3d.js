@@ -189,7 +189,7 @@ export const actOf = k => ACT[k] || (FURNITURE[k]?.light ? { kind: 'light', icon
 function pieceGroup(it, photoTex, st = {}) { /* st.off: a lamp switched off; st.on: a TV switched on */
   const f = FURNITURE[it.k]; if (!f) return null; const tint = TINTS[it.c || 0] || TINTS[0], grp = new THREE.Group(), byKind = new Map(), M = mats();
   // a door: its leaf parts go on a hinge of their own, so the door can swing open
-  const all = placedParts(it, tint), leafParts = all.filter(p => p.s === 'leaf'); let leaf = null;
+  const all = placedParts(it, tint).filter((p, n) => !(st.bare && f.goods && f.goods.includes(n))), leafParts = all.filter(p => p.s === 'leaf'); let leaf = null;
   if (leafParts.length) { const out = leafParts[0].out || [0, 1], alongX = out[0] === 0;
     const hx = Math.min(...leafParts.map(p => p.x)), hy = Math.min(...leafParts.map(p => p.y)), mx = Math.max(...leafParts.map(p => p.x + p.w)), my = Math.max(...leafParts.map(p => p.y + p.d));
     const hinge = alongX ? new THREE.Vector3(hx, 0, (hy + my) / 2) : new THREE.Vector3((hx + mx) / 2, 0, hy);
@@ -554,25 +554,89 @@ export function createHouse(host, opts) {
   function phoneModel(P) { const g = new THREE.Group(), body = new THREE.Mesh(new RoundedBoxGeometry(0.17, 0.35, 0.02, 2, 0.026), new THREE.MeshStandardMaterial({ color: P.col || '#333', roughness: 0.35, metalness: P.tier >= 3 ? 0.7 : 0.15 }));
     const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.32), new THREE.MeshBasicMaterial({ map: screenTex(P.tier || 0), toneMapped: false })); scr.position.z = 0.0105; g.add(body, scr);
     const stand = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.02, 0.08), new THREE.MeshStandardMaterial({ color: '#d5d8dc', roughness: 0.4, metalness: 0.6 })); stand.position.set(0, -0.175, -0.02); g.add(stand); g.rotation.x = -0.18; return g; }
-  function clearShow() { for (const c of [...show.children]) { show.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { for (const m of [].concat(o.material)) { if (m.map && !SCREENS_HAS(m.map)) m.map.dispose(); m.dispose(); } } }); } }
-  const SCREENS_HAS = t => { for (const v of SCREENS.values()) if (v === t) return true; return false; };
-  // where things stand: the slots on each piece of display furniture (in the room, whatever way it's turned)
-  function slotsOf(kind) { const per = [];
-    for (const it of room.items) { const k = it.k; if (!((kind === 'phone' && k === 'display') || (kind === 'car' && k === 'showcar') || (kind === 'pet' && k === 'petcages'))) continue;
-      const b = boxOf(it), ps = placedParts(it, '#ffffff'), top = Math.max(...ps.map(p => p.z + p.h)), long = (b.x1 - b.x0) >= (b.y1 - b.y0), len = long ? b.x1 - b.x0 : b.y1 - b.y0, n = kind === 'phone' ? 3 : kind === 'pet' ? 2 : 1, ry = long ? 0 : Math.PI / 2;
-      const face = kind === 'phone' ? (it.r || 0) : 0, fy = [0, -Math.PI / 2, Math.PI, Math.PI / 2][face % 4]; /* phones face the way the counter does */
-      const mine = []; per.push(mine); for (let k2 = 0; k2 < n; k2++) { const u = (k2 + 0.5) / n; mine.push({ it, x: long ? b.x0 + len * u : b.cx, y: long ? b.cy : b.y0 + len * u, z: kind === 'phone' ? top : kind === 'pet' ? 0.5 : 0.12, ry: kind === 'car' ? ry : fy, len: long ? b.x1 - b.x0 : b.y1 - b.y0, wid: long ? b.y1 - b.y0 : b.x1 - b.x0 }); } }
-    const out = []; for (let k2 = 0; per.some(l => l[k2]); k2++) for (const l of per) if (l[k2]) out.push(l[k2]); /* one on each counter first, then the next along: the goods spread round the store */
+  // where things stand: the slots on each piece of display furniture (in the room, whatever way it's turned). Each kind
+  // of stand takes certain goods: phones and jewellery on a display counter, clothes on mannequins and rails, shoes on a
+  // shoe wall, jewellery in a jewellery counter, furniture and appliances on a display platform, a car, pets.
+  const STANDS = { display: ['phone', 'jewel'], showcar: ['car'], petcages: ['pet'], mannequin: ['garment', 'acc'], clothesrack: ['garment'], shoewall: ['shoe'], jewelcase: ['jewel'], showplinth: ['home'] };
+  const middle = () => { const r = L.rooms.find(q => q.kind === 'main') || L.rooms[0]; return r ? [r.x + r.w / 2, r.y + r.d / 2] : [S / 2, S / 2]; };
+  function slotsOf() { const per = [], [mx, my] = middle();
+    for (const it of room.items) { const k = it.k, takes = STANDS[k]; if (!takes) continue;
+      const b = boxOf(it), ps = placedParts(it, '#ffffff'), top = Math.max(...ps.map(p => p.z + p.h)), long = (b.x1 - b.x0) >= (b.y1 - b.y0), len = long ? b.x1 - b.x0 : b.y1 - b.y0, wid = long ? b.y1 - b.y0 : b.x1 - b.x0, ry = long ? 0 : Math.PI / 2;
+      const toMid = Math.atan2(long ? 0 : mx - b.cx, long ? my - b.cy : 0); /* facing into the room, square to the stand */
+      const mine = []; per.push(mine); const at = (u, v, z, o) => mine.push({ it, k, takes, x: long ? b.x0 + len * u : b.x0 + wid * v, y: long ? b.y0 + wid * v : b.y0 + len * u, z, ry: ry, face: toMid, len, wid, ...o });
+      if (k === 'display') { const face = [0, -Math.PI / 2, Math.PI, Math.PI / 2][(it.r || 0) % 4]; for (let n = 0; n < 3; n++) at((n + 0.5) / 3, 0.5, top, { face }); } /* phones face the way the counter does */
+      else if (k === 'showcar') at(0.5, 0.5, 0.12);
+      else if (k === 'petcages') for (let n = 0; n < 2; n++) at((n + 0.5) / 2, 0.5, 0.5);
+      else if (k === 'mannequin' || k === 'showplinth') { const base = ps[k === 'mannequin' ? 0 : 1]; mine.push({ it, k, takes, x: base.x + base.w / 2, y: base.y + base.d / 2, z: base.z + base.h, face: Math.atan2(mx - (base.x + base.w / 2), my - (base.y + base.d / 2)), len: Math.min(base.w, base.d), wid: Math.min(base.w, base.d) }); }
+      else if (k === 'clothesrack') { const rail = ps[2], rl = rail.w >= rail.d; for (let n = 0; n < 4; n++) { const u = (n + 0.5) / 4; mine.push({ it, k, takes, x: rl ? rail.x + 0.12 + (rail.w - 0.24) * u : rail.x + rail.w / 2, y: rl ? rail.y + rail.d / 2 : rail.y + 0.12 + (rail.d - 0.24) * u, z: rail.z, face: toMid }); } }
+      else if (k === 'shoewall') { const bk = ps[0], s1 = ps[1], ox = (s1.x + s1.w / 2) - (bk.x + bk.w / 2), oy = (s1.y + s1.d / 2) - (bk.y + bk.d / 2), face = Math.abs(ox) > Math.abs(oy) ? Math.atan2(Math.sign(ox), 0) : Math.atan2(0, Math.sign(oy)); /* out from the wall: from the back board to the shelves */ for (const sh of ps.slice(1, 4)) { const sl = sh.w >= sh.d; for (let n = 0; n < 3; n++) { const u = (n + 0.5) / 3; mine.push({ it, k, takes, x: sl ? sh.x + sh.w * u : sh.x + sh.w / 2, y: sl ? sh.y + sh.d / 2 : sh.y + sh.d * u, z: sh.z + sh.h, face, small: 1 }); } } }
+      else if (k === 'jewelcase') { const pad = ps[3], pl = pad.w >= pad.d; for (const v of [0.72, 0.28]) for (let n = 0; n < 3; n++) { const u = (n + 0.5) / 3; mine.push({ it, k, takes, x: pl ? pad.x + pad.w * u : pad.x + pad.w * v, y: pl ? pad.y + pad.d * v : pad.y + pad.d * u, z: pad.z + pad.h, face: toMid, small: 1, row: v > 0.5 ? 1 : 0 }); } } }
+    const out = []; for (let k2 = 0; per.some(l => l[k2]); k2++) for (const l of per) if (l[k2]) out.push(l[k2]); /* one on each stand first, then the next along: the goods spread round the store */
     return out; }
-  async function buildShow() { const tok = ++showTok; clearShow(); for (const i of showHidden) for (const g of stuff.children) if (g.userData.i === i) g.visible = true; showHidden = new Set(); const spec = showSpec; if (!spec || !spec.products.length) { dirty = true; wake(); return; }
-    const kind = spec.kind, slots = slotsOf(kind); if (!slots.length) return; let W3 = null; if (kind === 'car') { try { W3 = await import('/world3d.js'); } catch (e) { return; } if (tok !== showTok) return; }
-    spec.products.slice(0, slots.length).forEach((P, n) => { const s = slots[n], g = new THREE.Group(); g.position.set(s.x, s.z, s.y); g.userData.product = P.k;
-      if (kind === 'phone') { const m = phoneModel(P); m.position.y = 0.19; m.rotation.y = s.ry; g.add(m); g.userData.turn = m; }
-      else if (kind === 'car') { const car = W3.makeCar(P.kind && P.kind !== 'car' ? 'car' : (P.model || 'car'), P.col || '#c8382e'), [L] = W3.carSize(P.model || 'car'), sc = Math.min(1, (s.len - 0.2) / Math.max(1, L)); car.scale.setScalar(sc); car.rotation.y = s.ry + Math.PI / 2; g.add(car); showHidden.add(s.it.i); }
-      else if (kind === 'pet' && P.img) { const t = new THREE.Texture(P.img); t.colorSpace = THREE.SRGBColorSpace; if (P.img.complete) t.needsUpdate = true; else P.img.addEventListener('load', () => { t.needsUpdate = true; dirty = true; wake(); }, { once: true }); const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, alphaTest: 0.05 })); sp.scale.set(0.5, 0.5, 1); sp.position.y = 0.26; sp.renderOrder = 3; g.add(sp); } /* (standing on the cage floor, behind its glass) */
-      const tag = priceTag(P.name, P.priceText, P.out); tag.position.y = kind === 'car' ? 1.6 : kind === 'pet' ? 0.78 : 0.6; g.add(tag);
-      g.traverse(o => { if (o !== g) o.userData.product = P.k; }); show.add(g); });
-    for (const i of showHidden) for (const g of stuff.children) if (g.userData.i === i) g.visible = false; /* (the stand's own model car makes way for the real one) */
+  // the goods themselves
+  const METAL = { gold: '#E2B13C', rose: '#E3A68C', silver: '#CDD3DB', ice: '#F2F8FF' };
+  const metalMat = c => new THREE.MeshStandardMaterial({ color: c, metalness: 1, roughness: 0.25 }), clothMat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }), plainMat = (c, r = 0.5) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
+  function garmentModel(P) { const g = new THREE.Group(), m = clothMat(P.col || '#3E5C9A'), hook = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.005, 4, 10, Math.PI * 1.3), metalMat('#BDC3C7')); hook.position.y = -0.02; g.add(hook);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.02, 0.02), metalMat('#BDC3C7')); bar.position.y = -0.07; g.add(bar);
+    if (P.slot === 'bot') { for (const s of [-1, 1]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.13, P.short ? 0.3 : 0.62, 0.04), m); leg.position.set(s * 0.075, P.short ? -0.25 : -0.41, 0); g.add(leg); } const w = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.045), m); w.position.y = -0.11; g.add(w); }
+    else { const long = P.full ? 0.95 : P.slot === 'out' && P.long ? 0.85 : 0.5, body = new THREE.Mesh(new THREE.BoxGeometry(0.34, long, 0.05), m); body.position.y = -0.08 - long / 2; g.add(body);
+      if (!P.bare) for (const s of [-1, 1]) { const sl = new THREE.Mesh(new THREE.BoxGeometry(0.09, P.longSleeve ? 0.42 : 0.18, 0.045), m); sl.position.set(s * 0.2, -0.1 - (P.longSleeve ? 0.21 : 0.09), 0); sl.rotation.z = s * 0.35; g.add(sl); } }
+    return g; }
+  function shoeModel(P) { const g = new THREE.Group(), m = plainMat(P.col || '#333', 0.45), sole = plainMat(P.white ? '#F2F0EA' : '#1d1b19', 0.7);
+    for (const s of [-1, 1]) { const f = new THREE.Group(); f.position.x = s * 0.06;
+      const up = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.15, 4, 10), m); up.rotation.x = Math.PI / 2; up.scale.set(1, 1, 0.82); up.position.set(0, 0.05, 0); f.add(up);
+      const so = new THREE.Mesh(new THREE.BoxGeometry(0.098, 0.024, 0.25), sole); so.position.y = 0.012; f.add(so);
+      if (P.high) { const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, P.boot ? 0.22 : 0.12, 12), m); sh.position.set(0, 0.06 + (P.boot ? 0.11 : 0.06), -0.06); f.add(sh); }
+      if (P.heel) { const h = new THREE.Mesh(new THREE.CylinderGeometry(P.thin ? 0.007 : 0.012, P.thin ? 0.004 : 0.009, 0.08, 8), m); h.position.set(0, 0.04, -0.1); f.add(h); }
+      g.add(f); }
+    return g; }
+  function jewelModel(P) { const g = new THREE.Group(), mm = metalMat(P.metal || METAL.gold), ice = metalMat(METAL.ice), sc = 1.8;
+    const s = P.slot, key = P.key;
+    if (s === 'wrist') { const band = new THREE.Mesh(new THREE.TorusGeometry(0.04, P.bracelet ? 0.005 : 0.009, 6, 20), P.leather ? plainMat(P.col || '#1d1b19') : mm); band.position.y = 0.045; g.add(band);
+      if (!P.bracelet) { const f = new THREE.Mesh(key === 'smartwatch' ? new THREE.BoxGeometry(0.03, 0.036, 0.012) : new THREE.CylinderGeometry(0.017, 0.017, 0.01, 16), key === 'smartwatch' ? plainMat('#1d1b19', 0.3) : mm); if (key !== 'smartwatch') f.rotation.x = Math.PI / 2; f.position.set(0, 0.045, 0.042); g.add(f);
+        const dial = new THREE.Mesh(new THREE.CircleGeometry(key === 'smartwatch' ? 0.012 : 0.013, 16), new THREE.MeshBasicMaterial({ color: key === 'smartwatch' ? '#3E8EDE' : key === 'diamondwatch' ? '#1F2E55' : '#F4F1EA' })); dial.position.set(0, 0.045, 0.049); g.add(dial); } }
+    else if (s === 'neck') { const ch = new THREE.Mesh(new THREE.TorusGeometry(0.07, P.thick ? 0.007 : 0.003, 6, 30), key === 'iced' ? ice : mm); ch.rotation.x = -Math.PI / 2; ch.position.y = 0.006; ch.scale.set(1, 1.25, 1); g.add(ch);
+      if (P.pearl) { ch.material = plainMat('#F4EFE6', 0.3); }
+      if (P.gem) { const pe = new THREE.Mesh(new THREE.SphereGeometry(0.013, 6, 4), key === 'diamondpendant' ? ice : mm); pe.position.set(0, 0.012, 0.09); g.add(pe); } }
+    else if (s === 'ear') { for (const x of [-0.025, 0.025]) { const e = key === 'hoops' ? new THREE.Mesh(new THREE.TorusGeometry(0.016, 0.003, 6, 16), mm) : new THREE.Mesh(new THREE.SphereGeometry(key === 'diamondstuds' ? 0.009 : 0.007, 8, 6), key === 'diamondstuds' ? ice : mm); e.position.set(x, key === 'hoops' ? 0.02 : 0.008, 0); g.add(e); } }
+    else if (s === 'ring') { const r = new THREE.Mesh(new THREE.TorusGeometry(0.014, 0.003, 6, 16), mm); r.position.y = 0.017; g.add(r); if (key === 'diamondring') { const d = new THREE.Mesh(new THREE.SphereGeometry(0.007, 6, 4), ice); d.position.y = 0.035; g.add(d); } }
+    else if (key === 'crown') { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.04, 18, 1, true), mm); c.material.side = THREE.DoubleSide; c.position.y = 0.02; g.add(c); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2, t = new THREE.Mesh(new THREE.ConeGeometry(0.01, 0.03, 5), mm); t.position.set(Math.sin(a) * 0.06, 0.055, Math.cos(a) * 0.06); g.add(t); } }
+    g.scale.setScalar(sc); return g; }
+  // a piece of furniture or an appliance, on a platform: made smaller if it wouldn't fit, standing on the top
+  function homeModel(P, room2) { const it = { i: 'show:' + P.k, k: P.key, x: 0, y: 0, r: 0, c: P.tint || 0 }, grp = pieceGroup(it, null, {}); if (!grp) return null;
+    const bb = new THREE.Box3().setFromObject(grp), sz = bb.getSize(new THREE.Vector3()), fit = Math.min(1, (room2 - 0.1) / Math.max(sz.x, sz.z, 0.01), 1.9 / Math.max(sz.y, 0.01));
+    const inner = new THREE.Group(); grp.position.set(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2); inner.add(grp); inner.scale.setScalar(fit); inner.userData.shared = true; return inner; }
+  // a mannequin wearing it (with plain basics for whatever it doesn't cover)
+  function mannequinModel(P, n) { const g = P.who === 'f' || (P.who !== 'm' && n % 2) ? 'f' : 'm', w = { [P.slot]: [P.key, P.colour || 0] };
+    if (P.slot !== 'top' && P.slot !== 'out') w.top = ['tee', 0]; if (P.slot === 'out') w.top = ['tee', 0]; if (!(P.slot === 'top' && P.full) && P.slot !== 'bot') w.bot = ['trousers', 3]; if (P.slot !== 'shoe') w.shoe = ['loafers', 4];
+    const A = buildAvatar({ g, sk: '#E9E4DC', hs: 'bald', hc: '#E9E4DC', ey: '#BDB6AA', w }); A.animate(0.016, 0, 0, false); A.group.userData.av = A; return A.group; }
+  function clearShow() { for (const c of [...show.children, ...showStands.children]) { c.parent.remove(c); c.traverse(o => { if (o.userData.av) o.userData.av.dispose(); });
+    c.traverse(o => { if (o.userData.av || isShared(o)) return; if (o.geometry) o.geometry.dispose(); if (o.material) { for (const m of [].concat(o.material)) { if (m.map && !SCREENS_HAS(m.map)) m.map.dispose(); m.dispose(); } } }); } }
+  const isShared = o => { for (let p = o; p; p = p.parent) { if (p.userData.shared) { if (o.geometry) o.geometry.dispose(); return true; } if (p.userData.av) return true; } return false; }; /* (the furniture's and the people's materials are shared: only their own shapes go) */
+  const showStands = new THREE.Group(); scene.add(showStands); /* the stands with goods on: without their pretend goods */
+  const SCREENS_HAS = t => { for (const v of SCREENS.values()) if (v === t) return true; return false; };
+  async function buildShow() { const tok = ++showTok; clearShow(); for (const i of showHidden) for (const g of [...stuff.children, ...wallStuff.children]) if (g.userData.i === i) g.visible = true; showHidden = new Set(); const spec = showSpec; if (!spec || !spec.products.length) { dirty = true; wake(); return; }
+    const slots = slotsOf(); if (!slots.length) return; let W3 = null; if (spec.products.some(P => P.cls === 'car')) { try { W3 = await import('/world3d.js'); } catch (e) { return; } if (tok !== showTok) return; }
+    // share the goods out: each stand in turn takes the next thing it can show (taking turns between the kinds it takes)
+    const queue = new Map(); for (const P of spec.products) { const c = P.cls || spec.kind; (queue.get(c) || queue.set(c, []).get(c)).push(P); }
+    const used = new Set(), turn = new Map(); let n = 0;
+    for (const s of slots) { const kinds = s.takes.filter(c => queue.get(c)?.length); if (!kinds.length) continue; const t = turn.get(s.it.i) || 0; turn.set(s.it.i, t + 1); const P = queue.get(kinds[t % kinds.length]).shift(), cls = P.cls || spec.kind;
+      const g = new THREE.Group(); g.position.set(s.x, s.z, s.y); g.userData.product = P.k; used.add(s.it.i);
+      let tagY = 0.6, tagS = 1;
+      if (cls === 'phone') { const m = phoneModel(P); m.position.y = 0.19; m.rotation.y = s.face; g.add(m); g.userData.turn = m; }
+      else if (cls === 'car') { const car = W3.makeCar(P.kind && P.kind !== 'car' ? 'car' : (P.model || 'car'), P.col || '#c8382e'), [Lc] = W3.carSize(P.model || 'car'), sc = Math.min(1, (s.len - 0.2) / Math.max(1, Lc)); car.scale.setScalar(sc); car.rotation.y = s.ry + Math.PI / 2; g.add(car); tagY = 1.6; }
+      else if (cls === 'pet' && P.img) { const t = new THREE.Texture(P.img); t.colorSpace = THREE.SRGBColorSpace; if (P.img.complete) t.needsUpdate = true; else P.img.addEventListener('load', () => { t.needsUpdate = true; dirty = true; wake(); }, { once: true }); const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, alphaTest: 0.05 })); sp.scale.set(0.5, 0.5, 1); sp.position.y = 0.26; sp.renderOrder = 3; g.add(sp); tagY = 0.78; } /* (standing on the cage floor, behind its glass) */
+      else if (s.k === 'mannequin') { const m = mannequinModel(P, n); m.rotation.y = s.face; g.add(m); tagY = 2.0; }
+      else if (cls === 'garment') { const m = garmentModel(P); m.rotation.y = s.face; g.add(m); tagY = 0.22; tagS = 0.8; }
+      else if (cls === 'shoe') { const m = shoeModel(P); m.rotation.y = s.face; m.scale.setScalar(0.9); g.add(m); tagY = 0.27; tagS = 0.62; }
+      else if (cls === 'jewel') { const m = jewelModel(P); m.rotation.y = s.face; g.add(m); tagY = s.k === 'display' ? 0.3 : 0.3 + (s.row ? 0.14 : 0); tagS = 0.62; }
+      else if (cls === 'home') { const m = homeModel(P, s.len || 1.7); if (!m) continue; m.rotation.y = s.face; g.add(m); tagY = Math.min(2.3, new THREE.Box3().setFromObject(m).max.y + 0.25); }
+      const tag = priceTag(P.name, P.priceText, P.out); tag.scale.multiplyScalar(tagS); tag.position.y = tagY; g.add(tag); n++;
+      g.traverse(o => { if (o !== g) o.userData.product = P.k; }); show.add(g); }
+    // the stands with real goods on them lose their pretend ones (a showroom's model car makes way for the real one)
+    for (const i of used) { const it = room.items.find(q => q.i === i); if (!it) continue; const f = FURNITURE[it.k]; if (it.k === 'showcar') { showHidden.add(i); continue; } if (!f.goods) continue;
+      const bare = pieceGroup(it, null, { bare: true }); if (!bare) continue; bare.userData.shared = true; bare.userData.i = undefined; bare.traverse(o => { o.userData.i = undefined; }); showStands.add(bare); showHidden.add(i); }
+    for (const i of showHidden) for (const g of [...stuff.children, ...wallStuff.children]) if (g.userData.i === i) g.visible = false;
     dirty = true; wake(); }
 
   // something put down where you're standing: step aside to the nearest free spot (not stuck inside it)
@@ -724,7 +788,7 @@ export function createHouse(host, opts) {
 
   return {
     setRoom(r, ph, shellToo) { room = r; photos = { ...photos, ...(ph || {}) }; if (shellToo) buildShell(); buildStuff(); unstick(); if (showSpec) buildShow(); wake(); },
-    setShowcase(spec) { showSpec = spec || null; buildShow(); }, /* a store's goods on display: { kind: 'phone'|'car'|'pet', products: [{ k, name, priceText, out, col, tier, model, img }] } */
+    setShowcase(spec) { showSpec = spec || null; buildShow(); }, /* a store's goods on display: { kind, products: [{ k, cls: phone|car|pet|garment|acc|shoe|jewel|home, name, priceText, out, col, … }] } */
     setPick(p) { pick = p; tapAim = false; const m = p && FURNITURE[p.k].mount; showGrid(m === 'floor'); buildStuff();
       if (p && view === 'walk' && p.x == null) me.pitch = m === 'ceil' ? 0.75 : m === 'floor' ? -0.45 : 0.02; // look where this kind of piece goes
       if (p) { placeCamera(); if (p.x == null) aim(); showGhost(); opts.onPick && opts.onPick(pick); } else showGhost(); wake(); },

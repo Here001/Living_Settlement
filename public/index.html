@@ -542,6 +542,10 @@ body.pane-max .composer textarea{height:70px}
 body.streaming .watchbar,body.streaming #showUi,body.streaming #intro,body.streaming .rsheet-bg,body.streaming #card,body.streaming .atsug{display:none!important}
 .rsheet.radio{width:min(400px,100%)}
 /* the radio as an app on the phone: its own screen, scrolling, no close button (the phone's home bar takes you back) */
+.phbank{padding:4px 2px 16px;overflow-y:auto;max-height:100%;color:var(--ink)}.phbank .phbankh{margin:2px 0 6px}.phbank .authbox{margin:0;padding:10px;background:rgba(255,255,255,.85)}
+.phgarage{padding:4px 2px 16px;overflow-y:auto;max-height:100%;color:var(--ink)}.phgarage h3{margin:2px 0 10px}.phglist{display:flex;flex-direction:column;gap:8px}
+.phgcar{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:14px;background:rgba(255,255,255,.85);border:1.5px solid var(--line)}.phgcar.on{border-color:#1F9E89;box-shadow:0 0 0 2px rgba(31,158,137,.25)}
+.phgcar img{flex:none;border-radius:8px;background:#eef0f2}.phgname{flex:1;min-width:0;display:flex;flex-direction:column}.phgname small{opacity:.7}.phgcar .btn{flex:none}
 .phradio{padding:4px 2px 16px;overflow-y:auto;max-height:100%;color:var(--ink)}.phradio .x{display:none}.phradio .shhead h3{margin:2px 0 8px}
 .uiswitch{position:relative;flex:none;width:46px;height:28px;border-radius:999px;border:0;padding:0;background:rgba(0,0,0,.22);cursor:pointer;transition:background .2s}
 .uiswitch i{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
@@ -7077,7 +7081,7 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
   // the phone in your hand: its home screen has the same five apps as the bar at the bottom of the map (Town Square,
   // My card, Colonists, Races, Chats). An app is the real thing, moved onto the phone's screen while it's open (the
   // panel or the card), so everything in it works just as it does on the map; the home bar takes you back to the apps.
-  APPS:[['car','Car','#1F9E89'],['maps','Maps','#2E86DE'],['feed','Town Square','#3D7BD9'],['me','My card','#E2783B'],['people','Colonists','#2F9E6A'],['races','Races','#C0392B'],['radio','Radio','#D2453C'],['chats','Chats','#8E44AD']],
+  APPS:[['car','Car','#1F9E89'],['maps','Maps','#2E86DE'],['feed','Town Square','#3D7BD9'],['me','My card','#E2783B'],['people','Colonists','#2F9E6A'],['races','Races','#C0392B'],['bank','Bank','#1E7A55'],['radio','Radio','#D2453C'],['chats','Chats','#8E44AD']],
   show(app){ if(!this.inside()){ if(app&&app!=='chats'){ app==='me'?openMyCard():openTab(app); } else openTab('chats'); return; } if(activeTab&&!this.app) openTab(null);
     try{ window.__phone=this; }catch(e){} /* (for checking how it looks) */
     const P=this.model(); if(this.el&&this.elOf!==P.m+P.col){ this.hide(); return this.show(app); } /* a new phone: take the new one out */
@@ -7111,7 +7115,7 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
   back(){ if(this.app==='card'&&this.from){ const f=this.from; this.from=null; this.open(f); } else this.home(); },
   showBack(on){ if(this.backBtn) this.backBtn.hidden=!on; },
   home(){ if(!this.screen) return; this.leave(); this.from=null; this.showBack(false); const n=Chats.unread||0, P=this.model(), t=P.tier;
-    const icon=(id,name,bg)=>{ const ic=el('i',{style:`--ic:${bg}`}); ic.innerHTML=id==='car'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 16V11l2-5h10l2 5v5"/><path d="M3 16h18v3H3z"/><circle cx="7.5" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/><path d="M5 11h14"/></svg>':id==='maps'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>':id==='radio'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M7 8 17 3"/><circle cx="15.5" cy="14" r="2.6"/><path d="M6 12h4M6 15h4"/></svg>':ICONS[id]||''; if(id==='chats'&&n) ic.append(el('b',{class:'phbadge',text:n>9?'9+':String(n)})); return el('button',{class:'phapp','aria-label':name,onclick:()=>this.open(id)}, ic, el('span',{text:name})); };
+    const icon=(id,name,bg)=>{ const ic=el('i',{style:`--ic:${bg}`}); ic.innerHTML=id==='car'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 16V11l2-5h10l2 5v5"/><path d="M3 16h18v3H3z"/><circle cx="7.5" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/><path d="M5 11h14"/></svg>':id==='maps'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>':id==='bank'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8"/><path d="M3 20h18"/></svg>':id==='radio'?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M7 8 17 3"/><circle cx="15.5" cy="14" r="2.6"/><path d="M6 12h4M6 15h4"/></svg>':ICONS[id]||''; if(id==='chats'&&n) ic.append(el('b',{class:'phbadge',text:n>9?'9+':String(n)})); return el('button',{class:'phapp','aria-label':name,onclick:()=>this.open(id)}, ic, el('span',{text:name})); };
     const apps=this.APPS.filter(([id])=>id!=='chats'||(Me&&Me.token)), dockIds=t>=2?['feed','me','chats']:[];
     const grid=el('div',{class:'phapps'}), dock=el('div',{class:'phdock'}); for(const [id,name,bg] of apps) (dockIds.includes(id)?dock:grid).append(icon(id,name,bg));
     const now=new Date(), time=now.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}), date=now.toLocaleDateString([],{weekday:'long',day:'numeric',month:'long'});
@@ -7122,12 +7126,40 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
       :el('div',{class:'phhello'}, el('b',{text:Me&&Me.handle?`Hi, @${Me.handle}`:'Hi there'}), el('span',{text:date}));
     const scr=this.screen.parentElement; if(scr&&!scr.querySelector(':scope>.phwall')) scr.prepend(el('div',{class:'phwall','aria-hidden':'true'})); this.el.classList.add('onhome'); /* the wallpaper fills the whole screen, behind the clock too */
     this.screen.replaceChildren(el('div',{class:'phhomescr'}, top, el('div',{class:'phwhere'}, el('span',{text:'📍'}), el('span',{text:this.where()})), grid, t>=2?dock:'', el('p',{class:'phmodel',text:`${P.name}${t<5?' · Upgrade at a Phone store':''}`}))); },
-  open(app){ if(app==='car'){ this.hide(); Drive.el?Drive.callCar():toast('🚗 Go outside to call your car.'); return; } /* (an app that does a thing: calls your car) */
+  open(app){
     if(!this.on){ this.show(app); return; } this.leave(); this.el.classList.remove('onhome'); this.showBack(true); this.anchor(); this.screen.replaceChildren(); this.busy=true;
     try{ if(app==='maps'){ this.app='maps'; if(Drive.T) DriveMap.open(this.screen); else this.screen.append(el('div',{class:'phmapsoff'}, el('b',{text:'🗺️ Maps'}), el('p',{text:'Maps shows the streets round you and the way to anywhere you pick, when you’re out on the street or driving. Inside, tap 2D for the colony map.'}))); }
       else if(app==='radio'){ this.app='radio'; const box=el('div',{class:'phradio radio'}); this.screen.append(box); Radio.fill(box); Radio.refreshLive(); } /* the colony radio, anywhere you are */
+      else if(app==='car'){ this.app='car'; const box=el('div',{class:'phgarage'}); this.screen.append(box); this.garage(box); } /* your vehicles: pick the one to drive */
+      else if(app==='bank'){ this.app='bank'; const box=el('div',{class:'phbank'}); this.screen.append(box); this.bank(box); } /* your wallet: cash, the bank, gifts and what came in and went out */
       else if(app==='me'||app==='card'){ this.app='card'; this.from=null; this.screen.append($('card')); const h=myHandle(); if(h) openCitizen(h,{stay:true}); else { this.home(); findMe(); } }
       else { this.app=app; this.screen.append($('pane')); openTab(app); } } finally{ this.busy=false; } },
+  // 🏦 Bank: your wallet, as on your card (cash on you, savings, gifts, and every coin in and out), drawn again as it loads
+  bank(box){ const c=myCitizen(); if(!c){ box.replaceChildren(el('p',{class:'hint',text:'Sign in to your colonist to see your money.'})); return; } let n=0;
+    const draw=()=>{ if(this.app!=='bank'||!box.isConnected) return; const top=box.scrollTop; box.replaceChildren(el('h3',{class:'phbankh',text:'🏦 Bank'}), walletPanel(c)); box.scrollTop=top;
+      const ready=Money.id===c.id&&Money.bank&&Ledger.data; if(!ready&&++n<12) setTimeout(draw,700); };
+    draw(); },
+  // 🚗 Car: every vehicle you own. Pick a car or bike to drive (out on the street it comes to you; driving, you swap
+  // into it where you are), take a boat out on the water; aircraft are up in the sky over the colony.
+  async garage(box){ const draw=(d,busy)=>{ if(this.app!=='car'||!box.isConnected) return; box.replaceChildren(el('h3',{text:'🚗 Your vehicles'}));
+      const cars=(d&&d.cars)||[], act=d&&d.carActive, out=!!(Drive.el&&Drive.T), foot=out&&Drive.T.pos.mode==='walk';
+      if(!d){ box.append(el('p',{class:'hint',text:'Loading…'})); return; }
+      if(!cars.length){ box.append(el('p',{class:'hint',text:'You don’t own a vehicle yet. Buy one at a Car dealership.'})); return; }
+      const list=el('div',{class:'phglist'});
+      for(const car of cars){ const M=CAR_MODELS[car.m]; if(!M) continue; const road=ridden(car.m), on=car.id===act, kind=M.kind;
+        const sub=kind==='water'?'⛵ On the water':kind==='air'?(needsHangar(car.m)&&car.hangar?'🛩️ In your hangar':'✈️ In the sky over the colony'):on?(out&&!foot?(kind==='bike'?'Riding it now':'Driving it now'):'Your ride'):'Parked';
+        let btn='';
+        if(road&&on&&out&&foot) btn=el('button',{class:'btn primary sm',text:kind==='bike'?'🚲 Bring it':'🚗 Call it',onclick:()=>{ this.hide(); Drive.callCar(); }});
+        else if(road&&!on) btn=el('button',{class:'btn primary sm',text:kind==='bike'?'🚲 Ride this':'🚗 Drive this',disabled:busy?'':null,onclick:()=>this.pickCar(car,box)});
+        else if(kind==='water') btn=el('button',{class:'btn primary sm',text:'⛵ Take it out',onclick:()=>{ this.hide(); if(Drive.el) Drive.close(true); setTimeout(()=>Drive.boatOut(car),200); }});
+        list.append(el('div',{class:'phgcar'+(on&&road?' on':'')}, el('img',{src:carThumb(car.m,car.col),alt:'',width:'56',height:'38'}), el('div',{class:'phgname'}, el('b',{text:M.name}), el('small',{text:sub})), btn)); }
+      box.append(list, el('p',{class:'hint',text:out?'':'Go outside (🚶 Walk or 🚗 Drive) to take one out.'})); };
+    draw(null); const h=myHandle(); if(!h) return; try{ draw(await loadDetail(h)); }catch(e){ draw({cars:[]}); } },
+  async pickCar(car,box){ const M=CAR_MODELS[car.m]; const r=await meAction('/api/me/cars/active',{id:car.id},null,'PUT'); if(!r) return;
+    const c=myCitizen(); if(c) c.car=[car.m,car.col]; /* (so the street gives you this one straight away) */
+    if(Drive.el&&Drive.T){ const p=Drive.T.pos, foot=p.mode==='walk'; this.hide(); Drive.close(true); await Drive.start({mode:foot?'walk':'car',x:p.x,y:p.y,a:p.a}); if(foot) setTimeout(()=>Drive.callCar(),1200);
+      toast(foot?`${M.kind==='bike'?'🚲':'🚗'} Your ${M.name.toLowerCase()} is on its way.`:`${M.kind==='bike'?'🚲 You’re on':'🚗 You’re in'} your ${M.name.toLowerCase()}.`); return; }
+    toast(`${M.kind==='bike'?'🚲':'🚗'} You’ll take your ${M.name.toLowerCase()} next time you go out.`); const h=myHandle(); try{ const d=await loadDetail(h); if(box.isConnected) this.garage(box); }catch(e){} },
   // a building's card on the phone (from the street, at its door): renting, buying, who lives there
   showBuilding(id){ this.show(); this.leave(); this.anchor(); this.app='card'; this.from=null; this.el.classList.remove('onhome'); this.showBack(true); this.screen.replaceChildren($('card')); selectBuilding(id); },
   // someone's card opened from inside an app (a colonist in the list, a name in a chat…): it shows on the phone, and
@@ -7202,7 +7234,7 @@ function sideCol(...btns){ const col=el('div',{class:'sidecol'}); let hid=false;
   const tog=el('button',{class:'sidebtn sidetoggle','aria-label':'Hide or show the buttons',onclick:()=>{ hid=!hid; try{ ls.set('resurgence-side-hidden',hid); }catch(e){} paint(); }});
   const paint=()=>{ col.classList.toggle('collapsed',hid); tog.innerHTML=hid?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>'; /* (drawn, not a character: some phones show ▴ as a dot) */ tog.title=hid?'Show the buttons':'Hide the buttons'; }; paint();
   for(const b of btns) if(b) b.classList.add('sidehide'); col.append(tog,...btns.filter(Boolean)); return col; }
-addEventListener('resize',()=>{ try{ Drive.floatOff=null; }catch(e){} }); /* (the screen turned or changed size: measure where the 3D view is again) */
+addEventListener('resize',()=>{ try{ Drive.floatOff=null; }catch(e){} try{ setTimeout(()=>World.dodge(),50); }catch(e){} }); /* (the screen turned or changed size: measure where the 3D view is again) */
 const DEEP=location.search.length>1; /* opened from a shared link, a notification…: that opens on the map */
 const World={ btn:null, last:null, booted:false,
   in3d(){ return !!((Room.el&&!Room.el.hidden)||Drive.el); },
@@ -7210,10 +7242,16 @@ const World={ btn:null, last:null, booted:false,
   paint(){ const b=this.btn; if(!b) return; const on=!!(Me&&Me.token&&Me.handle), d3=this.in3d();
     { const col=d3?((Drive.el&&Drive.el.querySelector('.sidecol'))||(Room.el&&!Room.el.hidden&&Room.el.querySelector('.sidecol'))):null; /* in 3D: second in the column, under ▴ */
       if(col){ if(b.parentElement!==col){ const t=col.querySelector('.sidetoggle'); col.insertBefore(b,t?t.nextSibling:col.firstChild); b.classList.add('sidebtn','sidehide'); } }
-      else if(b.parentElement!==document.body){ document.body.append(b); b.classList.remove('sidebtn','sidehide'); } } b.hidden=!on||!!document.querySelector('.cre')||document.body.classList.contains('mg-on');
+      else if(b.parentElement!==document.body){ document.body.append(b); b.classList.remove('sidebtn','sidehide'); } }
+    this.dodge(); b.hidden=!on||!!document.querySelector('.cre')||document.body.classList.contains('mg-on');
     const k=d3?'2d':'3d'; if(b.dataset.k===k) return; b.dataset.k=k; b.replaceChildren(el('b',{text:d3?'2D':'3D'}));
     b.title=d3?'The colony map (2D): come back with 3D':'Back to your character in 3D'; b.setAttribute('aria-label',b.title); },
   toggle(){ if(this.in3d()) this.toMap(); else this.to3D(); },
+  // on the map, a card that opens where the 3D button stands (on a phone on its side, the card's top right, where its ✕
+  // is): the button steps to just left of the card, so the ✕ is easy to tap; back to its place when the card closes
+  dodge(){ const b=this.btn; if(!b||b.parentElement!==document.body) return; const card=$('card'); b.style.right=''; if(!card||card.hidden) return;
+    const c=card.getBoundingClientRect(), r=b.getBoundingClientRect(); if(!c.width||r.right<c.left||r.left>c.right||r.bottom<c.top||r.top>c.bottom) return;
+    b.style.right=Math.max(8,innerWidth-c.left+10)+'px'; },
   // to the map: remember where your character is, to come back to
   toMap(){ if(Drive.el){ const p=Drive.T&&Drive.T.pos; this.last=p?{ kind:'street', at:{ mode:p.mode==='walk'?'walk':'car', x:p.x, y:p.y, a:p.a } }:null; Drive.close(); if(p){ const q=iso(p.x,p.y); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.4); follow=null; } } /* the map opens where you are */
     else if(Room.el){ this.last={ kind:'room' }; Room.toMap(); const h=Room.d&&Room.d.home, b=h&&(D.buildings.get(h.id)||h); if(b&&b.x!=null){ const q=iso(b.x+1,b.y+1); cam.x=q.x; cam.y=q.y; follow=null; } }
@@ -7983,7 +8021,7 @@ const GoodsStore={ dept:new Map(), pick:new Map(), ward:null, wardAt:0, H3:null,
   section(b){ const S0=STORES[b.type], box=el('div',{class:'authbox goods'}, el('h3',{text:`${S0.icon} ${S0.name}`}), StoreStock.head(b));
     if(!(Me&&Me.token&&Me.handle)){ box.append(el('p',{class:'hint',text:'Sign in to your colonist (tap "Find me") to buy here.'})); return box; }
     const all=productsOf(b.type), depts=[...new Set(all.map(P=>P.dept))], d=depts.includes(this.dept.get(b.type))?this.dept.get(b.type):depts[0], ward=this.wardrobe();
-    if(depts.length>1) box.append(el('div',{class:'chips gdepts'}, ...depts.map(x=>el('button',{class:'pill'+(x===d?' on':''),text:x,onclick:()=>{ this.dept.set(b.type,x); this.redraw(); }}))));
+    if(depts.length>1) box.append(el('div',{class:'gdepts'}, ...depts.map(x=>el('button',{class:'pill'+(x===d?' on':''),text:x,onclick:()=>{ this.dept.set(b.type,x); this.redraw(); }}))));
     const kinds=new Set(all.filter(P=>P.dept===d).map(P=>P.kind)); box.append(el('p',{class:'hint',text:kinds.has('home')?'Furniture and appliances go into your home’s storage: set them out from 🛋️ Furnish.':kinds.has('wear')?'Clothes and jewellery go into your wardrobe: wear them from ✏️ on your card.':''}));
     const list=el('div',{class:'glist'});
     for(const P of all.filter(P=>P.dept===d)){ const own=P.kind==='wear'&&ward.has(P.slot+':'+P.key), left=StoreStock.left(b,P.k), out=left===0, c=this.pick.get(P.k)||0, f=P.kind==='home'?FURNITURE[P.key]:null;
@@ -8098,6 +8136,7 @@ function fold(key,title,body,{open=false,note=''}={}){ const on=Folds.has(key)?F
   const box=el('div',{class:'fold'+(on?' on':'')}, el('button',{class:'fhead','aria-expanded':String(on),onclick:()=>{ Folds.set(key,!on); renderCard(true); }}, el('span',{text:title}), el('span',{class:'fnote'}, note, el('i',{text:on?'▾':'▸'}))));
   if(on){ const b=body(); if(b) box.append(el('div',{class:'fbody'}, b)); } return box; }
 function renderCard(force){ if(!force && cardBusy()) return;
+  setTimeout(()=>{ try{ World.dodge(); }catch(e){} },0); /* (the 3D button steps aside if the card is where it stands) */
   const card=$('card'); if(!sel){ card.hidden=true; return; } card.innerHTML='';
   // Playing at a Game House or Casino: the building's details step aside so the game fills the card.
   card.classList.toggle('ghplay', sel.kind==='b' && !Store.canWrite && (()=>{ try{ return (GH.open&&GH.id===sel.id) || !!(casino&&casino.open&&casino.id===sel.id); }catch(e){ return false; } })());

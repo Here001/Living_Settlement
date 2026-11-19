@@ -772,6 +772,16 @@ The map is tuned for low-end Android phones. The main pieces, all in `public/ind
 - **Keeping phones cool.** Left alone for 20 seconds, the map draws 10 frames a second on a phone (15 while you're looking around, full speed while you touch it); behind a full-screen game, card or panel it draws once a second. Races, the lottery and Fight Night refresh only while the Races tab is open (the 24/7 stream page excepted), and coins aren't refreshed while the app is in the background. Measured idle on the live colony: the main thread went from busy 84% of the time to 44%.
 - **Fonts never block the first screen.** On a slow or blocked connection the game opens in the phone's own font.
 
+**Lighter on the phone (November 2026, nothing looks or works differently):**
+
+- **Standing still sends almost nothing.** On the 3D street your position went to the server (and on to every other player) four times a second even when you hadn't moved. Now it's sent when it changes, with a heartbeat every 2 seconds while you stand still (others keep you on their map for 5 seconds).
+- **Street voice connects when it's needed.** Walking or driving through town used to tear down and rebuild a whole voice connection at every area you crossed, with nobody talking. Now the phone asks once who's talking there, and makes the connection only when someone is, or when you turn your mic on. The voice settings are fetched once every ten minutes, not at every place; connection quality is only measured while there's a voice to measure; a voice that can't be fetched is retried every 15 seconds, not every 2.5.
+- **No throwaway work every frame on the street.** Cars, traffic and pedestrians no longer create temporary lists and vectors, or re-read colour text, for every car and person on every frame (less memory churn, fewer pauses). Bumping into things looks only at what's within reach of you rather than every obstacle in nine blocks, seven times a frame (the collision step is about 4× cheaper). The floating 🚪 and 🚗 buttons measure the screen only while one is showing.
+- **Inside:** the wall check no longer copies the list of walls for every step you take.
+- **2D map:** hiding people behind buildings no longer builds five small lists per building per frame.
+
+Measured idle, before any of this: the 2D map and the inside of a home were already light (a home draws nothing at all while you stand still); the server is asked for something about once a minute. What's left on the street is drawing the 3D town itself.
+
 Results on a simulated low-end Android (360×780 screen, CPU slowed 6×, 9,000 colonists):
 - town centre: 2.4 → 8–10 frames a second
 - zoomed out over the whole colony: 8 → 11–30

@@ -3741,7 +3741,7 @@ function paintGround(g, W, H, wx0, wy0, rz){
 function hiddenPeople(items){ const out=[], grid=new Map(), C=128;
   for(let i=items.length-1;i>=0;i--){ const it=items[i];
     if(it.b){ const t=T(it.b), [w,d]=t.size, b=it.b, N=iso(b.x,b.y), E=iso(b.x+w,b.y), S2=iso(b.x+w,b.y+d), W=iso(b.x,b.y+d);
-      const cs4=[N,E,S2,W], bx0=Math.min(...cs4.map(p=>p.x)), bx1=Math.max(...cs4.map(p=>p.x)), by0=Math.min(...cs4.map(p=>p.y)), by1=Math.max(...cs4.map(p=>p.y)); const box={x0:bx0,x1:bx1,y0:by0-((SHADOW_H[t.style]?SHADOW_H[t.style](t):60)+30),y1:by1};
+      const bx0=Math.min(N.x,E.x,S2.x,W.x), bx1=Math.max(N.x,E.x,S2.x,W.x), by0=Math.min(N.y,E.y,S2.y,W.y), by1=Math.max(N.y,E.y,S2.y,W.y); const box={x0:bx0,x1:bx1,y0:by0-((SHADOW_H[t.style]?SHADOW_H[t.style](t):60)+30),y1:by1};
       for(let gx=Math.floor(box.x0/C);gx<=Math.floor(box.x1/C);gx++) for(let gy=Math.floor(box.y0/C);gy<=Math.floor(box.y1/C);gy++){ const k=gx+','+gy; let a=grid.get(k); if(!a) grid.set(k,a=[]); a.push(box); } }
     else if(it.c&&grid.size){ const p=iso(it.st.x,it.st.y), x0=p.x-7, x1=p.x+7, y0=p.y-38, y1=p.y; let hit=false;
       for(let gx=Math.floor(x0/C);gx<=Math.floor(x1/C)&&!hit;gx++) for(let gy=Math.floor(y0/C);gy<=Math.floor(y1/C)&&!hit;gy++){ const a=grid.get(gx+','+gy); if(a) for(const q of a) if(q.x0<x1&&q.x1>x0&&q.y0<y1&&q.y1>y0){ hit=true; break; } }
@@ -6913,15 +6913,22 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
   deaf:(()=>{ try{ return !!ls.get('resurgence-voice-deaf'); }catch(e){ return false; } })(), /* 🔊 off: hear nobody (and pull no voices at all) */
   MAX:6, /* in a crowd you hear the nearest six talking: the rest aren't even downloaded (data, battery, heat) */
   async enter(R){ this.leave(); if(!(Me&&Me.token)||typeof RTCPeerConnection==='undefined') return; this.R=R; try{ window.__voice=this; }catch(e){} /* (for checking) */
-    try{ this.cfg=await api('/api/voice/config'); }catch(e){ return; } if(!this.cfg.on||this.R!==R) return;
+    if(!this.cfg||!this.cfg.on||Date.now()-(this.cfgAt||0)>600000){ try{ this.cfg=await api('/api/voice/config'); this.cfgAt=Date.now(); }catch(e){ return; } } /* (the voice settings are asked for once every ten minutes, not at every place) */ if(!this.cfg.on||this.R!==R) return;
     this.micBtn=el('button',{class:'vbtn vmic',title:'Your microphone',onclick:()=>{ if(!this.ptt) this.talk(); }}); this.spkBtn=el('button',{class:'vbtn vspk',onclick:()=>this.setDeaf(!this.deaf)}); this.peopleBtn=el('button',{class:'vbtn vpeople',title:'Voice: open mic or hold to talk, and who you hear',onclick:()=>this.panel()});
     const hold=on=>e=>{ if(!this.ptt) return; e.preventDefault(); this.hold(on); };
     this.micBtn.addEventListener('pointerdown',hold(true)); for(const ev of ['pointerup','pointercancel','pointerleave']) this.micBtn.addEventListener(ev,hold(false));
     { const col=(R.stage.closest('.webview')||R.stage).querySelector('.sidecol'); if(col){ for(const b of [this.micBtn,this.spkBtn,this.peopleBtn]) b.classList.add('sidebtn','sidehide'); /* (they hide with ▴ too) */ col.append(this.micBtn,this.spkBtn,this.peopleBtn); } else R.stage.append(this.micBtn,this.spkBtn,this.peopleBtn); } this.paint(); /* (in the column on the right, under 📱) */
-    try{ const s=await api('/api/voice/session',{method:'POST',body:{place:R.spot}}); if(this.R!==R) return; this.sid=s.sessionId; }catch(e){ return; }
-    this.pc=new RTCPeerConnection({iceServers:this.cfg.ice,bundlePolicy:'max-bundle',...(VoiceOut.relay?{iceTransportPolicy:'relay'}:{})}); this.pc.ontrack=e=>this.track(e); VoiceOut.users.add(this);
-    this.serial(()=>this.sync()); this.timer=setInterval(()=>this.levels(),150); },
-  leave(){ const R=this.R; clearInterval(this.timer); this.timer=null; clearTimeout(this.wT); this.tx=null; VoiceOut.users.delete(this); VoiceOut.talk(this,false);
+    // Out on the street you pass through one area after another, mostly with nobody talking: the voice line itself (a
+    // session with the voice service and a connection from this phone) is only made when someone there is talking, or
+    // when you turn your mic on. Until then the phone just asks once who's talking, and is told if someone starts.
+    if(String(R.spot).startsWith('s:')){ this.armed=true; let L=null; try{ L=await api('/api/voice/list',{method:'POST',body:{place:R.spot}}); }catch(e){} if(this.R!==R) return; if(!L||!L.speakers||!L.speakers.length) return; }
+    await this.connect(R); },
+  // the voice line for this place (made once: asking twice while it's being made waits for the same one)
+  connect(R){ if(this.pc||!R||this.R!==R) return Promise.resolve(); if(this.joinP&&this.joinR===R) return this.joinP; this.joinR=R;
+    return this.joinP=(async()=>{ try{ const s=await api('/api/voice/session',{method:'POST',body:{place:R.spot}}); if(this.R!==R) return; this.sid=s.sessionId; }catch(e){ return; }
+      this.armed=false; this.pc=new RTCPeerConnection({iceServers:this.cfg.ice,bundlePolicy:'max-bundle',...(VoiceOut.relay?{iceTransportPolicy:'relay'}:{})}); this.pc.ontrack=e=>this.track(e); VoiceOut.users.add(this);
+      this.serial(()=>this.sync()); this.timer=setInterval(()=>this.levels(),150); })().finally(()=>{ if(this.joinR===R){ this.joinP=null; this.joinR=null; } }); },
+  leave(){ const R=this.R; this.armed=false; if(Object.prototype.hasOwnProperty.call(this,'pullWait')) this.pullWait.clear(); clearInterval(this.timer); this.timer=null; clearTimeout(this.wT); this.tx=null; VoiceOut.users.delete(this); VoiceOut.talk(this,false);
     if(this.mic){ for(const t of this.mic.getTracks()) t.stop(); this.mic=null; } if(this.pc){ try{ this.pc.close(); }catch(e){} this.pc=null; }
     for(const e of this.els.values()) this.unplug(e); this.els.clear(); this.byMid.clear(); this.meters.clear(); this.heard=[]; this.pickAt=0; this.sheet&&this.sheet.remove(); this.sheet=null;
     for(const k of ['micBtn','spkBtn','peopleBtn']) if(Object.prototype.hasOwnProperty.call(this,k)&&this[k]){ this[k].remove(); this[k]=null; } /* (the next place makes its own: never two of them) */
@@ -6934,8 +6941,10 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
   async sync(cached){ if(!this.pc||!this.R) return; const r=cached&&this.heard?{speakers:this.heard}:await api('/api/voice/list',{method:'POST',body:{place:this.R.spot}}); this.heard=r.speakers; r.speakers=this.pick(r.speakers); const ok=new Set(r.speakers.map(s=>s.id));
     { const still=new Set(this.heard.map(x=>x.id)), gone=[]; for(const [mid,v] of [...this.byMid]) if(!ok.has(v.id)){ if(still.has(v.id)) gone.push(v.id); this.dropMid(mid); }
       if(gone.length&&this.sid) api('/api/voice/unpull',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,ids:[...new Set(gone)]}}).catch(()=>{}); } /* (still talking, just not heard: stop their sound coming down) */
-    const have=new Set([...this.byMid.values()].map(v=>v.id)), ids=r.speakers.map(s=>s.id).filter(id=>!have.has(id)); if(!ids.length) return;
+    if(!Object.prototype.hasOwnProperty.call(this,'pullWait')) this.pullWait=new Map(); const PW=this.pullWait, now=Date.now(); /* a voice that couldn't be fetched isn't asked for again every couple of seconds: 15 s apart, or at once when they start talking again */
+    const have=new Set([...this.byMid.values()].map(v=>v.id)), ids=r.speakers.map(s=>s.id).filter(id=>!have.has(id)&&!(cached&&PW.get(id)>now)); if(!ids.length) return;
     const p=await api('/api/voice/pull',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,ids}}); for(const t of p.tracks) this.byMid.set(t.mid,{id:t.id,h:t.h});
+    { const got=new Set(p.tracks.map(t=>t.id)); for(const id of ids){ if(got.has(id)) PW.delete(id); else PW.set(id,Date.now()+15000); } }
     if(p.offer){ await this.pc.setRemoteDescription(p.offer); await this.pc.setLocalDescription(await this.pc.createAnswer()); await api('/api/voice/answer',{method:'POST',body:{place:this.R.spot,sessionId:this.sid,answer:{type:'answer',sdp:this.pc.localDescription.sdp}}}); } },
   // who to hear: nobody with 🔊 off; otherwise everyone talking that you haven't muted, nearest first, up to MAX
   far(id){ const R=this.R; let me=null, p=null; try{ me=R&&R.h&&R.h.me; p=R&&R.others&&R.others.get(id); }catch(e){} return me&&p?Math.hypot(p.x-me.x,p.y-me.y):1e9; },
@@ -6964,9 +6973,9 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
       else { x.a.muted=off; try{ x.a.volume=Math.min(1,g); }catch(e){} if(x.gain) x.gain.gain.value=0; } } },
   unplug(x){ try{ x.src&&x.src.disconnect(); x.gain&&x.gain.disconnect(); x.panner&&x.panner.disconnect(); }catch(e){} try{ x.a.srcObject=null; x.a.remove(); }catch(e){} },
   dropMid(mid){ const e=this.els.get(mid); if(e){ this.unplug(e); this.els.delete(mid); this.light(e.id,false); } this.byMid.delete(mid); this.meters.delete(mid); },
-  msg(v){ if(!this.pc||!v) return; if(v.kind==='on'||v.kind==='audience') this.serial(()=>this.sync()); else if(v.kind==='off'){ if(this.heard) this.heard=this.heard.filter(x=>x.id!==v.id); for(const [mid,e] of [...this.byMid]) if(e.id===v.id) this.dropMid(mid); this.repick(); } }, /* (someone stopped: the next nearest may come in) */
+  msg(v){ if(!v) return; if(!this.pc){ if(this.armed&&this.R&&(v.kind==='on'||v.kind==='audience')) this.connect(this.R); /* (someone started talking here: now the line is made, and it picks them up) */ return; } if(v.kind==='on'||v.kind==='audience') this.serial(()=>this.sync()); else if(v.kind==='off'){ if(this.heard) this.heard=this.heard.filter(x=>x.id!==v.id); for(const [mid,e] of [...this.byMid]) if(e.id===v.id) this.dropMid(mid); this.repick(); } }, /* (someone stopped: the next nearest may come in) */
   // the mic: the first tap asks the phone for it and goes live; after that it mutes and unmutes (or, held down, talks)
-  async talk(){ if(!this.pc) return; if(this.mic){ this.setLive(!this.live); return; }
+  async talk(){ if(!this.pc&&this.armed&&this.R){ const R=this.R; await this.connect(R); if(this.R!==R) return; } /* (your mic: the line is made now) */ if(!this.pc) return; if(this.mic){ this.setLive(!this.live); return; }
     try{ this.mic=await navigator.mediaDevices.getUserMedia({audio:VoiceOut.plain?true:VoiceOut.mic()}); /* (a phone whose mic went silent with the voice settings: its plain mic, from then on) */ }catch(e){ toast('Allow the microphone to talk (in your browser’s settings for this site).'); return; }
     try{ this.ac=this.ac||new (window.AudioContext||window.webkitAudioContext)(); if(this.ac.state!=='running') this.ac.resume().catch(()=>{}); }catch(e){} /* (a tap: the sound chip may start now) */
     const tr=this.mic.getAudioTracks()[0]; try{ tr.contentHint='speech'; }catch(e){} const tx=this.pc.addTransceiver(tr,{direction:'sendonly'}); this.tx=tx; this.live=true; this.mePeak=0; this.paint();
@@ -7014,7 +7023,7 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
       mutedN?el('button',{class:'linkb',text:`🔇 ${mutedN} muted · hear them all again`,onclick:()=>{ this.muted.clear(); try{ ls.set('resurgence-voice-muted',[]); }catch(e){} this.route(); this.serial(()=>this.sync(true)); this.fillPanel(); }}):'');
     this.dots(); },
   // how good each connection is (from the phone's own counts of lost and late sound), every couple of seconds
-  async quality(){ if(!this.pc) return; let st; try{ st=await this.pc.getStats(); }catch(e){ return; } const word=(loss,jit)=>loss<0.02&&jit<0.03?'good':loss<0.08&&jit<0.08?'fair':'weak';
+  async quality(){ if(!this.pc||(!this.els.size&&!this.tx)) return; /* (nobody heard and nothing sent: nothing to measure) */ let st; try{ st=await this.pc.getStats(); }catch(e){ return; } const word=(loss,jit)=>loss<0.02&&jit<0.03?'good':loss<0.08&&jit<0.08?'fair':'weak';
     st.forEach(r=>{ if(r.type==='inbound-rtp'&&r.kind==='audio'&&r.mid!=null){ const x=this.els.get(String(r.mid)); if(!x) return; const lost=r.packetsLost||0, got=r.packetsReceived||0, dl=lost-(x.l0||0), dg=got-(x.g0||0); x.l0=lost; x.g0=got; x.q=word(dg+dl>0?dl/(dg+dl):0,r.jitter||0); }
       if(r.type==='remote-inbound-rtp'&&r.kind==='audio') this.myQ=word(r.fractionLost||0,r.jitter||0)+(r.roundTripTime?` · ${Math.round(r.roundTripTime*1000)} ms`:''); });
     this.dots(); },
@@ -7038,7 +7047,7 @@ const Voice={ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null
 // without leaving. A message that arrives while you're inside buzzes the phone with a banner at the top. And you can call
 // anyone who's online: their phone rings wherever they are in the game, and once they answer you talk by voice (the same
 // voice service as inside places, on a line of your own that nobody else hears).
-const CallVoice=Object.assign(Object.create(Voice),{ R:null, cfg:null, pc:null, sid:null, mic:null, live:false, to:null, byMid:new Map(), els:new Map(), meters:new Map(), lit:new Map(), q:Promise.resolve(), ac:null, call:true, ptt:false, holding:false, statsAt:0, myQ:null,
+const CallVoice=Object.assign(Object.create(Voice),{ R:null, cfg:null, pc:null, sid:null, armed:false, joinP:null, joinR:null, cfgAt:0, mic:null, live:false, to:null, byMid:new Map(), els:new Map(), meters:new Map(), lit:new Map(), q:Promise.resolve(), ac:null, call:true, ptt:false, holding:false, statsAt:0, myQ:null,
   // a call has no room to put buttons in: the phone's call screen has its own
   async enter(R){ this.leave(); if(!(Me&&Me.token)||typeof RTCPeerConnection==='undefined') return 'This phone can’t do voice calls.'; this.R=R;
     try{ this.cfg=await api('/api/voice/config'); }catch(e){ return 'Couldn’t connect the voice. Hang up and try again.'; } if(this.R!==R) return 'gone'; if(!this.cfg.on) return 'Voice calls aren’t switched on yet.';
@@ -7176,6 +7185,7 @@ function sideCol(...btns){ const col=el('div',{class:'sidecol'}); let hid=false;
   const tog=el('button',{class:'sidebtn sidetoggle','aria-label':'Hide or show the buttons',onclick:()=>{ hid=!hid; try{ ls.set('resurgence-side-hidden',hid); }catch(e){} paint(); }});
   const paint=()=>{ col.classList.toggle('collapsed',hid); tog.innerHTML=hid?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>'; /* (drawn, not a character: some phones show ▴ as a dot) */ tog.title=hid?'Show the buttons':'Hide the buttons'; }; paint();
   for(const b of btns) if(b) b.classList.add('sidehide'); col.append(tog,...btns.filter(Boolean)); return col; }
+addEventListener('resize',()=>{ try{ Drive.floatOff=null; }catch(e){} }); /* (the screen turned or changed size: measure where the 3D view is again) */
 const DEEP=location.search.length>1; /* opened from a shared link, a notification…: that opens on the map */
 const World={ btn:null, last:null, booted:false,
   in3d(){ return !!((Room.el&&!Room.el.hidden)||Drive.el); },
@@ -7257,7 +7267,7 @@ const DriveMap={ route:null, idx:0, dest:null, off:0, rerouteAt:0, big:null, bv:
   draw(){ const T=Drive.T; if(!T) return; const p=T.pos; if(this.cv){ const g=this.cv.getContext('2d'), W=this.cv.width, H=this.cv.height;
     this.paint(g,W,H,p.x,p.y,3.6,-Math.PI/2+p.a); /* heading up; about 70 tiles across */
     g.fillStyle='#e8463a'; g.strokeStyle='#fff'; g.lineWidth=3; g.beginPath(); g.moveTo(W/2,H/2-13); g.lineTo(W/2+9,H/2+10); g.lineTo(W/2,H/2+5); g.lineTo(W/2-9,H/2+10); g.closePath(); g.fill(); g.stroke(); }
-    if(this.route){ const left=this.left(p); this.info.hidden=false; this.info.textContent=`${left<1000?Math.round(left/10)*10+' m':(left/1000).toFixed(1)+' km'} · ${Math.max(1,Math.round(left/1000/40*60))} min`; } else this.info.hidden=true;
+    if(this.route){ const left=this.left(p), txt=`${left<1000?Math.round(left/10)*10+' m':(left/1000).toFixed(1)+' km'} · ${Math.max(1,Math.round(left/1000/40*60))} min`; if(this.info.hidden) this.info.hidden=false; if(this.info.textContent!==txt) this.info.textContent=txt; } else if(!this.info.hidden) this.info.hidden=true;
     if(this.big) this.drawBig(); },
   left(p){ const r=this.route; if(!r) return 0; let d=0, i=Math.max(0,this.idx); if(r[i]) d+=Math.hypot(r[i][0]+0.5-p.x,r[i][1]+0.5-p.y); for(;i<r.length-1;i++) d+=Math.hypot(r[i+1][0]-r[i][0],r[i+1][1]-r[i][1]); return d*8; },
   // the big map: north up, drag to look about, + and − to zoom, tap to set where you're going
@@ -7376,7 +7386,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
   moved(x,y,a,v){ if(!this.el) return; if(this.last){ this.dist+=Math.hypot(x-this.last.x,y-this.last.y); } this.last={x,y};
     const foot=this.T&&this.T.pos.mode==='walk'; this.speed.hidden=!!foot; if(!foot) this.speed.textContent=`${this.T?this.T.kmh():0} km/h`; this.voiceSync(); /* on foot: no speed to show */
     if(this.riding){ this.speed.textContent=`${this.T?this.T.kmh():0} km/h`; DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); } return; } /* riding: the car goes where its driver takes it */
-    try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'drive',mode:foot?'walk':'car',x:+x.toFixed(2),y:+y.toFixed(2),a:+a.toFixed(2),m:this.car.m,col:this.car.col})); }catch(e){}
+    try{ if(ws&&ws.readyState===1){ const msg=JSON.stringify({type:'drive',mode:foot?'walk':'car',x:+x.toFixed(2),y:+y.toFixed(2),a:+a.toFixed(2),m:this.car.m,col:this.car.col}), now=Date.now(); if(msg!==this.sentMsg||now-(this.sentAt||0)>=2000||this.sentWs!==ws){ ws.send(msg); this.sentMsg=msg; this.sentAt=now; this.sentWs=ws; } } }catch(e){} /* standing still: the same place isn't sent four times a second, just a heartbeat every 2 s (others keep you for 5 s) */
     DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); }
     if(Date.now()-this.synced>1500){ this.synced=Date.now(); const V=DriveMap.big&&DriveMap.bv, q=V?iso(V.x,V.y):iso(x,y); cam.x=q.x; cam.y=q.y; cam.z=V?Math.max(0.2,Math.min(0.45,V.s/20)):0.45; follow=null; syncChunks(); } } /* the town round the car loads; with the big map open, round where you're looking (for routes further away) */, /* the map loads the town round the car (zoomed out, so it loads plenty) */
   nearBy(b){ this.near=b; this.doorOk=false; if(this.riding){ this.goBtn.hidden=true; this.inBtn.hidden=true; return; } const name=b&&(b.name||T(b).name), foot=this.T&&this.T.pos.mode==='walk';
@@ -7397,12 +7407,16 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     if(T3.pos.mode!=='walk'){ toast('🚗 You’re already in it.'); return; } if(T3.coming){ toast('🚗 It’s on its way.'); return; } if(T3.parked){ toast('🚗 It’s parked where you left it: walk back to it to get in.'); return; }
     if(T3.callCar()) toast(this.car.own?`🚗 Your ${this.car.name.toLowerCase()} is on its way. It’ll pull up beside you.`:'🚗 A car is on its way. It’ll pull up beside you.'); else { T3.drive(); this.title.textContent=`🚗 Driving`; this.dist=0; this.nearBy(null); this.paintMode(); } },
   // round buttons that sit on things in the town: 🚪 on a front door you're at, 🚗 on your car when you're by it
-  floats(){ if(!this.el||!this.T) return; const T3=this.T, foot=T3.pos.mode==='walk'&&!this.riding, st=this.el.querySelector('.drivestage'), sr=st?st.getBoundingClientRect():{left:0,top:0}, rr=this.el.getBoundingClientRect(), ox=sr.left-rr.left, oy=sr.top-rr.top; /* (the 3D view's own place in the screen) */
-    const place=(btn,pt,h)=>{ if(!pt){ btn.hidden=true; return; } const q=T3.project(pt.x,pt.y,h); btn.hidden=!q.on; if(q.on) btn.style.transform=`translate(${Math.round(q.x+ox)}px,${Math.round(q.y+oy)}px)`; };
+  floats(id){ if(id==null) id=this.floatsId=(this.floatsId||0)+1; if(id!==this.floatsId||!this.el||!this.T) return; /* (one loop per street: an older one stops when a new one starts) */
+    const T3=this.T, foot=T3.pos.mode==='walk'&&!this.riding;
     const b=foot&&this.near, door=b&&this.doorFor===b.id?this.doorAt:null; if(b&&this.doorFor!==b.id){ this.doorFor=b.id; this.doorAt=T3.doorOf(b.id); } if(!b) this.doorFor=null;
-    place(this.doorBtn, b&&this.doorOk?(door||this.doorAt):null, 1.5);
-    place(this.carBtn, foot&&T3.parked&&this.atCar?T3.parkedAt:null, 1.9);
-    requestAnimationFrame(()=>this.floats()); },
+    const dpt=b&&this.doorOk?(door||this.doorAt):null, cpt=foot&&T3.parked&&this.atCar?T3.parkedAt:null;
+    if(!dpt&&!cpt){ if(!this.doorBtn.hidden) this.doorBtn.hidden=true; if(!this.carBtn.hidden) this.carBtn.hidden=true; } /* nothing to show: nothing measured, nothing written */
+    else { const now=performance.now(); let F=this.floatOff; /* the 3D view's own place in the screen: measured when a button shows, again after a second or a resize (it was measured twice every frame) */
+      if(!F||now-F.t>1000){ const st=this.el.querySelector('.drivestage'), sr=st?st.getBoundingClientRect():{left:0,top:0}, rr=this.el.getBoundingClientRect(); F=this.floatOff={ox:sr.left-rr.left,oy:sr.top-rr.top,t:now}; }
+      const place=(btn,pt,h)=>{ if(!pt){ if(!btn.hidden) btn.hidden=true; return; } const q=T3.project(pt.x,pt.y,h); if(btn.hidden!==!q.on) btn.hidden=!q.on; if(q.on){ const tr=`translate(${Math.round(q.x+F.ox)}px,${Math.round(q.y+F.oy)}px)`; if(btn.dataset.tr!==tr){ btn.dataset.tr=tr; btn.style.transform=tr; } } };
+      place(this.doorBtn, dpt, 1.5); place(this.carBtn, cpt, 1.9); }
+    requestAnimationFrame(()=>this.floats(id)); },
   switchMode(){ const T3=this.T; if(!T3) return; if(this.riding){ this.send({type:'ride',a:'leave'}); return; } if(T3.pos.mode==='car'&&this.riders.length) toast('👥 Everyone riding with you gets out too.'); const foot=T3.pos.mode==='walk';
     if(foot&&!T3.parked){ this.callCar(); return; } /* (a car is called from the phone) */
     if(foot){ T3.drive(); this.title.textContent=`🚗 Driving ${this.car.own?'your '+this.car.name.toLowerCase():this.car.name}`; this.sub.textContent='Steer with the stick'; }
@@ -7445,7 +7459,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     if(inside){ const p=this.T&&this.T.pos, door=this.T&&this.T.doorOf(b.id), foot=p&&p.mode==='walk'; this.resume=foot?{ mode:'walk', x:door?door.x:p.x, y:door?door.y:p.y, a:door?door.a:p.a+Math.PI, bid:b.id, t:Date.now() }:this.car&&this.car.own&&p?{ x:p.x, y:p.y, a:p.a, bid:b.id, t:Date.now() }:null; /* on foot: back out of the front door */ this.close(); setTimeout(()=>Room.openBuilding(b.id),50); } }, /* your own car waits outside for you */
   map:null, /* (DriveMap, for checking) */
   back(){ const r=this.resume; this.resume=null; if(!r||Date.now()-r.t>3*3600000) return; setTimeout(()=>this.start(r),80); },
-  close(quiet){ if(!this.el) return; if(Voice.R&&Voice.R===this.vR) Voice.leave(); this.vR=null; this.vSpot=null; this.near=null; this.doorOk=false; this.doorFor=null; this.atCar=false; /* (a fresh street: not at any door or car yet) */ try{ this.T&&this.T.dispose(); }catch(e){} this.T=null; Phone.hide(); DriveMap.reset(); this.el.remove(); this.el=null; document.body.classList.remove('room-on','drive-on'); if(this.camWas){ cam.x=this.camWas.x; cam.y=this.camWas.y; cam.z=this.camWas.z; this.camWas=null; } setTimeout(mapResume,0);
+  close(quiet){ if(!this.el) return; if(Voice.R&&Voice.R===this.vR) Voice.leave(); this.vR=null; this.vSpot=null; this.near=null; this.doorOk=false; this.doorFor=null; this.atCar=false; /* (a fresh street: not at any door or car yet) */ this.floatOff=null; this.sentMsg=null; this.floatsId=(this.floatsId||0)+1; /* (and its button loop stops, its place is measured afresh, its first position is sent at once) */ try{ this.T&&this.T.dispose(); }catch(e){} this.T=null; Phone.hide(); DriveMap.reset(); this.el.remove(); this.el=null; document.body.classList.remove('room-on','drive-on'); if(this.camWas){ cam.x=this.camWas.x; cam.y=this.camWas.y; cam.z=this.camWas.z; this.camWas=null; } setTimeout(mapResume,0);
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'drive',off:true})); }catch(e){}
     if(!quiet){ try{ if(history.state&&history.state.drive) history.back(); }catch(e){} } } };
 addEventListener('popstate',()=>{ if(Drive.el) Drive.close(true); });

@@ -1382,8 +1382,8 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
   // ---- shared links get their own preview on X, WhatsApp… ----
   { const pg = await (await fetch(BASE + '/?c=zara_ng')).text();
     ok(/<meta property="og:title" content="[^"]*@zara_ng\)? on Resurgence"/.test(pg) && /og:url" content="[^"]*\?c=zara_ng"/.test(pg), 'a colonist link has their name in the link preview');
-    ok(/og:title" content="Resurgence: a living colony/.test(await (await fetch(BASE + '/?c=nobody_here_xyz')).text()), 'an unknown colonist falls back to the normal preview');
-    ok(/og:title" content="Resurgence: a living colony/.test(await (await fetch(BASE + '/?c=%3Cscript%3E')).text()), 'odd links are ignored safely');
+    ok(/og:title" content="Resurgence: a new beginning/.test(await (await fetch(BASE + '/?c=nobody_here_xyz')).text()), 'an unknown colonist falls back to the normal preview');
+    ok(/og:title" content="Resurgence: a new beginning/.test(await (await fetch(BASE + '/?c=%3Cscript%3E')).text()), 'odd links are ignored safely');
     const og = await fetch(BASE + '/og.jpg'); ok(og.status === 200 && /image\/jpeg/.test(og.headers.get('content-type')), 'the preview picture is served'); }
   // ---- mayor elections ----
   { const e0 = (await call('GET', '/api/election', undefined, { auth: false })).json;

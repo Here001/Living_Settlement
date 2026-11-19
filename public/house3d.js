@@ -534,8 +534,9 @@ export function createHouse(host, opts) {
   const solidEdges = [...L.edges].filter(([, t]) => t !== 'door').map(([k]) => { const [a, b] = k.slice(1).split(',').map(Number); return k[0] === 'h' ? [a, b, a + 1, b] : [a, b, a, b + 1]; });
   function blocked(px, py) {
     const R = 0.22; if (px < R || py < R || px > S - R || py > S - R) return true;
-    const segs = [...solidEdges]; for (const g of wallStuff.children) { const D = g.userData.door; if (D && D.a < 0.9) segs.push(D.seg); } /* a door that isn't open is in the way */
-    for (const [x0, y0, x1, y1] of segs) { const dx = x1 - x0, dy = y1 - y0, t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / (dx * dx + dy * dy))); if (Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy)) < R) return true; }
+    const near = e => { const x0 = e[0], y0 = e[1], dx = e[2] - x0, dy = e[3] - y0, t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / (dx * dx + dy * dy))); return Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy)) < R; };
+    for (let i = 0; i < solidEdges.length; i++) if (near(solidEdges[i])) return true; /* (the walls as they are: no copy of the list made for every step) */
+    for (const g of wallStuff.children) { const D = g.userData.door; if (D && D.a < 0.9 && near(D.seg)) return true; } /* a door that isn't open is in the way */
     for (const it of room.items) { const f = FURNITURE[it.k]; if (f.mount !== 'floor' || f.rug) continue; const [w, d] = footOf(it.k, it.r); if (px > it.x + 0.12 - R && px < it.x + w - 0.12 + R && py > it.y + 0.12 - R && py < it.y + d - 0.12 + R) return true; }
     return false;
   }

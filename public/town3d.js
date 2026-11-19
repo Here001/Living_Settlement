@@ -558,6 +558,24 @@ export function createTown(host, opts) {
   const minute = () => (opts.minute ? opts.minute() : 720);
   function sunNow(force) { const fast = Math.min(90, Math.abs(car.v) * 1.6); if (!(force || shadowsDue || Math.hypot(car.x - shadowAt.x, car.z - shadowAt.z) > 40 + fast)) return; /* (redone less often the faster you go: each redo is a hitch) */ shadowAt = { x: car.x, z: car.z }; shadowsDue = false;
     view.center.set(car.x + Math.cos(car.a) * Math.min(40, Math.abs(car.v)), 0, car.z - Math.sin(car.a) * Math.min(40, Math.abs(car.v))); view.span = 110 + Math.min(70, Math.abs(car.v) * 1.2); /* at speed: a wider patch, ahead of you */ if (opts.weather) view.setWeather(opts.weather()); view.setTime(minute()); haze(); }
+  // ---- the Colosseum's billboard: a big board on two posts beside it, showing the builder's pictures in turn (a
+  // FIGHT NIGHT poster when there are none). One canvas, redrawn when the picture changes. ----
+  const boards = new Map(), bbC = document.createElement('canvas'); bbC.width = 512; bbC.height = 256; const bbT = new THREE.CanvasTexture(bbC); bbT.colorSpace = THREE.SRGBColorSpace; let bbKey = '';
+  const bbM = new THREE.MeshBasicMaterial({ map: bbT, toneMapped: false }), bbImgs = new Map();
+  function paintBoard(now) { const L = (opts.billboard && opts.billboard()) || [], u = L.length ? L[Math.floor(now / 9000) % L.length] : null; let im = u && bbImgs.get(u); if (u && !im) { im = new Image(); im.onload = () => { bbKey = ''; }; im.src = u; bbImgs.set(u, im); }
+    const ok = im && im.complete && im.naturalWidth, key = (u || '') + ok; if (key === bbKey) return; bbKey = key; const g = bbC.getContext('2d'); g.fillStyle = '#8A2A22'; g.fillRect(0, 0, 512, 256);
+    if (ok) { const r = Math.max(512 / im.naturalWidth, 256 / im.naturalHeight); g.drawImage(im, (512 - im.naturalWidth * r) / 2, (256 - im.naturalHeight * r) / 2, im.naturalWidth * r, im.naturalHeight * r); }
+    else { g.fillStyle = '#F2C94C'; g.font = '900 58px Georgia, serif'; g.textAlign = 'center'; g.fillText('FIGHT NIGHT', 256, 120); g.fillStyle = '#F1EBDD'; g.font = '600 28px system-ui, sans-serif'; g.fillText('at the Colosseum', 256, 172); } bbT.needsUpdate = true; }
+  function syncBoards(now) { const seen = new Set();
+    for (const blk of blocks.values()) for (const b of opts.buildings(blk.bx, blk.by, blk.bx + B, blk.by + B)) { const T0 = BUILDING_TYPES[b.type]; if (!T0 || T0.style !== 'colosseum' || b.ruin || b.done === false) continue; seen.add(b.id); if (boards.has(b.id)) continue;
+      const [w, d] = b.w ? [b.w, b.d] : T0.size, x = (b.x + w + 0.6) * TILE, z = (b.y + d * 0.32) * TILE, g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = -Math.PI / 2;
+      const post = new THREE.MeshStandardMaterial({ color: '#3B2C1E', roughness: 0.8 }); view.mats.push(post);
+      for (const px of [-4, 4]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 9, 8), post); p.position.set(px, 4.5, 0); p.castShadow = true; g.add(p); }
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(13.2, 6.8, 0.4), post); frame.position.set(0, 10.6, 0); frame.castShadow = true; g.add(frame);
+      for (const sd of [1, -1]) { const face = new THREE.Mesh(new THREE.PlaneGeometry(12.6, 6.3), bbM); face.position.set(0, 10.6, sd * 0.21); if (sd < 0) face.rotation.y = Math.PI; g.add(face); }
+      scene.add(g); boards.set(b.id, g); }
+    for (const [id, g] of boards) if (!seen.has(id)) { scene.remove(g); g.traverse(o => o.geometry && o.geometry.dispose()); boards.delete(id); }
+    if (boards.size) paintBoard(now); }
   view.resize(); around(); sunNow(true);
   view.start((dt, now) => {
     if (dead) return; drive(dt);
@@ -572,7 +590,7 @@ export function createTown(host, opts) {
     head.intensity = foot || riding ? 0 : night * 60; if (night > 0.02) { const fx = Math.cos(car.a), fz = -Math.sin(car.a); head.position.set(car.x + fx * 1.8, 0.9, car.z + fz * 1.8); head.target.position.set(car.x + fx * 14, 0, car.z + fz * 14); }
     const fov = mode === 1 && camera.aspect < 1 ? 72 + (foot ? 0 : Math.min(8, Math.abs(car.v) * 0.3)) : foot ? 62 : 60 + Math.min(14, Math.abs(car.v) * 0.45); if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); } /* the view widens with speed */
     GRASS.time.value = now / 1000; W.WATER.time.value = now / 1000; crowd(now, dt); if (bubbles.size) placeBubbles(now); services(now, dt); rideSync(dt); chase(dt); drawFleet(night); routeMat.opacity = 0.6 + 0.3 * Math.sin(now / 250); ground.position.set(Math.round(car.x / 50) * 50, -0.45, Math.round(car.z / 50) * 50); /* (well below the water, so water always shows) */
-    if (now - chk > 600) { chk = now; around(); }
+    if (now - chk > 600) { chk = now; around(); syncBoards(now); }
     if (queue.length) { const [bx, by] = queue.shift().split(',').map(Number); if (opts.loaded(bx + B / 2, by + B / 2) || opts.loaded(bx, by)) build(bx, by); else queue.push(bx + ',' + by); }
     if (now - timeAt > 20000) { timeAt = now; shadowsDue = true; } sunNow(false);
     if (now - sent > 250) { sent = now; opts.onMove(car.x / TILE, car.z / TILE, car.a, car.v / TILE); }

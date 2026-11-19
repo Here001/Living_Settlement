@@ -366,6 +366,13 @@ const MIGRATIONS = [
   `create table if not exists store_stock (building_id text not null, item text not null, qty int not null default 0, primary key (building_id, item));`,
   // v81: watching races at a Racetrack in 3D: the entry ticket its owner sets, and who holds a ticket (until when)
   `alter table buildings add column if not exists ticket int; create table if not exists track_tickets (building_id text not null, citizen_id text not null, handle text, until bigint not null, primary key (building_id, citizen_id));`,
+  // v82: the Colosseum: the builder's billboard pictures (up to five, shown outside the Colosseum and on its big screen),
+  // the champion's belt, a fighter's training, grudge-match challenges, and the crowd's Fight of the Night votes
+  `create table if not exists billboards (slot int primary key, img bytea not null, t bigint not null);
+   alter table fighters add column if not exists champion boolean not null default false, add column if not exists tr_power real not null default 0, add column if not exists tr_speed real not null default 0, add column if not exists tr_chin real not null default 0, add column if not exists tr_day int;
+   create table if not exists fight_challenges (id text primary key, from_id text not null, from_handle text, to_id text not null, to_handle text, t bigint not null, accepted boolean not null default false, n int);
+   create table if not exists fight_votes (n int not null, citizen_id text not null, i int not null, primary key (n, citizen_id));
+   alter table fight_nights add column if not exists fotn int;`
 ];
 
 export async function migrate() {

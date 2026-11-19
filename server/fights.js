@@ -13,11 +13,12 @@ import { treasuryAdd } from './races.js';
 import * as R from '../shared/rules.js';
 import { pgList } from '../shared/catalog.js';
 import { BOUTS, BOUT_LEN_S, fighterOf, fight, oddsFor, rate, hashStr, STYLES } from '../shared/fights.js';
+import * as BR from '../shared/brawl.js';
 
 export const FIGHT_EVERY = Math.max(10 * 60000, Number(process.env.FIGHT_EVERY_MS) || 3 * 3600 * 1000);
 export const FIGHT_OFFSET = Math.floor(FIGHT_EVERY * 0.75) % FIGHT_EVERY; // 2¼ hours into each 3-hour stretch: clear of the races on the hour
 export const CARD_LOCK = Math.min(30 * 60000, Math.floor(FIGHT_EVERY / 3)); // sign-ups close and the card is set this long before
-export const BOUT_GAP = (BOUT_LEN_S + 70) * 1000; // one bell to the next
+export const BOUT_GAP = (Math.max(BOUT_LEN_S, BR.LIVE_LEN_S) + 50) * 1000; // one bell to the next (a live bout that goes the distance, then a breather)
 export const MAX_FIGHT_BET = 100000;
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const secureRand = () => crypto.randomInt(0, 2 ** 32) / 2 ** 32;
@@ -25,7 +26,7 @@ const pub = f => f && ({ id: f.id, handle: f.handle, name: f.name || '', gender:
   power: Math.round(f.power * 100), speed: Math.round(f.speed * 100), chin: Math.round(f.chin * 100), player: !!f.player });
 
 export class Fights {
-  constructor(world) { this.world = world; this.busy = false; this.arenaAt = 0; this.arenaRow = null; }
+  constructor(world) { this.world = world; this.busy = false; this.arenaAt = 0; this.arenaRow = null; this.live = new Map(); this.loop = null; this.publish = () => {}; this.present = () => false; this.cheerAt = new Map(); }
   async arena() {
     if (Date.now() - this.arenaAt > 5000) { this.arenaAt = Date.now();
       this.arenaRow = (await pool.query(`select id, name, x, y from buildings where type = any('${pgList('colosseum')}') and done and not ruin order by built_at, id limit 1`)).rows[0] || null; }
@@ -57,7 +58,9 @@ export class Fights {
       for (const nt of (await pool.query('select * from fight_nights where made and not done and start_at <= $1 order by n', [now])).rows) {
         const bouts = (await pool.query('select * from fight_bouts where n = $1 order by i', [nt.n])).rows;
         for (const b of bouts) {
-          if (!b.result && now >= Number(b.start_at)) await this.roll(nt, b);
+          const key = b.n + ':' + b.i;
+          if (!b.result && now >= Number(b.start_at)) { if (this.live.has(key)) continue; /* on now, live */
+            if (!nt.fast && now < Number(b.start_at) + 15000) this.goLive(nt, b); else await this.roll(nt, b); } /* (a test night, or the server restarted mid-bout: the quick way) */
           else if (b.result && !b.settled && now >= Number(b.start_at) + this.boutLen(nt, b.result)) await this.settle(nt, b);
         }
         if (bouts.length && bouts.every(b => b.settled)) await pool.query('update fight_nights set done = true where n = $1', [nt.n]);
@@ -140,15 +143,55 @@ export class Fights {
     });
   }
 
+  // ---- Live bouts: the bout is fought on the sand, 15 steps a second, here on the leader. A fighter who is in the
+  // Colosseum (and sending their moves) fights their own corner; otherwise the computer does. Everyone inside is sent
+  // the fight as it happens; the rest of the colony gets the score every couple of seconds. ----
+  goLive(nt, b) { const key = b.n + ':' + b.i, glad = BR.isGladiator(Number(b.n)), s = BR.newBout(b.a, b.b, { gladiator: glad, n: Number(b.n), i: b.i, seed: hashStr(key) });
+    const L = { key, nt, b, s, place: nt.arena_id ? 'b:' + nt.arena_id : null, mem: [{}, {}], inp: [null, null], last: [0, 0], acts: [null, null], sent: 0, wide: 0, hold: 0 };
+    this.live.set(key, L); this.wide({ n: b.n, i: b.i, stage: 'live', ph: 'walk' });
+    if (!this.loop) { let t0 = Date.now(); this.loop = setInterval(() => { const now = Date.now(), dt = Math.min(0.2, (now - t0) / 1000); t0 = now; for (const L of [...this.live.values()]) this.stepLive(L, dt, now); if (!this.live.size) { clearInterval(this.loop); this.loop = null; } }, 1000 / BR.HZ); } }
+  stepLive(L, dt, now) { const s = L.s; if (L.done) return;
+    const inp = [0, 1].map(k => { const mine = L.inp[k] && now - L.last[k] < 2500; const x = mine ? { ...L.inp[k], act: L.acts[k] } : BR.aiInput(s, k, secureRand, L.mem[k]); L.acts[k] = null; return x; });
+    s.who = [0, 1].map(k => (L.inp[k] && now - L.last[k] < 2500) ? 'p' : 'ai');
+    const ev = BR.step(s, inp, dt, secureRand); L.ev = (L.ev || []).concat(ev).slice(-12);
+    if (L.place && (now - L.sent >= 60 || ev.length)) { L.sent = now; this.publish([{ inside: true, place: L.place, k: 'brawl', club: { n: L.b.n, i: L.b.i, ...BR.snapshot(s), who: s.who, ev: ev.length ? ev : undefined } }]); }
+    if (now - L.wide > 2000 || ev.some(e => e.k === 'down' || e.k === 'end' || e.k === 'bell')) { L.wide = now; this.wide({ n: L.b.n, i: L.b.i, stage: 'live', ph: s.phase, r: s.round, pt: Math.round(s.pt), hp: s.f.map(f => Math.round(f.hp)), downs: s.f.map(f => f.downs), ev: ev.filter(e => ['down', 'end', 'bell'].includes(e.k)) }); }
+    if (s.phase === 'over') { L.done = true; this.finishLive(L).catch(e => console.error('fight live:', e.message)).finally(() => this.live.delete(L.key)); } }
+  async finishLive(L) { const res = BR.resultOf(L.s); res.len = Math.max(1, Math.ceil((Date.now() - Number(L.b.start_at)) / 1000));
+    const ok = await this.world.change(async ch => (await ch.q('update fight_bouts set result = $3 where n = $1 and i = $2 and result is null returning i', [L.b.n, L.b.i, JSON.stringify(res)])).rowCount);
+    if (ok) await this.settle(L.nt, { ...L.b, result: res }); }
+  wide(data) { this.publish([{ op: 'fight', data }]); }
+  // a fighter's moves (from their live connection), and the crowd's cheers
+  input(pid, m) { if (!m) return; const now = Date.now();
+    for (const L of this.live.values()) { const k = L.b.a.id === pid ? 0 : L.b.b.id === pid ? 1 : -1;
+      if (m.a === 'in' && k >= 0) { const c = v => Math.max(-1, Math.min(1, Number(v) || 0)); L.inp[k] = { mx: c(m.mx), mz: c(m.mz), block: !!m.block }; L.last[k] = now; if (['jab', 'heavy', 'special', 'dodge'].includes(m.act)) L.acts[k] = m.act; return; }
+      if (m.a === 'hype' && (m.side === 0 || m.side === 1)) { const f = L.s.f[m.side]; f.hype = Math.min(1, f.hype + Math.min(0.4, (Number(m.amount) || 0) / 5000)); return; } /* (coins thrown: a bigger lift) */
+      if ((m.a === 'cheer' || m.a === 'boo') && k < 0 && (m.side === 0 || m.side === 1)) { const was = this.cheerAt.get(pid) || 0; if (now - was < 700) return; this.cheerAt.set(pid, now); if (this.cheerAt.size > 5000) this.cheerAt.clear();
+        const f = L.s.f[m.side]; f.hype = Math.max(0, Math.min(1, f.hype + (m.a === 'cheer' ? 0.035 : -0.025))); if (L.place) this.publish([{ inside: true, place: L.place, k: 'crowd', club: { a: m.a, side: m.side, h: m.h || null } }]); return; } } }
+  // A spectator throws coins to a fighter in the bout that's on: from their pocket to the fighter's, and the crowd's roar
+  // gives the fighter a lift (hype, which brings their stamina back quicker).
+  async toss(playerId, side, amount) { side = side === 1 ? 1 : 0; amount = Math.floor(Number(amount)); if (![100, 500, 2000].includes(amount)) throw new HttpError(400, 'Throw 100, 500 or 2,000 coins.');
+    const nt = await this.current(), now = Date.now(); const b = nt && (await pool.query('select * from fight_bouts where n = $1 and start_at <= $2 and result is null order by i limit 1', [nt.n, now])).rows[0];
+    if (!b) throw new HttpError(409, 'There’s no bout on right now.'); const f = side ? b.b : b.a; if (f.id === playerId) throw new HttpError(409, 'You can’t throw coins to yourself!');
+    const out = await this.world.change(async ch => { const c = (await ch.q('select * from citizens where id = $1 for update', [playerId])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
+      ch.coins(c); if (c.coins_base < amount) throw new HttpError(400, `You have ${fmt(c.coins_base)} coins on you.`); c.coins_base -= amount; ch.touch(c); await ch.saveCitizen(c);
+      const t = (await ch.q('select * from citizens where id = $1 for update', [f.id])).rows[0]; if (t) { ch.coins(t); t.coins_base += amount; ch.touch(t); await ch.saveCitizen(t); if (t.pass_hash) ch.pushes.push([[t.id], { kind: 'fight', title: '🪙 The crowd loves you!', body: `@${c.handle} threw you ${fmt(amount)} coins.`, tag: 'fight' }]); }
+      track(ch, 'fight:toss', amount, c.id); return { coins: c.coins_base, handle: c.handle }; });
+    const place = nt.arena_id ? 'b:' + nt.arena_id : null;
+    this.publish([{ brawl: true, pid: playerId, m: { a: 'hype', side, amount } }, ...(place ? [{ inside: true, place, k: 'toss', club: { side, amount, h: out.handle, to: f.handle } }] : [])]);
+    return { ok: true, coins: out.coins, amount, to: f.handle }; }
+  hype(side, amount) { for (const L of this.live.values()) { const f = L.s.f[side]; if (f) f.hype = Math.min(1, f.hype + amount); return true; } return false; }
+  liveOf(n, i) { return this.live.get(n + ':' + i) || null; }
   // What the Fight Night tab shows.
   async info(playerId) {
     const now = Date.now(), arena = await this.arena(), nt = await this.current(now);
     const out = { now, every: FIGHT_EVERY, lock: CARD_LOCK, gap: BOUT_GAP, arena: arena && { id: arena.id, name: arena.name || 'Colosseum', x: arena.x, y: arena.y }, night: null, bouts: [], signups: [], mine: null, myBets: [], last: [], top: [] };
     if (nt) {
-      out.night = { n: nt.n, no: this.label(nt.n), start: Number(nt.start_at), made: !!nt.made, open: !nt.made && now < Number(nt.start_at) - CARD_LOCK, closes: Number(nt.start_at) - CARD_LOCK, gap: Number(nt.gap || BOUT_GAP), fast: !!nt.fast };
+      out.night = { n: nt.n, no: this.label(nt.n), gladiator: BR.isGladiator(Number(nt.n)), start: Number(nt.start_at), made: !!nt.made, open: !nt.made && now < Number(nt.start_at) - CARD_LOCK, closes: Number(nt.start_at) - CARD_LOCK, gap: Number(nt.gap || BOUT_GAP), fast: !!nt.fast };
       const bouts = (await pool.query('select * from fight_bouts where n = $1 order by i', [nt.n])).rows;
       out.bouts = bouts.map(b => ({ i: b.i, name: BOUTS[b.i].name, purse: BOUTS[b.i].purse, show: BOUTS[b.i].show, start: Number(b.start_at), a: pub(b.a), b: pub(b.b), odds: b.odds,
-        result: now >= Number(b.start_at) ? b.result : null, settled: b.settled, len: this.boutLen(nt, b.result) }));
+        result: now >= Number(b.start_at) ? b.result : null, settled: b.settled, len: this.boutLen(nt, b.result), live: this.live.has(b.n + ':' + b.i) || (!b.result && now >= Number(b.start_at) && !nt.fast),
+        weapons: BR.isGladiator(Number(nt.n)) ? [BR.weaponFor(Number(b.n), b.i, 0, b.a.id), BR.weaponFor(Number(b.n), b.i, 1, b.b.id)] : null }));
       if (!nt.made) {
         const s = (await pool.query(`select s.citizen_id id, c.handle, c.display_name, f.wins, f.losses, f.rating from fight_signups s join citizens c on c.id = s.citizen_id left join fighters f on f.citizen_id = s.citizen_id where s.n = $1 order by s.t`, [nt.n])).rows;
         out.signups = s.map(r => ({ handle: r.handle, name: r.display_name || '', wins: r.wins || 0, losses: r.losses || 0, rating: r.rating || 1000 }));
@@ -196,10 +239,10 @@ export class Fights {
     });
   }
   // For tests: the next Fight Night starts in `inMs`, with bells `gapMs` apart and each bout settled just before the next.
-  async testSoon(inMs = 4000, gapMs = 4000) {
-    const n = this.nextN(), start = Date.now() + Math.max(1000, Number(inMs) || 4000);
+  async testSoon(inMs = 4000, gapMs = 4000, live = false) { /* live: fought live in the Colosseum (otherwise the quick way, for the tests) */
+    const n = this.nextN(), start = Date.now() + Math.max(1000, Number(inMs) || 4000), fast = !live;
     await pool.query('delete from fight_bouts where n = $1', [n]); await pool.query('delete from fight_bets where n = $1', [n]);
-    await pool.query(`insert into fight_nights (n, start_at, gap, fast) values ($1, $2, $3, true) on conflict (n) do update set start_at = $2, gap = $3, fast = true, made = false, done = false`, [n, start, Math.max(2000, Number(gapMs) || 4000)]);
+    await pool.query(`insert into fight_nights (n, start_at, gap, fast) values ($1, $2, $3, $4) on conflict (n) do update set start_at = $2, gap = $3, fast = $4, made = false, done = false`, [n, start, Math.max(2000, Number(gapMs) || 4000), fast]);
     return { n, start };
   }
 }

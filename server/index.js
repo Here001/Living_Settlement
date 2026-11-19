@@ -62,6 +62,7 @@ process.on('uncaughtException', e => { console.error('uncaught exception:', e); 
 const bus = createBus();
 const world = new World(bus);
 const races = new Races(world); world.races = races; const fights = new Fights(world); world.fights = fights;
+fights.publish = ops => { if (ops.length) bus.publish(ops); }; /* live bouts: the fight to everyone in the Colosseum, the score to everyone */
 const lottery = new Lottery(world); world.lottery = lottery;
 const auctions = new Auctions(world); world.auctions = auctions;
 const economy = new Economy(world); world.economy = economy;
@@ -175,7 +176,8 @@ app.get('/api/citizens/:handle', limit, send(async req => {
 }));
 // ---------- creature races ----------
 app.get('/api/fight', limit, send(async req => fights.info((await playerFrom(req))?.id)));
-if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/fight-soon', admin, send(req => fights.testSoon((req.body || {}).in, (req.body || {}).gap)));
+app.post('/api/fight/toss', limit, send(async req => { const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Sign in first.'); return fights.toss(p.id, (req.body || {}).side, (req.body || {}).amount); }));
+if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/fight-soon', admin, send(req => fights.testSoon((req.body || {}).in, (req.body || {}).gap, !!(req.body || {}).live)));
 app.get('/api/race', limit, send(async req => races.info((await playerFrom(req))?.id, typeof req.query.track === 'string' ? req.query.track : null)));
 // watching races at the track in 3D: the gate (ticket, seats, who's in), buying a ticket, leaving, and the owner's price
 app.get('/api/tracks/:id/gate', limit, send(async req => races.gate((await playerFrom(req))?.id || null, req.params.id)));
@@ -267,6 +269,20 @@ app.put('/api/admin/property-prices', admin, send(req => world.change(async ch =
   ch.meta.propPct = pct; return { ok: true, pct }; })));
 app.put('/api/admin/colony-name', admin, send(req => world.renameColony((req.body || {}).name)));
 app.put('/api/admin/weather', admin, send(req => world.setWeather((req.body || {}).kind)));
+// The Colosseum's billboard: up to five pictures the builder uploads (shown, in turn, on the billboard outside the
+// Colosseum, on the 2D map and in 3D, and on the big screen inside). Only the builder can change them.
+const BILLBOARD_SLOTS = 5; let boardList = null;
+const billboards = async () => boardList || (boardList = (await pool.query('select slot, t from billboards order by slot')).rows.map(r => ({ slot: r.slot, t: Number(r.t) })));
+app.get('/api/billboard', limit, send(async () => ({ slots: await billboards(), max: BILLBOARD_SLOTS })));
+app.get('/api/billboard/:slot', limit, async (req, res) => { try { const r = (await pool.query('select img from billboards where slot = $1', [Number(req.params.slot) | 0])).rows[0]; if (!r) return res.status(404).end();
+  res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400, immutable' }); res.send(r.img); } catch (e) { res.status(500).end(); } });
+app.put('/api/admin/billboard/:slot', admin, express.raw({ type: 'image/jpeg', limit: '900kb' }), send(async req => { const slot = Number(req.params.slot) | 0;
+  if (slot < 0 || slot >= BILLBOARD_SLOTS) throw new HttpError(400, `Pick a slot from 1 to ${BILLBOARD_SLOTS}.`); const img = req.body;
+  if (!Buffer.isBuffer(img) || img.length < 200 || img[0] !== 0xFF || img[1] !== 0xD8) throw new HttpError(400, 'That isn’t a JPEG picture.');
+  const t = Date.now(); await pool.query('insert into billboards (slot, img, t) values ($1, $2, $3) on conflict (slot) do update set img = $2, t = $3', [slot, img, t]); boardList = null;
+  bus.publish([{ op: 'billboard', data: { slots: await billboards() } }]); return { ok: true, slot, t }; }));
+app.delete('/api/admin/billboard/:slot', admin, send(async req => { await pool.query('delete from billboards where slot = $1', [Number(req.params.slot) | 0]); boardList = null;
+  bus.publish([{ op: 'billboard', data: { slots: await billboards() } }]); return { ok: true }; }));
 app.get('/api/admin/draft', admin, send(async () => ({ draft: await world.getDraft() })));
 app.put('/api/admin/draft', admin, send(req => world.saveDraft((req.body || {}).data)));
 app.delete('/api/admin/draft', admin, send(() => world.discardDraft()));
@@ -413,6 +429,8 @@ wss.on('connection', (ws, req) => {
       if (a === 'ask') rides.ask(ws.playerId, ws.playerHandle, who).catch(() => {}); else if (a === 'answer') rides.answer(ws.playerId, who, !!m.yes);
       else if (a === 'leave') rides.leave(ws.playerId); else if (a === 'drop') rides.drop(ws.playerId, who); return; }
     // Inside a building or home: where you stand, so everyone else in there sees you walk about (see Rooms.seen)
+    if (m?.type === 'brawl') { if (!ws.playerId || !m || typeof m !== 'object') return; /* a fighter's moves, or a cheer from the stands: to the leader, who runs the bout */
+      bus.publish([{ brawl: true, pid: ws.playerId, m: { a: m.a === 'hype' ? '' : String(m.a || ''), /* (a phone can't fake a coin toss's lift) */ mx: Number(m.mx) || 0, mz: Number(m.mz) || 0, block: !!m.block, act: String(m.act || ''), side: m.side === 1 ? 1 : m.side === 0 ? 0 : -1, h: ws.playerHandle || null } }]); return; }
     if (m?.type === 'in') { const place = String(m.place || ''), x = Number(m.x), y = Number(m.y), a = Number(m.a);
       if (!/^(b|h):[A-Za-z0-9_.-]{1,64}$/.test(place) || ![x, y, a].every(Number.isFinite) || x < 0 || y < 0 || x > 16 || y > 16) return;
       if (ws.inside && ws.inside !== place) insideLeave(ws);
@@ -449,6 +467,7 @@ world.phone.online = localOnline; /* you can only ring someone who has the game 
 // Every minute, everyone with the colony open is marked as seen (that's what "online" means).
 setInterval(() => { const ids = [...new Set([...wss.clients].filter(w => w.readyState === 1 && w.playerId).map(w => w.playerId))]; chat.seen(ids).catch(e => console.error('presence:', e.message)); achievements.checkMany(ids).catch(() => {}); }, 60000).unref();
 bus.on(ops => {
+  if (ops.some(o => o.brawl)) { if (isLeader) for (const o of ops.filter(o => o.brawl)) fights.input(o.pid, o.m); ops = ops.filter(o => !o.brawl); if (!ops.length) return; }
   // Street games: the leader runs them; every server passes the leader's messages on to its own players.
   if (ops.some(o => o.arena)) { const ar = ops.filter(o => o.arena); ops = ops.filter(o => !o.arena);
     for (const o of ar) {

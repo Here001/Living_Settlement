@@ -1192,6 +1192,23 @@ body.phone-on .worldbtn{display:none}
 .trhud .trname{font-size:14px}.trstatus{font-size:13px;color:#F2C94C;font-weight:800}.trboard{margin:2px 0 4px;padding-left:18px;font-size:12.5px;line-height:1.35}.trbet{align-self:flex-start}
 .rndbtn.trleave{left:50%;bottom:calc(26px + env(safe-area-inset-bottom));transform:translateX(-50%)}.rndbtn.trleave:active{transform:translateX(-50%) scale(.95)}
 .trackview .hchat:not([hidden]) ~ .hact{display:none}
+/* the Colosseum: the score along the top, a note, the crowd's buttons, your fight pad, the builder's billboard pictures */
+.arhud{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:calc(env(safe-area-inset-left,0px) + 10px);right:calc(env(safe-area-inset-right,0px) + 74px);z-index:4;display:flex;gap:8px;align-items:flex-start;background:rgba(20,22,28,.66);color:#fff;border-radius:14px;padding:8px 10px;backdrop-filter:blur(4px)}
+.arside{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}.arside.s1{align-items:flex-end;text-align:right}.arside b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.arbar{width:100%;background:#2a2f3a;border-radius:4px;overflow:hidden;display:flex}.arside.s1 .arbar{justify-content:flex-end}.arbar i{display:block;height:100%;transition:width .15s}.arbar.hp{height:10px}.arbar.st{height:5px}.arbar.hy{height:3px}
+.arclock{font-weight:800;font-size:12px;color:#F2C94C;white-space:nowrap;padding-top:2px}
+.arnote{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);left:calc(env(safe-area-inset-left,0px) + 12px);right:calc(env(safe-area-inset-right,0px) + 74px);z-index:4;background:rgba(20,22,28,.66);color:#fff;font-weight:700;font-size:13px;border-radius:12px;padding:8px 12px;backdrop-filter:blur(4px)}
+.arenaview .arhud:not([hidden]) ~ .arnote{top:calc(env(safe-area-inset-top,0px) + 74px)}
+.arfans{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(104px + env(safe-area-inset-bottom));z-index:4;display:flex;gap:8px}
+.arfan{width:52px;height:52px;border-radius:50%;border:2px solid rgba(255,255,255,.75);background:rgba(20,22,28,.5);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9.5px;font-weight:800;padding:0;backdrop-filter:blur(3px)}
+.arfan b{font-size:19px;line-height:1.05}.arfan.red{border-color:#E0453A}.arfan.blue{border-color:#3A8FD6}.arfan:active{transform:scale(.92)}
+.arpad{position:absolute;right:calc(env(safe-area-inset-right,0px) + 12px);bottom:calc(22px + env(safe-area-inset-bottom));z-index:5;display:grid;grid-template-columns:repeat(3,62px);grid-template-areas:". sp ." "jb hv dg" ". bk .";gap:8px}
+.arbtn{width:62px;height:62px;border-radius:50%;background:rgba(20,22,28,.35);border:2px solid rgba(255,255,255,.8);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:10px;padding:0;backdrop-filter:blur(3px);touch-action:none;user-select:none;-webkit-user-select:none}
+.arbtn b{font-size:22px;line-height:1.05}.arbtn:active{transform:scale(.9);background:rgba(255,255,255,.35)}.arbtn.sp{grid-area:sp;border-color:#F2C94C}.arbtn.jb{grid-area:jb}.arbtn.hv{grid-area:hv}.arbtn.dg{grid-area:dg}.arbtn.bk{grid-area:bk;border-color:#4FC3F7}
+.arenaview.fight .trleave,.arenaview.fight .sidecol{display:none}
+@media (orientation:landscape) and (max-height:560px){ .arfans{bottom:calc(14px + env(safe-area-inset-bottom));left:auto;right:calc(env(safe-area-inset-right,0px) + 80px);transform:none} .arenaview .trleave{left:auto;right:calc(env(safe-area-inset-right,0px) + 80px);bottom:calc(84px + env(safe-area-inset-bottom));transform:none} }
+.bbadmin{margin-top:10px;border-top:1px solid rgba(0,0,0,.1);padding-top:8px}.bbadmin h4{margin:0 0 6px;font-size:13px}.bbslots{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.bbslot{flex:0 0 112px;display:flex;flex-direction:column;gap:4px}.bbslot img,.bbempty{width:112px;height:56px;border-radius:8px;object-fit:cover;background:#2B2621;color:#fff;display:grid;place-items:center;font-weight:800}
 .trackview .hjoy{bottom:calc(26px + env(safe-area-inset-bottom));left:calc(env(safe-area-inset-left,0px) + 18px)}
 @media (orientation:landscape) and (max-height:560px){ .trackview .rndbtn.hchatbtn,.trackview .hact{right:calc(env(safe-area-inset-right,0px) + 72px)} .trackview .hchat{right:calc(env(safe-area-inset-right,0px) + 72px)} }
 .rndbtn.dpick{width:44px;height:44px;left:calc(env(safe-area-inset-left,0px) + 84px);bottom:calc(200px + env(safe-area-inset-bottom))}.rndbtn.dpick b{font-size:19px}
@@ -1403,6 +1420,7 @@ import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
+import { WEAPONS as ARENA_W } from '/shared/brawl.js';
 import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, BIZ_CATS, bizTab, bizSize, roomSize, canEnter, canTurnOnWall, footOf, placeProblem, resaleOf, layoutOf, styleOf, photoAspect } from '/shared/furniture.js';
 import { paveCost, fullIncome, CRIME_FLOOR, FINE_MIN, FINE_MAX, nextBid, AUCTION_STEP_MIN, AUCTION_MINUTES, statusOf, STATUS, WEALTH_FREE, WEALTH_RATE, CRIME_DECAY, treasuryOn, buildMinutes, weatherAt, footprint, GAME_MIN_MS, CHUNK as CHUNK_SIZE, routineAt, miles, canGoTo, tripFare, propertyPrice, shiftOf, owlOf, SHIFTS, rentCost, SOLO_CRIMES, HEISTS, HEIST_WAIT, levelSize, capacities, buildQuote, upgradable, propertyLimit, rushCost, constructionCost, upgradeQuote, MAX_LEVEL, PLOT_MIN, PLOT_MAX, TRANSFER_TAX, LAND_TILE_MAX, bailCost } from '/shared/rules.js';
 
@@ -1479,6 +1497,7 @@ function applyOp(o){
   case 'meta': S.meta=o.data; refreshHUD(); if(activeTab&&!PLAYER_TABS.has(activeTab)&&activeTab!=='reports'&&activeTab!=='stats'&&activeTab!=='money'&&activeTab!=='stream') renderPane(); break;
   case 'race': raceSoon(o.data); break;
   case 'fight': fightSoon(o.data); break;
+  case 'billboard': BBoard.load(); break;
   case 'lottery': lotterySoon(o.data); break;
   case 'auction': Auction.upsert(o.data); break;
   case 'building': { const old=S.buildings.get(o.data.id), n=o.data; putBuilding(n);
@@ -1583,7 +1602,7 @@ function connect(){
     else if(m.type==='resync') reloadAll();
     else if(m.type==='arena') arenaMsg(m);
     else if(m.type==='authed'){ if(m.ok) resumeArena(arenaCtx()); if(typeof Room!=='undefined') Room.rejoin(); }
-    else if(m.type==='inside'){ if(TrackView.el&&m.place===TrackView.spot) TrackView.insideMsg(m); else if(typeof Room!=='undefined') Room.insideMsg(m); }
+    else if(m.type==='inside'){ if(TrackView.el&&m.place===TrackView.spot) TrackView.insideMsg(m); else if(typeof ArenaView!=='undefined'&&ArenaView.el&&m.place===ArenaView.spot) ArenaView.insideMsg(m); else if(typeof Room!=='undefined') Room.insideMsg(m); }
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
     else if(m.type==='phone' && m.data) Phone.msg(m.data);
@@ -3626,7 +3645,18 @@ DRAW.colosseum=function(b,t){ const [w,d]=t.size, c=iso(b.x+w/2,b.y+d/2), RX=(w+
   const g=P(Math.PI/2,1,0); poly([{x:g.x-11,y:g.y},{x:g.x-11,y:g.y-15},{x:g.x,y:g.y-22},{x:g.x+11,y:g.y-15},{x:g.x+11,y:g.y}],'#3B2C1E',INK,1);
   const bw=56, bh=14, by=g.y-th*2-6; poly([{x:g.x-bw/2,y:by-bh},{x:g.x+bw/2,y:by-bh},{x:g.x+bw/2,y:by},{x:g.x-bw/2,y:by}],'#1A1410',INK,1);
   ctx.save(); ctx.font='800 8.5px system-ui,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; if(night){ ctx.shadowColor='#FF3B30'; ctx.shadowBlur=8; } ctx.fillStyle=night?'#FF5A4E':'#D8463C'; ctx.fillText('FIGHT NIGHT',g.x,by-bh/2+0.5); ctx.restore();
-  if(night) lights.push({x:g.x,y:by-bh/2,r:60,col:'255,90,70'}); };
+  if(night) lights.push({x:g.x,y:by-bh/2,r:60,col:'255,90,70'});
+  // the billboard beside it: the builder's pictures in turn (a FIGHT NIGHT poster when there are none)
+  { const q=iso(b.x+w+0.9,b.y+d*0.3), W2=170, H2=85, top=q.y-118; line(q,{x:q.x,y:top+H2},'#3B2C1E',2.4); line({x:q.x-W2*0.3,y:q.y-3},{x:q.x-W2*0.3,y:top+H2},'#3B2C1E',2.4);
+    const x0=q.x-W2*0.65, im=BBoard.now(); poly([{x:x0-2,y:top-2},{x:x0+W2+2,y:top-2},{x:x0+W2+2,y:top+H2+2},{x:x0-2,y:top+H2+2}],'#1A1410',INK,1);
+    if(im){ ctx.save(); ctx.beginPath(); ctx.rect(x0,top,W2,H2); ctx.clip(); const r=Math.max(W2/im.naturalWidth,H2/im.naturalHeight); ctx.drawImage(im,x0+(W2-im.naturalWidth*r)/2,top+(H2-im.naturalHeight*r)/2,im.naturalWidth*r,im.naturalHeight*r); ctx.restore(); }
+    else { ctx.fillStyle='#8A2A22'; ctx.fillRect(x0,top,W2,H2); ctx.save(); ctx.fillStyle='#F2C94C'; ctx.font='900 22px Georgia,serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('FIGHT NIGHT',x0+W2/2,top+H2/2-10); ctx.font='700 13px system-ui,sans-serif'; ctx.fillStyle='#F1EBDD'; ctx.fillText('at the Colosseum',x0+W2/2,top+H2/2+16); ctx.restore(); }
+    if(night){ ctx.fillStyle='rgba(255,240,200,.12)'; ctx.fillRect(x0,top,W2,H2); lights.push({x:x0+W2/2,y:top+H2/2,r:50,col:'255,230,180'}); } } };
+// The Colosseum's billboard pictures (the builder uploads them): loaded once, refreshed when they change, shown in turn
+const BBoard={ urls:[], imgs:new Map(),
+  async load(){ try{ const r=await api('/api/billboard'); this.urls=(r.slots||[]).map(s=>`/api/billboard/${s.slot}?t=${s.t}`); if(typeof ArenaView!=='undefined'){ ArenaView.bb=r.slots||[]; ArenaView.bbUrls=this.urls; } }catch(e){} },
+  now(){ if(!this.urls.length) return null; const u=this.urls[Math.floor(Date.now()/9000)%this.urls.length]; let im=this.imgs.get(u); if(!im){ im=new Image(); im.src=u; this.imgs.set(u,im); } return im.complete&&im.naturalWidth?im:null; } };
+setTimeout(()=>BBoard.load(),2500);
 // Street furniture, plants and festive things (each a single tile).
 const PROPS2={
   bin(b){ const p=iso(b.x+0.5,b.y+0.55); cylinder(p,4.5,10,'#3E5148'); ctx.fillStyle='#2B3A33'; ctx.beginPath(); ctx.ellipse(p.x,p.y-10,4.5,2,0,0,7); ctx.fill(); },
@@ -5396,10 +5426,12 @@ setInterval(()=>{ if(document.hidden||!(Me&&Me.token)) return; const gap=(active
 // ---- Fight Night at the Colosseum: sign up, bet on each bout, and watch it live (everyone sees the same fight) ----
 const Fight={ info:null, skew:0, loadAt:0, view:'races', pick:{}, amount:{}, busy:false, toasted:new Set(), ringKey:'',
   now(){ return Date.now()+this.skew; },
-  liveBout(){ const I=this.info; if(!I) return null; const t=this.now(); return (I.bouts||[]).find(b=>b.result&&t>=b.start&&t<=b.start+b.len+6000)||null; },
+  liveBout(){ const I=this.info; if(!I) return null; const t=this.now(); return (I.bouts||[]).find(b=>!b.result&&b.live&&t>=b.start&&!b.settled)||(I.bouts||[]).find(b=>b.result&&!b.result.live&&t>=b.start&&t<=b.start+b.len+6000)||null; }, /* (a live bout: fought in the Colosseum now; an old-style one: played back from its result) */
+  liveNow:null,
   live(){ return !!this.liveBout(); } };
 let fightTimer=null;
-function fightSoon(d){ clearTimeout(fightTimer); fightTimer=setTimeout(()=>loadFight(d),400); }
+function fightSoon(d){ if(d&&d.stage==='live'){ Fight.liveNow=d; if(d.ev&&d.ev.length){ const b=Fight.info&&(Fight.info.bouts||[]).find(x=>x.i===d.i); if(b) Fight.liveCall=fightCall(d.ev[d.ev.length-1],['@'+b.a.handle,'@'+b.b.handle]); } if(!Fight.info||!Fight.liveBout()) { clearTimeout(fightTimer); fightTimer=setTimeout(()=>loadFight(),400); } else updateRing(); return; } /* (the score of a live bout, every couple of seconds) */
+  clearTimeout(fightTimer); fightTimer=setTimeout(()=>loadFight(d),400); }
 // News for the whole colony (a race, Fight Night, the lottery): not while you're inside a place, where it would only get in the way
 const newsToast=(...a)=>{ if(Phone.inside()) return; toast(...a); };
 async function loadFight(d){ try{ const r=await api('/api/fight'); Fight.info=r; Fight.skew=r.now-Date.now(); Fight.loadAt=Date.now(); }catch(e){ return; }
@@ -5455,15 +5487,19 @@ function ringBox(b){ const box=el('div',{class:'fring',id:'fRing','data-key':b.i
   const side=(f,k)=>{ const av=el('span',{class:'ava fav'}); av.innerHTML=avatarSVG({handle:f.handle,id:f.id,gender:f.gender}); return el('div',{class:'fside s'+k}, av, el('b',{text:names[k]}), el('div',{class:'hpbar'}, el('i',{id:'fhp'+k})), el('span',{class:'fdown',id:'fdn'+k})); };
   box.append(el('div',{class:'fring-top'}, el('b',{text:`🔴 LIVE · ${b.name}`}), el('span',{id:'fRound',text:''})), el('div',{class:'fring-mid'}, side(b.a,0), el('span',{class:'vs big',text:'VS'}), side(b.b,1)),
     el('p',{class:'fcall',id:'fCall',text:'The fighters make their way to the ring…'}));
+  const I=Fight.info; if(I&&I.arena) box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary sm',text:'🏟️ Watch it in the Colosseum (3D)',onclick:()=>{ const a=D.buildings.get(I.arena.id)||{id:I.arena.id,type:'colosseum',x:I.arena.x,y:I.arena.y}; ArenaView.gate(a); }})));
   requestAnimationFrame(()=>updateRing()); return box; }
-function updateRing(){ const R0=$('fRing'), b=Fight.liveBout(); if(!R0||!b||!b.result) return; const sp=b.len/((b.result.len||80)*1000), t=(Fight.now()-b.start)/1000/sp, ev=b.result.events;
+function updateRing(){ const R0=$('fRing'), b=Fight.liveBout(); if(!R0||!b) return;
+  if(!b.result){ const L=Fight.liveNow&&Fight.liveNow.i===b.i?Fight.liveNow:null, hp=L&&L.hp||[100,100], downs=L&&L.downs||[0,0]; /* live in the Colosseum: the score as it comes */
+    for(const k of [0,1]){ const h=$('fhp'+k); if(h){ h.style.width=hp[k]+'%'; h.style.background=hp[k]>50?'#3CC46A':hp[k]>25?'#F2B33D':'#E2453C'; } const d=$('fdn'+k); if(d) d.textContent=downs[k]?'⬇️'.repeat(downs[k]):''; }
+    const rd=$('fRound'); if(rd) rd.textContent=L?(L.ph==='fight'?`Round ${L.r} of 3 · ${Math.floor((L.pt||0)/60)}:${String((L.pt||0)%60).padStart(2,'0')}`:L.ph==='walk'?'Walk-out':L.ph==='break'?`End of round ${L.r}`:'The verdict'):'Walk-out'; const c=$('fCall'); if(c&&Fight.liveCall&&c.textContent!==Fight.liveCall) c.textContent=Fight.liveCall; return; } const sp=b.len/((b.result.len||80)*1000), t=(Fight.now()-b.start)/1000/sp, ev=b.result.events;
   let hp=[100,100], round=0, call='The fighters make their way to the ring…', downs=[0,0], hitBy=-1, hitAt=-9;
   for(const e of ev){ if(e.t>t) break; if(e.hp) hp=e.hp; if(e.k==='bell') round=e.round; if(e.k==='down') downs[e.who]=e.n; if(e.k==='hit'||e.k==='big'){ hitBy=e.by; hitAt=e.t; } call=fightCall(e,['@'+b.a.handle,'@'+b.b.handle]); }
   for(const k of [0,1]){ const h=$('fhp'+k); if(h){ h.style.width=hp[k]+'%'; h.style.background=hp[k]>50?'#3CC46A':hp[k]>25?'#F2B33D':'#E2453C'; } const d=$('fdn'+k); if(d) d.textContent=downs[k]?'⬇️'.repeat(downs[k]):'';
     const sd=R0.querySelector('.s'+k); if(sd) sd.classList.toggle('hit', hitBy===1-k && t-hitAt<0.35); }
   const rd=$('fRound'); if(rd) rd.textContent=round?`Round ${round} of 3`:'Walk-out'; const c=$('fCall'); if(c&&c.textContent!==call) c.textContent=call; }
-function fightCall(e,names){ const n=i=>names[i], o=i=>names[1-i], a=w=>(/^[aeiou]/i.test(w)?'an ':'a ')+w;
-  switch(e.k){ case 'bell': return `🔔 Round ${e.round}!`; case 'miss': return `${n(e.by)} throws ${a(e.move)}… and misses.`; case 'block': return `${o(e.by)} blocks ${n(e.by)}'s ${e.move}.`;
+function fightCall(e,names){ const n=i=>names[i], o=i=>names[1-i], a=w=>(/^[aeiou]/i.test(w)?'an ':'a ')+w; if(e.name) e={...e,move:String(e.name).toLowerCase()};
+  switch(e.k){ case 'burn': return `🔥 ${n(e.who)} is caught in the fire jets!`; case 'guardbreak': return `💥 ${n(e.by)} smashes through ${n(e.who)}'s guard!`; case 'bell': return `🔔 Round ${e.round}!`; case 'miss': return `${n(e.by)} throws ${a(e.move)}… and misses.`; case 'block': return `${o(e.by)} blocks ${n(e.by)}'s ${e.move}.`;
     case 'hit': return `${n(e.by)} lands ${a(e.move)}!`; case 'big': return `💥 HUGE ${e.move} from ${n(e.by)}!`; case 'down': return `⬇️ ${n(e.who)} is DOWN! ${e.n>1?`Knockdown number ${e.n}!`:'The referee starts the count…'}`;
     case 'up': return `${n(e.who)} beats the count and fights on!`; case 'rest': return `End of round ${e.round}. Back to the corners.`;
     case 'end': return e.method==='KO'?`🏆 KNOCKOUT! ${n(e.winner)} wins in round ${e.round}!`:e.method==='TKO'?`🏆 The referee waves it off! ${n(e.winner)} wins by TKO!`:`🏆 ${n(e.winner)} wins by ${e.method.toLowerCase()}!`; default: return ''; } }
@@ -7093,7 +7129,7 @@ const CallVoice=Object.assign(Object.create(Voice),{ R:null, cfg:null, pc:null, 
   quality0(){ const q=[...this.els.values()].map(x=>x.q).filter(Boolean)[0]||null; return q; }, /* the other end's connection */
   paint(){ Phone.paintCall(); }, light(id,on){ if(!on) this.lit.delete(id); Phone.talking(id,on); } });
 const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null, unread:0,
-  inside(){ return !!((typeof Room!=='undefined'&&Room.el)||(typeof Drive!=='undefined'&&Drive.el)||(typeof TrackView!=='undefined'&&TrackView.el)); }, /* in a place, in the car, or at the races */
+  inside(){ return !!((typeof Room!=='undefined'&&Room.el)||(typeof Drive!=='undefined'&&Drive.el)||(typeof TrackView!=='undefined'&&TrackView.el)||(typeof ArenaView!=='undefined'&&ArenaView.el)); }, /* in a place, in the car, at the races or the fights */
   // the phone in your hand: its home screen has the same five apps as the bar at the bottom of the map (Town Square,
   // My card, Colonists, Races, Chats). An app is the real thing, moved onto the phone's screen while it's open (the
   // panel or the card), so everything in it works just as it does on the map; the home bar takes you back to the apps.
@@ -7260,7 +7296,7 @@ const World={ btn:null, last:null, booted:false,
     { const col=d3?((Drive.el&&Drive.el.querySelector('.sidecol'))||(Room.el&&!Room.el.hidden&&Room.el.querySelector('.sidecol'))):null; /* in 3D: second in the column, under ▴ */
       if(col){ if(b.parentElement!==col){ const t=col.querySelector('.sidetoggle'); col.insertBefore(b,t?t.nextSibling:col.firstChild); b.classList.add('sidebtn','sidehide'); } }
       else if(b.parentElement!==document.body){ document.body.append(b); b.classList.remove('sidebtn','sidehide'); } }
-    this.dodge(); b.hidden=!on||!!document.querySelector('.cre')||document.body.classList.contains('mg-on')||!!(typeof TrackView!=='undefined'&&TrackView.el); /* (at the races: 🚪 Leave takes you back) */
+    this.dodge(); b.hidden=!on||!!document.querySelector('.cre')||document.body.classList.contains('mg-on')||!!(typeof TrackView!=='undefined'&&TrackView.el)||!!(typeof ArenaView!=='undefined'&&ArenaView.el); /* (at the races or the fights: 🚪 Leave takes you back) */
     const k=d3?'2d':'3d'; if(b.dataset.k===k) return; b.dataset.k=k; b.replaceChildren(el('b',{text:d3?'2D':'3D'}));
     b.title=d3?'The colony map (2D): come back with 3D':'Back to your character in 3D'; b.setAttribute('aria-label',b.title); },
   toggle(){ if(this.in3d()) this.toMap(); else this.to3D(); },
@@ -7475,6 +7511,116 @@ const TrackView={ el:null, T:null, b:null, g:null,
       Looks.want(hs).catch(()=>{}); this.people=hs.map(h=>({ id:h, look:Looks.m.get(h.toLowerCase())||null })); }); } },
   close(quiet){ if(!this.el) return; clearInterval(this.timer); clearTimeout(this.posT); if(Voice.R===this) Voice.leave(); try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'out'})); }catch(e){} this.others=new Map(); this.h=null; try{ this.T&&this.T.close(); }catch(e){} this.T=null; this.el.remove(); this.el=null; document.body.classList.remove('room-on'); this.people=[];
     if(!quiet&&this.b) api('/api/tracks/'+encodeURIComponent(this.b.id)+'/leave',{method:'POST'}).catch(()=>{}); if(!quiet) toast('🚪 You left the track. Your seat is free for someone else.'); } };
+// ---------------- Fight Night at the Colosseum, in 3D ----------------
+// Walk in with a ticket (tonight's fighters and the owner go in free), find a seat, and watch the bouts live: the
+// fighters fight on the sand in real time (see shared/brawl.js). If you're on the card, your bout's controls appear
+// at the bell: the stick moves you, and Jab, Heavy, your style's Special, Dodge and Block (hold). From the stands you
+// cheer your fighter on (it lifts their stamina), boo, or throw them coins. The big screen and the billboard show the
+// builder's pictures between bouts.
+const ArenaView={ el:null, T:null, b:null, g:null, bb:[], act:null, blocking:false, side:null, lastCheer:-1,
+  load(b){ return TrackView.load(b); },
+  cardBox(b){ const box=el('div',{class:'authbox trackgate'}, el('h3',{text:'🥊 Fight Night at the Colosseum'}), el('p',{class:'hint',text:'Loading the gate…'}));
+    Promise.all([this.load(b), Fight.info&&Date.now()-Fight.loadAt<30000?null:loadFight()]).then(([g])=>{ if(!g||!box.isConnected) return; box.replaceChildren(el('h3',{text:'🥊 Fight Night at the Colosseum'}));
+      const I=Fight.info, nt=I&&I.night, have=g.until&&g.until>Date.now(), fighter=!!(I&&I.mine&&nt&&nt.made);
+      if(nt){ const left=nt.start-Fight.now(); box.append(el('p',{class:'jobnow',text:(I.bouts||[]).some(x=>x.live)?'🔴 A bout is on right now!':left>0?`🔔 Fight Night #${nt.no}${nt.gladiator?' (⚔️ a gladiator night: weapons and fire jets)':''} starts in ${fmtLeft(left)}.`:`🥊 Fight Night #${nt.no} is on.`})); }
+      box.append(el('p',{class:'jobnow',text:`🎟️ Ticket: ${g.ticket?fmt(g.ticket)+' coins':'free'} · ${g.inside} of ${g.seats} seats taken`}), el('p',{class:'hint',text:(g.owner?`Run by @${g.owner}: the ticket money goes into its till.`:'Run by the colony: the ticket money goes to the treasury.')+' A ticket lasts a whole Fight Night. Tonight’s fighters go in free.'}));
+      box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:have?'🏟️ Go back in':g.mine||fighter?'🏟️ Go in (free)':'🎟️ Buy a ticket and go in',onclick:()=>this.gate(b)}), el('button',{class:'btn',text:'🥊 Fight Night',onclick:()=>{ closeCard(); Fight.view='fight'; openTab('races'); }})));
+      if(g.mine){ const inp=el('input',{type:'number',min:'0',max:'5000',step:'50',value:String(g.ticket),'aria-label':'Ticket price'});
+        box.append(el('div',{class:'cbet'}, el('span',{text:'Ticket price:'}), inp, el('button',{class:'btn',text:'Save',onclick:async()=>{ try{ const r=await api('/api/tracks/'+encodeURIComponent(b.id)+'/ticket',{method:'PUT',body:{price:Number(inp.value)}}); toast(`🎟️ Tickets now cost ${r.ticket?fmt(r.ticket)+' coins':'nothing'}.`); }catch(e){ toast(e.message); } }}))); }
+      if(Store.canWrite) box.append(this.boardBox()); });
+    return box; },
+  // the builder's billboard pictures: up to five, shown in turn on the billboard outside and on the big screen inside
+  boardBox(){ const box=el('div',{class:'bbadmin'}, el('h4',{text:'🖼️ Billboard pictures (only you can change these)'})), row=el('div',{class:'bbslots'}); box.append(row);
+    const paint=()=>{ row.replaceChildren(); for(let i=0;i<5;i++){ const s=this.bb.find(x=>x.slot===i), file=el('input',{type:'file',accept:'image/*',hidden:true,onchange:()=>{ if(file.files[0]) this.upload(i,file.files[0]).then(paint); }});
+        row.append(el('div',{class:'bbslot'}, s?el('img',{src:`/api/billboard/${i}?t=${s.t}`,alt:`Picture ${i+1}`}):el('div',{class:'bbempty',text:String(i+1)}), file,
+          el('button',{class:'btn sm',text:s?'Replace':'Upload',onclick:()=>file.click()}), s?el('button',{class:'btn sm',text:'Remove',onclick:async()=>{ try{ await api('/api/admin/billboard/'+i,{method:'DELETE'}); await this.loadBoard(); paint(); }catch(e){ toast(e.message); } }}):'')); } };
+    this.loadBoard().then(paint); return box; },
+  async loadBoard(){ await BBoard.load(); return this.bb; },
+  async upload(i,f){ try{ const im=await new Promise((res,rej)=>{ const u=URL.createObjectURL(f), x=new Image(); x.onload=()=>{ URL.revokeObjectURL(u); res(x); }; x.onerror=rej; x.src=u; });
+      const cv=document.createElement('canvas'); cv.width=1280; cv.height=640; const g=cv.getContext('2d'), r=Math.max(1280/im.naturalWidth,640/im.naturalHeight), w=im.naturalWidth*r, h=im.naturalHeight*r; g.fillStyle='#000'; g.fillRect(0,0,1280,640); g.drawImage(im,(1280-w)/2,(640-h)/2,w,h); /* (cropped to fill the board, 2:1) */
+      let blob=null; for(const q of [0.86,0.75,0.62]){ blob=await new Promise(r2=>cv.toBlob(r2,'image/jpeg',q)); if(blob&&blob.size<850*1024) break; }
+      const res=await fetch('/api/admin/billboard/'+i,{method:'PUT',headers:{'content-type':'image/jpeg',...(Store.token?{authorization:'Bearer '+Store.token}:{})},body:blob}); const j=await res.json(); if(!res.ok) throw new Error(j.error||'Upload failed.');
+      toast(`🖼️ Picture ${i+1} is up on the billboard.`); await this.loadBoard(); }catch(e){ toast(e.message||'That picture couldn’t be used.'); } },
+  async gate(b){ if(!(Me&&Me.token)){ toast('Sign in to your colonist first.'); return; } const g=await this.load(b); if(!g) return; const have=g.until&&g.until>Date.now();
+    const go=async()=>{ try{ const r=await api('/api/tracks/'+encodeURIComponent(b.id)+'/enter',{method:'POST'}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } if(r.paid) toast(`🎟️ Ticket bought: ${fmt(r.paid)} coins. Enjoy the fights!`); this.open(b,g); }catch(e){ toast(e.message); } };
+    const fighter=!!(Fight.info&&Fight.info.mine&&Fight.info.night&&Fight.info.night.made);
+    if(have||g.mine||fighter||!g.ticket) return go(); toast(`🎟️ A ticket to the Colosseum costs ${fmt(g.ticket)} coins (${g.seats-g.inside} seats left). It lasts the whole Fight Night.`,'Buy ticket',go); },
+  get spot(){ return this.b?'b:'+this.b.id:null; }, range:34, floor:0, get stage(){ return this.el; },
+  enc(m){ return TrackView.enc(m); }, dec(v){ return TrackView.dec(v); },
+  async open(b,g){ if(this.el) this.close(true); if(Drive.el) Drive.close(true); if(Room.el) Room.close(true); if(TrackView.el) TrackView.close(true); closeCard(); openTab(null); this.b=b; this.g=g; this.side=null; loadFight(); this.loadBoard();
+    const stage=el('div',{class:'trackstage'});
+    this.score=el('div',{class:'arhud',hidden:true}); this.note=el('div',{class:'arnote'});
+    const side=sideCol(el('button',{class:'sidebtn',title:'Camera: the TV camera, behind you, through your eyes, ringside, or from above','aria-label':'Camera',text:'🎥',onclick:()=>{ if(!this.T) return; const m=this.T.view(); toast({tv:'🎥 The TV camera',third:'🎥 Behind you',first:'🎥 Through your eyes',ring:'🎥 Ringside',above:'🎥 From above'}[m]||'🎥'); }}), Phone.sideBtn());
+    const leave=el('button',{class:'rndbtn trleave','aria-label':'Leave the Colosseum',onclick:()=>this.close()}, el('b',{text:'🚪'}), el('span',{text:'Leave'}));
+    // chat (the house's), and sitting down
+    this.chatLog=el('div',{class:'hchatlog'}); this.chatIn=el('input',{class:'hchatin',maxlength:'200',placeholder:'Say something to everyone here…','aria-label':'Message'});
+    this.chatIn.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter') this.sendChat(); }); this.chatIn.addEventListener('keyup',e=>e.stopPropagation());
+    this.chatTo=el('select',{class:'hchatto','aria-label':'Who to send it to',onfocus:()=>this.whoOpts(),onchange:()=>this.chatIn.placeholder=this.chatTo.value?`Only @${this.chatTo.value} will see this…`:'Say something to everyone here…'}); this.whoOpts();
+    this.chatBox=el('div',{class:'hchat',hidden:true}, this.chatLog, el('div',{class:'hchatrow'}, this.chatTo, this.chatIn, el('button',{class:'btn primary sm',text:'Send',onclick:()=>this.sendChat()})));
+    this.chatBtn=el('button',{class:'rndbtn hchatbtn',hidden:true,'aria-label':'Chat',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden){ this.whoOpts(); setTimeout(()=>this.chatIn.focus(),50); } }}, el('b',{text:'💬'}), el('span',{text:'Chat'}));
+    this.sitBtn=el('button',{class:'hact',hidden:true,onclick:()=>{ if(!this.T) return; this.T.sit(); this.sendPos(true); this.paintSit(); }});
+    // the stands: cheer a fighter on, boo, throw coins, bet
+    const cheer=(side,a)=>{ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'brawl',a,side})); }catch(e){} if(this.T) this.T.cheer(a); if(a==='cheer') this.lastCheer=side; };
+    this.fans=el('div',{class:'arfans',hidden:true}, el('button',{class:'arfan red',onclick:()=>cheer(0,'cheer')}, el('b',{text:'📣'}), el('span',{text:'Red'})), el('button',{class:'arfan',title:'Boo the other fighter',onclick:()=>cheer(this.lastCheer===0?1:this.lastCheer===1?0:Math.round(Math.random()),'boo')}, el('b',{text:'👎'}), el('span',{text:'Boo'})),
+      el('button',{class:'arfan blue',onclick:()=>cheer(1,'cheer')}, el('b',{text:'📣'}), el('span',{text:'Blue'})), el('button',{class:'arfan',onclick:()=>this.tossSheet()}, el('b',{text:'🪙'}), el('span',{text:'Coins'})), el('button',{class:'arfan',onclick:()=>{ Fight.view='fight'; Phone.show('races'); }}, el('b',{text:'🏁'}), el('span',{text:'Bet'})));
+    // your bout's controls (when you're the one fighting)
+    const hold=(b2,on,off)=>{ b2.addEventListener('pointerdown',e=>{ e.preventDefault(); on(); }); for(const ev of ['pointerup','pointercancel','pointerleave']) b2.addEventListener(ev,()=>off&&off()); return b2; };
+    const pbtn=(cls,icon,label,act)=>hold(el('button',{class:'arbtn '+cls}, el('b',{text:icon}), el('span',{text:label})),()=>{ this.act=act; this.sendIn(); });
+    this.specBtn=pbtn('sp','⭐','Special','special');
+    this.pad=el('div',{class:'arpad',hidden:true}, pbtn('jb','👊','Jab','jab'), pbtn('hv','💥','Heavy','heavy'), this.specBtn, pbtn('dg','💨','Dodge','dodge'), hold(el('button',{class:'arbtn bk'}, el('b',{text:'🛡️'}), el('span',{text:'Block'})),()=>{ this.blocking=true; this.sendIn(); },()=>{ if(this.blocking){ this.blocking=false; this.sendIn(); } }));
+    const root=el('div',{class:'webview trackview arenaview',role:'dialog','aria-label':'The Colosseum'}, stage, this.score, this.note, side, this.chatBtn, this.chatBox, this.sitBtn, this.fans, this.pad, leave);
+    document.body.append(root); document.body.classList.add('room-on'); this.el=root;
+    this.keys=e=>{ if(!this.T||!this.T.fighting||/INPUT|TEXTAREA/.test((e.target&&e.target.tagName)||'')) return; const k=e.key.toLowerCase(); const map={j:'jab',k:'heavy',l:'special',' ':'dodge'};
+      if(e.type==='keydown'&&map[k]){ this.act=map[k]; this.sendIn(); e.preventDefault(); } if(k==='shift'){ this.blocking=e.type==='keydown'; this.sendIn(); } };
+    addEventListener('keydown',this.keys); addEventListener('keyup',this.keys);
+    let M, myLook=null; try{ [M,[myLook]]=await Promise.all([import('/colosseum3d.js'), Me&&Me.handle?Looks.want([Me.handle]).catch(()=>[null]):[null]]); }catch(e){ this.close(true); toast('The Colosseum couldn’t load. Check your connection.'); return; } if(this.el!==root) return;
+    try{ this.T=M.createColosseum(stage,{ look:myLook||null, pet:(()=>{ const c=myCitizen(); return c&&c.pet&&CREATURES[c.pet.k]?c.pet.k:null; })(), minute:()=>((gmNow()%1440)+1440)%1440, weather:()=>window.__driveWx||(S.meta?weatherAt(S.meta,gmNow()):'sunny'),
+      onMove:()=>{ this.sendPos(false); this.talkNear(); this.paintSit(); }, screen:()=>this.screen(), billboard:()=>this.bbUrls||[], onHit:e=>{ if(this.side!=null&&e.by===1-this.side) try{ navigator.vibrate&&navigator.vibrate(e.k==='big'?60:25); }catch(x){} } }); }
+    catch(e){ this.close(true); toast('Your phone couldn’t show the Colosseum in 3D.'); return; }
+    try{ window.__arena=this; }catch(e){}
+    const Tr=this.T; this.others=new Map(); this.h={ get me(){ const m=Tr.me; return { x:m.x, y:m.z, a:m.a, pose:m.sit?'s':'' }; }, talking(){}, say:(id,t)=>Tr.say(id,t) };
+    this.lastSent=null; this.sendPos(true); setTimeout(()=>{ if(this.T===Tr) Voice.enter(this); },1500);
+    this.tick(); clearInterval(this.timer); this.timer=setInterval(()=>this.tick(),500); clearInterval(this.inTimer); this.inTimer=setInterval(()=>{ if(this.T&&this.T.fighting) this.sendIn(); },100); },
+  // the bout to show: the one on now, else the next one, else the last
+  bout(){ const I=Fight.info; if(!I||!I.bouts||!I.bouts.length) return null; const t=Fight.now(), L=I.bouts;
+    return L.find(b=>!b.settled&&t>=b.start)||L.find(b=>t<b.start)||L[L.length-1]; },
+  live(){ const b=this.bout(); return !!(b&&!b.settled&&Fight.now()>=b.start&&!b.result); },
+  screen(){ const I=Fight.info, b=this.bout(), nt=I&&I.night; if(!b) return { lines:['🥊 Fight Night', nt?`Next: #${nt.no} in ${fmtLeft(Math.max(0,nt.start-Fight.now()))}`:'At the Colosseum'] };
+    const st=f=>`${(FSTYLE[f.style]||['🥊',''])[1]} · ${f.wins||0}-${f.losses||0}`, w=b.weapons;
+    if(this.live()) return { names:['@'+b.a.handle,'@'+b.b.handle], subs:[st(b.a)+(w?' · '+ARENA_W[w[0]].name:''), st(b.b)+(w?' · '+ARENA_W[w[1]].name:'')], lines:[b.name, this.call||''] };
+    const left=b.start-Fight.now(); return { lines:[left>0?`${b.name} in ${fmtLeft(left)}`:b.settled&&b.result?`🏆 @${(b.result.winner===0?b.a:b.b).handle} won by ${b.result.method}`:b.name, `@${b.a.handle} vs @${b.b.handle}`] }; },
+  tick(){ if(!this.el||!this.T) return; const b=this.bout(), I=Fight.info, nt=I&&I.night;
+    if(!this.fAt||Date.now()-this.fAt>10000){ this.fAt=Date.now(); loadFight(); }
+    // the fighters on the sand (in their own characters, once they've loaded)
+    if(b){ const hs=[b.a.handle,b.b.handle], looks=hs.map(h=>Looks.m.get(h.toLowerCase())||null); if(looks.some(x=>!x)) Looks.want(hs).catch(()=>{});
+      this.T.setFighters({ n:nt&&nt.n, i:b.i, a:b.a, b:b.b, weapons:b.weapons, gladiator:!!(nt&&nt.gladiator), looks }); }
+    const me=((Me&&Me.handle)||'').toLowerCase(), side=b&&this.live()?(b.a.handle.toLowerCase()===me?0:b.b.handle.toLowerCase()===me?1:null):null;
+    if(side!==this.side){ this.side=side; this.T.setMine(side); if(side!=null){ toast('🥊 You’re on! The stick moves you: Jab, Heavy, Special, Dodge, and hold Block. (Keys: J K L, Space, Shift.)'); const me2=I&&I.me; if(me2) this.specBtn.querySelector('span').textContent=b.weapons?'Whirlwind':({boxer:'Uppercut',kicker:'Spin kick',grappler:'Slam',brawler:'Haymaker'})[me2.style]||'Special'; } }
+    this.pad.hidden=!(this.T.fighting); this.el.classList.toggle('fight',!!this.T.fighting); this.fans.hidden=!this.live()||this.T.fighting; this.score.hidden=!this.live();
+    this.note.textContent=this.T.fighting?'':this.live()?'':b?(b.start>Fight.now()?`🔔 ${b.name} in ${fmtLeft(b.start-Fight.now())}: @${b.a.handle} vs @${b.b.handle}`:b.settled&&b.result?`🏆 @${(b.result.winner===0?b.a:b.b).handle} won by ${b.result.method}`:''):nt?`🥊 Fight Night #${nt.no} in ${fmtLeft(Math.max(0,nt.start-Fight.now()))}`:'';
+    this.note.hidden=!this.note.textContent; this.paintSit(); if(this.T.fighting) this.sitBtn.hidden=true; this.talkNear(); },
+  // the score along the top: names, health, stamina, the round and the clock
+  paintScore(s){ const b=this.bout(); if(!b||!this.score) return; const bar=(v,c)=>el('i',{style:`width:${Math.max(0,Math.min(100,v))}%;background:${c}`});
+    const hc=v=>v>50?'#3FBF6A':v>25?'#F2C94C':'#E0453A', side=k=>{ const f=s.f[k], h=k?b.b:b.a; return el('div',{class:'arside s'+k}, el('b',{text:(k?'🔵 ':'🔴 ')+'@'+h.handle+(s.who&&s.who[k]==='p'?'':' 🤖')}), el('div',{class:'arbar hp'}, bar(f[3],hc(f[3]))), el('div',{class:'arbar st'}, bar(f[4],'#4FC3F7')), el('div',{class:'arbar hy'}, bar(f[9]*100,k?'#2E6FD8':'#C0392B'))); };
+    const clock=s.ph==='fight'?`R${s.r} · ${Math.floor(s.pt/60)}:${String(Math.floor(s.pt%60)).padStart(2,'0')}`:s.ph==='walk'?'Walk-out':s.ph==='break'?`End of R${s.r}`:'Verdict';
+    this.score.replaceChildren(side(0), el('div',{class:'arclock',text:clock}), side(1)); },
+  // what comes in from the Colosseum: the fight (15 times a second), the crowd, and the usual (people, chat, voice)
+  insideMsg(m){ if(!this.el||!this.T||m.place!==this.spot) return;
+    if(m.k==='brawl'&&m.club){ const s=m.club; this.T.brawl(s); if(!this.scoreAt||Date.now()-this.scoreAt>150){ this.scoreAt=Date.now(); this.paintScore(s); } const b=this.bout();
+      if(s.ev&&b) for(const e of s.ev){ const c=fightCall(e,['@'+b.a.handle,'@'+b.b.handle]); if(c) this.call=c; } return; }
+    if(m.k==='crowd'&&m.club){ this.T.cheer(m.club.a); return; }
+    if(m.k==='toss'&&m.club){ this.T.toss(m.club.side); if(m.club.h) this.note.textContent=`🪙 @${m.club.h} threw ${fmt(m.club.amount)} coins to ${m.club.side?'🔵':'🔴'} @${m.club.to}!`; return; }
+    return TrackView.insideMsg.call(this,m); },
+  sendIn(){ if(!this.T||!this.T.fighting) return; const d=this.T.input(); try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'brawl',a:'in',mx:+d.mx.toFixed(2),mz:+d.mz.toFixed(2),block:this.blocking,act:this.act||''})); }catch(e){} this.act=null; },
+  // coins for a fighter: from your pocket to theirs (and the crowd roars)
+  tossSheet(){ const b=this.bout(); if(!b) return; const pick=async(side,amt)=>{ try{ const r=await api('/api/fight/toss',{method:'POST',body:{side,amount:amt}}); myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); toast(`🪙 ${fmt(amt)} coins to @${side?b.b.handle:b.a.handle}!`); }catch(e){ toast(e.message); } };
+    const {box,close}=sheetBox('🪙 Throw coins to a fighter'); box.append(el('p',{class:'hint',text:'The coins go to the fighter, and the crowd roars them on (a little more stamina).'}));
+    for(const k of [0,1]){ const f=k?b.b:b.a; box.append(el('div',{class:'row-actions'}, el('b',{text:(k?'🔵 @':'🔴 @')+f.handle}), ...[100,500,2000].map(a=>el('button',{class:'btn',text:fmt(a),onclick:()=>{ close(); pick(k,a); }})))); } },
+  sendPos(f){ return TrackView.sendPos.call(this,f); }, talkNear(){ return TrackView.talkNear.call(this); }, paintSit(){ return TrackView.paintSit.call(this); },
+  addChat(c){ return Room.addChat.call(this,c); }, whoOpts(p){ return Room.whoOpts.call(this,p); }, sendChat(){ return Room.sendChat.call(this); },
+  close(quiet){ if(!this.el) return; clearInterval(this.timer); clearInterval(this.inTimer); clearTimeout(this.posT); removeEventListener('keydown',this.keys); removeEventListener('keyup',this.keys); if(Voice.R===this) Voice.leave();
+    try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'out'})); }catch(e){} this.others=new Map(); this.h=null; try{ this.T&&this.T.close(); }catch(e){} this.T=null; this.el.remove(); this.el=null; document.body.classList.remove('room-on');
+    if(!quiet&&this.b) api('/api/tracks/'+encodeURIComponent(this.b.id)+'/leave',{method:'POST'}).catch(()=>{}); if(!quiet) toast('🚪 You left the Colosseum.'); } };
 const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
   // which car: the one you're driving if it's a road one, otherwise a basic car
   ride(c){ const M=c&&c.car&&CAR_MODELS[c.car[0]]; if(M&&M.kind!=='water'&&M.kind!=='air'&&!M.vtype) return { m:c.car[0], col:c.car[1]||M.colors[0], kind:c.car[0], name:M.name, own:true, bike:M.kind==='bike' }; /* your own car (or bike), as itself */
@@ -7521,7 +7667,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
         road:(x,y)=>D.roads.get(x+','+y)||null, water:(x,y)=>D.water.has(x+','+y),
         building:(x,y)=>{ const id=D.occ.get(x+','+y); return id?D.buildings.get(id)||null:null; },
         buildings:(x0,y0,x1,y1)=>{ const out=[]; for(const b of D.buildings.values()) if(b.x>=x0&&b.x<x1&&b.y>=y0&&b.y<y1&&!b.ruin&&BUILDING_TYPES[b.type]) out.push(b); return out; },
-        byId:id=>D.buildings.get(id)||null, loaded:(x,y)=>S.chunks.has(ckTile(x,y)), minute:()=>window.__driveMinute!=null?window.__driveMinute:((gmNow()%1440)+1440)%1440, weather:()=>window.__driveWx||(S.meta?weatherAt(S.meta,gmNow()):'sunny'), /* (the same weather as the map; __driveWx: for checking) */ /* (__driveMinute: for checking how it looks at a time of day) */
+        byId:id=>D.buildings.get(id)||null, loaded:(x,y)=>S.chunks.has(ckTile(x,y)), minute:()=>window.__driveMinute!=null?window.__driveMinute:((gmNow()%1440)+1440)%1440, billboard:()=>BBoard.urls, /* (the Colosseum's billboard) */ weather:()=>window.__driveWx||(S.meta?weatherAt(S.meta,gmNow()):'sunny'), /* (the same weather as the map; __driveWx: for checking) */ /* (__driveMinute: for checking how it looks at a time of day) */
         people:(x,y)=>this.people(x,y), services:(x,y)=>this.services(x,y), onMove:(x,y,a,v)=>this.moved(x,y,a,v), onNear:b=>this.nearBy(b), onLost:()=>{ this.close(); toast('Your phone needed the memory back. Tap 🚗 Drive or 🚶 Walk to carry on.'); } }); }
     catch(e){ this.close(); toast('Your phone couldn’t show the 3D town.'); return; }
     try{ window.__drive=this; this.map=DriveMap; }catch(e){} /* (for checking how it runs) */
@@ -8344,7 +8490,6 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(t.hangar && b.done!==false && !b.ruin) card.append(hangarSection(b,t));
     if(b.owner&&isMe(b.owner)&&!Store.canWrite){ const tl=Tills.map.get(b.id); if(tl){ const f=Math.min(1,tl.till/Math.max(1,tl.cap)), btn=el('button',{class:'btn primary sm',text:`Collect ${fmt(tl.till)}`,disabled:tl.till<1?'':null,onclick:e=>{ const r=e.currentTarget.getBoundingClientRect(); Tills.collect({id:b.id,x:r.left+r.width/2,y:r.top+r.height/2,col:f>=1?['#FFE680','#E2A71E','#9A6A0E']:f>=0.5?['#F4F6F8','#AEB5BD','#6E757C']:['#F0B27A','#B8743A','#7A4A20']}).then(()=>renderCard(true)); }});
       card.append(el('div',{class:'row-actions'}, el('span',{class:'hint',text:`💰 ${fmt(tl.till)} of ${fmt(tl.cap)} earned${f>=1?' (full: collect it to keep earning)':''} · makes ${fmt(tl.day)} a game day`}), btn)); } }
-    if(kindOf(b.type)==='colosseum' && b.done!==false && !b.ruin) card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🥊 Fight Night',onclick:()=>{ Fight.view='fight'; openTab('races'); loadFight(); }})));
     if(t.home && !Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin) card.append(rentBox(b,t));
     if(t.work && !Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin) card.append(workBox(b,t));
     if(!Store.canWrite && Me&&Me.token&&Me.handle && b.done!==false && !b.ruin && canGoTo(b.type)) card.append(goHereRow(b));
@@ -8352,7 +8497,8 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(b.type==='petstore' && b.done!==false && !b.ruin && !Store.canWrite) card.append(PetStore.section(b));
     if(b.type==='phonestore' && b.done!==false && !b.ruin && !Store.canWrite) card.append(PhoneStore.section(b));
     if(b.type==='cardealer' && b.done!==false && !b.ruin && !Store.canWrite) card.append(dealerSection(b));
-    if(kindOf(b.type)==='racetrack' && b.done!==false && !b.ruin) card.append(TrackView.cardBox(b)); /* watch the races here in 3D: a ticket at the gate */
+    if(kindOf(b.type)==='racetrack' && b.done!==false && !b.ruin) card.append(TrackView.cardBox(b));
+    if(kindOf(b.type)==='colosseum' && b.done!==false && !b.ruin) card.append(ArenaView.cardBox(b)); /* Fight Night in 3D: a ticket at the gate */ /* watch the races here in 3D: a ticket at the gate */
     if(STORE_UI[b.type]&&STORE_UI[b.type].kind==='goods' && b.done!==false && !b.ruin && !Store.canWrite) card.append(GoodsStore.section(b));
     if(kindOf(b.type)==='gamehouse' && b.done!==false && !b.ruin && !Store.canWrite) card.append(GH.section(b));
     if(kindOf(b.type)==='casino' && b.done!==false && !b.ruin && !Store.canWrite){ // the games are played right here, on the casino's own card

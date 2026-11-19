@@ -404,7 +404,7 @@ export function buildAvatar(rawLook, opts = {}) {
       fa.rotation.x = -(0.1 + 0.18 * wk + 1.05 * rn * wk + 0.28 * wk * fwd); };
     arm(upperArmL, forearmL, ph, -1); arm(upperArmR, forearmR, ph + Math.PI, 1);
   }
-  const P = { group: g, body, head, armL: upperArmL, armR: upperArmR, forearmL, forearmR, legL: thighL, legR: thighR, look: L, height: 1.8 * B.scale, x: 0, z: 0,
+  const P = { group: g, body, head, armL: upperArmL, armR: upperArmR, forearmL, forearmR, legL: thighL, legR: thighR, shinL, shinR, spine, /* (all of them: fights pose every joint) */ look: L, height: 1.8 * B.scale, x: 0, z: 0,
     setPos(x, z) { this.x = x; this.z = z; g.position.set(x, 0, z); },
     // speed in m/s along x and z: they turn to face where they're going and walk (or run) at that pace
     animate(dt, vx, vz, turn = true) { const sp = Math.hypot(vx, vz); dt = Math.min(0.1, Math.max(0, dt)); t += dt;

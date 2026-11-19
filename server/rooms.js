@@ -7,6 +7,7 @@
 // Photos: the phone shrinks a picture to a small JPEG before sending it; the server checks it really is one, keeps it
 // in Cloudflare R2 when that's set up (or in the database otherwise), and serves it from /api/room/photos/<id>.
 import crypto from 'node:crypto';
+import { isHomeGood, whereToBuy } from '../shared/stores.js';
 import { HttpError } from './world.js';
 import { pool } from './db.js';
 import * as F from '../shared/furniture.js';
@@ -138,11 +139,16 @@ export class Rooms {
   find(room, i) { const at = room.items.findIndex(x => x.i === i), inBox = at < 0 ? room.box.findIndex(x => x.i === i) : -1;
     if (at < 0 && inBox < 0) throw new HttpError(404, 'That piece isn’t in your home any more.'); return { at, inBox, it: at >= 0 ? room.items[at] : room.box[inBox] }; }
   buy(id, b, bid = null) {
+    const dev = bid && typeof bid === 'object' && bid.dev, biz = typeof bid === 'string' && bid !== '@partner';
     return this.edit(id, (room, home) => {
       const k = String(b.k || ''), f = F.FURNITURE[k]; if (!f) throw new HttpError(400, 'There’s no such piece.');
+      let fromBox = -1; /* a home's furniture and appliances come from the stores, into its storage: "buy" here puts one you have in storage in place */
+      if (!dev && !biz && isHomeGood(k)) { fromBox = room.box.findIndex(x => x.k === k && (!f.tint || b.c == null || x.c === +b.c)); if (fromBox < 0) fromBox = room.box.findIndex(x => x.k === k);
+        if (fromBox < 0) throw new HttpError(409, `Furniture and appliances for a home are bought in the stores: get the ${f.name.toLowerCase()} at ${whereToBuy('home', null, k)}. It goes into your storage, ready to place here.`); }
       const x = int(b.x), y = int(b.y), r = int(b.r ?? 0), c = Number.isInteger(+b.c) && +b.c >= 0 && +b.c < F.TINTS.length ? +b.c : 0;
       if (room.items.length >= F.MAX_ITEMS) throw new HttpError(409, `Your home holds up to ${F.MAX_ITEMS} pieces. Sell or store one first.`);
       const problem = F.placeProblem(room, home.size, k, x, y, r); if (problem) throw new HttpError(409, problem);
+      if (fromBox >= 0) { const [s] = room.box.splice(fromBox, 1), item = { i: s.i, k, x, y, r, c: s.c || 0, ...(s.ph ? { ph: s.ph } : {}), ...(b.o && F.canTurnOnWall(k) ? { o: 1 } : {}) }; room.items.push(item); return { item }; } /* (already paid for, at the store) */
       const item = { i: crypto.randomUUID().slice(0, 8), k, x, y, r, c: f.tint ? c : 0, ...(b.o && F.canTurnOnWall(k) ? { o: 1 } : {}) }; room.items.push(item);
       return { spend: f.cost, item };
     }, bid);

@@ -16,7 +16,17 @@ let passed = 0, failed = 0;
 const ok = (cond, name, extra = '') => { if (cond) { passed++; console.log('  ✓', name); } else { failed++; console.log('  ✗', name, extra); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function call(method, path, body, { auth = true, headers = {}, raw } = {}) {
+// A home's furniture and appliances come from the stores now (shared/stores.js): tests that furnish a home put the piece
+// into its storage first, as a store purchase would, and Furnish places it from there.
+async function call(method, path, body, o = {}) {
+  if (method === 'POST' && path === '/api/me/room/buy' && body && body.k && o.headers && o.headers['x-player']) { const { isHomeGood } = await import('../shared/stores.js');
+    if (isHomeGood(body.k)) { const pg = await import('pg'), db = new pg.default.Client({ connectionString: process.env.DATABASE_URL }); await db.connect();
+      try { const crypto = await import('node:crypto'), h = crypto.createHash('sha256').update(o.headers['x-player']).digest('hex');
+        const c = (await db.query('select c.id, c.room from sessions s join citizens c on c.id = s.citizen_id where s.token_hash = $1', [h])).rows[0];
+        if (c) { const room = c.room || { items: [], box: [] }; room.box = [...(room.box || []), { i: crypto.randomUUID().slice(0, 8), k: body.k, c: Number.isInteger(body.c) ? body.c : 0 }]; await db.query('update citizens set room = $2 where id = $1', [c.id, JSON.stringify(room)]); } }
+      finally { await db.end(); } } }
+  return call0(method, path, body, o); }
+async function call0(method, path, body, { auth = true, headers = {}, raw } = {}) {
   const r = await fetch(BASE + path, {
     method,
     headers: { ...(body !== undefined || raw ? { 'content-type': 'application/json' } : {}), ...(auth ? { authorization: 'Bearer ' + TOKEN } : {}), ...headers },
@@ -1864,11 +1874,15 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   const s1 = await call('POST', '/api/me/look', { look: free }, A.P); ok(s1.status === 200 && s1.json.spent === 0 && s1.json.look.sk === '#8D5524', 'free clothes cost nothing', JSON.stringify(s1.json).slice(0, 200));
   ok((await call('GET', '/api/me', undefined, A.P)).json.lookSet === true, 'once made, the game stops asking');
   const fancy = { ...free, hs: 'braids', w: { ...free.w, out: ['leather', 4], wrist: ['goldwatch', 0] } }; // 500 + 4,000 + 12,000
-  const s2 = await call('POST', '/api/me/look', { look: fancy }, A.P); ok(s2.status === 409 && /16,500/.test(s2.json.error || ''), 'paid things need buying first', JSON.stringify(s2.json));
-  const s3 = await call('POST', '/api/me/look', { look: fancy, buy: true }, A.P); ok(s3.status === 400 && /16,500/.test(s3.json.error || ''), '…and they must have the coins', JSON.stringify(s3.json));
+  const s2 = await call('POST', '/api/me/look', { look: fancy, buy: true }, A.P); ok(s2.status === 409 && /Fashion boutique|Jeweller/.test(s2.json.error || ''), 'clothes and jewellery come from the stores (the character only wears what you have)', JSON.stringify(s2.json));
+  const jw = (await call('POST', '/api/admin/buildings', { type: 'jeweller', x: 1620, y: 1360, instant: true })).json.building, bq = (await call('POST', '/api/admin/buildings', { type: 'boutique', x: 1626, y: 1360, instant: true })).json.building;
+  ok((await call('POST', '/api/me/store/buy', { buildingId: jw.id, item: 'w:wrist:goldwatch' }, A.P)).status === 400, '…and they must have the coins');
   await pool.query('update citizens set coins_base = 20000 where id = $1', [A.id]);
-  const s4 = await call('POST', '/api/me/look', { look: fancy, buy: true }, A.P); ok(s4.status === 200 && s4.json.spent === 16500 && s4.json.wardrobe.includes('wrist:goldwatch') && s4.json.wardrobe.includes('hair:braids'), 'bought: the coins go and the things are kept', JSON.stringify(s4.json).slice(0, 300));
-  ok(Math.round(Number((await pool.query('select coins_base from citizens where id = $1', [A.id])).rows[0].coins_base)) === 3500, '16,500 coins taken', '');
+  const w1 = await call('POST', '/api/me/store/buy', { buildingId: jw.id, item: 'w:wrist:goldwatch' }, A.P), w2 = await call('POST', '/api/me/store/buy', { buildingId: bq.id, item: 'w:out:leather' }, A.P);
+  ok(w1.status === 200 && w1.json.wardrobe.includes('wrist:goldwatch') && w2.status === 200 && w2.json.wardrobe.includes('out:leather'), 'bought at the Jeweller and the boutique: into the wardrobe', JSON.stringify([w1.json, w2.json]).slice(0, 300));
+  ok((await call('POST', '/api/me/store/buy', { buildingId: bq.id, item: 'w:wrist:goldwatch' }, A.P)).status === 400 && (await call('POST', '/api/me/store/buy', { buildingId: jw.id, item: 'w:wrist:goldwatch' }, A.P)).status === 409, '…each store sells its own things, and you can’t buy one twice');
+  const s4 = await call('POST', '/api/me/look', { look: fancy, buy: true }, A.P); ok(s4.status === 200 && s4.json.spent === 500 && s4.json.wardrobe.includes('wrist:goldwatch') && s4.json.wardrobe.includes('hair:braids'), 'then the look is yours (a paid hairstyle is still bought here: a haircut)', JSON.stringify(s4.json).slice(0, 300));
+  ok(Math.round(Number((await pool.query('select coins_base from citizens where id = $1', [A.id])).rows[0].coins_base)) === 3500, '16,500 coins taken in all', '');
   const s5 = await call('POST', '/api/me/look', { look: { ...fancy, w: { ...fancy.w, wrist: ['goldwatch', 0], out: ['leather', 14] } } }, A.P); ok(s5.status === 200 && s5.json.spent === 0, 'wearing them again (in another colour) is free');
   ok(/chose/i.test((await call('POST', '/api/me/look', { look: { ...free, g: 'm' } }, A.P)).json.error || ''), 'once the character is made, man or woman stays');
   { const Z = await player('switch_sam', 100); await pool.query("update citizens set gender = 'f', gender_chosen = true where id = $1", [Z.id]);
@@ -1877,14 +1891,14 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   const lk = (await call('GET', '/api/looks?h=looks_lu,poor_pat,nobody_x', undefined, { auth: false })).json; ok(lk.looks_lu?.hs === 'braids' && lk.poor_pat && !lk.nobody_x, 'anyone can load the characters to draw them', JSON.stringify(Object.keys(lk)));
   const cd = (await call('GET', '/api/citizens/looks_lu', undefined, { auth: false })).json; ok(Array.isArray(cd.a) && cd.a[1] === '#8D5524' && cd.a[2] === '#120D0A', 'the map gets their colours', JSON.stringify(cd.a));
   ok(!(await call('GET', '/api/citizens/poor_pat', undefined, { auth: false })).json.a, '…and nothing extra for someone who hasn’t made one');
-  ok((await call('POST', '/api/me/look', { look: fancy, buy: true }, B.P)).status === 400, 'someone without the coins can’t buy');
+  ok((await call('POST', '/api/me/look', { look: fancy, buy: true }, B.P)).status === 409, 'someone who hasn’t bought the things can’t wear them');
   ok((await call('GET', '/api/me/look', undefined, { auth: false })).status === 401, 'you must be signed in to change your look'); }
 { // inside your home: a house with rooms; furniture on the floor, the walls, the windows and the ceiling; photos in frames
   const M = await player('homey_hal', 300_000), V = await player('visitor_vi', 1000);
   await pool.query('update citizens set home_id = (select id from buildings where type = $2 limit 1) where id = $1', [M.id, 'house']);
   const v0 = await call('GET', '/api/me/room', undefined, M.P); ok(v0.status === 200 && v0.json.mine && v0.json.size === 8 && v0.json.room.plan === 'h:house' && v0.json.room.items.length === 0, 'an empty house to furnish (a house is 8×8, with its own plan)', JSON.stringify(v0.json).slice(0, 200));
   const b1 = await call('POST', '/api/me/room/buy', { k: 'sofa', x: 0, y: 3, r: 0, c: 2 }, M.P); const it = b1.json.room?.items?.[0];
-  ok(b1.status === 200 && it && it.k === 'sofa' && it.c === 2 && b1.json.coins === 300_000 - 4000, 'buy a green sofa for the bedroom', JSON.stringify(b1.json).slice(0, 200));
+  ok(b1.status === 200 && it && it.k === 'sofa' && it.c === 2 && b1.json.coins === 300_000, 'place a green sofa (bought at a store, from storage) in the bedroom', JSON.stringify(b1.json).slice(0, 200));
   ok((await call('POST', '/api/me/room/buy', { k: 'armchair', x: 1, y: 3, r: 0 }, M.P)).status === 409, 'two pieces can’t stand in the same spot');
   ok((await call('POST', '/api/me/room/buy', { k: 'rug', x: 0, y: 3, r: 0 }, M.P)).status === 200, '…but a rug can go under the sofa');
   ok(/wall/i.test((await call('POST', '/api/me/room/buy', { k: 'sofa', x: 2, y: 3, r: 0 }, M.P)).json.error || ''), 'furniture can’t stand across a wall between rooms');
@@ -1908,9 +1922,9 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   ok((await call('POST', '/api/me/room/buy', { k: 'pendant', x: 1, y: 3, r: 0 }, M.P)).status === 200, '…a light above the sofa is fine (the ceiling is separate from the floor)');
   const tr = await call('POST', '/api/me/room/place', { i: it.i, x: 6, y: 3, r: 1 }, M.P), t2 = tr.json.room?.items?.find(x => x.i === it.i);
   ok(tr.status === 200 && t2.x === 6 && t2.r === 1, 'move the sofa into the bathroom and turn it', JSON.stringify(t2));
-  const st = await call('POST', '/api/me/room/store', { i: it.i }, M.P); ok(st.status === 200 && st.json.room.box.length === 1 && !st.json.room.items.some(x => x.i === it.i), 'put it in storage');
+  const st = await call('POST', '/api/me/room/store', { i: it.i }, M.P); ok(st.status === 200 && st.json.room.box.some(x => x.i === it.i) && !st.json.room.items.some(x => x.i === it.i), 'put it in storage');
   ok((await call('POST', '/api/me/room/place', { i: it.i, x: 2, y: 6, r: 0 }, M.P)).json.room?.items?.some(x => x.i === it.i), '…and set it out again in the living room');
-  const sl = await call('POST', '/api/me/room/sell', { i: it.i }, M.P); ok(sl.status === 200 && sl.json.coins === 300_000 - 4000 - 1500 - 300 - 600 - 25000 - 900 + 2000, 'sell it back for half what it cost', sl.json.coins);
+  const before = Number((await pool.query('select coins_base from citizens where id = $1', [M.id])).rows[0].coins_base); const sl = await call('POST', '/api/me/room/sell', { i: it.i }, M.P); ok(sl.status === 200 && sl.json.coins === Math.round(before) + 2000, 'sell it back for half what it cost', sl.json.coins);
   const sy = await call('POST', '/api/me/room/style', { room: 0, floor: 'marble', wall: 'sage' }, M.P); ok(sy.status === 200 && sy.json.room.styles[0].f === 'marble' && sy.json.room.styles[0].w === 'sage' && sy.json.coins === sl.json.coins - 6800, 'marble floor and sage walls in the bedroom', JSON.stringify(sy.json.room.styles));
   ok((await call('POST', '/api/me/room/style', { room: 9, floor: 'wood' }, M.P)).status === 400, 'only rooms the house has');
   // photos
@@ -1933,7 +1947,7 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   const ph3 = await up(frame.i, jpg, M.P), pid3 = ph3.json.room?.items?.find(x => x.i === frame.i)?.ph; await call('POST', '/api/me/room/sell', { i: frame.i }, M.P);
   ok(pid3 && (await fetch(BASE + '/api/room/photos/' + pid3)).status === 404, 'selling a frame deletes its photo');
   await pool.query('update citizens set home_id = (select id from buildings where type = $2 limit 1) where id = $1', [V.id, 'tent']);
-  const poor = await call('POST', '/api/me/room/buy', { k: 'statue', x: 0, y: 0, r: 0 }, V.P); ok(poor.status === 400 && /costs 150,000/.test(poor.json.error || ''), 'without the coins, you can’t buy a gold statue', JSON.stringify(poor.json));
+  const poor = await call0('POST', '/api/me/room/buy', { k: 'statue', x: 0, y: 0, r: 0 }, V.P); ok(poor.status === 409 && /Furniture store/.test(poor.json.error || ''), 'a gold statue for a home comes from a store, not from Furnish', JSON.stringify(poor.json));
   ok((await call('GET', '/api/citizens/visitor_vi/room', undefined, M.P)).json.room.items.length === 0, '…and nothing was taken or placed');
   await pool.query('update citizens set home_id = (select id from buildings where type = $2 limit 1) where id = $1', [M.id, 'tent']);
   const moved = (await call('GET', '/api/me/room', undefined, M.P)).json; ok(moved.size === 4 && moved.room.box.length > 0 && moved.room.items.every(x => x.x < 4 && x.y < 4), 'moving into a tent packs away what no longer fits', JSON.stringify(moved).slice(0, 200)); }
@@ -2060,9 +2074,10 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   ok((await call('GET', '/api/me/love', undefined, B.P)).json.current.proposedBy === 'them', '…Ben sees the proposal');
   ok((await call('POST', '/api/me/love/proposal', { accept: true }, B.P)).json.status === 'married', '…and says yes: they’re married');
   const ph = (await call('GET', '/api/citizens/love_ben/room', undefined, A.P)).json; ok(ph.mine === true && ph.partner === true, 'married: Amy can furnish Ben’s home', JSON.stringify({ mine: ph.mine, partner: ph.partner }));
+  { const bb = (await pool.query('select room from citizens where id = $1', [B.id])).rows[0].room || { items: [], box: [] }; bb.box = [...(bb.box || []), { i: 'pl4nt001', k: 'plant', c: 0 }]; await pool.query('update citizens set room = $2 where id = $1', [B.id, JSON.stringify(bb)]); } /* (a plant he bought at a store, in his storage) */
   let put = null; for (let y = 0; y < 8 && !put; y++) for (let x = 0; x < 8 && !put; x++) { const r = await call('POST', '/api/me/partner/room/buy', { k: 'plant', x, y, r: 0 }, A.P); if (r.status === 200) put = r; }
-  ok(put && put.json.partner && (await call('GET', '/api/me/room', undefined, B.P)).json.room.items.some(i => i.k === 'plant'), '…what she buys goes into his home', JSON.stringify(put?.json?.error || ''));
-  ok(Number((await pool.query('select coins_base from citizens where id = $1', [A.id])).rows[0].coins_base) < 200_000 && Number((await pool.query('select coins_base from citizens where id = $1', [B.id])).rows[0].coins_base) === 200_000, '…paid from her own coins');
+  ok(put && put.json.partner && (await call('GET', '/api/me/room', undefined, B.P)).json.room.items.some(i => i.k === 'plant'), '…she can set out what’s in his home’s storage', JSON.stringify(put?.json?.error || ''));
+  ok((await call('GET', '/api/me/room', undefined, B.P)).json.room.box.every(i => i.i !== 'pl4nt001'), '…it came out of his storage');
   ok((await call('GET', `/api/buildings/${shop.id}/inside`, undefined, A.P)).json.mine === true, '…and she can design his business too');
   ok((await call('POST', `/api/me/buildings/${shop.id}/inside/buy`, { k: 'plant', x: 0, y: 0, r: 0 }, C.P)).status === 403, '…but nobody else can');
   ok((await call('POST', '/api/me/partner/room/buy', { k: 'plant', x: 1, y: 1, r: 0 }, C.P)).status === 403, 'someone single has no partner’s home to furnish');
@@ -2148,6 +2163,27 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
     ok(back.status === 200 && left === 0 && (await call('GET', `/api/stores/${st.id}/stock`, undefined, { auth: false })).json.owned === false, 'sold back to the colony: the colony runs it again, and buys back the unsold stock', JSON.stringify({ b: back.json, left }));
     const sam = (await pool.query('select coins_base from citizens where id = $1', [own.id])).rows[0].coins_base;
     ok(Number(sam) >= 5000000 - unit * 2 + PM.pulse.price + unit + back.json.back - 1, '…at what the owner paid for it', String(sam)); }
+  // ---- every store that sells to players: clothes, shoes, jewellery, furniture, electronics; supermarkets carry several departments ----
+  { const sh = await player('shop_sue', 1000), S0 = await import('../shared/stores.js'); await pool.query('update citizens set coins_base = 2000000, net = 0 where id = $1', [sh.id]);
+    const mk = async (type, x) => (await call('POST', '/api/admin/buildings', { type, x, y: 1380, instant: true })).json.building;
+    const fs = await mk('furniture', 1600), el = await mk('electronics', 1606), sm = await mk('supermarket', 1612), ss = await mk('shoeshop', 1620);
+    ok(S0.productsOf('furniture').every(P => P.kind === 'home' && !S0.ELECTRONICS.has(P.key)) && S0.productsOf('electronics').every(P => S0.ELECTRONICS.has(P.key)), 'the Furniture store sells furniture; the Electronics store, the appliances');
+    const depts = new Set(S0.productsOf('supermarket').map(P => P.dept)); ok(['Tops', 'Shoes', 'Electronics', 'Phones', 'Living room'].every(d => depts.has(d)), 'a supermarket has several departments', [...depts].join(', '));
+    await pool.query('update citizens set home_id = null where id = $1', [sh.id]); const nohome = await call('POST', '/api/me/store/buy', { buildingId: fs.id, item: 'f:sofa' }, sh.P); ok(nohome.status === 409 && /home/.test(nohome.json.error), 'furniture needs a home to go to', JSON.stringify(nohome.json));
+    const hs = await mk('house', 1630); await pool.query(`update citizens set home_id = $2, home_unit = null, home_unit_bid = null, room = null where id = $1`, [sh.id, hs.id]);
+    const f1 = await call('POST', '/api/me/store/buy', { buildingId: fs.id, item: 'f:sofa', c: 3 }, sh.P), f2 = await call('POST', '/api/me/store/buy', { buildingId: el.id, item: 'f:fridge' }, sh.P);
+    ok(f1.status === 200 && f1.json.stored?.k === 'sofa' && f1.json.stored.c === 3 && f2.status === 200 && f2.json.stored?.k === 'fridge', 'a sofa from the Furniture store and a fridge from the Electronics store go into your storage', JSON.stringify([f1.json, f2.json]).slice(0, 240));
+    ok((await call('POST', '/api/me/store/buy', { buildingId: fs.id, item: 'f:fridge' }, sh.P)).status === 400 && (await call('POST', '/api/me/store/buy', { buildingId: fs.id, item: 'f:djbooth' }, sh.P)).status === 400, '…each store sells only its own (and nobody sells a DJ booth for a home)');
+    const rm = (await call('GET', '/api/me/room', undefined, sh.P)).json; ok(rm.room.box.some(i => i.k === 'sofa') && rm.room.box.some(i => i.k === 'fridge'), 'they wait in storage, to place from Furnish');
+    let placed = null; for (let y = 0; y < 8 && !placed; y++) for (let x = 0; x < 8 && !placed; x++) { const r = await call0('POST', '/api/me/room/buy', { k: 'sofa', x, y, r: 0 }, sh.P); if (r.status === 200) placed = r; }
+    ok(placed && placed.json.room.items.some(i => i.k === 'sofa' && i.c === 3) && !placed.json.room.box.some(i => i.k === 'sofa') && placed.json.coins === 2000000 - 4000 - 4500, 'Furnish sets the sofa out from storage, without paying again', JSON.stringify(placed?.json?.coins));
+    const ph = await call('POST', '/api/me/phone', { model: 'nimbus', buildingId: sm.id }, sh.P), shoe = await call('POST', '/api/me/store/buy', { buildingId: sm.id, item: 'w:shoe:boots' }, sh.P);
+    ok(ph.status === 200 && ph.json.phone.m === 'nimbus' && shoe.status === 200 && shoe.json.wardrobe.includes('shoe:boots'), 'at the supermarket: a phone from its phone counter, boots from its shoe aisle', JSON.stringify([ph.json, shoe.json]).slice(0, 200));
+    ok((await call('POST', '/api/me/phone', { model: 'zenith', buildingId: sm.id }, sh.P)).status === 409, '…but not the finest phones (those are at a Phone store)');
+    // an owned shoe shop: stocked by its owner, like any store
+    await pool.query('update buildings set owner_id = $2, owner_handle = $3 where id = $1', [ss.id, sh.id, 'shop_sue']); const other = await player('shop_ola', 1000); await pool.query('update citizens set coins_base = 50000 where id = $1', [other.id]);
+    ok((await call('POST', '/api/me/store/buy', { buildingId: ss.id, item: 'w:shoe:loafers' }, other.P)).status === 409, 'an owned shoe shop sells only what its owner has stocked');
+    ok((await call('POST', '/api/me/stock', { buildingId: ss.id, item: 'w:shoe:loafers', qty: 1 }, sh.P)).status === 200 && (await call('POST', '/api/me/store/buy', { buildingId: ss.id, item: 'w:shoe:loafers' }, other.P)).status === 200, '…once stocked, it sells, into the till'); }
 }
 { // the developer can walk into any building (even one the public can't, or a locked home) and furnish it, for nothing
   const pol = (await call('POST', '/api/admin/buildings', { type: 'police', x: 1460, y: 1300, instant: true })).json.building, bak = (await call('POST', '/api/admin/buildings', { type: 'bakery', x: 1480, y: 1300, instant: true })).json.building;

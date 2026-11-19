@@ -3,6 +3,9 @@
 import { pool } from './db.js';
 import { HttpError } from './world.js';
 import { STORES, STOCK_MAX, productOf, productsOf, wholesale } from '../shared/stores.js';
+import crypto from 'node:crypto';
+import { wardKey } from '../shared/avatar.js';
+import { FURNITURE, TINTS, MAX_STORED } from '../shared/furniture.js';
 import { treasuryAdd } from './races.js';
 import { track } from './stats.js';
 
@@ -45,6 +48,28 @@ export async function restock(world, playerId, { buildingId, item, qty }) {
     c.coins_base -= cost; treasuryAdd(ch, cost); track(ch, 'store:stock', cost, c.id); ch.touch(c); await ch.saveCitizen(c);
     const q = (await ch.q('insert into store_stock (building_id, item, qty) values ($1, $2, $3) on conflict (building_id, item) do update set qty = store_stock.qty + $3 returning qty', [b.id, P.k, n])).rows[0].qty;
     return { ok: true, item: P.k, qty: q, paid: cost, unit, coins: c.coins_base };
+  });
+}
+
+// Buying a thing to wear (into your wardrobe) or for your home (into its storage, to place from 🛋️ Furnish)
+export async function buyGoods(world, playerId, { buildingId, item, c: tint }) {
+  return world.change(async ch => {
+    const b = (await ch.q('select id, type, owner_id, owner_handle from buildings where id = $1 and done and not ruin for update', [String(buildingId || '')])).rows[0];
+    if (!b || !STORES[b.type]) throw new HttpError(404, 'That isn’t an open store.');
+    const P = productOf(b.type, String(item || '')); if (!P || !(P.kind === 'wear' || P.kind === 'home')) throw new HttpError(400, 'This store doesn’t sell that.');
+    const c = (await ch.q('select * from citizens where id = $1 for update', [playerId])).rows[0]; if (!c) throw new HttpError(404, 'Who are you?');
+    const ward = [...(c.wardrobe || [])]; let room = null, stored = null;
+    if (P.kind === 'wear') { if (ward.includes(wardKey(P.slot, P.key))) throw new HttpError(409, `You already have the ${P.name.toLowerCase()}: wear it from your character (✏️ on your card).`); }
+    else { if (!c.home_id) throw new HttpError(409, 'You need a home first: furniture goes into your home’s storage.');
+      room = c.room && typeof c.room === 'object' ? { ...c.room } : { items: [], box: [] }; room.items = room.items || []; room.box = [...(room.box || [])];
+      if (room.box.length >= MAX_STORED) throw new HttpError(409, 'Your storage is full. Place or sell something from 🛋️ Furnish first.'); }
+    ch.coins(c); if (Number(c.coins_base) < P.price) throw new HttpError(400, `The ${P.name} costs ${fmt(P.price)} coins. You have ${fmt(c.coins_base)} on you${Number(c.bank) ? ' (withdraw some at a Bank first)' : ''}.`);
+    const sold = await sell(ch, b, P.k, P.price);
+    c.coins_base = Number(c.coins_base) - P.price; if (!sold.owned) treasuryAdd(ch, P.price); track(ch, P.kind === 'wear' ? 'look:wardrobe' : 'home:furniture', P.price, c.id);
+    if (P.kind === 'wear') { ward.push(wardKey(P.slot, P.key)); await ch.q('update citizens set wardrobe = $2 where id = $1', [c.id, ward]); }
+    else { const f = FURNITURE[P.key], col = f.tint && Number.isInteger(+tint) && +tint >= 0 && +tint < TINTS.length ? +tint : 0; stored = { i: crypto.randomUUID().slice(0, 8), k: P.key, c: col }; room.box.push(stored); await ch.q('update citizens set room = $2 where id = $1', [c.id, JSON.stringify(room)]); }
+    ch.touch(c); await ch.saveCitizen(c);
+    return { ok: true, item: P.k, kind: P.kind, name: P.name, paid: P.price, coins: Math.round(Number(c.coins_base)), wardrobe: P.kind === 'wear' ? ward : undefined, stored, store: sold.owned ? { left: sold.left } : null };
   });
 }
 

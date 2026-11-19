@@ -6,6 +6,7 @@ import * as R from '../shared/rules.js';
 import { BUILDING_TYPES, CAR_MODELS, BANK_TYPES, carPaid, carKind, ridden, needsHangar, hangarCap, PHONE_MODELS, phoneOf } from '../shared/catalog.js';
 import { treasuryAdd } from './races.js';
 import { sell } from './stores.js';
+import { productOf } from '../shared/stores.js';
 import { track, snapshot, ledger, econTick } from './stats.js';
 import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
@@ -195,8 +196,8 @@ export class Economy {
     const M = PHONE_MODELS[model]; if (!M || !M.price) throw new HttpError(400, 'Pick a phone from the store.');
     if (!M.colors.includes(color)) color = M.colors[0];
     return this.world.change(async ch => {
-      const shop = (await ch.q("select id, type, owner_id, owner_handle from buildings where id = $1 and type = 'phonestore' and done and not ruin for update", [String(buildingId || '')])).rows[0];
-      if (!shop) throw new HttpError(409, 'Phones are sold at a Phone store. Tap one on the map.');
+      const shop = (await ch.q("select id, type, owner_id, owner_handle from buildings where id = $1 and done and not ruin for update", [String(buildingId || '')])).rows[0];
+      if (!shop || !productOf(shop.type, model)) throw new HttpError(409, 'Phones are sold at a Phone store (and at supermarkets and malls). Tap one on the map.');
       const c = await this.lockMe(ch, id), now = phoneOf(c.phone);
       if (now.m === model) { await ch.q('update citizens set phone = $2 where id = $1', [c.id, model + '|' + color]); return { ok: true, phone: { m: model, col: color }, recolour: true }; } /* the same phone: a new colour, free */
       const back = Math.floor((now.price || 0) / 5), cost = M.price - back;

@@ -1,6 +1,7 @@
 import { noteActive, history, track } from './stats.js';
 import { treasuryAdd } from './races.js';
-import { stockOf, restock } from './stores.js';
+import { stockOf, restock, buyGoods } from './stores.js';
+import { whereToBuy } from '../shared/stores.js';
 import * as AV from '../shared/avatar.js';
 import { assertNotMuted } from './chat.js';
 import express from 'express';
@@ -276,6 +277,7 @@ export function playersRouter({ limit, send, admin, world }) {
   // stores (shared/stores.js): what one has in stock, and its owner buying more in from the colony
   r.get('/stores/:id/stock', limit, send(async req => stockOf(req.params.id)));
   r.post('/me/stock', limit, send(async req => restock(world, (await me(req)).id, req.body || {})));
+  r.post('/me/store/buy', limit, send(async req => buyGoods(world, (await me(req)).id, req.body || {})));
   r.post('/me/phone', limit, send(async req => { const b = req.body || {}; return world.economy.buyPhone((await me(req)).id, String(b.model || ''), String(b.color || ''), b.buildingId); }));
   r.post('/me/cars', limit, send(async req => { const b = req.body || {}; return world.economy.buyCar((await me(req)).id, String(b.model || ''), String(b.color || ''), b.buildingId); }));
   r.delete('/me/cars/:id', limit, send(async req => world.economy.sellCar((await me(req)).id, req.params.id)));
@@ -501,6 +503,8 @@ export function playersRouter({ limit, send, admin, world }) {
       const c = (await ch.q('select * from citizens where id = $1 for update', [p.id])).rows[0]; if (!c) throw new HttpError(404, 'No such colonist.');
       const L = AV.fixLook(b.look, lookOf(c));
       if (c.look_set && L.g !== c.gender) throw new HttpError(409, 'You chose to be a ' + (c.gender === 'f' ? 'woman' : 'man') + ' when you made your character. Ask the developer if it needs changing.'); /* chosen once, the first time */
+      { const notHad = AV.unpaid(L, c.wardrobe).filter(([slot]) => slot !== 'hair'); /* things to wear: bought in the stores */
+        if (notHad.length) { const [slot, k] = notHad[0], it = AV.itemOf(slot, k); throw new HttpError(409, `You don’t have the ${it ? it[0].toLowerCase() : k} yet: buy it at ${whereToBuy('wear', slot, k)}.`); } }
       const owed = AV.unpaid(L, c.wardrobe), total = owed.reduce((n, x) => n + x[2], 0), ward = [...(c.wardrobe || [])];
       if (total) { ch.coins(c);
         if (!b.buy) throw new HttpError(409, `That look has ${owed.length === 1 ? 'one thing' : owed.length + ' things'} you haven't bought yet (${total.toLocaleString('en-US')} coins).`);

@@ -364,6 +364,8 @@ const MIGRATIONS = [
   `alter table citizens add column if not exists phone text;`,
   // v80: what each player-owned store has in stock (shared/stores.js): bought from the colony at wholesale, sold at the shop price
   `create table if not exists store_stock (building_id text not null, item text not null, qty int not null default 0, primary key (building_id, item));`,
+  // v81: watching races at a Racetrack in 3D: the entry ticket its owner sets, and who holds a ticket (until when)
+  `alter table buildings add column if not exists ticket int; create table if not exists track_tickets (building_id text not null, citizen_id text not null, handle text, until bigint not null, primary key (building_id, citizen_id));`,
 ];
 
 export async function migrate() {

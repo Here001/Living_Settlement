@@ -1187,6 +1187,10 @@ body.phone-on .worldbtn{display:none}
 .rndbtn.hexit{left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%)}.rndbtn.hexit:active{transform:translateX(-50%) scale(.95)}
 .rndbtn.hchatbtn{width:52px;height:52px;right:calc(env(safe-area-inset-right,0px) + 16px);bottom:calc(84px + env(safe-area-inset-bottom));z-index:3}.rndbtn.hchatbtn b{font-size:22px}
 .hchat.dchatbox{right:auto;left:calc(env(safe-area-inset-left,0px) + 12px);bottom:calc(262px + env(safe-area-inset-bottom));z-index:5}
+.trackview{background:#c9d8e4}.trackstage{position:absolute;inset:0}.trackstage canvas{display:block;width:100%;height:100%}
+.trhud{position:absolute;left:calc(env(safe-area-inset-left,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 12px);z-index:4;background:rgba(20,22,28,.62);color:#fff;border-radius:14px;padding:9px 12px;max-width:min(260px,62vw);backdrop-filter:blur(4px);display:flex;flex-direction:column;gap:3px}
+.trhud .trname{font-size:14px}.trstatus{font-size:13px;color:#F2C94C;font-weight:800}.trboard{margin:2px 0 4px;padding-left:18px;font-size:12.5px;line-height:1.35}.trbet{align-self:flex-start}
+.rndbtn.trleave{left:calc(env(safe-area-inset-left,0px) + 18px);bottom:calc(30px + env(safe-area-inset-bottom))}
 .rndbtn.dpick{width:44px;height:44px;left:calc(env(safe-area-inset-left,0px) + 84px);bottom:calc(200px + env(safe-area-inset-bottom))}.rndbtn.dpick b{font-size:19px}
 .rndbtn.dchat{width:52px;height:52px;left:calc(env(safe-area-inset-left,0px) + 18px);bottom:calc(196px + env(safe-area-inset-bottom))}.rndbtn.dchat b{font-size:22px}@keyframes floatin{from{opacity:0}to{opacity:1}}
 .hback{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);z-index:9650;box-shadow:0 4px 16px rgba(0,0,0,.3)}
@@ -5537,7 +5541,7 @@ function renderRaces(force){ const body=$('raceBody'); if(!body||activeTab!=='ra
   const live=liveRace();
   if(live && live.el<=I.len/1000+2){ const box=el('div',{class:'rlive'}, el('h3',{text:`Race #${live.r.no}${at} is running!`}));
     const lanes=el('div',{class:'lanes',id:'raceLanes'}); for(const id of fieldOf(live.r)){ const ln=el('div',{class:'lane'}); const im=el('img',{alt:CREATURES[id].name,src:creatureThumb(id),'data-id':id}); ln.append(el('span',{class:'lname',text:CREATURES[id].name}), im); lanes.append(ln); }
-    box.append(lanes); if(I.track) box.append(el('button',{class:'btn',text:'Watch on the map',onclick:()=>watchTrack()})); body.append(box); updateLanes(); }
+    box.append(lanes); if(I.track) box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🏟️ Watch at the track (3D)',onclick:()=>{ const b=D.buildings.get(I.track.id)||{id:I.track.id,type:'racetrack',x:I.track.x,y:I.track.y,name:I.track.name}; TrackView.gate(b); }}), el('button',{class:'btn',text:'Watch on the map',onclick:()=>watchTrack()}))); body.append(box); updateLanes(); }
   else if(I.last && I.last.result){ const o=I.last.result.order; body.append(el('div',{class:'rlast'}, el('h3',{text:`Race #${I.last.no}${at} result${I.last.cup?' · '+I.last.cup.name:''}`}),
       el('ol',null,...o.slice(0,3).map(id=>el('li',null, el('img',{alt:'',src:creatureThumb(id),width:'28',height:'28'}), CREATURES[id].name))))); }
   if(!I.track){ body.append(el('p',{class:'hint',text:"The colony doesn't have a Racetrack yet. Once one is built, it runs a race every 30 minutes (and each extra Racetrack adds its own races)."})); return; }
@@ -7085,7 +7089,7 @@ const CallVoice=Object.assign(Object.create(Voice),{ R:null, cfg:null, pc:null, 
   quality0(){ const q=[...this.els.values()].map(x=>x.q).filter(Boolean)[0]||null; return q; }, /* the other end's connection */
   paint(){ Phone.paintCall(); }, light(id,on){ if(!on) this.lit.delete(id); Phone.talking(id,on); } });
 const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null, unread:0,
-  inside(){ return !!((typeof Room!=='undefined'&&Room.el)||(typeof Drive!=='undefined'&&Drive.el)); }, /* in a place, or in the car */
+  inside(){ return !!((typeof Room!=='undefined'&&Room.el)||(typeof Drive!=='undefined'&&Drive.el)||(typeof TrackView!=='undefined'&&TrackView.el)); }, /* in a place, in the car, or at the races */
   // the phone in your hand: its home screen has the same five apps as the bar at the bottom of the map (Town Square,
   // My card, Colonists, Races, Chats). An app is the real thing, moved onto the phone's screen while it's open (the
   // panel or the card), so everything in it works just as it does on the map; the home bar takes you back to the apps.
@@ -7252,7 +7256,7 @@ const World={ btn:null, last:null, booted:false,
     { const col=d3?((Drive.el&&Drive.el.querySelector('.sidecol'))||(Room.el&&!Room.el.hidden&&Room.el.querySelector('.sidecol'))):null; /* in 3D: second in the column, under ▴ */
       if(col){ if(b.parentElement!==col){ const t=col.querySelector('.sidetoggle'); col.insertBefore(b,t?t.nextSibling:col.firstChild); b.classList.add('sidebtn','sidehide'); } }
       else if(b.parentElement!==document.body){ document.body.append(b); b.classList.remove('sidebtn','sidehide'); } }
-    this.dodge(); b.hidden=!on||!!document.querySelector('.cre')||document.body.classList.contains('mg-on');
+    this.dodge(); b.hidden=!on||!!document.querySelector('.cre')||document.body.classList.contains('mg-on')||!!(typeof TrackView!=='undefined'&&TrackView.el); /* (at the races: 🚪 Leave takes you back) */
     const k=d3?'2d':'3d'; if(b.dataset.k===k) return; b.dataset.k=k; b.replaceChildren(el('b',{text:d3?'2D':'3D'}));
     b.title=d3?'The colony map (2D): come back with 3D':'Back to your character in 3D'; b.setAttribute('aria-label',b.title); },
   toggle(){ if(this.in3d()) this.toMap(); else this.to3D(); },
@@ -7391,6 +7395,47 @@ function drivingAt(c){ const d=DrivingNow.get(c.id); if(!d) return null; if(Date
   if(d.mode==='ride'){ const by=d.by&&S.citizens.get(d.by); return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:false, act:by?`Riding with @${by.handle}`:'Riding in a car', where:'the streets', bid:null, moving:true, seg:null, plan:null }; } /* in someone's car: it's their car you see */
   if(d.mode==='walk') return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:true, act:'Walking around town', where:'the streets', bid:null, moving:true, seg:null, plan:null }; /* out on foot, as themselves */
   const M=CAR_MODELS[d.m], V=M?(M.vtype?VEHICLE_TYPES[M.vtype]||VEHICLE_TYPES.car:M):VEHICLE_TYPES.car; /* (out in a boat: a boat) */ return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:true, car:true, V, col:d.col||V.colors[0], act:'Driving around town', where:'the streets', bid:null, moving:true, seg:null, plan:null }; }
+// ---- At the races in 3D: a ticket at the gate (the owner sets its price; a track nobody owns charges the colony's),
+// seats for so many people, the oval, the grandstand with whoever else is here, and the race everyone sees ----
+const TrackView={ el:null, T:null, b:null, g:null,
+  async load(b){ try{ return await api('/api/tracks/'+encodeURIComponent(b.id)+'/gate'); }catch(e){ toast(e.message); return null; } },
+  // on the track's card: the ticket price, seats, a button in, and (for its owner) the price to set
+  cardBox(b){ const box=el('div',{class:'authbox trackgate'}, el('h3',{text:'🏟️ Watch the races here'}), el('p',{class:'hint',text:'Loading the gate…'}));
+    this.load(b).then(g=>{ if(!g||!box.isConnected) return; box.replaceChildren(el('h3',{text:'🏟️ Watch the races here'}));
+      const have=g.until&&g.until>Date.now();
+      box.append(el('p',{class:'jobnow',text:`🎟️ Ticket: ${g.ticket?fmt(g.ticket)+' coins':'free'} · ${g.inside} of ${g.seats} seats taken`}), el('p',{class:'hint',text:g.owner?`Run by @${g.owner}: the ticket money goes into the track’s till.`:'Run by the colony: the ticket money goes to the treasury.'}));
+      box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:have?'🏟️ Go back in':g.mine?'🏟️ Go in (it’s yours)':`🎟️ Buy a ticket and go in`,disabled:!have&&!g.mine&&g.inside>=g.seats?'':null,onclick:()=>this.gate(b)})));
+      if(g.mine){ const inp=el('input',{type:'number',min:'0',max:'5000',step:'50',value:String(g.ticket),'aria-label':'Ticket price'});
+        box.append(el('div',{class:'cbet'}, el('span',{text:'Ticket price:'}), inp, el('button',{class:'btn',text:'Save',onclick:async()=>{ try{ const r=await api('/api/tracks/'+encodeURIComponent(b.id)+'/ticket',{method:'PUT',body:{price:Number(inp.value)}}); toast(`🎟️ Tickets now cost ${r.ticket?fmt(r.ticket)+' coins':'nothing'}.`); }catch(e){ toast(e.message); } }}))); } });
+    return box; },
+  // buy a ticket (or use the one you have) and go in
+  async gate(b){ if(!(Me&&Me.token)){ toast('Sign in to your colonist first.'); return; } const g=await this.load(b); if(!g) return; const have=g.until&&g.until>Date.now();
+    const go=async()=>{ try{ const r=await api('/api/tracks/'+encodeURIComponent(b.id)+'/enter',{method:'POST'}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } if(r.paid) toast(`🎟️ Ticket bought: ${fmt(r.paid)} coins. Enjoy the races!`); this.open(b,g); }catch(e){ toast(e.message); } };
+    if(have||g.mine||!g.ticket) return go(); toast(`🎟️ A ticket to ${g.name} costs ${fmt(g.ticket)} coins (${g.seats-g.inside} seats left). It lasts until the next race has run.`,'Buy ticket',go); },
+  async open(b,g){ if(this.el) this.close(true); if(Drive.el) Drive.close(true); if(Room.el) Room.close(true); closeCard(); openTab(null); this.b=b; this.g=g; Race.track=b.id; await loadRace();
+    const stage=el('div',{class:'trackstage'}); this.status=el('div',{class:'trstatus'}); this.board=el('ol',{class:'trboard'});
+    const side=sideCol(el('button',{class:'sidebtn',title:'Camera: from the stands, behind the leader, or from above','aria-label':'Camera',text:'🎥',onclick:()=>{ if(!this.T) return; const m=this.T.view(); toast(m==='follow'?'🎥 Behind the leader':m==='above'?'🎥 From above':'🎥 From the stands'); }}), Phone.sideBtn());
+    const leave=el('button',{class:'rndbtn trleave','aria-label':'Leave the track',onclick:()=>this.close()}, el('b',{text:'🚪'}), el('span',{text:'Leave'}));
+    const bet=el('button',{class:'btn primary sm trbet',text:'🏁 Bet on the next race',onclick:()=>{ Phone.show('races'); }});
+    const root=el('div',{class:'webview trackview',role:'dialog','aria-label':'At the races'}, stage, el('div',{class:'trhud'}, el('b',{class:'trname',text:`🏟️ ${g.name}`}), this.status, this.board, bet), side, leave);
+    document.body.append(root); document.body.classList.add('room-on'); this.el=root;
+    let M; try{ M=await import('/racetrack3d.js'); }catch(e){ this.close(true); toast('The track couldn’t load. Check your connection.'); return; } if(this.el!==root) return;
+    try{ this.T=M.createTrack(stage,{ grand:!!(BUILDING_TYPES[b.type]||{}).grand, colour:(T(b).colors||{}).stand, minute:()=>((gmNow()%1440)+1440)%1440, runners:()=>this.runners(), people:()=>this.people||[], board:()=>this.boardLines() }); }catch(e){ this.close(true); toast('Your phone couldn’t show the 3D track.'); return; }
+    try{ window.__track=this; }catch(e){}
+    this.tick(); clearInterval(this.timer); this.timer=setInterval(()=>this.tick(),500); },
+  // the race on the track now: the live one (or the one just run, for a little while), else the next one at the gates
+  race(){ const I=Race.info; if(!I) return null; const live=liveRace(); if(live) return { r:live.r, el:live.el, live:true }; return I.next?{ r:I.next, el:(raceNow()-I.next.start)/1000, live:false }:null; },
+  runners(){ const R=this.race(); if(!R) return []; const fl=fieldOf(R.r), n=fl.length; return fl.map((id,i)=>{ const p=R.live?raceProgress(R.r,id,R.el):0; return { id, lane:i, n, p, run:R.live&&R.el>=0&&p<1 }; }); },
+  boardLines(){ const R=this.race(); if(!R) return ['🏁 No races yet']; const no=`Race #${R.r.no}`;
+    if(!R.live){ const left=R.r.start-raceNow(); return [`🏁 ${no}`, left>1000?`Starts in ${fmtLeft(left)}`:'They’re at the gates', ...fieldOf(R.r).slice(0,3).map(id=>`${CREATURES[id].name} · ${R.r.odds&&R.r.odds[id]?R.r.odds[id].pays+'×':''}`)]; }
+    const order=this.runners().sort((a,b)=>b.p-a.p), done=R.el>=(Race.info.len/1000);
+    return [`🏁 ${no}`, done?`🏆 ${CREATURES[(R.r.result&&R.r.result.order[0])||order[0].id].name} wins!`:'And they’re off!', ...(done&&R.r.result?R.r.result.order:order.map(o=>o.id)).slice(0,3).map((id,i)=>`${i+1}. ${CREATURES[id].name}`)]; },
+  tick(){ if(!this.el) return; const L=this.boardLines(); this.status.textContent=L[1]||''; this.board.replaceChildren(...L.slice(2).map(t=>el('li',{text:t.replace(/^\d\. /,'')})));
+    const R=this.race(), now=Date.now(); if(!this.lastLoad||now-this.lastLoad>8000||(R&&!R.live&&raceNow()>=R.r.start&&now-this.lastLoad>1500)){ this.lastLoad=now; loadRace(); }
+    if(!this.peopleAt||now-this.peopleAt>10000){ this.peopleAt=now; this.load(this.b).then(g=>{ if(!g||!this.el) return; const meH=((Me&&Me.handle)||'').toLowerCase(), hs=g.people.filter(h=>h.toLowerCase()!==meH);
+      Looks.want(hs).catch(()=>{}); this.people=hs.map(h=>({ id:h, look:Looks.m.get(h.toLowerCase())||null })); }); } },
+  close(quiet){ if(!this.el) return; clearInterval(this.timer); try{ this.T&&this.T.close(); }catch(e){} this.T=null; this.el.remove(); this.el=null; document.body.classList.remove('room-on'); this.people=[];
+    if(!quiet&&this.b) api('/api/tracks/'+encodeURIComponent(this.b.id)+'/leave',{method:'POST'}).catch(()=>{}); if(!quiet) toast('🚪 You left the track. Your seat is free for someone else.'); } };
 const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
   // which car: the one you're driving if it's a road one, otherwise a basic car
   ride(c){ const M=c&&c.car&&CAR_MODELS[c.car[0]]; if(M&&M.kind!=='water'&&M.kind!=='air'&&!M.vtype) return { m:c.car[0], col:c.car[1]||M.colors[0], kind:c.car[0], name:M.name, own:true, bike:M.kind==='bike' }; /* your own car (or bike), as itself */
@@ -8265,6 +8310,7 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(b.type==='petstore' && b.done!==false && !b.ruin && !Store.canWrite) card.append(PetStore.section(b));
     if(b.type==='phonestore' && b.done!==false && !b.ruin && !Store.canWrite) card.append(PhoneStore.section(b));
     if(b.type==='cardealer' && b.done!==false && !b.ruin && !Store.canWrite) card.append(dealerSection(b));
+    if(kindOf(b.type)==='racetrack' && b.done!==false && !b.ruin) card.append(TrackView.cardBox(b)); /* watch the races here in 3D: a ticket at the gate */
     if(STORE_UI[b.type]&&STORE_UI[b.type].kind==='goods' && b.done!==false && !b.ruin && !Store.canWrite) card.append(GoodsStore.section(b));
     if(kindOf(b.type)==='gamehouse' && b.done!==false && !b.ruin && !Store.canWrite) card.append(GH.section(b));
     if(kindOf(b.type)==='casino' && b.done!==false && !b.ruin && !Store.canWrite){ // the games are played right here, on the casino's own card

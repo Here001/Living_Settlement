@@ -1888,6 +1888,21 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
     const r1 = await call('POST', '/api/me/store/buy', { buildingId: jw.id, item: 'w:ring:band' }, A.P); ok(r1.status === 200 && r1.json.wardrobe.includes('ring:band'), 'a ring from the Jeweller goes into the wardrobe', JSON.stringify(r1.json).slice(0, 200));
     const r2 = await call('POST', '/api/me/look', { look: { ...fancy, w: { ...fancy.w, ring: ['band', 0] } } }, A.P); ok(r2.status === 200 && r2.json.look.w.ring?.[0] === 'band' && r2.json.spent === 0, '…and is worn on the hand', JSON.stringify(r2.json).slice(0, 200));
     ok((await call('POST', '/api/me/look', { look: { ...fancy, w: { ...fancy.w, ring: ['diamondring', 0] } } }, A.P)).status === 409, 'a ring not bought yet can’t be worn'); }
+  { // watching the races in 3D: a ticket at the gate, seats, and the owner's price
+    const rt = (await call('POST', '/api/admin/buildings', { type: 'racetrack', x: 1640, y: 1380, instant: true })).json.building;
+    const V1 = await player('fan_fay', 1000), V2 = await player('fan_finn', 50);
+    const g0 = (await call('GET', `/api/tracks/${rt.id}/gate`, undefined, V1.P)).json; ok(g0.ticket === 200 && g0.seats === 30 && g0.inside === 0 && !g0.owner, 'a track nobody owns: the colony’s ticket (200) and 30 seats', JSON.stringify(g0));
+    const e1 = await call('POST', `/api/tracks/${rt.id}/enter`, {}, V1.P); ok(e1.status === 200 && e1.json.paid === 200 && e1.json.coins === 800, 'a ticket costs 200 coins', JSON.stringify(e1.json));
+    ok((await call('POST', `/api/tracks/${rt.id}/enter`, {}, V1.P)).json.paid === 0, '…and going back in on the same ticket is free');
+    ok((await call('POST', `/api/tracks/${rt.id}/enter`, {}, V2.P)).status === 400, 'no coins, no ticket');
+    ok((await call('PUT', `/api/tracks/${rt.id}/ticket`, { price: 500 }, V1.P)).status === 403, 'only the owner sets the price');
+    await pool.query('update buildings set owner_id = $2, owner_handle = $3, till = 0 where id = $1', [rt.id, V2.id, 'fan_finn']);
+    ok((await call('PUT', `/api/tracks/${rt.id}/ticket`, { price: 30 }, V2.P)).json.ticket === 30, 'the owner sets the price');
+    const V3 = await player('fan_fern', 1000), e3 = await call('POST', `/api/tracks/${rt.id}/enter`, {}, V3.P);
+    ok(e3.json.paid === 30 && Number((await pool.query('select till from buildings where id = $1', [rt.id])).rows[0].till) === 30, 'an owned track: the ticket money goes into its till', JSON.stringify(e3.json));
+    await pool.query("insert into track_tickets (building_id, citizen_id, handle, until) select $1, 'x' || g, 'x' || g, $2 from generate_series(1, 30) g on conflict do nothing", [rt.id, Date.now() + 600000]);
+    const V4 = await player('fan_flo', 1000), e4 = await call('POST', `/api/tracks/${rt.id}/enter`, {}, V4.P); ok(e4.status === 409 && /full/.test(e4.json.error || ''), 'a full track turns people away', JSON.stringify(e4.json));
+    ok((await call('POST', `/api/tracks/${rt.id}/leave`, {}, V1.P)).status === 200 && !(await pool.query('select 1 from track_tickets where building_id = $1 and citizen_id = $2', [rt.id, V1.id])).rowCount, 'leaving frees your seat'); }
   ok(/chose/i.test((await call('POST', '/api/me/look', { look: { ...free, g: 'm' } }, A.P)).json.error || ''), 'once the character is made, man or woman stays');
   { const Z = await player('switch_sam', 100); await pool.query("update citizens set gender = 'f', gender_chosen = true where id = $1", [Z.id]);
     const sw = await call('POST', '/api/me/look', { look: { ...free, g: 'm' } }, Z.P); ok(sw.status === 200 && sw.json.look.g === 'm' && (await pool.query('select gender from citizens where id = $1', [Z.id])).rows[0].gender === 'm', 'making the character the first time, they can switch between man and woman', JSON.stringify(sw.json).slice(0, 120)); }

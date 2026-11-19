@@ -177,6 +177,11 @@ app.get('/api/citizens/:handle', limit, send(async req => {
 app.get('/api/fight', limit, send(async req => fights.info((await playerFrom(req))?.id)));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/fight-soon', admin, send(req => fights.testSoon((req.body || {}).in, (req.body || {}).gap)));
 app.get('/api/race', limit, send(async req => races.info((await playerFrom(req))?.id, typeof req.query.track === 'string' ? req.query.track : null)));
+// watching races at the track in 3D: the gate (ticket, seats, who's in), buying a ticket, leaving, and the owner's price
+app.get('/api/tracks/:id/gate', limit, send(async req => races.gate((await playerFrom(req))?.id || null, req.params.id)));
+app.post('/api/tracks/:id/enter', limit, send(async req => { const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Sign in to your colonist first.'); return races.enter(p.id, req.params.id); }));
+app.post('/api/tracks/:id/leave', limit, send(async req => { const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Sign in to your colonist first.'); return races.leave(p.id, req.params.id); }));
+app.put('/api/tracks/:id/ticket', limit, send(async req => { const p = await playerFrom(req); if (!p) throw new HttpError(401, 'Sign in to your colonist first.'); return races.setTicket(p.id, req.params.id, (req.body || {}).price); }));
 // Test servers only (ALLOW_TEST_ROUTES=1, never set on the live colony): run the daily payday on demand.
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/election-end', admin, send(async () => { const { weekOf, weekStart } = await import('./leaderboards.js'); const win = await world.elections.tally(weekStart(weekOf() + 1) + 1000); world.elections.testShift = 1; world.elections.cache.t = 0; return { winner: win?.handle || null }; }));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/bills', admin, send(() => world.change(ch => economy.weeklyBills(ch, true))));

@@ -10,12 +10,13 @@ import { pool } from './db.js';
 import { track } from './stats.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
-import { pgList } from '../shared/catalog.js';
+import { pgList, kindOf, BUILDING_TYPES } from '../shared/catalog.js';
 import { CREATURES, CREATURE_IDS, oddsFor, runRace, fieldFor, hashStr } from '../shared/creatures.js';
 
 // RACE_EVERY_MS can shorten the cycle for testing on a local server; the live colony uses 30 minutes.
 export const RACE_EVERY = Math.max(60000, Number(process.env.RACE_EVERY_MS) || 30 * 60 * 1000), RACE_LEN = 45 * 1000, RACE_ANNOUNCE = Math.min(150 * 1000, RACE_EVERY / 2);
 export const MAX_RACE_BET = 100000;
+export const TICKET_COLONY = 200, TICKET_MAX = 5000, TRACK_SEATS = 30; // watching at the track in 3D: the colony's ticket, an owner's most, people at once (a Grand racecourse: twice)
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const SLOTS = 6; // tracks are staggered by RACE_EVERY / SLOTS
 const raceOut = (r, label) => r && ({ n: r.n, track: r.track_id, no: label(r.track_id, r.n), start: Number(r.start_at), weather: r.weather, odds: r.odds, field: Object.keys(r.odds), cup: r.cup || null,
@@ -168,6 +169,34 @@ export class Races {
       return { ok: true, track: t.id, n, no: this.label(t.id, n), creature, amount, pays, coins: c.coins_base };
     });
   }
+  // ---- Watching in 3D: a ticket at the gate. A track nobody owns is the colony's (TICKET_COLONY coins, to the
+  // treasury); an owner sets their own price (0 to TICKET_MAX), paid into the track's till. A ticket lasts one race
+  // cycle. Each track takes only so many people at once (TRACK_SEATS), so the stands never get too heavy to draw.
+  async gateOf(id) { const b = (await pool.query('select id, type, name, owner_id, owner_handle, ticket from buildings where id = $1 and done and not ruin', [String(id || '')])).rows[0];
+    if (!b || kindOf(b.type) !== 'racetrack') throw new HttpError(404, 'That isn’t a Racetrack.'); return b; }
+  seatsOf(b) { return BUILDING_TYPES[b.type]?.grand ? TRACK_SEATS * 2 : TRACK_SEATS; }
+  priceOf(b) { return b.owner_id ? (b.ticket == null ? TICKET_COLONY : b.ticket) : TICKET_COLONY; }
+  async gate(playerId, id) { const b = await this.gateOf(id), now = Date.now(), inside = (await pool.query('select citizen_id, handle, until from track_tickets where building_id = $1 and until > $2 order by until', [b.id, now])).rows;
+    const mine = playerId ? inside.find(r => r.citizen_id === playerId) : null;
+    return { id: b.id, name: b.name || BUILDING_TYPES[b.type].name, owner: b.owner_handle || null, mine: !!(playerId && b.owner_id === playerId), ticket: this.priceOf(b), seats: this.seatsOf(b), inside: inside.length,
+      until: mine ? Number(mine.until) : null, people: inside.slice(0, this.seatsOf(b)).map(r => r.handle).filter(Boolean) }; }
+  async enter(playerId, id) { const b0 = await this.gateOf(id);
+    return this.world.change(async ch => { const now = Date.now(), b = (await ch.q('select id, type, owner_id, owner_handle, ticket from buildings where id = $1 for update', [b0.id])).rows[0];
+      const have = (await ch.q('select until from track_tickets where building_id = $1 and citizen_id = $2', [b.id, playerId])).rows[0];
+      if (have && Number(have.until) > now) return { ok: true, until: Number(have.until), paid: 0 };
+      const n = Number((await ch.q('select count(*) n from track_tickets where building_id = $1 and until > $2', [b.id, now])).rows[0].n);
+      if (n >= this.seatsOf(b)) throw new HttpError(409, `The stands are full (${this.seatsOf(b)} people). Try again in a little while.`);
+      const c = (await ch.q('select * from citizens where id = $1 for update', [playerId])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
+      const price = b.owner_id === playerId ? 0 : this.priceOf(b); ch.coins(c);
+      if (c.coins_base < price) throw new HttpError(400, `A ticket costs ${fmt(price)} coins. You have ${fmt(c.coins_base)} on you.`);
+      if (price) { c.coins_base -= price; ch.touch(c); await ch.saveCitizen(c); if (b.owner_id) await ch.q('update buildings set till = till + $2 where id = $1', [b.id, price]); else treasuryAdd(ch, price); track(ch, 'race:ticket', price, c.id); }
+      const until = now + RACE_EVERY; await ch.q('insert into track_tickets (building_id, citizen_id, handle, until) values ($1, $2, $3, $4) on conflict (building_id, citizen_id) do update set until = $4, handle = $3', [b.id, c.id, c.handle, until]);
+      await ch.q('delete from track_tickets where until < $1', [now - 3600000]); /* (old tickets go) */
+      return { ok: true, until, paid: price, coins: c.coins_base }; }); }
+  async leave(playerId, id) { await pool.query('delete from track_tickets where building_id = $1 and citizen_id = $2', [String(id || ''), playerId]); return { ok: true }; }
+  async setTicket(playerId, id, price) { const b = await this.gateOf(id); if (b.owner_id !== playerId) throw new HttpError(403, 'Only the track’s owner sets the ticket price.');
+    price = Math.floor(Number(price)); if (!(price >= 0 && price <= TICKET_MAX)) throw new HttpError(400, `A ticket can be 0 to ${fmt(TICKET_MAX)} coins.`);
+    await pool.query('update buildings set ticket = $2 where id = $1', [b.id, price]); return { ok: true, ticket: price }; }
   // The developer turns a track's next race into a Cup: a bonus pot from the treasury, shared by everyone who backs the winner.
   async setCup(bonus, name, trackId) {
     bonus = Math.floor(Number(bonus)); if (!(bonus >= 0) || bonus > 1000000) throw new HttpError(400, 'Bonus must be 0 to 1,000,000 coins.');

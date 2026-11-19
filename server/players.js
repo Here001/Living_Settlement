@@ -337,6 +337,12 @@ export function playersRouter({ limit, send, admin, world }) {
       world.love?.add(p.id, t.id, 'text', 1).catch(() => {}); /* a couple whispering: a little love */
       const pm = { from: p.handle, to: t.handle, text, t: Date.now(), private: true }; world.bus.publish([{ inside: true, place, k: 'chat', chat: pm, only: [p.handle.toLowerCase(), t.handle.toLowerCase()] }]); return { ok: true, chat: pm }; }
     const chat = { from: p.handle, text, t: Date.now() }; world.bus.publish([{ inside: true, place, k: 'chat', chat }]); return { ok: true, chat }; }));
+  // out on the street (walking or driving in 3D): say something to whoever is near you; it shows over your head for them
+  // (and in their street chat), like talking inside a place. Nothing is kept.
+  r.post('/street/say', limit, quota('group_msg'), send(async req => { const p = await me(req); await assertNotMuted(p.id); const b = bd(req), text = String(b.text || '').replace(/\s+/g, ' ').trim(), x = Number(b.x), y = Number(b.y);
+    if (!text) throw new HttpError(400, 'Write something first.'); if (text.length > 200) throw new HttpError(400, 'Keep it under 200 characters.');
+    if (![x, y].every(Number.isFinite) || Math.abs(x) > 1e5 || Math.abs(y) > 1e5) throw new HttpError(400, 'Where are you?');
+    const say = { id: p.id, from: p.handle, text, t: Date.now(), x: +x.toFixed(2), y: +y.toFixed(2) }; world.bus.publish([{ streetSay: true, ...say }]); return { ok: true, say }; }));
   // locked homes: ask to visit; the owner answers (let in for a while, or not), and can end a visit early
   r.get('/citizens/:handle/visit', limit, send(async req => world.visits.state((await playerFrom(req))?.id || null, req.params.handle)));
   r.post('/citizens/:handle/visit', limit, send(async req => { const p = await me(req); await assertNotMuted(p.id); return world.visits.request(p.id, p.handle, req.params.handle, bd(req).message); }));

@@ -624,7 +624,7 @@ body.clean #djBubble{display:none}
 .tpad{position:absolute;inset:auto 0 0 0;height:0;z-index:3;--ts:1;--tp:1}.tpad .tjoy{position:absolute;width:calc(128px*var(--ts));height:calc(128px*var(--ts))}.tpad .tjoy i{width:calc(54px*var(--ts));height:calc(54px*var(--ts));margin:calc(-27px*var(--ts)) 0 0 calc(-27px*var(--ts))}
 .tpad.swap .tjoy{left:auto;right:22px}
 .dsize{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font-size:14px;margin:4px 0}.dsize input{width:100%}
-.tpedals{position:absolute;right:16px;bottom:calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px;align-items:center} /* accelerator on top, brake/reverse below */.tpad.swap .tpedals{right:auto;left:16px}
+.tpedals{position:absolute;right:calc(16px + var(--sideX,0px));bottom:calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px;align-items:center} /* accelerator on top, brake/reverse below */.tpad.swap .tpedals{right:auto;left:16px}
 .tped{width:calc(84px*var(--tp));height:calc(100px*var(--tp));border-radius:16px 16px 22px 22px;background:linear-gradient(#3a3d44,#1f2126);border:2px solid rgba(255,255,255,.35);box-shadow:0 5px 14px rgba(0,0,0,.35);display:grid;place-items:end center;padding-bottom:12px;touch-action:none;user-select:none;-webkit-user-select:none;background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 3px,transparent 3px 12px),linear-gradient(#3a3d44,#1f2126)}
 .tped.brake{width:calc(84px*var(--tp));height:calc(72px*var(--tp))}.tped b{color:#fff;font-size:12px;letter-spacing:.06em;opacity:.85}.tped.on{transform:translateY(3px) scale(.97);border-color:#7fd1ff}
 .tsteer{position:absolute;left:16px;bottom:calc(24px + env(safe-area-inset-bottom));display:flex;gap:14px}.tpad.swap .tsteer{left:auto;right:16px}
@@ -1115,7 +1115,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .hact b{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;background:#fff;border:2px solid #2B2621;font-size:30px;box-shadow:0 4px 0 #2B2621}
 .hact:active b{transform:translateY(3px);box-shadow:0 1px 0 #2B2621}
 .hact span{font-size:12px;font-weight:800;color:#fff;background:rgba(43,38,33,.82);border-radius:999px;padding:3px 9px;white-space:nowrap}
-.hexit{position:absolute;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:4;border:2px solid #2B2621;background:#E4572E;color:#fff;font-weight:800;font-size:17px;border-radius:999px;padding:12px 26px;box-shadow:0 4px 0 #2B2621,0 8px 20px rgba(0,0,0,.25);animation:hexit .35s ease-out}.hexit[hidden]{display:none}@keyframes hexit{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+.hexit-old{position:absolute;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:4;border:2px solid #2B2621;background:#E4572E;color:#fff;font-weight:800;font-size:17px;border-radius:999px;padding:12px 26px;box-shadow:0 4px 0 #2B2621,0 8px 20px rgba(0,0,0,.25);animation:hexit .35s ease-out}.hexit[hidden]{display:none}@keyframes hexit{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
 .btn.love{background:#FCE4EB;border-color:#D9346A;color:#B23A5E}.lovechip{align-items:center;flex-wrap:wrap}.lovechip .hearts{font-size:18px}
 .lovebox{border-color:#E8A0B4}.lovebox h3{color:#B23A5E}.hearts{font-size:22px;letter-spacing:2px;color:#E0496E;line-height:1}.hearts i{font-style:normal;color:#E7C9D2}
 .lovebar{height:10px;border-radius:999px;background:#F4DDE4;overflow:hidden;margin:8px 0 4px}.lovebar b{display:block;height:100%;background:linear-gradient(90deg,#F28AA5,#D9346A);border-radius:999px;transition:width .4s}
@@ -1146,7 +1146,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .raintally{position:absolute;left:50%;bottom:130px;transform:translateX(-50%);z-index:6;background:rgba(20,12,30,.85);color:#FFE27A;font-weight:800;border-radius:999px;padding:8px 16px;white-space:nowrap;border:1px solid #F2C94C}
 .grabplus{position:fixed;z-index:9999;transform:translate(-50%,-50%);color:#2ECC71;font-weight:900;font-size:22px;text-shadow:0 2px 0 #145A32;pointer-events:none;animation:gplus .9s ease-out forwards}@keyframes gplus{to{transform:translate(-50%,-160%);opacity:0}}
 .spraysheet select{width:100%;margin:4px 0 8px}.spraysheet h4{margin:14px 0 6px}
-.hchatbtn{position:absolute;right:14px;bottom:72px;z-index:2;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.hchatbtn{position:absolute}
 .hchatbtn.new::after{content:'';position:absolute;top:-3px;right:-3px;width:11px;height:11px;border-radius:50%;background:#E74C3C;box-shadow:0 0 0 2px #fff}
 .hchat{position:absolute;right:10px;bottom:118px;z-index:3;width:min(340px,calc(100% - 150px));min-width:220px;background:rgba(255,255,255,.96);border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.3);padding:8px;display:flex;flex-direction:column;gap:6px;color:#222}
 .hchatlog{max-height:180px;min-height:60px;overflow-y:auto;font-size:13.5px;line-height:1.35;display:flex;flex-direction:column;gap:4px}
@@ -1162,9 +1162,28 @@ body.phone-on .worldbtn{display:none}
 .sidebtn,.sidecol .vbtn,.sidecol .worldbtn{position:static!important;width:40px;height:40px;border-radius:50%;border:2px solid #2B2621;background:#fff;font-size:18px;display:grid;place-items:center;padding:0;cursor:pointer;box-shadow:0 2px 0 #2B2621,0 4px 12px rgba(0,0,0,.2)}.sidebtn:active{transform:translateY(2px);box-shadow:none}
 .driveview .sidecol{top:calc(env(safe-area-inset-top,0px) + 12px)}.sidecol{gap:7px!important}.sidecol .worldbtn b{font-size:14px}.sidecol .worldbtn[data-k]{background:#fff;color:#2B2621;border-color:#2B2621;box-shadow:0 2px 0 #2B2621,0 4px 12px rgba(0,0,0,.2)}.sidecol.collapsed .sidehide{display:none!important}.sidetoggle{font-size:14px!important;background:#fff!important;color:#2B2621}.sidetoggle svg{width:22px;height:22px;fill:none;stroke:#2B2621;stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round;display:block}.sidecol .vbtn.live{background:#2ECC71}.sidecol .phside2 .phbadge{top:-5px;right:-7px}.sidecol .phside2,.phside2{position:relative!important} /* (so its unread count sits on 📱, not at the top of the column) */.phside2 .phbadge{position:absolute;top:-4px;right:-6px;margin:0}.roomstage .sidecol{top:calc(env(safe-area-inset-top,0px) + 10px)}
 /* inside a building: no banner either; ✕, who's here and Furnish float over the view */
-.roomview>.rbar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:calc(env(safe-area-inset-left,0px) + 10px);right:64px;z-index:7;background:none!important;border:0!important;box-shadow:none!important;padding:0!important;pointer-events:none}.roomview>.rbar>*{pointer-events:auto}.roomview>.rbar .hhere{box-shadow:0 2px 10px rgba(0,0,0,.25);background:rgba(255,253,248,.92)}.roomview>.rbar .btn{box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.roomview>.rbar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:calc(env(safe-area-inset-left,0px) + 10px);right:calc(env(safe-area-inset-right,0px) + 66px);z-index:7;background:none!important;border:0!important;box-shadow:none!important;padding:0!important;pointer-events:none}.roomview>.rbar>*{pointer-events:auto}.roomview>.rbar .hhere{box-shadow:0 2px 10px rgba(0,0,0,.25);background:rgba(255,253,248,.92)}.roomview>.rbar .btn{box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .tip.tipgo{opacity:0;transform:translateY(-6px);transition:opacity .5s,transform .5s}
-.floatbtn{position:absolute;left:0;top:0;z-index:6;margin:-30px 0 0 -30px;width:60px;height:60px;border-radius:50%;border:2.5px solid #fff;background:radial-gradient(circle at 35% 30%,#ffb07a,#E2783B 60%,#b9561f);color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.4),0 0 0 4px rgba(226,120,59,.25);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;padding:0;will-change:transform;animation:floatin .3s ease-out}.floatbtn b{font-size:24px;line-height:1}.floatbtn span{position:absolute;top:100%;margin-top:6px;white-space:nowrap;background:rgba(20,22,28,.78);color:#fff;font:700 12px/1.2 inherit;padding:3px 9px;border-radius:9px;pointer-events:none}.floatbtn:active{filter:brightness(.92)}@keyframes floatin{from{opacity:0}to{opacity:1}}
+.floatbtn{position:absolute;left:0;top:0;z-index:6;margin:-30px 0 0 -30px;width:60px;height:60px;border-radius:50%;border:2.5px solid #fff;background:radial-gradient(circle at 35% 30%,#ffb07a,#E2783B 60%,#b9561f);color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.4),0 0 0 4px rgba(226,120,59,.25);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;padding:0;will-change:transform;animation:floatin .3s ease-out}.floatbtn b{font-size:24px;line-height:1}.floatbtn span{position:absolute;top:100%;margin-top:6px;white-space:nowrap;background:rgba(20,22,28,.78);color:#fff;font:700 12px/1.2 inherit;padding:3px 9px;border-radius:9px;pointer-events:none}.floatbtn:active{filter:brightness(.92)}
+/* the see-through round buttons: get in or out of a vehicle, in or out of a building, chat. Almost clear, so whatever is behind
+   (the car, the door, the street) still shows through; a white ring and a soft shadow on the icon keep them easy to spot */
+.floatbtn,.rndbtn{background:rgba(255,255,255,.14)!important;border:2px solid rgba(255,255,255,.88)!important;box-shadow:0 2px 12px rgba(0,0,0,.22)!important;color:#fff}
+.floatbtn b,.rndbtn b{text-shadow:0 1px 4px rgba(0,0,0,.55);filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
+.floatbtn span,.rndbtn span{background:rgba(20,22,28,.5)!important}
+.rndbtn{position:absolute;width:62px;height:62px;border-radius:50%;padding:0;display:grid;place-items:center;cursor:pointer;z-index:5;-webkit-tap-highlight-color:transparent}
+.rndbtn b{font-size:26px;line-height:1}.rndbtn span{position:absolute;top:100%;margin-top:5px;white-space:nowrap;color:#fff;font:700 12px/1.2 inherit;padding:3px 9px;border-radius:9px;pointer-events:none}
+.rndbtn:active{transform:scale(.95)}.rndbtn[hidden]{display:none!important}
+/* a phone on its side: the round buttons down the right take the edge, so the pedals (and Get out) stand just inside them */
+@media (orientation:landscape) and (max-height:560px){ .driveview{--sideX:calc(env(safe-area-inset-right,0px) + 58px)} .driveview .tpad.swap .tpedals{right:auto} }
+/* inside, on its side: Chat, its box and the round action button stand clear of the column of round buttons on the right */
+@media (orientation:landscape) and (max-height:560px){ .roomstage .rndbtn.hchatbtn,.roomstage .hact:not(.hshop){right:calc(env(safe-area-inset-right,0px) + 72px)} .roomstage .hchat{right:calc(env(safe-area-inset-right,0px) + 72px)} }
+/* Get out: just left of the pedals (or bottom right with the one stick), in portrait and landscape */
+.rndbtn.dmode{left:var(--goL,auto);right:calc(var(--goR,auto) + var(--sideX,0px));bottom:calc(var(--goB,30px) + 22px + env(safe-area-inset-bottom))} /* (room for its label underneath) */
+/* inside: Exit by the front door, in the middle at the bottom; Chat on the right */
+.rndbtn.hexit{left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%)}.rndbtn.hexit:active{transform:translateX(-50%) scale(.95)}
+.rndbtn.hchatbtn{width:52px;height:52px;right:calc(env(safe-area-inset-right,0px) + 16px);bottom:calc(84px + env(safe-area-inset-bottom));z-index:3}.rndbtn.hchatbtn b{font-size:22px}
+.hchat.dchatbox{right:auto;left:calc(env(safe-area-inset-left,0px) + 12px);bottom:calc(262px + env(safe-area-inset-bottom));z-index:5}
+.rndbtn.dchat{width:52px;height:52px;left:calc(env(safe-area-inset-left,0px) + 18px);bottom:calc(196px + env(safe-area-inset-bottom))}.rndbtn.dchat b{font-size:22px}@keyframes floatin{from{opacity:0}to{opacity:1}}
 .hback{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);z-index:9650;box-shadow:0 4px 16px rgba(0,0,0,.3)}
 .rchoose{display:flex;flex-direction:column;gap:8px;margin:10px 0;max-height:50vh;overflow:auto}
 @media (max-width:520px){ .hhere .wide{display:none} }
@@ -1556,6 +1575,7 @@ function connect(){
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
     else if(m.type==='phone' && m.data) Phone.msg(m.data);
+    else if(m.type==='streetSay'){ try{ Drive.heard(m); }catch(e){} } /* someone near you on the street said something */
     else if(m.type==='drive' && m.id){ if(m.off) DrivingNow.delete(m.id); else DrivingNow.set(m.id,{x:m.x,y:m.y,a:m.a,m:m.m,col:m.col,mode:m.mode==='walk'?'walk':m.mode==='ride'?'ride':'car',by:m.by||null,t:Date.now()}); } /* someone driving about in 3D (or riding in someone's car) */
     else if(m.type==='ride'){ Drive.rideMsg(m); } /* rides: asks, answers, getting in and out */
     else if(m.type==='whereIn'){ if(m.all){ InsideNow.clear(); for(const [id,pl] of m.all) InsideNow.set(id,pl); } else if(m.place) InsideNow.set(m.id,m.place); else InsideNow.delete(m.id); }
@@ -7360,14 +7380,19 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     Phone.hide(); MyHome.load(); /* (which home is yours, for its door) */ this.camWas={x:cam.x,y:cam.y,z:cam.z}; DriveMap.reset(); this.foot=walk; this.parked=false; let look=null; try{ [look]=await Looks.want([Me.handle]); }catch(e){}
     closeCard(); openTab(null);
     const stage=el('div',{class:'drivestage'}), title=el('b',{text:walk?'🚶 Out on foot':car.water?`⛵ Out in your ${car.name.toLowerCase()}`:car.bike?`🚲 Riding your ${car.name.toLowerCase()}`:`🚗 Driving ${car.own?'your '+car.name.toLowerCase():car.name}`}), sub=el('span',{class:'dsub',text:walk?'Stick to walk, drag the screen to look round':car.water?'Steer with the stick: it only goes on water':'Steer with the stick'}); this.title=title;
-    this.modeBtn=el('button',{class:'btn dgo dmode',onclick:()=>this.switchMode()}); /* get out and walk, or get (back) in the car */
+    this.modeBtn=el('button',{class:'rndbtn dmode',hidden:true,onclick:()=>this.switchMode()});
+    // 💬 talking to the people near you on the street (the button shows only when someone real is close enough to read it)
+    this.chatLog=el('div',{class:'hchatlog'}); this.chatIn=el('input',{type:'text',maxlength:'200',placeholder:Me&&Me.token?'Say something to the people near you…':'Sign in to chat',disabled:!(Me&&Me.token),enterkeyhint:'send'});
+    this.chatIn.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter') this.say(); }); this.chatIn.addEventListener('keyup',e=>e.stopPropagation());
+    this.chatBox=el('div',{class:'hchat dchatbox',hidden:true}, this.chatLog, el('div',{class:'hchatrow'}, this.chatIn, el('button',{class:'btn primary sm',text:'Send',disabled:!(Me&&Me.token),onclick:()=>this.say()})));
+    this.chatBtn=el('button',{class:'rndbtn dchat',hidden:true,'aria-label':'Chat',title:'Talk to the people near you',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden) setTimeout(()=>this.chatIn.focus(),50); this.talkNear(); }}, el('b',{text:'💬'}), el('span',{text:'Chat'})); /* get out and walk, or get (back) in the car */
     this.goBtn=el('button',{class:'btn primary dgo',hidden:true}); this.inBtn=el('button',{class:'btn dgo',hidden:true}); this.rideBtn=el('button',{class:'btn primary dgo',hidden:true}); this.riding=null; this.riders=[];
     this.doorBtn=el('button',{class:'floatbtn',hidden:true}); this.carBtn=el('button',{class:'floatbtn',hidden:true,'aria-label':'Get in the car',onclick:()=>this.switchMode()}, el('b',{text:'🚗'}), el('span',{text:'Get in'})); /* rides: asking someone for one, or riding along */
     this.speed=el('div',{class:'dspeed'}); this.sub=sub;
     const bar=''; /* no banner on top: the 2D switch, the camera, the controls and the phone are on the right */
     const side=sideCol(el('button',{class:'sidebtn',title:'Camera: behind you, through your eyes (the driver’s seat), or from above','aria-label':'Camera',text:'🎥',onclick:()=>{ if(!this.T) return; const m=this.T.toggleView(), foot=this.T.pos.mode==='walk'; toast(m==='driver'?(foot?'🎥 Through your eyes':'🎥 From the driver’s seat'):m==='above'?'🎥 From above':foot?'🎥 Behind you':'🎥 Behind the car'); }}),
       el('button',{class:'sidebtn',title:'Controls','aria-label':'Controls',text:'⚙️',onclick:()=>DriveCtl.sheet()}), Phone.sideBtn());
-    const root=el('div',{class:'webview driveview',role:'dialog','aria-label':'Driving around town'}, bar, side, this.doorBtn, this.carBtn, stage, el('div',{class:'dhud'}, this.speed, el('div',{class:'dacts'}, this.rideBtn, this.goBtn, this.inBtn, this.modeBtn)));
+    const root=el('div',{class:'webview driveview',role:'dialog','aria-label':'Driving around town'}, bar, side, this.doorBtn, this.carBtn, stage, el('div',{class:'dhud'}, this.speed, el('div',{class:'dacts'}, this.rideBtn, this.goBtn, this.inBtn)), this.modeBtn, this.chatBtn, this.chatBox);
     document.body.append(root); document.body.classList.add('room-on','drive-on'); this.el=root; this.dist=0; this.last={x:s.x,y:s.y}; this.car=car; DriveMap.mount(root);
     let T3; try{ T3=await import('/town3d.js'); }catch(e){ this.close(); toast('Driving couldn’t load. Check your connection and try again.'); return; } if(this.el!==root) return;
     try{ this.T=T3.createTown(stage,{ start:s, car, controls:DriveCtl.get(), mode:walk?'walk':'car', look, onCar:near=>{ this.atCar=near; this.paintMode(); }, onCarHere:()=>{ toast(`🚗 Your ${this.car.own?this.car.name.toLowerCase():'car'} is here. Get in when you’re ready.`); this.paintMode(); }, onRide:c=>this.nearRide(c),
@@ -7402,7 +7427,15 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
       if(online&&!L) Looks.want([c.handle]); /* their own look, for next time */
       const drv=!!(dn&&dn.mode==='car'), n=aboard.get(c.id)||0;
       out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, m:V&&V.mode==='water'?Object.keys(VEHICLE_TYPES).find(k=>VEHICLE_TYPES[k]===V):m&&ridden(m)?m:V===VEHICLE_TYPES.taxi?'sedan':'hatch', look:L||null, tag:online||live?'@'+c.handle+(n?` +${n}`:''):null, online, h:c.handle, drv, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, full:drv&&n>=seatsOf(dn.m)-1 }); }
-    return out.sort((a,b)=>a.d-b.d).slice(0,40); },
+    const near=out.sort((a,b)=>a.d-b.d).slice(0,40); this.talkNear(near); return near; },
+  // talking on the street: what you say shows over your head for the people near you (and in their street chat)
+  async say(){ const t=this.chatIn.value.trim(); if(!t||!this.T) return; this.chatIn.value=''; const p=this.T.pos;
+    try{ const r=await api('/api/street/say',{method:'POST',body:{text:t,x:p.x,y:p.y}}); this.heard({...r.say,mine:true}); }catch(e){ toast(e.message); this.chatIn.value=t; } },
+  heard(m){ if(!this.el||!this.T||!m||!m.text) return; if(!m.mine&&typeof Blocks!=='undefined'&&Blocks.has(m.from)) return;
+    this.chatLog.append(el('div',{class:'hcl'+(m.mine?' me':'')}, el('b',{text:'@'+m.from+': '}), m.text)); while(this.chatLog.children.length>40) this.chatLog.firstChild.remove(); this.chatLog.scrollTop=this.chatLog.scrollHeight;
+    try{ this.T.say(m.mine?'me':m.id, m.text); }catch(e){} if(!m.mine&&this.chatBox.hidden){ this.chatBtn.classList.add('new'); this.chatBtn.hidden=false; } },
+  // 💬 shows only when a real person (online, as themselves) is close enough to read the words over your head; it stays while the chat is open
+  talkNear(list){ const b=this.chatBtn; if(!b) return; if(list) this.nearTalk=list.some(p=>p.online&&p.h&&p.d<=1.6); const show=!!this.nearTalk||!this.chatBox.hidden||b.classList.contains('new'); if(b.hidden===show) b.hidden=!show; },
   moved(x,y,a,v){ if(!this.el) return; if(this.last){ this.dist+=Math.hypot(x-this.last.x,y-this.last.y); } this.last={x,y};
     const foot=this.T&&this.T.pos.mode==='walk'; this.speed.hidden=!!foot; if(!foot) this.speed.textContent=`${this.T?this.T.kmh():0} km/h`; this.voiceSync(); /* on foot: no speed to show */
     if(this.riding){ this.speed.textContent=`${this.T?this.T.kmh():0} km/h`; DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); } return; } /* riding: the car goes where its driver takes it */
@@ -7419,8 +7452,9 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     this.goBtn.hidden=false; this.goBtn.textContent=`🅿️ Stop at ${name}`; this.goBtn.onclick=()=>this.arrive(b,false);
     this.inBtn.hidden=!enter; this.inBtn.textContent='🚪 Go inside'; this.inBtn.onclick=()=>this.arrive(b,true); },
   // walking and driving: get out (your own car stays parked where you left it) and get back in when you walk up to it
-  paintMode(){ const B=this.modeBtn; if(!B||!this.T) return; if(this.car&&this.car.water){ B.hidden=false; B.textContent='⚓ Back to shore'; return; } if(this.riding){ B.hidden=false; B.textContent='🚶 Get out'; return; } const foot=this.T.pos.mode==='walk';
-    if(!foot){ B.hidden=false; B.textContent='🚶 Get out'; return; }
+  paintMode(){ const B=this.modeBtn; if(!B||!this.T) return; const set=(ic,t)=>{ B.hidden=false; if(B.dataset.t!==t){ B.dataset.t=t; B.replaceChildren(el('b',{text:ic}), el('span',{text:t})); B.setAttribute('aria-label',t); } };
+    if(this.car&&this.car.water){ set('⚓','Back to shore'); return; } if(this.riding){ set('🚶','Get out'); return; } const foot=this.T.pos.mode==='walk';
+    if(!foot){ set('🚶','Get out'); return; }
     B.hidden=true; /* on foot: get in with the round 🚗 on the car itself; call it from your phone (🚗 Car) */ },
   // the car: called from the phone's 🚗 Car app
   callCar(){ const T3=this.T; if(!T3){ toast('🚗 Go outside to call your car.'); return; } if(this.riding){ toast('You’re riding with someone.'); return; }
@@ -7580,8 +7614,8 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     this.chatIn.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter') this.sendChat(); }); this.chatIn.addEventListener('keyup',e=>e.stopPropagation());
     this.chatTo=el('select',{class:'hchatto','aria-label':'Who to send it to',title:'Everyone here, or one person privately (only the two of you see it)',onfocus:()=>this.whoOpts(),onchange:()=>this.chatIn.placeholder=this.chatTo.value?`Only @${this.chatTo.value} will see this…`:'Say something to everyone here…'}); this.whoOpts();
     this.chatBox=el('div',{class:'hchat',hidden:true}, this.chatLog, el('div',{class:'hchatrow'}, this.chatTo, this.chatIn, el('button',{class:'btn primary sm',text:'Send',disabled:!(Me&&Me.token),onclick:()=>this.sendChat()})));
-    this.chatBtn=el('button',{class:'btn sm hchatbtn',text:'💬 Chat',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden){ this.whoOpts(); setTimeout(()=>this.chatIn.focus(),50); } }});
-    this.exitBtn=el('button',{class:'hexit',hidden:true,text:'🚪 Exit',title:'Go out of the door, onto the street',onclick:()=>this.exit()}); /* shown by the front door */
+    this.chatBtn=el('button',{class:'rndbtn hchatbtn',hidden:true,'aria-label':'Chat',title:'Chat with the people near you',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden){ this.whoOpts(); setTimeout(()=>this.chatIn.focus(),50); } }}, el('b',{text:'💬'}), el('span',{text:'Chat'}));
+    this.exitBtn=el('button',{class:'rndbtn hexit',hidden:true,title:'Go out of the door, onto the street','aria-label':'Exit',onclick:()=>this.exit()}, el('b',{text:'🚪'}), el('span',{text:'Exit'})); /* shown by the front door */
     this.actBtn=el('button',{class:'hact',hidden:true,onclick:()=>{ this.h&&this.h.act(); this.sendPos(true,true); }}); /* sit, lie down, use: shown next to things you can use */
     this.shopBtn=isStore(d.home.type)&&!Store.canWrite?el('button',{class:'hact hshop',title:'Shop','aria-label':'Shop',onclick:()=>{ const b=this.storeB(); if(b) StoreSheet.open(b); }}, el('b',{text:'🛍️'}), el('span',{text:'Shop'})):null; /* in a store: its goods, right here */
     this.camBtn=el('button',{class:'sidebtn',text:'🎥',title:'Camera: through your eyes, behind you, or from above','aria-label':'Camera',onclick:()=>this.camera()});
@@ -7619,7 +7653,12 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     if(!always&&L&&(m.pose||'')===(L.pose||'')&&Math.hypot(m.x-L.x,m.y-L.y)<0.15&&Math.abs(Math.atan2(Math.sin(m.a-L.a),Math.cos(m.a-L.a)))<0.2) return;
     if(!force&&now-(this.posAt||0)<200){ clearTimeout(this.posT); this.posT=setTimeout(()=>this.sendPos(true),200); return; } this.posAt=now; this.lastSent={x:m.x,y:m.y,a:m.a,pose:m.pose};
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'in',place:this.spot,x:m.x,y:m.y,a:m.a,...(m.pose?{pose:m.pose,ph:m.ph}:{})})); }catch(e){} },
-  moveSoon(){ this.sendPos(false); },
+  moveSoon(){ this.sendPos(false); this.talkNear(); },
+  // 💬 Chat shows only when a real person (signed in, here now) is close enough to read the words over your head; it stays
+  // while the chat is open
+  talkNear(){ const b=this.chatBtn; if(!b||!this.h||!this.h.me) return; const m=this.h.me, R=6;
+    const near=[...(this.others||new Map()).values()].some(p=>p.h&&p.x!=null&&Math.hypot(p.x-m.x,p.y-m.y)<=R), show=near||(this.chatBox&&!this.chatBox.hidden);
+    if(b.hidden===show) b.hidden=!show; },
   insideMsg(m){ if(!this.el||!this.d||m.place!==this.spot||!this.h) return; this.others||=new Map();
     const blocked=h=>h&&typeof Blocks!=='undefined'&&Blocks.has(h);
     const show=p=>{ const L=p.h&&Looks.m.get(p.h.toLowerCase()); this.h.upsertOther(p.id,L?{...p,look:L}:p); if(p.h&&!L) Looks.want([p.h]).then(([L2])=>{ if(L2&&this.h&&this.others.has(p.id)) this.h.upsertOther(p.id,{...this.others.get(p.id),look:L2}); }); }; /* their own character, once it's loaded */
@@ -7629,7 +7668,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     else if(m.k==='chat'&&m.chat){ if(blocked(m.chat.from)) return; this.addChat(m.chat); }
     else if(m.k==='club'&&m.club) Club.msg(m.club); /* money sprayed, money raining, the DJ */
     else if(m.k==='voice'&&m.club) Voice.msg(m.club); /* someone started or stopped talking, or changed who hears them */
-    this.hereTick(); },
+    this.hereTick(); this.talkNear(); },
   addChat(c){ const mine=Me&&Me.handle&&c.from.toLowerCase()===Me.handle.toLowerCase(); if(c.t&&this.lastChatT===c.t+c.from) return; this.lastChatT=c.t+c.from;
     const other=mine?c.to:c.from, who=c.private?el('b',{text:mine?`🔒 to @${c.to}: `:`🔒 @${c.from} (just you): `,title:'Private: only the two of you see this'}):el('b',{text:'@'+c.from+': ',title:mine?'':`Tap to message @${c.from} privately`});
     if(!mine||c.private) who.addEventListener('click',()=>{ this.whoOpts(other); this.chatIn.focus(); });

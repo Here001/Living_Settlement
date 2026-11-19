@@ -342,6 +342,19 @@ export function createTown(host, opts) {
       const g = f.g, dx = f.tx - g.position.x, dz = f.tz - g.position.z; if (Math.hypot(dx, dz) > 40) { g.position.x = f.tx; g.position.z = f.tz; continue; }
       const vx = dx * k / Math.max(dt, 1e-3), vz = dz * k / Math.max(dt, 1e-3); g.position.x += dx * k; g.position.z += dz * k; f.P.animate(dt, vx, vz); } }
 
+  // ---- talking on the street: what someone says shows over their head (yours over yours) for 7 seconds ----
+  const bubbles = new Map(); /* who → { sp, until } */
+  function bubbleSprite(text) { const c = document.createElement('canvas'), g = c.getContext('2d'); c.width = 512; c.height = 160; g.font = '600 34px sans-serif';
+    const words = String(text).split(' '), lines = []; let line = ''; for (const w of words) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > 460 && line) { lines.push(line); line = w; } else line = t; } if (line) lines.push(line);
+    const shown = lines.slice(0, 3); if (lines.length > 3) shown[2] = shown[2].replace(/.{0,2}$/, '…'); const w = Math.min(500, Math.max(...shown.map(l => g.measureText(l).width)) + 36), h = shown.length * 40 + 24;
+    g.fillStyle = 'rgba(255,255,255,.96)'; if (g.roundRect) { g.beginPath(); g.roundRect((512 - w) / 2, 4, w, h, 20); g.fill(); } else g.fillRect((512 - w) / 2, 4, w, h); g.fillStyle = '#1C1C1E'; g.textAlign = 'center'; g.textBaseline = 'top'; shown.forEach((l, i) => g.fillText(l, 256, 16 + i * 40));
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true })); sp.scale.set(3.2, 1.0, 1); sp.renderOrder = 6; return sp; }
+  const dropBubble = who => { const b = bubbles.get(who); if (!b) return; scene.remove(b.sp); b.sp.material.map.dispose(); b.sp.material.dispose(); bubbles.delete(who); };
+  function sayOver(who, text) { dropBubble(who); const sp = bubbleSprite(text); scene.add(sp); bubbles.set(who, { sp, until: performance.now() + 7000 }); }
+  function placeBubbles(now) { for (const [who, b] of bubbles) { if (now > b.until) { dropBubble(who); continue; }
+      if (who === 'me') { const onFoot = foot && feet; b.sp.position.set(onFoot ? feet.group.position.x : car.x, onFoot ? 2.75 : 3.0, onFoot ? feet.group.position.z : car.z); continue; }
+      const f = folk.get(who); if (!f) { dropBubble(who); continue; } if (f.kind === 'walk') b.sp.position.set(f.g.position.x, 2.75, f.g.position.z); else b.sp.position.set(f.x, 3.2, f.z); } }
+
   // ---- the colony's service vehicles, where the 2D map has them: police patrols, fire engines and ambulances (lights
   // flashing on a call), buses, taxis, vans and lorries. One light bar mesh and one ladder mesh for all of them. ----
   const svc = new Map(); let svcAt = 0; const SV = { police: 'police', firetruck: 'firetruck', fire: 'firetruck', ambulance: 'ambulance', bus: 'bus', van: 'van', truck: 'truck', taxi: 'car', car: 'sedan', bike: 'bicycle', motorbike: 'motorbike', boat: 'boat', sailboat: 'sailboat', ferry: 'ferry', cargoship: 'cargoship', helicopter: 'helicopter', plane: 'plane', balloon: 'balloon' }, ROOF = { police: 1.52, firetruck: 3.05, ambulance: 2.66 };
@@ -531,7 +544,7 @@ export function createTown(host, opts) {
     driveTraffic(dt); walk(dt); skyLife(dt, now, night);
     head.intensity = foot || riding ? 0 : night * 60; if (night > 0.02) { const fx = Math.cos(car.a), fz = -Math.sin(car.a); head.position.set(car.x + fx * 1.8, 0.9, car.z + fz * 1.8); head.target.position.set(car.x + fx * 14, 0, car.z + fz * 14); }
     const fov = mode === 1 && camera.aspect < 1 ? 72 + (foot ? 0 : Math.min(8, Math.abs(car.v) * 0.3)) : foot ? 62 : 60 + Math.min(14, Math.abs(car.v) * 0.45); if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); } /* the view widens with speed */
-    GRASS.time.value = now / 1000; W.WATER.time.value = now / 1000; crowd(now, dt); services(now, dt); rideSync(dt); chase(dt); drawFleet(night); routeMat.opacity = 0.6 + 0.3 * Math.sin(now / 250); ground.position.set(Math.round(car.x / 50) * 50, -0.45, Math.round(car.z / 50) * 50); /* (well below the water, so water always shows) */
+    GRASS.time.value = now / 1000; W.WATER.time.value = now / 1000; crowd(now, dt); if (bubbles.size) placeBubbles(now); services(now, dt); rideSync(dt); chase(dt); drawFleet(night); routeMat.opacity = 0.6 + 0.3 * Math.sin(now / 250); ground.position.set(Math.round(car.x / 50) * 50, -0.45, Math.round(car.z / 50) * 50); /* (well below the water, so water always shows) */
     if (now - chk > 600) { chk = now; around(); }
     if (queue.length) { const [bx, by] = queue.shift().split(',').map(Number); if (opts.loaded(bx + B / 2, by + B / 2) || opts.loaded(bx, by)) build(bx, by); else queue.push(bx + ',' + by); }
     if (now - timeAt > 20000) { timeAt = now; shadowsDue = true; } sunNow(false);
@@ -553,7 +566,9 @@ export function createTown(host, opts) {
   function controls() { if (pad) pad.remove(); inp.thr = inp.steer = 0; const lay = foot ? 'stick' : ctl.layout || 'pedalstick'; /* on foot: always the stick */ pad = document.createElement('div'); pad.className = 'tpad ' + lay + (ctl.swap ? ' swap' : ''); let ts = ctl.steerSize || 1, tp = ctl.pedalSize || 1; if (lay !== 'stick') { const W0 = host.clientWidth || innerWidth, need = (lay === 'wheel' ? 150 * ts : lay === 'pedalstick' ? 128 * ts : 170 * ts) + 88 * tp + 52; if (need > W0) { const f = (W0 - 52) / (need - 52); ts *= f; tp *= f; } } /* both fit side by side, however big you've made them */
     pad.style.setProperty('--ts', String(ts)); pad.style.setProperty('--tp', String(tp)); host.append(pad); /* sizes picked in Settings */
     { const right = lay === 'stick' ? (ctl.swap ? 28 + 128 * ts : 0) : ctl.swap ? (lay === 'wheel' ? 18 + 150 * ts : lay === 'pedalstick' ? 28 + 128 * ts : 24 + 78 * ts) : 20 + 186 * tp; /* (the pedals stand one above the other) */
-      (host.parentElement || host).style.setProperty('--dhud', Math.max(24, right + 14) + 'px'); } /* the speed and Stop buttons sit above whatever is on the right */
+      const hs = (host.parentElement || host).style, ped = lay !== 'stick', gap = ped ? 16 + 84 * tp + 18 : 20; /* 🚶 Get out: just beside the pedals (with the one stick, in the free corner) */
+      hs.setProperty('--dhud', Math.max(lay === 'stick' && !ctl.swap ? 112 : 24, right + 14) + 'px');
+      hs.setProperty('--goB', (ped ? 26 : 30) + 'px'); if (!ctl.swap) { hs.setProperty('--goL', 'auto'); hs.setProperty('--goR', gap + 'px'); } else { hs.setProperty('--goR', 'auto'); hs.setProperty('--goL', gap + 'px'); } } /* the speed and Stop buttons sit above whatever is on the right */
     const mk = (cls, html) => { const d = document.createElement('div'); d.className = cls; if (html) d.innerHTML = html; pad.append(d); return d; };
     const hold = (elm, down, up) => { const on = new Set(); elm.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); try { elm.setPointerCapture(e.pointerId); } catch (x) {} on.add(e.pointerId); elm.classList.add('on'); down(e); });
       const off = e => { if (!on.delete(e.pointerId)) return; if (!on.size) { elm.classList.remove('on'); up(e); } }; elm.addEventListener('pointerup', off); elm.addEventListener('pointercancel', off); return on; };
@@ -608,6 +623,7 @@ export function createTown(host, opts) {
     get parkedAt() { return parked ? { x: parked.x / TILE, y: parked.z / TILE } : null; },
     doorOf(id) { for (const v of blocks.values()) for (const s of v.solid) if (s.id === id && s.door) return { x: s.door[0] / TILE, y: s.door[1] / TILE, a: s.out }; return null; },
     kmh() { return Math.round(Math.abs(car.v) * 3.6); },
+    say(who, text) { sayOver(who, text); }, /* talking on the street: 'me' or a colonist's id */
     stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, fleet: Object.fromEntries([...fleetM].filter(([, m]) => m.count).map(([k, m]) => [k, m.count])), calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
     toggleView() { mode = (mode + 1) % 3; lk.yaw = foot ? lk.yaw : 0; lk.pitch = 0; return ['behind', 'driver', 'above'][mode]; },
     setControls(c) { ctl = c || ctl; controls(); if (riding && pad) pad.style.display = 'none'; },

@@ -4670,18 +4670,6 @@ var Top={ board:'racer', data:{}, busy:false,
     if(D0.me&&D0.me.rank>10) body.append(el('div',{class:'tgap',text:'⋯'}), this.row(D0.me,D0));
     else if(!D0.me&&Me&&Me.token) body.append(el('p',{class:'hint',text:`You're not on this board yet. ${D0.players?`${fmt(D0.players)} colonist${D0.players===1?' is':'s are'} on it.`:''}`}));
     else if(!(Me&&Me.token)) body.append(el('p',{class:'hint',text:'Sign in to your colonist to see where you rank. Only verified colonists are ranked.'})); } };
-// Pickpocketing: only someone out and about (not at home, not at work unless you work there too). Same rule as the server.
-function pocketWhy(c){ const now=Date.now()+skew, v=c.visit;
-  let where; if(v&&v[4]>now&&(v[5]||0)<=now){ const b=bOf(v), t=b&&T(b); where=t&&t.home?'home':b&&kindOf(b.type)==='jail'?'jail':(c.job&&c.job[0]===v[0]?'work':'out'); }
-  else { const jb=bOf(c.job); where=routineAt(gmNow(), !!c.job, shiftOf(c.id, c.job&&c.job[0], jb&&jb.type), owlOf(c.id)); }
-  const me=Me&&Me.handle&&[...S.citizens.values()].find(x=>x.handle.toLowerCase()===Me.handle.toLowerCase()), sameJob=me&&me.job&&c.job&&me.job[0]===c.job[0];
-  if(where==='home') return `@${c.handle} is safe at home right now.`;
-  if(where==='jail') return `@${c.handle} is in the Jail.`;
-  if(where==='work'&&!sameJob) return `@${c.handle} is at work. Only workmates can get close.`;
-  return null; }
-function pocketBtn(c){ const why=pocketWhy(c);
-  return why?el('span',{class:'hint pockethint',text:`🛡️ ${why} No pickpocketing.`})
-    :el('button',{class:'btn',text:'Pick their pocket',onclick:()=>toast(`Try to pick @${c.handle}'s pocket? If you're caught you'll be fined, and jailed if the colony has a Jail.`,'Do it',()=>doCrime('pickpocket',c.handle))}); }
 // ---- Badges: earned by playing; shown on every colonist's card, and in full in your own Badges tab ----
 const mineCard=c=>!!(Me&&Me.handle&&c&&c.handle&&Me.handle.toLowerCase()===c.handle.toLowerCase());
 var Badges={ data:null, at:0, loading:false,
@@ -8164,15 +8152,14 @@ function renderCard(force){ if(!force && cardBusy()) return;
         if(c.claimed&&!blocked&&giftOpen===c.handle) card.append(giftBox(c.handle));
         if(c.claimed&&!blocked) card.append(Love.row(c.handle));
         if(!c.claimed) card.append(el('p',{class:'hint',text:`@${c.handle} hasn't verified their avatar yet, so they can't get messages or gifts.`}));
-        /* then where they are: their home, watching them */
-        if(c.home){ const look=el('button',{class:'btn',text:d&&d.locked?'🔒 Look inside':'🏠 Look inside',title:d&&d.locked?'Their home is locked: ask to visit':'See inside their home',onclick:()=>d&&d.locked?Visit.open(c.handle):Room.open(c.handle)});
-          if(d&&d.locked&&Me&&Me.token) api('/api/citizens/'+encodeURIComponent(c.handle)+'/visit').then(v=>{ if(v.status==='accepted'){ look.textContent='🏠 Look inside · you’re invited'; look.title='You can visit until '+new Date(v.until).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}); } else if(v.status==='pending') look.textContent='🔒 Look inside · asked'; }).catch(()=>{}); /* how your request stands */
-          card.append(el('div',{class:'row-actions'}, look, el('button',{class:'btn',text:'👀 Watch',title:'Keep the camera on them and see what they do',onclick:()=>Watch.start(0,`Watching @${c.handle}`,null,c.handle)}), el('button',{class:'btn',text:'Visit their home',onclick:()=>meAction('/api/me/visit',{friend:c.handle},r=>`You're on your way to ${r.place}.`)}),
-          pocketBtn(c))); }
+        /* their home: 🏠 Visit their home takes you inside, if it's unlocked (a locked one: ask them first; once they let you in, it takes you in) */
+        if(c.home){ const go=el('button',{class:'btn',text:d&&d.locked?'🔒 Visit their home':'🏠 Visit their home',title:d&&d.locked?'Their home is locked: ask to visit':'Go inside their home',onclick:()=>d&&d.locked?Visit.open(c.handle):Room.open(c.handle)});
+          if(d&&d.locked&&Me&&Me.token) api('/api/citizens/'+encodeURIComponent(c.handle)+'/visit').then(v=>{ if(v.status==='accepted'){ go.textContent='🏠 Visit their home · you’re invited'; go.title='You can visit until '+new Date(v.until).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}); } else if(v.status==='pending') go.textContent='🔒 Visit their home · asked'; }).catch(()=>{}); /* how your request stands */
+          card.append(el('div',{class:'row-actions'}, go)); }
         /* and the small print at the bottom */
         card.append(el('div',{class:'row-actions cfoot'}, el('span',{class:'hint',text:`Signed in as @${Me.handle}.`}), el('button',{class:'linkb',text:'Go to my colonist',onclick:()=>findMe()}),
           c.claimed?(blocked?el('button',{class:'linkb',text:'Unblock',onclick:()=>Blocks.unblock(c.handle)}):el('button',{class:'linkb danger',text:'🚫 Block',onclick:()=>Blocks.ask(c.handle)})):'')); }
-      else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}), c.home?el('button',{class:'btn',text:'👀 Watch',onclick:()=>Watch.start(0,`Watching @${c.handle}`,null,c.handle)}):'')); }
+      else card.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'This is me',onclick:()=>{ auth={handle:c.handle,mode:d&&d.claimed?'login':'claim'}; renderCard(true); }}), '')); }
   } else if(sel.kind==='p'){ Plots.card(card, close);
   } else if(sel.kind==='g'){ Plots.grassCard(card, close);
   } else if(sel.kind==='a'){ Auction.card(card, close);

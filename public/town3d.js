@@ -184,15 +184,15 @@ export function createTown(host, opts) {
   //    at a stop it reverses (slowly, in reverse gear).
   const box = { g: 1, shift: 0, rpm: 0.2, pedal: 0, brake: 0 };
   function engine(vf, thr, top, rough, dt) { const P = PERF, n = P.gears, gTop = top * 1.04, drag = P.pw * 0.94 / (top ** 3), roll = rough ? 1.6 : 0.15;
-    box.pedal += ((thr > 0.05 ? thr : 0) - box.pedal) * Math.min(1, dt * 9); box.brake += ((thr < -0.05 ? -thr : 0) - box.brake) * Math.min(1, dt * 10);
+    box.pedal += ((thr > 0.05 ? thr : 0) - box.pedal) * Math.min(1, dt * 22); box.brake += ((thr < -0.05 ? -thr : 0) - box.brake) * Math.min(1, dt * 28); /* (the pedals answer at once) */
     const gas = box.pedal > 0.05, brk = box.brake > 0.05, v = Math.abs(vf), gMax = k => gTop * Math.pow(k / n, 0.85); /* (the speed at the redline in gear k: the gears close up as they go higher) */
     if (vf < -0.3) { box.g = 1; box.shift = 0; if (gas) return Math.min(0, vf + P.brk * box.pedal * dt); /* rolling back and you press on: the brakes catch it first */
-      if (brk) return Math.max(-6, vf - 2.6 * box.brake * dt); return Math.min(0, vf + (2.5 + roll) * dt); } /* reversing, up to about 20 km/h */
-    if (brk && !gas && vf <= 0.3) { box.g = 1; return Math.max(-6, vf - 2.6 * box.brake * dt); } /* stopped and holding the brake: into reverse */
+      if (brk) return Math.max(-8, vf - 6 * box.brake * dt); return Math.min(0, vf + (5 + roll) * dt); } /* reversing, up to about 30 km/h */
+    if (brk && !gas && vf <= 0.3) { box.g = 1; return Math.max(-8, vf - 6 * box.brake * dt); } /* stopped and holding the brake: straight into reverse */
     if (box.shift > 0) box.shift -= dt; else if (gas && box.g < n && v > gMax(box.g) * 0.97) { box.g++; box.shift = 0.25; } else if (box.g > 1 && v < gMax(box.g - 1) * (box.pedal > 0.6 ? 0.8 : 0.55)) box.g--;
     box.rpm = Math.max(0.16, Math.min(1, v / gMax(box.g)));
     const curve = box.rpm * (1.75 - 0.75 * box.rpm), push = gas && box.shift <= 0 ? Math.min(P.trac * (rough ? 0.6 : 1), P.pw * box.pedal * Math.max(0.55, curve) / Math.max(4, v)) : 0; /* power over the revs; at low speed the tyres limit it */
-    const hold = drag * v * v + roll + (!gas && !brk ? 3.4 + 0.09 * v + (v < 4 ? 2.5 : 0) : 0) + (brk ? P.brk * box.brake * (rough ? 0.7 : 1) : 0); /* drag, rolling, engine braking in gear (off the pedals), the brakes */
+    const hold = drag * v * v + roll + (!gas && !brk ? 5.2 + 0.12 * v + (v < 5 ? 4 : 0) : 0) + (brk ? P.brk * 1.5 * box.brake * (rough ? 0.7 : 1) : 0); /* (lifting off slows you firmly; the brakes bite hard) */ /* drag, rolling, engine braking in gear (off the pedals), the brakes */
     return Math.max(0, vf + (push - hold) * dt); }
   function drive(dt) { if (riding) return;
     const K = ctl.keys || {}, on = (a, d) => keys.has(d) || keys.has(String(K[a] || '').toLowerCase());
@@ -224,10 +224,10 @@ export function createTown(host, opts) {
     else { const d = (BOAT ? 1.4 + 0.05 * Math.abs(vf) : 3.0 + 0.1 * Math.abs(vf) + (rough ? 2.5 : 0)) * dt; vf = Math.abs(vf) <= d ? 0 : vf - Math.sign(vf) * d; } /* let go and it slows down by itself, like a real car: engine braking and the tyres' drag (from 70 km/h it stops in about 45 m); a boat drifts on further */ }
     if (hb) { const d = 7 * dt; vf = Math.abs(vf) <= d ? 0 : vf - Math.sign(vf) * d; }
     if (vf > top) vf = Math.max(top, vf - 7 * dt);
-    const maxA = CARPHYS ? 0.62 / (1 + (Math.abs(vf) / 16) ** 2) : 0.6 / (1 + Math.abs(vf) / 11), want = st * maxA, rate = (st === 0 ? 5 : CARPHYS ? 3.4 : 2.6) * dt; /* (a car: full lock is about 35° at walking pace, a 5 m turn, and less only gently as you speed up) */ car.wa = (car.wa || 0) + Math.max(-rate, Math.min(rate, want - (car.wa || 0))); car.steer = car.wa / 0.6;
-    let yr = vf / 2.7 * Math.tan(car.wa); const wt = CARPHYS ? (thr < -0.05 ? 1.18 : thr > 0.05 ? 0.94 : 1.08) : 1.08; /* (weight on the front wheels: braking into a corner turns you in tighter, flooring it pushes wide) */ const yl = (hb ? PERF.grip * 2.2 : PERF.grip * wt) / Math.max(1.5, Math.abs(vf)); yr = Math.max(-yl, Math.min(yl, yr)); /* the tyres can only turn you so hard */
+    const maxA = CARPHYS ? 0.72 / (1 + (Math.abs(vf) / 20) ** 2) : 0.6 / (1 + Math.abs(vf) / 11), want = st * maxA, rate = (st === 0 ? 7 : CARPHYS ? 6 : 2.6) * dt; /* (a car: full lock is about 35° at walking pace, a 5 m turn, and less only gently as you speed up) */ car.wa = (car.wa || 0) + Math.max(-rate, Math.min(rate, want - (car.wa || 0))); car.steer = car.wa / 0.6;
+    let yr = vf / 2.7 * Math.tan(car.wa); const wt = CARPHYS ? (thr < -0.05 ? 1.18 : thr > 0.05 ? 0.94 : 1.08) : 1.08; /* (weight on the front wheels: braking into a corner turns you in tighter, flooring it pushes wide) */ const yl = (hb ? PERF.grip * 2.2 : PERF.grip * wt * (CARPHYS ? 1.5 : 1)) / Math.max(1.5, Math.abs(vf)); /* (a car corners on rails: tighter than real tyres would let it) */ yr = Math.max(-yl, Math.min(yl, yr)); /* the tyres can only turn you so hard */
     car.a += yr * dt; const wx2 = vf * fx + vl * lx, wz2 = vf * fz + vl * lz; fx = Math.cos(car.a); fz = -Math.sin(car.a); lx = fz; lz = -fx; /* the car turns; where it was going lags behind a little */
-    vf = wx2 * fx + wz2 * fz; vl = wx2 * lx + wz2 * lz; const g = (hb ? PERF.grip * 0.3 : PERF.grip * (rough ? 0.7 : 1)) * dt; vl = Math.abs(vl) <= g ? 0 : vl - Math.sign(vl) * g; /* grip pulls it back in line */
+    vf = wx2 * fx + wz2 * fz; vl = wx2 * lx + wz2 * lz; const g = (hb ? PERF.grip * 0.3 : PERF.grip * (rough ? 0.7 : 1) * (CARPHYS ? 1.6 : 1)) * dt; vl = Math.abs(vl) <= g ? 0 : vl - Math.sign(vl) * g; /* grip pulls it back in line */
     if (Math.abs(vf) < 0.05 && Math.abs(thr) < 0.05) vf = 0; car.slip = Math.abs(vl);
     car.vx = vf * fx + vl * lx; car.vz = vf * fz + vl * lz; car.v = vf;
     const nx = car.x + car.vx * dt, nz = car.z + car.vz * dt, S = closeSolids(solidsNear(nx, nz), nx, nz, 3), dir = Math.sign(car.v || 1);
@@ -615,6 +615,12 @@ export function createTown(host, opts) {
       hs.setProperty('--dhud', Math.max(lay === 'stick' && !ctl.swap ? 112 : 24, right + 14) + 'px');
       hs.setProperty('--goB', (ped ? 26 : 30) + 'px'); if (!ctl.swap) { hs.setProperty('--goL', 'auto'); hs.setProperty('--goR', gap + 'px'); } else { hs.setProperty('--goR', 'auto'); hs.setProperty('--goL', gap + 'px'); } } /* the speed and Stop buttons sit above whatever is on the right */
     const mk = (cls, html) => { const d = document.createElement('div'); d.className = cls; if (html) d.innerHTML = html; pad.append(d); return d; };
+    // landscape: put 🚶 Get out by where the pedals really are on this phone (its notch, its text size), never on them
+    const fitGo = () => { if (!pad || !matchMedia('(orientation: landscape) and (max-height: 560px)').matches) return; const ped = pad.querySelector('.tpedals'), go = (host.parentElement || host).querySelector('.rndbtn.dmode'); if (!ped || !go || go.hidden) return;
+      const pr = ped.getBoundingClientRect(), gr = go.getBoundingClientRect(), lab = go.querySelector('span'), lw = lab ? lab.getBoundingClientRect().width : gr.width, W0 = innerWidth, hs = (host.parentElement || host).style;
+      if (!pr.width) return; const half = Math.max(gr.width, lw) / 2, cx = ctl.swap ? pr.right + 14 + half : pr.left - 14 - half; /* (the button's centre, clear of the pedals and of its label) */
+      if (!ctl.swap) { hs.setProperty('--goL', 'auto'); hs.setProperty('--goR', `calc(${Math.max(0, Math.round(W0 - cx - gr.width / 2))}px - var(--sideX, 0px))`); } else { hs.setProperty('--goR', 'auto'); hs.setProperty('--goL', Math.round(cx - gr.width / 2) + 'px'); } };
+    requestAnimationFrame(() => requestAnimationFrame(fitGo)); setTimeout(fitGo, 600); if (!controls.fit) { controls.fit = true; addEventListener('resize', () => setTimeout(fitGo, 200)); }
     const hold = (elm, down, up) => { const on = new Set(); elm.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); try { elm.setPointerCapture(e.pointerId); } catch (x) {} on.add(e.pointerId); elm.classList.add('on'); down(e); });
       const off = e => { if (!on.delete(e.pointerId)) return; if (!on.size) { elm.classList.remove('on'); up(e); } }; elm.addEventListener('pointerup', off); elm.addEventListener('pointercancel', off); return on; };
     if (lay === 'stick') { const st = mk('tjoy', '<i></i>'), knob = st.firstChild; let id = null;

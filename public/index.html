@@ -1178,7 +1178,7 @@ body.phone-on .worldbtn{display:none}
 .rndbtn b{font-size:26px;line-height:1}.rndbtn span{position:absolute;top:100%;margin-top:5px;white-space:nowrap;color:#fff;font:700 12px/1.2 inherit;padding:3px 9px;border-radius:9px;pointer-events:none}
 .rndbtn:active{transform:scale(.95)}.rndbtn[hidden]{display:none!important}
 /* a phone on its side: the round buttons down the right take the edge, so the pedals (and Get out) stand just inside them */
-@media (orientation:landscape) and (max-height:560px){ .driveview{--sideX:calc(env(safe-area-inset-right,0px) + 58px)} .driveview .tpad.swap .tpedals{right:auto} }
+@media (orientation:landscape) and (max-height:560px){ .driveview{--sideX:calc(env(safe-area-inset-right,0px) + 58px)} .driveview .tpad.swap .tpedals{right:auto} .driveview .dhud{right:calc(14px + var(--sideX,0px))} } /* (landscape: Stop and Go inside clear of the side buttons) */
 /* inside, on its side: Chat, its box and the round action button stand clear of the column of round buttons on the right */
 @media (orientation:landscape) and (max-height:560px){ .roomstage .rndbtn.hchatbtn,.roomstage .hact:not(.hshop){right:calc(env(safe-area-inset-right,0px) + 72px)} .roomstage .hchat{right:calc(env(safe-area-inset-right,0px) + 72px)} }
 /* Get out: just left of the pedals (or bottom right with the one stick), in portrait and landscape */
@@ -7306,7 +7306,8 @@ function sideCol(...btns){ const col=el('div',{class:'sidecol'}); let hid=false;
   const tog=el('button',{class:'sidebtn sidetoggle','aria-label':'Hide or show the buttons',onclick:()=>{ hid=!hid; try{ ls.set('resurgence-side-hidden',hid); }catch(e){} paint(); }});
   const paint=()=>{ col.classList.toggle('collapsed',hid); tog.innerHTML=hid?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>'; /* (drawn, not a character: some phones show ▴ as a dot) */ tog.title=hid?'Show the buttons':'Hide the buttons'; }; paint();
   for(const b of btns) if(b) b.classList.add('sidehide'); col.append(tog,...btns.filter(Boolean)); return col; }
-addEventListener('resize',()=>{ try{ Drive.floatOff=null; }catch(e){} try{ setTimeout(()=>World.dodge(),50); }catch(e){} }); /* (the screen turned or changed size: measure where the 3D view is again) */
+addEventListener('resize',()=>{ try{ Drive.floatOff=null; }catch(e){} try{ setTimeout(()=>World.dodge(),50); }catch(e){} });
+{ const card=document.getElementById('card'); if(card){ const again=()=>{ try{ World.dodge(); }catch(e){} }; try{ new ResizeObserver(again).observe(card); }catch(e){} try{ new MutationObserver(again).observe(card,{attributes:true,attributeFilter:['hidden','class','style']}); }catch(e){} } } /* (the card grew, shrank, opened or closed: the 3D button steps aside again) */ /* (the screen turned or changed size: measure where the 3D view is again) */
 const DEEP=location.search.length>1; /* opened from a shared link, a notification…: that opens on the map */
 const World={ btn:null, last:null, booted:false,
   in3d(){ return !!((Room.el&&!Room.el.hidden)||Drive.el); },
@@ -7321,8 +7322,9 @@ const World={ btn:null, last:null, booted:false,
   toggle(){ if(this.in3d()) this.toMap(); else this.to3D(); },
   // on the map, a card that opens where the 3D button stands (on a phone on its side, the card's top right, where its ✕
   // is): the button steps to just left of the card, so the ✕ is easy to tap; back to its place when the card closes
-  dodge(){ const b=this.btn; if(!b||b.parentElement!==document.body) return; const card=$('card'); b.style.right=''; if(!card||card.hidden) return;
-    const c=card.getBoundingClientRect(), r=b.getBoundingClientRect(); if(!c.width||r.right<c.left||r.left>c.right||r.bottom<c.top||r.top>c.bottom) return;
+  dodge(){ const b=this.btn; if(!b||b.parentElement!==document.body) return; const card=$('card'); b.style.right=''; if(!card||card.hidden) return; clearTimeout(this.dodgeT); this.dodgeT=setTimeout(()=>{ if(!card.hidden) this.dodgeNow(); },350); /* (and again once the card has slid in) */ this.dodgeNow(); },
+  dodgeNow(){ const b=this.btn, card=$('card'); if(!b||!card||card.hidden) return; b.style.right='';
+    const c=card.getBoundingClientRect(), r=b.getBoundingClientRect(); if(!c.width||r.right<c.left-6||r.left>c.right+6||r.bottom<c.top-6||r.top>c.bottom+6) return;
     b.style.right=Math.max(8,innerWidth-c.left+10)+'px'; },
   // to the map: remember where your character is, to come back to
   toMap(){ if(Drive.el){ const p=Drive.T&&Drive.T.pos; this.last=p?{ kind:'street', at:{ mode:p.mode==='walk'?'walk':'car', x:p.x, y:p.y, a:p.a } }:null; Drive.close(); if(p){ const q=iso(p.x,p.y); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.4); follow=null; } } /* the map opens where you are */
@@ -7356,9 +7358,9 @@ const World={ btn:null, last:null, booted:false,
 // there: that counts as going there (the fuel for the distance you drove is paid, no cab fare), and you can walk in.
 // Others driving show on the map as cars too (DrivingNow), however their routine would have them.
 // Driving controls (kept on this phone): the layout on screen, which side steers, and the keys on a computer.
-const DriveCtl={ DEF:{ layout:'pedalstick', swap:false, steerSize:1, pedalSize:1, keys:{ up:'w', down:'s', left:'a', right:'d' } },
-  get(){ let v=null; try{ v=ls.get('resurgence-drive'); if(v&&!v.lay2){ v={ ...v, layout:'pedalstick', lay2:1 }; ls.set('resurgence-drive',v); } }catch(e){} /* (once: everyone moves to pedals and stick, the new standard; they can pick another after) */ return { ...this.DEF, ...(v||{}), keys:{ ...this.DEF.keys, ...((v&&v.keys)||{}) } }; },
-  set(p){ const v={ ...this.get(), ...p, lay2:1 }; try{ ls.set('resurgence-drive',v); }catch(e){} if(Drive.T) Drive.T.setControls(v); return v; },
+const DriveCtl={ DEF:{ layout:'pedals', swap:false, steerSize:1, pedalSize:1, keys:{ up:'w', down:'s', left:'a', right:'d' } },
+  get(){ let v=null; try{ v=ls.get('resurgence-drive'); if(v&&!v.lay3){ v={ ...v, layout:'pedals', lay2:1, lay3:1 }; ls.set('resurgence-drive',v); } }catch(e){} /* (once: everyone moves to pedals and buttons, the new standard; they can pick another after) */ return { ...this.DEF, ...(v||{}), keys:{ ...this.DEF.keys, ...((v&&v.keys)||{}) } }; },
+  set(p){ const v={ ...this.get(), ...p, lay2:1, lay3:1 }; try{ ls.set('resurgence-drive',v); }catch(e){} if(Drive.T) Drive.T.setControls(v); return v; },
   keyName(k){ return k===' '?'Space':String(k).length===1?String(k).toUpperCase():String(k); },
   section(){ const box=el('div',{class:'drivectl'}), fill=()=>{ const C=this.get(); box.replaceChildren(el('h4',{class:'bgroup',text:'🚗 Driving controls'}));
       const lay=el('div',{class:'spchips'}); for(const [k,nm,why] of [['pedalstick','🦶🕹️ Pedals & stick','Gas and brake pedals, and a stick to steer (the standard)'],['stick','🕹️ Stick','One stick: push forward to drive, back to brake, sideways to steer'],['pedals','🦶 Pedals & buttons','Separate gas and brake pedals, and ◀ ▶ buttons to steer'],['wheel','🎡 Steering wheel','Turn a wheel to steer, with gas and brake pedals']])

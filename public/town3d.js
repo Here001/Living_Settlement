@@ -168,7 +168,7 @@ export function createTown(host, opts) {
     for (const f of folk.values()) if (f.kind === 'car' && Math.abs(f.x - x) < 4 && Math.abs(f.z - z) < 4 && carHit(f.m, f.x, f.z, f.ry)) return true;
     return false; };
   const OUTLINE_F = [[2.1, 0.85], [2.1, -0.85], [0, 0.85], [0, -0.85], [-2.1, 0.85], [-2.1, -0.85], [0, 0]], OUTLINE_B = OUTLINE_F.map(([u, w]) => [-u || 0, w]); /* the car's outline, going forwards and backwards (made once) */
-  const keys = new Set(), inp = { thr: 0, steer: 0 }; let ctl = opts.controls || { layout: 'stick' }; /* inp: from the on-screen controls (steer +1 = left) */
+  const keys = new Set(), inp = { thr: 0, steer: 0 }; let ctl = opts.controls || { layout: 'pedalstick' }; /* inp: from the on-screen controls (steer +1 = left) */
   function drive(dt) { if (riding) return;
     const K = ctl.keys || {}, on = (a, d) => keys.has(d) || keys.has(String(K[a] || '').toLowerCase());
     const up = (on('up', 'ArrowUp') ? 1 : 0) - (on('down', 'ArrowDown') ? 1 : 0) + inp.thr, turn = (on('left', 'ArrowLeft') ? 1 : 0) - (on('right', 'ArrowRight') ? 1 : 0) + inp.steer;
@@ -187,7 +187,7 @@ export function createTown(host, opts) {
     //  - the wheels turn smoothly, and less far the faster you go; how fast you turn follows the wheelbase;
     //  - the tyres hold the road up to their grip: corner too fast and the car understeers or slides, and Space (the
     //    handbrake) lets the back step out for a drift;
-    //  - the engine pulls hard from a stop and tails off near top speed; brakes bite hard; let go and it coasts;
+    //  - the engine pulls hard from a stop and tails off near top speed; brakes bite hard; let go and it slows down by itself;
     //  - no speed limit on any road (only grass and rough ground slow you); dearer cars pull harder, grip more, go faster.
     const thr = Math.max(-1, Math.min(1, up)), st = Math.max(-1, Math.min(1, turn)), rt = opts.road(tileOf(car.x), tileOf(car.z)), R = rt && ROAD_TYPES[rt];
     const rough = !BOAT && (!rt || (R && R.kind === 'rail')), top = rough ? PERF.top * 0.5 : PERF.top, hb = keys.has(' ') && Math.abs(car.v) > 4;
@@ -195,7 +195,7 @@ export function createTown(host, opts) {
     let vf = (car.vx || 0) * fx + (car.vz || 0) * fz, vl = (car.vx || 0) * lx + (car.vz || 0) * lz;
     if (thr > 0.05) vf += vf < -0.5 ? 16 * thr * dt : PERF.acc * thr * Math.max(0.12, 1 - (vf / top) ** 2) * dt; /* (pressing on while rolling back brakes first) */
     else if (thr < -0.05) vf += vf > 0.5 ? 16 * thr * dt : Math.max(-9 - vf, 4.5 * thr * dt);
-    else { const d = (1.1 + (rough ? 2.5 : 0) + 0.0012 * vf * vf) * dt; vf = Math.abs(vf) <= d ? 0 : vf - Math.sign(vf) * d; } /* rolling on, slowing down by itself */
+    else { const d = (BOAT ? 1.4 + 0.05 * Math.abs(vf) : 3.0 + 0.1 * Math.abs(vf) + (rough ? 2.5 : 0)) * dt; vf = Math.abs(vf) <= d ? 0 : vf - Math.sign(vf) * d; } /* let go and it slows down by itself, like a real car: engine braking and the tyres' drag (from 70 km/h it stops in about 45 m); a boat drifts on further */
     if (hb) { const d = 7 * dt; vf = Math.abs(vf) <= d ? 0 : vf - Math.sign(vf) * d; }
     if (vf > top) vf = Math.max(top, vf - 7 * dt);
     const maxA = 0.6 / (1 + Math.abs(vf) / 11), want = st * maxA, rate = (st === 0 ? 4.5 : 2.6) * dt; car.wa = (car.wa || 0) + Math.max(-rate, Math.min(rate, want - (car.wa || 0))); car.steer = car.wa / 0.6;
@@ -550,15 +550,15 @@ export function createTown(host, opts) {
   // ---- controls on screen, in the layout picked in Settings: a stick; pedals and steer buttons; or a steering wheel and
   // pedals (steering on the left unless it's swapped). The arrow keys and the keys picked in Settings always work too.
   let pad = null;
-  function controls() { if (pad) pad.remove(); inp.thr = inp.steer = 0; const lay = foot ? 'stick' : ctl.layout || 'stick'; /* on foot: always the stick */ pad = document.createElement('div'); pad.className = 'tpad ' + lay + (ctl.swap ? ' swap' : ''); let ts = ctl.steerSize || 1, tp = ctl.pedalSize || 1; if (lay !== 'stick') { const W0 = host.clientWidth || innerWidth, need = (lay === 'wheel' ? 150 * ts : 170 * ts) + 88 * tp + 52; if (need > W0) { const f = (W0 - 52) / (need - 52); ts *= f; tp *= f; } } /* both fit side by side, however big you've made them */
+  function controls() { if (pad) pad.remove(); inp.thr = inp.steer = 0; const lay = foot ? 'stick' : ctl.layout || 'pedalstick'; /* on foot: always the stick */ pad = document.createElement('div'); pad.className = 'tpad ' + lay + (ctl.swap ? ' swap' : ''); let ts = ctl.steerSize || 1, tp = ctl.pedalSize || 1; if (lay !== 'stick') { const W0 = host.clientWidth || innerWidth, need = (lay === 'wheel' ? 150 * ts : lay === 'pedalstick' ? 128 * ts : 170 * ts) + 88 * tp + 52; if (need > W0) { const f = (W0 - 52) / (need - 52); ts *= f; tp *= f; } } /* both fit side by side, however big you've made them */
     pad.style.setProperty('--ts', String(ts)); pad.style.setProperty('--tp', String(tp)); host.append(pad); /* sizes picked in Settings */
-    { const right = lay === 'stick' ? (ctl.swap ? 28 + 128 * ts : 0) : ctl.swap ? (lay === 'wheel' ? 18 + 150 * ts : 24 + 78 * ts) : 20 + 186 * tp; /* (the pedals stand one above the other) */
+    { const right = lay === 'stick' ? (ctl.swap ? 28 + 128 * ts : 0) : ctl.swap ? (lay === 'wheel' ? 18 + 150 * ts : lay === 'pedalstick' ? 28 + 128 * ts : 24 + 78 * ts) : 20 + 186 * tp; /* (the pedals stand one above the other) */
       (host.parentElement || host).style.setProperty('--dhud', Math.max(24, right + 14) + 'px'); } /* the speed and Stop buttons sit above whatever is on the right */
     const mk = (cls, html) => { const d = document.createElement('div'); d.className = cls; if (html) d.innerHTML = html; pad.append(d); return d; };
     const hold = (elm, down, up) => { const on = new Set(); elm.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); try { elm.setPointerCapture(e.pointerId); } catch (x) {} on.add(e.pointerId); elm.classList.add('on'); down(e); });
       const off = e => { if (!on.delete(e.pointerId)) return; if (!on.size) { elm.classList.remove('on'); up(e); } }; elm.addEventListener('pointerup', off); elm.addEventListener('pointercancel', off); return on; };
     if (lay === 'stick') { const st = mk('tjoy', '<i></i>'), knob = st.firstChild; let id = null;
-      const mv = e => { const r = st.getBoundingClientRect(), R = r.width / 2; let dx = (e.clientX - r.left - R) / R, dy = (e.clientY - r.top - R) / R; const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; } inp.thr = -dy; inp.steer = -dx; knob.style.transform = `translate(${dx * R * 0.6}px,${dy * R * 0.6}px)`; };
+      const mv = e => { const r = st.getBoundingClientRect(), R = r.width / 2; let dx = (e.clientX - r.left - R) / R, dy = (e.clientY - r.top - R) / R; const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; } const dz = foot ? 0 : 0.3; inp.thr = Math.abs(dy) <= dz ? 0 : -(dy - Math.sign(dy) * dz) / (1 - dz); inp.steer = -dx; /* (driving: steering sideways doesn't touch the gas or brake unless you mean it) */ knob.style.transform = `translate(${dx * R * 0.6}px,${dy * R * 0.6}px)`; };
       st.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); id = e.pointerId; st.setPointerCapture(id); mv(e); }); st.addEventListener('pointermove', e => { if (e.pointerId === id) mv(e); });
       const end = () => { id = null; inp.thr = inp.steer = 0; knob.style.transform = ''; }; st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end); return; }
     // the pedals: brake (and reverse when stopped) and accelerator, held down
@@ -566,6 +566,11 @@ export function createTown(host, opts) {
     hold(gas, () => { inp.thr = 1; }, () => { inp.thr = Math.min(0, inp.thr); }); hold(brake, () => { inp.thr = -1; }, () => { inp.thr = Math.max(0, inp.thr); });
     if (lay === 'pedals') { const st = mk('tsteer'), l = document.createElement('div'), r = document.createElement('div'); l.className = 'tbtn'; l.textContent = '◀'; r.className = 'tbtn'; r.textContent = '▶'; st.append(l, r);
       hold(l, () => { inp.steer = 1; }, () => { inp.steer = Math.min(0, inp.steer); }); hold(r, () => { inp.steer = -1; }, () => { inp.steer = Math.max(0, inp.steer); }); return; }
+    // pedals and a stick: the pedals drive and brake, the stick (side to side) steers
+    if (lay === 'pedalstick') { const st = mk('tjoy steer', '<i></i>'), knob = st.firstChild; let id = null;
+      const mv = e => { const r = st.getBoundingClientRect(), R = r.width / 2; const dx = Math.max(-1, Math.min(1, (e.clientX - r.left - R) / R)); inp.steer = -dx; knob.style.transform = `translate(${dx * R * 0.6}px,0)`; };
+      st.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); id = e.pointerId; st.setPointerCapture(id); mv(e); }); st.addEventListener('pointermove', e => { if (e.pointerId === id) mv(e); });
+      const end = () => { id = null; inp.steer = 0; knob.style.transform = ''; }; st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end); return; }
     // a steering wheel: drag it round (up to about a turn and a half each way); it springs back when you let go
     const wh = mk('twheel', '<svg viewBox="-50 -50 100 100"><circle r="44" fill="none" stroke="#1d1f24" stroke-width="10"/><circle r="44" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="2"/><path d="M-40 4 L-12 8 L-8 30 L8 30 L12 8 L40 4" fill="none" stroke="#1d1f24" stroke-width="8" stroke-linejoin="round"/><circle r="9" fill="#2a2d33"/><rect x="-3" y="-50" width="6" height="10" fill="#e8463a"/></svg>');
     let wid = null, a0 = 0, turned = 0, last = 0; const ang = e => { const r = wh.getBoundingClientRect(); return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)); };

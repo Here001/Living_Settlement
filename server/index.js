@@ -244,6 +244,7 @@ app.post('/api/admin/buildings/line', admin, send(req => world.buildLine(req.bod
 app.post('/api/admin/buildings/restore', admin, send(req => world.restore((req.body || {}).building)));
 app.delete('/api/admin/buildings/:id/website', admin, send(req => world.housing.setWebsite(null, req.params.id, '', true)));
 app.post('/api/admin/buildings/:id/finish', admin, send(req => world.finish(req.params.id)));
+app.post('/api/admin/buildings/:id/upgrade', admin, send(req => world.housing.upgradeNow(req.params.id))); // the builder: up a level now, free
 app.post('/api/admin/buildings/:id/repair', admin, send(req => world.repair(req.params.id)));
 app.post('/api/admin/ruins/clear', admin, send(() => world.clearRuins()));
 app.post('/api/admin/water', admin, send(req => world.paintWater(req.body || {})));

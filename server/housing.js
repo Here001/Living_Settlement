@@ -370,6 +370,19 @@ export class Housing {
       return { ok: true, paid: total, coins: c.coins_base, minutes: u.minutes, level: u.level };
     });
   }
+  // The builder (developer): up a level at once, free. An upgrade already under way is finished now; otherwise the building
+  // grows if it needs to (the ground beside it must be clear) and the new level opens straight away.
+  async upgradeNow(buildingId) {
+    return this.world.change(async ch => {
+      const b = (await ch.q('select * from buildings where id = $1 for update', [String(buildingId)])).rows[0];
+      if (!b) throw new HttpError(404, 'No such building.'); if (!b.done) throw new HttpError(409, 'Finish building it first.'); if (b.ruin) throw new HttpError(409, "It's in ruins.");
+      if (Number(b.up_at) > 0) { await this.finishUpgrade(ch, b); return { ok: true, level: R.clampLevel((b.level || 1) + 1) }; }
+      const u = this.upgradeInfo(b); if (!u) throw new HttpError(409, R.upgradable(b.type) ? "It's at the top level already." : "This can't be upgraded.");
+      if (u.extra > 0) await this.world.assertFree(ch, b.type, b.x, b.y, b.id, b.rot, { level: u.level, plot: b.plot_id });
+      await ch.q('update buildings set w = $2, d = $3, up_at = 1 where id = $1', [b.id, u.w, u.d]); await this.finishUpgrade(ch, { ...b, w: u.w, d: u.d, up_at: 1 });
+      return { ok: true, level: u.level };
+    });
+  }
   async finishUpgrade(ch, b, quiet = false) {
     const lv = R.clampLevel((b.level || 1) + 1), cap = R.capacities(b.type, lv);
     const r = (await ch.q('update buildings set level = $2, up_at = 0, up_cost = 0, home_cap = $3, job_cap = $4, hang_cap = $5 where id = $1 and up_at > 0 returning *', [b.id, lv, cap.homeCap, cap.jobCap, cap.hangCap])).rows[0];

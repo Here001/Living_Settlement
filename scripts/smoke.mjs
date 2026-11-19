@@ -1888,6 +1888,11 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
     const r1 = await call('POST', '/api/me/store/buy', { buildingId: jw.id, item: 'w:ring:band' }, A.P); ok(r1.status === 200 && r1.json.wardrobe.includes('ring:band'), 'a ring from the Jeweller goes into the wardrobe', JSON.stringify(r1.json).slice(0, 200));
     const r2 = await call('POST', '/api/me/look', { look: { ...fancy, w: { ...fancy.w, ring: ['band', 0] } } }, A.P); ok(r2.status === 200 && r2.json.look.w.ring?.[0] === 'band' && r2.json.spent === 0, '…and is worn on the hand', JSON.stringify(r2.json).slice(0, 200));
     ok((await call('POST', '/api/me/look', { look: { ...fancy, w: { ...fancy.w, ring: ['diamondring', 0] } } }, A.P)).status === 409, 'a ring not bought yet can’t be worn'); }
+  { // the builder upgrades a building at once, free
+    const ub = (await call('POST', '/api/admin/buildings', { type: 'boutique', x: 1650, y: 1392, instant: true })).json.building;
+    const u1 = await call('POST', `/api/admin/buildings/${ub.id}/upgrade`), u2 = await call('POST', `/api/admin/buildings/${ub.id}/upgrade`), row = (await pool.query('select level, up_at from buildings where id = $1', [ub.id])).rows[0];
+    ok(u1.json.level === 2 && u2.json.level === 3 && row.level === 3 && Number(row.up_at) === 0, 'the builder upgrades a building straight away (no waiting)', JSON.stringify([u1.json, u2.json, row]));
+    ok((await call('POST', `/api/admin/buildings/${ub.id}/upgrade`, {}, { auth: false })).status === 401 || (await call('POST', `/api/admin/buildings/${ub.id}/upgrade`, {}, { auth: false })).status === 403, '…and only the builder can'); }
   { // watching the races in 3D: a ticket at the gate, seats, and the owner's price
     const rt = (await call('POST', '/api/admin/buildings', { type: 'racetrack', x: 1640, y: 1380, instant: true })).json.building;
     const V1 = await player('fan_fay', 1000), V2 = await player('fan_finn', 50);

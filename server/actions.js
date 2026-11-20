@@ -12,6 +12,10 @@ import { treasuryAdd } from './races.js';
 import { track, ledger } from './stats.js';
 import * as MG from '../shared/minigames.js';
 import { note as noteProgress, progressOf } from './crimeprog.js';
+import { LIVE } from './missions.js';
+// Pickpocketing happens only out in the 3D town: you and them both on foot, right beside each other (in tiles; the
+// 👛 shows a little closer than this, so a moment's lag doesn't spoil it).
+export const PICK_NEAR = 1.2, PICK_FRESH = 15000;
 
 export const CRIME_COOLDOWN = 20 * 1000;         // lie low 20 seconds between crimes, whatever happened
 export const CRIME_QUICK = 20 * 1000;
@@ -162,7 +166,7 @@ export class Actions {
     if (h) { const v = (await pool.query('select c.*, h.x hx, h.y hy from citizens c left join buildings h on h.id = c.home_id where lower(c.handle) = lower($1)', [h])).rows[0];
       if (!v) pick = { error: `There's no colonist called @${h}.` };
       else { const where = await this.whereIs(pool, v, now), scene = await this.sceneOf(pool, v, where);
-        const blocked = !v.home_id ? 'still in cryosleep' : where === 'home' ? 'safe at home' : where === 'jail' ? 'locked up' : where === 'work' && v.job_id !== c.job_id ? 'at work' : null;
+        const L = LIVE.get(v.id), out = L && now - L.t < PICK_FRESH && L.mode === 'walk', blocked = !v.home_id ? 'still in cryosleep' : !out ? 'not out on foot in town' : null;
         pick = { handle: v.handle, where, at: scene.name, blocked, ...(await this.odds('pickpocket', await this.policeDist(pool, scene.x, scene.y), wave)) }; } }
     const solo = {}; for (const [k, S] of Object.entries(R.SOLO_CRIMES)) { let x = c.hx, y = c.hy, at = null;
       if (S.needs === 'bank' && c.home_id) { const bk = (await pool.query(`select * from buildings where type = any($3) and done and not ruin order by (x - $1::int) * (x - $1::int) + (y - $2::int) * (y - $2::int), id limit 1`, [c.hx, c.hy, BANKS])).rows[0]; if (!bk) continue; x = bk.x; y = bk.y; at = nameOf(bk); }
@@ -185,12 +189,12 @@ export class Actions {
         if (!victim) throw new HttpError(404, `There's no colonist called @${h}.`);
         if (victim.id === c.id) throw new HttpError(400, "You can't pick your own pocket.");
         if (!victim.home_id) throw new HttpError(400, `@${victim.handle} is still in cryosleep.`);
-        // Only someone out and about can have their pocket picked: not at home, and not at work, unless you work there too.
-        const where = await this.whereIs(ch, victim, now);
-        if (where === 'home') throw new HttpError(409, `@${victim.handle} is safe at home right now. Wait until they're out and about.`);
-        if (where === 'jail') throw new HttpError(409, `@${victim.handle} is locked up in the Jail.`);
-        if (where === 'work' && victim.job_id !== c.job_id) throw new HttpError(409, `@${victim.handle} is at work, and only their workmates can get close. Catch them on their lunch break or after work.`);
-        const scene = await this.sceneOf(ch.db, victim, where); px = scene.x; py = scene.y; delete victim.hx; delete victim.hy; // where they are now
+        // Only someone you can see, right beside you, out in the 3D town: both of you on foot, where your phones say you are.
+        const fresh = q => q && now - q.t < PICK_FRESH, me = LIVE.get(c.id), them = LIVE.get(victim.id);
+        if (!fresh(me) || me.mode !== 'walk') throw new HttpError(409, 'Pickpocketing happens out in town: go out on foot (🚶 Walk), walk right up to someone, and tap the 👛 that appears.');
+        if (!fresh(them) || them.mode !== 'walk') throw new HttpError(409, `@${victim.handle} isn't out on foot near you. You can only pick the pocket of someone you can see, right beside you.`);
+        if (Math.hypot(me.x - them.x, me.y - them.y) > PICK_NEAR) throw new HttpError(409, `Get closer: you need to be right beside @${victim.handle}.`);
+        px = Math.round(them.x); py = Math.round(them.y); delete victim.hx; delete victim.hy; // where they are now
         ch.coins(victim); if (victim.coins_base < 5) throw new HttpError(400, `@${victim.handle}'s pockets are empty.`);
         loot = Math.max(1, Math.min(1500, Math.floor(victim.coins_base * (0.1 + rand() * 0.15))));
       } else if (R.SOLO_CRIMES[kind]) { // a con on the street near home, or the ATM at the nearest Bank

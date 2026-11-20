@@ -379,7 +379,10 @@ const MIGRATIONS = [
   `create table if not exists bounties (id text primary key, target_id text not null, target_handle text, by_id text not null, by_handle text, amount int not null, t bigint not null, claimed_by text, claimed_at bigint);
    create index if not exists bounties_open on bounties (target_id) where claimed_by is null;`,
   // v85: extra storage space a colonist has bought (on top of shared/furniture.js MAX_STORED)
-  `alter table citizens add column if not exists storage_extra int not null default 0;`
+  `alter table citizens add column if not exists storage_extra int not null default 0;`,
+  // v86: best friends (server/friends.js): asked, then friends; best friends (and married couples) can drive each other's cars
+  `create table if not exists best_friends (pair text primary key, a_id text not null, b_id text not null, status text not null, asked_by text not null, t bigint not null);
+   create index if not exists best_friends_a on best_friends (a_id); create index if not exists best_friends_b on best_friends (b_id);`
 ];
 
 export async function migrate() {

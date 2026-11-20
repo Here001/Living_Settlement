@@ -396,6 +396,11 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/phone/hangup', limit, send(async req => Ph().hangup(await me(req), bd(req).id)));
   r.post('/me/love/privacy', limit, send(async req => world.love.privacy((await me(req)).id, !!bd(req).hidden)));
   r.post('/me/love/end', limit, send(async req => world.love.end(await me(req))));
+  // best friends, and the cars you can borrow (from your husband or wife, and your best friends)
+  r.get('/me/friends', limit, send(async req => { const id = (await me(req)).id; return { ...(await world.friends.mine(id)), ...(await world.friends.borrowable(id)) }; }));
+  r.get('/me/friends/with/:handle', limit, send(async req => world.friends.with((await me(req)).id, req.params.handle)));
+  r.post('/me/friends', limit, send(async req => world.friends.act(await me(req), { action: String(bd(req).action || ''), handle: String(bd(req).handle || ''), yes: !!bd(req).yes })));
+  r.post('/me/cars/borrow', limit, send(async req => world.friends.canBorrow((await me(req)).id, String(bd(req).owner || ''), String(bd(req).id || ''))));
   r.get('/me/visits', limit, send(async req => world.visits.incoming((await me(req)).id)));
   r.post('/me/visits/:id', limit, send(async req => { const p = await me(req); return world.visits.answer(p.id, p.handle, req.params.id, bd(req)); }));
   r.post('/inside/here', limit, send(async req => { const p = await playerFrom(req); return RM().seen(bd(req).place, p ? 'p:' + p.id : 'ip:' + clientIp(req), p ? p.handle : null); }));

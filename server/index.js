@@ -38,6 +38,7 @@ import { Housing } from './housing.js';
 import { Rooms } from './rooms.js';
 import { Visits } from './visits.js';
 import { Love } from './love.js';
+import { Friends } from './friends.js';
 import { Clubs } from './clubs.js';
 import { Voice } from './voice.js';
 import { Phone } from './phone.js';
@@ -68,7 +69,7 @@ const lottery = new Lottery(world); world.lottery = lottery;
 const auctions = new Auctions(world); world.auctions = auctions;
 const economy = new Economy(world); world.economy = economy;
 world.housing = new Housing(world);
-world.rooms = new Rooms(world); world.visits = new Visits(world); world.love = new Love(world); world.clubs = new Clubs(world); world.voice = new Voice(world); world.phone = new Phone(world);
+world.rooms = new Rooms(world); world.visits = new Visits(world); world.love = new Love(world); world.friends = new Friends(world); world.clubs = new Clubs(world); world.voice = new Voice(world); world.phone = new Phone(world);
 const chat = new Chat(bus); world.chat = chat; chat.world = world;
 world.bus = bus; /* inside chat passes through it to every server */
 world.chat.removePhoto = id => world.rooms.removePhoto(id); // a reported photo the developer takes down
@@ -189,6 +190,7 @@ app.put('/api/tracks/:id/ticket', limit, send(async req => { const p = await pla
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/election-end', admin, send(async () => { const { weekOf, weekStart } = await import('./leaderboards.js'); const win = await world.elections.tally(weekStart(weekOf() + 1) + 1000); world.elections.testShift = 1; world.elections.cache.t = 0; return { winner: win?.handle || null }; }));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/bills', admin, send(() => world.change(ch => economy.weeklyBills(ch, true))));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.get('/api/admin/test/pushlog', admin, send(async () => ({ log: push.log })));
+if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/live', admin, send(async req => { const b = req.body || {}, id = (await pool.query('select id from citizens where lower(handle) = lower($1)', [String(b.handle || '')])).rows[0]?.id; if (!id) throw new HttpError(404, 'No such citizen.'); if (b.off) LIVE_POS.delete(id); else LIVE_POS.set(id, { x: Number(b.x), y: Number(b.y), mode: b.mode || 'walk', t: Date.now() }); return { ok: true }; })); /* (tests: put someone out in the 3D town) */
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/arena-end', admin, send(async () => { for (const M of world.arena.matches.values()) { M.playFrom = Math.min(M.playFrom, Date.now()); M.until = Date.now(); } return { n: world.arena.matches.size }; }));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/rollover', admin, send(async () => ({ winners: await leaderboards.rollover() })));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/payday', admin, send(() => world.change(ch => economy.day(ch, 1))));

@@ -149,6 +149,8 @@ export function createTown(host, opts) {
   // on a bike, you ride it: your own character sits on the saddle, hands on the bars, feet down to the pedals
   if (BIKE) { const P = W.makePerson('me', null, opts.look || null); const A = P.av || P; if (A.pose) { A.pose('play'); if (A.legL) for (const l of [A.legL, A.legR]) { l.rotation.x = -0.95; if (l.children[0]) l.children[0].rotation.x = 1.15; } for (const a of [A.armL, A.armR]) if (a) a.rotation.x = -0.62; }
     P.group.rotation.y = Math.PI; P.group.position.set(0, VK === 'motorbike' ? -0.02 : 0.0, VK === 'motorbike' ? 0.3 : 0.26); P.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); me.add(P.group); me.userData.rider = P; }
+  // in your own boat you stand at the wheel (a ship's master is up on the bridge, out of sight)
+  if (BOAT && VK !== 'ferry' && VK !== 'cargoship') { const P = W.makePerson('me', null, opts.look || null); P.group.rotation.y = Math.PI; const at = VK === 'sailboat' ? [0, 0.76, 2.95] : [0.32, 0.6, 0.72]; P.group.position.set(...at); P.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); me.add(P.group); me.userData.rider = P; }
   const tileOf = v => Math.floor(v / TILE), PRJ = new THREE.Vector3();
   // swimming: out in open water on foot you sink to your shoulders and swim (arms over in a crawl, a little kick); the
   // same for anyone else you see in the water
@@ -762,6 +764,9 @@ export function createTown(host, opts) {
     // where a point of the town is on the screen (tiles, and metres up): for buttons that sit on the door, or on the car
     project(tx, ty, h = 0) { const v = PRJ.set(tx * TILE, h, ty * TILE).project(camera), w = canvas.clientWidth, hh = canvas.clientHeight; return { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * hh, on: v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 }; },
     get parkedAt() { return parked ? { x: parked.x / TILE, y: parked.z / TILE, a: parked.ry, k: parked.kind } : null; },
+    // someone riding on the back of your bike: a passenger sits behind you
+    setPillion(on) { if (!BIKE) return; const P = me.userData.pillion; if (on && !P) { const m = W.pillionMesh(VK); if (m) { m.castShadow = true; me.add(m); me.userData.pillion = m; } } else if (!on && P) { me.remove(P); P.geometry.dispose(); me.userData.pillion = null; } },
+    get comingAt() { return summon ? { x: summon.x / TILE, y: summon.z / TILE } : null; }, /* (your car on its way to you, for the map) */
     get swimming() { return foot && !riding && wetAt(car.x, car.z); },
     doorOf(id) { for (const v of blocks.values()) for (const s of v.solid) if (s.id === id && s.door) return { x: s.door[0] / TILE, y: s.door[1] / TILE, a: s.out }; return null; },
     petHappy() { if (tapped) tapped.happy(); }, /* (the pet you just tapped) */

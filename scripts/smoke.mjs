@@ -578,21 +578,15 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     await set('zara_ng', 'coins_base = 1000, net = 0, coins_day = 0, crime_at = null, jailed_until = null'); await set('jobfill_a', 'coins_base = 500, net = 0, coins_day = 0');
     ok((await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'zara_ng' }, P)).status === 400, "can't pick your own pocket");
     ok((await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'nobody_here' }, P)).status === 404, 'the victim must exist');
-    // Where the victim is matters: not at home, not at work (unless you work there too).
-    const at = async (h, bid) => pool.query('update citizens set visit_id = $2, visit_from = $3, visit_until = $4 where handle = $1', [h, bid, Date.now() - 1000, Date.now() + 3600000]);
-    const va = (await pool.query("select id, home_id, job_id from citizens where handle = 'jobfill_a'")).rows[0], zj0 = (await pool.query("select job_id from citizens where handle = 'zara_ng'")).rows[0].job_id;
-    const work = (await pool.query("select id from buildings where type = any($1) and done and not ruin limit 1", [['shop', 'office', 'cafe', 'supermarket', 'stall', 'police', 'school', 'clinic']])).rows[0]?.id || zj0;
-    const landing = (await pool.query("select id from buildings where type = 'landing' limit 1")).rows[0].id;
+    // Only out in the 3D town: both of you on foot, right beside each other (the old "not at home, not at work" rule is gone)
+    const live = (handle, x, y, mode = 'walk') => call('POST', '/api/admin/test/live', { handle, x, y, mode }), at = live;
     const pp = () => call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P);
-    await at('jobfill_a', va.home_id); let r0 = await pp();
-    ok(r0.status === 409 && /safe at home/.test(r0.json.error), "nobody's pocket can be picked while they're at home", JSON.stringify(r0.json));
-    await pool.query("update citizens set job_id = $1 where handle = 'jobfill_a'", [work]); await pool.query("update citizens set job_id = null where handle = 'zara_ng'"); await at('jobfill_a', work); r0 = await pp();
-    ok(r0.status === 409 && /workmates/.test(r0.json.error), 'or at work', JSON.stringify(r0.json));
-    await pool.query("update citizens set job_id = $1 where handle = 'zara_ng'", [work]); await set('jobfill_a', 'coins_base = 500'); r0 = await pp();
-    ok(r0.status === 200, 'but a workmate at the same place can try', JSON.stringify(r0.json));
-    await pool.query("update citizens set job_id = $1 where handle = 'zara_ng'", [zj0]); await pool.query("update citizens set job_id = $1 where handle = 'jobfill_a'", [va.job_id]);
-    await set('zara_ng', 'coins_base = 1000, net = 0, coins_day = 0, crime_at = null, jailed_until = null, visit_id = null, visit_until = null'); await set('jobfill_a', 'coins_base = 500, net = 0, coins_day = 0');
-    await at('jobfill_a', landing); // out and about at the landing station
+    let r0 = await pp(); ok(r0.status === 409 && /out in town/.test(r0.json.error), 'no picking pockets from the map or a card: only out in the 3D town', JSON.stringify(r0.json));
+    await live('zara_ng', 40, 40); r0 = await pp(); ok(r0.status === 409 && /isn't out on foot near you/.test(r0.json.error), "…and only someone who's really out there", JSON.stringify(r0.json));
+    await live('jobfill_a', 44, 40); r0 = await pp(); ok(r0.status === 409 && /Get closer/.test(r0.json.error), '…right beside you, not across the street', JSON.stringify(r0.json));
+    await live('jobfill_a', 40.6, 40.4, 'car'); r0 = await pp(); ok(r0.status === 409, '…and on foot, not driving past', JSON.stringify(r0.json));
+    await live('zara_ng', 40, 40, 'car'); await live('jobfill_a', 40.6, 40.4); r0 = await pp(); ok(r0.status === 409 && /out in town/.test(r0.json.error), '…and you on foot too', JSON.stringify(r0.json));
+    await live('zara_ng', 40, 40); await set('zara_ng', 'coins_base = 1000, net = 0, coins_day = 0, crime_at = null, jailed_until = null, visit_id = null, visit_until = null'); await set('jobfill_a', 'coins_base = 500, net = 0, coins_day = 0');
     const k = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P);
     const z1 = await coins('zara_ng'), v1 = await coins('jobfill_a');
     ok(k.status === 200 && (k.json.caught ? z1 === 1000 - k.json.fine && v1 === 500 : z1 === 1000 + k.json.loot && v1 === 500 - k.json.loot), `a pickpocket ${k.json.caught ? 'is caught and fined' : 'gets away with it'}, and the coins add up`, JSON.stringify(k.json));
@@ -602,7 +596,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     let policeId = null;
     for (const [t, x, y] of [['police', 930, 900], ['police', 930, 903], ['police', 933, 900], ['jail', 933, 903]]) { const b = await call('POST', '/api/admin/buildings', { type: t, x, y }); policeId = policeId || b.json.building?.id; await call('POST', `/api/admin/buildings/${b.json.building?.id}/finish`); }
     let caught = null;
-    await at('jobfill_a', policeId); // out and about right by the police station
+    await live('zara_ng', 931, 901); await live('jobfill_a', 931.5, 901.5); // out on foot right by the police station
     for (let i = 0; i < 30 && !caught; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 1000'); const r = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P); if (r.json.caught) caught = r.json; }
     ok(caught && caught.jailed && caught.fine >= 25, 'caught near the police: fined and sent to jail', JSON.stringify(caught));
     ok(caught && caught.band === 'low' && caught.police <= 15, 'police a few tiles from the scene: the low-chance band', JSON.stringify(caught));
@@ -628,7 +622,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok((await call('POST', '/api/me/visit', { friend: 'jobfill_a' }, P)).status === 409, 'no going out from jail');
     const petShop = (await call('POST', '/api/admin/buildings', { type: 'petstore', x: 1230, y: 1230 })).json.building?.id; await call('POST', `/api/admin/buildings/${petShop}/finish`);
     ok((await call('POST', '/api/me/pet', { kind: 'glimmerhop', buildingId: petShop }, P)).status === 409, 'no adopting from jail');
-    { let c2 = null; for (let i = 0; i < 30 && !c2; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 30, bank = 100'); const r = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P); if (r.json.caught) c2 = r.json; }
+    { let c2 = null; for (let i = 0; i < 30 && !c2; i++) { await set('zara_ng', 'crime_at = null, jailed_until = null, coins_base = 30, bank = 100'); await live('zara_ng', 931, 901); await live('jobfill_a', 931.5, 901.5); const r = await call('POST', '/api/me/crime', { kind: 'pickpocket', target: 'jobfill_a' }, P); if (r.json.caught) c2 = r.json; }
       const zz = (await pool.query("select coins_base, bank from citizens where handle = 'zara_ng'")).rows[0];
       ok(c2 && c2.paid.fromCash === 30 && c2.fine <= 130 && c2.paid.fromBank === c2.fine - 30 && !c2.paid.debt && Number(zz.bank) === 130 - c2.fine && Number(zz.coins_base) === 0, 'a fine comes from cash, then savings, and never puts the wallet in the minus', JSON.stringify({ c2: c2 && c2.paid, fine: c2 && c2.fine, zz }));
       // bail: out of jail early, from cash then savings
@@ -2678,6 +2672,31 @@ const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 
   for (const x of [...socks, extra]) try { x.w.close(); } catch {}
 }
 ok((await call('POST', '/api/admin/reset', { confirm: 'nope' })).status === 400, 'reset needs the word RESET');
+{ // best friends, and borrowing cars from them (or from your husband or wife)
+  const player = async (handle, coins) => { await call('POST', '/api/admin/citizens', { handle }); const id = (await pool.query('select id from citizens where handle = $1', [handle])).rows[0].id;
+    const link = (await call('POST', `/api/admin/citizens/${id}/setup-link`)).json.claimId, tok = (await call('POST', `/api/claim/${link}/password`, { password: 'secret88' }, { auth: false })).json.token; return { id, handle, P: { auth: false, headers: { 'x-player': tok } } }; };
+  const A = await player('bff_ana'), Bb = await player('bff_bo'), Cc = await player('bff_cy');
+  await pool.query(`update citizens set cars = $2 where id = $1`, [Bb.id, JSON.stringify([{ id: 'bo1', m: 'hatch', col: '#123456' }, { id: 'bo2', m: 'speedboat', col: '#FFFFFF' }])]);
+  const fr = (b, P) => call('POST', '/api/me/friends', b, P);
+  ok((await call('POST', '/api/me/cars/borrow', { owner: 'bff_bo', id: 'bo1' }, A.P)).status === 403, "you can't borrow a stranger's car");
+  ok((await fr({ action: 'ask', handle: 'bff_bo' }, A.P)).json.status === 'asked', 'ask someone to be your best friend');
+  ok((await fr({ action: 'ask', handle: 'bff_bo' }, A.P)).status === 409, '…once');
+  { const w = (await call('GET', '/api/me/friends/with/bff_ana', undefined, Bb.P)).json; ok(w.status === 'asks', 'they see you asked', JSON.stringify(w)); }
+  ok((await call('POST', '/api/me/cars/borrow', { owner: 'bff_bo', id: 'bo1' }, A.P)).status === 403, '…and nothing to borrow until they say yes');
+  ok((await fr({ action: 'answer', handle: 'bff_ana', yes: true }, Bb.P)).json.status === 'friends', 'they say yes: best friends');
+  { const m = (await call('GET', '/api/me/friends', undefined, A.P)).json; ok(m.friends.some(f => f.h === 'bff_bo') && m.lenders.some(l => l.h === 'bff_bo' && l.cars.length === 1 && l.cars[0].id === 'bo1'), 'your best friend’s cars and bikes are yours to borrow (not their boat)', JSON.stringify(m)); }
+  { const r = await call('POST', '/api/me/cars/borrow', { owner: 'bff_bo', id: 'bo1' }, A.P); ok(r.status === 200 && r.json.car.m === 'hatch' && r.json.owner === 'bff_bo', 'borrow it', JSON.stringify(r.json)); }
+  ok((await call('POST', '/api/me/cars/borrow', { owner: 'bff_bo', id: 'bo2' }, A.P)).status === 409, '…but not their boat');
+  ok((await call('POST', '/api/me/cars/borrow', { owner: 'bff_bo', id: 'nope' }, A.P)).status === 404, '…only a car that is really theirs');
+  ok((await call('POST', '/api/me/cars/borrow', { owner: 'bff_bo', id: 'bo1' }, Cc.P)).status === 403, "someone else still can't");
+  // married: your husband's or wife's cars too
+  await pool.query(`update citizens set cars = $2 where id = $1`, [Cc.id, JSON.stringify([{ id: 'cy1', m: 'hatch', col: '#AA0000' }])]);
+  const [pa, pb] = A.id < Cc.id ? [A.id, Cc.id] : [Cc.id, A.id];
+  await pool.query(`insert into relationships (pair, a_id, b_id, status, asked_by, t, points, started, married_at) values ($1, $2, $3, 'married', $2, $4, 100, $4, $4) on conflict (pair) do update set status = 'married'`, [pa + '|' + pb, pa, pb, Date.now()]).catch(e => console.log('rel', e.message));
+  { const m = (await call('GET', '/api/me/friends', undefined, A.P)).json, sp = m.lenders.find(l => l.h === 'bff_cy'); ok(sp && sp.spouse && sp.cars[0].id === 'cy1', 'married: your husband’s or wife’s cars are yours to borrow too', JSON.stringify(m.lenders)); }
+  ok((await call('POST', '/api/me/cars/borrow', { owner: 'bff_cy', id: 'cy1' }, A.P)).status === 200, '…and drive');
+  ok((await fr({ action: 'end', handle: 'bff_ana' }, Bb.P)).json.status === 'none' && (await call('POST', '/api/me/cars/borrow', { owner: 'bff_bo', id: 'bo1' }, A.P)).status === 403, 'end it, and the cars go back');
+}
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' }, { auth: false })).status === 401, 'only the developer can reset');
 ok((await call('POST', '/api/admin/reset', { confirm: 'RESET' })).status === 200 && !(await call('GET', '/api/meta', undefined, { auth: false })).json.meta, 'reset wipes the colony');
 ok(!(await pool.query('select 1 from plots union all select 1 from auctions limit 1')).rowCount, 'reset clears everyone’s land and the auctions too');

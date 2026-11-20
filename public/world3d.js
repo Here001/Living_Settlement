@@ -571,7 +571,8 @@ export function nameTag(text, color = '#ffffff') {
 }
 export { THREE };
 // a car's length and width in metres (for bumping into it on foot)
-export const carSize = kind => { const vk = String(kind).replace('!', ''); if (VEH[vk]) return [VEH[vk].L, VEH[vk].W]; const S = CARS[kind] || CARS.car; return [S.L, S.W]; };
+const vbase = k => String(k).replace(/[!+]$/, ''); /* 'bicycle!': nobody on it; 'motorbike+': rider and a passenger */
+export const carSize = kind => { const vk = vbase(kind); if (VEH[vk]) return [VEH[vk].L, VEH[vk].W]; const S = CARS[kind] || CARS.car; return [S.L, S.W]; };
 
 // ---------------- the getaway: a straight road out of town, lined with the colony's own kinds of buildings ----------------
 // The road runs away from the camera (towards -z). `types` are building types to line it with (the town's own).
@@ -752,6 +753,24 @@ const rod = (B, a, b, r, color) => { const d = new THREE.Vector3(b[0] - a[0], b[
 // a hull seen from above (pointed at the front, -z), stood up `h` high from `y0`
 const hullGeo = (L, W, h, bow = 0.3) => { const s = new THREE.Shape(); s.moveTo(-W / 2, -L / 2); s.lineTo(W / 2, -L / 2); s.lineTo(W / 2, L / 2 - L * bow); s.quadraticCurveTo(W / 2, L / 2, 0, L / 2); s.quadraticCurveTo(-W / 2, L / 2, -W / 2, L / 2 - L * bow); s.closePath();
   const g = new THREE.ExtrudeGeometry(s, { depth: h, bevelEnabled: false, curveSegments: 6 }); g.rotateX(Math.PI / 2); /* depth goes down, the bow to -z */ g.translate(0, h, 0); return g; };
+// A boat's hull from cross-sections along its length, stern (+z) to a pointed bow (-z): the deck edge rises towards
+// the bow (sheer), the sides come down to a V at the keel, and it narrows to the stem. The parts come apart so each can
+// have its colour: topsides, the boot stripe at the waterline, the bottom, the deck, the transom and a rail on top.
+function hullParts(L, W, D, o = {}) {
+  const N = 18, sheer = o.sheer ?? D * 0.35, stern = o.stern ?? 0.9, rise = o.rise ?? 0.3, top = o.top ?? 0.5, st = [];
+  for (let i = 0; i <= N; i++) { const t = i / N, z = L / 2 - t * L, hw = W / 2 * (t < 0.5 ? stern + (1 - stern) * Math.sin(t / 0.5 * Math.PI / 2) : Math.sqrt(Math.max(0, 1 - ((t - 0.5) / 0.5) ** 2))), k = D * (1 - rise * t * t), s = top * D * 0.0 + sheer * t * t;
+    st.push({ z, hw, s, ring: [[hw, s + top * D * 0.45], [hw * 0.995, 0.06 * D], [hw * 0.97, -0.08 * D], [hw * 0.82, -0.42 * k], [hw * 0.45, -0.82 * k], [0, -k]] }); }
+  const geo = (P, I) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); g.computeVertexNormals(); return g; };
+  const band = (a, b) => { const P = [], I = [], R = b - a + 1, off = st.length * R;
+    for (const sd of [1, -1]) for (const S of st) for (let j = a; j <= b; j++) P.push(sd * S.ring[j][0], S.ring[j][1], S.z);
+    for (let sd = 0; sd < 2; sd++) for (let i = 0; i < st.length - 1; i++) for (let j = 0; j < R - 1; j++) { const A = sd * off + i * R + j, Bq = A + R, C = Bq + 1, Dq = A + 1; if (sd === 0) I.push(A, C, Bq, A, Dq, C); else I.push(A, Bq, C, A, C, Dq); }
+    return geo(P, I); };
+  const dk = (() => { const P = [], I = []; for (const S of st) { const y = S.ring[0][1] - 0.06 * D, w = S.hw * 0.94; P.push(w, y, S.z, -w, y, S.z); } for (let i = 0; i < st.length - 1; i++) { const a = i * 2; I.push(a, a + 2, a + 3, a, a + 3, a + 1); } return geo(P, I); })();
+  const tr = (() => { const S = st[0], ring = [...S.ring, ...S.ring.slice(0, -1).reverse().map(([x, y]) => [-x, y])], cy = (S.ring[0][1] + S.ring[5][1]) / 2, P = [0, cy, S.z], I = [];
+    for (const [x, y] of ring) P.push(x, y, S.z); for (let i = 1; i < ring.length; i++) I.push(0, i + 1, i); I.push(0, 1, ring.length); return geo(P, I); })(); /* (the flat stern, closed across the top) */
+  const rl = (() => { const P = [], I = [], th = 0.05 * D + 0.04; for (const sd of [1, -1]) for (const S of st) { const x = sd * S.hw, y = S.ring[0][1]; P.push(x, y, S.z, x - sd * 0.08, y + th, S.z, x - sd * 0.16, y, S.z); }
+    for (let sd = 0; sd < 2; sd++) for (let i = 0; i < st.length - 1; i++) for (let j = 0; j < 2; j++) { const A = (sd * st.length + i) * 3 + j, Bq = A + 3; if (sd === 0) I.push(A, Bq, Bq + 1, A, Bq + 1, A + 1); else I.push(A, Bq + 1, Bq, A, A + 1, Bq + 1); } return geo(P, I); })();
+  return { top: band(0, 1), stripe: band(1, 2), bottom: band(2, 5), deck: dk, transom: tr, rail: rl }; }
 const triGeo = (pts) => { const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) s.lineTo(p[0], p[1]); s.closePath(); return new THREE.ExtrudeGeometry(s, { depth: 0.04, bevelEnabled: false }); };
 const ALT = { helicopter: 46, plane: 85, balloon: 62 }; /* metres up */
 // a rider for the shared bikes (other people out on two wheels)
@@ -759,35 +778,72 @@ function riderInto(B, seatY, seatZ, barY, barZ, col0) { const jacket = col(col0 
   bk(B, VG.ball, { y: seatY + 0.33, z: seatZ - 0.12, sx: 0.2, sy: 0.32, sz: 0.15, color: jacket }); bk(B, VG.ball, { y: seatY + 0.78, z: seatZ - 0.24, sx: 0.12, sy: 0.14, sz: 0.13, color: skin });
   bk(B, VG.ball, { y: seatY + 0.86, z: seatZ - 0.24, sx: 0.13, sy: 0.09, sz: 0.14, color: col('#1d1b19') });
   for (const s of [-1, 1]) { rod(B, [s * 0.18, seatY + 0.5, seatZ - 0.18], [s * 0.24, barY, barZ], 0.05, jacket); rod(B, [s * 0.1, seatY + 0.05, seatZ], [s * 0.13, seatY - 0.15, seatZ - 0.42], 0.065, jeans); rod(B, [s * 0.13, seatY - 0.15, seatZ - 0.42], [s * 0.15, 0.2, seatZ - 0.3], 0.055, jeans); } }
+// a passenger behind the rider (a bike carrying someone): seated a little higher on the back, hands at the rider's waist
+function pillionInto(B, seatY, seatZ, col0) { const top = col(col0 || '#8E44AD'), skin = col('#C68B59'), legs = col('#3a3530');
+  bk(B, VG.ball, { y: seatY + 0.33, z: seatZ + 0.02, sx: 0.19, sy: 0.3, sz: 0.15, color: top }); bk(B, VG.ball, { y: seatY + 0.76, z: seatZ - 0.06, sx: 0.115, sy: 0.135, sz: 0.125, color: skin });
+  bk(B, VG.ball, { y: seatY + 0.84, z: seatZ - 0.04, sx: 0.125, sy: 0.09, sz: 0.135, color: col('#3b2a20') });
+  for (const s of [-1, 1]) { rod(B, [s * 0.17, seatY + 0.48, seatZ - 0.02], [s * 0.15, seatY + 0.3, seatZ - 0.36], 0.045, top); rod(B, [s * 0.1, seatY + 0.05, seatZ], [s * 0.15, seatY - 0.12, seatZ - 0.36], 0.06, legs); rod(B, [s * 0.15, seatY - 0.12, seatZ - 0.36], [s * 0.2, 0.3, seatZ - 0.2], 0.05, legs); } }
 const VEH = {
-  bicycle: { L: 1.75, W: 0.6, road: true, build(B, P, rider) { const dark = col('#1d1b19'), grey = col('#9aa1a8'), r = 0.34;
+  bicycle: { L: 1.75, W: 0.6, road: true, build(B, P, rider, two) { const dark = col('#1d1b19'), grey = col('#9aa1a8'), r = 0.34;
     for (const z of [-0.55, 0.55]) { bk(B, VG.tor, { y: r, z, ry: Math.PI / 2, sx: r, sy: r, sz: 0.5, color: dark }); bk(B, VG.cyl, { y: r, z, rz: Math.PI / 2, sx: 0.04, sy: 0.08, sz: 0.04, color: grey }); for (let k = 0; k < 4; k++) bk(B, VG.box, { y: r, z, rx: k * Math.PI / 4, sx: 0.01, sy: r * 1.9, sz: 0.01, color: grey }); }
     const bb = [0, 0.32, 0.05], seat = [0, 0.82, 0.3], head = [0, 0.86, -0.42]; rod(B, bb, seat, 0.025, P); rod(B, seat, head, 0.025, P); rod(B, bb, head, 0.028, P); rod(B, bb, [0, r, 0.55], 0.02, P); rod(B, seat, [0, r, 0.55], 0.02, P); rod(B, head, [0, r, -0.55], 0.022, P);
     bk(B, VG.box, { y: 0.88, z: 0.32, sx: 0.12, sy: 0.05, sz: 0.24, color: dark }); rod(B, head, [0, 1.0, -0.45], 0.02, grey); rod(B, [-0.27, 1.0, -0.45], [0.27, 1.0, -0.45], 0.018, dark);
+    if (two) { bk(B, VG.box, { y: 0.78, z: 0.66, sx: 0.2, sy: 0.04, sz: 0.3, color: dark }); pillionInto(B, 0.8, 0.68); } /* (a rack over the back wheel) */
     if (rider) riderInto(B, 0.9, 0.3, 1.0, -0.45); } },
-  motorbike: { L: 2.1, W: 0.8, road: true, build(B, P, rider) { const dark = col('#151515'), grey = col('#8b9198'), chrome = col('#d5d9de'), r = 0.32;
+  motorbike: { L: 2.1, W: 0.8, road: true, build(B, P, rider, two) { const dark = col('#151515'), grey = col('#8b9198'), chrome = col('#d5d9de'), r = 0.32;
     for (const z of [-0.72, 0.68]) { bk(B, VG.tor, { y: r, z, ry: Math.PI / 2, sx: r, sy: r, sz: 1.0, color: dark }); bk(B, VG.cyl, { y: r, z, rz: Math.PI / 2, sx: 0.17, sy: 0.1, sz: 0.17, color: grey }); }
     bk(B, VG.ball, { y: 0.88, z: -0.18, sx: 0.2, sy: 0.15, sz: 0.36, color: P }); /* the tank */ bk(B, VG.box, { y: 0.86, z: 0.33, sx: 0.28, sy: 0.08, sz: 0.55, color: dark }); /* the seat */
     bk(B, VG.box, { y: 0.52, z: 0.0, sx: 0.32, sy: 0.32, sz: 0.5, color: grey }); /* the engine */ bk(B, VG.box, { y: 0.66, z: 0.62, sx: 0.24, sy: 0.12, sz: 0.36, color: P }); /* the tail */
     rod(B, [0.16, 0.4, 0.1], [0.2, 0.42, 0.85], 0.045, chrome); rod(B, [0, 0.95, -0.42], [0, r, -0.72], 0.04, chrome); rod(B, [-0.36, 1.08, -0.44], [0.36, 1.08, -0.44], 0.022, dark); rod(B, [0, 0.95, -0.42], [0, 1.08, -0.44], 0.03, dark);
     bk(B, VG.ball, { y: 0.98, z: -0.6, sx: 0.09, sy: 0.08, sz: 0.06, color: col('#fffbe8') }); bk(B, VG.box, { y: 0.98, z: -0.48, sx: 0.3, sy: 0.12, sz: 0.04, color: P });
-    if (rider) riderInto(B, 0.92, 0.32, 1.08, -0.44, '#1d1b19'); } },
-  boat: { L: 7, W: 2.5, water: true, build(B, P) { const wood = col('#A0703F'), dark = col('#1c2a36'), white = col('#F4F4F0');
-    bk(B, hullGeo(7, 2.5, 1.0, 0.32), { y: -0.45, color: P }); bk(B, hullGeo(7.02, 2.52, 0.14, 0.32), { y: 0.1, color: col('#2F4A7A') }); /* a stripe */
-    bk(B, hullGeo(6.6, 2.1, 0.06, 0.3), { y: 0.55, color: wood }); /* the deck */ bk(B, VG.box, { y: 0.95, z: 0.3, sx: 1.7, sy: 0.7, sz: 1.6, color: white }); bk(B, VG.box, { y: 1.15, z: -0.55, rx: -0.6, sx: 1.7, sy: 0.06, sz: 0.8, color: dark });
-    bk(B, VG.box, { y: 0.85, z: 2.6, sx: 2.0, sy: 0.4, sz: 1.2, color: col('#EDE6D6') }); bk(B, VG.box, { y: 0.4, z: 3.55, sx: 0.4, sy: 0.6, sz: 0.4, color: col('#2b2b2b') }); } },
-  sailboat: { L: 8, W: 2.4, water: true, build(B, P) { const wood = col('#A0703F'), sail = col('#F8F6EE');
-    bk(B, hullGeo(8, 2.4, 1.0, 0.4), { y: -0.45, color: P }); bk(B, hullGeo(7.6, 2.0, 0.06, 0.38), { y: 0.55, color: wood }); bk(B, VG.box, { y: 0.85, z: 1.2, sx: 1.4, sy: 0.5, sz: 2.0, color: col('#EDE6D6') });
-    bk(B, VG.cyl, { y: 5.6, z: -0.6, sx: 0.08, sy: 10, sz: 0.08, color: col('#d5d9de') }); rod(B, [0, 1.6, -0.6], [0, 1.6, 3.2], 0.06, col('#d5d9de'));
-    bk(B, triGeo([[0, 0], [0, 8.6], [3.6, 0]]), { x: 0.02, y: 1.7, z: -0.55, ry: -Math.PI / 2, color: sail }); bk(B, triGeo([[0, 0], [0, 8.2], [-2.8, 0]]), { x: 0.02, y: 1.0, z: -0.68, ry: -Math.PI / 2, color: sail }); } },
-  ferry: { L: 30, W: 9, water: true, build(B, P) { const white = col('#F4F4F0'), dark = col('#1c2a36');
-    bk(B, hullGeo(30, 9, 3.2, 0.22), { y: -1.6, color: col('#2F4A7A') }); bk(B, hullGeo(30.05, 9.05, 0.5, 0.22), { y: 1.1, color: P });
-    for (const [y, L, W] of [[1.6, 22, 8.2], [4.2, 16, 7.4]]) { bk(B, VG.box, { y: y + 1.2, z: 1, sx: W, sy: 2.4, sz: L, color: white }); bk(B, VG.box, { y: y + 1.5, z: 1, sx: W + 0.05, sy: 0.7, sz: L - 1, color: dark }); }
-    bk(B, VG.cyl, { y: 9.0, z: 5, sx: 1.1, sy: 3, sz: 1.1, color: col('#C8382E') }); bk(B, VG.box, { y: 7.6, z: -6.5, sx: 6.5, sy: 1.2, sz: 2.4, color: white }); } },
-  cargoship: { L: 46, W: 11, water: true, build(B, P) { const white = col('#F4F4F0'), C = ['#C8382E', '#2F4A7A', '#E2A23B', '#3E7A4B', '#7C8288', '#8C2F2A'];
-    bk(B, hullGeo(46, 11, 4, 0.18), { y: -2, color: P }); bk(B, hullGeo(46.05, 11.05, 0.6, 0.18), { y: 1.5, color: col('#8C2F2A') });
-    for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) for (let k = 0; k < 2; k++) bk(B, VG.box, { x: (j - 1) * 3.2, y: 3.4 + k * 2.6, z: -14 + i * 4.6, sx: 3.0, sy: 2.5, sz: 4.4, color: col(C[(i * 3 + j + k * 2) % 6]) });
-    bk(B, VG.box, { y: 6.5, z: 17, sx: 9, sy: 9, sz: 5, color: white }); bk(B, VG.box, { y: 9.5, z: 14.4, sx: 9.05, sy: 1, sz: 0.2, color: col('#1c2a36') }); bk(B, VG.cyl, { y: 12.5, z: 19, sx: 0.9, sy: 3, sz: 0.9, color: col('#1d1b19') }); } },
+    if (two) pillionInto(B, 0.96, 0.66); if (rider) riderInto(B, 0.92, 0.32, 1.08, -0.44, '#1d1b19'); } },
+  // the speedboat: a deep-V hull with a pointed, rising bow, a navy boot stripe and an antifouled bottom, a teak deck,
+  // a wrap-round windscreen over the helm, padded seats, a sun lounger on the bow, a rail and a big outboard
+  boat: { L: 7, W: 2.5, water: true, build(B, P) { const teak = col('#B07A45'), navy = col('#1F3A5F'), red = col('#7A2A26'), white = col('#F4F4F0'), cream = col('#EDE3CF'), chrome = col('#D5D9DE'), glass = col('#1c2a36'); void glass;
+    const H = hullParts(7, 2.5, 0.95, { sheer: 0.42, stern: 0.88, rise: 0.35, top: 0.55 }); bk(B, H.top, { color: P }); bk(B, H.stripe, { color: navy }); bk(B, H.bottom, { color: red }); bk(B, H.deck, { color: teak }); bk(B, H.transom, { color: P }); bk(B, H.rail, { color: white });
+    bk(B, VG.box, { y: 0.78, z: 0.15, sx: 1.6, sy: 0.5, sz: 1.2, color: white }); /* the console */ bk(B, VG.ball, { y: 1.02, z: -0.05, sx: 0.85, sy: 0.12, sz: 0.62, color: white });
+    bk(B, new THREE.CylinderGeometry(1, 1.08, 1, 18, 1, true, Math.PI - 0.95, 1.9), { y: 1.22, z: 0.2, sx: 0.82, sy: 0.36, sz: 0.68, color: col('#8FB4C9') }); bk(B, new THREE.TorusGeometry(1, 0.03, 4, 18, 1.9), { y: 1.4, z: 0.2, rx: Math.PI / 2, rz: Math.PI / 2 + 0.95 - 1.9 + Math.PI / 2, sx: 0.82, sy: 0.68, sz: 1, color: chrome }); /* the wrap-round windscreen and its chrome frame */
+    bk(B, VG.cyl, { x: 0.32, y: 1.12, z: 0.42, rx: -0.9, sx: 0.16, sy: 0.04, sz: 0.16, color: col('#2b2b2b') }); /* the wheel */
+    for (const x of [-0.42, 0.42]) { bk(B, VG.box, { x, y: 0.82, z: 1.05, sx: 0.62, sy: 0.22, sz: 0.62, color: cream }); bk(B, VG.box, { x, y: 1.18, z: 1.36, rx: 0.2, sx: 0.62, sy: 0.55, sz: 0.14, color: cream }); }
+    bk(B, VG.box, { y: 0.78, z: 2.45, sx: 1.9, sy: 0.24, sz: 0.85, color: cream }); bk(B, VG.box, { y: 1.04, z: 2.85, sx: 1.9, sy: 0.4, sz: 0.14, color: cream }); /* the stern bench */
+    bk(B, VG.box, { y: 0.74, z: -1.7, rx: 0.08, sx: 1.4, sy: 0.12, sz: 1.3, color: cream }); /* a sun pad on the bow */
+    bk(B, VG.box, { y: 0.35, z: 3.62, sx: 0.14, sy: 0.7, sz: 0.22, color: col('#262626') }); bk(B, VG.box, { y: 0.92, z: 3.66, sx: 0.46, sy: 0.5, sz: 0.62, color: col('#262626') }); bk(B, VG.box, { y: 1.18, z: 3.66, sx: 0.4, sy: 0.08, sz: 0.56, color: col('#3a3a3a') }); bk(B, VG.box, { y: 0.92, z: 3.36, sx: 0.47, sy: 0.08, sz: 0.04, color: chrome }); /* the outboard: its leg and cowling */
+    for (const sd of [-1, 1]) { rod(B, [sd * 0.98, 0.95, -0.6], [sd * 0.5, 1.12, -2.6], 0.025, chrome); rod(B, [sd * 0.5, 1.12, -2.6], [0, 1.12, -3.05], 0.025, chrome); for (const z of [-0.6, -1.6]) rod(B, [sd * (z < -1 ? 0.78 : 0.98), 0.62, z], [sd * (z < -1 ? 0.76 : 0.98), 0.98 + (z < -1 ? 0.08 : 0), z], 0.02, chrome); }
+    bk(B, VG.cyl, { y: 1.55, z: 2.95, sx: 0.025, sy: 1.1, sz: 0.025, color: chrome }); bk(B, VG.box, { y: 1.95, z: 2.95, sx: 0.02, sy: 0.24, sz: 0.36, color: navy }); } },
+  // the sailing yacht: a slim hull with a fin keel, a cabin top with portholes, the cockpit, a tall mast with its boom,
+  // the mainsail and the jib, the stays, and rails round the deck
+  sailboat: { L: 8, W: 2.4, water: true, build(B, P) { const teak = col('#B07A45'), white = col('#F4F4F0'), navy = col('#1F3A5F'), sail = col('#F8F6EE'), chrome = col('#D5D9DE'), dark = col('#1c2a36');
+    const H = hullParts(8, 2.4, 1.0, { sheer: 0.34, stern: 0.78, rise: 0.25, top: 0.5 }); bk(B, H.top, { color: P }); bk(B, H.stripe, { color: navy }); bk(B, H.bottom, { color: navy }); bk(B, H.deck, { color: teak }); bk(B, H.transom, { color: P }); bk(B, H.rail, { color: white });
+    bk(B, VG.box, { y: -1.1, z: 0.2, sx: 0.16, sy: 1.1, sz: 1.3, color: navy }); /* the keel */
+    bk(B, VG.box, { y: 0.82, z: -0.2, sx: 1.5, sy: 0.42, sz: 2.6, color: white }); bk(B, VG.box, { y: 1.05, z: -0.2, sx: 1.35, sy: 0.08, sz: 2.4, color: white }); /* the cabin top */
+    for (const sd of [-1, 1]) for (const z of [-1.0, -0.2, 0.6]) bk(B, VG.ball, { x: sd * 0.76, y: 0.85, z, sx: 0.02, sy: 0.08, sz: 0.11, color: dark }); /* portholes */
+    bk(B, VG.box, { y: 0.72, z: 1.9, sx: 1.6, sy: 0.08, sz: 1.6, color: teak }); for (const sd of [-1, 1]) bk(B, VG.box, { x: sd * 0.72, y: 0.86, z: 1.9, sx: 0.32, sy: 0.22, sz: 1.5, color: white }); /* the cockpit */
+    bk(B, VG.tor, { y: 1.15, z: 2.5, rx: -0.5, sx: 0.32, sy: 0.32, sz: 0.4, color: chrome }); /* the wheel */
+    bk(B, VG.cyl, { y: 5.6, z: -0.6, sx: 0.08, sy: 10, sz: 0.08, color: chrome }); rod(B, [0, 1.6, -0.6], [0, 1.65, 3.0], 0.06, chrome); /* the mast and boom */
+    rod(B, [0, 10.4, -0.6], [0, 0.95, -3.8], 0.012, chrome); rod(B, [0, 10.4, -0.6], [0, 0.95, 3.6], 0.012, chrome); for (const sd of [-1, 1]) rod(B, [0, 10.4, -0.6], [sd * 1.05, 0.85, -0.4], 0.01, chrome); /* the stays */
+    bk(B, triGeo([[0, 0], [0, 8.6], [3.5, 0]]), { x: 0.02, y: 1.72, z: -0.55, ry: -Math.PI / 2, color: sail }); bk(B, VG.box, { y: 1.68, z: 1.2, sx: 0.18, sy: 0.18, sz: 3.4, color: navy }); /* the mainsail, and its cover on the boom */
+    bk(B, triGeo([[0, 0], [0, 8.4], [-3.0, 0]]), { x: 0.02, y: 1.05, z: -0.75, ry: -Math.PI / 2, color: sail }); } },
+  // the passenger ferry: a long hull with a flared bow, two decks of windows wrapping round, the bridge with its wings,
+  // lifeboats, a funnel in the line's colours, railings and a mast
+  ferry: { L: 30, W: 9, water: true, build(B, P) { const white = col('#F4F4F0'), dark = col('#1c2a36'), navy = col('#1F3A5F'), red = col('#8C2F2A'), orange = col('#E8812E'), grey = col('#9aa1a8');
+    const H = hullParts(30, 9, 3.4, { sheer: 1.4, stern: 0.92, rise: 0.2, top: 0.6 }); bk(B, H.top, { color: navy }); bk(B, H.stripe, { color: P }); bk(B, H.bottom, { color: red }); bk(B, H.deck, { color: col('#C9C3B6') }); bk(B, H.transom, { color: navy }); bk(B, H.rail, { color: white });
+    for (const [y, L, W, z] of [[0.1, 21, 8.0, 2.2], [2.7, 16, 7.2, 3.0]]) { bk(B, VG.box, { y: y + 1.25, z, sx: W, sy: 2.5, sz: L, color: white }); bk(B, VG.box, { y: y + 1.55, z, sx: W + 0.06, sy: 0.85, sz: L - 1.4, color: dark }); bk(B, VG.box, { y: y + 2.55, z, sx: W + 0.4, sy: 0.12, sz: L + 0.4, color: white });
+      bk(B, VG.cyl, { y: y + 1.25, z: z - L / 2, sx: W / 2, sy: 2.5, sz: 1.6, color: white }); bk(B, VG.cyl, { y: y + 1.55, z: z - L / 2, sx: W / 2 + 0.03, sy: 0.85, sz: 1.63, color: dark }); } /* rounded fronts */
+    bk(B, VG.box, { y: 6.4, z: -3.2, sx: 9.4, sy: 1.6, sz: 2.6, color: white }); bk(B, VG.box, { y: 6.55, z: -4.52, sx: 9.0, sy: 0.7, sz: 0.06, color: dark }); /* the bridge and its windows */
+    bk(B, VG.cyl, { y: 8.6, z: 7.5, sx: 1.4, sy: 3.4, sz: 1.9, color: white }); bk(B, VG.cyl, { y: 9.6, z: 7.5, sx: 1.42, sy: 0.9, sz: 1.92, color: P }); bk(B, VG.cyl, { y: 10.45, z: 7.5, sx: 1.42, sy: 0.25, sz: 1.92, color: dark }); /* the funnel */
+    for (const sd of [-1, 1]) for (const z of [-2, 3, 8]) { bk(B, VG.ball, { x: sd * 4.15, y: 5.3, z, sx: 0.55, sy: 0.45, sz: 1.7, color: orange }); rod(B, [sd * 3.7, 5.0, z - 1.2], [sd * 4.2, 5.9, z - 1.2], 0.05, grey); rod(B, [sd * 3.7, 5.0, z + 1.2], [sd * 4.2, 5.9, z + 1.2], 0.05, grey); } /* lifeboats on their davits */
+    rod(B, [0, 7.2, -3.6], [0, 11.5, -3.6], 0.12, grey); rod(B, [-1.2, 10.6, -3.6], [1.2, 10.6, -3.6], 0.06, grey); /* the mast */ } },
+  // the cargo ship: a long red-bottomed hull with its anchor and bulbous bow, rows of stacked containers, the white
+  // accommodation block aft with its bridge windows and wings, the funnel, and cranes between the holds
+  cargoship: { L: 46, W: 11, water: true, build(B, P) { const white = col('#F4F4F0'), dark = col('#1c2a36'), grey = col('#7C8288'), C = ['#C8382E', '#2F4A7A', '#E2A23B', '#3E7A4B', '#7C8288', '#8C2F2A'];
+    const H = hullParts(46, 11, 4.4, { sheer: 1.6, stern: 0.95, rise: 0.1, top: 0.62 }); bk(B, H.top, { color: P }); bk(B, H.stripe, { color: white }); bk(B, H.bottom, { color: col('#8C2F2A') }); bk(B, H.deck, { color: col('#6E6A62') }); bk(B, H.transom, { color: P }); bk(B, H.rail, { color: P });
+    bk(B, VG.ball, { y: -3.2, z: -22.6, sx: 1.3, sy: 1.2, sz: 2.2, color: col('#8C2F2A') }); /* the bulbous bow */
+    for (const sd of [-1, 1]) bk(B, VG.box, { x: sd * 3.0, y: 0.6, z: -19.5, sx: 0.08, sy: 0.9, sz: 0.6, color: dark }); /* the anchors */
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) for (let k = 0; k < 2 + ((i + j) % 2); k++) bk(B, VG.box, { x: (j - 1) * 3.2, y: 1.85 + k * 2.6, z: -15 + i * 4.6, sx: 3.0, sy: 2.5, sz: 4.4, color: col(C[(i * 3 + j + k * 2) % 6]) });
+    for (const z of [-17.4, -8.2, 1.0]) { rod(B, [4.2, 0.6, z], [4.2, 9.5, z], 0.25, col('#E2A23B')); rod(B, [4.2, 9.2, z], [-2.5, 7.0, z + 1.5], 0.16, col('#E2A23B')); } /* cranes */
+    bk(B, VG.box, { y: 5.0, z: 16.5, sx: 9.6, sy: 9.0, sz: 6.0, color: white }); for (const y of [2.4, 4.6, 6.8]) bk(B, VG.box, { y, z: 13.47, sx: 9.0, sy: 0.6, sz: 0.06, color: dark });
+    bk(B, VG.box, { y: 9.9, z: 15.2, sx: 13.5, sy: 1.5, sz: 3.2, color: white }); bk(B, VG.box, { y: 10.0, z: 13.57, sx: 13.0, sy: 0.7, sz: 0.06, color: dark }); /* the bridge, its windows and wings */
+    bk(B, VG.box, { y: 12.4, z: 18.4, sx: 2.4, sy: 3.6, sz: 2.8, color: P }); bk(B, VG.box, { y: 14.1, z: 18.4, sx: 2.42, sy: 0.3, sz: 2.82, color: dark }); rod(B, [0, 10.7, 15.2], [0, 14.5, 15.2], 0.1, grey); } },
   helicopter: { L: 11, W: 3, air: true, build(B, P) { const y = ALT.helicopter, dark = col('#1c2a36'), grey = col('#5c6168');
     bk(B, VG.ball, { y, z: -0.4, sx: 1.3, sy: 1.2, sz: 2.4, color: P }); bk(B, VG.ball, { y: y + 0.25, z: -1.6, sx: 1.05, sy: 0.85, sz: 1.2, color: dark }); rod(B, [0, y + 0.3, 1.5], [0, y + 0.7, 6.2], 0.28, P);
     bk(B, VG.box, { y: y + 1.3, z: 6.2, sx: 0.1, sy: 1.6, sz: 0.9, color: P }); bk(B, VG.cyl, { y: y + 1.4, z: -0.3, sx: 0.12, sy: 0.6, sz: 0.12, color: grey });
@@ -806,9 +862,11 @@ const VEH = {
 export const isVeh = kind => !!VEH[kind];
 export const vehOn = kind => VEH[kind] ? (VEH[kind].water ? 'water' : VEH[kind].air ? 'air' : 'road') : 'road';
 const VLITE = new Map();
-function vehLite(kind) { let o = VLITE.get(kind); if (o) return o; const V = VEH[kind.replace('!', '')], B = new Bucket(); V.build(B, col('#ffffff'), !kind.endsWith('!')); /* 'bicycle!': a bike nobody's on */ const g = B.geometry();
+function vehLite(kind) { let o = VLITE.get(kind); if (o) return o; const V = VEH[vbase(kind)], B = new Bucket(); V.build(B, col('#ffffff'), !kind.endsWith('!'), kind.endsWith('+')); /* 'bicycle!': a bike nobody's on */ const g = B.geometry();
   o = { geo: g, L: V.L, W: V.W, paint: [0.4, 0.3, 1.0], noBlob: !V.road }; VLITE.set(kind, o); return o; }
 // your own: in its colour, with the wheels apart (to spin them) for a bike
+export function pillionMesh(kind) { const V = VEH[vbase(kind)]; if (!V) return null; const B = new Bucket(); if (vbase(kind) === 'bicycle') pillionInto(B, 0.8, 0.68); else pillionInto(B, 0.96, 0.66);
+  return new THREE.Mesh(B.geometry(), carMat('veh', () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.3 }))); }
 function vehModel(kind, color) { const V = VEH[kind], B = new Bucket(); V.build(B, col(color), false); const g = new THREE.Group();
   g.add(new THREE.Mesh(B.geometry(), carMat('veh', () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.3 }))));
   g.userData.wheels = []; g.userData.len = V.L; g.userData.veh = kind; return g; }
@@ -837,7 +895,7 @@ export function makeCar(kind = 'car', color = '#c8382e') {
 // The paint is white in it, so each car's own colour comes from its instance colour; glass, tyres and trim stay dark.
 const LITE = new Map();
 export function carLite(kind = 'car') {
-  if (VEH[kind.replace('!', '')]) return vehLite(kind);
+  if (VEH[vbase(kind)]) return vehLite(kind);
   if (LITE.has(kind)) return LITE.get(kind); const S = CARS[kind] || CARS.car, G = carGeo(kind), P = [], N = [], C = [];
   // lighter than the car you drive: fewer curves on the body, and plain wheels (tyre and rim) without spokes
   const body = shapeBody(extrudeAcross(carProfile(S), S.W, 0.08, 0.064, 1), S), wb = new Bucket(), CY = n => new THREE.CylinderGeometry(1, 1, 1, n);

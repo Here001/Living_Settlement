@@ -243,7 +243,7 @@ export function createColosseum(host, opts) {
     if (act === 'dodge' && A.body) A.body.rotation.z = 0.35; if ((stun || Fk.hitT > 0) && A.head) { A.head.rotation.x = -0.35; if (A.body) A.body.rotation.x = -0.18; } Fk.hitT = Math.max(0, Fk.hitT - dt); }
   // ---- the cameras: behind you, through your eyes, ringside, the TV camera (it follows the fight), from above;
   // when you're the one fighting, over your fighter's shoulder ----
-  const MODES = ['tv', 'third', 'first', 'ring', 'above']; let mode = 'tv', camYaw = 0; const aim = new THREE.Vector3(), tmp = new THREE.Vector3();
+  const MODES = ['tv', 'third', 'first', 'ring', 'above']; let mode = 'third', camYaw = 0; /* (behind you to start; 🎥 cycles to the TV camera and the rest) */ const aim = new THREE.Vector3(), tmp = new THREE.Vector3();
   function placeCamera(dt, s) { const k = Math.min(1, dt * 3.5), pos = new THREE.Vector3(), tgt = new THREE.Vector3(), fx = -Math.sin(me.yaw), fz = -Math.cos(me.yaw);
     const A = s && s.f[0], B = s && s.f[1], mid = s ? tmp.set((A[0] + B[0]) / 2, 1.1, (A[1] + B[1]) / 2) : tmp.set(0, 1, 0), sep = s ? Math.hypot(A[0] - B[0], A[1] - B[1]) : 4;
     me.P.group.visible = mode !== 'first' && !fighting();

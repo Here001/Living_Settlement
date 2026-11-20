@@ -35,15 +35,15 @@ function blockArea(bx, by, o) {
     const T = BUILDING_TYPES[b.type]; if (!T) continue; const [w, h] = sizeOf(b), tx = b.x - bx, ty = b.y - by, st = T.style, x = tx * TILE, y = ty * TILE;
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const gx = tx + i, gy = ty + j; if (gx < 0 || gy < 0 || gx >= B || gy >= B || ground[gy * B + gx] === 2) continue;
       ground[gy * B + gx] = st === 'farm' ? 4 : st === 'pitch' || st === 'stadium' || st === 'racetrack' ? 5 : GREEN.has(st) || (T.cat === 'housing' && (st === 'house' || st === 'gabled' || st === 'tent')) ? 0 : 1; } /* houses stand on lawns */
-    if (TREES.has(st)) { const px = x + TILE / 2 + (r() - 0.5) * 2, py = y + TILE / 2 + (r() - 0.5) * 2; props.push({ k: st === 'pine' || st === 'xmastree' ? 'pine' : st === 'palm' ? 'palm' : st === 'poplar' ? 'poplar' : 'tree', x: px, y: py, c: T.colors?.leaf || '#6FAE45', s: 0.85 + r() * 0.35 }); solid.push({ c: [wx(px), wz(py), 0.8] }); continue; }
-    if (st === 'bush' || st === 'hedge') { spots.push({ x: x + TILE / 2, y: y + TILE / 2, k: 'bush' }); solid.push({ c: [wx(x + TILE / 2), wz(y + TILE / 2), 1.4] }); continue; }
+    if (TREES.has(st)) { const px = x + TILE / 2 + (r() - 0.5) * 2, py = y + TILE / 2 + (r() - 0.5) * 2; props.push({ k: st === 'pine' || st === 'xmastree' ? 'pine' : st === 'palm' ? 'palm' : st === 'poplar' ? 'poplar' : 'tree', x: px, y: py, c: T.colors?.leaf || '#6FAE45', s: 0.85 + r() * 0.35 }); solid.push({ c: [wx(px), wz(py), 0.5], soft: 0.22 }); continue; }
+    if (st === 'bush' || st === 'hedge') { spots.push({ x: x + TILE / 2, y: y + TILE / 2, k: 'bush' }); solid.push({ c: [wx(x + TILE / 2), wz(y + TILE / 2), 1.1], soft: 0.5 }); continue; }
     if (st === 'fence') { props.push({ k: 'fence', x: x + TILE / 2, y: y + TILE / 2, c: T.colors?.wall || '#F4F1E8', w: TILE }); solid.push({ r: [wx(x), wz(y + TILE / 2 - 0.4), wx(x + TILE), wz(y + TILE / 2 + 0.4)] }); continue; }
     if (st === 'lamp' || st === 'bench' || st === 'prop' || st === 'busstop') { const k = st === 'prop' ? T.prop || 'prop' : st, pr = { k, x: x + TILE / 2, y: y + TILE / 2, rot: b.rot || 0, brk: k === 'lamp' }; props.push(pr); solid.push(pr.brk ? { c: [wx(pr.x), wz(pr.y), 0.3], brk: 'lamp', p: pr } : { c: [wx(x + TILE / 2), wz(y + TILE / 2), 0.7] }); continue; } /* (a street lamp: a car knocks it over) */
     if (T.outdoor) { buildings.push({ id: b.id, type: b.type, x, y, w: w * TILE, h: h * TILE, outdoor: true, rot: b.rot || 0 });
       const n = Math.round(w * h * (st === 'park' || st === 'garden' ? 1.2 : st === 'square' ? 0.3 : 0));
       for (let k = 0; k < n; k++) { const px = x + 3 + r() * (w * TILE - 6), py = y + 3 + r() * (h * TILE - 6);
-        if (st === 'square' || r() < 0.55) { props.push({ k: 'tree', x: px, y: py, c: ['#6FAE45', '#5E9E45', '#7DB656'][k % 3], s: 0.8 + r() * 0.4 }); solid.push({ c: [wx(px), wz(py), 0.8] }); }
-        else { spots.push({ x: px, y: py, k: 'bush' }); solid.push({ c: [wx(px), wz(py), 1.4] }); } }
+        if (st === 'square' || r() < 0.55) { props.push({ k: 'tree', x: px, y: py, c: ['#6FAE45', '#5E9E45', '#7DB656'][k % 3], s: 0.8 + r() * 0.4 }); solid.push({ c: [wx(px), wz(py), 0.5], soft: 0.22 }); }
+        else { spots.push({ x: px, y: py, k: 'bush' }); solid.push({ c: [wx(px), wz(py), 1.1], soft: 0.5 }); } }
       if (st === 'fountain' || T.center === 'fountain') { const cx = x + w * TILE / 2, cy = y + h * TILE / 2; props.push({ k: 'fountain', x: cx, y: cy }); solid.push({ c: [wx(cx), wz(cy), 2.8] }); }
       continue; }
     buildings.push({ id: b.id, type: b.type, x: x + M, y: y + M, w: w * TILE - 2 * M, h: h * TILE - 2 * M, level: b.lv || 1, rot: b.rot || 0, name: b.name || null });
@@ -61,7 +61,7 @@ function blockArea(bx, by, o) {
     const x0 = tx * TILE, z0 = ty * TILE, n = { N: isR(tx, ty - 1), S: isR(tx, ty + 1), W: isR(tx - 1, ty), E: isR(tx + 1, ty) }, links = n.N + n.S + n.W + n.E;
     const kerbs = [['N', 0, -1], ['S', 0, 1], ['W', -1, 0], ['E', 1, 0]].filter(([k, dx, dy]) => !n[k] && free(tx + dx, ty + dy));
     for (const [k, dx, dy] of kerbs) { const along = dx === 0, px = (d) => along ? x0 + d : dx < 0 ? x0 - 0.8 : x0 + TILE + 0.8, pz = (d) => along ? (dy < 0 ? z0 - 0.8 : z0 + TILE + 0.8) : z0 + d;
-      if (R0.deco === 'trees' || R0.lanes === 'median' || H(tx, ty, 1) < 260) { props.push({ k: 'tree', lite: true, x: px(1.6), y: pz(1.6), c: ['#6FAE45', '#5E9E45', '#7DB656'][H(tx, ty, 2) % 3], s: 0.7 + (H(tx, ty, 3) % 30) / 100 }); solid.push({ c: [wx(px(1.6)), wz(pz(1.6)), 0.6] }); }
+      if (R0.deco === 'trees' || R0.lanes === 'median' || H(tx, ty, 1) < 260) { props.push({ k: 'tree', lite: true, x: px(1.6), y: pz(1.6), c: ['#6FAE45', '#5E9E45', '#7DB656'][H(tx, ty, 2) % 3], s: 0.7 + (H(tx, ty, 3) % 30) / 100 }); solid.push({ c: [wx(px(1.6)), wz(pz(1.6)), 0.42], soft: 0.2 }); } /* (a street tree: its trunk, not its leaves; a vehicle can brush past) */
       else if (H(tx, ty, 4) < 120) { const pr = { k: 'bin', x: px(6.2), y: pz(6.2), brk: true }; props.push(pr); solid.push({ c: [wx(pr.x), wz(pr.y), 0.4], brk: 'bin', p: pr }); }
       else if (H(tx, ty, 5) < 70) { const pr = { k: 'hydrant', x: px(6.6), y: pz(6.6), brk: true }; props.push(pr); solid.push({ c: [wx(pr.x), wz(pr.y), 0.3], brk: 'hydrant', p: pr }); } /* (bins and hydrants: a car sends them flying) */
       // a car parked at this kerb (on a street with parking, most tiles; elsewhere now and then)
@@ -161,7 +161,7 @@ export function createTown(host, opts) {
   const BRUSH = -0.1, SHOULDER = 0.28; /* driving: up to 10 cm of overlap is a brush; on foot: room for your shoulders */
   const depth = (x, z, s) => s.car ? carDep(s.car.kind, s.car.x, s.car.z, s.car.ry, x, z, foot ? SHOULDER : BRUSH) : s.r ? Math.min(x - s.r[0], s.r[2] - x, z - s.r[1], s.r[3] - z) : s.c[2] - Math.hypot(x - s.c[0], z - s.c[1]); /* > 0: inside, by this much */
   const hits = (x, z, S, x0, z0) => { const tx = tileOf(x), tz = tileOf(z); if (!opts.loaded(tx, tz)) return true; if (BOAT && !foot) return !(opts.water(tx, tz) && !opts.road(tx, tz)); /* a boat: on the water only */ if (opts.water(tx, tz) && !opts.road(tx, tz) && !(opts.water(tileOf(x0), tileOf(z0)) && !opts.road(tileOf(x0), tileOf(z0)))) return true;
-    for (const s of S) { if (s.gone || (s.brk && !foot)) continue; const d = depth(x, z, s); if (d > 0 && d >= depth(x0, z0, s) - 1e-3) return true; } /* (lamps, bins, hydrants and traffic lights don't stop a car: it knocks them over) */
+    for (const s of S) { if (s.gone || (s.brk && !foot)) continue; const d = depth(x, z, s); if (d <= (foot ? 0 : s.soft || 0)) continue; if (foot ? d >= depth(x0, z0, s) - 1e-3 : d > depth(x0, z0, s) + 0.002) return true; } /* (a vehicle may brush a tree or a bush, and once touching something it can always slide along it or back away) */ /* (lamps, bins, hydrants and traffic lights don't stop a car: it knocks them over) */
     if (!foot) { const box = (kind, cx, cz, ry) => { const d = carDep(kind, cx, cz, ry, x, z, BRUSH); return d > 0 && d >= carDep(kind, cx, cz, ry, x0, z0, BRUSH) - 1e-3; };
       for (const t of traffic) if (Math.abs(t.px - x) < 5 && Math.abs(t.pz - z) < 5 && box(t.kind, t.px, t.pz, t.ry)) return true;
       for (const f of folk.values()) if (f.kind === 'car' && Math.abs(f.x - x) < 5 && Math.abs(f.z - z) < 5 && box(f.m, f.x, f.z, f.ry)) return true; return false; } /* other cars: their real size, so you can squeeze past */
@@ -172,7 +172,8 @@ export function createTown(host, opts) {
     for (const t of traffic) if (Math.abs(t.px - x) < 4 && Math.abs(t.pz - z) < 4 && carHit(t.kind, t.px, t.pz, t.ry)) return true;
     for (const f of folk.values()) if (f.kind === 'car' && Math.abs(f.x - x) < 4 && Math.abs(f.z - z) < 4 && carHit(f.m, f.x, f.z, f.ry)) return true;
     return false; };
-  const OUTLINE_F = [[2.1, 0.85], [2.1, -0.85], [0, 0.85], [0, -0.85], [-2.1, 0.85], [-2.1, -0.85], [0, 0]], OUTLINE_B = OUTLINE_F.map(([u, w]) => [-u || 0, w]); /* the car's outline, going forwards and backwards (made once) */
+  const [OL, OW] = (() => { try { const [l, w] = W.carSize(VK); return [Math.max(0.6, l / 2 - 0.05), Math.max(0.2, w / 2 - 0.05)]; } catch (e) { return [2.1, 0.85]; } })(); /* (your vehicle's own size: a motorbike is much smaller than a car) */
+  const OUTLINE_F = (() => { const o = [[0, 0]], nw = Math.max(1, Math.ceil(OW * 2 / 0.45)), nl = Math.max(1, Math.ceil(OL * 2 / 0.9)); for (let i = 0; i <= nw; i++) { const w = -OW + i * 2 * OW / nw; o.push([OL, w], [-OL, w]); } for (let i = 1; i < nl; i++) { const u = -OL + i * 2 * OL / nl; o.push([u, OW], [u, -OW]); } return o; })(), /* (points all round the edge, close enough that a thin tree trunk can't slip between them) */ OUTLINE_B = OUTLINE_F.map(([u, w]) => [-u || 0, w]); /* the car's outline, going forwards and backwards (made once) */
   const keys = new Set(), inp = { thr: 0, steer: 0 }; let ctl = opts.controls || { layout: 'pedalstick' }; /* inp: from the on-screen controls (steer +1 = left) */
   // ---- the engine, the gearbox and the brakes, as a real car's: ----
   //  - the engine makes its power over a rev band; each gear trades pull for speed, so it pulls hardest in first, shifts up
@@ -232,11 +233,14 @@ export function createTown(host, opts) {
     vf = wx2 * fx + wz2 * fz; vl = wx2 * lx + wz2 * lz; const g = (hb ? PERF.grip * 0.3 : PERF.grip * (rough ? 0.7 : 1) * (CARPHYS ? 1.6 : 1)) * dt; vl = Math.abs(vl) <= g ? 0 : vl - Math.sign(vl) * g; /* grip pulls it back in line */
     if (Math.abs(vf) < 0.05 && Math.abs(thr) < 0.05) vf = 0; car.slip = Math.abs(vl);
     car.vx = vf * fx + vl * lx; car.vz = vf * fz + vl * lz; car.v = vf;
-    const nx = car.x + car.vx * dt, nz = car.z + car.vz * dt, S = closeSolids(solidsNear(nx, nz), nx, nz, 3), dir = Math.sign(car.v || 1);
-    for (const o of S) if (o.brk && !o.gone) { const dx = o.c[0] - nx, dz = o.c[1] - nz, al = dx * fx + dz * fz, sd = dx * lx + dz * lz; if (Math.abs(al) < 2.15 + o.c[2] && Math.abs(sd) < 0.9 + o.c[2]) smash(o); }
-    const pts = dir < 0 ? OUTLINE_B : OUTLINE_F; /* its corners and the middles of its sides (so it can slide past another car along its side, but not into it) */
-    if (pts.some(([u, w]) => hits(nx + fx * u + fz * w, nz + fz * u - fx * w, S, car.x + fx * u + fz * w, car.z + fz * u - fx * w))) { const hit = Math.hypot(car.vx || 0, car.vz || 0); car.vx = car.vz = car.v = 0; box.g = 1; if (hit > 1.5) { bump = 0.35; shake = Math.min(0.16, 0.03 + hit * 0.008); try { navigator.vibrate && navigator.vibrate(Math.min(60, 15 + hit * 2 | 0)); } catch { } } return; } /* (a crash: the car stops where it is, no bounce back; the camera jolts, harder the faster you hit) */
-    car.x = nx; car.z = nz; }
+    const sx = car.vx * dt, sz = car.vz * dt, step = Math.hypot(sx, sz), n = Math.min(6, Math.max(1, Math.ceil(step / 0.2))), S = closeSolids(solidsNear(car.x + sx, car.z + sz), car.x + sx / 2, car.z + sz / 2, 3 + step), dir = Math.sign(car.v || 1);
+    const pts = dir < 0 ? OUTLINE_B : OUTLINE_F; /* points all round its edge (it can slide past another car along its side, but not into it) */
+    let px = car.x, pz = car.z; /* the move, checked a little at a time (a slow frame can't jump the car through a thin tree) */
+    for (let k = 1; k <= n; k++) { const nx = car.x + sx * k / n, nz = car.z + sz * k / n;
+      for (const o of S) if (o.brk && !o.gone) { const dx = o.c[0] - nx, dz = o.c[1] - nz, al = dx * fx + dz * fz, sd = dx * lx + dz * lz; if (Math.abs(al) < OL + 0.1 + o.c[2] && Math.abs(sd) < OW + 0.1 + o.c[2]) smash(o); }
+      if (pts.some(([u, w]) => hits(nx + fx * u + fz * w, nz + fz * u - fx * w, S, px + fx * u + fz * w, pz + fz * u - fx * w))) { const hit = Math.hypot(car.vx || 0, car.vz || 0); car.x = px; car.z = pz; car.vx = car.vz = car.v = 0; box.g = 1; if (hit > 1.5) { bump = 0.35; shake = Math.min(0.16, 0.03 + hit * 0.008); try { navigator.vibrate && navigator.vibrate(Math.min(60, 15 + hit * 2 | 0)); } catch { } } return; } /* (a crash: the car stops where it hit, no bounce back; the camera jolts, harder the faster you hit) */
+      px = nx; pz = nz; }
+    car.x = px; car.z = pz; }
   let bump = 0, shake = 0.08, roll = 0, pitch = 0, accel0 = 0, accS = 0;
 
   // ---- knocked-over street things: the lamp, bin, hydrant or traffic light leaves its merged block (its corners fold
@@ -741,13 +745,14 @@ export function createTown(host, opts) {
     kmh() { return Math.round(Math.abs(car.v) * 3.6); }, gear() { return !CARPHYS || foot || riding ? '' : car.v < -0.3 ? 'R' : Math.abs(car.v) < 0.3 && box.pedal < 0.05 ? 'N' : String(box.g); },
     say(who, text) { sayOver(who, text); }, /* talking on the street: 'me' or a colonist's id */
     // for testing: line the car up 14 m from the nearest lamp/bin/hydrant/traffic light it could drive straight at
-    _aim(kind) { let best = null; for (const v of blocks.values()) for (const o of v.solid) { if (!o.brk || o.gone || (kind && o.brk !== kind)) continue;
+    _aim(kind) { let best = null; for (const v of blocks.values()) for (const o of v.solid) { if (kind === 'tree' ? !(o.soft && o.soft < 0.3) : (!o.brk || o.gone || (kind && o.brk !== kind))) continue;
         for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, sx = o.c[0] - Math.cos(a) * 14, sz = o.c[1] + Math.sin(a) * 14; if (!opts.road(tileOf(sx), tileOf(sz))) continue; let ok = true;
-          for (let t = 0; t <= 1.6 && ok; t += 0.05) { const x = sx + (o.c[0] - sx) * t, z = sz + (o.c[1] - sz) * t; for (const q of solidsNear(x, z)) { if (q === o || q.brk || q.car) continue; const d = depth(x, z, q); if (d > -1) { ok = false; break; } } }
+          for (let t = 0; t <= 1.6 && ok; t += 0.05) { const x = sx + (o.c[0] - sx) * t, z = sz + (o.c[1] - sz) * t; for (const q of solidsNear(x, z)) { if (q === o || q.brk || q.car || q.soft) continue; const d = depth(x, z, q); if (d > -1) { ok = false; break; } } }
           const dd = Math.hypot(sx - car.x, sz - car.z); if (ok && (!best || dd < best.dd)) best = { dd, sx, sz, a, o }; } }
-      if (!best) return null; car.x = best.sx; car.z = best.sz; car.a = best.a; car.v = car.vx = car.vz = 0; car.wa = 0; return { kind: best.o.brk }; },
+      if (!best) return null; car.x = best.sx; car.z = best.sz; car.a = best.a; car.v = car.vx = car.vz = 0; car.wa = 0; return { kind: best.o.brk || 'tree', r: best.o.c[2], at: [best.o.c[0], best.o.c[1]] }; },
     _myPet() { return myPet ? { x: myPet.group.position.x / TILE, y: myPet.group.position.z / TILE, on: myPet.group.visible } : null; }, /* (for testing) */
     _put(x, z, a) { car.x = x; car.z = z; car.a = a; car.v = car.vx = car.vz = 0; car.wa = 0; }, /* (for testing) */
+    _why() { const out = []; for (const q of solidsNear(car.x, car.z)) { const d = q.car ? 'car' : q.r ? 'rect' : +(Math.hypot(q.c[0] - car.x, q.c[1] - car.z)).toFixed(2); if (q.car ? Math.hypot(q.car.x - car.x, q.car.z - car.z) < 6 : q.r ? (car.x > q.r[0] - 4 && car.x < q.r[2] + 4 && car.z > q.r[1] - 4 && car.z < q.r[3] + 4) : d < 4) out.push({ d, r: q.c && q.c[2], soft: q.soft, brk: q.brk, id: q.id }); } return { a: +car.a.toFixed(2), out, traffic: traffic.filter(t => Math.hypot(t.px - car.x, t.pz - car.z) < 8).length, OL, OW }; },
     _broken() { let n = 0; for (const v of blocks.values()) for (const o of v.solid) if (o.gone) n++; return { broken: n, flying: DEB.length, deb: DEB.map(d => [d.x - car.x, d.y, d.z - car.z, d.th, d.G.parent === scene, d.G.children.length].map(v => typeof v === 'number' ? +v.toFixed(2) : v)) }; },
     stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, fleet: Object.fromEntries([...fleetM].filter(([, m]) => m.count).map(([k, m]) => [k, m.count])), calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
     toggleView() { mode = (mode + 1) % 3; lk.yaw = foot ? lk.yaw : 0; lk.pitch = 0; return ['behind', 'driver', 'above'][mode]; },

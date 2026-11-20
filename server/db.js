@@ -385,7 +385,11 @@ const MIGRATIONS = [
    create index if not exists best_friends_a on best_friends (a_id); create index if not exists best_friends_b on best_friends (b_id);`,
   // v87: where a player was when their connection dropped (out in 3D, or inside a place) and when: for five minutes
   // everyone sees them stay there, then they walk or drive off to where their day has them (server/index.js)
-  `alter table citizens add column if not exists last_live jsonb;`
+  `alter table citizens add column if not exists last_live jsonb;`,
+  // v88: a log of what goes wrong (the server starting up again, a phone's game crashing or showing an error), so the
+  // cause can be seen afterwards rather than guessed. Kept for two weeks. See /api/admin/events.
+  `create table if not exists app_events (id bigserial primary key, t bigint not null, kind text not null, who text, detail jsonb);
+   create index if not exists app_events_t on app_events (t);`
 ];
 
 export async function migrate() {

@@ -2689,7 +2689,21 @@ ok((await call('POST', '/api/admin/reset', { confirm: 'nope' })).status === 400,
   ok(watch.got.some(m => m.type === 'linger' && m.id === A.id && m.off) && !(await pool.query('select last_live from citizens where id = $1', [A.id])).rows[0].last_live, 'back online: they are themselves again at once', JSON.stringify(watch.got.filter(m => m.type === 'linger')));
   a.w.send(JSON.stringify({ type: 'in', place: 'h:linger_lu', x: 3, y: 3, a: 0 })); await sleep(300); a.w.terminate(); await sleep(600);
   ok(watch.got.some(m => m.type === 'linger' && m.id === A.id && m.L && m.L.place === 'h:linger_lu'), 'inside a place when the line drops: they stay inside it for a while', JSON.stringify(watch.got.filter(m => m.type === 'linger').slice(-1)));
+  // back to the 2D map on purpose: still there where they left the street, for everyone (and online)
+  a = await sock(A.tok); a.w.send(JSON.stringify({ type: 'drive', mode: 'walk', x: 70.5, y: 61, a: 0 })); await sleep(400); const n0 = watch.got.length;
+  a.w.send(JSON.stringify({ type: 'drive', off: true, keep: 1 })); await sleep(400);
+  { const L = watch.got.slice(n0).find(m => m.type === 'linger' && m.id === A.id && m.L); ok(L && L.L.x === 70.5 && Date.now() - L.L.t < 5000, 'switching to the 2D map: everyone in 3D still sees them where they left the street', JSON.stringify(watch.got.slice(n0))); }
+  a.w.send(JSON.stringify({ type: 'drive', mode: 'walk', x: 71, y: 61, a: 0 })); await sleep(500);
+  ok(watch.got.slice(n0).some(m => m.type === 'linger' && m.id === A.id && m.off), '…and back in 3D, they carry on from there');
+  a.w.close();
   watch.w.close(); late.w.close();
+}
+{ // the log of what goes wrong: start-ups, and phones' crashes and errors, for the developer
+  ok((await call('POST', '/api/log', { kind: 'crash', msg: 'stopped without closing after 3 min', view: '3d-street', mem: 180 }, { auth: false })).status === 200, 'a phone reports its game crashed last time');
+  await call('POST', '/api/log', { kind: 'nonsense', msg: 'x'.repeat(5000) }, { auth: false });
+  ok((await call('GET', '/api/admin/events', undefined, { auth: false })).status === 401, 'only the developer reads the log');
+  const ev = (await call('GET', '/api/admin/events')).json; ok(ev.count.boot >= 1 && ev.count.crash >= 1 && ev.events.find(e => e.kind === 'crash').detail.view === '3d-street', 'the log: each server start-up, and the crash with where the player was', JSON.stringify(ev.count));
+  ok(ev.events.every(e => ['boot', 'crash', 'error', 'webgl-lost', 'reload', 'memory-high'].includes(e.kind)) && ev.events.every(e => !e.detail || !e.detail.msg || e.detail.msg.length <= 400), '…made-up kinds become errors, and long messages are cut short');
 }
 { // best friends, and borrowing cars from them (or from your husband or wife)
   const player = async (handle, coins) => { await call('POST', '/api/admin/citizens', { handle }); const id = (await pool.query('select id from citizens where handle = $1', [handle])).rows[0].id;

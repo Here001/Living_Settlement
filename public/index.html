@@ -1638,7 +1638,7 @@ function connect(){
     else if(m.type==='phone' && m.data) Phone.msg(m.data);
     else if(m.type==='streetSay'){ try{ Drive.heard(m); }catch(e){} } /* someone near you on the street said something */
     else if(m.type==='linger' && m.id){ if(m.off) Linger.delete(m.id); else lingerSet(m.id,m.L); } /* someone's line dropped: they stay put for a while (or they're back) */
-    else if(m.type==='drive' && m.id){ if(m.off){ DrivingNow.delete(m.id); const L0=Linger.get(m.id); if(L0&&L0.local) Linger.delete(m.id); } else DrivingNow.set(m.id,{x:m.x,y:m.y,a:m.a,m:m.m,col:m.col,pk:m.pk||null,pt:typeof m.pt==='string'?m.pt:null,mode:m.mode==='walk'?'walk':m.mode==='ride'?'ride':'car',by:m.by||null,t:Date.now()}); } /* someone driving about in 3D (or riding in someone's car) */
+    else if(m.type==='drive' && m.id){ if(!m.off&&m.h&&!S.citizens.has(m.id)) CitFetch.want(m.h); if(m.off){ DrivingNow.delete(m.id); const L0=Linger.get(m.id); if(L0&&L0.local) Linger.delete(m.id); } else DrivingNow.set(m.id,{x:m.x,y:m.y,a:m.a,m:m.m,col:m.col,pk:m.pk||null,pt:typeof m.pt==='string'?m.pt:null,mode:m.mode==='walk'?'walk':m.mode==='ride'?'ride':'car',by:m.by||null,t:Date.now()}); } /* someone driving about in 3D (or riding in someone's car) */
     else if(m.type==='ride'){ Drive.rideMsg(m); } /* rides: asks, answers, getting in and out */
     else if(m.type==='whereIn'){ if(m.all){ InsideNow.clear(); for(const [id,pl] of m.all) InsideNow.set(id,pl); } else if(m.place) InsideNow.set(m.id,m.place); else InsideNow.delete(m.id); }
     else if(m.type==='gm' && m.data) Chats.gincoming(m.data);
@@ -1910,6 +1910,11 @@ function citizenAt(c, gm){
   if(L&&!(v&&Number(v[5])>L.t)){ const st=lingerAt(c,L,gm); if(st) return st; } /* their line dropped: where they were, then on their way (unless they've set off on a trip since) */
   if(v){ const st=tripAt(c, v, gm); if(st) return st; }
   return dayAt(c, gm); }
+// Someone out in 3D whose citizen record the page hasn't loaded (they live and work in a part of the map you haven't
+// looked at): fetched by name, so they're drawn like everyone else, not left out
+const CitFetch={ busy:new Set(), tried:new Map(),
+  want(h){ const k=String(h).toLowerCase(); if(this.busy.has(k)||Date.now()-(this.tried.get(k)||0)<30000) return; this.busy.add(k); this.tried.set(k,Date.now());
+    api('/api/citizens/'+encodeURIComponent(h)).then(d=>{ if(d&&d.id&&!S.citizens.has(d.id)){ const c=normC(d); S.citizens.set(c.id,c); detail.set(d.id,d); } }).catch(()=>{}).finally(()=>this.busy.delete(k)); } };
 // ---- A player whose connection dropped (or whose updates stopped coming) stays where they were for five real minutes,
 // standing there, in their car or inside the place they were in; then they walk (if it's close) or drive to where their
 // day has them, rather than jumping there. Back online, they're themselves again straight away. ----
@@ -7714,7 +7719,7 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
 // anyone out on the street in 3D counts too. Refreshed every minute while the page is open.
 const LiveOnline={ ids:new Set(), at:0, busy:false,
   has(id){ this.load(); return this.ids.has(id)||DrivingNow.has(id); },
-  load(){ if(this.busy||Date.now()-this.at<60000||document.hidden) return; this.busy=true; api('/api/online').then(L=>{ this.ids=new Set((L||[]).filter(p=>p.online).map(p=>p.id)); this.at=Date.now(); }).catch(()=>{ this.at=Date.now(); }).finally(()=>{ this.busy=false; }); } };
+  load(){ if(this.busy||Date.now()-this.at<(typeof Drive!=='undefined'&&Drive.el?20000:60000)||document.hidden) return; this.busy=true; api('/api/online').then(L=>{ this.ids=new Set((L||[]).filter(p=>p.online).map(p=>p.id)); this.at=Date.now(); }).catch(()=>{ this.at=Date.now(); }).finally(()=>{ this.busy=false; }); } };
 const CAR_KEY=new Map(Object.entries(CAR_MODELS).map(([k,v])=>[v,k])); /* a car model back to its name */
 const DrivingNow=new Map(); // citizen id → { x, y, a, m, col, t }
 function drivingAt(c){ const d=DrivingNow.get(c.id); if(!d) return null; if(Date.now()-d.t>5000){ DrivingNow.delete(c.id); if(d.mode!=='ride') lingerSet(c.id,{ x:d.x, y:d.y, mode:d.mode, m:d.m, col:d.col, t:d.t, local:true }); return null; } /* (gone quiet: they stay where they were last seen, not off to where the map would guess) */
@@ -7968,7 +7973,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
         building:(x,y)=>{ const id=D.occ.get(x+','+y); return id?D.buildings.get(id)||null:null; },
         buildings:(x0,y0,x1,y1)=>{ const out=[]; for(const b of D.buildings.values()) if(b.x>=x0&&b.x<x1&&b.y>=y0&&b.y<y1&&!b.ruin&&BUILDING_TYPES[b.type]) out.push(b); return out; },
         byId:id=>D.buildings.get(id)||null, loaded:(x,y)=>S.chunks.has(ckTile(x,y)), minute:()=>window.__driveMinute!=null?window.__driveMinute:((gmNow()%1440)+1440)%1440, billboard:()=>BBoard.urls, /* (the Colosseum's billboard) */ weather:()=>window.__driveWx||(S.meta?weatherAt(S.meta,gmNow()):'sunny'), /* (the same weather as the map; __driveWx: for checking) */ /* (__driveMinute: for checking how it looks at a time of day) */
-        people:(x,y)=>this.people(x,y), services:(x,y)=>this.services(x,y), onMove:(x,y,a,v)=>this.moved(x,y,a,v), onNear:b=>this.nearBy(b), onLost:()=>{ this.close(); toast('Your phone needed the memory back. Tap 🚗 Drive or 🚶 Walk to carry on.'); } }); }
+        people:(x,y)=>this.people(x,y), services:(x,y)=>this.services(x,y), onMove:(x,y,a,v)=>this.moved(x,y,a,v), onNear:b=>this.nearBy(b), onLost:()=>{ CrashLog.send('webgl-lost',{ msg:'the 3D street lost its graphics' }); this.close(); toast('Your phone needed the memory back. Tap 🚗 Drive or 🚶 Walk to carry on.'); } }); }
     catch(e){ try{ console.warn('town3d', e&&e.stack); }catch(_){} this.close(); toast('Your phone couldn’t show the 3D town.'); return; }
     try{ window.__drive=this; this.map=DriveMap; }catch(e){} /* (for checking how it runs) */
     this.floats();
@@ -7995,7 +8000,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
       const V=st.V||null, m=V&&CAR_KEY.get(V), live=DrivingNow.has(c.id), online=live||LiveOnline.has(c.id), L=c.claimed!==false&&(live||online)?Looks.m.get(c.handle.toLowerCase()):null;
       if(online&&!L) Looks.want([c.handle]); /* their own look, for next time */
       const drv=!!(dn&&dn.mode==='car'), n=aboard.get(c.id)||0;
-      out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, m:V&&V.mode==='water'?Object.keys(VEHICLE_TYPES).find(k=>VEHICLE_TYPES[k]===V):m&&ridden(m)?(carKind(m)==='bike'&&(n>0||(this.riding&&this.riding.id===c.id))?m+'+':m):V===VEHICLE_TYPES.taxi?'sedan':'hatch', /* (a bike carrying someone: with them on the back) */ look:L||null, pet:!st.car?(dn&&dn.mode==='walk'&&dn.pt!=null&&Date.now()-dn.t<5000?(dn.pt||null):petOut(c)):null, /* (out in 3D: the pet they say is with them, so one sent home goes home for you too) */ petOwner:c.handle, tag:live?'@'+c.handle+(n?` +${n}`:''):null, online:live, live, h:c.handle, drv, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, full:drv&&n>=seatsOf(dn.m)-1 }); }
+      out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, m:V&&V.mode==='water'?Object.keys(VEHICLE_TYPES).find(k=>VEHICLE_TYPES[k]===V):m&&ridden(m)?(carKind(m)==='bike'&&(n>0||(this.riding&&this.riding.id===c.id))?m+'+':m):V===VEHICLE_TYPES.taxi?'sedan':'hatch', /* (a bike carrying someone: with them on the back) */ look:L||null, pet:!st.car?(dn&&dn.mode==='walk'&&dn.pt!=null&&Date.now()-dn.t<5000?(dn.pt||null):petOut(c)):null, /* (out in 3D: the pet they say is with them, so one sent home goes home for you too) */ petOwner:c.handle, tag:online?'@'+c.handle+(n?` +${n}`:''):null, online:live||online, live, h:c.handle, drv, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, full:drv&&n>=seatsOf(dn.m)-1 }); }
     for(const [id,dn] of DrivingNow){ const pk=dn.pk; if(!pk||dn.mode!=='walk'||Date.now()-dn.t>5000) continue; const c=S.citizens.get(id); if(c&&c.handle.toLowerCase()===meH) continue; const d=Math.hypot(pk.x-x,pk.y-y); if(d>26) continue;
       out.push({ d, id:'pk:'+id, x:pk.x, y:pk.y, car:true, col:dn.col||null, m:pk.k, a:pk.a+Math.PI/2, drv:false, still:true, h:null, tag:null }); } /* someone's car parked, or boat moored, where they got out */
     const near=out.sort((a,b)=>a.d-b.d).slice(0,40); this.talkNear(near); const extra=Missions.people(); if(extra) near.push(...(Array.isArray(extra)?extra:[extra])); /* (your taxi fare at the kerb, the car to take, or people with work going) */ return near; },
@@ -8095,7 +8100,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
   map:null, /* (DriveMap, for checking) */
   back(){ const r=this.resume; this.resume=null; if(!r||Date.now()-r.t>3*3600000) return; setTimeout(()=>this.start(r),80); },
   close(quiet){ if(!this.el) return; if(Voice.R&&Voice.R===this.vR) Voice.leave(); this.vR=null; this.vSpot=null; this.near=null; this.doorOk=false; this.doorFor=null; this.atCar=false; /* (a fresh street: not at any door or car yet) */ this.floatOff=null; this.sentMsg=null; this.floatsId=(this.floatsId||0)+1; /* (and its button loop stops, its place is measured afresh, its first position is sent at once) */ try{ this.T&&this.T.dispose(); }catch(e){} this.T=null; Phone.hide(); DriveMap.reset(); this.el.remove(); this.el=null; document.body.classList.remove('room-on','drive-on'); if(this.camWas){ cam.x=this.camWas.x; cam.y=this.camWas.y; cam.z=this.camWas.z; this.camWas=null; } setTimeout(mapResume,0);
-    try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'drive',off:true})); }catch(e){} try{ localStorage.removeItem('resurgence-lastpos'); const me=myCitizen(); if(me) Linger.delete(me.id); }catch(e){} /* (left the street on purpose: no waiting about where you were) */
+    try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'drive',off:true,keep:1})); }catch(e){} try{ const me=myCitizen(), p=this.T&&this.T.pos; if(me&&p&&p.mode!=='ride'){ const L={ x:+p.x.toFixed(2), y:+p.y.toFixed(2), mode:p.mode, m:this.car&&this.car.m, col:this.car&&this.car.col, t:Date.now() }; Linger.set(me.id,{...L,local:true}); localStorage.setItem('resurgence-lastpos',JSON.stringify({id:me.id,...L})); } }catch(e){} /* (back to the 2D map: you're still where you left the street, and still online for everyone in 3D) */
     if(!quiet){ try{ if(history.state&&history.state.drive) history.back(); }catch(e){} } } };
 addEventListener('popstate',()=>{ if(Drive.el) Drive.close(true); });
 const Visit={
@@ -9091,6 +9096,19 @@ if('serviceWorker' in navigator) addEventListener('load',()=>{ PushUI.reg().catc
 // Updates reach open games: the game remembers the version it started with, and checks again when the phone comes back to
 // it and every 10 minutes. If a new version is out, it reloads right away on coming back (unless the player is typing), or
 // otherwise offers a one-tap "Update" note, so an app left open on a phone never keeps running an old copy.
+// What went wrong on this phone, sent to the developer's log (/api/admin/events): if the game stopped without closing
+// properly last time (the phone ran out of memory and killed it, or it froze), that's reported on the next start with
+// where you were; errors on the page are reported too (a few at most).
+const CrashLog={ n:0, t0:Date.now(),
+  view(){ try{ return Drive.el?'3d-street':Room.el?'room':TrackView.el?'races':ArenaView.el?'colosseum':'2d'; }catch(e){ return '?'; } },
+  mem(){ try{ return performance.memory?Math.round(performance.memory.usedJSHeapSize/1048576):null; }catch(e){ return null; } },
+  send(kind,o={}){ if(this.n++>8) return; try{ fetch('/api/log',{method:'POST',keepalive:true,headers:{'content-type':'application/json',...(Me&&Me.token?{'x-player':Me.token}:{})},body:JSON.stringify({ kind, view:this.view(), mem:this.mem(), up:Math.round((Date.now()-this.t0)/1000), v:(AppVersion&&AppVersion.v)||'', ...o })}).catch(()=>{}); }catch(e){} },
+  start(){ try{ const was=JSON.parse(sessionStorage.getItem('rs-alive')||'null'); if(was&&!was.clean&&Date.now()-was.t<180000) setTimeout(()=>this.send('crash',{ msg:`stopped without closing after ${Math.round(was.up/60)} min`, src:was.view, mem:was.mem }),4000); }catch(e){}
+    const beat=()=>{ try{ sessionStorage.setItem('rs-alive',JSON.stringify({ t:Date.now(), view:this.view(), mem:this.mem(), up:Math.round((Date.now()-this.t0)/1000) })); }catch(e){} };
+    beat(); setInterval(beat,10000); addEventListener('pagehide',()=>{ try{ const o=JSON.parse(sessionStorage.getItem('rs-alive')||'{}'); o.clean=1; sessionStorage.setItem('rs-alive',JSON.stringify(o)); }catch(e){} });
+    addEventListener('error',e=>{ if(!e||!e.message||/ResizeObserver/.test(e.message)) return; this.send('error',{ msg:e.message, src:`${(e.filename||'').split('/').pop()}:${e.lineno||0}` }); });
+    addEventListener('unhandledrejection',e=>{ const r=e&&e.reason; const m=r&&(r.message||String(r)); if(!m||/Failed to fetch|NetworkError|aborted|Load failed/i.test(m)) return; this.send('error',{ msg:m, src:'promise' }); }); } };
+CrashLog.start();
 const AppVersion={ v:null, hiddenAt:0, shown:false,
   async get(){ try{ const r=await fetch('/api/version',{cache:'no-store'}); return r.ok?(await r.json()).v:null; }catch(e){ return null; } },
   busy(){ const a=document.activeElement; return !!(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.isContentEditable)); },

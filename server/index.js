@@ -189,6 +189,16 @@ app.put('/api/tracks/:id/ticket', limit, send(async req => { const p = await pla
 // Test servers only (ALLOW_TEST_ROUTES=1, never set on the live colony): run the daily payday on demand.
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/election-end', admin, send(async () => { const { weekOf, weekStart } = await import('./leaderboards.js'); const win = await world.elections.tally(weekStart(weekOf() + 1) + 1000); world.elections.testShift = 1; world.elections.cache.t = 0; return { winner: win?.handle || null }; }));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/bills', admin, send(() => world.change(ch => economy.weeklyBills(ch, true))));
+// A phone's report: its game crashed (or the phone killed it) last time, or an error showed. A few a day per phone at most.
+const LOG_SEEN = new Map(); setInterval(() => LOG_SEEN.clear(), 3600000).unref();
+app.post('/api/log', limit, express.json({ limit: '8kb' }), send(async req => { const b = req.body || {}, ip = String(req.ip || ''), n = (LOG_SEEN.get(ip) || 0) + 1; LOG_SEEN.set(ip, n); if (n > 20) return { ok: true };
+  const kind = ['crash', 'error', 'webgl-lost', 'reload'].includes(b.kind) ? b.kind : 'error', p = await playerFrom(req).catch(() => null), clip = (v, k) => String(v ?? '').slice(0, k);
+  const detail = { msg: clip(b.msg, 400), src: clip(b.src, 200), view: clip(b.view, 30), mem: Number(b.mem) || null, up: Number(b.up) || null, ua: clip(req.headers['user-agent'], 160), v: clip(b.v, 40) };
+  await pool.query('insert into app_events (t, kind, who, detail) values ($1, $2, $3, $4)', [Date.now(), kind, p?.handle || null, JSON.stringify(detail)]); return { ok: true }; }));
+// For the developer: what went wrong lately (server restarts, phones' crashes and errors), newest first
+app.get('/api/admin/events', admin, send(async req => { const days = Math.min(14, Math.max(1, Number(req.query.days) || 2));
+  const rows = (await pool.query('select t, kind, who, detail from app_events where t > $1 order by t desc limit 300', [Date.now() - days * 86400000])).rows.map(r => ({ ...r, t: Number(r.t) }));
+  const count = {}; for (const r of rows) count[r.kind] = (count[r.kind] || 0) + 1; return { count, events: rows }; }));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.get('/api/admin/test/pushlog', admin, send(async () => ({ log: push.log })));
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/live', admin, send(async req => { const b = req.body || {}, id = (await pool.query('select id from citizens where lower(handle) = lower($1)', [String(b.handle || '')])).rows[0]?.id; if (!id) throw new HttpError(404, 'No such citizen.'); if (b.off) LIVE_POS.delete(id); else LIVE_POS.set(id, { x: Number(b.x), y: Number(b.y), mode: b.mode || 'walk', t: Date.now() }); return { ok: true }; })); /* (tests: put someone out in the 3D town) */
 if (process.env.ALLOW_TEST_ROUTES === '1') app.post('/api/admin/test/arena-end', admin, send(async () => { for (const M of world.arena.matches.values()) { M.playFrom = Math.min(M.playFrom, Date.now()); M.until = Date.now(); } return { n: world.arena.matches.size }; }));
@@ -423,13 +433,13 @@ wss.on('connection', (ws, req) => {
       bus.publish([{ arena: true, k: 'in', pid: ws.playerId, handle: ws.playerHandle, m: { a, mode: String(m.mode || ''), id: String(m.id || ''), x: Number(m.x), y: Number(m.y) } }]); return; }
     // Driving around town in 3D: where your car is, passed on to everyone so their maps show it (a few times a second at most)
     if (m?.type === 'drive' && ws.playerId) { const now = Date.now();
-      if (m.off) { rides.off(ws.playerId); if (ws.driving) { ws.driving = false; bus.publish([{ driving: true, id: ws.playerId, off: true }]); } return; }
+      if (m.off) { rides.off(ws.playerId); if (m.keep && ws.driving) { lingerFrom(ws, null, true); ws.lingering = true; } /* switched to the 2D map: still online, still there where they left the street (then on with their day) */ if (ws.driving) { ws.driving = false; bus.publish([{ driving: true, id: ws.playerId, off: true }]); } return; }
       const x = Number(m.x), y = Number(m.y), a = Number(m.a); if (![x, y, a].every(Number.isFinite) || Math.abs(x) > 1e5 || Math.abs(y) > 1e5 || now - (ws.driveAt || 0) < 150) return; ws.driveAt = now;
       const w = { h: ws.playerHandle || null, mode: m.mode === 'walk' ? 'walk' : 'car', x: +x.toFixed(2), y: +y.toFixed(2), a: +a.toFixed(2), m: /^[a-z]{1,16}$/.test(String(m.m || '')) ? String(m.m) : 'car', col: /^#[0-9A-Fa-f]{6}$/.test(String(m.col || '')) ? String(m.col) : null };
       if (typeof m.pt === 'string' && /^[a-z0-9_]{0,24}$/.test(m.pt)) w.pt = m.pt; /* the pet with them ('' when it's at home) */
       { const k = m.pk; if (w.mode === 'walk' && k && typeof k === 'object' && [k.x, k.y, k.a].every(Number.isFinite) && Math.hypot(k.x - x, k.y - y) < 60 && /^[a-z]{1,16}!?$/.test(String(k.k || ''))) w.pk = { x: +(+k.x).toFixed(2), y: +(+k.y).toFixed(2), a: +(+k.a).toFixed(2), k: String(k.k) }; } /* where they left their car or boat, so others see it there */
       if (!rides.moved(ws.playerId, w)) return; /* riding in someone's car: you go where it goes */
-      if (w.mode !== 'ride') ws.lastDrive = { x: w.x, y: w.y, mode: w.mode, m: w.m, col: w.col, t: now }; if (!ws.lingerCleared) { ws.lingerCleared = true; clearLinger(ws.playerId); } /* (back: no longer waiting where the line dropped) */
+      if (w.mode !== 'ride') ws.lastDrive = { x: w.x, y: w.y, mode: w.mode, m: w.m, col: w.col, t: now }; if (!ws.lingerCleared || ws.lingering) { ws.lingerCleared = true; ws.lingering = false; clearLinger(ws.playerId); } /* (back: no longer waiting where the line dropped) */
       ws.driving = true; ws.drivePos = [w.x, w.y]; bus.publish([{ driving: true, id: ws.playerId, ...w }]); return; } /* mode: on foot or in a car */
     // Rides: ask a driver for a ride, the driver answers (or lets someone out), a rider gets out
     if (m?.type === 'ride' && ws.playerId) { const a = String(m.a || ''), who = String(m.id || '').slice(0, 64);
@@ -441,7 +451,7 @@ wss.on('connection', (ws, req) => {
     if (m?.type === 'in') { const place = String(m.place || ''), x = Number(m.x), y = Number(m.y), a = Number(m.a);
       if (!/^(b|h):[A-Za-z0-9_.-]{1,64}$/.test(place) || ![x, y, a].every(Number.isFinite) || x < 0 || y < 0 || x > 16 || y > 16) return;
       if (ws.inside && ws.inside !== place) insideLeave(ws);
-      const first = ws.inside !== place; ws.inside = place; if (ws.playerId && !ws.lingerCleared) { ws.lingerCleared = true; clearLinger(ws.playerId); } const who = ws.playerId ? 'p:' + ws.playerId : wsKey;
+      const first = ws.inside !== place; ws.inside = place; if (ws.playerId && (!ws.lingerCleared || ws.lingering)) { ws.lingerCleared = true; ws.lingering = false; clearLinger(ws.playerId); } const who = ws.playerId ? 'p:' + ws.playerId : wsKey;
       if (ws.insideWho && ws.insideWho !== who) { bus.publish([{ inside: true, place, skip: who, k: 'gone', id: ws.insideWho }]); try { world.rooms?.here.get(place)?.delete(ws.insideWho); } catch {} } /* signed in since: the anonymous figure goes (from the head count too) */ ws.insideWho = who;
       try { world.rooms.seen(place, who, ws.playerHandle || null); } catch {}
       const p = { id: who, h: ws.playerHandle || null, x: +x.toFixed(2), y: +y.toFixed(2), a: +a.toFixed(2) };
@@ -464,9 +474,9 @@ wss.on('connection', (ws, req) => {
 // inside a place), then they walk or drive off to where their day has them (public/index.html lingerAt). Kept in the
 // database so a server restart, or someone opening the map later, still knows; cleared the moment they're back.
 const DRIVE_LAST = new Map(); /* player id → their latest position message (for anyone just connecting) */
-function lingerFrom(ws, place) { const d = ws.lastDrive, id = ws.playerId, now = Date.now(); let L = null;
+function lingerFrom(ws, place, fresh) { const d = ws.lastDrive, id = ws.playerId, now = Date.now(); let L = null;
   if (place && /^(b|h):/.test(place)) L = { place, t: now };
-  else if (ws.driving && d && now - d.t < 120000) L = { x: d.x, y: d.y, mode: d.mode, m: d.m, col: d.col, t: d.t };
+  else if (ws.driving && d && now - d.t < 120000) L = { x: d.x, y: d.y, mode: d.mode, m: d.m, col: d.col, t: fresh ? now : d.t };
   if (!L) return; bus.publish([{ linger: true, id, L }]); pool.query('update citizens set last_live = $2 where id = $1', [id, JSON.stringify(L)]).catch(() => {}); }
 function clearLinger(id) { if (!id) return; pool.query('update citizens set last_live = null where id = $1 and last_live is not null', [id]).then(r => { if (r.rowCount) bus.publish([{ linger: true, id, off: true }]); }).catch(() => {}); }
 function insideLeave(ws) { if (!ws.inside) return; const place = ws.inside, who = ws.insideWho; ws.inside = null; ws.insidePos = null;
@@ -589,4 +599,10 @@ if (isLeader) await world.upgradeCampfire().catch(e => console.error('landing st
 if (isLeader) await world.taxOutOfWages().then(n => n && console.log(`Took the 20% tax out of ${n} wages.`)).catch(e => console.error('wage tax:', e.message));
 if (isLeader) await step('catching up the clock', () => world.tick().catch(e => console.error('tick failed:', e.message))); // anything missed while off
 ready = true; started = true; console.log(`City running on :${PORT} with ${world.meta?.population || 0} citizens (bus: ${bus.kind})`);
+// The log of what goes wrong: each start-up is noted (a restart nobody asked for shows up here), memory is watched
+// (Render restarts a server that runs out), and phones report their crashes and errors (/api/log)
+{ const mem = () => { const m = process.memoryUsage(); return { rss: Math.round(m.rss / 1048576), heap: Math.round(m.heapUsed / 1048576) }; };
+  pool.query('insert into app_events (t, kind, detail) values ($1, $2, $3)', [Date.now(), 'boot', JSON.stringify({ ...mem(), node: process.version, commit: process.env.RENDER_GIT_COMMIT || null })]).catch(() => {});
+  pool.query('delete from app_events where t < $1', [Date.now() - 14 * 86400000]).catch(() => {});
+  let warned = 0; setInterval(() => { const m = mem(); console.log(`memory: ${m.rss} MB in use (${m.heap} MB heap), ${wss.clients.size} connected`); if (m.rss > 420 && Date.now() - warned > 3600000) { warned = Date.now(); pool.query('insert into app_events (t, kind, detail) values ($1, $2, $3)', [Date.now(), 'memory-high', JSON.stringify({ ...m, clients: wss.clients.size })]).catch(() => {}); } }, 5 * 60000).unref(); }
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => { server.close(); try { const { drainFlows } = await import('./stats.js'); await Promise.race([drainFlows(), new Promise(r => setTimeout(r, 3000))]); } catch {} process.exit(0); }); // the last few seconds of stats are saved first

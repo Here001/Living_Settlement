@@ -32,23 +32,33 @@ export async function sell(ch, store, item, price) {
   return { owned: true, till: price, left: r.qty };
 }
 
-// The owner buys stock from the colony at wholesale
-export async function restock(world, playerId, { buildingId, item, qty }) {
-  const n = Math.floor(Number(qty)); if (!(n >= 1 && n <= STOCK_MAX)) throw new HttpError(400, `Buy between 1 and ${STOCK_MAX}.`);
-  return world.change(async ch => {
-    const b = (await ch.q('select id, type, owner_id from buildings where id = $1 and done and not ruin for update', [String(buildingId || '')])).rows[0];
+// The owner buys stock from the colony at wholesale: one product (item, qty), a whole order at once (items: [{ item,
+// qty }]), or "fill every product up to N" (fill: N). dry: just the quote (what it would come to), nothing bought. One
+// personal transaction for all of it (no colony-wide lock, so a big order never holds anyone else up), all or nothing.
+export async function restock(world, playerId, { buildingId, item, qty, items, fill, dry }) {
+  const run = async ch => {
+    const b = (await ch.q('select id, type, owner_id from buildings where id = $1 and done and not ruin' + (dry ? '' : ' for update'), [String(buildingId || '')])).rows[0];
     if (!b || !STORES[b.type]) throw new HttpError(404, 'That isn’t an open store.');
     if (b.owner_id !== playerId) throw new HttpError(403, 'Only the store’s owner can buy in stock.');
-    const P = productOf(b.type, String(item || '')); if (!P) throw new HttpError(400, 'This store doesn’t sell that.');
-    const have = (await ch.q('select qty from store_stock where building_id = $1 and item = $2 for update', [b.id, P.k])).rows[0]?.qty || 0;
-    if (have + n > STOCK_MAX) throw new HttpError(400, `A store holds up to ${STOCK_MAX} of each. You have ${have}.`);
-    const unit = wholesale(P.price), cost = unit * n;
+    const have = new Map((await ch.q('select item, qty from store_stock where building_id = $1' + (dry ? '' : ' for update'), [b.id])).rows.map(r => [r.item, Number(r.qty)]));
+    let want = [];
+    if (fill != null) { const to = Math.floor(Number(fill)); if (!(to >= 1 && to <= STOCK_MAX)) throw new HttpError(400, `Fill each up to between 1 and ${STOCK_MAX}.`);
+      for (const P of productsOf(b.type)) { const n = to - (have.get(P.k) || 0); if (n > 0) want.push([P, n]); } }
+    else { const list = Array.isArray(items) ? items : [{ item, qty }]; if (!list.length || list.length > 400) throw new HttpError(400, 'Pick what to buy.');
+      const seen = new Map(); for (const x of list) { const P = productOf(b.type, String(x?.item || '')); if (!P) throw new HttpError(400, 'This store doesn’t sell that.'); const n = Math.floor(Number(x?.qty)); if (!(n >= 1 && n <= STOCK_MAX)) throw new HttpError(400, `Buy between 1 and ${STOCK_MAX}.`); seen.set(P.k, [P, (seen.get(P.k)?.[1] || 0) + n]); }
+      want = [...seen.values()];
+      for (const [P, n] of want) { const h = have.get(P.k) || 0; if (h + n > STOCK_MAX) throw new HttpError(400, want.length === 1 ? `A store holds up to ${STOCK_MAX} of each. You have ${h}.` : `A store holds up to ${STOCK_MAX} of each: you have ${h} ${P.name}, so at most ${STOCK_MAX - h} more.`); } }
+    const lines = want.map(([P, n]) => ({ item: P.k, name: P.name, qty: n, unit: wholesale(P.price), cost: wholesale(P.price) * n })), cost = lines.reduce((a, l) => a + l.cost, 0), units = lines.reduce((a, l) => a + l.qty, 0);
+    if (dry) return { ok: true, quote: true, lines: lines.length, units, cost };
+    if (!lines.length) return { ok: true, lines: 0, units: 0, paid: 0, note: 'Everything is already stocked to that level.' };
     const c = (await ch.q('select * from citizens where id = $1 for update', [playerId])).rows[0]; if (!c) throw new HttpError(404, 'Who are you?');
-    ch.coins(c); if (c.coins_base < cost) throw new HttpError(400, `${n} × ${P.name} costs ${fmt(cost)} coins from the colony (${fmt(unit)} each, 25% off the shop price). You have ${fmt(c.coins_base)} on you.`);
+    ch.coins(c); if (c.coins_base < cost) throw new HttpError(400, lines.length === 1 ? `${lines[0].qty} × ${lines[0].name} costs ${fmt(cost)} coins from the colony (${fmt(lines[0].unit)} each, 25% off the shop price). You have ${fmt(c.coins_base)} on you.` : `That order comes to ${fmt(cost)} coins (${units} items, 25% off the shop price). You have ${fmt(c.coins_base)} on you.`);
     c.coins_base -= cost; treasuryAdd(ch, cost); track(ch, 'store:stock', cost, c.id); ch.touch(c); await ch.saveCitizen(c);
-    const q = (await ch.q('insert into store_stock (building_id, item, qty) values ($1, $2, $3) on conflict (building_id, item) do update set qty = store_stock.qty + $3 returning qty', [b.id, P.k, n])).rows[0].qty;
-    return { ok: true, item: P.k, qty: q, paid: cost, unit, coins: c.coins_base };
-  });
+    const rows = (await ch.q('insert into store_stock (building_id, item, qty) select $1, i, n from unnest($2::text[], $3::int[]) u(i, n) on conflict (building_id, item) do update set qty = store_stock.qty + excluded.qty returning item, qty', [b.id, lines.map(l => l.item), lines.map(l => l.qty)])).rows;
+    const one = lines.length === 1 ? rows.find(r => r.item === lines[0].item) : null;
+    return { ok: true, lines: lines.length, units, paid: cost, coins: c.coins_base, ...(one ? { item: one.item, qty: Number(one.qty), unit: lines[0].unit } : {}), stock: Object.fromEntries(rows.map(r => [r.item, Number(r.qty)])) };
+  };
+  return dry ? run({ q: (sql, v) => pool.query(sql, v) }) : world.personal(run);
 }
 
 // Buying a thing to wear (into your wardrobe) or for your home (into its storage, to place from 🛋️ Furnish)

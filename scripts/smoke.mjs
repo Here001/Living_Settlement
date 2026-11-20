@@ -2198,6 +2198,20 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
     const sale = await call('POST', '/api/me/phone', { model: 'pulse', color: '#7C5CFF', buildingId: st.id }, buyer.P), till = Number((await pool.query('select till from buildings where id = $1', [st.id])).rows[0].till);
     ok(sale.status === 200 && sale.json.paid === PM.pulse.price && sale.json.store?.left === 1 && till === PM.pulse.price, '…a sale takes one off the shelf and puts the full shop price in the store’s till', JSON.stringify({ s: sale.json, till }));
     const e1 = (await call('GET', `/api/stores/${st.id}/stock`, undefined, { auth: false })).json; ok(e1.stock.pulse === 1, '…and everyone sees what’s left', JSON.stringify(e1));
+    { // stocking a big catalogue: a quote first, then everything at once (one transaction, all or nothing), or an order of many products
+      const PS = (await import('../shared/stores.js')).productsOf('phonestore'), unitOf = k => Math.ceil(PS.find(P => P.k === k).price * 0.75), keep = (await pool.query("select coins_base, coins_day, net from citizens where handle = 'store_sam'")).rows[0];
+      await pool.query("update citizens set coins_base = 50000000 where handle = 'store_sam'");
+      const q = (await call('POST', '/api/me/stock', { buildingId: st.id, fill: 2, dry: true }, own.P)).json, need = P => Math.max(0, 2 - (P.k === 'pulse' ? 1 : 0)), want = PS.reduce((a, P) => a + need(P), 0), cost = PS.reduce((a, P) => a + need(P) * unitOf(P.k), 0);
+      ok(q.quote && q.units === want && q.cost === cost, 'stock everything: the final price first (nothing bought yet)', JSON.stringify({ q, want, cost }));
+      const f = (await call('POST', '/api/me/stock', { buildingId: st.id, fill: 2 }, own.P)).json, e2 = (await call('GET', `/api/stores/${st.id}/stock`, undefined, { auth: false })).json;
+      ok(f.paid === cost && f.coins === 50000000 - cost && PS.every(P => e2.stock[P.k] === 2), '…then every product filled up to that level, paid in one go', JSON.stringify({ f, e2: e2.stock }));
+      const o = (await call('POST', '/api/me/stock', { buildingId: st.id, items: [{ item: PS[0].k, qty: 2 }, { item: PS[1].k, qty: 4 }] }, own.P)).json;
+      ok(o.units === 6 && o.lines === 2 && o.stock[PS[0].k] === 4 && o.stock[PS[1].k] === 6 && o.paid === 2 * unitOf(PS[0].k) + 4 * unitOf(PS[1].k), 'an order of several products, bought at once', JSON.stringify(o));
+      const bad = await call('POST', '/api/me/stock', { buildingId: st.id, items: [{ item: PS[0].k, qty: 1 }, { item: PS[1].k, qty: 45 }] }, own.P), e3 = (await call('GET', `/api/stores/${st.id}/stock`, undefined, { auth: false })).json;
+      ok(bad.status === 400 && e3.stock[PS[0].k] === 4, '…all or nothing: one line over the limit and none of it is bought', JSON.stringify(bad.json));
+      ok((await call('POST', '/api/me/stock', { buildingId: st.id, fill: 2 }, own.P)).json.note, '…and filling what is already full costs nothing');
+      await pool.query('delete from store_stock where building_id = $1', [st.id]); await pool.query('insert into store_stock (building_id, item, qty) values ($1, $2, 1)', [st.id, 'pulse']);
+      await pool.query("update citizens set coins_base = $1, coins_day = $2, net = $3 where handle = 'store_sam'", [keep.coins_base, keep.coins_day, keep.net]); }
     const col = await call('POST', '/api/me/collect', { buildingId: st.id }, own.P); ok(col.status === 200 && col.json.got >= PM.pulse.price, '…which the owner collects like any till', JSON.stringify(col.json));
     const back = await call('POST', '/api/me/properties/sell', { buildingId: st.id }, own.P), left = (await pool.query('select count(*)::int n from store_stock where building_id = $1', [st.id])).rows[0].n;
     ok(back.status === 200 && left === 0 && (await call('GET', `/api/stores/${st.id}/stock`, undefined, { auth: false })).json.owned === false, 'sold back to the colony: the colony runs it again, and buys back the unsold stock', JSON.stringify({ b: back.json, left }));

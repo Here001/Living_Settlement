@@ -467,6 +467,17 @@ function prop(B, view, p, r) {
   if (k === 'hydrant') { bake(B.shiny, GEO.cyl, { x: p.x, y: 0.4, z: p.y, sx: 0.2, sy: 0.8, sz: 0.2, color: col('#c8382e') }); return; }
   if (k === 'mailbox') { B.shiny.box(p.x - 0.3, p.y - 0.3, p.x + 0.3, p.y + 0.3, 0, 1.2, col('#c8382e')); return; }
   if (k === 'phone') { B.glass.box(p.x - 0.55, p.y - 0.55, p.x + 0.55, p.y + 0.55, 0, 2.4, col('#c8382e'), { su: 4, sv: 4 }); return; }
+  if (k === 'atm') { /* a cash machine: a kiosk in the bank's colour, a lit header with the sign, the screen, a keypad and the card and cash slots, facing out (ang) */
+    const a = p.ang || 0, s = Math.sin(a), c = Math.cos(a), at = (f, u) => [p.x + s * f + c * u, p.y + c * f - s * u], body = col(p.c || '#1E7A55');
+    bake(B.shiny, GEO.box, { x: p.x, y: 1.0, z: p.y, ry: a, sx: 1.0, sy: 2.0, sz: 0.62, color: col('#C9CED4') }); /* the cabinet */
+    { const [hx, hz] = at(0.02, 0); bake(B.shiny, GEO.box, { x: hx, y: 2.12, z: hz, ry: a, sx: 1.08, sy: 0.34, sz: 0.68, color: body }); }
+    { const [gx, gz] = at(0.35, 0); bake(B.glow, GEO.box, { x: gx, y: 2.12, z: gz, ry: a, sx: 0.8, sy: 0.2, sz: 0.02, color: col('#9fe3ff') }); } /* the lit sign */
+    { const [sx, sz] = at(0.3, 0); bake(B.glow, GEO.box, { x: sx, y: 1.45, z: sz, ry: a, rx: -0.18, sx: 0.56, sy: 0.4, sz: 0.04, color: col('#2f8fd8') }); } /* the screen */
+    { const [kx, kz] = at(0.36, 0); bake(B.shiny, GEO.box, { x: kx, y: 1.02, z: kz, ry: a, rx: -0.6, sx: 0.5, sy: 0.05, sz: 0.3, color: col('#3a3f46') });
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { const [bx2, bz2] = at(0.4 + j * 0.06, (i - 1) * 0.11); bake(B.shiny, GEO.box, { x: bx2, y: 1.08 - j * 0.035, z: bz2, ry: a, sx: 0.07, sy: 0.03, sz: 0.05, color: col('#d5d9de') }); } } /* the keypad */
+    { const [cx2, cz2] = at(0.32, 0.18); bake(B.glow, GEO.box, { x: cx2, y: 1.26, z: cz2, ry: a, sx: 0.14, sy: 0.03, sz: 0.04, color: col('#36d27a') }); } /* the card slot's light */
+    { const [dx2, dz2] = at(0.32, 0); bake(B.shiny, GEO.box, { x: dx2, y: 0.78, z: dz2, ry: a, sx: 0.42, sy: 0.05, sz: 0.04, color: col('#1d1f23') }); } /* the cash slot */
+    return; }
   if (k === 'kiosk') { B.solid.box(p.x - 1.2, p.y - 1, p.x + 1.2, p.y + 1, 0, 2.4, col('#2f5d4a')); B.solid.box(p.x - 1.5, p.y - 1.3, p.x + 1.5, p.y + 1.3, 2.4, 2.6, col('#c8382e')); return; }
   if (k === 'busstop') { B.glass.box(p.x - 1.6, p.y - 0.5, p.x + 1.6, p.y + 0.5, 0, 2.5, col('#9fb4c2'), { su: 4, sv: 4 }); B.solid.box(p.x - 1.8, p.y - 0.8, p.x + 1.8, p.y + 0.8, 2.5, 2.7, col('#2f4a7a')); return; }
   if (k === 'planter') { B.solid.box(p.x - 0.6, p.y - 0.6, p.x + 0.6, p.y + 0.6, 0, 0.6, col('#8c7b66')); bake(B.solid, GEO.ball, { x: p.x, y: 0.9, z: p.y, sx: 0.6, sy: 0.5, sz: 0.6, color: col('#4e8f3a') }); return; }

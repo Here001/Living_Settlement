@@ -17,6 +17,7 @@ const THREE = W.THREE;
 
 const PHONE = matchMedia('(pointer: coarse)').matches;
 const HQ = !(PHONE && ((navigator.deviceMemory || 4) <= 3 || (navigator.hardwareConcurrency || 8) <= 4));
+const BANKS = new Set(['microbank', 'communitybank', 'bank', 'intlbank']); /* (shared/catalog.js BANK_TYPES: each has a cash machine outside) */
 const TILE = 8, B = 20, M = 1.2;     // metres to a tile; tiles to a block; how far a building stands in from its plot's edge
 const TREES = new Set(['tree', 'pine', 'birch', 'poplar', 'palm', 'xmastree']);
 const GREEN = new Set(['park', 'garden', 'fitpark', 'playground', 'pitch', 'farm', 'bush', 'hedge', 'flowers', 'tree', 'pine', 'birch', 'poplar', 'palm', 'xmastree', 'rocks', 'golf']);
@@ -52,7 +53,10 @@ function blockArea(bx, by, o) {
       for (const [, hx, hy, ns, len, [nx, ny]] of sides) { if (o.road(nx, ny) || r() < 0.35) continue; props.push({ k: 'hedge', x: hx, y: hy, w: len - 1.6, ns, c: ['#3f7d32', '#4a8a3a', '#356b2b'][Math.floor(r() * 3)] }); } }
     { const side = [['S', 0, 1], ['N', 0, -1], ['E', 1, 0], ['W', -1, 0]].map(([k, dx, dy]) => { let n = 0; if (dx) for (let j = 0; j < h; j++) n += o.road(b.x + (dx > 0 ? w : -1), b.y + j) ? 1 : 0; else for (let i = 0; i < w; i++) n += o.road(b.x + i, b.y + (dy > 0 ? h : -1)) ? 1 : 0; return [k, dx, dy, n]; }).sort((p, q) => q[3] - p[3])[0];
       const [, ddx, ddy] = side, door = [wx(ddx > 0 ? x + w * TILE - M + 0.6 : ddx < 0 ? x + M - 0.6 : x + w * TILE / 2), wz(ddy > 0 ? y + h * TILE - M + 0.6 : ddy < 0 ? y + M - 0.6 : y + h * TILE / 2)]; /* just outside the front door */
-      solid.push({ r: [wx(x + M), wz(y + M), wx(x + w * TILE - M), wz(y + h * TILE - M)], id: b.id, door, out: Math.atan2(-ddy, ddx) }); }
+      solid.push({ r: [wx(x + M), wz(y + M), wx(x + w * TILE - M), wz(y + h * TILE - M)], id: b.id, door, out: Math.atan2(-ddy, ddx) });
+      if (BANKS.has(b.type)) { /* a cash machine in the bank's front wall, a few steps along from its door, facing the street */
+        const ax = ddx > 0 ? x + w * TILE - M + 0.32 : ddx < 0 ? x + M - 0.32 : x + w * TILE / 2 + 2.6, ay = ddy > 0 ? y + h * TILE - M + 0.32 : ddy < 0 ? y + M - 0.32 : y + h * TILE / 2 + (ddx ? 2.6 : 0);
+        props.push({ k: 'atm', x: ax, y: ay, ang: Math.atan2(ddx, ddy), c: (T.colors && T.colors.accent) || '#1E7A55' }); solid.push({ c: [wx(ax), wz(ay), 0.55] }); } }
   }
   // the street: trees and bins on the pavements, traffic lights at junctions, and cars parked along the kerb
   const isR = (tx, ty) => !!o.road(bx + tx, by + ty), free = (tx, ty) => !isR(tx, ty) && !o.water(bx + tx, by + ty), H = (tx, ty, k) => ((((bx + tx) * 73856093) ^ ((by + ty) * 19349663) ^ (k * 83492791)) >>> 0) % 1000;

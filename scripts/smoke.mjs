@@ -1018,11 +1018,11 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok((await call('POST', `/api/me/heists/${pl.json.id}/role`, { role: 'safecracker' }, PB)).status === 400, "a part the job doesn't need can't be picked");
       ok((await call('POST', `/api/me/heists/${pl.json.id}/role`, { role: 'driver' }, PB)).status === 200 && (await call('POST', `/api/me/heists/${pl.json.id}/role`, { role: 'hacker' }, P)).status === 200, 'each member picks a part');
       { const hv = (await call('GET', '/api/me/heists', undefined, PB)).json.mine.find(h => h.id === pl.json.id);
-        ok(hv.parts.jobfill_a.role === 'driver' && hv.parts.jobfill_a.picked && hv.parts.zara_ng.role === 'hacker' && hv.roles.includes('muscle'), 'the crew sees who plays what', JSON.stringify(hv.parts)); }
-      ok(MG.assignRoles('bank', ['driver', 'driver', null]).join() === 'driver,safecracker,hacker' && MG.assignRoles('mayor', [null, null]).join() === 'lookout,muscle', 'unpicked parts are filled in order of what the job needs most');
+        ok(hv.parts.jobfill_a.role === 'driver' && hv.parts.jobfill_a.picked && hv.parts.zara_ng.role === 'hacker' && hv.roles.includes('gunner'), 'the crew sees who plays what', JSON.stringify(hv.parts)); }
+      ok(MG.assignRoles('bank', ['driver', 'driver', null]).join() === 'driver,safecracker,hacker' && MG.assignRoles('mayor', [null, null]).join() === 'lookout,gunner', 'unpicked parts are filled in order of what the job needs most');
       const go = await call('POST', `/api/me/heists/${pl.json.id}/go`, {}, P);
       ok(go.status === 200 && go.json.live && go.json.until > Date.now(), 'go: the job goes live, and the crew has a couple of minutes to play their parts', JSON.stringify(go.json));
-      ok((await call('POST', `/api/me/heists/${pl.json.id}/role`, { role: 'muscle' }, PB)).status === 409, 'no changing parts once it has started');
+      ok((await call('POST', `/api/me/heists/${pl.json.id}/role`, { role: 'gunner' }, PB)).status === 409, 'no changing parts once it has started');
       ok((await call('POST', '/api/me/crime/start', { kind: 'driver' }, P)).status === 400 && (await call('POST', '/api/me/crime/start', { kind: 'driver', practice: true }, P)).status === 200, 'heist parts can be practised any time, but only played for real on the job');
       { const lv = (await call('GET', `/api/me/heists/${pl.json.id}/live`, undefined, P)).json;
         ok(lv.status === 'live' && lv.live.myRole === 'hacker' && lv.live.crew.length === 2 && lv.live.crew.every(m => !m.done), 'everyone sees the live job: who plays what, and who has finished', JSON.stringify(lv)); }
@@ -1053,25 +1053,18 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
         ok(!(await call('GET', '/api/chat/groups', undefined, PB)).json.groups.some(g => g.id === pl.json.group), 'and a little later it leaves the list'); }
       ok((await call('POST', '/api/me/heists', { kind: 'armored', inMinutes: 10, members: ['jobfill_a'] }, PB)).status === 429 || (await whoDev('jobfill_a')).jailedUntil > Date.now(), 'and the crew lies low for a while afterwards');
       { const hv = (await call('GET', '/api/me/heists', undefined, P)).json.mine.find(h => h.id === pl.json.id); ok(hv.status === 'done' && hv.result.parts, 'the result stays on the job card'); }
-      // every part can be played well: bots for the driver, safecracker, lookout and muscle
+      // every part can be played well: bots for the driver, safecracker and lookout
       { let good = 0; for (let seed = 1; seed <= 10; seed++) { const diff = 1 + seed % 3;
           const S = MG.genSafe(seed, diff); let from = 0; const taps = []; for (const N of S.nums) { let t = from + 0.3; while (Math.abs((((MG.safeAngle(N, t - from) - N.a) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI) > S.tol * 0.5) t += 0.01; t = +t.toFixed(2); taps.push(t); from = t; }
           const Lk = MG.genLook(seed, diff), lt = Lk.pops.filter(p => p.cop).map(p => [p.s, +(p.t0 + 0.4).toFixed(2)]).sort((a, b) => a[1] - b[1]);
-          const Ms = MG.genMuscle(seed, diff), mt = Ms.guards.map(g => [g.side, +(g.t0 + 0.5 / g.sp).toFixed(2)]).sort((a, b) => a[1] - b[1]);
-          if (MG.safeReplay(S, taps, taps.at(-1) + 0.1).perf > 0.8 && MG.lookReplay(Lk, lt, Lk.limit).perf > 0.9 && MG.muscleReplay(Ms, mt, Ms.limit).perf > 0.9) good++; }
-        ok(good === 10, 'the dial, the lookout and the doors can all be played to a top score', String(good));
+          if (MG.safeReplay(S, taps, taps.at(-1) + 0.1).perf > 0.8 && MG.lookReplay(Lk, lt, Lk.limit).perf > 0.9) good++; }
+        ok(good === 10, 'the dial and the lookout can both be played to a top score', String(good));
         const Dl = MG.genDrive(7, 1); let st = MG.driveStart(); const mv = []; while (!st.done) { st = MG.driveStep(Dl, st, st.lane); } ok(st.crashes > 0 && MG.driveReplay(Dl, []).state.crashes === st.crashes, 'driving straight ahead crashes, and the server sees the same crashes');
         const spam = []; for (let t = 0.1; t < 40; t += 0.05) spam.push(+t.toFixed(2)); ok(!MG.safeReplay(MG.genSafe(3, 2), spam, 40).money, "hammering the dial sets the alarm off"); }
-      // the muscle: hold off the zombie horde
-      { let held = 0, idle = 0, valid = 0; for (let seed = 1; seed <= 8; seed++) { const Lz = MG.genHorde(seed * 31, 2); let z = MG.hordeStart(Lz); const path = [[z.x, z.y]]; let acts = '0';
-          while (!z.done) { let vx = 0, vy = 0; const pk = z.picks[0]; if (pk) { vx = pk.x - z.x; vy = pk.y - z.y; } const n = Math.hypot(vx, vy); if (n) { vx /= n; vy /= n; } const q = MG.hordeMove(Lz, z, vx, vy); z = MG.hordeStep(Lz, z, q.x, q.y, true); path.push([q.x, q.y]); acts += '1'; }
-          const rp = MG.hordeReplay(Lz, { path, acts }); if (rp.ok && rp.state.done === z.done && rp.state.kills === z.kills) valid++; if (z.done === 'held') held++;
-          let w = MG.hordeStart(Lz); while (!w.done) w = MG.hordeStep(Lz, w, w.x, w.y, false); if (w.done === 'held') idle++;
-          if (seed === 1) { const bad = path.map((p, i) => i === 40 ? [p[0] + 5, p[1]] : p); ok(!MG.hordeReplay(Lz, { path: bad, acts }).ok, "the horde: teleporting doesn't count"); } }
-        ok(valid === 8 && held >= 5 && idle === 0, 'the horde: fight back and you can hold out; stand still and they get you; the server sees exactly the same game', JSON.stringify({ valid, held, idle }));
-        const Lw = MG.genHorde(9, 3), w1 = Lw.spawns.filter(z => z.wave === 0), w4 = Lw.spawns.filter(z => z.wave === 4);
-        ok(w4.length > w1.length && Math.max(...w4.map(z => z.sp)) > Math.max(...w1.map(z => z.sp)) - 0.3 && w4[0].dmg > w1[0].dmg && Lw.picks.some(p => p.k === 'medkit') && Lw.picks.some(p => p.k === 'shotgun'), 'each wave is bigger, faster and hungrier, and weapons and first aid turn up', JSON.stringify({ n: [w1.length, w4.length], dmg: [w1[0].dmg, w4[0].dmg] }));
-        ok(MG.GAMES.muscle === 'horde' && MG.levelOf('muscle', 5, 2).spawns.length > 0, 'the muscle part is the horde now'); }
+      // the gunner (it replaced the zombie horde): the prison compound, already armed, guards coming in pairs
+      { const Lg = MG.levelOf('gunner', 31, 3), g0 = MG.breakStart(Lg); ok(Lg.shoot && g0.w === 'rifle' && g0.ammo > 0 && g0.freed && !Lg.picks.some(p => p.k === 'axe' || p.k === 'rifle') && Lg.more.length > Lg.guards.length, 'the gunner starts with a rifle, no one to free, and wave after wave of guards');
+        let w = g0; while (!w.done) w = MG.breakStep(Lg, w, w.x, w.y, false, false); ok(w.done !== 'free', 'standing still at the fence, the guards get you');
+        ok(MG.GAMES.gunner === 'breakout' && !('muscle' in Object.fromEntries(Object.entries(MG.ROLES))) && MG.ROLES.muscle === MG.ROLES.gunner && MG.levelOf('muscle', 5, 2).shoot && MG.HEIST_ROLES.armored.includes('gunner') && !Object.values(MG.HEIST_ROLES).flat().includes('muscle'), 'the muscle part is gone: the gunner takes its place (a job planned before still plays)'); }
       // the jailbreak: sneak into the compound, arm up, spring the cell, fight the guards off
       { const G = 0.5; let won = 0, valid = 0, silent = 0;
         for (let seed = 1; seed <= 6; seed++) { const Lb = MG.levelOf('breakout', seed * 7919, 2), NX = Math.ceil(Lb.W / G), NY = Math.ceil(Lb.H / G), free = (i, j) => MG.breakFits(Lb, (i + 0.5) * G, (j + 0.5) * G, 0.45);

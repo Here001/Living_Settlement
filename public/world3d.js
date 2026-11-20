@@ -984,9 +984,9 @@ export function viewCone(color = '#ffd54a') {
   m.userData.n = n; return m;
 }
 
-// ---------------- the yard behind the job (the horde) ----------------
-// A walled-in back lot at dusk: the backs of the town's own kinds of buildings all round, alleys the dead stagger in
-// from, wrecked cars, concrete barriers, crates, dumpsters and burning barrels throwing flickering light.
+// ---------------- the yard behind the job (the lookout) ----------------
+// A walled-in back lot at dusk: the backs of the town's own kinds of buildings all round, alleys people step out
+// of, wrecked cars, concrete barriers, crates, dumpsters and burning barrels throwing flickering light.
 function flameTex() { return canvasTex('flame', 128, (g, S) => { const gr = g.createRadialGradient(64, 80, 4, 64, 70, 60); gr.addColorStop(0, 'rgba(255,240,180,1)'); gr.addColorStop(0.35, 'rgba(255,150,40,.9)'); gr.addColorStop(0.7, 'rgba(200,50,10,.4)'); gr.addColorStop(1, 'rgba(120,20,0,0)'); g.fillStyle = gr; g.beginPath(); g.ellipse(64, 74, 40, 56, 0, 0, 7); g.fill(); }, { repeat: false }); }
 function smokeTex() { return canvasTex('smoke', 128, (g) => { const gr = g.createRadialGradient(64, 64, 4, 64, 64, 62); gr.addColorStop(0, 'rgba(70,70,70,.55)'); gr.addColorStop(1, 'rgba(40,40,40,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); }, { repeat: false }); }
 export function buildYard(view, L, { types = [], minute = 1065, skip = [], fogFar = 85 } = {}) {
@@ -1217,57 +1217,3 @@ export function buildCompound(view, L) {
 }
 const breakClear = (L, x, z, R) => L.obs.every(o => x + R < o.x || x - R > o.x + o.w || z + R < o.y || z - R > o.y + o.h);
 
-// The horde: every zombie drawn in a few batched calls (one per body part), animated by moving the parts. Each part
-// has its own painted texture (a rotting face with hollow eyes and an open mouth; a torn, bloodied shirt; veined skin;
-// filthy trousers) that each zombie's own colours tint, and they differ in height, slump, head tilt and limp.
-const zTex = {
-  face: () => canvasTex('zface', 256, (g, S) => { const r = rnd(61), c = S * 0.25, ey = S * 0.46; g.fillStyle = '#d6d6d0'; g.fillRect(0, 0, S, S); noise(g, 3, 1800, '60,40,30', 0.18, r);
-    for (let i = 0; i < 14; i++) { g.strokeStyle = 'rgba(70,30,60,.35)'; g.lineWidth = 1; g.beginPath(); let x = r() * S, y = r() * S; g.moveTo(x, y); for (let k = 0; k < 5; k++) { x += (r() - 0.5) * 18; y += (r() - 0.5) * 18; g.lineTo(x, y); } g.stroke(); } // veins
-    for (const sx of [-1, 1]) { const x = c + sx * 11; g.fillStyle = '#1a0d0a'; g.beginPath(); g.ellipse(x, ey, 7, 6, 0, 0, 7); g.fill(); g.fillStyle = '#e8e2a0'; g.beginPath(); g.arc(x + sx, ey, 1.8, 0, 7); g.fill(); g.fillStyle = 'rgba(90,20,20,.5)'; g.beginPath(); g.ellipse(x, ey + 8, 8, 4, 0, 0, 7); g.fill(); }
-    g.fillStyle = '#1a0806'; g.beginPath(); g.ellipse(c, ey + 24, 10, 8, 0, 0, 7); g.fill(); g.fillStyle = '#d8cfa0'; for (let k = -2; k <= 2; k++) { g.fillRect(c + k * 4 - 1, ey + 16, 3, 4); g.fillRect(c + k * 4 - 1, ey + 28, 3, 3); } // the open mouth, teeth
-    g.fillStyle = 'rgba(120,10,10,.75)'; g.beginPath(); g.moveTo(c - 6, ey + 30); g.lineTo(c + 4, ey + 30); g.lineTo(c + 2, ey + 48); g.lineTo(c - 3, ey + 44); g.fill(); // blood down the chin
-    g.fillStyle = 'rgba(110,15,15,.6)'; g.beginPath(); g.arc(c + 26 + r() * 20, ey - 14, 9, 0, 7); g.fill(); g.fillStyle = 'rgba(40,10,10,.55)'; g.beginPath(); g.arc(c + 120, ey, 14, 0, 7); g.fill(); }, { repeat: false }),
-  shirt: () => canvasTex('zshirt', 256, (g, S) => { const r = rnd(62); g.fillStyle = '#e6e2da'; g.fillRect(0, 0, S, S); for (let y = 0; y < S; y += 3) { g.fillStyle = 'rgba(0,0,0,.06)'; g.fillRect(0, y, S, 1); } noise(g, 4, 2500, '60,50,40', 0.22, r);
-    for (let i = 0; i < 7; i++) { const x = r() * S, y = r() * S, rr = 8 + r() * 22, gr = g.createRadialGradient(x, y, 1, x, y, rr); gr.addColorStop(0, 'rgba(110,8,8,.9)'); gr.addColorStop(1, 'rgba(110,8,8,0)'); g.fillStyle = gr; g.fillRect(x - rr, y - rr, rr * 2, rr * 2); } // blood
-    for (let i = 0; i < 6; i++) { g.fillStyle = 'rgba(20,12,10,.85)'; g.beginPath(); const x = r() * S, y = r() * S; g.moveTo(x, y); for (let k = 0; k < 6; k++) g.lineTo(x + (r() - 0.5) * 30, y + (r() - 0.5) * 30); g.fill(); } // rips
-    g.fillStyle = 'rgba(40,30,20,.35)'; g.fillRect(0, S * 0.85, S, S * 0.15); }),
-  skin: () => canvasTex('zskin', 128, (g, S) => { const r = rnd(63); g.fillStyle = '#d8d8d2'; g.fillRect(0, 0, S, S); noise(g, 3, 900, '60,40,40', 0.2, r);
-    for (let i = 0; i < 10; i++) { g.strokeStyle = 'rgba(80,30,70,.4)'; g.beginPath(); let x = r() * S, y = r() * S; g.moveTo(x, y); for (let k = 0; k < 4; k++) { x += (r() - 0.5) * 16; y += r() * 14; g.lineTo(x, y); } g.stroke(); }
-    for (let i = 0; i < 4; i++) { g.fillStyle = 'rgba(100,15,15,.55)'; g.beginPath(); g.arc(r() * S, r() * S, 4 + r() * 8, 0, 7); g.fill(); } }),
-  pants: () => canvasTex('zpants', 128, (g, S) => { const r = rnd(64); g.fillStyle = '#d0ccc4'; g.fillRect(0, 0, S, S); for (let x = 0; x < S; x += 2) { g.fillStyle = 'rgba(0,0,0,.07)'; g.fillRect(x, 0, 1, S); } noise(g, 4, 1200, '50,40,30', 0.25, r);
-    g.fillStyle = 'rgba(60,40,25,.45)'; g.fillRect(0, S * 0.7, S, S * 0.3); for (let i = 0; i < 3; i++) { g.fillStyle = 'rgba(20,12,8,.8)'; g.fillRect(r() * S, r() * S * 0.7, 10 + r() * 12, 6 + r() * 10); } }),
-};
-export function makeHorde(max = 90) {
-  const g = new THREE.Group(), parts = {}, dummy = new THREE.Object3D(), m4 = new THREE.Matrix4(), base = new THREE.Matrix4(), tmp = new THREE.Matrix4(), cl = new THREE.Color();
-  const mk = (geo, name, map, rough = 0.9) => { const m = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ map, roughness: rough }), max); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.count = 0; m.frustumCulled = false; g.add(m); parts[name] = m; };
-  mk(PGEO.limb, 'legL', zTex.pants()); mk(PGEO.limb, 'legR', zTex.pants()); mk(PGEO.torso, 'torso', zTex.shirt()); mk(PGEO.limb, 'armL', zTex.skin()); mk(PGEO.limb, 'armR', zTex.skin()); mk(PGEO.head, 'head', zTex.face(), 0.75);
-  mk(PGEO.hand, 'handL', zTex.skin()); mk(PGEO.hand, 'handR', zTex.skin());
-  // tints (the textures are pale, so these colours show through): sickly skin, filthy clothes
-  const SKIN = ['#6f8f58', '#7f9663', '#5f7d52', '#8a8c64', '#74787e', '#86785a'], RAGS = ['#5e4a3a', '#46566a', '#6e3632', '#5a5a44', '#7a6a54', '#3c4c3c', '#86827a', '#523852'];
-  const put = (name, i, sx, sy, sz, px, py, pz, rx, pivotY, rz = 0) => { // a part: size, where its pivot is, how far it's swung (forward, and to the side)
-    dummy.position.set(0, 0, 0); dummy.rotation.set(0, 0, 0); dummy.scale.set(sx, sy, sz); dummy.updateMatrix();
-    tmp.makeTranslation(0, -pivotY, 0); m4.copy(dummy.matrix).premultiply(tmp); tmp.makeRotationX(rx); m4.premultiply(tmp); if (rz) { tmp.makeRotationZ(rz); m4.premultiply(tmp); } tmp.makeTranslation(px, py, pz); m4.premultiply(tmp); m4.premultiply(base); parts[name].setMatrixAt(i, m4); };
-  const H = { group: g, phase: new Map(),
-    // list: [{ id, x, z, heading, speed, hurt, dead, t }]
-    update(list, dt, now) {
-      let i = 0;
-      for (const z of list) { if (i >= max) break; const ph = (this.phase.get(z.id) || 0) + dt * (2.2 + z.speed * 1.3); this.phase.set(z.id, ph);
-        const h = hashS(z.id), tall = 0.92 + ((h >>> 3) % 17) / 100, limp = 0.5 + ((h >>> 9) % 5) / 10, tilt = (((h >>> 12) % 7) - 3) * 0.09, reach = ((h >>> 15) % 5) * 0.08;
-        const fall = z.dead ? Math.min(1, z.dead) : 0; base.makeTranslation(z.x, -fall * 0.3, z.z); tmp.makeRotationY(z.heading); base.multiply(tmp); if (fall) { tmp.makeRotationX(-fall * 1.4); base.multiply(tmp); } tmp.makeScale(tall, tall, tall); base.multiply(tmp);
-        const sw = Math.sin(ph) * 0.5, lurch = Math.sin(ph * 0.5) * 0.12, sway = Math.sin(ph * 0.5) * 0.08;
-        put('legL', i, 0.17, 0.43, 0.18, -0.12, 0.88, 0, sw, 0.43); put('legR', i, 0.17, 0.43, 0.18, 0.12, 0.88, 0, -sw * limp, 0.43);
-        put('torso', i, 0.5, 0.37, 0.28, 0, 1.2 + lurch * 0.2, 0.06, 0.32 + lurch, 0, sway);
-        const aL = -1.3 - reach + sw * 0.3, aR = -1.45 + reach * 0.5 - sw * 0.3;
-        put('armL', i, 0.12, 0.33, 0.12, -0.31, 1.45, 0.1, aL, 0.33, -0.08); put('armR', i, 0.12, 0.33, 0.12, 0.31, 1.45, 0.1, aR, 0.33, 0.08);
-        put('handL', i, 0.065, 0.075, 0.055, -0.31, 1.45, 0.1, aL, 0.7, -0.08); put('handR', i, 0.065, 0.075, 0.055, 0.31, 1.45, 0.1, aR, 0.7, 0.08);
-        put('head', i, 0.15, 0.18, 0.16, Math.sin(ph * 0.7) * 0.05, 1.7, 0.16, 0.35, 0, tilt + Math.sin(ph * 0.35) * 0.08);
-        const skin = z.hurt > 0 ? '#ffffff' : SKIN[h % SKIN.length], rag = z.hurt > 0 ? '#ff8a8a' : RAGS[(h >>> 4) % RAGS.length];
-        for (const p of ['legL', 'legR']) parts[p].setColorAt(i, cl.set(RAGS[(h >>> 8) % RAGS.length])); parts.torso.setColorAt(i, cl.set(rag)); for (const p of ['armL', 'armR', 'head', 'handL', 'handR']) parts[p].setColorAt(i, cl.set(skin));
-        i++; }
-      for (const p of Object.values(parts)) { p.count = i; p.instanceMatrix.needsUpdate = true; if (p.instanceColor) p.instanceColor.needsUpdate = true; }
-    } };
-  return H;
-}
-// Simple markers on the ground (splats where the dead fall), drawn in one batch.
-export function makeSplats(max = 120) { const m = new THREE.InstancedMesh(new THREE.CircleGeometry(0.7, 12), new THREE.MeshBasicMaterial({ color: '#3a1a12', transparent: true, opacity: 0.75, depthWrite: false }), max); m.count = 0; m.renderOrder = 2; const d = new THREE.Object3D(); let n = 0;
-  return { mesh: m, add(x, z, s = 1) { d.position.set(x, 0.035, z); d.rotation.set(-Math.PI / 2, 0, Math.random() * 6); d.scale.setScalar(s * (0.7 + Math.random() * 0.6)); d.updateMatrix(); m.setMatrixAt(n % max, d.matrix); n++; m.count = Math.min(max, n); m.instanceMatrix.needsUpdate = true; } }; }

@@ -18,13 +18,14 @@ const INFO = {
   hacker: { icon: '💻', name: 'Hacker: the security panel', how: ['Rewire the panel: tap a wire, then the socket with that colour\'s symbol on the service card.', 'Then watch the keypad flash a code and tap it back.', 'Wrong moves make the alarm jump. If the alarm fills, the sirens go off.'] },
   safecracker: { icon: '🔐', name: 'Safecracker: the dial', how: ['The dial spins by itself. Tap when the pointer is on the green number to lock it in.', 'Then the next number, spinning the other way, until the safe opens.', 'A tap off the number makes a noise. Five noises and the alarm goes.'] },
   lookout: { icon: '👀', name: 'Lookout: spot the police', how: ['Watch the doorways and alleys round the yard. People keep stepping out: tap the police (in uniform, or plain clothes with dark glasses) before they slip away.', 'Don\'t tap ordinary people: a false alarm adds heat. So does every officer you miss.', 'Keep watch until the time is up. Full heat and the job is blown.'] },
-  muscle: { icon: '💪', name: 'Muscle: hold off the horde', how: ['The dead are pouring into the yard while the crew works. Stay alive until the clock runs out.', 'Move with your left thumb (drag anywhere). Hold the red button on the right to fight: a bat to start with, and guns aim themselves at the nearest zombie.', 'Pistols, shotguns, rifles and first-aid kits turn up on the ground: walk over them to pick them up. Every wave is bigger, faster and hungrier.'] },
+  gunner: { icon: '🎯', name: 'Gunner: hold the yard', how: ['While the crew does the job, the guards come for them. You\'re in the compound with a rifle: put every guard down before they get through.', 'The rifle aims itself at the nearest guard you can see. Hold the red button to fire. Ammo and first aid are lying about.', 'They come in pairs through the gate and out of the cell block. Use cover (sheds, trailers, tanks), and tap Crouch to make yourself a smaller target.', 'Move with your left thumb; drag on the right to look round.'] },
   breakout: { icon: '⛓️', name: 'Breakout: spring the prisoner', how: ['Slip through the gap in the fence into the compound. Guards are on their rounds: the yellow cones on the ground are what they can see.', 'Tap Crouch to creep: they see you less, and not at all behind low cover (barrels, tanks, sandbags, boats). Creep up behind a guard who hasn\'t noticed you and the red button (🤫) takes them down without a sound.', 'Pick up the axe by the fence, then the rifle in the yard (it aims itself, but everyone hears it). Hold the red button at the prisoner\'s cell to spring the lock.', 'The alarm brings more guards. Put every one of them down to win. Move with your left thumb; drag on the right to look round.'] },
 };
 const ROLE = k => !!MG.ROLES[k];
 
 // The game's frame: the intro, the countdown, the game, and the result.
 export function openCrimeGame(kind, info, ctx) {
+  if (kind === 'muscle') kind = 'gunner'; /* (a job planned before the muscle part went) */
   X = ctx; close(); document.body.classList.add('mg-on');
   const root = $c('div', { class: 'mg', role: 'dialog', 'aria-label': INFO[kind].name }); document.body.append(root);
   intro(root, kind, info || {});
@@ -34,11 +35,11 @@ function close() { const r = document.querySelector('.mg'); if (r) { r._stop && 
 // The page before a game, kept short: a banner in the game's colours, three numbers (how hard, your chance, what it
 // pays), a one-line tip, the steps folded away under "How to play", and the buttons. Practising is offered the first time you open each game
 // (practice-only openings always show it); after that it's straight to the real thing.
-const HUE = { rob: ['#E4572E', '#F2994A'], scam: ['#8E5BD9', '#D97BC8'], atm: ['#2F80ED', '#56CCF2'], driver: ['#E2A23B', '#F2C94C'], hacker: ['#219653', '#6FCF97'], safecracker: ['#5E6670', '#A9B0B8'], lookout: ['#2F4A7A', '#4A7BD9'], muscle: ['#A3271F', '#E4572E'], breakout: ['#C0712E', '#E2A23B'] };
+const HUE = { rob: ['#E4572E', '#F2994A'], scam: ['#8E5BD9', '#D97BC8'], atm: ['#2F80ED', '#56CCF2'], driver: ['#E2A23B', '#F2C94C'], hacker: ['#219653', '#6FCF97'], safecracker: ['#5E6670', '#A9B0B8'], lookout: ['#2F4A7A', '#4A7BD9'], gunner: ['#A3271F', '#E4572E'], breakout: ['#C0712E', '#E2A23B'] };
 // one line to get going; the full steps sit folded away under "How to play"
 const TIP = { rob: 'Sneak to the till, grab the cash, get out unseen.', scam: 'Answer what the tourist asks, then tap “Say it” in the green.', atm: 'Match each wire to its symbol, then tap back the code.',
   driver: 'Tap left or right to dodge the traffic.', hacker: 'Match each wire to its symbol, then tap back the code.', safecracker: 'Tap when the pointer is on the green number.',
-  lookout: 'Tap the police. Leave everyone else alone.', muscle: 'Drag to move, hold the red button to fight. Stay alive.', breakout: 'Crouch and creep up on guards to take them down quietly. Free the prisoner, then fight your way out.' };
+  lookout: 'Tap the police. Leave everyone else alone.', gunner: 'Hold the red button to fire. Take down every guard.', breakout: 'Crouch and creep up on guards to take them down quietly. Free the prisoner, then fight your way out.' };
 const triedKey = k => 'mg-tried-' + k;
 const tried = k => { try { return !!localStorage.getItem(triedKey(k)); } catch (e) { return false; } };
 const markTried = k => { try { localStorage.setItem(triedKey(k), '1'); } catch (e) {} };
@@ -82,7 +83,7 @@ function play(root, kind, L, run, info) {
     result(root, kind, info, run, r); if (!run.practice) X.done && X.done(r); };
   const g = MG.GAMES[kind];
   if (g === 'stealth') stealth(root, L, finish); else if (g === 'con') con(root, L, finish); else if (g === 'atm') atm(root, L, finish, kind);
-  else if (g === 'drive') drive(root, L, finish); else if (g === 'safe') safe(root, L, finish); else if (g === 'lookout') lookout(root, L, finish); else if (g === 'horde') horde(root, L, finish); else if (g === 'breakout') breakout(root, L, finish); else muscle(root, L, finish);
+  else if (g === 'drive') drive(root, L, finish); else if (g === 'safe') safe(root, L, finish); else if (g === 'lookout') lookout(root, L, finish); else if (g === 'breakout') breakout(root, L, finish);
 }
 // After your part in a heist: your score, then the crew as they finish, then how the job went.
 function heistWait(root, kind, info, r) {
@@ -604,113 +605,6 @@ function lookout2d(root, L, finish) {
 }
 
 // ---------------- Hold the doors ----------------
-function muscle(root, L, finish) {
-  const C = canvasFor(root), door = meter('trust', '🚪'), clock = $c('b', { class: 'mgclock' }), info = $c('div', { class: 'mggoal', text: '💪 0 shoved' });
-  root.append(hud(door, clock), info, $c('div', { class: 'mgjoyhint', text: 'Tap the left or right side to shove' }));
-  const taps = [], t0 = performance.now(); let ended = false, ev = { shoved: 0, through: 0, lost: null, shovedSet: new Map() }, hitFx = [], lastThrough = 0;
-  const shove = side => { if (ended) return; const t = +((performance.now() - t0) / 1000).toFixed(2); taps.push([side, t]); const before = ev.shoved; ev = MG.muscleEval(L, taps, t) || ev; if (ev.shoved > before) { buzz(25); hitFx.push({ side, at: performance.now() }); } else buzz(8); };
-  C.cv.addEventListener('pointerdown', e => shove(e.clientX < C.W / 2 ? 0 : 1)); keyHook(root, e => { if (e.key === 'ArrowLeft' || e.key === 'a') shove(0); else if (e.key === 'ArrowRight' || e.key === 'd') shove(1); else return false; });
-  const SK = ['#8D5524', '#C68642', '#E0AC69', '#5C3A21'];
-  loop(root, () => {
-    const t = (performance.now() - t0) / 1000, { g, W, H, dpr } = C; ev = MG.muscleEval(L, taps, t) || ev;
-    if (ev.through > lastThrough) { lastThrough = ev.through; buzz(250); feedback('medium', { root, sound: 'hurt', color: '255,40,40' }); }
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const fy = H * 0.62, cx = W / 2, half = W / 2 - 20, dw = Math.min(90, W * 0.2), s = Math.min(1.4, W / 400);
-    g.fillStyle = '#3B342C'; g.fillRect(0, 0, W, H); g.fillStyle = '#7A6A5A'; g.fillRect(0, fy, W, H - fy); // wall and floor
-    g.fillStyle = '#6E5E4E'; for (let x = 0; x < W; x += 48) g.fillRect(x, fy, 2, H - fy);
-    g.fillStyle = 'rgba(255,75,58,.35)'; g.fillRect(cx - dw / 2 - half * MG.MUSCLE.reach, fy, half * MG.MUSCLE.reach, 14); g.fillRect(cx + dw / 2, fy, half * MG.MUSCLE.reach, 14);
-    // the doors (cracks as guards get through)
-    g.fillStyle = '#8A5A33'; g.fillRect(cx - dw / 2, fy - dw * 1.7, dw, dw * 1.7); g.strokeStyle = '#2B2621'; g.lineWidth = 3; g.strokeRect(cx - dw / 2, fy - dw * 1.7, dw, dw * 1.7); g.beginPath(); g.moveTo(cx, fy - dw * 1.7); g.lineTo(cx, fy); g.stroke();
-    g.strokeStyle = '#1B1612'; g.lineWidth = 2; for (let i = 0; i < ev.through; i++) { g.beginPath(); g.moveTo(cx - dw * 0.3 + i * 12, fy - dw * (1.4 - i * 0.3)); g.lineTo(cx - dw * 0.1 + i * 10, fy - dw * (1.1 - i * 0.3)); g.lineTo(cx + dw * 0.2, fy - dw * (1.2 - i * 0.3)); g.stroke(); }
-    // me, in front of the doors
-    const me = (x, col) => { g.fillStyle = col; rr(g, x - 16 * s, fy - 62 * s, 32 * s, 40 * s, 8 * s); g.fill(); g.strokeStyle = '#2B2621'; g.lineWidth = 2; g.stroke(); g.fillStyle = '#7A4E2D'; g.beginPath(); g.arc(x, fy - 72 * s, 11 * s, 0, 7); g.fill(); g.stroke(); g.fillStyle = '#2B2621'; g.fillRect(x - 12 * s, fy - 22 * s, 9 * s, 22 * s); g.fillRect(x + 3 * s, fy - 22 * s, 9 * s, 22 * s); };
-    me(cx, '#2E3440');
-    // guards
-    L.guards.forEach((gd, i) => { if (gd.t0 > t) return; const sh = ev.shovedSet.get(i); let p = MG.guardPos(gd, t), a = 1;
-      if (sh != null && sh <= t) { const k = t - sh; if (k > 0.5) return; p = MG.guardPos(gd, sh) + k * 2.2; a = 1 - k * 2; } else if (p <= 0) return;
-      const x = gd.side ? cx + dw / 2 + p * half : cx - dw / 2 - p * half; g.globalAlpha = Math.max(0, a);
-      g.fillStyle = '#2F4A7A'; rr(g, x - 14 * s, fy - 58 * s, 28 * s, 36 * s, 7 * s); g.fill(); g.strokeStyle = '#2B2621'; g.lineWidth = 2; g.stroke();
-      g.fillStyle = SK[gd.look % SK.length]; g.beginPath(); g.arc(x, fy - 68 * s, 10 * s, 0, 7); g.fill(); g.stroke(); g.fillStyle = '#1E2A44'; g.fillRect(x - 11 * s, fy - 80 * s, 22 * s, 6 * s);
-      const leg = Math.sin(t * 14 + i) * 5 * s; g.fillStyle = '#2B2621'; g.fillRect(x - 9 * s + leg, fy - 22 * s, 7 * s, 22 * s); g.fillRect(x + 2 * s - leg, fy - 22 * s, 7 * s, 22 * s); g.globalAlpha = 1; });
-    hitFx = hitFx.filter(f => performance.now() - f.at < 300); for (const f of hitFx) { const k = (performance.now() - f.at) / 300; g.fillStyle = `rgba(242,201,76,${1 - k})`; g.font = `900 ${28 + k * 20}px system-ui`; g.textAlign = 'center'; g.fillText('POW!', f.side ? cx + dw + 40 : cx - dw - 40, fy - 100 * s - k * 30); }
-    door.set(1 - ev.through / MG.MUSCLE.breaches); door.classList.toggle('hot', ev.through >= MG.MUSCLE.breaches - 1); const it = `💪 ${ev.shoved} shoved`; if (info.textContent !== it) info.textContent = it; clock.textContent = `${Math.max(0, Math.ceil(L.limit - t))}s`;
-    if (!ended && (ev.lost != null || t >= L.limit)) { ended = true; C.off(); if (ev.lost != null) { root.classList.add('siren'); buzz(500); } setTimeout(() => finish({ taps, time: Math.min(+t.toFixed(2), L.limit) }), 700); }
-  });
-  const stop = root._stop; root._stop = () => { stop && stop(); C.off(); };
-}
-
-// ---------------- Hold off the horde (muscle) ----------------
-async function horde(root, L, finish) {
-  const loading = $c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'They\'re coming…' })); root.append(loading);
-  let W; try { W = await load3d(); } catch (e) { loading.remove(); X.toast('Your phone could not load the 3D view.'); return finish({ path: [[L.start.x, L.start.y], [L.start.x, L.start.y]], acts: '00' }); }
-  loading.remove(); if (!root.isConnected) return;
-  const cv = $c('canvas', { class: 'mgcanvas' }), hp = meter('trust', '❤️'), clock = $c('b', { class: 'mgclock' }), wpn = $c('b', { class: 'acount' }), waveB = $c('div', { class: 'abig' }), stick = $c('div', { class: 'astick' }, $c('i'));
-  const fire = $c('button', { class: 'zfire', 'aria-label': 'Fight' }, $c('span', { text: '🏏' })), feed = $c('div', { class: 'afeed' });
-  root.append(cv, hud(hp, wpn, clock), feed, waveB, stick, fire);
-  const view = W.createView(cv), THREE = W.THREE; view.resize(); W.buildYard(view, L, { types: X.townTypes ? X.townTypes() : [] });
-  const ro = new ResizeObserver(() => view.resize()); ro.observe(root);
-  const me = W.makePerson('muscle' + L.seed, 'civilian', X.lookOf ? X.lookOf(X.me && X.me()) : null); view.scene.add(me.group);
-  const weapon = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.9), new THREE.MeshStandardMaterial({ color: '#8a5a33', roughness: 0.6 })); weapon.position.set(0.32, 0.85, 0.35); me.group.add(weapon);
-  const flash = new THREE.PointLight('#ffd27a', 0, 9, 2); flash.position.set(0, 1.3, 0.6); me.group.add(flash);
-  const horde = W.makeHorde(90); view.scene.add(horde.group); const splats = W.makeSplats(140); view.scene.add(splats.mesh);
-  const tracerMat = new THREE.LineBasicMaterial({ color: '#ffe9a8', transparent: true, opacity: 0.9 }); const tracers = [];
-  const PCOL = { pistol: '#2b2f33', shotgun: '#5a3a2a', rifle: '#3a4a3a', medkit: '#f4f4f0' };
-  const pickMeshes = new Map(); const pickMesh = p => { const g = new THREE.Group(); const b = new THREE.Mesh(p.k === 'medkit' ? new THREE.BoxGeometry(0.6, 0.35, 0.45) : new THREE.BoxGeometry(p.k === 'pistol' ? 0.5 : 1.1, 0.16, 0.22), new THREE.MeshStandardMaterial({ color: PCOL[p.k], metalness: p.k === 'medkit' ? 0 : 0.6, roughness: 0.4 })); b.position.y = 0.9; g.add(b);
-    if (p.k === 'medkit') { const c1 = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.37, 0.1), new THREE.MeshBasicMaterial({ color: '#d62828' })), c2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.37, 0.34), new THREE.MeshBasicMaterial({ color: '#d62828' })); c1.position.y = c2.position.y = 0.9; g.add(c1, c2); }
-    const halo = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.85, 28), new THREE.MeshBasicMaterial({ color: p.k === 'medkit' ? '#7cffb2' : '#ffd54a', side: THREE.DoubleSide, transparent: true, opacity: 0.8 })); halo.rotation.x = -Math.PI / 2; halo.position.y = 0.05; g.add(halo);
-    const tag = W.nameTag(`${MG.WEAPONS[p.k].icon} ${MG.WEAPONS[p.k].name}`, '#ffe9a8'); tag.position.y = 1.7; tag.scale.set(2, 0.5, 1); g.add(tag); g.position.set(p.x, 0, p.y); view.scene.add(g); return g; };
-  // controls: the left thumb moves (a stick appears under it), the red button fights (hold it)
-  let joy = null, act = false; const keys = new Set();
-  cv.addEventListener('pointerdown', e => { joy = { x: e.clientX, y: e.clientY, dx: 0, dy: 0, id: e.pointerId }; try { cv.setPointerCapture(e.pointerId); } catch (er) {} stick.style.cssText = `display:block;left:${e.clientX}px;top:${e.clientY}px`; stick.firstChild.style.transform = 'translate(-50%,-50%)'; });
-  cv.addEventListener('pointermove', e => { if (!joy || e.pointerId !== joy.id) return; let dx = e.clientX - joy.x, dy = e.clientY - joy.y; const d = Math.hypot(dx, dy); if (d > 55) { dx *= 55 / d; dy *= 55 / d; } joy.dx = dx; joy.dy = dy; stick.firstChild.style.transform = `translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px))`; });
-  const up = e => { if (joy && e.pointerId === joy.id) { joy = null; stick.style.display = 'none'; } }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-  fire.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); act = true; fire.classList.add('on'); try { fire.setPointerCapture(e.pointerId); } catch (er) {} });
-  const off = () => { act = false; fire.classList.remove('on'); }; fire.addEventListener('pointerup', off); fire.addEventListener('pointercancel', off); fire.addEventListener('lostpointercapture', off);
-  const kd = e => { keys.add(e.key); if (e.key === ' ') { act = true; e.preventDefault(); } if (e.key.startsWith('Arrow')) e.preventDefault(); }, ku = e => { keys.delete(e.key); if (e.key === ' ') act = false; }; addEventListener('keydown', kd); addEventListener('keyup', ku);
-  const yaw = Math.PI / 4;
-  const input = () => { let sx = 0, sy = 0; if (joy && Math.hypot(joy.dx, joy.dy) > 6) { sx = joy.dx / 55; sy = joy.dy / 55; }
-    if (keys.has('ArrowUp') || keys.has('w')) sy -= 1; if (keys.has('ArrowDown') || keys.has('s')) sy += 1; if (keys.has('ArrowLeft') || keys.has('a')) sx -= 1; if (keys.has('ArrowRight') || keys.has('d')) sx += 1;
-    const c = Math.cos(yaw), sn = Math.sin(yaw); let vx = sx * c + sy * sn, vy = -sx * sn + sy * c; const n = Math.hypot(vx, vy); return n > 1 ? [vx / n, vy / n] : [vx, vy]; };
-  // the world moves in fixed steps (the server replays the same steps); the picture is drawn in between
-  let s = MG.hordeStart(L), prev = s, acc = 0, ended = false, lastWave = -1, deadAt = new Map(), lastHp = s.hp, lastW = 'bat';
-  const path = [[s.x, s.y]]; let acts = '0';
-  const look = new THREE.Vector3(s.x, 0, s.y); const camDist = 15, camH = 19;
-  view.start((dt, now) => {
-    if (!ended) { acc += dt; while (acc >= MG.STEP && !s.done) { acc -= MG.STEP; prev = s; const [vx, vy] = input(), q = MG.hordeMove(L, s, vx, vy); s = MG.hordeStep(L, s, q.x, q.y, act); path.push([q.x, q.y]); acts += act ? '1' : '0';
-        for (const sh of s.shots) { const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(q.x, 1.3, q.y), new THREE.Vector3(sh[0], 1.1, sh[1])]); const ln = new THREE.Line(g, tracerMat); view.scene.add(ln); tracers.push({ ln, t: now }); }
-        if (s.shots.length) { flash.intensity = s.w === 'bat' && prev.w === 'bat' ? 0 : 30; buzz(s.w === 'bat' ? 15 : 8); me.body.rotation.y = 0; sfx(s.w === 'bat' ? 'swing' : s.w === 'shotgun' ? 'blast' : 'shot'); if (s.w === 'shotgun') shake(view, 0.14); }
-        if (s.kills > prev.kills) { sfx('splat'); shake(view, 0.06 * (s.kills - prev.kills)); }
-        if (s.hp > prev.hp + 0.5) feedback('medium', { view, root, sound: 'heal', text: '+❤️ Patched up', at: screenOf(view, q.x, 2.2, q.y), kind: 'good', color: '80,220,120', flash: 0.1, shake: false });
-        if (s.w !== prev.w && s.w !== 'bat') feedback('small', { view, root, sound: 'pickup', text: `${MG.WEAPONS[s.w].icon} ${MG.WEAPONS[s.w].name}!`, at: screenOf(view, q.x, 2.2, q.y), kind: 'gold' }); } }
-    const u = s.done ? 1 : Math.min(1, acc / MG.STEP), px = prev.x + (s.x - prev.x) * u, py = prev.y + (s.y - prev.y) * u;
-    me.setPos(px, py); me.animate(dt, (s.x - prev.x) / MG.STEP, (s.y - prev.y) / MG.STEP); if (Math.hypot(s.x - prev.x, s.y - prev.y) < 0.01) me.group.rotation.y = Math.atan2(s.fx, s.fy);
-    flash.intensity *= 0.6;
-    // the zombies, in between their steps
-    const pz = new Map(prev.z.map(z => [z.id, z])), list = [];
-    for (const z of s.z) { const a = pz.get(z.id) || z, x = a.x + (z.x - a.x) * u, y = a.y + (z.y - a.y) * u;
-      if (z.dead && !deadAt.has(z.id)) { deadAt.set(z.id, now); splats.add(x, y, 1.2); }
-      list.push({ id: z.id, x, z: y, heading: Math.atan2(s.x - x, s.y - y), speed: z.dead ? 0 : z.sp, hurt: z.hurt, dead: z.dead ? Math.min(1, (now - (deadAt.get(z.id) || now)) / 300) : 0 }); }
-    for (const [id, t0] of deadAt) if (now - t0 < 900 && !s.z.some(z => z.id === id)) { /* fallen, already gone */ }
-    horde.update(list, dt, now);
-    // things on the ground
-    const seenP = new Set(); for (const p of s.picks) { const key = p.t + ':' + p.k; seenP.add(key); if (!pickMeshes.has(key)) pickMeshes.set(key, pickMesh(p)); const g = pickMeshes.get(key); g.children[0].rotation.y = now / 400; g.children[0].position.y = 0.9 + Math.sin(now / 250) * 0.1; }
-    for (const [k, g] of pickMeshes) if (!seenP.has(k)) { view.scene.remove(g); pickMeshes.delete(k); }
-    for (let i = tracers.length - 1; i >= 0; i--) if (now - tracers[i].t > 70) { view.scene.remove(tracers[i].ln); tracers[i].ln.geometry.dispose(); tracers.splice(i, 1); }
-    view.animateYard && view.animateYard(now);
-    // the camera follows from above and behind, and shakes when you get bitten
-    look.lerp(new THREE.Vector3(px, 0, py), Math.min(1, dt * 7)); 
-    view.camera.position.set(look.x + Math.sin(yaw) * camDist, camH, look.z + Math.cos(yaw) * camDist); view.camera.lookAt(look.x, 1, look.z); view.cut.A.value.set(px, 1, py); view.cut.B.value.copy(view.camera.position); view.cut.R.value = 7;
-    // the HUD
-    hp.set(s.hp / MG.HORDE.hp); hp.classList.toggle('hot', s.hp < 35); if (s.hp < lastHp - 0.5) { root.classList.add('hurt'); setTimeout(() => root.classList.remove('hurt'), 120); feedback('medium', { view, sound: 'hurt', shakeBy: Math.min(0.4, 0.12 + (lastHp - s.hp) * 0.02) }); } lastHp = s.hp;
-    const W0 = MG.WEAPONS[s.w], wt = `${W0.icon} ${W0.name}${s.ammo !== Infinity ? ` · ${s.ammo}` : ''} · 🧟 ${s.kills}`; if (wpn.textContent !== wt) wpn.textContent = wt;
-    if (s.w !== lastW) { fire.firstChild.textContent = W0.icon; weapon.scale.set(s.w === 'bat' ? 1 : 1.2, s.w === 'bat' ? 1 : 1.6, s.w === 'pistol' ? 0.45 : s.w === 'bat' ? 1 : 1.1); weapon.material.color.set(s.w === 'bat' ? '#8a5a33' : '#2b2f33'); if (s.w !== 'bat') say2(feed, `Picked up a ${W0.name.toLowerCase()}!`); lastW = s.w; }
-    clock.textContent = `${Math.max(0, Math.ceil(L.limit - s.t))}s`;
-    const wave = Math.floor(s.t / 9); if (wave !== lastWave) { lastWave = wave; waveB.textContent = wave ? `Wave ${wave + 1}` : 'Hold them off!'; waveB.hidden = false; setTimeout(() => { waveB.hidden = true; }, 1600); bump(waveB); if (wave) { buzz([40, 40, 40]); feedback('medium', { view, sound: 'wave' }); } }
-    if (s.done && !ended) { ended = true; off(); if (s.done === 'down') { root.classList.add('siren'); buzz(500); feedback('large', { view, root, sound: 'lose', color: '255,30,30' }); waveB.textContent = 'You went down!'; waveB.hidden = false; } else { waveB.textContent = 'You held them off!'; waveB.hidden = false; }
-      setTimeout(() => finish({ path, acts }), 1200); }
-  });
-  const stop = root._stop; root._stop = () => { stop && stop(); view.dispose(); ro.disconnect(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); };
-}
 function say2(feed, text) { const line = $c('div', { class: 'aline', text }); feed.prepend(line); setTimeout(() => line.remove(), 2500); while (feed.children.length > 3) feed.lastChild.remove(); }
 
 // ---------------- Breakout (the jailbreak), in 3D ----------------
@@ -745,12 +639,12 @@ async function breakout(root, L, finish) {
   const zd = (L.obs.find(o => o.k === 'block') || { y: 3.5, h: 7.5 }), doorZ = zd.y + zd.h;
   const inmate = W.makePerson('inmate' + L.seed, 'civilian'); const orange = new THREE.MeshStandardMaterial({ color: '#f0791c', roughness: 0.9 });
   inmate.group.traverse(o => { if (o.isMesh && o.material && o.material.roughness === 0.92) o.material = orange; }); view.scene.add(inmate.group);
-  let ix = L.door.x, iy = doorZ - 0.9; inmate.setPos(ix, iy); me.setPos(L.entry.x, L.entry.y); me.animate(0.1, 0, -5); me.animate(0.1, 0, -5); /* (facing into the compound from the start) */
+  let ix = L.door.x, iy = doorZ - 0.9; inmate.setPos(ix, iy); inmate.group.visible = !L.shoot; /* (the gunner has no one to free) */ me.setPos(L.entry.x, L.entry.y); me.animate(0.1, 0, -5); me.animate(0.1, 0, -5); /* (facing into the compound from the start) */
   const sprite = (txt, bg, fg) => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = bg; g.beginPath(); g.arc(32, 32, 28, 0, 7); g.fill(); g.strokeStyle = '#2B2621'; g.lineWidth = 4; g.stroke(); g.fillStyle = fg; g.font = '900 40px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 32, 35);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true }); };
   const SUS = sprite('?', '#F2C94C', '#2B2621'), ALERT = sprite('!', '#E4572E', '#ffffff'), MARK = sprite('⛓', '#F2C94C', '#2B2621');
-  const mark = new THREE.Sprite(MARK); mark.scale.set(0.9, 0.9, 1); mark.renderOrder = 11; mark.position.set(L.door.x, 3.2, doorZ + 0.4); view.scene.add(mark);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(1.2, 1.45, 32), new THREE.MeshBasicMaterial({ color: '#F2C94C', transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; ring.position.set(L.door.x, 0.06, L.door.y); view.scene.add(ring);
+  const mark = new THREE.Sprite(MARK); mark.scale.set(0.9, 0.9, 1); mark.renderOrder = 11; mark.position.set(L.door.x, 3.2, doorZ + 0.4); mark.visible = !L.shoot; view.scene.add(mark);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.2, 1.45, 32), new THREE.MeshBasicMaterial({ color: '#F2C94C', transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; ring.position.set(L.door.x, 0.06, L.door.y); ring.visible = !L.shoot; view.scene.add(ring);
   // the guards: made as they appear (the alarm brings more), each with a rifle, a "?"/"!" over the head and a faint view cone
   const G = new Map(); const guardOf = g => { let q = G.get(g.id); if (q) return q; const p = W.makePerson('guard' + L.seed + ':' + g.id, 'hunter'); const rf = rifleMesh(); rf.position.set(...handAt(p)); rf.rotation.x = 0.9; hand(p).add(rf); view.scene.add(p.group);
     const icon = new THREE.Sprite(SUS); icon.scale.set(0.55, 0.55, 1); icon.renderOrder = 11; icon.position.y = 2.35; icon.visible = false; p.group.add(icon);
@@ -793,10 +687,11 @@ async function breakout(root, L, finish) {
   // how far back the camera can sit before something tall is in the way (so it never ends up inside a shed)
   const camRoom = (x, z, dx, dz, want) => { let d = 0.6; for (; d < want; d += 0.25) { const px = x + dx * d, pz = z + dz * d; if (L.obs.some(o => o.tall && o.k !== 'fence' && px > o.x - 0.2 && px < o.x + o.w + 0.2 && pz > o.y - 0.2 && pz < o.y + o.h + 0.2)) return Math.max(1.2, d - 0.35); } return want; };
   const objective = () => { const live = s.g.filter(g => !g.dead).length;
+    if (L.shoot) return s.next < L.more.length || live ? `🎯 Hold the yard: ${live + (L.more.length - s.next)} guards left` : '🏁 Yard held!';
     if (!s.freed) return s.w === 'fists' && s.picks.some(p => p.k === 'axe') ? '🪓 Find the axe near the fence' : s.w !== 'rifle' && s.picks.some(p => p.k === 'rifle') ? '🎯 Find the rifle in the yard' : `⛓️ Get to the cell (number ${L.cell + 1}) and spring the lock`;
     return s.next < L.more.length || live ? `🎯 Take out the guards: ${live + (L.more.length - s.next)} left` : '🏃 You did it!'; };
   const say = t => { const line = $c('div', { class: 'aline', text: t }); feed.prepend(line); setTimeout(() => line.remove(), 2600); while (feed.children.length > 2) feed.lastChild.remove(); };
-  say('Slip through the gap in the fence. Crouch to stay out of sight.');
+  say(L.shoot ? 'The crew is counting on you. Take down every guard.' : 'Slip through the gap in the fence. Crouch to stay out of sight.');
   if (location.hostname === 'localhost') window.__bx = { get s() { return s; }, view, L, T: TEST };
   view.start((dt, now) => {
     if (!ended) { acc += dt; while (acc >= MG.STEP && !s.done) { acc -= MG.STEP; prev = s; const [vx, vy] = input(), q = MG.breakMove(L, s, vx, vy, crouch); s = MG.breakStep(L, s, q.x, q.y, act, crouch); path.push([q.x, q.y]); acts += act ? '1' : '0'; crl += crouch ? 'c' : '0';
@@ -835,7 +730,8 @@ async function breakout(root, L, finish) {
         for (let i = 0; i <= n; i++) { const an = base - half + (2 * half) * i / n, dx = Math.cos(an), dy = Math.sin(an); let d = 0.5; for (; d < R; d += 0.5) { if (!MG.breakSees(L, { x, y }, { x: x + dx * d, y: y + dy * d }, crouch)) break; } pts.push([x + dx * Math.min(d, R), y + dy * Math.min(d, R)]); }
         q.pts = pts; q.cone.userData.set(pts, 0.05); } }
     // the prisoner: gripping the bars, then out and after you
-    if (s.freed) { C.door.rotation.y += (-2.85 - C.door.rotation.y) * Math.min(1, dt * 3); mark.visible = false; ring.visible = false;
+    if (L.shoot) { /* no prisoner */ }
+    else if (s.freed) { C.door.rotation.y += (-2.85 - C.door.rotation.y) * Math.min(1, dt * 3); mark.visible = false; ring.visible = false;
       const rxs = Math.cos(yaw), rzs = -Math.sin(yaw), tx = px - rxs * 1.3 - Math.sin(yaw) * -0.4, ty = py - rzs * 1.3 - Math.cos(yaw) * -0.4, /* (at your left shoulder, not between you and the camera) */ dx = tx - ix, dy = ty - iy, d = Math.hypot(dx, dy); let vx = 0, vy = 0;
       if (d > 0.6) { const sp = Math.min(4.8, d * 2.2) * dt; vx = dx / d * sp; vy = dy / d * sp; if (MG.breakFits(L, ix + vx, iy, 0.3)) ix += vx; else vx = 0; if (MG.breakFits(L, ix, iy + vy, 0.3) || iy + vy > doorZ - 1.6 && iy + vy < doorZ + 0.6) iy += vy; else vy = 0; }
       inmate.setPos(ix, iy); inmate.animate(dt, vx / Math.max(dt, 1e-3), vy / Math.max(dt, 1e-3)); }
@@ -864,13 +760,13 @@ async function breakout(root, L, finish) {
       mg.translate(S0 / 2, S0 / 2); mg.rotate(yaw); mg.scale(1.6, 1.6); mg.translate(-px * k, -py * k); mg.drawImage(mapBase, 0, 0);
       const dot = (x, y, c, r) => { mg.fillStyle = c; mg.beginPath(); mg.arc(x * k, y * k, r, 0, 7); mg.fill(); };
       for (const p of s.picks) dot(p.x, p.y, p.k === 'medkit' ? '#7cffb2' : '#ffd54a', 4);
-      if (!s.freed) dot(L.door.x, L.door.y, '#F2C94C', 6); else dot(ix, iy, '#f0791c', 4);
+      if (L.shoot) { /* no cell to reach */ } else if (!s.freed) dot(L.door.x, L.door.y, '#F2C94C', 6); else dot(ix, iy, '#f0791c', 4);
       for (const g of s.g) if (!g.dead) dot(g.x, g.y, g.alert ? '#ff3b30' : g.sus > 0.05 ? '#F2C94C' : '#f4f4f0', 4.5);
       mg.restore(); mg.save(); mg.translate(S0 / 2, S0 / 2); mg.rotate(yaw - Math.atan2(s.fx, s.fy) + Math.PI); mg.fillStyle = '#4ac2ff'; mg.strokeStyle = '#fff'; mg.lineWidth = 2; mg.beginPath(); mg.moveTo(0, -10); mg.lineTo(7, 8); mg.lineTo(0, 4); mg.lineTo(-7, 8); mg.closePath(); mg.fill(); mg.stroke(); mg.restore();
       mg.strokeStyle = 'rgba(255,255,255,.75)'; mg.lineWidth = 4; mg.beginPath(); mg.arc(S0 / 2, S0 / 2, S0 / 2 - 4, 0, 7); mg.stroke(); }
     if (s.done && !ended) { ended = true; off();
       if (s.done === 'down') { root.classList.add('siren'); buzz(500); feedback('large', { view, root, sound: 'lose', color: '255,30,30' }); big.textContent = 'You went down!'; }
-      else if (s.done === 'free') { feedback('large', { view, root, sound: 'win' }); big.textContent = 'Break-out!'; }
+      else if (s.done === 'free') { feedback('large', { view, root, sound: 'win' }); big.textContent = L.shoot ? 'Yard held!' : 'Break-out!'; }
       else big.textContent = 'Out of time!';
       big.hidden = false; bump(big); setTimeout(() => finish({ path, acts, crouch: crl }), 1400); }
   });
@@ -886,7 +782,7 @@ async function lookout(root, L, finish) {
   loading.remove(); if (!root.isConnected) return;
   const cv = $c('canvas', { class: 'mgcanvas' }), heat = meter('alarm', '🔥'), clock = $c('b', { class: 'mgclock' }), score = $c('div', { class: 'mggoal', text: '👮 0 spotted' });
   root.append(cv, hud(heat, clock), score, $c('div', { class: 'mgjoyhint', text: 'Tap the police' }));
-  const view = W.createView(cv), THREE = W.THREE, yard = MG.genHorde(L.seed, 1); view.resize(); W.buildYard(view, yard, { types: X.townTypes ? X.townTypes() : [], skip: ['W'], fogFar: 160 });
+  const view = W.createView(cv), THREE = W.THREE, yard = MG.genYard(L.seed); view.resize(); W.buildYard(view, yard, { types: X.townTypes ? X.townTypes() : [], skip: ['W'], fogFar: 160 });
   const ro = new ResizeObserver(() => { view.resize(); frame(); }); ro.observe(root);
   // six back doors: three on the far side of the yard, three on the near side. Each is set in a stretch of brick wall, with a
   // stone frame, a step, an awning, a lamp that throws a pool of light, a window above, and a door that swings open when
@@ -917,7 +813,7 @@ async function lookout(root, L, finish) {
     box(g, '#2c2c2c', 0.5, 0.7, 0.5, 1.7, 0.35, 0.6); box(g, '#3a3a3a', 0.56, 0.06, 0.56, 1.7, 0.72, 0.6); // a bin by the door
     Object.assign(sp, { hinge, inside, bulb, glow, open: 0, flick: i === 4 }); }
   // the crew's van, parked up with its hazard lights going
-  let van = null, hz = []; for (let k = 0; k < 40 && !van; k++) { const x = yard.W / 2 + ((k % 7) - 3) * 2.2, z = yard.H / 2 + (Math.floor(k / 7) - 2.5) * 1.8; if (MG.hordeFits(yard, x, z, 3)) { van = W.makeCar('van', '#3d4247'); van.position.set(x, 0, z); van.rotation.y = Math.PI / 2 - 0.15; view.scene.add(van);
+  let van = null, hz = []; for (let k = 0; k < 40 && !van; k++) { const x = yard.W / 2 + ((k % 7) - 3) * 2.2, z = yard.H / 2 + (Math.floor(k / 7) - 2.5) * 1.8; if (MG.yardFits(yard, x, z, 3)) { van = W.makeCar('van', '#3d4247'); van.position.set(x, 0, z); van.rotation.y = Math.PI / 2 - 0.15; view.scene.add(van);
       for (const [hx, hz2] of [[-0.9, 2.66], [0.9, 2.66], [-0.9, -2.66], [0.9, -2.66]]) { const h = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.06), new THREE.MeshBasicMaterial({ color: '#ffa31a', toneMapped: false })); h.position.set(hx, 0.95, hz2); van.add(h); hz.push(h); } } }
   // police lights round the corner: the hotter it gets, the brighter they flash on the walls
   const sirens = [new THREE.PointLight('#ff2a2a', 0, 40, 1.4), new THREE.PointLight('#2a5bff', 0, 40, 1.4)]; sirens[0].position.set(-1, 4, yard.H * 0.3); sirens[1].position.set(-1, 4, yard.H * 0.7); sirens.forEach(l => view.scene.add(l));

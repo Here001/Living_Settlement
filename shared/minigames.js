@@ -8,11 +8,12 @@
 //   atm  → Wire & code: rewire the cash machine, then crack the PIN before the alarm goes.
 //
 // Heists give each crew member a role, played live at the same time on their own phone:
-//   driver → Getaway drive · hacker → Wire & code · safecracker → The dial · lookout → Spot the police · muscle → Hold the doors
+//   driver → Getaway drive · hacker → Wire & code · safecracker → The dial · lookout → Spot the police · gunner → Hold the yard (in the prison compound) · breakout → Break someone out of jail
 //
 // Score out of 100: your play is worth up to 60 points, the setting (how far the police are, night, a crime wave) up to 40.
 
-export const GAMES = { rob: 'stealth', scam: 'con', atm: 'atm', driver: 'drive', hacker: 'atm', safecracker: 'safe', lookout: 'lookout', muscle: 'horde', breakout: 'breakout' };
+export const GAMES = { rob: 'stealth', scam: 'con', atm: 'atm', driver: 'drive', hacker: 'atm', safecracker: 'safe', lookout: 'lookout', gunner: 'breakout', breakout: 'breakout' };
+Object.defineProperty(GAMES, 'muscle', { value: 'breakout', enumerable: false }); /* (the old muscle part, in a job that started before it went: played as the gunner) */
 export const SOLO = ['rob', 'scam', 'atm']; // the crimes you do alone; the rest are heist roles (practice is open to all)
 export const STEP = 0.1; // the stealth game moves in steps of a tenth of a second, on the phone and on the server alike
 
@@ -20,7 +21,7 @@ export function rng(seed) { let s = (seed >>> 0) || 1; return () => { s = (s + 0
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // Difficulty 1 (easy) to 5 (hard): each crime has its own base, and police close by make it harder.
-const BASE = { rob: 2, scam: 1, atm: 3, driver: 2, hacker: 3, safecracker: 3, lookout: 2, muscle: 2, breakout: 2 };
+const BASE = { rob: 2, scam: 1, atm: 3, driver: 2, hacker: 3, safecracker: 3, lookout: 2, gunner: 2, muscle: 2, breakout: 2 };
 export function difficultyOf(kind, band) { return clamp((BASE[kind] || 2) + (band === 'low' ? 1 : band === 'high' ? -1 : 0), 1, 5); }
 
 export function scoreOf(perf, chance) {
@@ -523,22 +524,23 @@ export const ROLES = {
   hacker: { name: 'Hacker', icon: '💻', blurb: 'Rewire the security panel and crack its code.' },
   safecracker: { name: 'Safecracker', icon: '🔐', blurb: 'Stop the dial on each number.' },
   lookout: { name: 'Lookout', icon: '👀', blurb: 'Spot the plain-clothes police before they spot the crew.' },
-  muscle: { name: 'Muscle', icon: '💪', blurb: 'Hold off the zombie horde while the crew works.' },
+  gunner: { name: 'Gunner', icon: '🎯', blurb: 'Hold the yard: take the guards down while the crew does the job.' },
   breakout: { name: 'Breakout', icon: '⛓️', blurb: 'Slip into the compound, take the guards down quietly, arm up and free the prisoner.' },
 };
+Object.defineProperty(ROLES, 'muscle', { value: ROLES.gunner, enumerable: false }); /* (see GAMES.muscle) */
 // The parts each job needs, most important first: a crew of 3 fills the first three.
 export const HEIST_ROLES = {
-  armored: ['driver', 'muscle', 'hacker', 'lookout', 'muscle'],
-  mayor: ['lookout', 'muscle', 'driver', 'muscle', 'muscle'],
+  armored: ['driver', 'gunner', 'hacker', 'lookout', 'gunner'],
+  mayor: ['lookout', 'gunner', 'driver', 'gunner', 'gunner'],
   jailbreak: ['breakout', 'breakout', 'breakout', 'breakout', 'breakout', 'breakout'], /* (everyone goes in: each plays the breakout on their own phone) */
-  bank: ['safecracker', 'hacker', 'driver', 'lookout', 'muscle', 'muscle'],
+  bank: ['safecracker', 'hacker', 'driver', 'lookout', 'gunner', 'gunner'],
 };
 // Who plays what: everyone gets the part they asked for while the job still has room for it; the rest fill the
 // job's open parts in order. `wants` is one role (or null) per crew member, in crew order.
 export function assignRoles(kind, wants) {
-  const slots = [...(HEIST_ROLES[kind] || ['muscle'])], out = wants.map(() => null);
+  const slots = [...(HEIST_ROLES[kind] || ['gunner'])], out = wants.map(() => null);
   wants.forEach((w, i) => { const k = slots.indexOf(w); if (w && k >= 0) { out[i] = w; slots.splice(k, 1); } });
-  out.forEach((r, i) => { if (!r) out[i] = slots.length ? slots.shift() : 'muscle'; });
+  out.forEach((r, i) => { if (!r) out[i] = slots.length ? slots.shift() : 'gunner'; });
   return out;
 }
 
@@ -635,124 +637,19 @@ export function lookReplay(L, taps, time) {
   return { ok: true, state: { t: +t.toFixed(2), done, hits: e.hits, wrong: e.wrong, missed: e.missed, heat: +e.heat.toFixed(2) }, perf, money: done === 'clear' };
 }
 
-// ======================= Hold the doors (muscle) =======================
-// Guards run at the doors from both sides. Tap a side to shove back the nearest guard on that side once they're
-// close; shoving at nobody wastes your strength. Three guards through and the doors are lost. Taps: [side, time].
-export const MUSCLE = { reach: 0.62, breaches: 3 };
-export function genMuscle(seed, diff) {
-  const r = rng(seed), guards = [], limit = 32; let t = 1;
-  while (t < limit - 1.5) { guards.push({ side: r() < 0.5 ? 0 : 1, t0: +t.toFixed(2), sp: +(0.3 + diff * 0.05 + r() * 0.12).toFixed(3), look: Math.floor(r() * 1000) }); t += 0.9 - diff * 0.08 + r() * 0.7; }
-  return { seed, diff, guards, limit };
-}
-export const guardPos = (g, t) => 1 - g.sp * (t - g.t0); // 1 = the end of the hall, 0 = at the doors
-export function muscleEval(L, taps, T) {
-  const shoved = new Map(); let last = 0, whiffs = 0; const whiffAt = [];
-  for (const x of taps) { const side = Number(x && x[0]), t = Number(x && x[1]); if (!(t >= last) || (side !== 0 && side !== 1)) return null; last = t; if (t > T) break;
-    let best = -1, bp = 9; L.guards.forEach((g, i) => { if (g.side !== side || shoved.has(i) || g.t0 > t) return; const p = guardPos(g, t); if (p > 0 && p <= MUSCLE.reach && p < bp) { bp = p; best = i; } });
-    if (best >= 0) shoved.set(best, t); else { whiffs++; whiffAt.push(t); } }
-  const through = L.guards.map((g, i) => [g.t0 + 1 / g.sp, i]).filter(([t, i]) => t <= T && !(shoved.has(i) && shoved.get(i) < t)).map(([t]) => t).sort((a, b) => a - b);
-  const lost = through.length >= MUSCLE.breaches ? through[MUSCLE.breaches - 1] : null, until = lost ?? T;
-  return { shoved: [...shoved.values()].filter(t => t <= until).length, whiffs: whiffAt.filter(t => t <= until).length, through: through.filter(t => t <= until).length, lost, shovedSet: shoved };
-}
-export function muscleReplay(L, taps, time) {
-  if (!Array.isArray(taps) || taps.length > 600) return { ok: false, why: 'bad taps' };
-  const T = clamp(Number(time) || 0, 0, L.limit + 2), e = muscleEval(L, taps, Math.min(T, L.limit)); if (!e) return { ok: false, why: 'bad timing' };
-  const done = e.lost != null ? 'lost' : T >= L.limit - 0.5 ? 'held' : 'gaveup', t = e.lost ?? T;
-  const perf = done === 'held' ? clamp(0.6 + 0.4 * (1 - e.through / MUSCLE.breaches) - 0.01 * e.whiffs, 0.25, 1) : done === 'lost' ? clamp(0.25 * t / L.limit, 0, 0.25) : clamp(0.2 * T / L.limit, 0, 0.2);
-  return { ok: true, state: { t: +t.toFixed(2), done, shoved: e.shoved, through: e.through, whiffs: e.whiffs }, perf, money: done === 'held' };
-}
-
-// ======================= Hold off the horde (muscle) =======================
-// Zombies pour into the yard behind the job from every side, in waves that get bigger, faster and hungrier. Move with
-// the stick, fight with the action button: a bat to start with, and guns (pistol, shotgun, rifle) and first-aid kits
-// turn up on the ground as it goes on. Survive until the crew is done. Everything here uses only + - * / and square
-// roots, so a phone and the server always get exactly the same result from the same moves.
-// The log: one point per step (where you were) and, per step, whether the action button was held.
-export const HORDE = { speed: 5.4, r: 0.45, hp: 100, reach: 2.0, pick: 1.3, W: 34, H: 26 };
-export const WEAPONS = {
-  bat: { name: 'Bat', icon: '🏏', dmg: 2, cd: 0.45, range: 2.0, ammo: Infinity },
-  pistol: { name: 'Pistol', icon: '🔫', dmg: 2, cd: 0.32, range: 13, ammo: 14 },
-  shotgun: { name: 'Shotgun', icon: '💥', dmg: 3, cd: 0.8, range: 8.5, ammo: 8, spread: 0.82 },
-  rifle: { name: 'Rifle', icon: '🎯', dmg: 1.5, cd: 0.11, range: 16, ammo: 45 },
-  medkit: { name: 'First aid', icon: '🩹', heal: 35 },
-};
-export function genHorde(seed, diff) {
-  const r = rng(seed), W = HORDE.W, H = HORDE.H, obs = [], limit = 48, kinds = ['car', 'car', 'barrier', 'crates', 'dumpster', 'barrel'];
+// ======================= The yard behind the job =======================
+// A walled-in back lot (wrecked cars, barriers, crates, dumpsters, burning barrels): where the lookout keeps watch.
+export const YARD = { W: 34, H: 26 };
+export function genYard(seed) {
+  const r = rng(seed), W = YARD.W, H = YARD.H, obs = []
+    , kinds = ['car', 'car', 'barrier', 'crates', 'dumpster', 'barrel'];
   const free = (x, y, w, h) => Math.abs(x + w / 2 - W / 2) + Math.abs(y + h / 2 - H / 2) > 7 && obs.every(o => x + w + 2.2 < o.x || o.x + o.w + 2.2 < x || y + h + 2.2 < o.y || o.y + o.h + 2.2 < y);
   for (let i = 0, tries = 0; i < 9 && tries < 300; tries++) { const k = kinds[Math.floor(r() * kinds.length)], horiz = r() < 0.5;
     const [w, h] = k === 'car' ? (horiz ? [4.4, 2] : [2, 4.4]) : k === 'barrier' ? (horiz ? [4, 0.8] : [0.8, 4]) : k === 'crates' ? [2.2, 2.2] : k === 'dumpster' ? [2.6, 1.6] : [1, 1];
     const x = +(2.5 + r() * (W - 5 - w)).toFixed(2), y = +(2.5 + r() * (H - 5 - h)).toFixed(2); if (!free(x, y, w, h)) continue; obs.push({ x, y, w, h, k }); i++; }
-  // the waves: every 9 seconds a new one, bigger, faster, tougher and hungrier than the last
-  const spawns = []; let t = 1.5, wave = 0;
-  while (t < limit - 2) { wave = Math.floor(t / 9);
-    const n = 2 + wave + Math.floor(diff / 2), gap = Math.max(0.25, 1.6 - wave * 0.18 - diff * 0.08);
-    for (let k = 0; k < n && t < limit - 2; k++) { const side = Math.floor(r() * 4), u = r();
-      const x = side === 0 ? 0.6 : side === 1 ? W - 0.6 : u * (W - 2) + 1, y = side === 2 ? 0.6 : side === 3 ? H - 0.6 : u * (H - 2) + 1;
-      spawns.push({ t: +t.toFixed(2), x: +x.toFixed(2), y: +y.toFixed(2), hp: 2 + Math.floor(wave / 2) + (diff >= 4 ? 1 : 0) + (r() < 0.15 ? 2 : 0), sp: +(1.7 + wave * 0.28 + diff * 0.18 + r() * 0.5).toFixed(2), dmg: +(9 + wave * 3 + diff * 2).toFixed(1), wave });
-      t += gap * (0.6 + r() * 0.8); }
-    t = Math.max(t, (wave + 1) * 9 + 0.5); }
-  // what turns up on the ground
-  const picks = [], pk = ['pistol', 'shotgun', 'medkit', 'rifle', 'pistol', 'medkit', 'shotgun', 'rifle'];
-  for (let k = 0, at = 3; at < limit - 4; k++, at += 6 + r() * 3) { let x, y, n = 0; do { x = 3 + r() * (W - 6); y = 3 + r() * (H - 6); n++; } while (n < 40 && !hordeFits({ obs, W, H }, x, y)); picks.push({ t: +at.toFixed(2), x: +x.toFixed(2), y: +y.toFixed(2), k: pk[k % pk.length] }); }
-  return { seed, diff, W, H, obs, spawns, picks, limit, start: { x: W / 2, y: H / 2 } };
+  return { seed, W, H, obs, start: { x: W / 2, y: H / 2 } };
 }
-export function hordeFits(L, x, y, R = HORDE.r) { if (x < R || y < R || x > L.W - R || y > L.H - R) return false; for (const o of L.obs) if (x + R > o.x && x - R < o.x + o.w && y + R > o.y && y - R < o.y + o.h) return false; return true; }
-const len2 = (x, y) => Math.sqrt(x * x + y * y);
-export const hordeStart = L => ({ t: 0, n: 0, x: L.start.x, y: L.start.y, fx: 0, fy: 1, hp: HORDE.hp, w: 'bat', ammo: Infinity, cd: 0, z: [], next: 0, kills: 0, picks: [], took: 0, shots: [], done: null, hit: 0 });
-// Your own move for one step (the same on the phone and the server): towards (vx, vy), sliding along anything in the way.
-export function hordeMove(L, s, vx, vy) { const n = len2(vx, vy); if (n > 1) { vx /= n; vy /= n; } const sp = HORDE.speed * STEP; let x = s.x, y = s.y; if (hordeFits(L, x + vx * sp, y)) x += vx * sp; if (hordeFits(L, x, y + vy * sp)) y += vy * sp; return { x, y }; }
-// One step of the world, with you now at (x, y), the action button held or not. Returns the new state.
-export function hordeStep(L, s0, x, y, act) {
-  const s = { ...s0, z: s0.z.map(z => ({ ...z })), picks: s0.picks.map(p => ({ ...p })), shots: [] }; if (s.done) return s0;
-  const mx = x - s.x, my = y - s.y, ml = len2(mx, my); if (ml > 0.01) { s.fx = mx / ml; s.fy = my / ml; } s.x = x; s.y = y;
-  s.n++; s.t = +(s.n * STEP).toFixed(3); s.cd = Math.max(0, +(s.cd - STEP).toFixed(3)); s.hit = 0;
-  // new arrivals
-  while (s.next < L.spawns.length && L.spawns[s.next].t <= s.t) { const z = L.spawns[s.next]; s.z.push({ id: s.next, x: z.x, y: z.y, hp: z.hp, sp: z.sp, dmg: z.dmg, hurt: 0 }); s.next++; }
-  for (const p of L.picks) if (p.t <= s.t && p.t > s.t - STEP - 1e-9) s.picks.push({ ...p, until: +(p.t + 12).toFixed(2) });
-  s.picks = s.picks.filter(p => p.until > s.t);
-  // picking things up
-  for (let i = s.picks.length - 1; i >= 0; i--) { const p = s.picks[i]; if (len2(p.x - s.x, p.y - s.y) > HORDE.pick) continue;
-    if (p.k === 'medkit') s.hp = Math.min(HORDE.hp, s.hp + WEAPONS.medkit.heal); else { s.w = p.k; s.ammo = WEAPONS[p.k].ammo; } s.took++; s.picks.splice(i, 1); }
-  // the zombies shamble towards you (around anything in the way), keep a little apart, and bite when they reach you
-  for (const z of s.z) { if (z.hp <= 0) continue; let dx = s.x - z.x, dy = s.y - z.y; const d = len2(dx, dy); if (d < 0.0001) continue; dx /= d; dy /= d;
-    if (d > 0.95) { const st = z.sp * STEP; let nx = z.x + dx * st, ny = z.y + dy * st;
-      if (!hordeFits(L, nx, ny, 0.4)) { if (hordeFits(L, z.x - dy * st, z.y + dx * st, 0.4)) { nx = z.x - dy * st; ny = z.y + dx * st; } else if (hordeFits(L, z.x + dy * st, z.y - dx * st, 0.4)) { nx = z.x + dy * st; ny = z.y - dx * st; } else { nx = z.x; ny = z.y; } }
-      z.x = nx; z.y = ny; }
-    else { s.hp -= z.dmg * STEP; s.hit = 1; }
-    z.hurt = Math.max(0, z.hurt - STEP); }
-  for (let i = 0; i < s.z.length; i++) for (let j = i + 1; j < s.z.length; j++) { const a = s.z[i], b = s.z[j]; if (a.hp <= 0 || b.hp <= 0) continue; const dx = b.x - a.x, dy = b.y - a.y, d = len2(dx, dy);
-    if (d < 0.8 && d > 0.0001) { const push = (0.8 - d) / 2, ux = dx / d, uy = dy / d; if (hordeFits(L, a.x - ux * push, a.y - uy * push, 0.4)) { a.x -= ux * push; a.y -= uy * push; } if (hordeFits(L, b.x + ux * push, b.y + uy * push, 0.4)) { b.x += ux * push; b.y += uy * push; } } }
-  // fighting back: the bat swings at whoever's close; guns aim themselves at the nearest zombie in range
-  if (act && s.cd <= 0) { const W0 = WEAPONS[s.w]; let best = null, bd = 1e9; for (const z of s.z) { if (z.hp <= 0) continue; const d = len2(z.x - s.x, z.y - s.y); if (d < bd) { bd = d; best = z; } }
-    s.cd = W0.cd;
-    if (best && bd <= W0.range) { const ax = (best.x - s.x) / bd, ay = (best.y - s.y) / bd; s.fx = ax; s.fy = ay;
-      const hits = s.w === 'shotgun' ? s.z.filter(z => { if (z.hp <= 0) return false; const d = len2(z.x - s.x, z.y - s.y); return d <= W0.range && (d < 0.01 || ((z.x - s.x) * ax + (z.y - s.y) * ay) / d >= W0.spread); })
-        : s.w === 'bat' ? s.z.filter(z => { if (z.hp <= 0) return false; const d = len2(z.x - s.x, z.y - s.y); return d <= W0.range && (z === best || ((z.x - s.x) * ax + (z.y - s.y) * ay) / Math.max(d, 0.01) >= 0.3); }) : [best];
-      for (const z of hits) { z.hp -= W0.dmg; z.hurt = 0.2; if (z.hp <= 0) s.kills++; const d = len2(z.x - s.x, z.y - s.y) || 1; z.x += (z.x - s.x) / d * (s.w === 'bat' ? 0.9 : 0.35); z.y += (z.y - s.y) / d * (s.w === 'bat' ? 0.9 : 0.35); if (!hordeFits(L, z.x, z.y, 0.4)) { z.x -= (z.x - s.x) / d * 0.5; z.y -= (z.y - s.y) / d * 0.5; } }
-      s.shots = hits.map(z => [+z.x.toFixed(2), +z.y.toFixed(2)]); }
-    else s.shots = [[+(s.x + s.fx * Math.min(W0.range, 6)).toFixed(2), +(s.y + s.fy * Math.min(W0.range, 6)).toFixed(2)]];
-    if (W0.ammo !== Infinity) { s.ammo--; if (s.ammo <= 0) { s.w = 'bat'; s.ammo = Infinity; } } }
-  s.z = s.z.filter(z => z.hp > 0 || z.hurt > 0.05); for (const z of s.z) if (z.hp <= 0) z.dead = 1;
-  if (s.hp <= 0) { s.hp = 0; s.done = 'down'; } else if (s.t >= L.limit) s.done = 'held';
-  return s;
-}
-export function hordePerf(L, s) {
-  const expect = Math.max(1, L.spawns.filter(z => z.t < s.t).length);
-  if (s.done === 'held') return { perf: clamp(0.5 + 0.3 * s.hp / HORDE.hp + 0.2 * Math.min(1, s.kills / (expect * 0.6)), 0, 1), money: true };
-  return { perf: clamp(0.3 * s.t / L.limit, 0, 0.3), money: false };
-}
-export function hordeReplay(L, log) {
-  const path = log && log.path, acts = String((log && log.acts) || ''); if (!Array.isArray(path) || path.length < 2 || path.length > Math.ceil(L.limit / STEP) + 2) return { ok: false, why: 'bad path' };
-  let s = hordeStart(L);
-  for (let i = 1; i < path.length && !s.done; i++) {
-    const [x, y] = (path[i] || []).map(Number); if (!Number.isFinite(x) || !Number.isFinite(y)) return { ok: false, why: 'bad point' };
-    const dx = x - s.x, dy = y - s.y, d = len2(dx, dy); if (d > HORDE.speed * STEP + 0.02) return { ok: false, why: 'too fast' };
-    const q = hordeMove(L, s, d ? dx / (HORDE.speed * STEP) : 0, d ? dy / (HORDE.speed * STEP) : 0); if (len2(q.x - x, q.y - y) > 0.03 || !hordeFits(L, x, y)) return { ok: false, why: 'walked through something' };
-    s = hordeStep(L, s, x, y, acts[i] === '1');
-  }
-  if (!s.done) s.done = s.t >= L.limit - 0.05 ? 'held' : 'gaveup';
-  return { ok: true, state: { t: s.t, done: s.done, hp: Math.round(s.hp), kills: s.kills, took: s.took }, ...hordePerf(L, s) };
-}
+export function yardFits(L, x, y, R = 0.45) { if (x < R || y < R || x > L.W - R || y > L.H - R) return false; for (const o of L.obs) if (x + R > o.x && x - R < o.x + o.w && y + R > o.y && y - R < o.y + o.h) return false; return true; }
 
 // ======================= Break someone out of jail (breakout) =======================
 // A run-down prison compound in the heat: a fenced yard of sheds, livestock trailers, water tanks, barrels, sandbags and
@@ -760,7 +657,7 @@ export function hordeReplay(L, log) {
 // gap in the fence with your bare hands. Guards patrol, each looking ahead: crouch and they see you less (and not at
 // all behind low cover); creep up on one who hasn't noticed you and take them down without a sound. Pick up the axe,
 // then the rifle (gunfire brings everyone running), reach the prisoner's cell and spring the lock: the alarm goes and
-// more guards pour in. Free the prisoner and put every guard down to win. Like the horde, only + - * / and square
+// more guards pour in. Free the prisoner and put every guard down to win. Only + - * / and square
 // roots, so the phone and the server always agree.
 // The log: one point per step (where you were), and per step whether the action button was held ('1') and whether you
 // were crouching ('c').
@@ -772,7 +669,7 @@ export const BWEAP = {
   ammo: { name: 'Ammo', icon: '📦', add: 24 }, medkit: { name: 'First aid', icon: '🩹', heal: 40 },
 };
 // obstacles: { x, y, w, h, k, tall } (tall ones hide you even standing; low ones only when you crouch)
-export function genBreak(seed, diff) {
+export function genBreak(seed, diff, shoot = false) { /* shoot: the gunner's version (rifle in hand, no prisoner, guards coming in waves) */
   const r = rng(seed), W = BREAK.W, H = BREAK.H, obs = [], f = (v, n = 2) => +v.toFixed(n);
   const wall = (x, y, w, h, k = 'fence') => obs.push({ x: f(x), y: f(y), w: f(w), h: f(h), k, tall: true });
   // the fence round it all, with the gap you slip in through at the bottom
@@ -796,7 +693,7 @@ export function genBreak(seed, diff) {
       if (breakFits({ obs, W, H }, x, y, 0.9)) return { x: f(x), y: f(y) }; } return { x: gapX + 1.5, y: (y0 + y1) / 2 }; };
   const picks = [{ k: 'axe', ...spot(H - 9, H - 4, { x: gapX + 3, y: H - 6 }) }, { k: 'rifle', ...spot(31, 40) }, { k: 'ammo', ...spot(14, 22) }, { k: 'medkit', ...spot(28, 48) }];
   // the guards: on their rounds between two points (or watching one way and then the other), more of them the harder it is
-  const guards = [], gN = 4 + diff, zones = [[44, 53], [36, 46], [27, 36], [25, 27], [14, 22], [27, 50], [14, 22], [36, 50], [27, 44]];
+  const guards = [], gN = shoot ? 3 + Math.ceil(diff / 2) : 4 + diff, zones = [[44, 53], [36, 46], [27, 36], [25, 27], [14, 22], [27, 50], [14, 22], [36, 50], [27, 44]];
   for (let i = 0; i < gN; i++) { const [y0, y1] = zones[i % zones.length]; let a = null;
     for (let t = 0; t < 200 && !a; t++) { const p = spot(y0, y1); if (Math.abs(p.x - gapX) + Math.abs(p.y - (H - 2)) > 9) a = p; } a = a || spot(y0, y1);
     let b = null; for (let t = 0; t < 40 && !b; t++) { const along = r() < 0.5, d = (r() < 0.5 ? -1 : 1) * (5 + r() * 6), q = along ? { x: f(a.x + d), y: a.y } : { x: a.x, y: f(a.y + d) };
@@ -804,18 +701,19 @@ export function genBreak(seed, diff) {
     const lx = r() < 0.5 ? (r() < 0.5 ? -1 : 1) : 0, ly = lx ? 0 : (r() < 0.5 ? -1 : 1);
     guards.push({ x: a.x, y: a.y, b, look: [lx, ly], look2: [0 - ly, lx + 0], gun: true }); } /* (look2: a quarter turn from look) */
   // the alarm: when the cell's sprung, more come through the gate and out of the cell block, one after another
-  const more = []; const mN = 3 + Math.floor(diff / 2) + (diff >= 4 ? 1 : 0);
-  for (let i = 0; i < mN; i++) more.push({ dt: f(1.2 + i * 1.5, 1), x: i % 2 ? f(gate + (r() - 0.5) * 2) : f(door.x + (i % 4 < 2 ? -5 : 5)), y: i % 2 ? 26 : 13 });
-  return { seed, diff, W, H, obs, entry: { x: gapX, y: H - 1.6 }, gate, door, cells, cell, picks, guards, more, limit: BREAK.limit };
+  const more = []; const mN = shoot ? 6 + Math.round(1.5 * diff) : 3 + Math.floor(diff / 2) + (diff >= 4 ? 1 : 0);
+  for (let i = 0; i < mN; i++) more.push({ dt: f(shoot ? 5 + Math.floor(i / 2) * 4.5 + (i % 2) * 0.6 : 1.2 + i * 1.5, 1), /* (the gunner's come in pairs) */ x: i % 2 ? f(gate + (r() - 0.5) * 2) : f(door.x + (i % 4 < 2 ? -5 : 5)), y: i % 2 ? 26 : 13 });
+  if (shoot) { picks.splice(0, 2); picks.push({ k: 'ammo', ...spot(30, 46) }, { k: 'medkit', ...spot(14, 22) }); } /* (no axe or rifle to find: you came armed) */
+  return { seed, diff, W, H, obs, entry: { x: gapX, y: H - 1.6 }, gate, door, cells, cell, picks, guards, more, limit: BREAK.limit, ...(shoot ? { shoot: true } : {}) };
 }
 export function breakFits(L, x, y, R = BREAK.r) { if (x < R || y < R || x > L.W - R || y > L.H - R) return false; for (const o of L.obs) if (x + R > o.x && x - R < o.x + o.w && y + R > o.y && y - R < o.y + o.h) return false; return true; }
 // can a sees b? walls and tall things always block; low cover blocks only someone crouching behind it
 function clearLine(L, a, b, low) { const dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy), n = Math.max(1, Math.ceil(d / 0.25));
   for (let i = 1; i < n; i++) { const x = a.x + dx * i / n, y = a.y + dy * i / n; for (const o of L.obs) if ((o.tall || low) && x > o.x && x < o.x + o.w && y > o.y && y < o.y + o.h) return false; } return true; }
 export const breakSees = (L, a, b, low) => clearLine(L, a, b, low);
-export const breakStart = L => ({ t: 0, n: 0, x: L.entry.x, y: L.entry.y, fx: 0, fy: -1, hp: BREAK.hp, w: 'fists', ammo: 0, cd: 0, crouch: false,
+export const breakStart = L => ({ t: 0, n: 0, x: L.entry.x, y: L.entry.y, fx: 0, fy: -1, hp: BREAK.hp, w: L.shoot ? 'rifle' : 'fists', ammo: L.shoot ? 45 : 0, cd: 0, crouch: false,
   g: L.guards.map((g, i) => ({ id: i, x: g.x, y: g.y, fx: g.look[0] || 0, fy: g.look[1] || -1, hp: BREAK.ghp, leg: 1, wait: 0, sus: 0, alert: 0, cd: 0.9, dead: 0 })),
-  picks: L.picks.map(p => ({ ...p })), freeing: 0, freed: 0, tFree: 0, next: 0, kills: 0, silent: 0, shots: [], hit: 0, ev: '', done: null });
+  picks: L.picks.map(p => ({ ...p })), freeing: 0, freed: L.shoot ? 1 : 0, tFree: 0, /* (the gunner: the alarm's already up, the guards keep coming) */ next: 0, kills: 0, silent: 0, shots: [], hit: 0, ev: '', done: null });
 // your own move for one step: crouched you creep, standing you run; you slide along anything in the way
 export function breakMove(L, s, vx, vy, crouch) { const n = Math.sqrt(vx * vx + vy * vy); if (n > 1) { vx /= n; vy /= n; } const sp = (crouch ? BREAK.sneak : BREAK.run) * STEP; let x = s.x, y = s.y;
   if (breakFits(L, x + vx * sp, y)) x += vx * sp; if (breakFits(L, x, y + vy * sp)) y += vy * sp; return { x, y }; }
@@ -847,7 +745,7 @@ export function breakStep(L, s0, x, y, act, crouch) {
     if (d > 6 || !los) { const st = BREAK.gchase * STEP; let nx = g.x + tx * st, ny = g.y + ty * st;
       if (!breakFits(L, nx, ny, 0.35)) { if (breakFits(L, g.x - ty * st, g.y + tx * st, 0.35)) { nx = g.x - ty * st; ny = g.y + tx * st; } else if (breakFits(L, g.x + ty * st, g.y - tx * st, 0.35)) { nx = g.x + ty * st; ny = g.y - tx * st; } else { nx = g.x; ny = g.y; } }
       g.x = nx; g.y = ny; }
-    if (los && d <= 15 && g.cd <= 0) { s.hp -= (4 + L.diff * 0.8) * (s.crouch ? 0.65 : 1) * (d < 6 ? 1 : 0.75); g.cd = Math.max(0.75, 1.25 - L.diff * 0.07); s.hit = 1; g.shot = 1; } else g.shot = 0; }
+    if (los && d <= 15 && g.cd <= 0) { s.hp -= (4 + L.diff * 0.8) * (s.crouch ? 0.65 : 1) * (d < 6 ? 1 : 0.75) * (L.shoot ? 1.15 : 1); g.cd = Math.max(0.75, 1.25 - L.diff * 0.07); s.hit = 1; g.shot = 1; } else g.shot = 0; }
   // you: the action button takes down a guard who hasn't seen you (crouched, right up close), or fights with what you've got, or springs the cell
   if (act) {
     const atDoor = !s.freed && Math.sqrt((L.door.x - s.x) ** 2 + (L.door.y - s.y) ** 2) <= BREAK.door;
@@ -890,7 +788,7 @@ export function breakReplay(L, log) {
 
 // How long a game must at least take (a fast human), so a result can't come back quicker than it could be played.
 export function minTime(kind, L, st) {
-  if (kind === 'rob' || kind === 'driver' || kind === 'lookout' || kind === 'muscle' || kind === 'breakout') return st && st.t ? st.t : 0; // the horde (muscle) has to be survived in real time too
+  if (kind === 'rob' || kind === 'driver' || kind === 'lookout' || GAMES[kind] === 'breakout') return st && st.t ? st.t : 0; // the compound has to be played in real time
   if (kind === 'scam') return (st?.turns || 1) * 0.8;
   if (kind === 'atm' || kind === 'hacker') return L.wires.length * 0.35 + L.pin.length * 0.2;
   if (kind === 'safecracker') return (st?.got || 0) * 0.4;
@@ -899,7 +797,7 @@ export function minTime(kind, L, st) {
 export const CCTV_FROM = 5; // robberies in a row before this one: the 6th robbery in a row and on have CCTV
 export function levelOf(kind, seed, diff, hard = false, cctv = false) {
   const g = GAMES[kind];
-  return g === 'stealth' ? genStealth(seed, diff, cctv) : g === 'con' ? genCon(seed, diff) : g === 'atm' ? genAtm(seed, diff, hard) : g === 'drive' ? genDrive(seed, diff) : g === 'safe' ? genSafe(seed, diff) : g === 'lookout' ? genLook(seed, diff) : g === 'horde' ? genHorde(seed, diff) : g === 'breakout' ? genBreak(seed, diff) : genMuscle(seed, diff);
+  return g === 'stealth' ? genStealth(seed, diff, cctv) : g === 'con' ? genCon(seed, diff) : g === 'atm' ? genAtm(seed, diff, hard) : g === 'drive' ? genDrive(seed, diff) : g === 'safe' ? genSafe(seed, diff) : g === 'lookout' ? genLook(seed, diff) : g === 'breakout' ? genBreak(seed, diff, kind !== 'breakout') : null;
 }
 export function replay(kind, L, log) {
   const g = GAMES[kind], x = log || {};
@@ -909,8 +807,6 @@ export function replay(kind, L, log) {
   if (g === 'drive') return driveReplay(L, x.moves);
   if (g === 'safe') return safeReplay(L, x.taps, x.time);
   if (g === 'lookout') return lookReplay(L, x.taps, x.time);
-  if (g === 'muscle') return muscleReplay(L, x.taps, x.time);
-  if (g === 'horde') return hordeReplay(L, x);
   if (g === 'breakout') return breakReplay(L, x);
   return { ok: false, why: 'unknown game' };
 }

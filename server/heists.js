@@ -1,6 +1,6 @@
 // Group crimes (heists). A player plans one, picks a time (5 to 60 minutes away) and invites a crew; the crew get a
 // group chat (with an invite from the colony) to agree the details, and each picks a part (driver, hacker, safecracker,
-// lookout, muscle). At the set time, or when the planner says "go now" with enough crew, the job goes live: everyone
+// lookout, gunner). At the set time, or when the planner says "go now" with enough crew, the job goes live: everyone
 // plays their part's mini game at the same time on their own phone (shared/minigames.js), within a couple of minutes.
 // The crew's average play (0-60) plus the setting (0-40) decides how it goes, like a solo crime: a great job pays up to
 // 1.5x the loot, a bad one gets the whole crew fined (about a seventh of the share, 50 to 1,500, never more than they have; from cash then

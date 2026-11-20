@@ -409,6 +409,7 @@ wss.on('connection', (ws, req) => {
   const wsKey = 'ws:' + crypto.randomBytes(6).toString('hex');
   ws.isAlive = true; ws.subs = new Set(); ws.out = [];
   if (whereIn.size) try { ws.send(JSON.stringify({ type: 'whereIn', all: [...whereIn] })); } catch {} /* who's inside places right now */
+  { const now = Date.now(); for (const [id, d] of DRIVE_LAST) { if (now - d.t > 6000) { DRIVE_LAST.delete(id); continue; } try { ws.send(d.json); } catch {} } } /* who's out in the 3D town right now, where they are (not a two-second wait for their next update) */
   ws.on('error', () => { try { ws.terminate(); } catch {} });
   ws.on('pong', () => { ws.isAlive = true; });
   ws.on('message', raw => {
@@ -428,6 +429,7 @@ wss.on('connection', (ws, req) => {
       if (typeof m.pt === 'string' && /^[a-z0-9_]{0,24}$/.test(m.pt)) w.pt = m.pt; /* the pet with them ('' when it's at home) */
       { const k = m.pk; if (w.mode === 'walk' && k && typeof k === 'object' && [k.x, k.y, k.a].every(Number.isFinite) && Math.hypot(k.x - x, k.y - y) < 60 && /^[a-z]{1,16}!?$/.test(String(k.k || ''))) w.pk = { x: +(+k.x).toFixed(2), y: +(+k.y).toFixed(2), a: +(+k.a).toFixed(2), k: String(k.k) }; } /* where they left their car or boat, so others see it there */
       if (!rides.moved(ws.playerId, w)) return; /* riding in someone's car: you go where it goes */
+      if (w.mode !== 'ride') ws.lastDrive = { x: w.x, y: w.y, mode: w.mode, m: w.m, col: w.col, t: now }; if (!ws.lingerCleared) { ws.lingerCleared = true; clearLinger(ws.playerId); } /* (back: no longer waiting where the line dropped) */
       ws.driving = true; ws.drivePos = [w.x, w.y]; bus.publish([{ driving: true, id: ws.playerId, ...w }]); return; } /* mode: on foot or in a car */
     // Rides: ask a driver for a ride, the driver answers (or lets someone out), a rider gets out
     if (m?.type === 'ride' && ws.playerId) { const a = String(m.a || ''), who = String(m.id || '').slice(0, 64);
@@ -439,7 +441,7 @@ wss.on('connection', (ws, req) => {
     if (m?.type === 'in') { const place = String(m.place || ''), x = Number(m.x), y = Number(m.y), a = Number(m.a);
       if (!/^(b|h):[A-Za-z0-9_.-]{1,64}$/.test(place) || ![x, y, a].every(Number.isFinite) || x < 0 || y < 0 || x > 16 || y > 16) return;
       if (ws.inside && ws.inside !== place) insideLeave(ws);
-      const first = ws.inside !== place; ws.inside = place; const who = ws.playerId ? 'p:' + ws.playerId : wsKey;
+      const first = ws.inside !== place; ws.inside = place; if (ws.playerId && !ws.lingerCleared) { ws.lingerCleared = true; clearLinger(ws.playerId); } const who = ws.playerId ? 'p:' + ws.playerId : wsKey;
       if (ws.insideWho && ws.insideWho !== who) { bus.publish([{ inside: true, place, skip: who, k: 'gone', id: ws.insideWho }]); try { world.rooms?.here.get(place)?.delete(ws.insideWho); } catch {} } /* signed in since: the anonymous figure goes (from the head count too) */ ws.insideWho = who;
       try { world.rooms.seen(place, who, ws.playerHandle || null); } catch {}
       const p = { id: who, h: ws.playerHandle || null, x: +x.toFixed(2), y: +y.toFixed(2), a: +a.toFixed(2) };
@@ -455,9 +457,18 @@ wss.on('connection', (ws, req) => {
       ws.send(JSON.stringify({ type: 'authed', ok: !!p }));
     }).catch(() => {});
   });
-  ws.on('close', () => { insideLeave(ws); if (ws.playerId && !localOnline(ws.playerId)) { chat.gone(ws.playerId).catch(() => {}); world.phone.gone(ws.playerId); rides.off(ws.playerId); if (ws.driving) bus.publish([{ driving: true, id: ws.playerId, off: true }]); bus.publish([{ arena: true, k: 'in', pid: ws.playerId, m: { a: 'gone' } }]); } });
+  ws.on('close', () => { const wasIn = ws.inside; insideLeave(ws); if (ws.playerId && !localOnline(ws.playerId)) { lingerFrom(ws, wasIn); chat.gone(ws.playerId).catch(() => {}); world.phone.gone(ws.playerId); rides.off(ws.playerId); if (ws.driving) bus.publish([{ driving: true, id: ws.playerId, off: true }]); bus.publish([{ arena: true, k: 'in', pid: ws.playerId, m: { a: 'gone' } }]); } });
   ws.send(JSON.stringify({ type: 'hello', meta: world.publicMeta(), serverNow: Date.now() }));
 });
+// A dropped connection: for five minutes everyone sees the player stay where they were (on the street, in their car, or
+// inside a place), then they walk or drive off to where their day has them (public/index.html lingerAt). Kept in the
+// database so a server restart, or someone opening the map later, still knows; cleared the moment they're back.
+const DRIVE_LAST = new Map(); /* player id → their latest position message (for anyone just connecting) */
+function lingerFrom(ws, place) { const d = ws.lastDrive, id = ws.playerId, now = Date.now(); let L = null;
+  if (place && /^(b|h):/.test(place)) L = { place, t: now };
+  else if (ws.driving && d && now - d.t < 120000) L = { x: d.x, y: d.y, mode: d.mode, m: d.m, col: d.col, t: d.t };
+  if (!L) return; bus.publish([{ linger: true, id, L }]); pool.query('update citizens set last_live = $2 where id = $1', [id, JSON.stringify(L)]).catch(() => {}); }
+function clearLinger(id) { if (!id) return; pool.query('update citizens set last_live = null where id = $1 and last_live is not null', [id]).then(r => { if (r.rowCount) bus.publish([{ linger: true, id, off: true }]); }).catch(() => {}); }
 function insideLeave(ws) { if (!ws.inside) return; const place = ws.inside, who = ws.insideWho; ws.inside = null; ws.insidePos = null;
   const m = world.rooms?.here.get(place); if (m && who && ![...wss.clients].some(w => w !== ws && w.inside === place && w.insideWho === who)) m.delete(who);
   bus.publish([{ inside: true, place, skip: who, k: 'gone', id: who }]);
@@ -492,8 +503,13 @@ bus.on(ops => {
   if (ops.some(o => o.streetSay)) { for (const o of ops.filter(o => o.streetSay)) { const json = JSON.stringify({ type: 'streetSay', id: o.id, from: o.from, text: o.text, t: o.t, x: o.x, y: o.y });
       for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.bufferedAmount > MAX_BUFFER || ws.playerId === o.id || !ws.driving || !ws.drivePos || Math.hypot(ws.drivePos[0] - o.x, ws.drivePos[1] - o.y) > 14) continue; try { ws.send(json); } catch {} } }
     ops = ops.filter(o => !o.streetSay); if (!ops.length) return; }
+  // Someone's connection dropped (or they're back): every map keeps them where they were for a while
+  if (ops.some(o => o.linger)) { for (const o of ops.filter(o => o.linger)) { const json = JSON.stringify(o.off ? { type: 'linger', id: o.id, off: true } : { type: 'linger', id: o.id, L: o.L });
+      for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.bufferedAmount > MAX_BUFFER) continue; try { ws.send(json); } catch {} } }
+    ops = ops.filter(o => !o.linger); if (!ops.length) return; }
   // Someone driving about in 3D: every map shows their car where it is
   if (ops.some(o => o.driving)) { for (const o of ops.filter(o => o.driving)) { if (o.off) LIVE_POS.delete(o.id); else if (o.mode !== 'ride') LIVE_POS.set(o.id, { x: o.x, y: o.y, mode: o.mode, t: Date.now() }); /* (where each player is, for missions) */ const json = JSON.stringify(o.off ? { type: 'drive', id: o.id, off: true } : { type: 'drive', id: o.id, h: o.h, mode: o.mode, x: o.x, y: o.y, a: o.a, m: o.m, col: o.col, ...(o.by ? { by: o.by } : {}), ...(o.pk ? { pk: o.pk } : {}), ...(o.pt != null ? { pt: o.pt } : {}) });
+      if (o.off) DRIVE_LAST.delete(o.id); else DRIVE_LAST.set(o.id, { json, t: Date.now() });
       for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.bufferedAmount > MAX_BUFFER || ws.playerId === o.id) continue; try { ws.send(json); } catch {} } }
     ops = ops.filter(o => !o.driving); if (!ops.length) return; }
   // Private chat messages go only to the two people's own connections.
@@ -518,7 +534,7 @@ setInterval(() => {
     ws.out = []; try { ws.send('{"type":"ops","ops":[' + parts.join(',') + ']}'); } catch { ws.terminate(); }
   }
 }, 250);
-setInterval(() => { for (const ws of wss.clients) { if (!ws.isAlive) { ws.terminate(); continue; } ws.isAlive = false; ws.ping(); } }, 30000);
+setInterval(() => { for (const ws of wss.clients) { if (!ws.isAlive) { ws.terminate(); continue; } ws.isAlive = false; ws.ping(); } }, 15000); /* (a line that's gone dead is noticed within half a minute: the player then waits where they were, see lingerFrom) */
 setInterval(() => { const msg = JSON.stringify({ type: 'tick', serverNow: Date.now() }); for (const ws of wss.clients) if (ws.readyState === 1) { try { ws.send(msg); } catch {} } }, GAME_MIN_MS);
 
 // ---------- the leader: exactly one server runs the clock and the comment queue ----------

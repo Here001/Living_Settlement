@@ -382,7 +382,10 @@ const MIGRATIONS = [
   `alter table citizens add column if not exists storage_extra int not null default 0;`,
   // v86: best friends (server/friends.js): asked, then friends; best friends (and married couples) can drive each other's cars
   `create table if not exists best_friends (pair text primary key, a_id text not null, b_id text not null, status text not null, asked_by text not null, t bigint not null);
-   create index if not exists best_friends_a on best_friends (a_id); create index if not exists best_friends_b on best_friends (b_id);`
+   create index if not exists best_friends_a on best_friends (a_id); create index if not exists best_friends_b on best_friends (b_id);`,
+  // v87: where a player was when their connection dropped (out in 3D, or inside a place) and when: for five minutes
+  // everyone sees them stay there, then they walk or drive off to where their day has them (server/index.js)
+  `alter table citizens add column if not exists last_live jsonb;`
 ];
 
 export async function migrate() {

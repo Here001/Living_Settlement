@@ -2674,6 +2674,23 @@ const bl2 = await call('POST', '/api/admin/test/bills'); ok(bl2.status === 200, 
   for (const x of [...socks, extra]) try { x.w.close(); } catch {}
 }
 ok((await call('POST', '/api/admin/reset', { confirm: 'nope' })).status === 400, 'reset needs the word RESET');
+{ // a dropped line: everyone sees you stay where you were (then go on your way); someone just connecting sees who's out at once
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const player = async handle => { await call('POST', '/api/admin/citizens', { handle }); const id = (await pool.query('select id from citizens where handle = $1', [handle])).rows[0].id;
+    const link = (await call('POST', `/api/admin/citizens/${id}/setup-link`)).json.claimId, tok = (await call('POST', `/api/claim/${link}/password`, { password: 'secret88' }, { auth: false })).json.token; return { id, handle, tok }; };
+  const sock = async tok => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => got.push(JSON.parse(d))); await new Promise(r => w.once('open', r)); if (tok) { w.send(JSON.stringify({ type: 'auth', token: tok })); for (let i = 0; i < 40 && !got.some(m => m.type === 'authed'); i++) await sleep(50); } return { w, got }; };
+  const A = await player('linger_lu'), watch = await sock(null); let a = await sock(A.tok);
+  a.w.send(JSON.stringify({ type: 'drive', mode: 'walk', x: 50.5, y: 60.25, a: 0, m: 'hatch' })); await sleep(300);
+  const late = await sock(null); await sleep(200); ok(late.got.some(m => m.type === 'drive' && m.id === A.id && m.x === 50.5), 'opening the map, you see who is out in 3D straight away (not after their next move)', JSON.stringify(late.got.filter(m => m.type === 'drive')));
+  a.w.terminate(); await sleep(600);
+  const lg = watch.got.find(m => m.type === 'linger' && m.id === A.id); ok(lg && lg.L && lg.L.x === 50.5 && lg.L.y === 60.25 && lg.L.mode === 'walk', 'their line drops: everyone is told to keep them where they were', JSON.stringify(lg));
+  const row = (await pool.query('select last_live from citizens where id = $1', [A.id])).rows[0].last_live; ok(row && row.x === 50.5 && Number(row.t) > Date.now() - 60000, '…and it is kept, so a restart or a late arrival still knows', JSON.stringify(row));
+  a = await sock(A.tok); a.w.send(JSON.stringify({ type: 'drive', mode: 'walk', x: 51, y: 60.25, a: 0 })); await sleep(500);
+  ok(watch.got.some(m => m.type === 'linger' && m.id === A.id && m.off) && !(await pool.query('select last_live from citizens where id = $1', [A.id])).rows[0].last_live, 'back online: they are themselves again at once', JSON.stringify(watch.got.filter(m => m.type === 'linger')));
+  a.w.send(JSON.stringify({ type: 'in', place: 'h:linger_lu', x: 3, y: 3, a: 0 })); await sleep(300); a.w.terminate(); await sleep(600);
+  ok(watch.got.some(m => m.type === 'linger' && m.id === A.id && m.L && m.L.place === 'h:linger_lu'), 'inside a place when the line drops: they stay inside it for a while', JSON.stringify(watch.got.filter(m => m.type === 'linger').slice(-1)));
+  watch.w.close(); late.w.close();
+}
 { // best friends, and borrowing cars from them (or from your husband or wife)
   const player = async (handle, coins) => { await call('POST', '/api/admin/citizens', { handle }); const id = (await pool.query('select id from citizens where handle = $1', [handle])).rows[0].id;
     const link = (await call('POST', `/api/admin/citizens/${id}/setup-link`)).json.claimId, tok = (await call('POST', `/api/claim/${link}/password`, { password: 'secret88' }, { auth: false })).json.token; return { id, handle, P: { auth: false, headers: { 'x-player': tok } } }; };

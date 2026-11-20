@@ -1509,7 +1509,7 @@ async function api(path, opts={}){
     return j; } finally { clearTimeout(timer); } }
 const LOOKA=new Map(); /* handle → a player's own character's map colours (see shared/avatar.js mapLook) */
 const normC = c => { if(c.a&&c.h) LOOKA.set(c.h.toLowerCase(),c.a); return normC0(c); };
-const normC0 = c => ({ a:c.a||null, id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang, visit:c.visit||null, pet:c.pet||null, claimed:!!c.k, web:!!c.w, car:c.car||null, online:!!c.o });
+const normC0 = c => ({ a:c.a||null, id:c.id, seq:c.s, handle:c.h, joinedAt:c.t, founder:!!c.f, gender:c.g==='f'?'f':'m', name:c.n||'', home:c.home, job:c.job, hang:c.hang, visit:c.visit||null, pet:c.pet||null, lv:(c.lv&&Number(c.lv.t)?(lingerSet(c.id,c.lv),c.lv):null), claimed:!!c.k, web:!!c.w, car:c.car||null, online:!!c.o });
 const visiting = c => c.visit && Date.now()+skew < c.visit[4]+20*60000 ? c.visit : null; // [buildingId, type, x, y, until, from]: kept a while after it ends for the trip back
 const placeChunks = c => [c.home,c.job,c.hang,visiting(c)].filter(Boolean).map(p=>ckTile(p[2],p[3]));
 const keepCitizen = c => c.id===pinned || placeChunks(c).some(k=>S.chunks.has(k));
@@ -1637,7 +1637,8 @@ function connect(){
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
     else if(m.type==='phone' && m.data) Phone.msg(m.data);
     else if(m.type==='streetSay'){ try{ Drive.heard(m); }catch(e){} } /* someone near you on the street said something */
-    else if(m.type==='drive' && m.id){ if(m.off) DrivingNow.delete(m.id); else DrivingNow.set(m.id,{x:m.x,y:m.y,a:m.a,m:m.m,col:m.col,pk:m.pk||null,pt:typeof m.pt==='string'?m.pt:null,mode:m.mode==='walk'?'walk':m.mode==='ride'?'ride':'car',by:m.by||null,t:Date.now()}); } /* someone driving about in 3D (or riding in someone's car) */
+    else if(m.type==='linger' && m.id){ if(m.off) Linger.delete(m.id); else lingerSet(m.id,m.L); } /* someone's line dropped: they stay put for a while (or they're back) */
+    else if(m.type==='drive' && m.id){ if(m.off){ DrivingNow.delete(m.id); const L0=Linger.get(m.id); if(L0&&L0.local) Linger.delete(m.id); } else DrivingNow.set(m.id,{x:m.x,y:m.y,a:m.a,m:m.m,col:m.col,pk:m.pk||null,pt:typeof m.pt==='string'?m.pt:null,mode:m.mode==='walk'?'walk':m.mode==='ride'?'ride':'car',by:m.by||null,t:Date.now()}); } /* someone driving about in 3D (or riding in someone's car) */
     else if(m.type==='ride'){ Drive.rideMsg(m); } /* rides: asks, answers, getting in and out */
     else if(m.type==='whereIn'){ if(m.all){ InsideNow.clear(); for(const [id,pl] of m.all) InsideNow.set(id,pl); } else if(m.place) InsideNow.set(m.id,m.place); else InsideNow.delete(m.id); }
     else if(m.type==='gm' && m.data) Chats.gincoming(m.data);
@@ -1897,7 +1898,7 @@ function getPlan(c, day){
 // Where someone is at game minute gm: on a trip they chose (a visit), or following their usual day.
 // Who's inside a home, business or club right now (from the server): on the map they're in there, not out and about
 const InsideNow=new Map();
-function insideAt(c){ const pl=InsideNow.get(c.id); if(!pl) return null; let b=null;
+function insideAt(c,place){ const pl=place||InsideNow.get(c.id); if(!pl) return null; let b=null;
   if(pl.startsWith('b:')) b=D.buildings.get(pl.slice(2)); else { const h=pl.slice(2), o=[...S.citizens.values()].find(x=>x.handle.toLowerCase()===h); b=o&&bOf(o.home); }
   if(!b||b.x==null) return null; const [w,d]=b.type&&BUILDING_TYPES[b.type]?sizeOf(b.type,b.rot||0):[1,1], name=b.name||(b.type&&BUILDING_TYPES[b.type]?T(b).name:'home'), pos=[b.x+w/2,b.y+d/2];
   const p={ tile:[Math.floor(pos[0]),Math.floor(pos[1])], pos, indoor:true, bid:b.id, name };
@@ -1905,8 +1906,27 @@ function insideAt(c){ const pl=InsideNow.get(c.id); if(!pl) return null; let b=n
 function citizenAt(c, gm){
   const joinGm=gmAt(c.joinedAt); if(gm<joinGm) return null;
   if((InsideNow.size||DrivingNow.size)&&Math.abs(gm-gmNow())<3){ if(InsideNow.has(c.id)){ const st=insideAt(c); if(st) return st; } if(DrivingNow.has(c.id)){ const st=drivingAt(c); if(st) return st; } } /* inside a place, or driving about, right now */
-  const v=visiting(c); if(v){ const st=tripAt(c, v, gm); if(st) return st; }
+  const v=visiting(c), L=Linger.size&&Math.abs(gm-gmNow())<3?Linger.get(c.id):null;
+  if(L&&!(v&&Number(v[5])>L.t)){ const st=lingerAt(c,L,gm); if(st) return st; } /* their line dropped: where they were, then on their way (unless they've set off on a trip since) */
+  if(v){ const st=tripAt(c, v, gm); if(st) return st; }
   return dayAt(c, gm); }
+// ---- A player whose connection dropped (or whose updates stopped coming) stays where they were for five real minutes,
+// standing there, in their car or inside the place they were in; then they walk (if it's close) or drive to where their
+// day has them, rather than jumping there. Back online, they're themselves again straight away. ----
+const Linger=new Map(), LINGER_MS=5*60000; /* citizen id → { x, y, mode, m, col, t } or { place, t } */
+function lingerSet(id,L){ const o=Linger.get(id); if(!L||!Number(L.t)) return; if(o&&o.t>Number(L.t)&&!o.local) return; Linger.set(id,{...L,t:Number(L.t)}); }
+function lingerAt(c,L,gm){ const now=Date.now(), age=now-L.t; if(age<0) return null;
+  if(age<LINGER_MS){ if(L.place){ const st=insideAt(c,L.place); if(st) return {...st, act:st.act}; return null; }
+    const M=L.mode==='car'&&L.m&&CAR_MODELS[L.m], V=M?(M.vtype?VEHICLE_TYPES[M.vtype]||VEHICLE_TYPES.car:M):null;
+    return V?{ x:L.x, y:L.y, dx:1, dy:0, visible:true, car:true, V, col:L.col||V.colors[0], act:'Parked up', where:'the streets', bid:null, moving:false, seg:null, plan:null }
+      :{ x:L.x, y:L.y, dx:1, dy:0, visible:!wet(L.x,L.y), act:'Standing about', where:'the streets', bid:null, moving:false, seg:null, plan:null }; }
+  /* five minutes up: off to where their day has them, along the paths (walked if it's close, driven if not) */
+  const key=c.id+'|'+L.t+'|'+planGen; let leg=lingerLegs.get(key);
+  if(leg===undefined){ const g0=gmAt(L.t+LINGER_MS), from=L.place?(()=>{ const s0=insideAt(c,L.place); return s0?{ tile:[Math.floor(s0.x),Math.floor(s0.y)], pos:[s0.x,s0.y], indoor:true, bid:s0.bid, name:s0.where }:null; })():{ tile:[Math.floor(L.x),Math.floor(L.y)], pos:[L.x,L.y], indoor:false, bid:null, name:'the street' };
+    const to=placeOf(dayAt(c,g0)); leg=from&&to?tripLeg(c,from,{...to,name:to.name||'home'},g0,'go'):null; if(lingerLegs.size>500) lingerLegs.clear(); lingerLegs.set(key,leg); }
+  if(!leg||gm>=leg.to){ if(gm>gmAt(L.t+LINGER_MS)+240) Linger.delete(c.id); return null; } /* (there now: their usual day) */
+  return segAt(c, leg, gm, gm, null); }
+const lingerLegs=new Map();
 function dayAt(c, gm){
   const day=Math.floor(gm/1440), m=gm-day*1440; const plan=getPlan(c,day); if(!plan) return null;
   let seg=plan.segs[plan.segs.length-1]; for(const s of plan.segs){ if(m<s.to){ seg=s; break; } }
@@ -7471,7 +7491,7 @@ const DriveMap={ route:null, idx:0, dest:null, off:0, rerouteAt:0, big:null, bv:
   draw(){ const T=Drive.T; if(!T) return; const p=T.pos; if(this.cv){ const g=this.cv.getContext('2d'), W=this.cv.width, H=this.cv.height;
     this.paint(g,W,H,p.x,p.y,W/40,-Math.PI/2+p.a); /* heading up; about 40 tiles across */
     const k=W/140; g.fillStyle='#e8463a'; g.strokeStyle='#fff'; g.lineWidth=3*k; g.beginPath(); g.moveTo(W/2,H/2-13*k); g.lineTo(W/2+9*k,H/2+10*k); g.lineTo(W/2,H/2+5*k); g.lineTo(W/2-9*k,H/2+10*k); g.closePath(); g.fill(); g.stroke(); }
-    if(this.route){ const left=this.left(p), txt=`${left<1000?Math.round(left/10)*10+' m':(left/1000).toFixed(1)+' km'} · ${Math.max(1,Math.round(left/1000/40*60))} min`; if(this.info.hidden) this.info.hidden=false; if(this.info.textContent!==txt) this.info.textContent=txt; } else if(!this.info.hidden) this.info.hidden=true;
+    if(this.route){ const left=this.left(p), txt=`${left<1000?Math.round(left/10)*10+' m':(left/1000).toFixed(1)+' km'} · ${Math.max(1,Math.round(left/1000/(this.dest&&this.dest.walk?5:40)*60))} min${this.dest&&this.dest.walk?' 🚶':''}`; if(this.info.hidden) this.info.hidden=false; if(this.info.textContent!==txt) this.info.textContent=txt; } else if(!this.info.hidden) this.info.hidden=true;
     if(this.big) this.drawBig(); },
   left(p){ const r=this.route; if(!r) return 0; let d=0, i=Math.max(0,this.idx); if(r[i]) d+=Math.hypot(r[i][0]+0.5-p.x,r[i][1]+0.5-p.y); for(;i<r.length-1;i++) d+=Math.hypot(r[i+1][0]-r[i][0],r[i+1][1]-r[i][1]); return d*8; },
   // the big map: north up, drag to look about, + and − to zoom, tap to set where you're going
@@ -7514,17 +7534,21 @@ const DriveMap={ route:null, idx:0, dest:null, off:0, rerouteAt:0, big:null, bv:
         g.fillStyle='rgba(255,255,255,.82)'; g.fillRect(bx[0],bx[1],tw,bx[3]-bx[1]); g.fillStyle='rgba(40,34,28,.9)'; g.fillText(nm,x,y); n++; } } },
   // a waypoint: the way there along the roads, from where the car is
   go(tx,ty,o={}){ const id=D.occ.get(tx+','+ty), b=id&&D.buildings.get(id), name=o.name||(b?(b.name||T(b).name):'the spot you picked'); /* o: { quiet, mission, name } for a mission's stop */
-    let goal=null; if(b){ const [w,h]=T(b).size; for(let r=1;r<=6&&!goal;r++) for(let i=-r;i<w+r&&!goal;i++) for(let j=-r;j<h+r&&!goal;j++){ if(i>-r&&i<w+r-1&&j>-r&&j<h+r-1) continue; if(carOK((b.x+i)+','+(b.y+j))) goal=[b.x+i,b.y+j]; } }
+    const walk=!!(Drive.T&&Drive.T.pos.mode==='walk'&&!Drive.riding), ok=walk?(k=>{ const [x,y]=k.split(',').map(Number); return walkable(x,y)&&!D.occ.get(k); }):carOK; /* on foot: a walking way, across grass and paths, round buildings and water */
+    let goal=null; if(b){ const [w,h]=T(b).size; for(let r=1;r<=6&&!goal;r++) for(let i=-r;i<w+r&&!goal;i++) for(let j=-r;j<h+r&&!goal;j++){ if(i>-r&&i<w+r-1&&j>-r&&j<h+r-1) continue; if(ok((b.x+i)+','+(b.y+j))) goal=[b.x+i,b.y+j]; } }
+    else if(walk){ for(let r=0;r<=6&&!goal;r++) for(let i=-r;i<=r&&!goal;i++) for(let j=-r;j<=r&&!goal;j++){ if(Math.max(Math.abs(i),Math.abs(j))!==r) continue; if(ok((tx+i)+','+(ty+j))) goal=[tx+i,ty+j]; } }
     else goal=nearestRoad(tx,ty,6);
-    if(!goal){ if(this.title) this.title.textContent='No road near there: tap nearer a road'; toast('There’s no road near there. Pick a spot by a road.'); return; }
-    this.dest={ x:tx, y:ty, gx:goal[0], gy:goal[1], name, bid:b?b.id:null, mission:!!o.mission }; if(o.quiet){ this.plan(); this.draw(); return; } if(!this.plan()){ this.dest=null; if(this.title) this.title.textContent=`No way to drive to ${name} from here`; toast(`There’s no way to drive to ${name} from here.`); return; }
-    toast(`🧭 Route set to ${name}. Follow the blue arrows.`); this.done(); this.draw(); },
+    if(!goal){ if(this.title) this.title.textContent=walk?'You can’t walk there: tap somewhere on land':'No road near there: tap nearer a road'; toast(walk?'You can’t walk there. Pick a spot on land.':'There’s no road near there. Pick a spot by a road.'); return; }
+    this.dest={ x:tx, y:ty, gx:goal[0], gy:goal[1], name, bid:b?b.id:null, mission:!!o.mission, walk }; if(o.quiet){ this.plan(); this.draw(); return; } if(!this.plan()){ this.dest=null; if(this.title) this.title.textContent=`No way to ${walk?'walk':'drive'} to ${name} from here`; toast(`There’s no way to ${walk?'walk':'drive'} to ${name} from here.`); return; }
+    toast(walk?`🚶 Walking route set to ${name}. Follow the blue arrows.`:`🧭 Route set to ${name}. Follow the blue arrows.`); this.done(); this.draw(); },
   plan(){ const T=Drive.T, d=this.dest; if(!T||!d) return false; const p=T.pos, cx=Math.floor(p.x), cy=Math.floor(p.y), near=[];
+    if(d.walk){ const path=findPath(cx,cy,d.gx,d.gy,true); if(!path||path.length<2||(path.length===2&&Math.abs(path[0][0]-path[1][0])+Math.abs(path[0][1]-path[1][1])>1)) return false; /* (on foot: the walking way, tile by tile) */
+      this.route=path; this.idx=0; this.off=0; T.setRoute(path); if(this.clearBtn) this.clearBtn.hidden=false; if(this.title) this.title.textContent=`🚶 To ${d.name}`; return true; }
     for(let j=-6;j<=6;j++) for(let i=-6;i<=6;i++) if(carOK((cx+i)+','+(cy+j))) near.push([cx+i,cy+j,Math.hypot(i,j)]); near.sort((a,b)=>a[2]-b[2]);
     let path=null; for(const [sx,sy] of near.slice(0,10)){ path=findRoadPath(sx,sy,d.gx,d.gy,true); if(path) break; } /* the nearest road that goes there */ if(!path) return false; this.route=path; this.idx=0; this.off=0; T.setRoute(path); if(this.clearBtn) this.clearBtn.hidden=false; if(this.title) this.title.textContent=`To ${d.name}`; return true; },
   clear(){ this.route=null; this.dest=null; this.idx=0; Drive.T&&Drive.T.setRoute(null); this.draw(); },
   // as you drive: how far along you are, a new way if you've gone off it, and arriving
-  follow(p){ const r=this.route; if(!r) return; let best=1e9, bi=this.idx; for(let i=this.idx;i<Math.min(r.length,this.idx+40);i++){ const d=Math.hypot(r[i][0]+0.5-p.x,r[i][1]+0.5-p.y); if(d<best){ best=d; bi=i; } }
+  follow(p){ const r=this.route; if(!r) return; const d0=this.dest; if(d0&&!d0.mission&&!!d0.walk!==(p.mode==='walk')&&Date.now()-this.rerouteAt>1500){ this.rerouteAt=Date.now(); this.go(d0.x,d0.y,{quiet:true,name:d0.name}); return; } /* (got in or out of the car: a driving way, or a walking one) */ let best=1e9, bi=this.idx; for(let i=this.idx;i<Math.min(r.length,this.idx+40);i++){ const d=Math.hypot(r[i][0]+0.5-p.x,r[i][1]+0.5-p.y); if(d<best){ best=d; bi=i; } }
     if(bi-this.idx>=4){ this.idx=bi; Drive.T.setRoute(r.slice(bi)); }
     const end=r[r.length-1]; if(!(this.dest&&this.dest.mission)&&Math.hypot(end[0]+0.5-p.x,end[1]+0.5-p.y)<1.6){ const name=this.dest&&this.dest.name; this.clear(); toast(`🏁 You’ve arrived at ${name}.`); return; }
     if(best>2.5){ if(++this.off>=4&&Date.now()-this.rerouteAt>3000){ this.rerouteAt=Date.now(); this.off=0; this.plan(); } } else this.off=0; } };
@@ -7693,7 +7717,7 @@ const LiveOnline={ ids:new Set(), at:0, busy:false,
   load(){ if(this.busy||Date.now()-this.at<60000||document.hidden) return; this.busy=true; api('/api/online').then(L=>{ this.ids=new Set((L||[]).filter(p=>p.online).map(p=>p.id)); this.at=Date.now(); }).catch(()=>{ this.at=Date.now(); }).finally(()=>{ this.busy=false; }); } };
 const CAR_KEY=new Map(Object.entries(CAR_MODELS).map(([k,v])=>[v,k])); /* a car model back to its name */
 const DrivingNow=new Map(); // citizen id → { x, y, a, m, col, t }
-function drivingAt(c){ const d=DrivingNow.get(c.id); if(!d) return null; if(Date.now()-d.t>5000){ DrivingNow.delete(c.id); return null; }
+function drivingAt(c){ const d=DrivingNow.get(c.id); if(!d) return null; if(Date.now()-d.t>5000){ DrivingNow.delete(c.id); if(d.mode!=='ride') lingerSet(c.id,{ x:d.x, y:d.y, mode:d.mode, m:d.m, col:d.col, t:d.t, local:true }); return null; } /* (gone quiet: they stay where they were last seen, not off to where the map would guess) */
   if(d.mode==='ride'){ const by=d.by&&S.citizens.get(d.by); return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:false, act:by?`Riding with @${by.handle}`:'Riding in a car', where:'the streets', bid:null, moving:true, seg:null, plan:null }; } /* in someone's car: it's their car you see */
   if(d.mode==='walk') return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:true, act:'Walking around town', where:'the streets', bid:null, moving:true, seg:null, plan:null }; /* out on foot, as themselves */
   const M=CAR_MODELS[d.m], V=M?(M.vtype?VEHICLE_TYPES[M.vtype]||VEHICLE_TYPES.car:M):VEHICLE_TYPES.car; /* (out in a boat: a boat) */ return { x:d.x, y:d.y, dx:Math.cos(d.a), dy:-Math.sin(d.a), visible:true, car:true, V, col:d.col||V.colors[0], act:'Driving around town', where:'the streets', bid:null, moving:true, seg:null, plan:null }; }
@@ -7915,7 +7939,8 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     let c=myCitizen(); if(!c&&Me.handle){ try{ const d=await loadDetail(Me.handle); if(d){ c=normC(d); S.citizens.set(c.id,c); } }catch(e){} } /* (you, even if the map hasn't loaded your part of town) */
     if(!c||(!c.home&&!(at&&at.x!=null))){ toast('Your colonist needs a home before they can drive about.'); return; }
     const st=citizenAt(c,gmNow()); if(st&&st.bid&&String(st.where||'').toLowerCase().includes('jail')){ toast('You can’t drive while you’re in jail.'); return; }
-    const here=st||{ x:bOf(c.home).x+1, y:bOf(c.home).y+1 }, s=at&&at.x!=null?{x:at.x,y:at.y,a:at.a||0}:this.startAt(here.x,here.y), car=at&&at.boat?at.boat:at&&at.car?at.car:this.lent||this.ride(c); /* at.car: a car that isn't yours (a hot car) */ /* at: back in the car where you parked it */
+    const LL=!at||at.x==null?Linger.get(c.id):null, back=LL&&!LL.place&&Date.now()-LL.t<LINGER_MS?LL:null; /* back within five minutes of the line dropping: right where you were */
+    const here=st||{ x:bOf(c.home).x+1, y:bOf(c.home).y+1 }, s=at&&at.x!=null?{x:at.x,y:at.y,a:at.a||0}:back?{x:back.x,y:back.y,a:0}:this.startAt(here.x,here.y), car=at&&at.boat?at.boat:at&&at.car?at.car:this.lent||this.ride(c); /* at.car: a car that isn't yours (a hot car) */ /* at: back in the car where you parked it */
     if(!(at&&at.boat)&&wet(s.x,s.y)){ let best=null, bd=1e9; for(let r=1;r<=14&&!best;r++) for(let i=-r;i<=r;i++) for(let j=-r;j<=r;j++){ if(Math.max(Math.abs(i),Math.abs(j))!==r) continue; const tx=Math.floor(s.x)+i, ty=Math.floor(s.y)+j; if(wet(tx,ty)||!walkable(tx,ty)) continue; const d=Math.hypot(i,j); if(d<bd){ bd=d; best=[tx,ty]; } }
       if(best){ s.x=best[0]+0.5; s.y=best[1]+0.5; } } /* never out on the water (only in your boat): the nearest dry land */
     this.send({type:'ride',a:'leave'}); /* (in case the server still has you in someone's car) */
@@ -7989,6 +8014,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     if(this.riding){ this.speed.textContent=`${this.T?this.T.kmh():0} km/h`; DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); } return; } /* riding: the car goes where its driver takes it */
     try{ if(ws&&ws.readyState===1){ const pa=foot&&this.car.own&&this.T.parkedAt, msg=JSON.stringify({type:'drive',mode:foot?'walk':'car',pt:petOut(myCitizen())||'',x:+x.toFixed(2),y:+y.toFixed(2),a:+a.toFixed(2),m:this.car.m,col:this.car.col,...(pa?{pk:{x:+pa.x.toFixed(2),y:+pa.y.toFixed(2),a:+pa.a.toFixed(2),k:pa.k}}:{})}), now=Date.now(); if(msg!==this.sentMsg||now-(this.sentAt||0)>=2000||this.sentWs!==ws){ ws.send(msg); this.sentMsg=msg; this.sentAt=now; this.sentWs=ws; } } }catch(e){} /* standing still: the same place isn't sent four times a second, just a heartbeat every 2 s (others keep you for 5 s) */
     DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); } Missions.tick(x,y);
+    if(Date.now()-(this.keptAt||0)>3000){ this.keptAt=Date.now(); try{ const me=myCitizen(); if(me) localStorage.setItem('resurgence-lastpos',JSON.stringify({ id:me.id, x:+x.toFixed(2), y:+y.toFixed(2), mode:foot?'walk':'car', m:this.car.m, col:this.car.col, t:Date.now() })); }catch(e){} } /* (where you are, kept on this phone: if the app closes or the line drops, you're back here) */
     if(Date.now()-this.synced>1500){ this.synced=Date.now(); const V=DriveMap.big&&DriveMap.bv, q=V?iso(V.x,V.y):iso(x,y); cam.x=q.x; cam.y=q.y; cam.z=V?Math.max(0.2,Math.min(0.45,V.s/20)):0.45; follow=null; syncChunks(); } } /* the town round the car loads; with the big map open, round where you're looking (for routes further away) */, /* the map loads the town round the car (zoomed out, so it loads plenty) */
   nearBy(b){ this.near=b; this.doorOk=false; if(this.riding){ this.goBtn.hidden=true; this.inBtn.hidden=true; return; } const name=b&&(b.name||T(b).name), foot=this.T&&this.T.pos.mode==='walk';
     if(!b||!canGoTo(b.type)||b.done===false){ this.goBtn.hidden=true; this.inBtn.hidden=true; this.sub.textContent=b?`${name}`:foot?'Stick to walk, drag the screen to look round':'Steer with the stick'; return; }
@@ -8069,7 +8095,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
   map:null, /* (DriveMap, for checking) */
   back(){ const r=this.resume; this.resume=null; if(!r||Date.now()-r.t>3*3600000) return; setTimeout(()=>this.start(r),80); },
   close(quiet){ if(!this.el) return; if(Voice.R&&Voice.R===this.vR) Voice.leave(); this.vR=null; this.vSpot=null; this.near=null; this.doorOk=false; this.doorFor=null; this.atCar=false; /* (a fresh street: not at any door or car yet) */ this.floatOff=null; this.sentMsg=null; this.floatsId=(this.floatsId||0)+1; /* (and its button loop stops, its place is measured afresh, its first position is sent at once) */ try{ this.T&&this.T.dispose(); }catch(e){} this.T=null; Phone.hide(); DriveMap.reset(); this.el.remove(); this.el=null; document.body.classList.remove('room-on','drive-on'); if(this.camWas){ cam.x=this.camWas.x; cam.y=this.camWas.y; cam.z=this.camWas.z; this.camWas=null; } setTimeout(mapResume,0);
-    try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'drive',off:true})); }catch(e){}
+    try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'drive',off:true})); }catch(e){} try{ localStorage.removeItem('resurgence-lastpos'); const me=myCitizen(); if(me) Linger.delete(me.id); }catch(e){} /* (left the street on purpose: no waiting about where you were) */
     if(!quiet){ try{ if(history.state&&history.state.drive) history.back(); }catch(e){} } } };
 addEventListener('popstate',()=>{ if(Drive.el) Drive.close(true); });
 const Visit={
@@ -9145,7 +9171,14 @@ function goHereRow(b){ const me=myCitizen(), [w,d]=T(b).size, bx=b.x+w/2, by=b.y
   return el('div',{class:'row-actions gohere'}, here?el('span',{class:'badge ok',text:'📍 You’re here'}):
     el('button',{class:'btn primary',text:mine?'🏠 Go home':'🚶 Go here',onclick:async()=>{ try{ const r=await api('/api/me/visit',{method:'POST',body:b.type==='spot'?{spot:{x:b.x,y:b.y}}:{buildingId:b.id}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
         toast((mine?'Heading home.':`On your way to ${name}.`)+(r.fare?` ${r.mode==='cab'?'🚕 Cab fare':'🚗 Fuel'}: ${fmt(r.fare)} coins.`:r.mode==='walk'&&fare>0?' Walking (not enough cash for the ride).':'')); Watch.start(0, mine?'Heading home':`Going to ${name}`, b.id); }catch(e){ toast(e.message); } }}),
-    dist!=null&&!here?el('span',{class:'hint',text:`${dist<=1?'right next to you':miles(dist)+' away'} · ${how}`}):''); }
+    dist!=null&&!here?el('span',{class:'hint',text:`${dist<=1?'right next to you':miles(dist)+' away'} · ${how}`}):'',
+    !here&&Me&&Me.token?el('div',{class:'row-actions'}, el('button',{class:'btn sm',text:'🚗 Drive there in 3D',title:'Out into the 3D town, with the way there set',onclick:()=>goIn3D(b,'car')}), el('button',{class:'btn sm',text:'🚶 Walk there in 3D',title:'Out on foot in the 3D town, with the walking way there set',onclick:()=>goIn3D(b,'walk')})):''); }
+// From a place or a spot on the 2D map: out into the 3D town (driving, or on foot) with the way there already set
+async function goIn3D(b,mode){ const name=b.type==='spot'?'the spot you picked':(b.name||T(b).name); closeCard();
+  if(Drive.el&&Drive.T){ const p=Drive.T.pos, foot=p.mode==='walk'; if(mode==='walk'&&!foot&&!Drive.riding) Drive.switchMode(); else if(mode==='car'&&foot&&!Drive.riding){ Drive.callCar(); } }
+  else await Drive.start(mode==='walk'?{mode:'walk'}:undefined);
+  for(let i=0;i<60&&!(Drive.T);i++) await new Promise(r=>setTimeout(r,200)); if(!Drive.T) return;
+  setTimeout(()=>DriveMap.go(b.x,b.y,{name}),400); }
 
 /* ---------------- watching your own colonist ---------------- */
 // "Watch me go" (a delivery) and "Follow me" (any time): the card and panels get out of the way and the camera stays on
@@ -9747,7 +9780,9 @@ function openSharedLink(){ const q=new URLSearchParams(location.search), c=q.get
   if(c){ openCitizen(c).catch(()=>{}); return; }
   if(at.length===2&&at.every(Number.isFinite)){ const p=iso(at[0]+1,at[1]+1); follow=null; cam.x=p.x; cam.y=p.y; cam.z=Math.max(cam.z,1.4); }
   let n=0; const tryB=()=>{ if(S.buildings.has(b)) selectBuilding(b); else if(++n<20) setTimeout(tryB,500); }; tryB(); }
-function afterLoad(){
+// Back after the app closed or the page reloaded within a few minutes: you're where you were, not where your day would have you
+function lastPosSeed(){ try{ const L=JSON.parse(localStorage.getItem('resurgence-lastpos')||'null'), me=myCitizen(); if(!L||!me||L.id!==me.id||Date.now()-L.t>LINGER_MS+20*60000) return; const o=Linger.get(me.id); if(!o||o.t<L.t) Linger.set(me.id,{ x:L.x, y:L.y, mode:L.mode, m:L.m, col:L.col, t:L.t, local:true }); }catch(e){} }
+function afterLoad(){ setTimeout(lastPosSeed,1500); setTimeout(lastPosSeed,6000);
   applyPermissions(); refreshUI();
   if(!S.meta){ Boot.drop(); if(Store.canWrite) $('setup').hidden=false; else { $('townName').textContent='Not founded yet'; $('popLine').textContent='The colony hasn’t landed yet.'; } }
   else { const [cx,cy]=centerTile(); const p=iso(cx+0.5,cy+0.5); cam.x=p.x; cam.y=p.y; updateNews(); openSharedLink(); World.mount(); World.boot(); }
@@ -9759,7 +9794,7 @@ $('setupForm').addEventListener('submit', async e=>{ e.preventDefault();
 const p0=iso(1,1); cam.x=p0.x; cam.y=p0.y;
 // Test hook used by the automated screenshots: move the camera, or look ahead in time (viewing only; the real clock is untouched).
 let frameStats={}, lastVeh=[];
-window.__dbg={ perf:()=>({frames:drawnFrames,ms:Math.round(drawMs)}), look:(x,y,z)=>{ const q=iso(x,y); cam.x=q.x; cam.y=q.y; if(z) cam.z=z; follow=null; }, scr:(x,y)=>{ const q=iso(x,y); return {x:(q.x-cam.x)*cam.z+cw/2, y:(q.y-cam.y)*cam.z+ch/2}; }, wsState:()=>({ready:ws&&ws.readyState, quiet:Date.now()-lastMsgAt}), myTab:t=>openMyTab(t), tables:()=>Tables, snk:()=>SnookerUI, chats:()=>Chats, tab:t=>openTab(t), openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
+window.__dbg={ linger:()=>[...Linger], at:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return null; const st=citizenAt(c,gmNow()); return st&&{x:st.x,y:st.y,act:st.act,moving:st.moving}; }, perf:()=>({frames:drawnFrames,ms:Math.round(drawMs)}), look:(x,y,z)=>{ const q=iso(x,y); cam.x=q.x; cam.y=q.y; if(z) cam.z=z; follow=null; }, scr:(x,y)=>{ const q=iso(x,y); return {x:(q.x-cam.x)*cam.z+cw/2, y:(q.y-cam.y)*cam.z+ch/2}; }, wsState:()=>({ready:ws&&ws.readyState, quiet:Date.now()-lastMsgAt}), myTab:t=>openMyTab(t), tables:()=>Tables, snk:()=>SnookerUI, chats:()=>Chats, tab:t=>openTab(t), openType:t=>{ for(const b of D.buildings.values()) if(b.type===t&&b.done!==false&&!b.ruin){ goToBuilding(b); return b.id; } return null; }, goPetStore:()=>{ for(const b of D.buildings.values()) if(b.type==='petstore'&&b.done!==false){ goToBuilding(b); return b.id; } return null; }, camTile:()=>{ const t=worldToTileF(cam.x,cam.y+14); return {x:+t.x.toFixed(2),y:+t.y.toFixed(2),follow:!!follow}; }, veh:()=>lastVeh.map(i=>({k:i.veh.key,x:+i.veh.st.x.toFixed(3),y:+i.veh.st.y.toFixed(3),dx:+(i.veh.st.dx||0).toFixed(2),dy:+(i.veh.st.dy||0).toFixed(2),m:!!i.veh.st.moving,a:i.veh.st.alpha??1,L:i.veh.V.len})), jump:m=>{ anchorVirt+=m*GAME_MIN_MS; return fmtClock(gmNow()); }, toHour:h=>{ const g=gmNow(), want=Math.floor(g/1440)*1440+h*60; anchorVirt+=((want-g+1440)%1440)*GAME_MIN_MS; return fmtClock(gmNow()); }, trains:()=>railRoutes().map(r=>{ const t=trainAt(r,gmNow(),0), p=routePoint(r,t.s); return {id:r.id,loop:r.loop,len:+r.len.toFixed(1),cars:r.cars,legs:r.legs.length,cycle:+r.cycle.toFixed(1),x:+p[0].toFixed(2),y:+p[1].toFixed(2),moving:t.moving}; }), whereIs:h=>{ const c=[...S.citizens.values()].find(x=>x.handle===h); if(!c) return 'not loaded'; const st=citizenAt(c,gmNow()); return st&&{act:st.act,car:!!st.car,v:st.V&&st.V.name,x:+st.x.toFixed(2),y:+st.y.toFixed(2),visible:st.visible}; }, creatureThumb, nb:()=>S.buildings.size, drawn:()=>[...lastStates.values()].filter(s=>s.visible&&!s.car).map(s=>[s.x,s.y]), stats:()=>({...frameStats, bsp:{hits:BSPR.hits,made:BSPR.made,live:BSPR.live,n:BSPR.map.size,mpx:+(BSPR.px/1e6).toFixed(1)}}), Q:Quality, G:Ground, gen:()=>tileListGen, lights:()=>lights.slice(0,5), dark:()=>DARK, cam(x,y,z){ const p=iso(x,y); cam.x=p.x; cam.y=p.y; cam.z=z||cam.z; follow=null; }, jump(min){ anchorVirt+=min*GAME_MIN_MS; }, now:()=>gmNow(), people:()=>{ const gm=gmNow(); return [...S.citizens.values()].map(c=>({c,s:citizenAt(c,gm)})).filter(o=>o.s&&o.s.visible&&!o.s.car).map(o=>[o.s.x,o.s.y,o.c.gender,D.roads.has(Math.floor(o.s.x)+','+Math.floor(o.s.y))?1:0]); }, avatarSheet:()=>{ const c=document.createElement('canvas'); c.width=1000; c.height=260; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,1000,260); ctx.setTransform(3,0,0,3,0,0);
     for(let i=0;i<20;i++){ const g=i<10?'m':'f', cc={id:'s'+i*7, handle:'sample'+(i*13+5), gender:g}; const p0={x:(i%10)*32+18, y:i<10?42:82}; const pt=worldToTileF(p0.x,p0.y); drawCitizen(cc,{x:pt.x,y:pt.y,moving:false},false); }
     ctx=old; return c.toDataURL(); }, carSheet:()=>{ const c=document.createElement('canvas'); c.width=900; c.height=300; const old=ctx; ctx=c.getContext('2d'); ctx.fillStyle='#8FC463'; ctx.fillRect(0,0,900,300); ctx.setTransform(2.5,0,0,2.5,0,0);
     const dirs=[[1,0],[-1,0],[0,1],[0,-1],[0.7071,0.7071],[0.7071,-0.7071]]; dirs.forEach((d,i)=>['car','bus'].forEach((t,j)=>{ const p0={x:30+i*55,y:30+j*55}; const pt=worldToTileF(p0.x,p0.y); drawVehicle(pt.x,pt.y,d[0],d[1],VEHICLE_TYPES[t],VEHICLE_TYPES[t].colors[0],false); }));

@@ -6369,7 +6369,7 @@ const BUYABLE=new Set(['housing','shops','offices','industry']); // what players
 function actionTabs(c){ const wrap=el('div',null); const gb=GuideUI.box(); if(gb) wrap.append(gb); const dr=Daily.row(); if(dr) wrap.append(dr);
   if(Date.now()-(Love.at||0)>60000){ Love.at=Date.now(); api('/api/me/love').then(r=>{ if(Love.count(r)&&sel) renderCard(true); }).catch(()=>{}); } /* for the number on the 💘 Love tab */
   if(!PushUI.st&&!PushUI.busy) PushUI.load().then(()=>{ if(sel&&sel.kind==='c') renderCard(true); });
-  wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}), el('button',{class:'btn sm',text:'⚙️ Settings',onclick:()=>PushUI.sheet()}), el('button',{class:'btn sm primary',text:'🚗 Drive',title:'Drive around town in 3D',onclick:()=>goOut(false)}), el('button',{class:'btn sm primary',text:'🚶 Walk',title:'Walk around town in 3D, as yourself',onclick:()=>goOut(true)}))); const row=el('div',{class:'acttabs',role:'tablist'});
+  wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}), el('button',{class:'btn sm',text:'⚙️ Settings',onclick:()=>PushUI.sheet()}))); const row=el('div',{class:'acttabs',role:'tablist'});
   for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home',MyHome.data&&MyHome.data.props?`🏠 Home · ${MyHome.data.props} 🏢`:'🏠 Home'],['wallet','👛 Wallet'],['love',Love.n?`💘 Love · ${Love.n}`:'💘 Love'],['cars','Cars'],['crime','Crime'],['badges','⭐ Stars']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=actTab===id?null:id; renderCard(true); if(actTab) scrollTabsUp(); }}));
   if(actTab==='bank') actTab='wallet'; if(actTab==='pet'||actTab==='casino'||actTab==='out') actTab='earn'; if(!actTab){ wrap.append(row); return wrap; } const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, love:()=>Love.box(), casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>{ const p=Stars.panel(c); p.append(statusBox(c)); return p; }, earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
@@ -7158,12 +7158,6 @@ const CallVoice=Object.assign(Object.create(Voice),{ R:null, cfg:null, pc:null, 
 // A button that works on the 2D map (find your colonist, 🎥 Follow me, the intro, moving a building…), tapped on the
 // phone while you're out in 3D: the phone goes away, you're back on the map, and then it does what it says. Returns
 // true when it has taken over (the caller stops there); false when you're already on the map.
-// 🚗 Drive / 🚶 Walk on your card: from the map, out onto the street; on the phone out on the street, into your car or
-// out of it right where you are; on the phone in a place, at the races or the fights, out of there and onto the street
-function goOut(walk){ try{ if(Drive.el&&Drive.T){ const foot=Drive.T.pos.mode==='walk'&&!Drive.riding;
-      if(walk===foot){ toast(walk?'🚶 You’re already on foot.':'🚗 You’re already driving.'); return; } Phone.hide(); Drive.switchMode(); return; }
-    if(Phone.on) Phone.hide(); for(const V of [TrackView,ArenaView]) if(V.el) V.close(); }catch(e){}
-  Drive.start(walk?{mode:'walk'}:undefined); }
 // 🛋️ Go inside (your home, from your card): from the street, the races or the fights on the phone, you leave there first
 function goHome(){ try{ if(Phone.on) Phone.hide(); for(const V of [Drive,TrackView,ArenaView]) if(V.el) V.close(); }catch(e){} Room.open(); }
 function toMap(fn){ let inside=false; try{ inside=Phone.inside(); }catch(e){} if(!inside) return false;

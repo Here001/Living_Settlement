@@ -641,7 +641,7 @@ body.clean #djBubble{display:none}
 .dpin canvas{width:100%;height:100%;display:block;cursor:pointer}
 .dpin .dpinx{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:50%;border:0;background:rgba(20,22,28,.7);color:#fff;font-size:13px;line-height:26px;padding:0}
 @media (orientation:landscape) and (max-height:500px){ .dpin{width:112px;height:112px} }
-.mbanner{position:fixed;left:0;right:0;top:34%;z-index:9700;pointer-events:none;display:flex;justify-content:center;opacity:0;transition:opacity .45s ease}
+.mbanner{position:fixed;left:0;right:0;top:34%;z-index:9800;pointer-events:none;display:flex;justify-content:center;opacity:0;transition:opacity .45s ease}
 .mbanner.on{opacity:1}.mbanner.off{opacity:0;transition:opacity .6s ease}
 .mbband{width:100%;padding:16px 16px 18px;display:flex;flex-direction:column;align-items:center;gap:4px;background:linear-gradient(90deg,rgba(0,0,0,0),rgba(0,0,0,.42) 18%,rgba(0,0,0,.42) 82%,rgba(0,0,0,0));text-align:center}
 .mbtitle{font:900 clamp(30px,9vw,54px)/1.05 system-ui,sans-serif;letter-spacing:.04em;text-shadow:0 3px 0 rgba(0,0,0,.55),0 0 18px rgba(0,0,0,.35);transform:scale(1.35);transition:transform .5s cubic-bezier(.2,1.4,.4,1)}
@@ -744,6 +744,18 @@ body.room-on .toast{z-index:9850} /* above the phone and the call screen, so a r
 .phone.pt5 .phframe{--bz:8px;--fr:54px;--sr:46px;--pfb:linear-gradient(135deg,#f8e7a1 0%,var(--pc) 22%,#8a6a1f 48%,var(--pc) 70%,#fff3c4 100%);box-shadow:0 0 0 1px #fff3c4,0 0 0 4px #5e4512,0 0 40px rgba(255,210,110,.35),0 24px 60px rgba(0,0,0,.6)}
 .phone.pt5 .phframe::before{content:'';position:absolute;inset:3px;border-radius:51px;pointer-events:none;background:repeating-linear-gradient(45deg,rgba(255,255,255,.12) 0 2px,transparent 2px 9px);mix-blend-mode:overlay}
 .phone.pt5 .phnotch{background:radial-gradient(circle at 78% 50%,#9ff 0 3px,#3a8 4px,#050506 6px);box-shadow:0 0 0 1.5px #d4af37}
+/* the phone turned sideways (a phone held in landscape, as in the 3D views): wide and short, the notch at the side, the
+   apps in more columns; each phone keeps its own look (bezels go round the long sides) */
+@media (orientation:landscape) and (max-height:560px){
+  .phone{padding:8px calc(8px + env(safe-area-inset-right,0px)) 8px calc(8px + env(safe-area-inset-left,0px))}
+  .phone .phframe{width:min(860px,calc(100vw - 24px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));height:calc(100dvh - 16px);max-height:430px;animation:phside .25s ease-out}
+  .phone.pt0 .phframe{--bz:12px 64px 12px 44px;width:min(780px,calc(100vw - 24px))} .phone.pt0 .phhw{bottom:auto;top:50%;left:auto;right:9px;margin:-23px 0 0} .phone.pt0 .phspk{top:50%;left:18px;width:7px;height:64px;margin:-32px 0 0} /* (the old phone sideways: its round button and speaker at the ends) */ .phone.pt1 .phframe{--bz:10px 22px 10px 12px}
+  .phone .phstatus{padding:4px 18px 2px}.phone .phhome{height:14px}
+  .phone .phapps{grid-template-columns:repeat(6,1fr);gap:12px 6px}
+  .phone .phnotch{position:absolute;left:4px;top:50%;transform:translateY(-50%) rotate(90deg);transform-origin:center}
+  .phone.pt1 .phnotch{margin-top:0}
+}
+@keyframes phside{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
 .phone.pt5 .phside{display:block;position:absolute;right:-5px;top:140px;width:5px;height:80px;border-radius:0 3px 3px 0;background:linear-gradient(#fff3c4,#d4af37,#8a6a1f)}
 .phone.pt5 .phwall{background:radial-gradient(circle at 30% 25%,rgba(255,230,160,.55),transparent 45%),radial-gradient(circle at 70% 70%,rgba(255,170,190,.45),transparent 50%),linear-gradient(140deg,#1b1206,#3a2508 40%,#1b1206);background-size:200% 200%;animation:phaurora 14s ease-in-out infinite alternate}
 .phone.pt5 .phwall::after{content:'';position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,rgba(255,240,200,.22) 50%,transparent 65%);background-size:250% 100%;animation:phshine 6s linear infinite}
@@ -1240,7 +1252,7 @@ body.phone-on .worldbtn{display:none}
 .roomitem img{width:80px;height:64px;object-fit:contain}
 .roomitem .noimg{display:block;width:80px;height:64px}
 .roomitems .rfor{flex:none;align-self:center;font-weight:800;margin:0}
-body.room-on .toast,body.room-on .rsheet-bg.rreport{z-index:9700}
+body.room-on .rsheet-bg.rreport{z-index:9700} body.room-on .toast{z-index:9850} body:has(.rsheet-bg) .toast,body:has(.phone) .toast{z-index:9850} /* (over a sheet or the phone on the map too) */ /* (a message is never hidden behind the phone) */
 .roomtools{position:absolute;left:8px;right:8px;top:54px;z-index:2;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;pointer-events:none}
 .roomtools>*{pointer-events:auto}
 .roomtools .tip{background:rgba(255,255,255,.94);color:#222;border-radius:12px;padding:6px 10px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.25)}
@@ -7606,7 +7618,7 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
       const r=await api('/api/me/missions',{method:'POST',body:{action:'start',kind,...opt}}); this.close(); Phone.hide(); this.d=r; this.begin(r.active);
       const K=MISSION_KINDS[kind]; toast(`${K.icon} ${K.name}: ${this.say(this.step())}`); }
     catch(e){ toast(e.message); } finally{ this.busy=false; } },
-  begin(a){ this.a=a; this.saidHi=false; this.route(); this.paintHud(); clearInterval(this.tickT); this.tickT=setInterval(()=>this.paintHud(),a.kind==='race'?100:1000); },
+  begin(a){ this.a=a; this.saidHi=false; this.route(); if(a.kind==='race') this.rivals(a); this.paintHud(); clearInterval(this.tickT); this.tickT=setInterval(()=>this.paintHud(),a.kind==='race'?100:1000); },
   say(s){ const a=this.a, K=a&&a.kind; if(!s) return ''; if(K==='race'){ const n=a.steps.length; return a.step>=n-1?'Through the finish!':`Checkpoint ${a.step+1} of ${n}`; }
     if(s.k==='chase') return `🚨 Catch ${s.name}: pull up right beside them.`; if(s.k==='hunt') return `🎯 Catch up with ${s.name}: get right next to them.`; if(a.patrol) return `On patrol: ${s.name}.`;
     if(s.k==='game') return K==='holdup'?`Walk into ${s.name} and rob the till.`:K==='con'?`Find ${s.name} and walk up to them.`:`Walk up to ${s.name}.`;
@@ -7620,6 +7632,22 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
   people(){ const a=this.a, s=this.step(); if(!a) return this.givers(Drive.T?Drive.T.pos.x:0, Drive.T?Drive.T.pos.y:0); if(a&&s&&s.k==='steal'&&s.car) return { d:0, id:'m:mark', x:s.kx+0.5, y:s.ky+0.5, car:true, m:s.car.m, col:s.car.col, drv:true, a:this.markA||0, tag:'🔑 Your mark' }; /* (the car to take, parked on the street) */
     if(a&&s&&s.k==='game'&&s.game==='scam'&&s.kx!=null){ const tx=Math.max(s.x-0.3,Math.min(s.x+s.w+0.3,s.kx+0.5)), ty=Math.max(s.y-0.3,Math.min(s.y+s.h+0.3,s.ky+0.5)); return { d:0, id:'m:tourist', x:tx, y:ty, car:false, look:null, tag:'🧳 Tourist' }; }
     if(!a||!this.paxAt) return []; return { d:0, id:'m:pax', x:this.paxAt.x, y:this.paxAt.y, car:false, look:null, tag:'🚕 Your fare' }; },
+  // a street race's other drivers: three cars of different makes on the grid beside you, each driving the same course
+  // along the streets from the green light, one about the gold time, one about silver, one a little slower (each a
+  // touch different every race). Where you are among them shows on the strip, and at the end, where you finished.
+  rivals(a){ const T3=Drive.T; if(!T3||!a.steps||!a.steps.length) return; const p=T3.pos, st=nearestRoad(Math.floor(p.x),Math.floor(p.y),6)||[Math.floor(p.x),Math.floor(p.y)];
+    let tiles=[st], cur=st; for(const c of a.steps){ const leg=findRoadPath(cur[0],cur[1],c.kx,c.ky,true); if(!leg||leg.length<2){ tiles.push([c.kx,c.ky]); cur=[c.kx,c.ky]; continue; } tiles.push(...leg.slice(1)); cur=[c.kx,c.ky]; }
+    if(tiles.length<3) return; const pts=tiles.map(([x,y])=>[(x+0.5)*8,(y+0.5)*8]); let len=0; const cum=[0]; for(let k=1;k<pts.length;k++){ len+=Math.hypot(pts[k][0]-pts[k-1][0],pts[k][1]-pts[k-1][1]); cum.push(len); }
+    this.course={ pts, cum, len, pi:0 }; const T0=a.times||{gold:40,silver:50,bronze:65}, rnd=k=>{ let h=hash(a.id+':'+k); return (h%1000)/1000; };
+    const cars=['sports','gt','supercar','luxury','evsedan','suv'], cols=['#C8382E','#1F1F24','#E2B13C','#2F4A7A','#F4F4F0','#1E7A55','#8E44AD','#E2783B'], pick=k=>cars[(hash(a.id+'car'+k))%cars.length];
+    const goal=[T0.gold*(0.94+rnd(1)*0.08), T0.silver*(0.94+rnd(2)*0.08), (T0.silver+T0.bronze)/2*(0.95+rnd(3)*0.08)];
+    const grid=[[-1.7,0],[1.7,7],[-1.7,7]]; /* (beside you, and the two just behind) */
+    const L=goal.map((secs,i)=>({ kind:pick(i), col:cols[(hash(a.id+'col'+i))%cols.length], pts, v:Math.min(36,(len+grid[i][1])/Math.max(8,secs-1.25)), t0:a.start, lane:grid[i][0], back:grid[i][1] }));
+    try{ T3.setRacers(L); }catch(e){} },
+  // where you are in the race: how far along the course you've got against the others
+  place(){ const c=this.course, T3=Drive.T; if(!c||!T3) return null; const p=T3.pos, x=p.x*8, y=p.y*8; let best=1e9, bi=c.pi;
+    for(let k=Math.max(0,c.pi-3);k<Math.min(c.pts.length,c.pi+30);k++){ const d=Math.hypot(c.pts[k][0]-x,c.pts[k][1]-y); if(d<best){ best=d; bi=k; } } c.pi=bi;
+    const mine=c.cum[bi], R=T3.racers||[]; return { n:R.length+1, at:1+R.filter(r=>r.s>mine+2).length }; },
   // as you drive: the strip, the passenger's hello, and pulling up at the stop
   tick(x,y){ this.dropNear(x,y); const a=this.a, s=this.step(); if(!a&&Drive.T){ this.nearGiver(x,y); return; } if(!a||!s||!Drive.T||this.busy||this.playing) return; const T3=Drive.T, now=Date.now();
     if(now>a.deadline){ this.fail('time'); return; }
@@ -7638,7 +7666,7 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
       if(r.next&&a.kind==='hotcar'){ this.a=r.active; await this.takeCar(s); return; }
       if(r.next){ this.a=r.active; if(a.kind==='taxi'){ toast('🚕 They’re in. '+this.say(this.step())); setTimeout(()=>{ try{ Drive.T.say('me', '“'+FARES[a.line%FARES.length].go+'”'); }catch(e){} },1500); } else toast(`📦 ${s.k==='pickup'?'Got it.':'Delivered.'} ${this.say(this.step())}`); sfxCoin(); this.route(); this.paintHud(); return; }
       if(r.done) this.goalsToast(r);
-      if(r.done&&r.kind==='race'){ const K=MISSION_KINDS[r.kind]; this.end(); this.passed(`${MEDALS[r.medal]} ${r.secs.toFixed(1)} s! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),4600); try{ Earn.coins(r); }catch(e){} return; }
+      if(r.done&&r.kind==='race'){ const K=MISSION_KINDS[r.kind], R=(Drive.T&&Drive.T.racers)||[], at=1+R.filter(x=>x.finish<r.secs).length; this.end(); this.passed(`${at===1?'🏆 1st!':`${ordinal(at)} of ${R.length+1}.`} ${MEDALS[r.medal]||''} ${r.secs.toFixed(1)} s! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),4600); try{ Earn.coins(r); }catch(e){} return; }
       if(r.done&&(r.kind==='police'||r.kind==='bounty')){ this.end(); this.passed(r.kind==='police'?`🚓 ${a.patrol?'Patrol done':'Arrest made'}! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`:`🎯 Bounty collected! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),4600); return; }
       if(r.done&&r.kind==='holdup'){ this.end(); this.passed(`🏪 Got away with it! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),4600); return; }
       if(r.done&&r.kind==='hotcar'){ this.end(); this.passed(`🔑 Sold for parts! +${r.paid.toLocaleString()} coins${r.tip?` (${r.tip.toLocaleString()} for being quick)`:''} · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),4600); setTimeout(()=>this.walkAway(),1500); return; }
@@ -7658,7 +7686,7 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
     const n=el('div',{class:'mbanner '+(ok?'ok':'bad'),role:'status','aria-live':'polite'}, el('div',{class:'mbband'}, el('b',{class:'mbtitle',text:ok?'MISSION PASSED':'MISSION FAILED'}), el('span',{class:'mbsub',text:head}), pay?el('span',{class:'mbpay',text:pay}):''));
     document.body.append(n); requestAnimationFrame(()=>n.classList.add('on')); this.bannerT=setTimeout(()=>{ n.classList.remove('on'); n.classList.add('off'); setTimeout(()=>n.remove(),700); },4200); },
   goalsToast(r){ if(r&&r.goalsDone&&r.goalsDone.length) setTimeout(()=>{ toast(r.dailyBonus?`📅 All three of today’s goals done! +${r.dailyBonus.toLocaleString()} coins`:`📅 Goal done: ${r.goalsDone[0]}`); sfxCoin(); },2600); },
-  end(){ this.tgt=null; this.a=null; this.paxAt=null; this.cops=null; this.trail=null; this.playing=false; this.getaway=false; clearInterval(this.tickT); this.tickT=null; if(DriveMap.dest&&DriveMap.dest.mission) DriveMap.clear(); this.paintHud(); },
+  end(){ try{ Drive.T&&Drive.T.setRacers(null); }catch(e){} this.course=null; this.tgt=null; this.a=null; this.paxAt=null; this.cops=null; this.trail=null; this.playing=false; this.getaway=false; clearInterval(this.tickT); this.tickT=null; if(DriveMap.dest&&DriveMap.dest.mission) DriveMap.clear(); this.paintHud(); },
   // a crime mission: you're there, so the game plays right here (the server replays it and scores it, and the take goes by your score)
   playGame(game, s){ const a=this.a, K=MISSION_KINDS[a.kind]; this.playing=true; try{ Drive.T&&Drive.T.stop(); }catch(e){}
     openCrimeGame(game, { practiceOnly:true, mission:{ next:a.kind==='holdup'?'🚗 Get away!':'Back to the street' }, at:s.name, band:'mid', chance:0.3, onResult:(res,run)=>this.played(run&&run.id, res) }, crimeCtx()); },
@@ -7721,7 +7749,7 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
     if(!this.hud||!this.hud.isConnected){ this.hud=el('div',{class:'mhud'}); root.append(this.hud); }
     const a=this.a, K=MISSION_KINDS[a.kind], now=Date.now(), left=Math.max(0,Math.ceil((a.deadline-now)/1000)), t=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`, txt=this.say(this.step());
     if(a.kind==='race'){ const go=now<a.start?Math.ceil((a.start-now)/1000):0, el2=Math.max(0,(now-a.start)/1000), key=a.id+a.step+(go||Math.floor(el2*10)); if(this.hud.dataset.k===key) return; this.hud.dataset.k=key; this.hud.classList.toggle('late',left<=10);
-      const T0=a.times||{}; this.hud.replaceChildren(el('div',{class:'mhrow'}, el('b',{text:`🏁 ${go?'Get ready…':txt}`}), el('span',{class:'mclock',text:go?String(go):`${el2.toFixed(1)} s`})), el('small',{text:`🥇 ${T0.gold} s · 🥈 ${T0.silver} s · 🥉 ${T0.bronze} s`})); this.hud.classList.toggle('mgo2',!!go); return; }
+      const T0=a.times||{}; this.hud.replaceChildren(el('div',{class:'mhrow'}, el('b',{text:`🏁 ${go?'Get ready…':txt}`}), el('span',{class:'mclock',text:go?String(go):`${el2.toFixed(1)} s`})), el('small',{text:(()=>{ const P=!go&&this.place(); return `${P?`📍 ${ordinal(P.at)} of ${P.n} · `:''}🥇 ${T0.gold} s · 🥈 ${T0.silver} s · 🥉 ${T0.bronze} s`; })()})); this.hud.classList.toggle('mgo2',!!go); return; }
     const key=a.id+a.step+t; if(this.hud.dataset.k===key) return; this.hud.dataset.k=key; this.hud.classList.toggle('late',left<=20);
     this.hud.replaceChildren(el('div',{class:'mhrow'}, el('b',{text:`${K.icon} ${K.name}`}), el('span',{class:'mclock',text:`⏱ ${t}`})), el('div',{class:'mhtxt',text:txt}), el('small',{text:`💰 ${a.fare.toLocaleString()} + a tip if you’re quick`})); },
   // back out on the street with a mission still on: the way to the stop again
@@ -7928,6 +7956,7 @@ const ArenaView={ el:null, T:null, b:null, g:null, bb:[], act:null, blocking:fal
   close(quiet){ if(!this.el) return; clearInterval(this.timer); clearInterval(this.inTimer); clearTimeout(this.posT); removeEventListener('keydown',this.keys); removeEventListener('keyup',this.keys); if(Voice.R===this) Voice.leave();
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'out'})); }catch(e){} this.others=new Map(); this.h=null; try{ this.T&&this.T.close(); }catch(e){} this.T=null; this.el.remove(); this.el=null; document.body.classList.remove('room-on');
     if(!quiet&&this.b) api('/api/tracks/'+encodeURIComponent(this.b.id)+'/leave',{method:'POST'}).catch(()=>{}); if(!quiet) toast('🚪 You left the Colosseum.'); } };
+const ordinal=n=>n+(n%100>=11&&n%100<=13?'th':['th','st','nd','rd'][n%10]||'th');
 const yourCar=(c,cap)=>c.lent?c.name:(cap?'Your ':'your ')+c.name.toLowerCase(); /* your car, or the one you borrowed (@ana’s sports car) */
 const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
   // which car: the one you're driving if it's a road one, otherwise a basic car

@@ -144,6 +144,16 @@ export function createTown(host, opts) {
   let feet = null; const mkFeet = () => { if (feet) return feet; feet = W.makePerson('me', null, opts.look || null); feet.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); scene.add(feet.group); return feet; };
   if (foot) mkFeet();
   let petGone = null; /* (your pet on its way home) */
+  // ---- a street race's other cars: each drives the course (a line of points along the roads, in metres) at its own
+  // pace from the green light, in its own lane, and stops once it's crossed the line ----
+  let racers = [];
+  function setRacers(list) { racers = (list || []).map((o, i) => { const P = o.pts, cum = [0]; for (let k = 1; k < P.length; k++) cum.push(cum[k - 1] + Math.hypot(P[k][0] - P[k - 1][0], P[k][1] - P[k - 1][1]));
+      const r = { kind: o.kind, col: o.col, pts: P, cum, total: cum[cum.length - 1], v: o.v, t0: o.t0, lane: o.lane || 0, back: o.back || 0, i: 0, x: P[0][0], z: P[0][1], ry: Math.atan2(-(P[1][1] - P[0][1]), P[1][0] - P[0][0]) - Math.PI / 2, s: 0 }; racerAt(r, 0); return r; }); }
+  function racerAt(r, s) { const P = r.pts, C = r.cum; while (r.i < P.length - 2 && C[r.i + 1] < s) r.i++; while (r.i > 0 && C[r.i] > s) r.i--; const a = P[r.i], b = P[Math.min(r.i + 1, P.length - 1)], L = (C[r.i + 1] - C[r.i]) || 1, f = Math.max(0, Math.min(1, (s - C[r.i]) / L));
+    const dx = (b[0] - a[0]) / L, dz = (b[1] - a[1]) / L; r.x = a[0] + (b[0] - a[0]) * f - dz * r.lane; r.z = a[1] + (b[1] - a[1]) * f + dx * r.lane; const ry = Math.atan2(-dz, dx) - Math.PI / 2; let d = ry - r.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); r.ry += d * 0.25; }
+  function racersStep() { if (!racers.length) return; const now = Date.now(); for (const r of racers) { const t = (now - r.t0) / 1000; let s = t <= 0 ? 0 : t < 2.5 ? 0.5 * (r.v / 2.5) * t * t : r.v * (t - 1.25); /* (pulls away from the line, then at full pace) */
+      s = Math.min(r.total, Math.max(0, s - r.back)); r.s = s; racerAt(r, s); } }
+
   const strays = []; /* (other people's pets on their way home) */
   let myPet = null; if (opts.pet) { try { myPet = follower(opts.pet); myPet.group.visible = false; scene.add(myPet.group); } catch (e) { myPet = null; } } /* your pet: with you on foot (in the car while you drive) */
   const me = W.makeCar(opts.car.kind || 'car', opts.car.col || '#c8382e'); scene.add(me); me.traverse(m => { if (m.isMesh) m.castShadow = true; });
@@ -173,6 +183,7 @@ export function createTown(host, opts) {
     for (const s of S) { if (s.gone || (s.brk && !foot)) continue; const d = depth(x, z, s); if (d <= (foot ? 0 : s.soft || 0)) continue; if (foot ? d >= depth(x0, z0, s) - 1e-3 : d > depth(x0, z0, s) + 0.002) return true; } /* (a vehicle may brush a tree or a bush, and once touching something it can always slide along it or back away) */ /* (lamps, bins, hydrants and traffic lights don't stop a car: it knocks them over) */
     if (!foot) { const box = (kind, cx, cz, ry) => { const d = carDep(kind, cx, cz, ry, x, z, BRUSH); return d > 0 && d >= carDep(kind, cx, cz, ry, x0, z0, BRUSH) - 1e-3; };
       for (const t of traffic) if (Math.abs(t.px - x) < 5 && Math.abs(t.pz - z) < 5 && box(t.kind, t.px, t.pz, t.ry)) return true;
+      for (const r of racers) if (Math.abs(r.x - x) < 5 && Math.abs(r.z - z) < 5 && box(r.kind, r.x, r.z, r.ry)) return true; /* (the other cars in a street race: solid, you can bump them) */
       for (const f of folk.values()) if (f.kind === 'car' && Math.abs(f.x - x) < 5 && Math.abs(f.z - z) < 5 && box(f.m, f.x, f.z, f.ry)) return true; return false; } /* other cars: their real size, so you can squeeze past */
     // on foot, a car is solid all along its body (its own length and width, and a little for your shoulders): yours where
     // you parked it, other players' cars and the traffic
@@ -677,6 +688,7 @@ export function createTown(host, opts) {
     else if (myPet) { const onFoot = foot && feet && !riding; myPet.group.visible = onFoot; if (onFoot) myPet.step(dt, feet.group.position.x, feet.group.position.z); }
     me.visible = !foot && !riding && mode !== 1; if (feet) { feet.group.visible = foot && mode !== 1; if (foot) { feet.setPos(car.x, car.z); { const m = car.mv == null ? car.a : car.mv; feet.animate(dt, Math.cos(m) * car.v, -Math.sin(m) * car.v); } feet.group.rotation.y = car.a + Math.PI / 2; const wet = wetAt(car.x, car.z); swimY += ((wet ? SINK : 0) - swimY) * Math.min(1, dt * 4); swimPose(feet, swimY, wet, now, Math.abs(car.v)); } } /* your character walks (and faces where you're going) */
     if (parked) pushCar(parked.kind, parked.col, parked.x, parked.z, parked.ry);
+    racersStep(); for (const r of racers) pushCar(r.kind, r.col, r.x, r.z, r.ry);
     if (summon) { comeUp(dt); if (summon) pushCar(summon.kind, summon.col, summon.x, summon.z, summon.ry); }
     me.position.set(car.x, BOAT ? Math.sin(now / 700) * 0.06 : 0, car.z); me.rotation.set(0, 0, 0); me.rotation.y = car.a - Math.PI / 2; if (BOAT) me.rotation.z = Math.sin(now / 900) * 0.025; /* (a boat rocks gently) */ for (const w of me.userData.wheels || []) w.rotation.x -= car.v * dt / 0.33;
     roll += (car.steer * Math.min(1, Math.abs(car.v) / 14) * 0.05 - roll) * Math.min(1, dt * 5); accS += ((car.v - accel0) / Math.max(dt, 1 / 30) - accS) * Math.min(1, dt * 2.5); accel0 = car.v; pitch += (-accS * 0.0022 - pitch) * Math.min(1, dt * 3); /* the body dips under braking and squats as it pulls away: smoothed, so it never twitches */ me.rotateZ(roll); me.rotateX(Math.max(-0.035, Math.min(0.035, pitch))); /* the body leans into a turn and dips when you brake */
@@ -794,7 +806,7 @@ export function createTown(host, opts) {
     stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, fleet: Object.fromEntries([...fleetM].filter(([, m]) => m.count).map(([k, m]) => [k, m.count])), calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
     toggleView() { mode = (mode + 1) % 3; lk.yaw = foot ? lk.yaw : 0; lk.pitch = 0; return ['behind', 'driver', 'above'][mode]; },
     setControls(c) { ctl = c || ctl; controls(); if (riding && pad) pad.style.display = 'none'; },
-    setRoute, setDrop,
+    setRoute, setDrop, setRacers, get racers() { return racers.map(r => ({ s: r.s, x: r.x / TILE, y: r.z / TILE, ry: r.ry, kind: r.kind, total: r.total, done: r.s >= r.total - 0.5, finish: (r.total + r.back) / r.v + 1.25 })); },
     stop() { car.v = 0; car.vx = car.vz = 0; },
     dispose() { dead = true; clearInterval(refresh); view.stop(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); removeEventListener('blur', kb); removeEventListener('resize', fit); removeEventListener('orientationchange', turned); ro.disconnect();
       for (const v of blocks.values()) drop(v); blocks.clear(); for (const f of folk.values()) scene.remove(f.g); folk.clear();

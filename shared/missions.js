@@ -43,12 +43,12 @@ export const MISSION = {
   near: 2.6,                  // how close (in tiles, from the edge of the building) counts as "there"
   fastest: 6,                 // tiles a second: nothing on the road gets between two stops quicker than this
   time: { base: 35, perTile: 1.1 },
-  pay: { parcel: { base: 45, perTile: 2.6, max: 420 }, taxi: { base: 40, perTile: 3.0, max: 480 } },
+  pay: { parcel: { base: 85, perTile: 4.6, max: 800 }, taxi: { base: 80, perTile: 5.2, max: 900 } }, /* (raised: a side job pays enough to be worth the drive) */
   xp: { parcel: { base: 22, perTile: 0.25 }, taxi: { base: 26, perTile: 0.25 } },
-  race: { checkpoints: 5, leg: [9, 17], gold: 2.6, silver: 2.1, bronze: 1.6, pay: { base: 70, perTile: 3.2, max: 650 }, medal: { gold: 1, silver: 0.65, bronze: 0.4 }, xp: { base: 30, perTile: 0.3 }, countdown: 3 },
-  hotcar: { pay: { base: 160, perTile: 4.2, max: 900 }, xp: { base: 40, perTile: 0.3 }, cars: ['sports', 'gt', 'luxury', 'supercar', 'evsedan', 'suv'], police: 2, after: 6, speed: [2.6, 3.3], lose: 42, catch: 0.9, caught: 2.5 },
-  game: { holdup: { base: 260, perTile: 3.6, max: 900, xp: 55 }, con: { base: 190, xp: 40 }, atm: { base: 340, xp: 60 }, extra: 150, botched: 0.15 }, /* (a crime mission plays the shop, the con or the ATM game right there: pay by how well you played) */
-  police: { pay: 360, xp: 65, catch: 1.8, secs: 150, range: 90, patrol: { pay: 0.45, xp: 0.6 } }, /* (an arrest, or a patrol: a race's course, paid at a fraction, no medals) */
+  race: { checkpoints: 5, leg: [9, 17], gold: 2.6, silver: 2.1, bronze: 1.6, pay: { base: 130, perTile: 5.6, max: 1200 }, medal: { gold: 1, silver: 0.65, bronze: 0.4 }, xp: { base: 30, perTile: 0.3 }, countdown: 3 },
+  hotcar: { pay: { base: 260, perTile: 6.4, max: 1500 }, xp: { base: 40, perTile: 0.3 }, cars: ['sports', 'gt', 'luxury', 'supercar', 'evsedan', 'suv'], police: 2, after: 6, speed: [2.6, 3.3], lose: 42, catch: 0.9, caught: 2.5 },
+  game: { holdup: { base: 400, perTile: 5.4, max: 1400, xp: 55 }, con: { base: 300, xp: 40 }, atm: { base: 520, xp: 60 }, extra: 240, botched: 0.15 }, /* (a crime mission plays the shop, the con or the ATM game right there: pay by how well you played) */
+  police: { pay: 560, xp: 65, catch: 1.8, secs: 150, range: 90, patrol: { pay: 0.45, xp: 0.6 } }, /* (an arrest, or a patrol: a race's course, paid at a fraction, no medals) */
   bounty: { min: 500, max: 50000, catch: 1.6, secs: 240, xp: 70 },
   drop: { every: [8, 16], amount: [300, 1200], grab: 1.4, life: 6 }, /* cash drops: minutes between them, coins, how close, minutes it waits */
   tip: 0.5,                   // up to half the fare again for arriving with lots of time left
@@ -71,7 +71,7 @@ export function offEdge(p, b) { const dx = Math.max(b.x - p.x, 0, p.x - (b.x + b
 export const atStop = (p, s) => (s.kx != null && Math.hypot(p.x - (s.kx + 0.5), p.y - (s.ky + 0.5)) <= 1.8) || offEdge(p, s) <= MISSION.near;
 
 // Today's three goals: small things to aim for each day, from the missions you have open, with a bonus for all three.
-export const DAILY = { bonus: { base: 250, perRank: 150, xp: 60 } };
+export const DAILY = { bonus: { base: 400, perRank: 220, xp: 60 } };
 export function dailyGoals(seed, xp) { let h = (seed >>> 0) || 1; const r = () => { h = (h + 0x6D2B79F5) >>> 0; let t = h; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const rank = rankOf(xp), open = MISSION_IDS.filter(k => openAt(k, xp) && !MISSIONS[k].link), pool = [];
   for (const k of open) pool.push({ k: 'do', kind: k, need: k === 'parcel' || k === 'taxi' ? 2 : 1 });

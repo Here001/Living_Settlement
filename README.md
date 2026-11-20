@@ -745,6 +745,8 @@ Every colonist can go inside the home they live in, owned or rented, walk around
 
 ## 🎯 Missions in town
 
+**Every mission ends with a banner.** Pass or fail, a big see-through banner sweeps across the middle of the screen for a few seconds, over the 3D street, a game or the map: **MISSION PASSED** in gold, with what you did and what it paid (coins and XP), or **MISSION FAILED** in red, with why (out of time, busted, arrested, botched, given up). A rank-up card follows once it's gone.
+
 The main way to make money out in the 3D town, and what gives players something to aim for. Open **🎯 Missions** on your phone (it's the first app), or the **🎯 Missions in town** button at the top of the Earn tab on your card.
 
 - **One at a time, a few to start with.** A new player sees just two missions: 📦 **Parcel run** (collect a parcel, drop it at one or two places across town) and 🚕 **Taxi fare** (someone waits at the kerb with a name tag and a wave; pick them up and drive them where they're going, and they chat on the way). Below the list, the next rank's missions show locked, so there's always one thing to aim for; the rest stay a surprise.

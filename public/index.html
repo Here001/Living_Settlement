@@ -641,6 +641,15 @@ body.clean #djBubble{display:none}
 .dpin canvas{width:100%;height:100%;display:block;cursor:pointer}
 .dpin .dpinx{position:absolute;top:4px;right:4px;width:26px;height:26px;border-radius:50%;border:0;background:rgba(20,22,28,.7);color:#fff;font-size:13px;line-height:26px;padding:0}
 @media (orientation:landscape) and (max-height:500px){ .dpin{width:112px;height:112px} }
+.mbanner{position:fixed;left:0;right:0;top:34%;z-index:9700;pointer-events:none;display:flex;justify-content:center;opacity:0;transition:opacity .45s ease}
+.mbanner.on{opacity:1}.mbanner.off{opacity:0;transition:opacity .6s ease}
+.mbband{width:100%;padding:16px 16px 18px;display:flex;flex-direction:column;align-items:center;gap:4px;background:linear-gradient(90deg,rgba(0,0,0,0),rgba(0,0,0,.42) 18%,rgba(0,0,0,.42) 82%,rgba(0,0,0,0));text-align:center}
+.mbtitle{font:900 clamp(30px,9vw,54px)/1.05 system-ui,sans-serif;letter-spacing:.04em;text-shadow:0 3px 0 rgba(0,0,0,.55),0 0 18px rgba(0,0,0,.35);transform:scale(1.35);transition:transform .5s cubic-bezier(.2,1.4,.4,1)}
+.mbanner.on .mbtitle{transform:scale(1)}
+.mbanner.ok .mbtitle{color:#F5C542}.mbanner.bad .mbtitle{color:#F0533F}
+.mbsub{color:#fff;font:700 clamp(14px,4.2vw,19px)/1.3 system-ui,sans-serif;text-shadow:0 2px 6px rgba(0,0,0,.6);max-width:92%}
+.mbpay{color:#7EE2A0;font:800 clamp(15px,4.4vw,20px)/1.3 system-ui,sans-serif;text-shadow:0 2px 6px rgba(0,0,0,.6)}
+@media (orientation:landscape) and (max-height:500px){ .mbanner{top:26%} }
 .dminfo{background:rgba(20,22,28,.75);color:#fff;font-weight:700;font-size:12.5px;padding:4px 10px;border-radius:10px}
 .phbody>.dbig{position:relative!important;inset:auto!important;flex:1;border-radius:0;box-shadow:none}.phbody>.dbig .webx{display:none}.phmapsoff{padding:28px 22px;display:flex;flex-direction:column;gap:8px}.phmapsoff b{font-size:20px}
 .dbig{position:absolute;inset:56px 10px calc(10px + env(safe-area-inset-bottom)) 10px;z-index:8;background:#fff;border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden}
@@ -7629,18 +7638,25 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
       if(r.next&&a.kind==='hotcar'){ this.a=r.active; await this.takeCar(s); return; }
       if(r.next){ this.a=r.active; if(a.kind==='taxi'){ toast('🚕 They’re in. '+this.say(this.step())); setTimeout(()=>{ try{ Drive.T.say('me', '“'+FARES[a.line%FARES.length].go+'”'); }catch(e){} },1500); } else toast(`📦 ${s.k==='pickup'?'Got it.':'Delivered.'} ${this.say(this.step())}`); sfxCoin(); this.route(); this.paintHud(); return; }
       if(r.done) this.goalsToast(r);
-      if(r.done&&r.kind==='race'){ const K=MISSION_KINDS[r.kind]; this.end(); sfxCoin(); toast(`${MEDALS[r.medal]} ${r.secs.toFixed(1)} s! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); try{ Earn.coins(r); }catch(e){} return; }
-      if(r.done&&(r.kind==='police'||r.kind==='bounty')){ this.end(); sfxCoin(); toast(r.kind==='police'?`🚓 ${a.patrol?'Patrol done':'Arrest made'}! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`:`🎯 Bounty collected! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); return; }
-      if(r.done&&r.kind==='holdup'){ this.end(); sfxCoin(); toast(`🏪 Got away with it! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); return; }
-      if(r.done&&r.kind==='hotcar'){ this.end(); sfxCoin(); toast(`🔑 Sold for parts! +${r.paid.toLocaleString()} coins${r.tip?` (${r.tip.toLocaleString()} for being quick)`:''} · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); setTimeout(()=>this.walkAway(),1500); return; }
+      if(r.done&&r.kind==='race'){ const K=MISSION_KINDS[r.kind]; this.end(); this.passed(`${MEDALS[r.medal]} ${r.secs.toFixed(1)} s! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),4600); try{ Earn.coins(r); }catch(e){} return; }
+      if(r.done&&(r.kind==='police'||r.kind==='bounty')){ this.end(); this.passed(r.kind==='police'?`🚓 ${a.patrol?'Patrol done':'Arrest made'}! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`:`🎯 Bounty collected! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),4600); return; }
+      if(r.done&&r.kind==='holdup'){ this.end(); this.passed(`🏪 Got away with it! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),4600); return; }
+      if(r.done&&r.kind==='hotcar'){ this.end(); this.passed(`🔑 Sold for parts! +${r.paid.toLocaleString()} coins${r.tip?` (${r.tip.toLocaleString()} for being quick)`:''} · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),4600); setTimeout(()=>this.walkAway(),1500); return; }
       if(r.done){ const K=MISSION_KINDS[r.kind]; this.end(); if(r.kind==='taxi'){ try{ Drive.T.say('me','“'+FARES[a.line%FARES.length].bye+'”'); }catch(e){} }
-        sfxCoin(); toast(`${K.icon} Done! +${r.paid.toLocaleString()} coins${r.tip?` (${r.tip.toLocaleString()} tip)`:''} · +${r.xpGot} XP${r.short?' (the treasury was short)':''}`);
+        this.passed(`${K.icon} Done! +${r.paid.toLocaleString()} coins${r.tip?` (${r.tip.toLocaleString()} tip)`:''} · +${r.xpGot} XP${r.short?' (the treasury was short)':''}`);
         try{ Earn.coins(r); }catch(e){}
-        if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); } }
+        if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),4600); } }
     catch(e){ if(!/not at|yet/i.test(e.message)) toast(e.message); } finally{ this.busy=false; } },
-  fail(why,told){ const a=this.a; if(!a) return; const K=MISSION_KINDS[a.kind]; this.end(); toast(why==='time'?`⏱️ Out of time: the ${K.name.toLowerCase()} is off.`:why==='gone'?`${K.icon} Too late: they’re gone.`:why==='botched'?`${K.icon} Botched: nothing to show for it this time.`:`${K.icon} ${K.name} called off.`);
+  fail(why,told){ const a=this.a; if(!a) return; const K=MISSION_KINDS[a.kind]; this.end(); this.failed(why==='time'?`⏱️ Out of time: the ${K.name.toLowerCase()} is off.`:why==='gone'?`${K.icon} Too late: they’re gone.`:why==='botched'?`${K.icon} Botched: nothing to show for it this time.`:`${K.icon} ${K.name} called off.`);
     if(!told) api('/api/me/missions',{method:'POST',body:{action:'arrive'}}).catch(()=>{}); /* (the server sees the clock ran out and closes it) */ },
-  async quit(box){ try{ this.d=await api('/api/me/missions',{method:'POST',body:{action:'quit'}}); }catch(e){ toast(e.message); return; } this.end(); toast('Mission given up.'); if(box&&box.isConnected) this.fill(box); },
+  async quit(box){ try{ this.d=await api('/api/me/missions',{method:'POST',body:{action:'quit'}}); }catch(e){ toast(e.message); return; } this.end(); this.failed('You gave it up.'); if(box&&box.isConnected) this.fill(box); },
+  // the end of every mission, passed or failed: a big see-through banner across the middle of the screen for a few
+  // seconds (over the 3D street, a game, or the map), so there's no missing that it's over, and how it went
+  passed(msg){ sfxCoin(); this.banner(true,msg); }, failed(msg){ this.banner(false,msg); },
+  banner(ok,msg){ const m=String(msg||''), i=m.indexOf(' +'), head=i>0?m.slice(0,i):m, pay=i>0?m.slice(i+1):'';
+    document.querySelectorAll('.mbanner').forEach(n=>n.remove()); clearTimeout(this.bannerT);
+    const n=el('div',{class:'mbanner '+(ok?'ok':'bad'),role:'status','aria-live':'polite'}, el('div',{class:'mbband'}, el('b',{class:'mbtitle',text:ok?'MISSION PASSED':'MISSION FAILED'}), el('span',{class:'mbsub',text:head}), pay?el('span',{class:'mbpay',text:pay}):''));
+    document.body.append(n); requestAnimationFrame(()=>n.classList.add('on')); this.bannerT=setTimeout(()=>{ n.classList.remove('on'); n.classList.add('off'); setTimeout(()=>n.remove(),700); },4200); },
   goalsToast(r){ if(r&&r.goalsDone&&r.goalsDone.length) setTimeout(()=>{ toast(r.dailyBonus?`📅 All three of today’s goals done! +${r.dailyBonus.toLocaleString()} coins`:`📅 Goal done: ${r.goalsDone[0]}`); sfxCoin(); },2600); },
   end(){ this.tgt=null; this.a=null; this.paxAt=null; this.cops=null; this.trail=null; this.playing=false; this.getaway=false; clearInterval(this.tickT); this.tickT=null; if(DriveMap.dest&&DriveMap.dest.mission) DriveMap.clear(); this.paintHud(); },
   // a crime mission: you're there, so the game plays right here (the server replays it and scores it, and the take goes by your score)
@@ -7651,7 +7667,7 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
       if(r.failed){ this.fail(r.failed,true); return; }
       if(r.next){ this.a=r.active; this.route(); this.paintHud(); this.trail=[]; this.cops=[]; this.copsAt=Date.now()+MISSION.hotcar.after*1000; this.near0=0; this.getaway=true; /* the alarm's gone: the police are on their way */
         setTimeout(()=>{ toast('🚨 The alarm’s gone! Get to your car and get away.'); try{ if(Drive.T&&Drive.T.pos.mode==='walk') Drive.callCar(); }catch(e){} },400); return; }
-      if(r.done){ this.goalsToast(r); this.end(); sfxCoin(); toast(`${MISSION_KINDS[r.kind].icon} The take: +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); } }
+      if(r.done){ this.goalsToast(r); this.end(); this.passed(`${MISSION_KINDS[r.kind].icon} The take: +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),4600); } }
     catch(e){ toast(e.message); } finally{ this.busy=false; } },
   // the hot car: in you get (the street again, in that car), and the police come after you
   async takeCar(s){ const c0=s.car||{m:'sports',col:'#C8382E'}, CM=CAR_MODELS[c0.m]||{name:'car'}, p=Drive.T&&Drive.T.pos; toast('🔑 You’re in. Go! The police are on their way.'); sfxCoin();
@@ -7668,7 +7684,7 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
     const slow=Drive.T&&Drive.T.kmh()<8; if(close&&slow){ this.near0=this.near0||now; if(now-this.near0>H0.caught*1000) this.busted(); } else this.near0=0;
     if(tr.length>4000) tr.splice(0,1000); },
   services(){ return (this.cops||[]).filter(c=>!c.gone&&c.x!=null).map((c,i)=>({ id:'m:cop'+i, type:'police', x:c.x, y:c.y, a:c.a, col:'#F4F4F0', siren:true })); },
-  async busted(){ if(!this.a) return; const ga=this.getaway; this.end(); this.getaway=ga; toast(this.getaway?'🚓 Busted! The police caught you with the takings.':'🚓 Busted! The police took the car back.'); try{ await api('/api/me/missions',{method:'POST',body:{action:'quit'}}); }catch(e){} if(!ga) setTimeout(()=>this.walkAway(),1200); this.getaway=false; },
+  async busted(){ if(!this.a) return; const ga=this.getaway; this.end(); this.getaway=ga; this.failed(this.getaway?'🚓 Busted! The police caught you with the takings.':'🚓 Busted! The police took the car back.'); try{ await api('/api/me/missions',{method:'POST',body:{action:'quit'}}); }catch(e){} if(!ga) setTimeout(()=>this.walkAway(),1200); this.getaway=false; },
   // after a hot car: out of it and on foot (it's gone, one way or the other)
   async walkAway(){ const p=Drive.T&&Drive.T.pos; if(!p) return; Drive.close(true); await Drive.start({ mode:'walk', x:p.x, y:p.y, a:p.a }); },
   // people with work going: a ❗ over their head outside some of the businesses near you (only while you're not on a
@@ -7685,7 +7701,7 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
     for(const g of this.gList||[]){ if(Math.hypot(g.x-x,g.y-y)>1.4) continue; this.told=this.told||{}; if(now-(this.told[g.id]||0)<90000) return; this.told[g.id]=now;
       try{ T3.say(g.id, g.line); }catch(e){} toast(`❗ ${g.name} at ${g.at}: “${g.line}”`,'See work',()=>Phone.show('missions')); return; } },
   // news for you from the server: pulled over by a real player on patrol, or caught for the bounty on your head
-  event(d){ if(d.kind==='arrested'){ const a=this.a, hot=a&&a.kind==='hotcar'; if(a) this.end(); toast(`🚓 @${d.by} pulled you over: you’re arrested and the job’s off.`); if(hot) setTimeout(()=>this.walkAway(),1200); }
+  event(d){ if(d.kind==='arrested'){ const a=this.a, hot=a&&a.kind==='hotcar'; if(a){ this.end(); this.failed(`🚓 @${d.by} pulled you over: you’re arrested.`); } else toast(`🚓 @${d.by} pulled you over: you’re arrested.`); if(hot) setTimeout(()=>this.walkAway(),1200); }
     else if(d.kind==='bountied') toast(`🎯 @${d.by} caught up with you and collected the ${Number(d.amount||0).toLocaleString()}-coin bounty on your head.`); },
   // the cash drop: shown (a gold beam) while you're out in town; checked every 20 seconds; grab it by getting there first
   dropPoll(){ const now=Date.now(); if(!Drive.T||(this.dropAt&&now-this.dropAt<20000)) return; this.dropAt=now; this.load().then(d=>{ const D=d&&d.drop; this.drop=D||null; try{ Drive.T&&Drive.T.setDrop(D); }catch(e){}

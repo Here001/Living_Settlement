@@ -144,6 +144,7 @@ export function createTown(host, opts) {
   let feet = null; const mkFeet = () => { if (feet) return feet; feet = W.makePerson('me', null, opts.look || null); feet.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); scene.add(feet.group); return feet; };
   if (foot) mkFeet();
   let petGone = null; /* (your pet on its way home) */
+  const strays = []; /* (other people's pets on their way home) */
   let myPet = null; if (opts.pet) { try { myPet = follower(opts.pet); myPet.group.visible = false; scene.add(myPet.group); } catch (e) { myPet = null; } } /* your pet: with you on foot (in the car while you drive) */
   const me = W.makeCar(opts.car.kind || 'car', opts.car.col || '#c8382e'); scene.add(me); me.traverse(m => { if (m.isMesh) m.castShadow = true; });
   // on a bike, you ride it: your own character sits on the saddle, hands on the bars, feet down to the pedals
@@ -405,7 +406,9 @@ export function createTown(host, opts) {
       for (const p of L) { seen.add(p.id); const kind = p.car ? 'car' : 'walk'; let f = folk.get(p.id);
         if (f && f.kind !== kind) { if (f.g) scene.remove(f.g); if (f.pet) f.pet.dispose(); folk.delete(p.id); f = null; }
         if (f && kind === 'walk' && p.look && !f.look) { scene.remove(f.g); if (f.pet) f.pet.dispose(); folk.delete(p.id); f = null; } /* their own look arrived: show them as themselves */
-        if (!f) { if (kind === 'walk') { const P = W.makePerson(p.id, null, p.look || null); f = { kind, P, g: P.group, look: !!p.look }; if (p.pet && [...folk.values()].filter(q => q.pet).length < 8) { try { f.pet = follower(p.pet, { side: -1 }); f.owner = p.petOwner || null; scene.add(f.pet.group); } catch (e) {} } /* their pet walks with them (the nearest eight) */ if (p.tag) P.group.add(tag(p.tag, p.online, 2.15)); f.g.position.set(p.x * TILE, 0, p.y * TILE); scene.add(f.g); } else f = { kind, m: p.m || 'sedan', col: p.col || '#7c8288', x: p.x * TILE, z: p.y * TILE, ry: p.a != null ? p.a - Math.PI / 2 : 0 }; folk.set(p.id, f); }
+        if (!f) { if (kind === 'walk') { const P = W.makePerson(p.id, null, p.look || null); f = { kind, P, g: P.group, look: !!p.look }; if (p.pet && [...folk.values()].filter(q => q.pet).length < 8) { try { f.pet = follower(p.pet, { side: -1 }); f.petK = p.pet; f.owner = p.petOwner || null; scene.add(f.pet.group); } catch (e) {} } /* their pet walks with them (the nearest eight) */ if (p.tag) P.group.add(tag(p.tag, p.online, 2.15)); f.g.position.set(p.x * TILE, 0, p.y * TILE); scene.add(f.g); } else f = { kind, m: p.m || 'sedan', col: p.col || '#7c8288', x: p.x * TILE, z: p.y * TILE, ry: p.a != null ? p.a - Math.PI / 2 : 0 }; folk.set(p.id, f); }
+        if (f.kind === 'walk') { const want = p.pet || null; if (f.pet && f.petK !== want) { const g0 = f.pet.group.position; let dx = g0.x - f.g.position.x, dz = g0.z - f.g.position.z, d = Math.hypot(dx, dz) || 1; strays.push({ t: 0, pet: f.pet, x0: g0.x, z0: g0.z, dx: dx / d, dz: dz / d }); f.pet = null; f.petK = null; } /* sent home by them: it runs off and is gone, for you too */
+          if (want && !f.pet && [...folk.values()].filter(q => q.pet).length < 8) { try { f.pet = follower(want, { side: -1 }); f.petK = want; f.owner = p.petOwner || null; scene.add(f.pet.group); } catch (e) {} } } /* (and when they call it back, it's with them again) */
         f.tx = p.x * TILE; f.tz = p.y * TILE; if (f.kind === 'car') { f.m = p.m || f.m; f.col = p.col || f.col; f.drv = !!p.drv; f.h = p.h || null; f.full = !!p.full; f.ta = (p.drv || p.still) && p.a != null ? p.a - Math.PI / 2 : null; /* a player's car: the way they say it faces */ if (p.tag && f.tagT !== p.tag) { if (f.tagO) { scene.remove(f.tagO); f.tagO.material.map.dispose(); f.tagO.material.dispose(); } f.tagO = tag(p.tag, p.online, 0); f.tagT = p.tag; scene.add(f.tagO); } } }
       for (const [id, f] of folk) if (!seen.has(id)) { if (f.g) scene.remove(f.g); if (f.pet) f.pet.dispose(); if (f.tagO) { scene.remove(f.tagO); f.tagO.material.map.dispose(); f.tagO.material.dispose(); } folk.delete(id); } }
     for (const [id, f] of folk) { const k = Math.min(1, dt * 2.5); if (f.kind === 'car' && f.tagO) { f.tagO.position.set(f.x, 2.4, f.z); }
@@ -660,6 +663,7 @@ export function createTown(host, opts) {
   view.resize(); around(); sunNow(true);
   view.start((dt, now) => {
     if (dead) return; drive(dt); if (DEB.length) stepDebris(dt);
+    for (let i = strays.length - 1; i >= 0; i--) { const G = strays[i]; G.t += dt; const k = Math.min(70, 1.6 + G.t * 7.5); G.pet.step(dt, G.x0 + G.dx * k, G.z0 + G.dz * k); if (G.t > 5.2) G.pet.group.scale.setScalar(Math.max(0.001, 1 - (G.t - 5.2) / 0.5)); if (G.t > 5.7) { G.pet.dispose(); strays.splice(i, 1); } }
     if (myPet && petGone) { const G = petGone; G.t += dt; myPet.group.visible = true;
       if (G.road) { const sp = 7.5 * dt, nx = G.cx + G.dx * sp, nz = G.cz + G.dz * sp, ahead = (x, z) => !!opts.road(tileOf(x), tileOf(z)); /* along the road: at the end of it, round the corner (or back the way it came) */
         if (tileOf(nx) !== tileOf(G.cx) || tileOf(nz) !== tileOf(G.cz)) { const lx = G.cx + G.dx * TILE * 0.55, lz = G.cz + G.dz * TILE * 0.55;

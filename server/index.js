@@ -425,6 +425,7 @@ wss.on('connection', (ws, req) => {
       if (m.off) { rides.off(ws.playerId); if (ws.driving) { ws.driving = false; bus.publish([{ driving: true, id: ws.playerId, off: true }]); } return; }
       const x = Number(m.x), y = Number(m.y), a = Number(m.a); if (![x, y, a].every(Number.isFinite) || Math.abs(x) > 1e5 || Math.abs(y) > 1e5 || now - (ws.driveAt || 0) < 150) return; ws.driveAt = now;
       const w = { h: ws.playerHandle || null, mode: m.mode === 'walk' ? 'walk' : 'car', x: +x.toFixed(2), y: +y.toFixed(2), a: +a.toFixed(2), m: /^[a-z]{1,16}$/.test(String(m.m || '')) ? String(m.m) : 'car', col: /^#[0-9A-Fa-f]{6}$/.test(String(m.col || '')) ? String(m.col) : null };
+      if (typeof m.pt === 'string' && /^[a-z0-9_]{0,24}$/.test(m.pt)) w.pt = m.pt; /* the pet with them ('' when it's at home) */
       { const k = m.pk; if (w.mode === 'walk' && k && typeof k === 'object' && [k.x, k.y, k.a].every(Number.isFinite) && Math.hypot(k.x - x, k.y - y) < 60 && /^[a-z]{1,16}!?$/.test(String(k.k || ''))) w.pk = { x: +(+k.x).toFixed(2), y: +(+k.y).toFixed(2), a: +(+k.a).toFixed(2), k: String(k.k) }; } /* where they left their car or boat, so others see it there */
       if (!rides.moved(ws.playerId, w)) return; /* riding in someone's car: you go where it goes */
       ws.driving = true; ws.drivePos = [w.x, w.y]; bus.publish([{ driving: true, id: ws.playerId, ...w }]); return; } /* mode: on foot or in a car */
@@ -492,7 +493,7 @@ bus.on(ops => {
       for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.bufferedAmount > MAX_BUFFER || ws.playerId === o.id || !ws.driving || !ws.drivePos || Math.hypot(ws.drivePos[0] - o.x, ws.drivePos[1] - o.y) > 14) continue; try { ws.send(json); } catch {} } }
     ops = ops.filter(o => !o.streetSay); if (!ops.length) return; }
   // Someone driving about in 3D: every map shows their car where it is
-  if (ops.some(o => o.driving)) { for (const o of ops.filter(o => o.driving)) { if (o.off) LIVE_POS.delete(o.id); else if (o.mode !== 'ride') LIVE_POS.set(o.id, { x: o.x, y: o.y, mode: o.mode, t: Date.now() }); /* (where each player is, for missions) */ const json = JSON.stringify(o.off ? { type: 'drive', id: o.id, off: true } : { type: 'drive', id: o.id, h: o.h, mode: o.mode, x: o.x, y: o.y, a: o.a, m: o.m, col: o.col, ...(o.by ? { by: o.by } : {}), ...(o.pk ? { pk: o.pk } : {}) });
+  if (ops.some(o => o.driving)) { for (const o of ops.filter(o => o.driving)) { if (o.off) LIVE_POS.delete(o.id); else if (o.mode !== 'ride') LIVE_POS.set(o.id, { x: o.x, y: o.y, mode: o.mode, t: Date.now() }); /* (where each player is, for missions) */ const json = JSON.stringify(o.off ? { type: 'drive', id: o.id, off: true } : { type: 'drive', id: o.id, h: o.h, mode: o.mode, x: o.x, y: o.y, a: o.a, m: o.m, col: o.col, ...(o.by ? { by: o.by } : {}), ...(o.pk ? { pk: o.pk } : {}), ...(o.pt != null ? { pt: o.pt } : {}) });
       for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.bufferedAmount > MAX_BUFFER || ws.playerId === o.id) continue; try { ws.send(json); } catch {} } }
     ops = ops.filter(o => !o.driving); if (!ops.length) return; }
   // Private chat messages go only to the two people's own connections.

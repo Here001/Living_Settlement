@@ -2337,6 +2337,8 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
   await at(road.x + 0.5, road.y + 0.5, 'walk'); ok((await st({ action: 'start', kind: 'taxi' })).status === 409, 'a taxi fare needs a car');
   await at(road.x + 0.5, road.y + 0.5); const s1 = await st({ action: 'start', kind: 'taxi' }), act = s1.json.active;
   ok(s1.status === 200 && act && act.steps.length === 2 && act.steps.every(s => s.kx != null) && act.fare > 0 && act.deadline > Date.now(), 'start: a fare to pick up and a place to take them, each with a kerb to pull up on', JSON.stringify(s1.json).slice(0, 300));
+  ok(info.goals.length === 3 && info.goals.every(g => g.text && g.got === 0) && info.bonus > 0, "today's three goals, with a bonus for all three", JSON.stringify(info.goals));
+  await pool.query("update citizens set missions = jsonb_set(missions, '{goals}', $2::jsonb) where id = $1", [A.id, JSON.stringify([{ k: 'do', kind: 'taxi', need: 1, got: 0 }, { k: 'earn', need: 1, got: 0 }, { k: 'do', kind: 'race', need: 1, got: 1 }])]);
   if (act) { ok((await st({ action: 'start', kind: 'parcel' })).status === 409, 'one mission at a time');
     ok((await st({ action: 'arrive' })).status === 409, "pulling up somewhere else doesn't count");
     const [p0, p1] = act.steps; await at(p0.kx + 0.5, p0.ky + 0.5); const quick = Math.hypot(p0.kx - road.x, p0.ky - road.y) > 8;
@@ -2346,8 +2348,9 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
     const c0 = Number((await pool.query('select coins_base from citizens where id = $1', [A.id])).rows[0].coins_base);
     await at(p1.kx + 0.5, p1.ky + 0.5); await sleep(Math.ceil(MS.dist(p0, p1) / MS.MISSION.fastest * 1000) + 100); const r2 = await st({ action: 'arrive' });
     const c1 = Number((await pool.query('select coins_base from citizens where id = $1', [A.id])).rows[0].coins_base);
-    ok(r2.status === 200 && r2.json.done && r2.json.paid >= act.fare && c1 - c0 === r2.json.paid && r2.json.xp === act.xp && !r2.json.active, 'dropped off: paid the fare (plus a tip for time to spare) and XP', JSON.stringify({ ...r2.json, list: 0 }).slice(0, 300));
-    ok((await pool.query("select 1 from ledger where citizen_id = $1 and key = 'earn:missions'", [A.id])).rowCount === 1, '…and it shows in your wallet'); }
+    ok(r2.status === 200 && r2.json.done && r2.json.paid >= act.fare && c1 - c0 === r2.json.paid + r2.json.dailyBonus && r2.json.xp === act.xp + MS.DAILY.bonus.xp && !r2.json.active, 'dropped off: paid the fare (plus a tip for time to spare) and XP', JSON.stringify({ ...r2.json, list: 0 }).slice(0, 300));
+    ok((await pool.query("select 1 from ledger where citizen_id = $1 and key = 'earn:missions'", [A.id])).rowCount >= 1, '…and it shows in your wallet');
+    ok(r2.json.goalsDone.length === 2 && r2.json.dailyBonus > 0 && r2.json.bonusGot && r2.json.goals.every(g => g.done), "today's goals tick off as you go, and finishing all three pays the bonus", JSON.stringify({ g: r2.json.goalsDone, b: r2.json.dailyBonus })); }
   { await at(road.x + 0.5, road.y + 0.5); const s2 = await st({ action: 'start', kind: 'parcel' }); ok(s2.status === 200 && s2.json.active.steps[0].k === 'pickup' && s2.json.active.steps.slice(1).every(s => s.k === 'drop'), 'a parcel run: collect, then one or two drops', JSON.stringify(s2.json.active && s2.json.active.steps.map(s => s.k)));
     ok((await st({ action: 'quit' })).json.active === null && (await st({ action: 'start', kind: 'parcel' })).status === 429, 'giving up ends it, with a short wait before the next'); }
   { await pool.query("update citizens set missions = jsonb_set(missions, '{active}', $2::jsonb) where id = $1", [A.id, JSON.stringify({ id: 'x', kind: 'taxi', steps: [{ k: 'pickup', x: 0, y: 0, w: 1, h: 1, kx: 0, ky: 0, name: 'a' }], step: 0, start: Date.now() - 99000, deadline: Date.now() - 1000, fare: 50, xp: 10, at: 0, from: { x: 0, y: 0 }, line: 0 })]);

@@ -63,6 +63,19 @@ export function offEdge(p, b) { const dx = Math.max(b.x - p.x, 0, p.x - (b.x + b
 // there: pulled up on the kerb tile beside it, or right up against the building
 export const atStop = (p, s) => (s.kx != null && Math.hypot(p.x - (s.kx + 0.5), p.y - (s.ky + 0.5)) <= 1.8) || offEdge(p, s) <= MISSION.near;
 
+// Today's three goals: small things to aim for each day, from the missions you have open, with a bonus for all three.
+export const DAILY = { bonus: { base: 250, perRank: 150, xp: 60 } };
+export function dailyGoals(seed, xp) { let h = (seed >>> 0) || 1; const r = () => { h = (h + 0x6D2B79F5) >>> 0; let t = h; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const rank = rankOf(xp), open = MISSION_IDS.filter(k => openAt(k, xp)), pool = [];
+  for (const k of open) pool.push({ k: 'do', kind: k, need: k === 'race' || k === 'hotcar' ? 1 : 2 });
+  pool.push({ k: 'earn', need: 300 + 200 * rank });
+  if (open.includes('race')) pool.push({ k: 'medal', need: 1 });
+  const out = []; while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(r() * pool.length), 1)[0]);
+  if (out.length < 3) out.push({ k: 'do', kind: open[0] || 'parcel', need: 3 });
+  return out.map(g => ({ ...g, got: 0 })); }
+export function goalText(g) { const K = MISSIONS[g.kind]; return g.k === 'do' ? `${K.icon} Finish ${g.need === 1 ? 'a' : g.need} ${K.name.toLowerCase()}${g.need === 1 ? '' : 's'}` : g.k === 'earn' ? `💰 Earn ${g.need.toLocaleString('en-US')} coins from missions` : '🥇 Win a gold medal in a street race'; }
+export const dailyBonus = rank => DAILY.bonus.base + DAILY.bonus.perRank * rank;
+
 // What the passenger says (taxi): one line when you pull up, one on the way, one when you drop them off.
 export const FARES = [
   { hi: 'Taxi! Over here!', go: 'I\'m running late, step on it!', bye: 'Thanks, keep the change!' },

@@ -19,20 +19,22 @@ const nameOf = b => b.name || BUILDING_TYPES[b.type]?.name || 'a building';
 
 export class Missions {
   constructor(world) { this.world = world; }
-  stateOf(c) { const m = { xp: 0, ...(c.missions || {}) }; if (m.day !== day()) { m.day = day(); m.paid = 0; } return m; }
+  stateOf(c) { const m = { xp: 0, ...(c.missions || {}) }; if (m.day !== day()) { m.day = day(); m.paid = 0; m.goals = null; m.bonus = 0; }
+    if (!m.goals) this.goals(c, m); return m; }
+  goals(c, m) { let h = day(); for (const ch of String(c.id)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0; m.goals = M.dailyGoals(h, m.xp); } /* (the same three for a player all day) */
   async save(db, c, m) { c.missions = m; await Q(db, 'update citizens set missions = $2 where id = $1', [c.id, JSON.stringify(m)]); }
   // players who already pulled off crimes and heists before missions came in keep doing them: they start at Operator
   async seed(db, c, m) { if (m.seeded) return false; m.seeded = 1;
     const n = Number((await Q(db, 'select count(*) n from crime_runs where citizen_id = $1 and not practice', [c.id])).rows[0].n); if (n > 0) m.xp = Math.max(m.xp, M.RANKS[3].xp);
-    m.seen = M.rankOf(m.xp); return true; }
+    m.seen = M.rankOf(m.xp); this.goals(c, m); return true; }
   pos(id) { const p = LIVE.get(id); return p && Date.now() - p.t < FRESH ? p : null; }
   // what the Missions app shows
   view(m) { const pr = M.rankProgress(m.xp), now = Date.now();
-    return { xp: m.xp, rank: pr.rank, nextXp: pr.next, frac: pr.frac, ranks: M.RANKS, paidLeft: Math.max(0, M.MISSION.perDay - (m.paid || 0)),
+    return { goals: (m.goals || []).map(g => ({ ...g, text: M.goalText(g), done: g.got >= g.need })), bonus: m.bonus ? 0 : M.dailyBonus(pr.rank), bonusGot: !!m.bonus, xp: m.xp, rank: pr.rank, nextXp: pr.next, frac: pr.frac, ranks: M.RANKS, paidLeft: Math.max(0, M.MISSION.perDay - (m.paid || 0)),
       list: M.MISSION_IDS.map(k => ({ kind: k, ...M.MISSIONS[k], open: M.openAt(k, m.xp) })), active: m.active && now <= m.active.deadline ? this.pub(m.active) : null }; }
   pub(a) { return { id: a.id, kind: a.kind, step: a.step, steps: a.steps.map(s => ({ k: s.k, name: s.name, x: s.x, y: s.y, w: s.w, h: s.h, bid: s.bid, kx: s.kx, ky: s.ky, need: s.need, car: s.car })), start: a.start, deadline: a.deadline, fare: a.fare, xp: a.xp, line: a.line, times: a.times }; }
   async info(id) { const c = (await pool.query('select id, missions from citizens where id = $1', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
-    const m = this.stateOf(c); if (await this.seed(pool, c, m)) await this.save(pool, c, m); return this.view(m); }
+    const fresh = !c.missions || !c.missions.goals || c.missions.day !== day(), m = this.stateOf(c); if ((await this.seed(pool, c, m)) || fresh) await this.save(pool, c, m); return this.view(m); }
 
   // ---------- planning ----------
   // buildings a car can pull up beside (a road within a couple of tiles), between min and max tiles from p
@@ -118,9 +120,13 @@ export class Missions {
       const fare = medal ? Math.round(a.fare * M.MISSION.race.medal[medal]) : a.fare, tip = medal ? 0 : M.tipOf(a.fare, left), before = M.rankOf(m.xp); m.active = null; m.last = 0; m.done = (m.done || 0) + 1; /* (a race pays by medal, no tip) */
       if (medal) { const xpGot = Math.round(a.xp * M.MISSION.race.medal[medal]); a.xp = Math.max(10, xpGot); }
       let paid = 0, short = false; if ((m.paid || 0) < M.MISSION.perDay) { const r = await this.world.earn.pay(ch, c, fare + tip, 'missions'); paid = r.paid; short = r.short; m.paid = (m.paid || 0) + 1; }
-      m.xp += a.xp; const after = M.rankOf(m.xp); await this.save(ch, c, m);
+      m.xp += a.xp;
+      // today's goals: count this one, and the bonus when all three are done
+      const goalsDone = []; for (const g of m.goals || []) { if (g.got >= g.need) continue; if (g.k === 'do' && g.kind === a.kind) g.got++; else if (g.k === 'earn') g.got = Math.min(g.need, g.got + paid); else if (g.k === 'medal' && medal === 'gold') g.got++; if (g.got >= g.need) goalsDone.push(M.goalText(g)); }
+      let bonus = 0; if (!m.bonus && m.goals && m.goals.every(g => g.got >= g.need)) { const r = await this.world.earn.pay(ch, c, M.dailyBonus(M.rankOf(m.xp)), 'missions', true); bonus = r.paid; m.bonus = 1; m.xp += M.DAILY.bonus.xp; }
+      const after = M.rankOf(m.xp); await this.save(ch, c, m);
       if (paid >= 300) await ch.event(`${M.MISSIONS[a.kind].icon} @${c.handle} finished a ${M.MISSIONS[a.kind].name.toLowerCase()} for ${paid.toLocaleString('en-US')} coins.`, 'gig');
-      return { ok: true, done: true, kind: a.kind, fare, tip, paid, short, xpGot: a.xp, coins: c.coins_base, medal, secs,
+      return { ok: true, done: true, kind: a.kind, fare, tip, paid, short, xpGot: a.xp, coins: c.coins_base, medal, secs, goalsDone, dailyBonus: bonus,
         rankUp: after > before ? { rank: after, ...M.RANKS[after], unlocks: M.unlocksAt(after).map(k => ({ kind: k, ...M.MISSIONS[k] })) } : null, ...this.view(m) };
     });
   }

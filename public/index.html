@@ -1322,6 +1322,7 @@ body.room-on .toast,body.room-on .rsheet-bg.rreport{z-index:9700}
 .mg.hurt{box-shadow:inset 0 0 80px rgba(220,0,0,.65)}
 .mrank{display:flex;gap:10px;align-items:center;background:#2B2621;color:#fff;border-radius:16px;padding:10px 12px;margin:4px 0 10px}.mrkic{font-size:30px}.mrkt{flex:1;min-width:0}.mrkt b{font-size:16px}.mrkt small{opacity:.8;font-size:12px}
 .mbar{height:8px;background:rgba(255,255,255,.18);border-radius:6px;margin:5px 0 3px;overflow:hidden}.mbar i{display:block;height:100%;background:linear-gradient(90deg,#F2C94C,#E4572E);border-radius:6px}
+.mgoals{background:#FFF6DA;border:2px solid #2B2621;border-radius:14px;padding:8px 12px;margin:0 0 10px;color:#2B2621}.mgoals.all{background:#E3F3E8}.mgoal{display:flex;gap:8px;align-items:center;font-size:13.5px;margin:5px 0}.mgoal .mgt{flex:1}.mgoal small{font-weight:800;opacity:.7}.mgoal.done .mgt{text-decoration:line-through;opacity:.6}
 .mcard{background:#fff;border:2px solid #2B2621;border-radius:14px;padding:10px 12px;margin:8px 0;box-shadow:0 3px 0 #2B2621;color:#2B2621}.mcard p{margin:4px 0 8px;font-size:13px;line-height:1.35}.mcard.on{background:#FFF6DA}.mcard.lock{opacity:.6;box-shadow:none;border-style:dashed}.mcard.lock p{margin-bottom:0}
 .mtop{display:flex;justify-content:space-between;align-items:center;gap:8px}.mtag{font-size:11px;font-weight:800;border-radius:8px;padding:2px 7px;background:#E3F3E8;color:#1E7A55}.mtag.crime{background:#FBE3DE;color:#B3261E}.mpay{font-weight:800;color:#1E7A55;font-size:13px}
 .mrow{display:flex;gap:8px;flex-wrap:wrap}.mh{margin:12px 0 2px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;opacity:.7}
@@ -7497,6 +7498,8 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
     const R0=d.ranks[d.rank], N=d.ranks[d.rank+1];
     box.append(el('div',{class:'mrank'}, el('b',{class:'mrkic',text:R0.icon}), el('div',{class:'mrkt'}, el('b',{text:R0.name}), el('div',{class:'mbar'}, el('i',{style:`width:${Math.round(d.frac*100)}%`})),
       el('small',{text:N?`${(d.nextXp-d.xp).toLocaleString()} XP to ${N.icon} ${N.name}`:`${d.xp.toLocaleString()} XP · the top rank`}))));
+    if(d.goals&&d.goals.length){ const all=d.goals.every(g=>g.done); box.append(el('div',{class:'mgoals'+(all?' all':'')}, el('div',{class:'mtop'}, el('b',{text:'📅 Today'}), el('span',{class:'mpay',text:d.bonusGot?'✅ Bonus paid':`All three: +${d.bonus.toLocaleString()} 🪙`})),
+      ...d.goals.map(g=>el('div',{class:'mgoal'+(g.done?' done':'')}, el('span',{text:g.done?'✅':'⬜'}), el('span',{class:'mgt',text:g.text}), el('small',{text:g.k==='earn'?`${Math.min(g.got,g.need).toLocaleString()}/${g.need.toLocaleString()}`:`${Math.min(g.got,g.need)}/${g.need}`}))))); }
     if(this.a){ const a=this.a, K=MISSION_KINDS[a.kind], s=this.step();
       box.append(el('div',{class:'mcard on'}, el('div',{class:'mtop'}, el('b',{text:`${K.icon} ${K.name}`}), el('span',{class:'mpay',text:`💰 ${a.fare.toLocaleString()}+`})), el('p',{text:s?this.say(s):''}),
         el('div',{class:'mrow'}, el('button',{class:'btn primary sm',text:'🧭 Show the way',onclick:()=>{ Phone.hide(); this.goOut(); }}), el('button',{class:'btn sm',text:'Give up',onclick:()=>this.quit(box)})))); }
@@ -7529,10 +7532,10 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
   route(){ const s=this.step(); if(!s||!Drive.T) return; if(s.kx!=null) DriveMap.go(s.kx, s.ky, {quiet:true, mission:true, name:s.name}); else DriveMap.go(s.x+Math.floor(s.w/2), s.y+Math.floor(s.h/2), {quiet:true, mission:true, name:s.name}); const g=DriveMap.dest; this.paxAt=null; /* (to the kerb beside it) */
     if(g&&this.a.kind==='taxi'&&s.k==='pickup'){ const px=Math.max(s.x-0.3,Math.min(s.x+s.w+0.3,g.gx+0.5)), py=Math.max(s.y-0.3,Math.min(s.y+s.h+0.3,g.gy+0.5)); this.paxAt={x:px,y:py}; } },
   // your fare, waiting at the kerb (one of the people on the street)
-  people(){ const a=this.a, s=this.step(); if(a&&s&&s.k==='steal'&&s.car) return { d:0, id:'m:mark', x:s.kx+0.5, y:s.ky+0.5, car:true, m:s.car.m, col:s.car.col, drv:true, a:this.markA||0, tag:'🔑 Your mark' }; /* (the car to take, parked on the street) */
-    if(!a||!this.paxAt) return null; return { d:0, id:'m:pax', x:this.paxAt.x, y:this.paxAt.y, car:false, look:null, tag:'🚕 Your fare' }; },
+  people(){ const a=this.a, s=this.step(); if(!a) return this.givers(Drive.T?Drive.T.pos.x:0, Drive.T?Drive.T.pos.y:0); if(a&&s&&s.k==='steal'&&s.car) return { d:0, id:'m:mark', x:s.kx+0.5, y:s.ky+0.5, car:true, m:s.car.m, col:s.car.col, drv:true, a:this.markA||0, tag:'🔑 Your mark' }; /* (the car to take, parked on the street) */
+    if(!a||!this.paxAt) return []; return { d:0, id:'m:pax', x:this.paxAt.x, y:this.paxAt.y, car:false, look:null, tag:'🚕 Your fare' }; },
   // as you drive: the strip, the passenger's hello, and pulling up at the stop
-  tick(x,y){ const a=this.a, s=this.step(); if(!a||!s||!Drive.T||this.busy) return; const T3=Drive.T, now=Date.now();
+  tick(x,y){ const a=this.a, s=this.step(); if(!a&&Drive.T){ this.nearGiver(x,y); return; } if(!a||!s||!Drive.T||this.busy) return; const T3=Drive.T, now=Date.now();
     if(now>a.deadline){ this.fail('time'); return; }
     if(a.kind==='hotcar'&&this.cops) this.chase(x,y,now);
     if(now<a.start) return; /* (the green light) */
@@ -7545,6 +7548,7 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
       if(r.next&&a.kind==='race'){ this.a=r.active; sfxCoin(); this.route(); this.paintHud(); return; }
       if(r.next&&a.kind==='hotcar'){ this.a=r.active; await this.takeCar(s); return; }
       if(r.next){ this.a=r.active; if(a.kind==='taxi'){ toast('🚕 They’re in. '+this.say(this.step())); setTimeout(()=>{ try{ Drive.T.say('me', '“'+FARES[a.line%FARES.length].go+'”'); }catch(e){} },1500); } else toast(`📦 ${s.k==='pickup'?'Got it.':'Delivered.'} ${this.say(this.step())}`); sfxCoin(); this.route(); this.paintHud(); return; }
+      if(r.done) this.goalsToast(r);
       if(r.done&&r.kind==='race'){ const K=MISSION_KINDS[r.kind]; this.end(); sfxCoin(); toast(`${MEDALS[r.medal]} ${r.secs.toFixed(1)} s! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); try{ Earn.coins(r); }catch(e){} return; }
       if(r.done&&r.kind==='hotcar'){ this.end(); sfxCoin(); toast(`🔑 Sold for parts! +${r.paid.toLocaleString()} coins${r.tip?` (${r.tip.toLocaleString()} for being quick)`:''} · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); setTimeout(()=>this.walkAway(),1500); return; }
       if(r.done){ const K=MISSION_KINDS[r.kind]; this.end(); if(r.kind==='taxi'){ try{ Drive.T.say('me','“'+FARES[a.line%FARES.length].bye+'”'); }catch(e){} }
@@ -7555,6 +7559,7 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
   fail(why,told){ const a=this.a; if(!a) return; const K=MISSION_KINDS[a.kind]; this.end(); toast(why==='time'?`⏱️ Out of time: the ${K.name.toLowerCase()} is off.`:`${K.icon} ${K.name} called off.`);
     if(!told) api('/api/me/missions',{method:'POST',body:{action:'arrive'}}).catch(()=>{}); /* (the server sees the clock ran out and closes it) */ },
   async quit(box){ try{ this.d=await api('/api/me/missions',{method:'POST',body:{action:'quit'}}); }catch(e){ toast(e.message); return; } this.end(); toast('Mission given up.'); if(box&&box.isConnected) this.fill(box); },
+  goalsToast(r){ if(r&&r.goalsDone&&r.goalsDone.length) setTimeout(()=>{ toast(r.dailyBonus?`📅 All three of today’s goals done! +${r.dailyBonus.toLocaleString()} coins`:`📅 Goal done: ${r.goalsDone[0]}`); sfxCoin(); },2600); },
   end(){ this.a=null; this.paxAt=null; this.cops=null; this.trail=null; clearInterval(this.tickT); this.tickT=null; if(DriveMap.dest&&DriveMap.dest.mission) DriveMap.clear(); this.paintHud(); },
   // the hot car: in you get (the street again, in that car), and the police come after you
   async takeCar(s){ const c0=s.car||{m:'sports',col:'#C8382E'}, CM=CAR_MODELS[c0.m]||{name:'car'}, p=Drive.T&&Drive.T.pos; toast('🔑 You’re in. Go! The police are on their way.'); sfxCoin();
@@ -7574,6 +7579,19 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
   async busted(){ if(!this.a) return; this.end(); toast('🚓 Busted! The police took the car back.'); try{ await api('/api/me/missions',{method:'POST',body:{action:'quit'}}); }catch(e){} setTimeout(()=>this.walkAway(),1200); },
   // after a hot car: out of it and on foot (it's gone, one way or the other)
   async walkAway(){ const p=Drive.T&&Drive.T.pos; if(!p) return; Drive.close(true); await Drive.start({ mode:'walk', x:p.x, y:p.y, a:p.a }); },
+  // people with work going: a ❗ over their head outside some of the businesses near you (only while you're not on a
+  // mission). Walk or pull up beside one and they tell you about it; the Missions app opens with a tap.
+  GIVERS:['Rosa','Dex','Mira','Tomas','Ada','Kofi','Lena','Yusuf','Ines','Bram','Nia','Otto'], LINES:['Got a job for you, if you want it.','You look like someone who can drive. Interested?','Need a hand with something. Pays well.','Looking for work? I might have something.'],
+  givers(x,y){ const now=Date.now(); if(this.a||!(Me&&Me.token)) return []; if(this.gAt&&now-this.gAt<2000&&this.gFor&&Math.hypot(this.gFor.x-x,this.gFor.y-y)<6) return this.gList; this.gAt=now; this.gFor={x,y};
+    const out=[]; for(const b of D.buildings.values()){ if(Math.abs(b.x-x)>24||Math.abs(b.y-y)>24||b.done===false||b.ruin) continue; const t=BUILDING_TYPES[b.type]; if(!t||t.home||!canGoTo(b.type)||hash('give'+b.id)%5) continue;
+      const [w,h]=T(b).size; let spot=null; for(let r=1;r<=2&&!spot;r++) for(let i=-r;i<w+r&&!spot;i++) for(let j=-r;j<h+r&&!spot;j++){ if(i>-r&&i<w+r-1&&j>-r&&j<h+r-1) continue; if(carOK((b.x+i)+','+(b.y+j))) spot=[b.x+i+0.5,b.y+j+0.5]; }
+      if(!spot) continue; const px=Math.max(b.x-0.25,Math.min(b.x+w+0.25,spot[0])), py=Math.max(b.y-0.25,Math.min(b.y+h+0.25,spot[1])), H=hash('give'+b.id);
+      out.push({ d:Math.hypot(px-x,py-y), id:'m:give:'+b.id, x:px, y:py, car:false, look:null, tag:`❗ ${this.GIVERS[H%this.GIVERS.length]}`, name:this.GIVERS[H%this.GIVERS.length], at:b.name||t.name, line:this.LINES[(H>>>4)%this.LINES.length] }); }
+    this.gList=out.sort((a,b)=>a.d-b.d).slice(0,3); return this.gList; },
+  // close to one: they speak up (once in a while), and a tap opens the app
+  nearGiver(x,y){ if(this.a||!Drive.T) return; const T3=Drive.T, slow=T3.pos.mode==='walk'||T3.kmh()<=15; if(!slow) return; const now=Date.now();
+    for(const g of this.gList||[]){ if(Math.hypot(g.x-x,g.y-y)>1.4) continue; this.told=this.told||{}; if(now-(this.told[g.id]||0)<90000) return; this.told[g.id]=now;
+      try{ T3.say(g.id, g.line); }catch(e){} toast(`❗ ${g.name} at ${g.at}: “${g.line}”`,'See work',()=>Phone.show('missions')); return; } },
   // the strip at the top of the street view: what to do now, the clock, the fare
   paintHud(){ const root=Drive.el; if(!root||!this.a){ if(this.hud){ this.hud.remove(); this.hud=null; } return; }
     if(!this.hud||!this.hud.isConnected){ this.hud=el('div',{class:'mhud'}); root.append(this.hud); }
@@ -7861,7 +7879,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
       if(online&&!L) Looks.want([c.handle]); /* their own look, for next time */
       const drv=!!(dn&&dn.mode==='car'), n=aboard.get(c.id)||0;
       out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, m:V&&V.mode==='water'?Object.keys(VEHICLE_TYPES).find(k=>VEHICLE_TYPES[k]===V):m&&ridden(m)?m:V===VEHICLE_TYPES.taxi?'sedan':'hatch', look:L||null, pet:!st.car?petOut(c):null, petOwner:c.handle, tag:online||live?'@'+c.handle+(n?` +${n}`:''):null, online, h:c.handle, drv, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, full:drv&&n>=seatsOf(dn.m)-1 }); }
-    const near=out.sort((a,b)=>a.d-b.d).slice(0,40); this.talkNear(near); const pax=Missions.people(); if(pax) near.push(pax); /* (your taxi fare, waiting at the kerb) */ return near; },
+    const near=out.sort((a,b)=>a.d-b.d).slice(0,40); this.talkNear(near); const extra=Missions.people(); if(extra) near.push(...(Array.isArray(extra)?extra:[extra])); /* (your taxi fare at the kerb, the car to take, or people with work going) */ return near; },
   // talking on the street: what you say shows over your head for the people near you (and in their street chat)
   async say(){ const t=this.chatIn.value.trim(); if(!t||!this.T) return; this.chatIn.value=''; const p=this.T.pos;
     try{ const r=await api('/api/street/say',{method:'POST',body:{text:t,x:p.x,y:p.y}}); this.heard({...r.say,mine:true}); }catch(e){ toast(e.message); this.chatIn.value=t; } },

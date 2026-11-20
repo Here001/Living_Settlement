@@ -599,6 +599,12 @@ export function createTown(host, opts) {
   const chevron = (() => { const sh = new THREE.Shape(); sh.moveTo(1.1, 0); sh.lineTo(-0.5, 1.0); sh.lineTo(-0.1, 0); sh.lineTo(-0.5, -1.0); sh.closePath(); const g = new THREE.ShapeGeometry(sh); g.rotateX(-Math.PI / 2); return g; })();
   const routeMat = new THREE.MeshBasicMaterial({ color: '#2f9bff', transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6, toneMapped: false });
   const beamMat = new THREE.MeshBasicMaterial({ color: '#2f9bff', transparent: true, opacity: 0.35, depthWrite: false, toneMapped: false });
+  // a cash drop: a gold crate on the road with a tall gold beam over it, so it's seen from streets away (one at a time)
+  let dropG = null; const dropMat = new THREE.MeshBasicMaterial({ color: '#ffd23f', transparent: true, opacity: 0.4, depthWrite: false, toneMapped: false });
+  function setDrop(d) { if (dropG) { scene.remove(dropG); dropG.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material !== dropMat) o.material.dispose(); }); dropG = null; } if (!d) return;
+    dropG = new THREE.Group(); const crate = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.8, 1.1), new THREE.MeshStandardMaterial({ color: '#c8963e', roughness: 0.6, metalness: 0.3, emissive: '#5a3a00', emissiveIntensity: 0.4 })); crate.position.y = 0.45;
+    const band = new THREE.Mesh(new THREE.BoxGeometry(1.14, 0.16, 1.14), new THREE.MeshStandardMaterial({ color: '#ffe27a', roughness: 0.3, metalness: 0.8 })); band.position.y = 0.6;
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 70, 14, 1, true), dropMat); beam.position.y = 35; dropG.add(crate, band, beam); dropG.position.set(d.x * TILE, 0, d.y * TILE); dropG.userData.crate = crate; scene.add(dropG); }
   function setRoute(path) { if (routeMesh) { routeG.remove(routeMesh); routeMesh.dispose(); routeMesh = null; } if (routeEnd) { routeG.remove(routeEnd); routeEnd.geometry.dispose(); routeEnd = null; }
     if (!path || path.length < 2) return; const pts = path.map(([x, y]) => [(x + 0.5) * TILE, (y + 0.5) * TILE]), spots = [];
     for (let i = 1; i < pts.length; i++) { const [ax, az] = pts[i - 1], [bx2, bz2] = pts[i], L2 = Math.hypot(bx2 - ax, bz2 - az), ang = Math.atan2(-(bz2 - az), bx2 - ax); for (let d = 2; d < L2; d += 4) spots.push([ax + (bx2 - ax) * d / L2, az + (bz2 - az) * d / L2, ang]); }
@@ -652,7 +658,7 @@ export function createTown(host, opts) {
     driveTraffic(dt); walk(dt); skyLife(dt, now, night);
     head.intensity = foot || riding ? 0 : night * 60; if (night > 0.02) { const fx = Math.cos(car.a), fz = -Math.sin(car.a); head.position.set(car.x + fx * 1.8, 0.9, car.z + fz * 1.8); head.target.position.set(car.x + fx * 14, 0, car.z + fz * 14); }
     const fov = mode === 1 && camera.aspect < 1 ? 72 + (foot ? 0 : Math.min(8, Math.abs(car.v) * 0.3)) : foot ? 62 : 60 + Math.min(14, Math.abs(car.v) * 0.45); if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); } /* the view widens with speed */
-    GRASS.time.value = now / 1000; W.WATER.time.value = now / 1000; crowd(now, dt); if (bubbles.size) placeBubbles(now); services(now, dt); rideSync(dt); chase(dt); drawFleet(night); routeMat.opacity = 0.6 + 0.3 * Math.sin(now / 250); ground.position.set(Math.round(car.x / 50) * 50, -0.45, Math.round(car.z / 50) * 50); /* (well below the water, so water always shows) */
+    GRASS.time.value = now / 1000; W.WATER.time.value = now / 1000; crowd(now, dt); if (bubbles.size) placeBubbles(now); services(now, dt); rideSync(dt); chase(dt); drawFleet(night); routeMat.opacity = 0.6 + 0.3 * Math.sin(now / 250); if (dropG) { dropG.userData.crate.rotation.y = now / 900; dropMat.opacity = 0.3 + 0.15 * Math.sin(now / 300); } ground.position.set(Math.round(car.x / 50) * 50, -0.45, Math.round(car.z / 50) * 50); /* (well below the water, so water always shows) */
     if (now - chk > 600) { chk = now; around(); syncBoards(now); }
     if (queue.length) { const [bx, by] = queue.shift().split(',').map(Number); if (opts.loaded(bx + B / 2, by + B / 2) || opts.loaded(bx, by)) build(bx, by); else queue.push(bx + ',' + by); }
     if (now - timeAt > 20000) { timeAt = now; shadowsDue = true; } sunNow(false);
@@ -757,10 +763,10 @@ export function createTown(host, opts) {
     stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, fleet: Object.fromEntries([...fleetM].filter(([, m]) => m.count).map(([k, m]) => [k, m.count])), calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
     toggleView() { mode = (mode + 1) % 3; lk.yaw = foot ? lk.yaw : 0; lk.pitch = 0; return ['behind', 'driver', 'above'][mode]; },
     setControls(c) { ctl = c || ctl; controls(); if (riding && pad) pad.style.display = 'none'; },
-    setRoute,
+    setRoute, setDrop,
     stop() { car.v = 0; car.vx = car.vz = 0; },
     dispose() { dead = true; clearInterval(refresh); view.stop(); removeEventListener('keydown', kd); removeEventListener('keyup', ku); removeEventListener('blur', kb); removeEventListener('resize', fit); removeEventListener('orientationchange', turned); ro.disconnect();
       for (const v of blocks.values()) drop(v); blocks.clear(); for (const f of folk.values()) scene.remove(f.g); folk.clear();
-      ground.geometry.dispose(); ground.material.dispose(); try { view.dispose(); } catch (e) {} try { renderer.forceContextLoss(); } catch (e) {} canvas.remove(); if (pad) pad.remove(); chevron.dispose(); routeMat.dispose(); beamMat.dispose(); for (const m of fleetM.values()) { scene.remove(m); m.dispose(); } blobGeo.dispose(); blobMat.dispose(); beamGeo.dispose(); beamMat2.dispose(); beamTex.dispose(); sky.t.dispose(); },
+      ground.geometry.dispose(); ground.material.dispose(); try { view.dispose(); } catch (e) {} try { renderer.forceContextLoss(); } catch (e) {} canvas.remove(); if (pad) pad.remove(); chevron.dispose(); routeMat.dispose(); beamMat.dispose(); setDrop(null); dropMat.dispose(); for (const m of fleetM.values()) { scene.remove(m); m.dispose(); } blobGeo.dispose(); blobMat.dispose(); beamGeo.dispose(); beamMat2.dispose(); beamTex.dispose(); sky.t.dispose(); },
   };
 }

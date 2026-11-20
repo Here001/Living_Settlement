@@ -26,8 +26,8 @@ export const MISSIONS = {
   con: { name: 'Con a tourist', icon: '🎭', side: 'crime', rank: 2, live: true, blurb: 'A tourist is standing about in town. Walk up and sell them a "genuine" moon rock.' },
   atm: { name: 'ATM hack', icon: '🏧', side: 'crime', rank: 3, live: true, blurb: 'Walk up to the cash machine outside a Bank, rewire it and tap in the code.' },
   heist: { name: 'Crew jobs (heists)', icon: '🕶️', side: 'crime', rank: 3, live: true, link: 'crime', blurb: 'Plan a job with your crew: the armoured truck, the Mayor, a jailbreak, the bank. Planned from the Crime tab on your card.' },
-  police: { name: 'Police patrol', icon: '🚓', side: 'work', rank: 3, live: false, blurb: 'Get paid to stop real crimes as they happen, against real players.' },
-  bounty: { name: 'Bounties', icon: '🎯', side: 'crime', rank: 4, live: false, blurb: 'Put a price on someone, or hunt the ones on the board.' },
+  police: { name: 'Police patrol', icon: '🚓', side: 'work', rank: 3, live: true, blurb: 'Chase down a real player getting away with a hot car or a hold-up, and pull up beside them to make the arrest. No one on the run? A paid patrol round town.' },
+  bounty: { name: 'Bounties', icon: '🎯', side: 'crime', rank: 4, live: true, blurb: 'Hunt a player with a price on their head while they\'re out in town: catch up with them and the bounty is yours. Anyone can put one up.' },
   turf: { name: 'Turf', icon: '🏴', side: 'crime', rank: 5, live: false, blurb: 'Take city blocks for your crew. The shops there pay you every hour.' },
 };
 export const MISSION_IDS = Object.keys(MISSIONS);
@@ -48,6 +48,9 @@ export const MISSION = {
   race: { checkpoints: 5, leg: [9, 17], gold: 2.6, silver: 2.1, bronze: 1.6, pay: { base: 70, perTile: 3.2, max: 650 }, medal: { gold: 1, silver: 0.65, bronze: 0.4 }, xp: { base: 30, perTile: 0.3 }, countdown: 3 },
   hotcar: { pay: { base: 160, perTile: 4.2, max: 900 }, xp: { base: 40, perTile: 0.3 }, cars: ['sports', 'gt', 'luxury', 'supercar', 'evsedan', 'suv'], police: 2, after: 6, speed: [2.6, 3.3], lose: 42, catch: 0.9, caught: 2.5 },
   game: { holdup: { base: 260, perTile: 3.6, max: 900, xp: 55 }, con: { base: 190, xp: 40 }, atm: { base: 340, xp: 60 }, extra: 150, botched: 0.15 }, /* (a crime mission plays the shop, the con or the ATM game right there: pay by how well you played) */
+  police: { pay: 360, xp: 65, catch: 1.8, secs: 150, range: 90, patrol: { pay: 0.45, xp: 0.6 } }, /* (an arrest, or a patrol: a race's course, paid at a fraction, no medals) */
+  bounty: { min: 500, max: 50000, catch: 1.6, secs: 240, xp: 70 },
+  drop: { every: [8, 16], amount: [300, 1200], grab: 1.4, life: 6 }, /* cash drops: minutes between them, coins, how close, minutes it waits */
   tip: 0.5,                   // up to half the fare again for arriving with lots of time left
   quitCooldown: 20000,        // after giving up on one, a short wait before the next
 };

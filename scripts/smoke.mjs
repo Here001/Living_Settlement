@@ -2329,7 +2329,7 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
   ok(info.rank === 0 && info.list.filter(m => m.open).map(m => m.kind).join() === 'parcel,taxi' && info.list.some(m => m.kind === 'heist' && !m.open), 'a new player starts with two missions; the rest open up rank by rank', JSON.stringify(info.list.map(m => [m.kind, m.open])));
   const st = b => call('POST', '/api/me/missions', b, A.P);
   ok((await st({ action: 'start', kind: 'taxi' })).status === 409, 'missions happen out in the town: you have to be out on the street');
-  ok((await st({ action: 'start', kind: 'race' })).status === 403 && (await st({ action: 'start', kind: 'bounty' })).status === 409 && (await st({ action: 'start', kind: 'nope' })).status === 400, 'what isn\'t open yet (or doesn\'t exist) can\'t be started');
+  ok((await st({ action: 'start', kind: 'race' })).status === 403 && (await st({ action: 'start', kind: 'turf' })).status === 409 && (await st({ action: 'start', kind: 'nope' })).status === 400, 'what isn\'t open yet (or doesn\'t exist) can\'t be started');
   /* a street of its own out east, with shops and cottages along it */
   { const set = {}; for (let x = 300; x <= 362; x++) set[x + ',300'] = 'street'; await call('POST', '/api/admin/roads', { set });
     for (const [t, x] of [['grocer', 302], ['cottage', 312], ['grocer', 322], ['cottage', 332], ['grocer', 342], ['cottage', 352], ['grocer', 360], ['bakery', 316], ['microbank', 336]]) await call('POST', '/api/admin/buildings', { type: t, x, y: 301, instant: true }); }
@@ -2389,6 +2389,32 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
     await pool.query("update citizens set missions = missions || '{\"last\": 0}'::jsonb where id = $1", [A.id]); await at(road.x + 0.5, road.y + 0.5, 'walk');
     const h = await st({ action: 'start', kind: 'holdup' }); ok(h.status === 200 && h.json.active.steps[0].game === 'rob' && h.json.active.steps[1].getaway && h.json.active.steps[1].need === 'car', 'a hold-up: rob a real store on foot, then the getaway by car', JSON.stringify(h.json.active && h.json.active.steps.map(x => [x.k, x.game, x.need])));
     await st({ action: 'quit' }); }
+  // players against players: a cop chases down someone on the run; a hunter collects a bounty; cash drops
+  { const sockOf = async P => { const w2 = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w2.on('message', d => { const m = JSON.parse(d); got.push(m); }); await new Promise(r => w2.once('open', r)); w2.send(JSON.stringify({ type: 'auth', token: P.headers['x-player'] })); for (let i = 0; i < 40 && !got.some(m => m.type === 'authed'); i++) await sleep(50); return { w: w2, got, at: async (x, y, mode = 'car') => { w2.send(JSON.stringify({ type: 'drive', mode, x, y, a: 0 })); await sleep(250); } }; };
+    const robberGot = []; w.on('message', d => { try { robberGot.push(JSON.parse(d)); } catch {} });
+    const Cop = await player('mission_cop', 1000), Hun = await player('mission_hunter', 1000); await pool.query("update citizens set missions = $2::jsonb where id = $1", [Cop.id, JSON.stringify({ xp: 1000, seeded: 1 })]); await pool.query("update citizens set missions = $2::jsonb where id = $1", [Hun.id, JSON.stringify({ xp: 2200, seeded: 1 })]);
+    const cop = await sockOf(Cop.P), hun = await sockOf(Hun.P), cst = b => call('POST', '/api/me/missions', b, Cop.P), hst = b => call('POST', '/api/me/missions', b, Hun.P);
+    await cop.at(road.x + 0.5, road.y + 0.5); const pat = await cst({ action: 'start', kind: 'police' }); ok(pat.status === 200 && pat.json.active.patrol && pat.json.active.steps.every(x => x.k === 'cp'), 'no one on the run: a police shift is a paid patrol round town', JSON.stringify(pat.json.active && { patrol: pat.json.active.patrol, n: pat.json.active.steps.length })); await cst({ action: 'quit' }); await pool.query("update citizens set missions = missions || '{\"last\": 0}'::jsonb where id = $1", [Cop.id]);
+    // the robber takes a hot car and drives off
+    await pool.query("update citizens set missions = missions || '{\"last\": 0}'::jsonb where id = $1", [A.id]); await at(road.x + 0.5, road.y + 0.5, 'walk'); const hc = (await st({ action: 'start', kind: 'hotcar' })).json.active, m0 = hc.steps[0];
+    await at(m0.kx + 0.5, m0.ky + 0.5, 'walk'); await sleep(Math.ceil(MS.dist(road, m0) / MS.MISSION.fastest * 1000) + 60); await st({ action: 'arrive' }); await at(m0.kx + 0.5, m0.ky + 0.5, 'car');
+    const ch1 = await cst({ action: 'start', kind: 'police' }), C1 = ch1.json.active; ok(ch1.status === 200 && C1.steps[0].k === 'chase' && C1.steps[0].target === A.id, 'on patrol with someone on the run: you\'re sent after them', JSON.stringify(C1 && C1.steps[0]));
+    ok((await cst({ action: 'arrive' })).status === 409, 'from across town, no arrest');
+    await cop.at(m0.kx + 1.0, m0.ky + 0.5); const ar = await cst({ action: 'arrive' }); await sleep(300);
+    const rob = (await call('GET', '/api/me/missions', undefined, A.P)).json;
+    ok(ar.status === 200 && ar.json.done && ar.json.paid > 0 && !rob.active && robberGot.some(m => m.type === 'mission' && m.data && m.data.kind === 'arrested' && m.data.by === 'mission_cop'), 'pull up right beside them: arrested (their job\'s off, and they hear who got them), and the officer is paid', JSON.stringify({ paid: ar.json.paid, robActive: !!rob.active }));
+    // a bounty on the robber; the hunter catches up with them while they're out
+    const coinsOf = async id2 => Number((await pool.query('select coins_base from citizens where id = $1', [id2])).rows[0].coins_base);
+    const h0 = await coinsOf(Hun.id), place = await call('POST', '/api/me/missions', { action: 'bounty', handle: 'mission_mo', amount: 800 }, Cop.P);
+    ok(place.status === 200 && (await coinsOf(Cop.id)) < 1000 + ar.json.paid, 'anyone can put up a bounty: the coins are held until someone collects', JSON.stringify(place.json));
+    ok((await call('POST', '/api/me/missions', { action: 'bounty', handle: 'mission_cop', amount: 800 }, Cop.P)).status === 400 && (await call('POST', '/api/me/missions', { action: 'bounty', handle: 'mission_mo', amount: 5 }, Cop.P)).status === 400, '…not on yourself, and not for pennies');
+    const bd = (await call('GET', '/api/me/missions', undefined, Hun.P)).json.bounties, bb = bd.find(x => x.handle === 'mission_mo'); ok(bb && bb.amount === 800 && bb.out, 'the bounty board shows it, and whether they\'re out in town', JSON.stringify(bd));
+    await hun.at(road.x + 0.5, road.y + 0.5, 'walk'); const hs = await hst({ action: 'start', kind: 'bounty', bounty: bb && bb.id }); ok(hs.status === 200 && hs.json.active.steps[0].k === 'hunt', 'the hunt is on', JSON.stringify(hs.json).slice(0, 160));
+    await hun.at(m0.kx + 1.0, m0.ky + 0.5, 'walk'); const hc2 = await hst({ action: 'arrive' }); await sleep(300);
+    ok(hc2.status === 200 && hc2.json.done && hc2.json.paid === 800 && (await coinsOf(Hun.id)) - h0 === 800 && robberGot.some(m => m.type === 'mission' && m.data && m.data.kind === 'bountied'), 'caught up with them: the bounty is yours (and they know who collected it)', JSON.stringify({ paid: hc2.json.paid }));
+    ok(!(await call('GET', '/api/me/missions', undefined, Hun.P)).json.bounties.some(x => x.id === bb.id), '…and it comes off the board');
+    ok((await hst({ action: 'grab' })).status === 409, 'no cash drop to grab: someone got there first');
+    cop.w.close(); hun.w.close(); }
   ok(MS.rankOf(0) === 0 && MS.rankOf(MS.RANKS[1].xp) === 1 && MS.unlocksAt(1).includes('race') && MS.RANKS.every((R, i) => !i || R.xp > MS.RANKS[i - 1].xp), 'XP moves you up the ranks, and each rank opens something new');
   { const vet = await player('mission_vet', 1000); await pool.query("insert into crime_runs (id, citizen_id, kind, seed, diff, started_at) values ($1, $2, 'rob', 1, 1, $3)", ['cr-vet-' + Date.now(), vet.id, Date.now()]);
     ok((await call('GET', '/api/me/missions', undefined, vet.P)).json.rank === 3, 'players who already did crimes before missions start at Operator, so nothing they did is locked away'); }

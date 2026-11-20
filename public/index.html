@@ -1322,6 +1322,7 @@ body.room-on .toast,body.room-on .rsheet-bg.rreport{z-index:9700}
 .mg.hurt{box-shadow:inset 0 0 80px rgba(220,0,0,.65)}
 .mrank{display:flex;gap:10px;align-items:center;background:#2B2621;color:#fff;border-radius:16px;padding:10px 12px;margin:4px 0 10px}.mrkic{font-size:30px}.mrkt{flex:1;min-width:0}.mrkt b{font-size:16px}.mrkt small{opacity:.8;font-size:12px}
 .mbar{height:8px;background:rgba(255,255,255,.18);border-radius:6px;margin:5px 0 3px;overflow:hidden}.mbar i{display:block;height:100%;background:linear-gradient(90deg,#F2C94C,#E4572E);border-radius:6px}
+.mbounty{margin:10px 0}.mbounty summary{font-weight:800;cursor:pointer}.mbounty input{flex:1;min-width:0;padding:7px 9px;border:2px solid #2B2621;border-radius:10px;font:inherit}
 .mgoals{background:#FFF6DA;border:2px solid #2B2621;border-radius:14px;padding:8px 12px;margin:0 0 10px;color:#2B2621}.mgoals.all{background:#E3F3E8}.mgoal{display:flex;gap:8px;align-items:center;font-size:13.5px;margin:5px 0}.mgoal .mgt{flex:1}.mgoal small{font-weight:800;opacity:.7}.mgoal.done .mgt{text-decoration:line-through;opacity:.6}
 .mcard{background:#fff;border:2px solid #2B2621;border-radius:14px;padding:10px 12px;margin:8px 0;box-shadow:0 3px 0 #2B2621;color:#2B2621}.mcard p{margin:4px 0 8px;font-size:13px;line-height:1.35}.mcard.on{background:#FFF6DA}.mcard.lock{opacity:.6;box-shadow:none;border-style:dashed}.mcard.lock p{margin-bottom:0}
 .mtop{display:flex;justify-content:space-between;align-items:center;gap:8px}.mtag{font-size:11px;font-weight:800;border-radius:8px;padding:2px 7px;background:#E3F3E8;color:#1E7A55}.mtag.crime{background:#FBE3DE;color:#B3261E}.mpay{font-weight:800;color:#1E7A55;font-size:13px}
@@ -1635,6 +1636,7 @@ function connect(){
     else if(m.type==='whereIn'){ if(m.all){ InsideNow.clear(); for(const [id,pl] of m.all) InsideNow.set(id,pl); } else if(m.place) InsideNow.set(m.id,m.place); else InsideNow.delete(m.id); }
     else if(m.type==='gm' && m.data) Chats.gincoming(m.data);
     else if(m.type==='chatInvite' && m.data) Chats.invited(m.data);
+    else if(m.type==='mission' && m.data){ Missions.event(m.data); } /* arrested on the run, or a bounty collected on you */
     else if(m.type==='notice' && m.data){ Notices.incoming(m.data); if((m.data.kind==='visit'||m.data.kind==='love')&&sel) setTimeout(()=>renderCard(true),300); } /* a visit asked for or answered: the open card shows it */
     else if(m.type==='dmGone' && m.id) Chats.gone(m.id);
     else if(m.type==='badge' && m.data) {} // badges were replaced by stars
@@ -7506,11 +7508,12 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
     const open=d.list.filter(m=>m.open), soon=d.list.filter(m=>!m.open);
     box.append(el('h4',{class:'mh',text:this.a?'Next time':'Pick one'}));
     for(const m of open) box.append(el('div',{class:'mcard'}, el('div',{class:'mtop'}, el('b',{text:`${m.icon} ${m.name}`}), el('span',{class:'mtag '+m.side,text:m.side==='crime'?'Crime':'Work'})), el('p',{text:m.blurb}),
-      m.link?el('button',{class:'btn primary sm',text:'Open the Crime tab',onclick:()=>{ this.close(); Phone.hide(); openMyTab('crime'); }}):el('button',{class:'btn primary sm',text:'Start',disabled:this.a||this.busy?'':null,onclick:()=>this.start(m.kind)})));
+      m.kind==='bounty'?el('p',{class:'hint',text:'Pick someone from the board below.'}):m.link?el('button',{class:'btn primary sm',text:'Open the Crime tab',onclick:()=>{ this.close(); Phone.hide(); openMyTab('crime'); }}):el('button',{class:'btn primary sm',text:'Start',disabled:this.a||this.busy?'':null,onclick:()=>this.start(m.kind)})));
     /* what's ahead: just the next rank's openings, so there's always one thing to aim for (the rest stay a surprise) */
     const nextR=soon.length?Math.min(...soon.map(m=>m.rank).filter(r=>r>d.rank).concat([99])):99, ahead=soon.filter(m=>m.rank===nextR);
     if(ahead.length){ box.append(el('h4',{class:'mh',text:`Coming at ${d.ranks[nextR].icon} ${d.ranks[nextR].name}`}));
       for(const m of ahead) box.append(el('div',{class:'mcard lock'}, el('div',{class:'mtop'}, el('b',{text:`🔒 ${m.icon} ${m.name}`}), el('span',{class:'mtag '+m.side,text:m.side==='crime'?'Crime':'Work'})), el('p',{text:m.blurb}))); }
+    this.board(box,d);
     box.append(el('p',{class:'hint',text:d.paidLeft?`Missions pay from the colony treasury: ${d.paidLeft} more today.`:'You’ve done today’s paid missions: more XP still counts. New ones tomorrow.'})); },
   sheet(){ this.close(); const box=el('div',{class:'rsheet mbox'}), wrap=el('div',{class:'rsheet-bg storesheet msheet'}, box); wrap.addEventListener('click',e=>{ if(e.target===wrap) this.close(); });
     box.append(el('div',{class:'mhead'}, el('h3',{text:'🎯 Missions'}), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>this.close()}))); const inner=el('div'); box.append(inner); document.body.append(wrap); this.sheetEl=wrap; this.fill(inner); },
@@ -7518,14 +7521,15 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
   // out on the street, in a car, ready for the server to know where you are
   async goOut(){ this.close(); if(!Drive.el) await Drive.start(); const t0=Date.now(); while(Drive.el&&!(Drive.T)&&Date.now()-t0<15000) await new Promise(r=>setTimeout(r,200)); if(!Drive.T) return false;
     if(this.a) this.route(); return true; },
-  async start(kind){ if(this.busy) return; this.busy=true;
-    try{ const wasOut=!!Drive.T; if(!(await this.goOut())) return; if((Drive.T.pos.mode==='walk'&&kind!=='hotcar')||Drive.riding){ toast('🚗 Get in a car first: this one’s driving.'); return; }
+  async start(kind,opt={}){ if(this.busy) return; this.busy=true;
+    try{ const wasOut=!!Drive.T; if(!(await this.goOut())) return; if((Drive.T.pos.mode==='walk'&&!['hotcar','bounty','holdup','con','atm'].includes(kind))||Drive.riding){ toast('🚗 Get in a car first: this one’s driving.'); return; }
       if(!wasOut) await new Promise(r=>setTimeout(r,1200)); /* (the town tells the server where you are a moment after you go out) */
-      const r=await api('/api/me/missions',{method:'POST',body:{action:'start',kind}}); this.close(); Phone.hide(); this.d=r; this.begin(r.active);
+      const r=await api('/api/me/missions',{method:'POST',body:{action:'start',kind,...opt}}); this.close(); Phone.hide(); this.d=r; this.begin(r.active);
       const K=MISSION_KINDS[kind]; toast(`${K.icon} ${K.name}: ${this.say(this.step())}`); }
     catch(e){ toast(e.message); } finally{ this.busy=false; } },
   begin(a){ this.a=a; this.saidHi=false; this.route(); this.paintHud(); clearInterval(this.tickT); this.tickT=setInterval(()=>this.paintHud(),a.kind==='race'?100:1000); },
   say(s){ const a=this.a, K=a&&a.kind; if(!s) return ''; if(K==='race'){ const n=a.steps.length; return a.step>=n-1?'Through the finish!':`Checkpoint ${a.step+1} of ${n}`; }
+    if(s.k==='chase') return `🚨 Catch ${s.name}: pull up right beside them.`; if(s.k==='hunt') return `🎯 Catch up with ${s.name}: get right next to them.`; if(a.patrol) return `On patrol: ${s.name}.`;
     if(s.k==='game') return K==='holdup'?`Walk into ${s.name} and rob the till.`:K==='con'?`Find ${s.name} and walk up to them.`:`Walk up to ${s.name}.`;
     if(s.getaway) return `Get away to ${s.name}!`;
     if(K==='hotcar') return s.k==='steal'?'Walk up to the car with the 🔑 and take it.':`Get it to ${s.name} (the chop shop).`; if(K==='taxi') return s.k==='pickup'?`Pick up your fare at ${s.name}.`:`Drive them to ${s.name}.`;
@@ -7538,10 +7542,12 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
     if(a&&s&&s.k==='game'&&s.game==='scam'&&s.kx!=null){ const tx=Math.max(s.x-0.3,Math.min(s.x+s.w+0.3,s.kx+0.5)), ty=Math.max(s.y-0.3,Math.min(s.y+s.h+0.3,s.ky+0.5)); return { d:0, id:'m:tourist', x:tx, y:ty, car:false, look:null, tag:'🧳 Tourist' }; }
     if(!a||!this.paxAt) return []; return { d:0, id:'m:pax', x:this.paxAt.x, y:this.paxAt.y, car:false, look:null, tag:'🚕 Your fare' }; },
   // as you drive: the strip, the passenger's hello, and pulling up at the stop
-  tick(x,y){ const a=this.a, s=this.step(); if(!a&&Drive.T){ this.nearGiver(x,y); return; } if(!a||!s||!Drive.T||this.busy||this.playing) return; const T3=Drive.T, now=Date.now();
+  tick(x,y){ this.dropNear(x,y); const a=this.a, s=this.step(); if(!a&&Drive.T){ this.nearGiver(x,y); return; } if(!a||!s||!Drive.T||this.busy||this.playing) return; const T3=Drive.T, now=Date.now();
     if(now>a.deadline){ this.fail('time'); return; }
     if(this.cops) this.chase(x,y,now); /* (a hot car, or the getaway after a hold-up) */
     if(now<a.start) return; /* (the green light) */
+    if(s.k==='chase'||s.k==='hunt'){ const t=DrivingNow.get(s.target); if(!t||now-t.t>8000) return; if(!this.tgtAt||now-this.tgtAt>2000){ this.tgtAt=now; if(!this.tgt||Math.hypot(t.x-this.tgt.x,t.y-this.tgt.y)>2){ this.tgt={x:t.x,y:t.y}; DriveMap.go(Math.floor(t.x),Math.floor(t.y),{quiet:true,mission:true,name:s.name}); } }
+      if(Math.hypot(t.x-x,t.y-y)<=(s.k==='chase'?MISSION.police.catch:MISSION.bounty.catch)-0.2&&now-this.nearT>800){ this.nearT=now; this.arrive(); } return; } /* (they keep moving: the way is re-planned as they go) */
     const off=offEdge({x,y},s); if(a.kind==='taxi'&&s.k==='pickup'&&!this.saidHi&&off<6){ this.saidHi=true; try{ T3.say('m:pax', FARES[a.line%FARES.length].hi); }catch(e){} }
     const at=(s.kx!=null&&Math.hypot(x-(s.kx+0.5),y-(s.ky+0.5))<=(s.k==='steal'?1.1:1.5))||(s.k!=='cp'&&s.k!=='steal'&&off<=MISSION.near-(s.k==='game'?0.9:0.2)), mode=T3.pos.mode, want=s.need||'car';
     if(at&&(s.k==='cp'||s.k==='steal'||s.k==='game'||T3.kmh()<=12)&&mode===want&&now-this.nearT>(s.k==='cp'?400:1500)){ this.nearT=now; this.arrive(); } /* (a checkpoint counts at any speed) */ },
@@ -7554,6 +7560,7 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
       if(r.next){ this.a=r.active; if(a.kind==='taxi'){ toast('🚕 They’re in. '+this.say(this.step())); setTimeout(()=>{ try{ Drive.T.say('me', '“'+FARES[a.line%FARES.length].go+'”'); }catch(e){} },1500); } else toast(`📦 ${s.k==='pickup'?'Got it.':'Delivered.'} ${this.say(this.step())}`); sfxCoin(); this.route(); this.paintHud(); return; }
       if(r.done) this.goalsToast(r);
       if(r.done&&r.kind==='race'){ const K=MISSION_KINDS[r.kind]; this.end(); sfxCoin(); toast(`${MEDALS[r.medal]} ${r.secs.toFixed(1)} s! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); try{ Earn.coins(r); }catch(e){} return; }
+      if(r.done&&(r.kind==='police'||r.kind==='bounty')){ this.end(); sfxCoin(); toast(r.kind==='police'?`🚓 ${a.patrol?'Patrol done':'Arrest made'}! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`:`🎯 Bounty collected! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); return; }
       if(r.done&&r.kind==='holdup'){ this.end(); sfxCoin(); toast(`🏪 Got away with it! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); return; }
       if(r.done&&r.kind==='hotcar'){ this.end(); sfxCoin(); toast(`🔑 Sold for parts! +${r.paid.toLocaleString()} coins${r.tip?` (${r.tip.toLocaleString()} for being quick)`:''} · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); setTimeout(()=>this.walkAway(),1500); return; }
       if(r.done){ const K=MISSION_KINDS[r.kind]; this.end(); if(r.kind==='taxi'){ try{ Drive.T.say('me','“'+FARES[a.line%FARES.length].bye+'”'); }catch(e){} }
@@ -7561,11 +7568,11 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
         try{ Earn.coins(r); }catch(e){}
         if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); } }
     catch(e){ if(!/not at|yet/i.test(e.message)) toast(e.message); } finally{ this.busy=false; } },
-  fail(why,told){ const a=this.a; if(!a) return; const K=MISSION_KINDS[a.kind]; this.end(); toast(why==='time'?`⏱️ Out of time: the ${K.name.toLowerCase()} is off.`:why==='botched'?`${K.icon} Botched: nothing to show for it this time.`:`${K.icon} ${K.name} called off.`);
+  fail(why,told){ const a=this.a; if(!a) return; const K=MISSION_KINDS[a.kind]; this.end(); toast(why==='time'?`⏱️ Out of time: the ${K.name.toLowerCase()} is off.`:why==='gone'?`${K.icon} Too late: they’re gone.`:why==='botched'?`${K.icon} Botched: nothing to show for it this time.`:`${K.icon} ${K.name} called off.`);
     if(!told) api('/api/me/missions',{method:'POST',body:{action:'arrive'}}).catch(()=>{}); /* (the server sees the clock ran out and closes it) */ },
   async quit(box){ try{ this.d=await api('/api/me/missions',{method:'POST',body:{action:'quit'}}); }catch(e){ toast(e.message); return; } this.end(); toast('Mission given up.'); if(box&&box.isConnected) this.fill(box); },
   goalsToast(r){ if(r&&r.goalsDone&&r.goalsDone.length) setTimeout(()=>{ toast(r.dailyBonus?`📅 All three of today’s goals done! +${r.dailyBonus.toLocaleString()} coins`:`📅 Goal done: ${r.goalsDone[0]}`); sfxCoin(); },2600); },
-  end(){ this.a=null; this.paxAt=null; this.cops=null; this.trail=null; this.playing=false; this.getaway=false; clearInterval(this.tickT); this.tickT=null; if(DriveMap.dest&&DriveMap.dest.mission) DriveMap.clear(); this.paintHud(); },
+  end(){ this.tgt=null; this.a=null; this.paxAt=null; this.cops=null; this.trail=null; this.playing=false; this.getaway=false; clearInterval(this.tickT); this.tickT=null; if(DriveMap.dest&&DriveMap.dest.mission) DriveMap.clear(); this.paintHud(); },
   // a crime mission: you're there, so the game plays right here (the server replays it and scores it, and the take goes by your score)
   playGame(game, s){ const a=this.a, K=MISSION_KINDS[a.kind]; this.playing=true; try{ Drive.T&&Drive.T.stop(); }catch(e){}
     openCrimeGame(game, { practiceOnly:true, mission:{ next:a.kind==='holdup'?'🚗 Get away!':'Back to the street' }, at:s.name, band:'mid', chance:0.3, onResult:(res,run)=>this.played(run&&run.id, res) }, crimeCtx()); },
@@ -7607,6 +7614,22 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
   nearGiver(x,y){ if(this.a||!Drive.T) return; const T3=Drive.T, slow=T3.pos.mode==='walk'||T3.kmh()<=15; if(!slow) return; const now=Date.now();
     for(const g of this.gList||[]){ if(Math.hypot(g.x-x,g.y-y)>1.4) continue; this.told=this.told||{}; if(now-(this.told[g.id]||0)<90000) return; this.told[g.id]=now;
       try{ T3.say(g.id, g.line); }catch(e){} toast(`❗ ${g.name} at ${g.at}: “${g.line}”`,'See work',()=>Phone.show('missions')); return; } },
+  // news for you from the server: pulled over by a real player on patrol, or caught for the bounty on your head
+  event(d){ if(d.kind==='arrested'){ const a=this.a, hot=a&&a.kind==='hotcar'; if(a) this.end(); toast(`🚓 @${d.by} pulled you over: you’re arrested and the job’s off.`); if(hot) setTimeout(()=>this.walkAway(),1200); }
+    else if(d.kind==='bountied') toast(`🎯 @${d.by} caught up with you and collected the ${Number(d.amount||0).toLocaleString()}-coin bounty on your head.`); },
+  // the cash drop: shown (a gold beam) while you're out in town; checked every 20 seconds; grab it by getting there first
+  dropPoll(){ const now=Date.now(); if(!Drive.T||(this.dropAt&&now-this.dropAt<20000)) return; this.dropAt=now; this.load().then(d=>{ const D=d&&d.drop; this.drop=D||null; try{ Drive.T&&Drive.T.setDrop(D); }catch(e){}
+      if(D&&D.id!==this.dropSeen&&Drive.T){ const p=Drive.T.pos; this.dropSeen=D.id; if(Math.hypot(D.x-p.x,D.y-p.y)<45) toast(`💰 A cash drop just landed nearby (${D.amount.toLocaleString()} coins)! Follow the gold beam.`,this.a?null:'Show the way',()=>DriveMap.go(Math.floor(D.x),Math.floor(D.y),{quiet:true,name:'the cash drop'})); } }); },
+  dropNear(x,y){ this.dropPoll(); const D=this.drop; if(!D||this.grabbing||Date.now()>D.until) return; if(Math.hypot(D.x-x,D.y-y)>MISSION.drop.grab-0.2) return; this.grabbing=true;
+    api('/api/me/missions',{method:'POST',body:{action:'grab'}}).then(r=>{ sfxCoin(); toast(`💰 You grabbed the cash drop! +${r.paid.toLocaleString()} coins`); try{ Earn.coins(r); }catch(e){} }).catch(e=>toast(e.message)).finally(()=>{ this.grabbing=false; this.drop=null; this.dropAt=0; try{ Drive.T&&Drive.T.setDrop(null); }catch(e){} if(DriveMap.dest&&DriveMap.dest.name==='the cash drop') DriveMap.clear(); }); },
+  // the bounty board (at Boss), and putting a price on someone (anyone can)
+  board(box,d){ const B=MISSION_KINDS.bounty, open=d.list.find(m=>m.kind==='bounty'&&m.open);
+    if(open&&d.bounties&&d.bounties.length){ box.append(el('h4',{class:'mh',text:'🎯 The bounty board'})); for(const b of d.bounties){ const me=Me&&b.handle&&b.handle.toLowerCase()===String(Me.handle).toLowerCase();
+        box.append(el('div',{class:'mcard'}, el('div',{class:'mtop'}, el('b',{text:`@${b.handle}`}), el('span',{class:'mpay',text:`💰 ${b.amount.toLocaleString()}`})), el('p',{text:me?'That’s you. Keep moving.':b.out?'Out in town right now.':'Not out in town just now.'}),
+          me?null:el('button',{class:'btn primary sm',text:'🎯 Hunt them',disabled:b.out&&!this.a?null:'',onclick:()=>this.start('bounty',{bounty:b.id})}))); } }
+    const who=el('input',{type:'text',placeholder:'@who',maxlength:'32'}), amt=el('input',{type:'number',min:String(MISSION.bounty.min),max:String(MISSION.bounty.max),step:'100',value:String(MISSION.bounty.min)});
+    box.append(el('details',{class:'mbounty'}, el('summary',{text:'🎯 Put a price on someone'}), el('p',{class:'hint',text:`The coins come from you now; whoever catches them out in town gets them. ${MISSION.bounty.min.toLocaleString()} to ${MISSION.bounty.max.toLocaleString()}.`}),
+      el('div',{class:'mrow'}, who, amt, el('button',{class:'btn sm',text:'Put it up',onclick:async()=>{ try{ const r=await api('/api/me/missions',{method:'POST',body:{action:'bounty',handle:who.value.trim(),amount:Number(amt.value)}}); try{ Earn.coins(r); }catch(e){} toast('🎯 The bounty is up.'); this.fill(box); }catch(e){ toast(e.message); } }})))); },
   // the strip at the top of the street view: what to do now, the clock, the fare
   paintHud(){ const root=Drive.el; if(!root||!this.a){ if(this.hud){ this.hud.remove(); this.hud=null; } return; }
     if(!this.hud||!this.hud.isConnected){ this.hud=el('div',{class:'mhud'}); root.append(this.hud); }

@@ -444,7 +444,8 @@ export function playersRouter({ limit, send, admin, world }) {
   // missions out in the 3D town: the ladder and the one you're on; start one, pull up at a stop, give it up
   r.get('/me/missions', limit, send(async req => world.missions.info((await me(req)).id)));
   r.post('/me/missions', limit, send(async req => { const b = req.body || {}, id = (await me(req)).id;
-    return b.action === 'start' ? world.missions.start(id, String(b.kind || '')) : b.action === 'arrive' ? world.missions.arrive(id, b.run ? String(b.run).slice(0, 64) : null) : b.action === 'quit' ? world.missions.quit(id) : Promise.reject(new HttpError(400, 'Start, arrive or quit.')); }));
+    if (b.action === 'bounty') return world.missions.placeBounty(id, String(b.handle || ''), b.amount); if (b.action === 'grab') return world.missions.grab(id);
+    return b.action === 'start' ? world.missions.start(id, String(b.kind || ''), { bounty: b.bounty }) : b.action === 'arrive' ? world.missions.arrive(id, b.run ? String(b.run).slice(0, 64) : null) : b.action === 'quit' ? world.missions.quit(id) : Promise.reject(new HttpError(400, 'Start, arrive or quit.')); }));
   r.post('/me/earn/shift', limit, send(async req => world.earn.shift((await me(req)).id)));
   r.post('/me/earn/gig', limit, send(async req => { const b = req.body || {}, id = (await me(req)).id;
     return b.action === 'take' ? world.earn.takeGig(id, String(b.id || '')) : b.action === 'deliver' ? world.earn.deliver(id) : b.action === 'drop' ? world.earn.dropGig(id) : Promise.reject(new HttpError(400, 'Take, deliver or drop.')); }));

@@ -374,7 +374,10 @@ const MIGRATIONS = [
    create table if not exists fight_votes (n int not null, citizen_id text not null, i int not null, primary key (n, citizen_id));
    alter table fight_nights add column if not exists fotn int;`,
   // v83: missions out in the 3D town (shared/missions.js): XP, today's count, the one you're on
-  `alter table citizens add column if not exists missions jsonb;`
+  `alter table citizens add column if not exists missions jsonb;`,
+  // v84: bounties: a price on someone's head, held until a hunter catches them out in town
+  `create table if not exists bounties (id text primary key, target_id text not null, target_handle text, by_id text not null, by_handle text, amount int not null, t bigint not null, claimed_by text, claimed_at bigint);
+   create index if not exists bounties_open on bounties (target_id) where claimed_by is null;`
 ];
 
 export async function migrate() {

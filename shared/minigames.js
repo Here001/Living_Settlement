@@ -12,7 +12,7 @@
 //
 // Score out of 100: your play is worth up to 60 points, the setting (how far the police are, night, a crime wave) up to 40.
 
-export const GAMES = { rob: 'stealth', scam: 'con', atm: 'atm', driver: 'drive', hacker: 'atm', safecracker: 'safe', lookout: 'lookout', muscle: 'horde' };
+export const GAMES = { rob: 'stealth', scam: 'con', atm: 'atm', driver: 'drive', hacker: 'atm', safecracker: 'safe', lookout: 'lookout', muscle: 'horde', breakout: 'breakout' };
 export const SOLO = ['rob', 'scam', 'atm']; // the crimes you do alone; the rest are heist roles (practice is open to all)
 export const STEP = 0.1; // the stealth game moves in steps of a tenth of a second, on the phone and on the server alike
 
@@ -20,7 +20,7 @@ export function rng(seed) { let s = (seed >>> 0) || 1; return () => { s = (s + 0
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // Difficulty 1 (easy) to 5 (hard): each crime has its own base, and police close by make it harder.
-const BASE = { rob: 2, scam: 1, atm: 3, driver: 2, hacker: 3, safecracker: 3, lookout: 2, muscle: 2 };
+const BASE = { rob: 2, scam: 1, atm: 3, driver: 2, hacker: 3, safecracker: 3, lookout: 2, muscle: 2, breakout: 2 };
 export function difficultyOf(kind, band) { return clamp((BASE[kind] || 2) + (band === 'low' ? 1 : band === 'high' ? -1 : 0), 1, 5); }
 
 export function scoreOf(perf, chance) {
@@ -524,12 +524,13 @@ export const ROLES = {
   safecracker: { name: 'Safecracker', icon: '🔐', blurb: 'Stop the dial on each number.' },
   lookout: { name: 'Lookout', icon: '👀', blurb: 'Spot the plain-clothes police before they spot the crew.' },
   muscle: { name: 'Muscle', icon: '💪', blurb: 'Hold off the zombie horde while the crew works.' },
+  breakout: { name: 'Breakout', icon: '⛓️', blurb: 'Slip into the compound, take the guards down quietly, arm up and free the prisoner.' },
 };
 // The parts each job needs, most important first: a crew of 3 fills the first three.
 export const HEIST_ROLES = {
   armored: ['driver', 'muscle', 'hacker', 'lookout', 'muscle'],
   mayor: ['lookout', 'muscle', 'driver', 'muscle', 'muscle'],
-  jailbreak: ['hacker', 'driver', 'lookout', 'muscle', 'safecracker', 'muscle'],
+  jailbreak: ['breakout', 'breakout', 'breakout', 'breakout', 'breakout', 'breakout'], /* (everyone goes in: each plays the breakout on their own phone) */
   bank: ['safecracker', 'hacker', 'driver', 'lookout', 'muscle', 'muscle'],
 };
 // Who plays what: everyone gets the part they asked for while the job still has room for it; the rest fill the
@@ -753,9 +754,143 @@ export function hordeReplay(L, log) {
   return { ok: true, state: { t: s.t, done: s.done, hp: Math.round(s.hp), kills: s.kills, took: s.took }, ...hordePerf(L, s) };
 }
 
+// ======================= Break someone out of jail (breakout) =======================
+// A run-down prison compound in the heat: a fenced yard of sheds, livestock trailers, water tanks, barrels, sandbags and
+// upturned boats under the palms, an inner wall with one gate, and the cell block at the back. You come in through a
+// gap in the fence with your bare hands. Guards patrol, each looking ahead: crouch and they see you less (and not at
+// all behind low cover); creep up on one who hasn't noticed you and take them down without a sound. Pick up the axe,
+// then the rifle (gunfire brings everyone running), reach the prisoner's cell and spring the lock: the alarm goes and
+// more guards pour in. Free the prisoner and put every guard down to win. Like the horde, only + - * / and square
+// roots, so the phone and the server always agree.
+// The log: one point per step (where you were), and per step whether the action button was held ('1') and whether you
+// were crouching ('c').
+export const BREAK = { W: 36, H: 58, r: 0.4, run: 4.4, sneak: 2.0, hp: 100, tk: 1.4, pick: 1.3, door: 1.7, free: 1.2, limit: 140, ghp: 3, gspeed: 1.4, gchase: 3.2 };
+export const BWEAP = {
+  fists: { name: 'Fists', icon: '✊', dmg: 1, cd: 0.5, range: 1.6, noise: 3 },
+  axe: { name: 'Axe', icon: '🪓', dmg: 3, cd: 0.6, range: 1.9, noise: 4 },
+  rifle: { name: 'Rifle', icon: '🔫', dmg: 1.5, cd: 0.16, range: 17, noise: 22, ammo: 30 },
+  ammo: { name: 'Ammo', icon: '📦', add: 24 }, medkit: { name: 'First aid', icon: '🩹', heal: 40 },
+};
+// obstacles: { x, y, w, h, k, tall } (tall ones hide you even standing; low ones only when you crouch)
+export function genBreak(seed, diff) {
+  const r = rng(seed), W = BREAK.W, H = BREAK.H, obs = [], f = (v, n = 2) => +v.toFixed(n);
+  const wall = (x, y, w, h, k = 'fence') => obs.push({ x: f(x), y: f(y), w: f(w), h: f(h), k, tall: true });
+  // the fence round it all, with the gap you slip in through at the bottom
+  const gapX = W / 2; wall(0, 0, W, 0.3); wall(0, 0, 0.3, H); wall(W - 0.3, 0, 0.3, H); wall(0, H - 0.3, gapX - 2.2, 0.3); wall(gapX + 2.2, H - 0.3, W - gapX - 2.2, 0.3);
+  // the inner wall and its gate, then the cell block at the back with four cells; the prisoner is in one of them
+  const gate = f(9 + r() * (W - 18)); wall(0.3, 24, gate - 2.2 - 0.3, 0.6, 'wall'); wall(gate + 2.2, 24, W - 0.3 - gate - 2.2, 0.6, 'wall');
+  obs.push({ x: 5, y: 3.5, w: W - 10, h: 7.5, k: 'block', tall: true });
+  const cells = [0, 1, 2, 3].map(i => f(5 + (W - 10) * (i + 0.5) / 4)), cell = Math.floor(r() * 4), door = { x: cells[cell], y: 12.2 };
+  obs.push({ x: W - 6.2, y: 14.5, w: 2.6, h: 2.6, k: 'tower', tall: true });
+  const keep = [{ x: gapX, y: H - 2, d: 4 }, { x: gate, y: 24.3, d: 3.2 }, { x: door.x, y: door.y, d: 2.8 }];
+  const fits = (x, y, w, h, gap) => x > 1 && y > 1 && x + w < W - 1 && y + h < H - 1 && obs.every(o => o.k === 'fence' || x + w + gap < o.x || o.x + o.w + gap < x || y + h + gap < o.y || o.y + o.h + gap < y)
+    && keep.every(q => Math.abs(x + w / 2 - q.x) > w / 2 + q.d || Math.abs(y + h / 2 - q.y) > h / 2 + q.d);
+  const place = (k, w, h, y0, y1, n, gap = 2.0, tall = false) => { for (let i = 0, t = 0; i < n && t < 200; t++) { const flip = r() < 0.5, ww = flip ? h : w, hh = flip ? w : h, x = 1.5 + r() * (W - 3 - ww), y = y0 + r() * (y1 - y0 - hh);
+      if (!fits(x, y, ww, hh, gap)) continue; obs.push({ x: f(x), y: f(y), w: f(ww), h: f(hh), k, tall }); i++; } };
+  place('shed', 6.5, 4.2, 27, 52, 2, 2.4, true); place('trailer', 7.4, 2.5, 27, 52, 2, 2.2, true);
+  place('tank', 1.7, 1.7, 27, 52, 2); place('crates', 1.5, 1.5, 27, 53, 3); place('barrels', 1.2, 1.2, 27, 53, 3); place('boat', 3.6, 1.5, 30, 53, 2); place('sandbags', 2.8, 0.9, 27, 52, 2);
+  place('palm', 0.7, 0.7, 26, 54, 4, 2.2, true);
+  place('crates', 1.5, 1.5, 13, 23, 2); place('barrels', 1.2, 1.2, 13, 23, 2); place('sandbags', 2.8, 0.9, 13, 22.5, 2);
+  // what's lying about: an axe near the fence gap, a rifle further in, ammo and first aid
+  const spot = (y0, y1, near) => { for (let t = 0; t < 200; t++) { const x = near ? near.x + (r() - 0.5) * 8 : 3 + r() * (W - 6), y = near ? near.y + (r() - 0.5) * 4 : y0 + r() * (y1 - y0); if (y < y0 || y > y1) continue;
+      if (breakFits({ obs, W, H }, x, y, 0.9)) return { x: f(x), y: f(y) }; } return { x: gapX + 1.5, y: (y0 + y1) / 2 }; };
+  const picks = [{ k: 'axe', ...spot(H - 9, H - 4, { x: gapX + 3, y: H - 6 }) }, { k: 'rifle', ...spot(31, 40) }, { k: 'ammo', ...spot(14, 22) }, { k: 'medkit', ...spot(28, 48) }];
+  // the guards: on their rounds between two points (or watching one way and then the other), more of them the harder it is
+  const guards = [], gN = 4 + diff, zones = [[44, 53], [36, 46], [27, 36], [25, 27], [14, 22], [27, 50], [14, 22], [36, 50], [27, 44]];
+  for (let i = 0; i < gN; i++) { const [y0, y1] = zones[i % zones.length]; let a = null;
+    for (let t = 0; t < 200 && !a; t++) { const p = spot(y0, y1); if (Math.abs(p.x - gapX) + Math.abs(p.y - (H - 2)) > 9) a = p; } a = a || spot(y0, y1);
+    let b = null; for (let t = 0; t < 40 && !b; t++) { const along = r() < 0.5, d = (r() < 0.5 ? -1 : 1) * (5 + r() * 6), q = along ? { x: f(a.x + d), y: a.y } : { x: a.x, y: f(a.y + d) };
+      if (q.y > 12.8 && q.y < H - 3 && breakFits({ obs, W, H }, q.x, q.y, 0.6) && clearLine({ obs }, a, q, false)) b = q; }
+    const lx = r() < 0.5 ? (r() < 0.5 ? -1 : 1) : 0, ly = lx ? 0 : (r() < 0.5 ? -1 : 1);
+    guards.push({ x: a.x, y: a.y, b, look: [lx, ly], look2: [0 - ly, lx + 0], gun: true }); } /* (look2: a quarter turn from look) */
+  // the alarm: when the cell's sprung, more come through the gate and out of the cell block, one after another
+  const more = []; const mN = 3 + Math.floor(diff / 2) + (diff >= 4 ? 1 : 0);
+  for (let i = 0; i < mN; i++) more.push({ dt: f(1.2 + i * 1.5, 1), x: i % 2 ? f(gate + (r() - 0.5) * 2) : f(door.x + (i % 4 < 2 ? -5 : 5)), y: i % 2 ? 26 : 13 });
+  return { seed, diff, W, H, obs, entry: { x: gapX, y: H - 1.6 }, gate, door, cells, cell, picks, guards, more, limit: BREAK.limit };
+}
+export function breakFits(L, x, y, R = BREAK.r) { if (x < R || y < R || x > L.W - R || y > L.H - R) return false; for (const o of L.obs) if (x + R > o.x && x - R < o.x + o.w && y + R > o.y && y - R < o.y + o.h) return false; return true; }
+// can a sees b? walls and tall things always block; low cover blocks only someone crouching behind it
+function clearLine(L, a, b, low) { const dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy), n = Math.max(1, Math.ceil(d / 0.25));
+  for (let i = 1; i < n; i++) { const x = a.x + dx * i / n, y = a.y + dy * i / n; for (const o of L.obs) if ((o.tall || low) && x > o.x && x < o.x + o.w && y > o.y && y < o.y + o.h) return false; } return true; }
+export const breakSees = (L, a, b, low) => clearLine(L, a, b, low);
+export const breakStart = L => ({ t: 0, n: 0, x: L.entry.x, y: L.entry.y, fx: 0, fy: -1, hp: BREAK.hp, w: 'fists', ammo: 0, cd: 0, crouch: false,
+  g: L.guards.map((g, i) => ({ id: i, x: g.x, y: g.y, fx: g.look[0] || 0, fy: g.look[1] || -1, hp: BREAK.ghp, leg: 1, wait: 0, sus: 0, alert: 0, cd: 0.9, dead: 0 })),
+  picks: L.picks.map(p => ({ ...p })), freeing: 0, freed: 0, tFree: 0, next: 0, kills: 0, silent: 0, shots: [], hit: 0, ev: '', done: null });
+// your own move for one step: crouched you creep, standing you run; you slide along anything in the way
+export function breakMove(L, s, vx, vy, crouch) { const n = Math.sqrt(vx * vx + vy * vy); if (n > 1) { vx /= n; vy /= n; } const sp = (crouch ? BREAK.sneak : BREAK.run) * STEP; let x = s.x, y = s.y;
+  if (breakFits(L, x + vx * sp, y)) x += vx * sp; if (breakFits(L, x, y + vy * sp)) y += vy * sp; return { x, y }; }
+const unit = (x, y) => { const d = Math.sqrt(x * x + y * y); return d > 1e-6 ? [x / d, y / d, d] : [0, 0, 0]; };
+function alarm(s, g) { if (g.dead || g.alert) return; g.alert = 1; g.cd = Math.max(g.cd, 0.8); } /* (a moment to react before the first shot) */
+export function breakStep(L, s0, x, y, act, crouch) {
+  if (s0.done) return s0; const s = { ...s0, g: s0.g.map(g => ({ ...g })), picks: s0.picks.map(p => ({ ...p })), shots: [], ev: '' }, me = { x, y };
+  const mx = x - s.x, my = y - s.y, [ux, uy, ml] = unit(mx, my); if (ml > 0.01) { s.fx = ux; s.fy = uy; } s.x = x; s.y = y; s.crouch = !!crouch;
+  s.n++; s.t = +(s.n * STEP).toFixed(3); s.cd = Math.max(0, +(s.cd - STEP).toFixed(3)); s.hit = 0;
+  const live = () => s.g.filter(g => !g.dead), noise = (r) => { for (const g of s.g) { const d = Math.sqrt((g.x - s.x) ** 2 + (g.y - s.y) ** 2); if (d <= r) alarm(s, g); } };
+  // reinforcements, after the alarm
+  if (s.freed) while (s.next < L.more.length && s.t >= s.tFree + L.more[s.next].dt) { const m = L.more[s.next]; s.g.push({ id: 100 + s.next, x: m.x, y: m.y, fx: 0, fy: 1, hp: BREAK.ghp, leg: 1, wait: 0, sus: 1, alert: 1, cd: 1.0, dead: 0 }); s.next++; s.ev = 'more'; }
+  // picking things up
+  for (let i = s.picks.length - 1; i >= 0; i--) { const p = s.picks[i]; if (Math.sqrt((p.x - s.x) ** 2 + (p.y - s.y) ** 2) > BREAK.pick) continue;
+    if (p.k === 'medkit') s.hp = Math.min(BREAK.hp, s.hp + BWEAP.medkit.heal); else if (p.k === 'ammo') { if (s.w !== 'rifle') continue; s.ammo += BWEAP.ammo.add; } else if (p.k === 'axe') { if (s.w !== 'fists') continue; s.w = 'axe'; } else { s.w = 'rifle'; s.ammo += BWEAP.rifle.ammo; }
+    s.ev = 'pick:' + p.k; s.picks.splice(i, 1); }
+  // the guards: on their rounds, watching; noticing you fills up (faster close up, slower when you crouch); then they come and shoot
+  for (const g of s.g) { if (g.dead) continue; const G = L.guards[g.id] || null, [tx, ty, d] = unit(s.x - g.x, s.y - g.y);
+    const see = d < (s.crouch ? 6 : 10.5) && (g.fx * tx + g.fy * ty) >= 0.55 && clearLine(L, g, me, s.crouch), hear = !s.crouch && d < 2.2;
+    if (!g.alert) {
+      g.sus = see || hear ? g.sus + STEP * (s.crouch ? 1.0 : 2.0) * (1 + Math.max(0, (8 - d) / 8)) : Math.max(0, g.sus - STEP * 0.4);
+      if (g.sus >= 1) { alarm(s, g); s.ev = s.ev || 'seen'; for (const o of s.g) if (!o.dead && o !== g && Math.sqrt((o.x - g.x) ** 2 + (o.y - g.y) ** 2) < 9) alarm(s, o); } /* (a shout brings those close by) */
+      else if (G && G.b) { const to = g.leg ? G.b : G, [wx, wy, wd] = unit(to.x - g.x, to.y - g.y);
+        if (g.wait > 0) g.wait = Math.max(0, g.wait - STEP); else if (wd < BREAK.gspeed * STEP) { g.x = to.x; g.y = to.y; g.leg = g.leg ? 0 : 1; g.wait = 1.2; } else { g.x += wx * BREAK.gspeed * STEP; g.y += wy * BREAK.gspeed * STEP; g.fx = wx; g.fy = wy; } }
+      else if (G) { g.wait += STEP; if (g.wait >= 3) { g.wait = 0; const flip = g.fx === G.look[0] && g.fy === G.look[1]; g.fx = flip ? G.look2[0] : G.look[0]; g.fy = flip ? G.look2[1] : G.look[1]; } } /* (watching one way, then the other) */
+      continue; }
+    // alert: face you, close in (round anything in the way) until there's a clear shot from a few metres, then fire
+    g.fx = tx; g.fy = ty; g.cd = Math.max(0, g.cd - STEP); const los = clearLine(L, g, me, s.crouch);
+    if (d > 6 || !los) { const st = BREAK.gchase * STEP; let nx = g.x + tx * st, ny = g.y + ty * st;
+      if (!breakFits(L, nx, ny, 0.35)) { if (breakFits(L, g.x - ty * st, g.y + tx * st, 0.35)) { nx = g.x - ty * st; ny = g.y + tx * st; } else if (breakFits(L, g.x + ty * st, g.y - tx * st, 0.35)) { nx = g.x + ty * st; ny = g.y - tx * st; } else { nx = g.x; ny = g.y; } }
+      g.x = nx; g.y = ny; }
+    if (los && d <= 15 && g.cd <= 0) { s.hp -= (4 + L.diff * 0.8) * (s.crouch ? 0.65 : 1) * (d < 6 ? 1 : 0.75); g.cd = Math.max(0.75, 1.25 - L.diff * 0.07); s.hit = 1; g.shot = 1; } else g.shot = 0; }
+  // you: the action button takes down a guard who hasn't seen you (crouched, right up close), or fights with what you've got, or springs the cell
+  if (act) {
+    const atDoor = !s.freed && Math.sqrt((L.door.x - s.x) ** 2 + (L.door.y - s.y) ** 2) <= BREAK.door;
+    if (atDoor) { s.freeing += STEP; s.ev = s.ev || 'freeing'; if (s.freeing >= BREAK.free) { s.freed = 1; s.tFree = s.t; s.ev = 'freed'; for (const g of s.g) alarm(s, g); } }
+    else if (s.cd <= 0) { let tk = null, td = 1e9; if (s.crouch) for (const g of live()) { const d = Math.sqrt((g.x - s.x) ** 2 + (g.y - s.y) ** 2); if (!g.alert && d <= BREAK.tk && d < td) { td = d; tk = g; } }
+      if (tk) { tk.dead = 1; tk.hp = 0; s.kills++; s.silent++; s.cd = 0.7; s.ev = 'takedown'; s.shots = [[f2(tk.x), f2(tk.y), 0]]; }
+      else { const W0 = BWEAP[s.w]; let best = null, bd = 1e9;
+        for (const g of live()) { const d = Math.sqrt((g.x - s.x) ** 2 + (g.y - s.y) ** 2); if (d <= W0.range && d < bd && (s.w !== 'rifle' || clearLine(L, s, g, false))) { bd = d; best = g; } }
+        s.cd = W0.cd;
+        if (s.w === 'rifle') { if (s.ammo <= 0) { s.cd = 0.3; s.ev = 'empty'; } else { s.ammo--; noise(W0.noise); s.ev = 'shot';
+            if (best) { const [ax, ay] = unit(best.x - s.x, best.y - s.y); s.fx = ax; s.fy = ay; best.hp -= W0.dmg; s.shots = [[f2(best.x), f2(best.y), 1]]; } else s.shots = [[f2(s.x + s.fx * 12), f2(s.y + s.fy * 12), 1]]; } }
+        else if (best) { const [ax, ay] = unit(best.x - s.x, best.y - s.y); s.fx = ax; s.fy = ay; best.hp -= best.alert ? W0.dmg : 3; noise(W0.noise); s.ev = s.ev || 'hit'; s.shots = [[f2(best.x), f2(best.y), 0]];
+          if (best.hp > 0) alarm(s, best); }
+        else s.ev = s.ev || 'swing';
+        for (const g of s.g) if (!g.dead && g.hp <= 0) { g.dead = 1; s.kills++; } } } }
+  else if (!s.freed) s.freeing = 0;
+  if (s.hp <= 0) { s.hp = 0; s.done = 'down'; }
+  else if (s.freed && s.next >= L.more.length && !live().length) s.done = 'free';
+  else if (s.t >= L.limit) s.done = 'time';
+  return s;
+}
+const f2 = v => +v.toFixed(2);
+export function breakPerf(L, s) {
+  const total = L.guards.length + L.more.length;
+  if (s.done === 'free') return { perf: clamp(0.62 + 0.14 * s.hp / BREAK.hp + 0.1 * Math.min(1, s.silent / 3) + 0.14 * Math.max(0, 1 - s.t / L.limit), 0, 1), money: true };
+  return { perf: clamp(0.06 + 0.3 * s.kills / total + (s.freed ? 0.15 : 0), 0, 0.55), money: false };
+}
+export function breakReplay(L, log) {
+  const path = log && log.path, acts = String((log && log.acts) || ''), cr = String((log && log.crouch) || ''); if (!Array.isArray(path) || path.length < 2 || path.length > Math.ceil(L.limit / STEP) + 2) return { ok: false, why: 'bad path' };
+  let s = breakStart(L);
+  for (let i = 1; i < path.length && !s.done; i++) {
+    const [x, y] = (path[i] || []).map(Number); if (!Number.isFinite(x) || !Number.isFinite(y)) return { ok: false, why: 'bad point' };
+    const c = cr[i] === 'c', sp = (c ? BREAK.sneak : BREAK.run) * STEP, dx = x - s.x, dy = y - s.y, d = Math.sqrt(dx * dx + dy * dy); if (d > sp + 0.02) return { ok: false, why: 'too fast' };
+    const q = breakMove(L, s, d ? dx / sp : 0, d ? dy / sp : 0, c); if (Math.sqrt((q.x - x) ** 2 + (q.y - y) ** 2) > 0.03 || !breakFits(L, x, y)) return { ok: false, why: 'walked through something' };
+    s = breakStep(L, s, x, y, acts[i] === '1', c);
+  }
+  if (!s.done) s.done = s.t >= L.limit - 0.05 ? 'time' : 'gaveup';
+  return { ok: true, state: { t: s.t, done: s.done, hp: Math.round(s.hp), kills: s.kills, silent: s.silent, freed: !!s.freed }, ...breakPerf(L, s) };
+}
+
 // How long a game must at least take (a fast human), so a result can't come back quicker than it could be played.
 export function minTime(kind, L, st) {
-  if (kind === 'rob' || kind === 'driver' || kind === 'lookout' || kind === 'muscle') return st && st.t ? st.t : 0; // the horde (muscle) has to be survived in real time too
+  if (kind === 'rob' || kind === 'driver' || kind === 'lookout' || kind === 'muscle' || kind === 'breakout') return st && st.t ? st.t : 0; // the horde (muscle) has to be survived in real time too
   if (kind === 'scam') return (st?.turns || 1) * 0.8;
   if (kind === 'atm' || kind === 'hacker') return L.wires.length * 0.35 + L.pin.length * 0.2;
   if (kind === 'safecracker') return (st?.got || 0) * 0.4;
@@ -764,7 +899,7 @@ export function minTime(kind, L, st) {
 export const CCTV_FROM = 5; // robberies in a row before this one: the 6th robbery in a row and on have CCTV
 export function levelOf(kind, seed, diff, hard = false, cctv = false) {
   const g = GAMES[kind];
-  return g === 'stealth' ? genStealth(seed, diff, cctv) : g === 'con' ? genCon(seed, diff) : g === 'atm' ? genAtm(seed, diff, hard) : g === 'drive' ? genDrive(seed, diff) : g === 'safe' ? genSafe(seed, diff) : g === 'lookout' ? genLook(seed, diff) : g === 'horde' ? genHorde(seed, diff) : genMuscle(seed, diff);
+  return g === 'stealth' ? genStealth(seed, diff, cctv) : g === 'con' ? genCon(seed, diff) : g === 'atm' ? genAtm(seed, diff, hard) : g === 'drive' ? genDrive(seed, diff) : g === 'safe' ? genSafe(seed, diff) : g === 'lookout' ? genLook(seed, diff) : g === 'horde' ? genHorde(seed, diff) : g === 'breakout' ? genBreak(seed, diff) : genMuscle(seed, diff);
 }
 export function replay(kind, L, log) {
   const g = GAMES[kind], x = log || {};
@@ -776,5 +911,6 @@ export function replay(kind, L, log) {
   if (g === 'lookout') return lookReplay(L, x.taps, x.time);
   if (g === 'muscle') return muscleReplay(L, x.taps, x.time);
   if (g === 'horde') return hordeReplay(L, x);
+  if (g === 'breakout') return breakReplay(L, x);
   return { ok: false, why: 'unknown game' };
 }

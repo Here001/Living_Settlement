@@ -124,8 +124,8 @@ class Bucket {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.u, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3)); g.setIndex(this.i); g.computeBoundingSphere(); return g; }
 }
 // Any three.js geometry, baked into a bucket (moved, turned, coloured): for trees, cars, lamps and the like.
-function bake(bucket, geo, { x = 0, y = 0, z = 0, ry = 0, sx = 1, sy = 1, sz = 1, color }) {
-  const g = geo.index ? geo.toNonIndexed() : geo, P = g.attributes.position, N = g.attributes.normal, m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(sx, sy, sz));
+function bake(bucket, geo, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1, color }) {
+  const g = geo.index ? geo.toNonIndexed() : geo, P = g.attributes.position, N = g.attributes.normal, m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ')), new THREE.Vector3(sx, sy, sz));
   const nm = new THREE.Matrix3().getNormalMatrix(m), v = new THREE.Vector3(), base = bucket.p.length / 3;
   for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(m); bucket.p.push(v.x, v.y, v.z); v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize(); bucket.n.push(v.x, v.y, v.z); bucket.u.push(0, 0); bucket.c.push(color.r, color.g, color.b); bucket.i.push(base + i); }
 }
@@ -1045,6 +1045,177 @@ export function buildYard(view, L, { types = [], minute = 1065, skip = [], fogFa
     else { q.f.scale.set(0.9 + Math.sin(t * 13) * 0.15, 1.3 + Math.sin(t * 9) * 0.3, 1); q.f.position.y = q.base + Math.sin(t * 11) * 0.06; } } };
   return group;
 }
+
+// ---------------- the prison compound (the jailbreak) ----------------
+// A run-down compound out in the heat at the end of the afternoon: a chain-link fence topped with barbed wire round a
+// dirt yard of corrugated sheds, livestock trailers, white water totes in their cages, blue drums, sandbag walls and
+// upturned boats under the palms; a concrete wall with an open gate, and behind it the cell block with its barred
+// cells and a guard tower. Outside: a dirt road, wooden power poles and their sagging wires, palms and a thatched hut.
+// L: the level from shared/minigames.js (genBreak), metres; its y is z here. Everything that doesn't move is merged into
+// one mesh per material (a dozen draw calls); the shadows are drawn once.
+const NI = {}; const ni = k => NI[k] || (NI[k] = GEO[k].index ? GEO[k].toNonIndexed() : GEO[k]); /* (baked over and over: un-indexed once) */
+const cTex = {
+  corr: () => canvasTex('corr', 256, (g, S) => { for (let x = 0; x < S; x++) { const v = 200 + 45 * Math.sin(x / S * Math.PI * 2 * 16); g.fillStyle = `rgb(${v | 0},${v | 0},${v | 0})`; g.fillRect(x, 0, 1, S); }
+    const r = rnd(71); for (let i = 0; i < 26; i++) { const x = r() * S, w = 2 + r() * 10, gr = g.createLinearGradient(0, 0, 0, S); gr.addColorStop(0, 'rgba(120,60,20,0)'); gr.addColorStop(0.3 + r() * 0.5, 'rgba(120,55,20,.45)'); gr.addColorStop(1, 'rgba(90,40,15,.15)'); g.fillStyle = gr; g.fillRect(x, 0, w, S); } /* rust running down */
+    noise(g, 2, 2500, '60,30,10', 0.2, r); }),
+  slat: () => canvasTex('slat', 256, (g, S) => { g.fillStyle = '#e6e6e2'; g.fillRect(0, 0, S, S); for (let y = 0; y < S; y += 32) { g.fillStyle = '#2a2a28'; g.fillRect(0, y + 22, S, 7); g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(0, y + 2, S, 3); }
+    const r = rnd(72); noise(g, 2, 1800, '70,50,30', 0.18, r); for (let i = 0; i < 10; i++) { g.fillStyle = 'rgba(110,70,30,.25)'; g.fillRect(r() * S, r() * S, 3 + r() * 9, 20 + r() * 60); } }),
+  dirt: () => canvasTex('cdirt', 512, (g, S) => { g.fillStyle = '#a88b63'; g.fillRect(0, 0, S, S); const r = rnd(73);
+    for (let i = 0; i < 60; i++) { const x = r() * S, y = r() * S, rr = 20 + r() * 60, gr = g.createRadialGradient(x, y, 1, x, y, rr); const c = r() < 0.35 ? '96,112,58' : r() < 0.6 ? '132,104,70' : '170,146,108'; gr.addColorStop(0, `rgba(${c},.55)`); gr.addColorStop(1, `rgba(${c},0)`); g.fillStyle = gr; g.fillRect(x - rr, y - rr, rr * 2, rr * 2); }
+    for (let i = 0; i < 9000; i++) { const v = r(); g.fillStyle = v < 0.5 ? 'rgba(70,52,32,.35)' : 'rgba(210,190,150,.3)'; const s = 1 + r() * 2.2; g.fillRect(r() * S, r() * S, s, s); } /* grit and pebbles */
+    for (let i = 0; i < 700; i++) { g.strokeStyle = `rgba(${70 + r() * 30 | 0},${100 + r() * 40 | 0},45,.6)`; g.lineWidth = 1; const x = r() * S, y = r() * S; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 4, y - 4 - r() * 6); g.stroke(); } }), /* dry grass */
+  chain: () => canvasTex('chain', 64, (g, S) => { g.clearRect(0, 0, S, S); g.strokeStyle = '#d8dcdf'; g.lineWidth = 2.4; g.beginPath(); g.moveTo(0, S / 2); g.lineTo(S / 2, 0); g.lineTo(S, S / 2); g.lineTo(S / 2, S); g.closePath(); g.stroke();
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(2, 2); g.moveTo(S, 0); g.lineTo(S - 2, 2); g.moveTo(0, S); g.lineTo(2, S - 2); g.moveTo(S, S); g.lineTo(S - 2, S - 2); g.stroke(); }, { srgb: true }),
+  frond: () => canvasTex('frond', 256, (g, S) => { g.clearRect(0, 0, S, S); g.strokeStyle = '#d9e6c0'; g.lineWidth = 5; g.beginPath(); g.moveTo(S / 2, 0); g.lineTo(S / 2, S); g.stroke();
+    for (let y = 6; y < S; y += 9) { const w = S / 2 * (0.55 + 0.45 * Math.sin(y / S * Math.PI)); for (const d of [-1, 1]) { g.strokeStyle = y % 2 ? '#f2f6ea' : '#e2ebcf'; g.lineWidth = 5; g.beginPath(); g.moveTo(S / 2, y); g.quadraticCurveTo(S / 2 + d * w * 0.5, y + 6, S / 2 + d * w, y + 22); g.stroke(); } } }, { repeat: false }),
+  wood: () => canvasTex('cwood', 256, (g, S) => { g.fillStyle = '#d8c4a4'; g.fillRect(0, 0, S, S); const r = rnd(74); for (let y = 0; y < S; y += 32) { g.fillStyle = 'rgba(60,40,20,.55)'; g.fillRect(0, y, S, 2); for (let k = 0; k < 14; k++) { g.strokeStyle = 'rgba(90,60,30,.18)'; g.beginPath(); const yy = y + 4 + r() * 26; g.moveTo(0, yy); g.bezierCurveTo(S * 0.3, yy + (r() - 0.5) * 6, S * 0.7, yy + (r() - 0.5) * 6, S, yy); g.stroke(); } } noise(g, 2, 900, '40,25,10', 0.2, r); }),
+  thatch: () => canvasTex('thatch', 256, (g, S) => { g.fillStyle = '#b39760'; g.fillRect(0, 0, S, S); const r = rnd(75); for (let i = 0; i < 2600; i++) { g.strokeStyle = `rgba(${140 + r() * 80 | 0},${110 + r() * 60 | 0},${50 + r() * 40 | 0},.7)`; g.lineWidth = 1 + r(); const x = r() * S, y = r() * S; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 3, y + 10 + r() * 16); g.stroke(); }
+    for (let y = 0; y < S; y += 40) { g.fillStyle = 'rgba(40,28,10,.35)'; g.fillRect(0, y, S, 3); } }),
+};
+export function buildCompound(view, L) {
+  const M = materials(view), B = {}, r = rnd((L.seed || 1) * 7 + 3), W = L.W, H = L.H, w = col('#ffffff');
+  const mk = (k, o, cut = true) => { if (!M[k]) { const m = new THREE.MeshStandardMaterial({ vertexColors: true, ...o }); if (cut) cutAway(m, view.cut); view.mats.push(m); M[k] = m; } };
+  mk('corr', { map: cTex.corr(), roughness: 0.55, metalness: 0.35 }); mk('slat', { map: cTex.slat(), roughness: 0.5, metalness: 0.4 }); mk('dirt', { map: cTex.dirt(), roughness: 1 }, false);
+  mk('chain', { map: cTex.chain(), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.4, metalness: 0.6 }, false); mk('frond', { map: cTex.frond(), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.8 }, false);
+  mk('wood', { map: cTex.wood(), roughness: 0.85 }); mk('thatch', { map: cTex.thatch(), roughness: 1 }, false);
+  for (const k of ['solid', 'shiny', 'roof', 'paving', 'grass', 'corr', 'slat', 'dirt', 'chain', 'frond', 'wood', 'thatch', 'glow', 'paint', 'ao']) B[k] = new Bucket();
+  view.center.set(W / 2, 0, H / 2); view.span = 48;
+  const gq = (b, x0, z0, x1, z1, y, s, c) => b.quad([x0, y, z1], [x1, y, z1], [x1, y, z0], [x0, y, z0], [0, 1, 0], [x0 / s, z1 / s, x1 / s, z1 / s, x1 / s, z0 / s, x0 / s, z0 / s], c);
+  // the ground: grass and scrub outside, the dirt yard inside, concrete behind the wall; the track in and the road past it
+  gq(B.grass, -90, -70, W + 90, H + 90, 0, 6, col('#c9c08a')); gq(B.dirt, 0, 0, W, H, 0.01, 9, w); gq(B.paving, 0.3, 0.3, W - 0.3, 24, 0.02, 3, col('#b9b2a2'));
+  gq(B.dirt, W / 2 - 2.6, H - 0.3, W / 2 + 2.6, H + 6, 0.012, 9, col('#efe4d0')); gq(B.dirt, -90, H + 6, W + 90, H + 12, 0.014, 9, col('#e8dcc4'));
+  // contact shadows along every wall's foot
+  const ao = (x0, z0, x1, z1) => { const d = 0.9; B.ao.quad([x0 - d, 0.03, z0 - d], [x1 + d, 0.03, z0 - d], [x1, 0.03, z0], [x0, 0.03, z0], [0, 1, 0], [0, 1, 0, 1, 0, 0, 0, 0], w); B.ao.quad([x1 + d, 0.03, z1 + d], [x0 - d, 0.03, z1 + d], [x0, 0.03, z1], [x1, 0.03, z1], [0, 1, 0], [0, 1, 0, 1, 0, 0, 0, 0], w);
+    B.ao.quad([x0 - d, 0.03, z1 + d], [x0 - d, 0.03, z0 - d], [x0, 0.03, z0], [x0, 0.03, z1], [0, 1, 0], [0, 1, 0, 1, 0, 0, 0, 0], w); B.ao.quad([x1 + d, 0.03, z0 - d], [x1 + d, 0.03, z1 + d], [x1, 0.03, z1], [x1, 0.03, z0], [0, 1, 0], [0, 1, 0, 1, 0, 0, 0, 0], w); };
+  const ringLo = new THREE.TorusGeometry(1, 0.07, 3, 10).toNonIndexed();
+  // chain-link with posts and three strands of barbed wire
+  const fence = o => { const along = o.w >= o.h, len = along ? o.w : o.h, cx = o.x + o.w / 2, cz = o.y + o.h / 2, x0 = along ? o.x : cx, z0 = along ? cz : o.y, x1 = along ? o.x + o.w : cx, z1 = along ? cz : o.y + o.h;
+    B.chain.quad([x0, 0.05, z0], [x1, 0.05, z1], [x1, 2.5, z1], [x0, 2.5, z0], along ? [0, 0, 1] : [1, 0, 0], [0, 0, len / 0.12 / 6, 0, len / 0.12 / 6, 2.45 / 0.12 / 6, 0, 2.45 / 0.12 / 6], col('#c4c8cc'));
+    for (let u = 0; u <= len + 0.01; u += 3) { const x = along ? o.x + Math.min(u, len) : cx, z = along ? cz : o.y + Math.min(u, len); bake(B.shiny, ni('cyl'), { x, y: 1.4, z, sx: 0.045, sy: 2.8, sz: 0.045, color: col('#8b9095') });
+      bake(B.shiny, ni('box'), { x: x + (along ? 0 : -0.18), y: 2.85, z: z + (along ? -0.18 : 0), rx: along ? -0.6 : 0, rz: along ? 0 : 0.6, sx: 0.04, sy: 0.5, sz: 0.04, color: col('#8b9095') }); } /* the arms lean out, over the wire */
+    for (const h of [2.62, 2.78, 2.94]) { const off = (h - 2.5) * 0.7; if (along) B.shiny.box(x0, cz - off - 0.012, x1, cz - off + 0.012, h, h + 0.02, col('#6f747a'), { top: false }); else B.shiny.box(cx - off - 0.012, z0, cx - off + 0.012, z1, h, h + 0.02, col('#6f747a'), { top: false }); }
+    B.solid.box(along ? x0 : cx - 0.03, along ? cz - 0.03 : z0, along ? x1 : cx + 0.03, along ? cz + 0.03 : z1, 2.47, 2.53, col('#8b9095')); };
+  // the concrete wall, razor wire coiled on top, stains down it
+  const wall = o => { B.roof.box(o.x, o.y, o.x + o.w, o.y + o.h, 0, 3, col('#c7bfae'), { su: 2, sv: 2 }); B.roof.box(o.x - 0.06, o.y - 0.06, o.x + o.w + 0.06, o.y + o.h + 0.06, 3, 3.12, col('#a59d8c'), { su: 2, sv: 2 }); ao(o.x, o.y, o.x + o.w, o.y + o.h);
+    B.paint.box(o.x - 0.01, o.y - 0.01, o.x + o.w + 0.01, o.y + o.h + 0.01, 0, 0.5, col('#8d826c'), { top: false });
+    for (let x = o.x + 0.3; x < o.x + o.w - 0.2; x += 0.55) bake(B.shiny, ringLo, { x, y: 3.42, z: o.y + o.h / 2, ry: Math.PI / 2 + (r() - 0.5) * 0.3, sx: 0.3, sy: 0.3, sz: 0.3, color: col('#9aa0a6') });
+    for (let i = 0; i < o.w / 3; i++) { const x = o.x + r() * o.w, h0 = 1.2 + r() * 1.4, ww = 0.2 + r() * 0.5; for (const zf of [o.y - 0.015, o.y + o.h + 0.015]) B.paint.quad([x, h0, zf], [x + ww, h0, zf], [x + ww, 3, zf], [x, 3, zf], [0, 0, zf < o.y ? -1 : 1], [0, 0, 1, 0, 1, 1, 0, 1], col('#958a76')); } };
+  // the gate: two pillars and the barred gate swung open
+  const gate = () => { const g = L.gate, z = 24.3; for (const x of [g - 2.2, g + 2.2]) { B.roof.box(x - 0.35, z - 0.45, x + 0.35, z + 0.45, 0, 3.5, col('#b8b0a0'), { su: 2, sv: 2 }); B.roof.box(x - 0.42, z - 0.52, x + 0.42, z + 0.52, 3.5, 3.65, col('#9a927f')); bake(B.glow, ni('box'), { x, y: 3.3, z: z + 0.5, sx: 0.3, sy: 0.16, sz: 0.1, color: col('#fff1c8') }); }
+    for (const [hx, a] of [[g - 1.85, -1.9], [g + 1.85, 1.9 + Math.PI]]) { const ca = Math.cos(a), sa = Math.sin(a), P = u => [hx + ca * u, z + sa * u];
+      for (const h of [0.25, 1.4, 2.5]) { const [mx, mz] = P(0.9); bake(B.shiny, ni('box'), { x: mx, y: h, z: mz, ry: -a, sx: 1.8, sy: 0.08, sz: 0.06, color: col('#3f454b') }); }
+      for (let u = 0.1; u <= 1.8; u += 0.18) { const [bx, bz] = P(u); bake(B.shiny, ni('cyl'), { x: bx, y: 1.35, z: bz, sx: 0.022, sy: 2.4, sz: 0.022, color: col('#3f454b') }); } } };
+  // the cell block: concrete, flat roof with tanks and units on it, four barred cells across the front
+  const block = o => { const zf = o.y + o.h, zb = zf - 1.8, c0 = col('#d2c9b6'), c1 = col('#bdb4a0');
+    B.roof.box(o.x, o.y, o.x + o.w, zb, 0, 5.2, c0, { su: 2, sv: 2 }); ao(o.x, o.y, o.x + o.w, zf);
+    B.roof.box(o.x, zb, o.x + o.w, zf, 2.85, 5.2, c0, { su: 2, sv: 2, bottom: true }); B.roof.box(o.x - 0.3, o.y - 0.3, o.x + o.w + 0.3, zf + 0.4, 5.2, 5.45, c1, { su: 2, sv: 2, bottom: true });
+    B.paint.box(o.x - 0.01, o.y - 0.01, o.x + o.w + 0.01, zf + 0.01, 0, 0.6, col('#9c917b'), { top: false });
+    const edges = [o.x]; for (const c of L.cells) edges.push(c - 1.1, c + 1.1); edges.push(o.x + o.w);
+    for (let i = 0; i < edges.length; i += 2) if (edges[i + 1] > edges[i] + 0.01) B.roof.box(edges[i], zb, edges[i + 1], zf, 0, 2.85, c0, { su: 2, sv: 2 });
+    L.cells.forEach((c, i) => { gq(B.paving, c - 1.1, zb, c + 1.1, zf, 0.03, 1.5, col('#8e897e'));
+      B.solid.box(c - 1.0, zb + 0.05, c + 0.2, zb + 0.75, 0.35, 0.5, col('#5b5f52')); B.solid.box(c - 1.0, zb + 0.05, c - 0.9, zb + 0.75, 0, 0.35, col('#3c3f44')); B.solid.box(c + 0.1, zb + 0.05, c + 0.2, zb + 0.75, 0, 0.35, col('#3c3f44')); /* a bunk */
+      bake(B.shiny, ni('cyl'), { x: c + 0.75, y: 0.22, z: zb + 0.35, sx: 0.2, sy: 0.44, sz: 0.2, color: col('#c9ccce') });
+      if (i !== L.cell) { for (let u = -1.0; u <= 1.01; u += 0.15) bake(B.shiny, ni('cyl'), { x: c + u, y: 1.42, z: zf - 0.06, sx: 0.022, sy: 2.84, sz: 0.022, color: col('#2f3337') }); for (const h of [0.15, 1.3, 2.7]) B.shiny.box(c - 1.1, zf - 0.1, c + 1.1, zf - 0.02, h, h + 0.08, col('#2f3337')); }
+      B.paint.quad([c - 0.25, 3.3, zf + 0.012], [c + 0.25, 3.3, zf + 0.012], [c + 0.25, 3.8, zf + 0.012], [c - 0.25, 3.8, zf + 0.012], [0, 0, 1], [0, 0, 1, 0, 1, 1, 0, 1], col(i === L.cell ? '#f2c94c' : '#e8e2d4')); /* the cell's number plate */
+      bake(B.glow, ni('box'), { x: c, y: 4.6, z: zf + 0.12, sx: 0.5, sy: 0.12, sz: 0.2, color: col('#fff1c8') }); });
+    for (let i = 0; i < 3; i++) { const x = o.x + 2 + r() * (o.w - 4), z = o.y + 1 + r() * (o.h - 4); bake(B.solid, ni('box'), { x, y: 5.85, z, sx: 1.1, sy: 0.8, sz: 0.8, color: col('#a8acaf') }); }
+    bake(B.shiny, ni('cyl'), { x: o.x + o.w - 3, y: 6.4, z: o.y + 2.5, sx: 1.1, sy: 1.9, sz: 1.1, color: col('#2b3a4a') });
+    for (let x = o.x + 1.5; x < o.x + o.w - 1; x += 3.2) { B.shiny.box(x - 0.35, o.y - 0.02, x + 0.35, o.y + 0.02, 3.2, 3.7, col('#2f3337')); } }; /* barred windows at the back */
+  // the guard tower: legs, a platform with a rail, a tin roof and a searchlight
+  let light = null; const tower = o => { const cx = o.x + o.w / 2, cz = o.y + o.h / 2, hw = o.w / 2;
+    for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { bake(B.wood, ni('box'), { x: cx + dx * (hw - 0.15), y: 2.2, z: cz + dz * (hw - 0.15), sx: 0.22, sy: 4.4, sz: 0.22, color: col('#8a6a48') }); bake(B.wood, ni('box'), { x: cx + dx * (hw - 0.15), y: 5.7, z: cz + dz * (hw - 0.15), sx: 0.12, sy: 2.5, sz: 0.12, color: col('#8a6a48') }); }
+    for (const h of [1.4, 2.9]) { B.wood.box(o.x + 0.1, cz - 0.05, o.x + o.w - 0.1, cz + 0.05, h, h + 0.12, col('#7a5c3c')); B.wood.box(cx - 0.05, o.y + 0.1, cx + 0.05, o.y + o.h - 0.1, h, h + 0.12, col('#7a5c3c')); }
+    B.wood.box(o.x - 0.2, o.y - 0.2, o.x + o.w + 0.2, o.y + o.h + 0.2, 4.4, 4.62, col('#9a7a55'), { bottom: true });
+    for (const [a, b2, c2, d2] of [[o.x - 0.2, o.y - 0.2, o.x + o.w + 0.2, o.y - 0.12], [o.x - 0.2, o.y + o.h + 0.12, o.x + o.w + 0.2, o.y + o.h + 0.2], [o.x - 0.2, o.y - 0.2, o.x - 0.12, o.y + o.h + 0.2], [o.x + o.w + 0.12, o.y - 0.2, o.x + o.w + 0.2, o.y + o.h + 0.2]]) B.wood.box(a, b2, c2, d2, 4.62, 5.6, col('#8a6a48'));
+    B.corr.quad([o.x - 0.5, 7.0, o.y - 0.5], [o.x + o.w + 0.5, 7.0, o.y - 0.5], [o.x + o.w + 0.5, 6.6, o.y + o.h + 0.5], [o.x - 0.5, 6.6, o.y + o.h + 0.5], [0, 1, 0], [0, 0, 3.6, 0, 3.6, 3.6, 0, 3.6], col('#8c6a52'));
+    B.corr.quad([o.x - 0.5, 6.6, o.y + o.h + 0.5], [o.x + o.w + 0.5, 6.6, o.y + o.h + 0.5], [o.x + o.w + 0.5, 7.0, o.y - 0.5], [o.x - 0.5, 7.0, o.y - 0.5], [0, -1, 0], [0, 0, 3.6, 0, 3.6, 3.6, 0, 3.6], col('#5a4a3e'));
+    for (let h = 0.4; h < 4.4; h += 0.4) B.wood.box(o.x + o.w + 0.25, cz - 0.3, o.x + o.w + 0.32, cz + 0.3, h, h + 0.06, col('#7a5c3c')); /* the ladder */
+    light = { x: cx, y: 6.1, z: cz }; bake(B.shiny, ni('cyl'), { x: cx, y: 6.1, z: cz, sx: 0.25, sy: 0.35, sz: 0.25, color: col('#2b2f33') }); };
+  // corrugated sheds: rusty or painted tin, a sloping roof, a dark doorway and a door hanging open
+  const shed = o => { const c = col(['#9a5b3a', '#7e8a8f', '#5f7f6a', '#a7b2b5', '#8a6b4a', '#6d7f99'][Math.floor(r() * 6)]), along = o.w >= o.h, hgt = 2.7;
+    B.corr.box(o.x, o.y, o.x + o.w, o.y + o.h, 0, hgt, c, { su: 1.6, sv: 3, top: false }); ao(o.x, o.y, o.x + o.w, o.y + o.h);
+    const rc = col(['#8c5a3c', '#7a7f82', '#9a7a5a'][Math.floor(r() * 3)]), e = 0.35;
+    if (along) { B.corr.quad([o.x - e, hgt + 0.15, o.y + o.h + e], [o.x + o.w + e, hgt + 0.15, o.y + o.h + e], [o.x + o.w + e, hgt + 0.6, o.y - e], [o.x - e, hgt + 0.6, o.y - e], [0, 1, 0], [0, 0, (o.w + 2 * e) / 1.6, 0, (o.w + 2 * e) / 1.6, 1, 0, 1], rc);
+      B.corr.quad([o.x - e, hgt + 0.6, o.y - e], [o.x + o.w + e, hgt + 0.6, o.y - e], [o.x + o.w + e, hgt + 0.15, o.y + o.h + e], [o.x - e, hgt + 0.15, o.y + o.h + e], [0, -1, 0], [0, 0, 1, 0, 1, 1, 0, 1], col('#3a3530'));
+      B.corr.box(o.x, o.y, o.x + o.w, o.y + o.h, hgt, hgt + 0.45, c, { su: 1.6, sv: 3, top: false }); }
+    else { B.corr.quad([o.x + o.w + e, hgt + 0.15, o.y + o.h + e], [o.x + o.w + e, hgt + 0.15, o.y - e], [o.x - e, hgt + 0.6, o.y - e], [o.x - e, hgt + 0.6, o.y + o.h + e], [0, 1, 0], [0, 0, (o.h + 2 * e) / 1.6, 0, (o.h + 2 * e) / 1.6, 1, 0, 1], rc);
+      B.corr.quad([o.x - e, hgt + 0.6, o.y + o.h + e], [o.x - e, hgt + 0.6, o.y - e], [o.x + o.w + e, hgt + 0.15, o.y - e], [o.x + o.w + e, hgt + 0.15, o.y + o.h + e], [0, -1, 0], [0, 0, 1, 0, 1, 1, 0, 1], col('#3a3530'));
+      B.corr.box(o.x, o.y, o.x + o.w, o.y + o.h, hgt, hgt + 0.45, c, { su: 1.6, sv: 3, top: false }); }
+    const fx = along ? o.x + o.w * (0.3 + r() * 0.4) : (o.x + o.w / 2 < W / 2 ? o.x + o.w + 0.012 : o.x - 0.012), fz = along ? (o.y + o.h / 2 < H / 2 + 6 ? o.y + o.h + 0.012 : o.y - 0.012) : o.y + o.h * (0.3 + r() * 0.4), dk = col('#1b1a18');
+    if (along) { B.paint.quad([fx - 0.7, 0.02, fz], [fx + 0.7, 0.02, fz], [fx + 0.7, 2.1, fz], [fx - 0.7, 2.1, fz], [0, 0, fz > o.y ? 1 : -1], [0, 0, 1, 0, 1, 1, 0, 1], dk); bake(B.corr, ni('box'), { x: fx + 0.7 + 0.45, y: 1.05, z: fz + (fz > o.y ? 0.5 : -0.5), ry: fz > o.y ? -0.9 : 0.9, sx: 1.4, sy: 2.1, sz: 0.05, color: c.clone().multiplyScalar(0.8) }); }
+    else { B.paint.quad([fx, 0.02, fz + 0.7], [fx, 0.02, fz - 0.7], [fx, 2.1, fz - 0.7], [fx, 2.1, fz + 0.7], [fx > o.x ? 1 : -1, 0, 0], [0, 0, 1, 0, 1, 1, 0, 1], dk); bake(B.corr, ni('box'), { x: fx + (fx > o.x ? 0.5 : -0.5), y: 1.05, z: fz + 0.7 + 0.45, ry: fx > o.x ? 0.9 + Math.PI / 2 : -0.9 - Math.PI / 2, sx: 1.4, sy: 2.1, sz: 0.05, color: c.clone().multiplyScalar(0.8) }); } };
+  // livestock trailers: slatted aluminium on a dark frame, wheels, the hitch out the front
+  const trailer = o => { const along = o.w >= o.h, c = col(['#d6d9db', '#c9c2b4', '#b8c0c4'][Math.floor(r() * 3)]), i = 0.08;
+    B.slat.box(o.x + i, o.y + i, o.x + o.w - i, o.y + o.h - i, 0.62, 2.35, c, { su: 1.6, sv: 1.6 }); B.solid.box(o.x + i, o.y + i, o.x + o.w - i, o.y + o.h - i, 0.42, 0.62, col('#26282b')); ao(o.x, o.y, o.x + o.w, o.y + o.h);
+    B.shiny.box(o.x + i - 0.03, o.y + i - 0.03, o.x + o.w - i + 0.03, o.y + o.h - i + 0.03, 2.33, 2.42, c.clone().multiplyScalar(0.9));
+    const cx = o.x + o.w / 2, cz = o.y + o.h / 2, half = (along ? o.w : o.h) / 2, side = (along ? o.h : o.w) / 2;
+    for (const u of [-0.55, 0.35]) for (const s2 of [-1, 1]) { const x = along ? cx + u : cx + s2 * (side - 0.02), z = along ? cz + s2 * (side - 0.02) : cz + u; bake(B.solid, ni('cyl'), { x, y: 0.38, z, rx: along ? Math.PI / 2 : 0, rz: along ? 0 : Math.PI / 2, sx: 0.38, sy: 0.24, sz: 0.38, color: col('#18191b') }); bake(B.shiny, ni('cyl'), { x, y: 0.38, z, rx: along ? Math.PI / 2 : 0, rz: along ? 0 : Math.PI / 2, sx: 0.2, sy: 0.26, sz: 0.2, color: col('#9aa0a6') }); }
+    const dir = r() < 0.5 ? -1 : 1, hx = along ? cx + dir * (half + 0.9) : cx, hz = along ? cz : cz + dir * (half + 0.9); bake(B.solid, ni('box'), { x: hx, y: 0.5, z: hz, ry: along ? Math.PI / 2 : 0, sx: 0.12, sy: 0.12, sz: 1.8, color: col('#26282b') }); bake(B.solid, ni('cyl'), { x: hx + (along ? dir * 0.8 : 0), y: 0.25, z: hz + (along ? 0 : dir * 0.8), sx: 0.06, sy: 0.5, sz: 0.06, color: col('#26282b') }); };
+  // water totes: a white tank in a galvanised cage on a pallet
+  const tank = o => { const cx = o.x + o.w / 2, cz = o.y + o.h / 2, s = 0.62; B.solid.box(cx - s - 0.04, cz - s - 0.04, cx + s + 0.04, cz + s + 0.04, 0, 0.15, col('#2a2c2e')); B.solid.box(cx - s + 0.03, cz - s + 0.03, cx + s - 0.03, cz + s - 0.03, 0.15, 1.2, col('#efece2')); ao(cx - s, cz - s, cx + s, cz + s);
+    for (let u = -s; u <= s + 0.01; u += s / 2.5) { B.shiny.box(cx + u - 0.015, cz - s, cx + u + 0.015, cz - s + 0.03, 0.15, 1.24, col('#a9afb3'), { top: false }); B.shiny.box(cx + u - 0.015, cz + s - 0.03, cx + u + 0.015, cz + s, 0.15, 1.24, col('#a9afb3'), { top: false }); B.shiny.box(cx - s, cz + u - 0.015, cx - s + 0.03, cz + u + 0.015, 0.15, 1.24, col('#a9afb3'), { top: false }); B.shiny.box(cx + s - 0.03, cz + u - 0.015, cx + s, cz + u + 0.015, 0.15, 1.24, col('#a9afb3'), { top: false }); }
+    for (const h of [0.6, 1.2]) B.shiny.box(cx - s, cz - s, cx + s, cz + s, h, h + 0.035, col('#a9afb3'), { top: false });
+    bake(B.solid, ni('cyl'), { x: cx, y: 1.24, z: cz, sx: 0.2, sy: 0.1, sz: 0.2, color: col('#d8d4c8') }); };
+  const crates = o => { const cx = o.x + o.w / 2, cz = o.y + o.h / 2, dx = (r() - 0.5) * 0.3, dz = (r() - 0.5) * 0.3; /* (boxes with real texture coordinates, so the planks show) */
+    B.wood.box(cx - 0.62, cz - 0.62, cx + 0.62, cz + 0.62, 0, 1.1, col('#c9a06a'), { su: 1.1, sv: 1.1 }); B.wood.box(cx + dx - 0.38, cz + dz - 0.38, cx + dx + 0.38, cz + dz + 0.38, 1.1, 1.74, col('#b58c5a'), { su: 1.1, sv: 1.1 });
+    for (const [x0, x1] of [[cx - 0.64, cx - 0.56], [cx + 0.56, cx + 0.64]]) B.wood.box(x0, cz - 0.64, x1, cz + 0.64, 0, 1.1, col('#8a6640'), { su: 1.1, sv: 1.1, top: false }); ao(o.x + 0.1, o.y + 0.1, o.x + o.w - 0.1, o.y + o.h - 0.1); };
+  const barrels = o => { const cx = o.x + o.w / 2, cz = o.y + o.h / 2; for (const [dx, dz] of [[-0.28, -0.28], [0.28, -0.28], [-0.28, 0.28], [0.28, 0.28]]) { if (r() < 0.15) continue; const c = col(r() < 0.8 ? '#2f6fd1' : '#c9a227'), x = cx + dx, z = cz + dz;
+      bake(B.shiny, ni('cyl'), { x, y: 0.45, z, sx: 0.27, sy: 0.9, sz: 0.27, color: c }); for (const h of [0.3, 0.62]) bake(B.shiny, ni('cyl'), { x, y: h, z, sx: 0.285, sy: 0.04, sz: 0.285, color: c.clone().multiplyScalar(0.8) }); bake(B.shiny, ni('cyl'), { x: x + 0.1, y: 0.91, z, sx: 0.05, sy: 0.03, sz: 0.05, color: col('#e8e8e8') }); } };
+  // upturned boats on blocks: a long hull, keel up, a coloured band along the gunwale
+  const boat = o => { const along = o.w >= o.h, cx = o.x + o.w / 2, cz = o.y + o.h / 2, len = along ? o.w : o.h, bw = along ? o.h : o.w, c = col(['#f2f2ee', '#e9e4d6', '#3d6fa8', '#b8452f'][Math.floor(r() * 4)]), band = col(['#2f6fd1', '#c8382e', '#2f8a5a', '#f2c94c'][Math.floor(r() * 4)]);
+    for (const u of [-len * 0.3, len * 0.3]) B.wood.box(along ? cx + u - 0.15 : cx - bw / 2 + 0.1, along ? cz - bw / 2 + 0.1 : cz + u - 0.15, along ? cx + u + 0.15 : cx + bw / 2 - 0.1, along ? cz + bw / 2 - 0.1 : cz + u + 0.15, 0, 0.22, col('#7a5c3c'));
+    bake(B.shiny, ni('half'), { x: cx, y: 0.3, z: cz, ry: along ? Math.PI / 2 : 0, sx: bw / 2, sy: 0.62, sz: len / 2, color: c }); bake(B.shiny, ni('cyl'), { x: cx, y: 0.3, z: cz, rx: Math.PI / 2, ry: along ? Math.PI / 2 : 0, sx: bw / 2 + 0.02, sy: len * 0.9, sz: 0.1, color: band });
+    bake(B.solid, ni('box'), { x: cx, y: 0.9, z: cz, ry: along ? Math.PI / 2 : 0, sx: 0.07, sy: 0.08, sz: len * 0.9, color: c.clone().multiplyScalar(0.7) }); };
+  // sandbag walls: three courses of fat bags, staggered
+  const sandbags = o => { const along = o.w >= o.h, len = along ? o.w : o.h, cx = o.x + o.w / 2, cz = o.y + o.h / 2;
+    for (let k = 0; k < 3; k++) for (let u = -len / 2 + 0.3 + (k % 2) * 0.28; u <= len / 2 - 0.25; u += 0.55) { const t = col(['#b9a27a', '#a99067', '#c4ae86'][Math.floor(r() * 3)]);
+      bake(B.solid, ni('ball'), { x: along ? cx + u : cx + (r() - 0.5) * 0.06, y: 0.17 + k * 0.27, z: along ? cz + (r() - 0.5) * 0.06 : cz + u, ry: along ? 0 : Math.PI / 2, sx: 0.31, sy: 0.16, sz: 0.24 + (k ? 0 : 0.06), color: t }); } ao(o.x + 0.1, o.y + 0.1, o.x + o.w - 0.1, o.y + o.h - 0.1); };
+  // palms: a curving ringed trunk, drooping fronds, coconuts
+  const palm = (x, z, s = 1) => { const a = r() * Math.PI * 2, lean = 0.5 + r() * 0.9, n = 7, hgt = (6 + r() * 2) * s; let px = x, pz = z;
+    for (let i = 0; i < n; i++) { const t0 = i / n, t1 = (i + 1) / n, d0 = lean * t0 * t0, d1 = lean * t1 * t1, x0 = x + Math.cos(a) * d0, z0 = z + Math.sin(a) * d0, x1 = x + Math.cos(a) * d1, z1 = z + Math.sin(a) * d1, y0 = hgt * t0, y1 = hgt * t1, sl = Math.atan2(Math.hypot(x1 - x0, z1 - z0), y1 - y0);
+      bake(B.solid, ni('cyl'), { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z: (z0 + z1) / 2, ry: -a, rz: -sl, sx: (0.2 - 0.06 * t0) * s, sy: (y1 - y0) * 1.05, sz: (0.2 - 0.06 * t0) * s, color: col(i % 2 ? '#8a7558' : '#7a6448') }); px = x1; pz = z1; }
+    const top = [px, hgt, pz]; for (let i = 0; i < 3; i++) bake(B.solid, ni('ball'), { x: px + Math.cos(i * 2.1) * 0.22, y: hgt - 0.25, z: pz + Math.sin(i * 2.1) * 0.22, sx: 0.15, sy: 0.17, sz: 0.15, color: col('#5a4a2a') });
+    const nf = 9; for (let f = 0; f < nf; f++) { const fa = f / nf * Math.PI * 2 + r() * 0.4, L0 = (2.6 + r() * 0.8) * s, droop = 1.2 + r() * 0.9, ca = Math.cos(fa), sa = Math.sin(fa), lc = col(['#5f8a3a', '#6f9a42', '#4f7a34', '#86a24a'][f % 4]); const seg = 5;
+      for (let k = 0; k < seg; k++) { const t0 = k / seg, t1 = (k + 1) / seg, P0 = [top[0] + ca * L0 * t0, top[1] + 0.3 * t0 * 4 * (1 - t0) - droop * t0 * t0, top[2] + sa * L0 * t0], P1 = [top[0] + ca * L0 * t1, top[1] + 0.3 * t1 * 4 * (1 - t1) - droop * t1 * t1, top[2] + sa * L0 * t1], w0 = 0.55 * s * Math.sin(Math.PI * (0.12 + t0 * 0.88)) + 0.05, w1 = 0.55 * s * Math.sin(Math.PI * (0.12 + t1 * 0.88)) + 0.05;
+        B.frond.quad([P0[0] - sa * w0, P0[1] - 0.06, P0[2] + ca * w0], [P0[0] + sa * w0, P0[1] - 0.06, P0[2] - ca * w0], [P1[0] + sa * w1, P1[1] - 0.06, P1[2] - ca * w1], [P1[0] - sa * w1, P1[1] - 0.06, P1[2] + ca * w1], [0, 1, 0], [0, t0, 1, t0, 1, t1, 0, t1], lc); } } };
+  const bush = (x, z, s = 1) => { for (let i = 0; i < 3; i++) bake(B.solid, ni('ball'), { x: x + Math.cos(i * 2.1) * 0.5 * s, y: 0.45 * s, z: z + Math.sin(i * 2.1) * 0.5 * s, sx: 0.8 * s, sy: 0.6 * s, sz: 0.8 * s, color: col(['#5a7a34', '#6b8a3c', '#4f6b30'][i]) }); };
+  for (const o of L.obs) { const k = o.k;
+    if (k === 'fence') fence(o); else if (k === 'wall') wall(o); else if (k === 'block') block(o); else if (k === 'tower') tower(o); else if (k === 'shed') shed(o); else if (k === 'trailer') trailer(o);
+    else if (k === 'tank') tank(o); else if (k === 'crates') crates(o); else if (k === 'barrels') barrels(o); else if (k === 'boat') boat(o); else if (k === 'sandbags') sandbags(o); else if (k === 'palm') palm(o.x + o.w / 2, o.y + o.h / 2); }
+  gate();
+  // round the outside: palms and scrub, the thatched hut, the power line along the road, a sign at the gap in the fence
+  const out = (x, z) => x < -2 || x > W + 2 || z < -2 || z > H + 2;
+  for (let i = 0, t = 0; i < 26 && t < 400; t++) { const x = -40 + r() * (W + 80), z = -40 + r() * (H + 70); if (!out(x, z) || (z > H + 4 && z < H + 14) || Math.abs(x - W / 2) < 6 && z > H) continue; palm(x, z, 0.9 + r() * 0.35); i++; }
+  for (let i = 0, t = 0; i < 40 && t < 400; t++) { const x = -30 + r() * (W + 60), z = -30 + r() * (H + 60); if (!out(x, z) || (z > H + 5 && z < H + 13)) continue; bush(x, z, 0.7 + r() * 0.8); i++; }
+  for (let i = 0; i < 70; i++) { const x = 1 + r() * (W - 2), z = 25 + r() * (H - 26); if (!breakClear(L, x, z, 0.4)) continue; for (let k = 0; k < 3; k++) bake(B.solid, ni('cone'), { x: x + (r() - 0.5) * 0.3, y: 0.15, z: z + (r() - 0.5) * 0.3, ry: r() * 3, sx: 0.06, sy: 0.3 + r() * 0.2, sz: 0.06, color: col(['#7d8a45', '#9a9a52', '#6a7a3a'][k]) }); } /* tufts of dry grass */
+  const hx = W / 2 + 11, hz = H + 17; for (const [dx, dz] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) bake(B.wood, ni('cyl'), { x: hx + dx, y: 1.2, z: hz + dz, sx: 0.1, sy: 2.4, sz: 0.1, color: col('#6b4a32') });
+  bake(B.thatch, ni('cone'), { x: hx, y: 3.1, z: hz, ry: 0.4, sx: 3.2, sy: 1.6, sz: 3.2, color: col('#cdb27a') }); B.wood.box(hx - 1.4, hz - 1.4, hx + 1.4, hz + 1.4, 0.3, 0.42, col('#8a6a48'));
+  const poles = []; for (let x = -36; x <= W + 36; x += 14) { const z = H + 4.6; poles.push([x, z]); bake(B.wood, ni('cyl'), { x, y: 4, z, sx: 0.14, sy: 8, sz: 0.14, color: col('#6b5238') }); bake(B.wood, ni('box'), { x, y: 7.4, z, sx: 0.12, sy: 0.12, sz: 1.8, color: col('#6b5238') }); for (const dz of [-0.7, 0, 0.7]) bake(B.shiny, ni('cyl'), { x, y: 7.55, z: z + dz, sx: 0.05, sy: 0.14, sz: 0.05, color: col('#e8e4dc') }); }
+  const wire = []; for (let i = 0; i + 1 < poles.length; i++) for (const dz of [-0.7, 0, 0.7]) { const [x0, z0] = poles[i], [x1] = poles[i + 1]; for (let k = 0; k < 8; k++) { const t0 = k / 8, t1 = (k + 1) / 8, sag = t => 7.62 - 0.9 * 4 * t * (1 - t); wire.push(x0 + (x1 - x0) * t0, sag(t0), z0 + dz, x0 + (x1 - x0) * t1, sag(t1), z0 + dz); } }
+  { const [px, pz] = poles.reduce((a, p) => Math.abs(p[0] - (W - 4)) < Math.abs(a[0] - (W - 4)) ? p : a, poles[0]), tx = W - 5, tz = 3.6; for (let k = 0; k < 12; k++) { const t0 = k / 12, t1 = (k + 1) / 12, sag = t => 7.6 + (5.4 - 7.6) * t - 1.4 * 4 * t * (1 - t); wire.push(px + (tx - px) * t0, sag(t0), pz + (tz - pz) * t0, px + (tx - px) * t1, sag(t1), pz + (tz - pz) * t1); } } /* the line into the cell block */
+  // the sign by the gap: KEEP OUT, painted by hand
+  const sx0 = W / 2 - 4.2, sz0 = H + 1.2; for (const dx of [-0.8, 0.8]) bake(B.wood, ni('box'), { x: sx0 + dx, y: 0.9, z: sz0, sx: 0.1, sy: 1.8, sz: 0.1, color: col('#6b4a32') });
+  const group = new THREE.Group();
+  for (const [k, b] of Object.entries(B)) { const g = b.geometry(); if (!g) continue; const m = new THREE.Mesh(g, M[k]); m.castShadow = !['grass', 'dirt', 'paving', 'paint', 'ao', 'glow'].includes(k); m.receiveShadow = !['ao', 'glow'].includes(k); if (k === 'ao') m.renderOrder = 2; m.matrixAutoUpdate = false; group.add(m); }
+  const wl = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(wire, 3)), new THREE.LineBasicMaterial({ color: '#1e1e1e' })); group.add(wl);
+  const sc = document.createElement('canvas'); sc.width = 256; sc.height = 96; const sg = sc.getContext('2d'); sg.fillStyle = '#e9dcc0'; sg.fillRect(0, 0, 256, 96); sg.fillStyle = 'rgba(90,60,30,.25)'; for (let y = 0; y < 96; y += 24) sg.fillRect(0, y, 256, 2);
+  sg.fillStyle = '#b3261e'; sg.font = 'bold 50px sans-serif'; sg.textAlign = 'center'; sg.textBaseline = 'middle'; sg.fillText('KEEP OUT', 128, 50); const st = new THREE.CanvasTexture(sc); st.colorSpace = THREE.SRGBColorSpace;
+  const signM = new THREE.MeshStandardMaterial({ map: st, roughness: 0.9 }); view.mats.push(signM); const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.75), signM); sign.position.set(sx0, 1.5, sz0 + 0.06); group.add(sign);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.75), pmat('#8a6a48')); back.position.set(sx0, 1.5, sz0 + 0.05); back.rotation.y = Math.PI; group.add(back);
+  // the prisoner's cell door: its own bars, hinged at the left, so it can swing open
+  const c = L.cells[L.cell], zf = L.obs.find(o => o.k === 'block'), zd = zf ? zf.y + zf.h : 11, D = new Bucket();
+  for (let u = 0.1; u <= 2.11; u += 0.15) bake(D, ni('cyl'), { x: u, y: 1.42, z: -0.06, sx: 0.022, sy: 2.84, sz: 0.022, color: col('#2f3337') }); for (const h of [0.15, 1.3, 2.7]) D.box(0, -0.1, 2.2, -0.02, h, h + 0.08, col('#2f3337'));
+  D.box(1.9, -0.2, 2.05, 0.08, 1.0, 1.3, col('#c9a227')); /* the lock */
+  const door = new THREE.Group(); door.position.set(c - 1.1, 0, zd); const dm = new THREE.Mesh(D.geometry(), M.shiny); dm.castShadow = true; door.add(dm); group.add(door);
+  view.scene.add(group);
+  // the searchlight: a pale beam sweeping the yard (a see-through cone, no real light: cheap)
+  let beam = null; if (light) { beam = new THREE.Mesh(new THREE.ConeGeometry(2.4, 14, 18, 1, true), new THREE.MeshBasicMaterial({ color: '#fff6d8', transparent: true, opacity: 0.09, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })); beam.geometry.translate(0, -7, 0); beam.position.set(light.x, light.y, light.z); view.scene.add(beam); }
+  // late afternoon: a low warm sun and a hazy distance
+  view.setTime(16 * 60 + 40); view.scene.fog = new THREE.Fog('#dcc9a2', 70, 220); view.renderer.toneMappingExposure = 1.0;
+  view.animateCompound = now => { if (beam) { const t = now / 1000; beam.rotation.set(0.9 + Math.sin(t * 0.37) * 0.15, 0, 0); beam.rotation.order = 'YXZ'; beam.rotation.y = Math.PI * 0.75 + Math.sin(t * 0.23) * 0.9; } };
+  return { group, door };
+}
+const breakClear = (L, x, z, R) => L.obs.every(o => x + R < o.x || x - R > o.x + o.w || z + R < o.y || z - R > o.y + o.h);
 
 // The horde: every zombie drawn in a few batched calls (one per body part), animated by moving the parts. Each part
 // has its own painted texture (a rotting face with hollow eyes and an open mouth; a torn, bloodied shirt; veined skin;

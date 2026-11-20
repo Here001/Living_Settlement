@@ -1072,6 +1072,30 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
         const Lw = MG.genHorde(9, 3), w1 = Lw.spawns.filter(z => z.wave === 0), w4 = Lw.spawns.filter(z => z.wave === 4);
         ok(w4.length > w1.length && Math.max(...w4.map(z => z.sp)) > Math.max(...w1.map(z => z.sp)) - 0.3 && w4[0].dmg > w1[0].dmg && Lw.picks.some(p => p.k === 'medkit') && Lw.picks.some(p => p.k === 'shotgun'), 'each wave is bigger, faster and hungrier, and weapons and first aid turn up', JSON.stringify({ n: [w1.length, w4.length], dmg: [w1[0].dmg, w4[0].dmg] }));
         ok(MG.GAMES.muscle === 'horde' && MG.levelOf('muscle', 5, 2).spawns.length > 0, 'the muscle part is the horde now'); }
+      // the jailbreak: sneak into the compound, arm up, spring the cell, fight the guards off
+      { const G = 0.5; let won = 0, valid = 0, silent = 0;
+        for (let seed = 1; seed <= 6; seed++) { const Lb = MG.levelOf('breakout', seed * 7919, 2), NX = Math.ceil(Lb.W / G), NY = Math.ceil(Lb.H / G), free = (i, j) => MG.breakFits(Lb, (i + 0.5) * G, (j + 0.5) * G, 0.45);
+          const route = (sx, sy, tx, ty) => { const ti = Math.floor(tx / G), tj = Math.floor(ty / G), prev = new Int32Array(NX * NY).fill(-2), q = [Math.floor(sx / G) + Math.floor(sy / G) * NX]; prev[q[0]] = -1;
+            for (let h = 0; h < q.length; h++) { const c = q[h], i = c % NX, j = (c / NX) | 0; if (Math.abs(i - ti) <= 2 && Math.abs(j - tj) <= 2) { const out = []; for (let k = c; k >= 0; k = prev[k]) out.push([(k % NX + 0.5) * G, (((k / NX) | 0) + 0.5) * G]); return out.reverse(); }
+              for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a2 = i + di, b2 = j + dj, id = a2 + b2 * NX; if (a2 < 0 || b2 < 0 || a2 >= NX || b2 >= NY || prev[id] !== -2 || !free(a2, b2)) continue; prev[id] = c; q.push(id); } } return null; };
+          let s = MG.breakStart(Lb); const path = [[s.x, s.y]]; let acts = '0', cr = '0';
+          while (!s.done) { let T = ['axe', 'rifle'].map(k => s.picks.find(q => q.k === k)).find(Boolean) || (!s.freed ? Lb.door : null);
+            if (!T) { let bd = 1e9; for (const g of s.g) if (!g.dead) { const d = Math.hypot(g.x - s.x, g.y - s.y); if (d < bd) { bd = d; T = g; } } }
+            let vx = 0, vy = 0, act = false; const crouch = !s.g.some(g => !g.dead && g.alert);
+            if (T) { const r0 = route(s.x, s.y, T.x, T.y) || [[T.x, T.y]]; while (r0.length > 1 && Math.hypot(r0[0][0] - s.x, r0[0][1] - s.y) < 0.35) r0.shift(); const [wx, wy] = r0.length > 1 ? r0[0] : [T.x, T.y], d = Math.hypot(wx - s.x, wy - s.y), dT = Math.hypot(T.x - s.x, T.y - s.y);
+              const shoot = s.w === 'rifle' && s.g.some(g => !g.dead && g.alert && Math.hypot(g.x - s.x, g.y - s.y) < 15 && MG.breakSees(Lb, s, g, false));
+              if (d > 0.01 && !(T === Lb.door && dT < 1.2) && !(shoot && s.freed)) { vx = (wx - s.x) / d; vy = (wy - s.y) / d; }
+              act = (T === Lb.door && dT < 1.6) || shoot || s.g.some(g => !g.dead && Math.hypot(g.x - s.x, g.y - s.y) < 1.6); }
+            const q = MG.breakMove(Lb, s, vx, vy, crouch); s = MG.breakStep(Lb, s, q.x, q.y, act, crouch); path.push([q.x, q.y]); acts += act ? '1' : '0'; cr += crouch ? 'c' : '0'; }
+          const rp = MG.replay('breakout', Lb, { path, acts, crouch: cr }); if (rp.ok && rp.state.done === s.done && rp.state.kills === s.kills) valid++; if (s.done === 'free') won++; silent += s.silent;
+          if (seed === 1) { ok(!MG.replay('breakout', Lb, { path: path.map((p0, i) => i === 30 ? [p0[0], p0[1] - 4] : p0), acts, crouch: cr }).ok, "the jailbreak: teleporting doesn't count");
+            { const e = Lb.entry, run = [[e.x, e.y], [e.x, e.y - 0.43], [e.x, e.y - 0.86]]; ok(MG.replay('breakout', Lb, { path: run, acts: '000', crouch: '000' }).ok && !MG.replay('breakout', Lb, { path: run, acts: '000', crouch: '0cc' }).ok, 'running while claiming to creep is refused'); } }
+          if (seed === 1) { let w = MG.breakStart(Lb); while (!w.done) w = MG.breakStep(Lb, w, w.x, w.y, false, true); ok(w.done === 'time' && MG.breakPerf(Lb, w).perf < 0.2, 'hiding at the fence the whole time gets you nowhere'); } }
+        { const Lb = MG.levelOf('breakout', 11, 2), g0 = Lb.guards[0], st = MG.breakStart(Lb), dv = g0.b ? [g0.b.x - g0.x, g0.b.y - g0.y] : g0.look, dn = Math.hypot(dv[0], dv[1]), behind = { ...st, x: g0.x - dv[0] / dn * 1.0, y: g0.y - dv[1] / dn * 1.0 }; /* (a step behind them, the way they're walking or looking) */
+          const t1 = MG.breakStep(Lb, behind, behind.x, behind.y, true, true); ok(t1.ev === 'takedown' && t1.g[0].dead && t1.silent === 1 && !t1.g.some(g => g.alert), 'creep up behind a guard, crouched, and take them down without a sound', JSON.stringify({ ev: t1.ev }));
+          const t2 = MG.breakStep(Lb, behind, behind.x, behind.y, true, false); ok(t2.ev !== 'takedown' && !t2.silent, 'standing up, it is a fight, not a takedown'); }
+        ok(valid === 6 && won >= 4, 'the jailbreak: crouch in, take guards down quietly, arm up, spring the cell and fight them off; the server sees exactly the same game', JSON.stringify({ valid, won, silent }));
+        ok(MG.HEIST_ROLES.jailbreak.every(r => r === 'breakout') && MG.GAMES.breakout === 'breakout' && MG.levelOf('breakout', 3, 3).guards.length === 7, 'everyone in a jailbreak crew plays the break-out'); }
       // the ATM after a job that came off: sockets swap places and a fuse burns between moves
       { const Lh = MG.genAtm(5, 3, true), Le = MG.genAtm(5, 3); ok(Lh.shift > 0 && Lh.fuse > 0 && !Le.shift && JSON.stringify(MG.socketsAt(Lh, Lh.shift + 0.01)) !== JSON.stringify(MG.socketsAt(Lh, 0)) || Lh.sockets.length < 3, 'the hard ATM: the sockets swap round every few seconds');
         ok(MG.atmReplay(Lh, [['w', 0, 0, Lh.fuse + 0.5]], Lh.fuse + 0.6).state.burnt, 'and if the fuse burns down between moves, the alarm goes'); }

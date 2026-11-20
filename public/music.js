@@ -198,7 +198,7 @@ const STYLES = {
 export function songPlan(station, n) {
   const st = STYLES[station], r = rng(hash(station + ':' + n)), bpm = Math.round(st.bpm[0] + r() * (st.bpm[1] - st.bpm[0]));
   const barSec = 4 * 60 / bpm, bars = Math.floor((SLOT_MS / 1000 - 3) / barSec);
-  const song = { ...st.make(r), bpm, barSec, bars, steps: st.steps, title: songTitle(station, n), vowel: pick(r, ['a', 'o', 'e']), shout: r() < 0.7 };
+  const song = { ...st.make(r), station, bpm, barSec, bars, steps: st.steps, title: songTitle(station, n), vowel: pick(r, ['a', 'o', 'e']), shout: r() < 0.7 };
   const seq = [['intro', 4], ['groove', 8], ['lead', 8], ['groove', 8], ['lead', 8]], tail = [['break', 4], ['build', 2], ['lead', 8], ['lift', 8]];
   let used = 36; while (bars - used - 22 - 4 >= 16) { seq.push(['groove', 8], ['lead', 8]); used += 16; }
   const rem = bars - used - 22, outro = Math.min(4, Math.max(1, rem)); const extra = rem - outro; if (extra >= 10) seq.push(['groove', extra - 8], ['lead', 8]); else if (extra > 0) seq.push(['groove', extra]);
@@ -230,6 +230,7 @@ function extras(s, i, r, part, fillIns) {
 const SIDE = { shaker: 'L', hat: 'R', bell: 'RR', cowbell: 'R', conga: 'LL', talk: 'L', pluck: 'L', pluck2: 'R', keys: 'R', brass: 'R', tom: 'L', vox2: 'LL' };
 const ALIAS = { pluck2: 'pluck', vox2: 'vox' };
 function playBar(kits, station, s, i, t0) {
+  station = s.station || station; /* (a bar of the song that was on: played in its own station's style, even just after you switch) */
   const part = s.part(i), r = rng(hash(station + ':' + s.n + ':' + i)), stepSec = s.barSec / s.steps, style = STYLES[station];
   const swing = s.steps === 16 ? 0.12 : 0, fade = part === 'outro' ? (i === s.bars - 1 ? 0.35 : 0.7) : 1, ss = part === 'lift' ? s.lifted : s;
   let notes = style.bar(ss, i, r, part === 'build' ? 'break' : part === 'lift' ? 'lead' : part);

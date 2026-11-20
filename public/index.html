@@ -4377,7 +4377,7 @@ async function rotateBuilding(id){ const b=D.buildings.get(id); if(!b) return; c
   if(draftOn){ draftEdit(`turning ${nm}`,d=>{ const n=d.builds.find(q=>q.tid===id); if(n) n.rot=nr; else { const live=S.buildings.get(id), p=d.moves[id]||{x:b.x,y:b.y}; if(live&&live.x===p.x&&live.y===p.y&&(live.rot||0)===nr) delete d.moves[id]; else d.moves[id]={x:p.x,y:p.y,rot:nr}; d.labels[id]=nm; } }); return; }
   try{ await api('/api/admin/buildings/'+encodeURIComponent(id),{method:'PATCH',body:{x:b.x,y:b.y,rot:nr}}); remember(`turning ${nm}`,()=>api('/api/admin/buildings/'+encodeURIComponent(id),{method:'PATCH',body:{x:b.x,y:b.y,rot:b.rot||0}})); }
   catch(e){ toast(e.message); } }
-function setTool(t){ tool=t; ghost=null; roadStart=null; setTimeout(syncToolDone); if(t.kind!=='land'){ landSel=null; document.querySelector('.landtip')?.remove(); } setTimeout(refreshTurn); const chip=$('toolchip');
+function setTool(t){ if(t&&t.kind!=='pan'&&toMap(()=>setTool(t))) return; tool=t; ghost=null; roadStart=null; setTimeout(syncToolDone); if(t.kind!=='land'){ landSel=null; document.querySelector('.landtip')?.remove(); } setTimeout(refreshTurn); const chip=$('toolchip');
   if(t.kind==='pan'){ chip.hidden=true; setMini(false); }
   else { chip.hidden=false; $('toolLabel').textContent = t.kind==='ppave'?(t.erase?'Tap or drag over your paving to lift it':`Tap or drag on your plot: ${ROAD_TYPES[t.road].name}, ${fmt(paveCost(t.road))} a tile`) : t.kind==='land'?(t.mark?'Drag over empty grass beside a road':'Swipe to the spot, then double-tap it') : t.kind==='pbuild'?(isFence(t.type)?`Drag along your plot to lay ${BUILDING_TYPES[t.type].name.toLowerCase()}`:`${BUILDING_TYPES[t.type].cat==='decor'||BUILDING_TYPES[t.type].cat==='nature'?'Tap or drag to place':'Drag onto your plot:'} ${BUILDING_TYPES[t.type].name}`) : t.kind==='water'?`Drag to paint ${WATER_TYPES[t.water].name.toLowerCase()}` : t.kind==='drain'?'Drag over water to turn it back into land' : t.kind==='vehicle'?`Drag a ${VEHICLE_TYPES[t.vtype].name.toLowerCase()} ${VEHICLE_TYPES[t.vtype].mode==='water'?'onto water':VEHICLE_TYPES[t.vtype].mode==='air'?'anywhere: it flies above that spot':'onto a road'}` : t.kind==='disaster'?`Tap the map: ${DISASTER_TYPES[t.dtype].name.toLowerCase()} strikes there` : t.kind==='erase'&&t.mode==='area'?'Drag a box over what you want gone' : t.kind==='place'?(isFence(t.type)?`Drag to lay ${BUILDING_TYPES[t.type].name.toLowerCase()}, like a road`:`Drag ${BUILDING_TYPES[t.type].name} into place, let go to build`) : t.kind==='road'?(roadMode==='line'?`${ROAD_TYPES[t.road].name}: tap a start, then tap an end`:`Drag to lay ${ROAD_TYPES[t.road].name.toLowerCase()}`) : t.kind==='move'?`Drag ${(D.buildings.get(t.id)&&(D.buildings.get(t.id).name||T(D.buildings.get(t.id)).name))||'it'} to its new spot` : t.mode==='roads'?'Drag over roads to remove them' : t.mode==='buildings'?'Tap a building to demolish it':'Tap a building or drag over roads to clear them'; }
   if(activeTab && !PLAYER_TABS.has(activeTab) && activeTab!=='reports' && activeTab!=='stats' && activeTab!=='money' && activeTab!=='stream') renderPane(); }
@@ -6369,7 +6369,7 @@ const BUYABLE=new Set(['housing','shops','offices','industry']); // what players
 function actionTabs(c){ const wrap=el('div',null); const gb=GuideUI.box(); if(gb) wrap.append(gb); const dr=Daily.row(); if(dr) wrap.append(dr);
   if(Date.now()-(Love.at||0)>60000){ Love.at=Date.now(); api('/api/me/love').then(r=>{ if(Love.count(r)&&sel) renderCard(true); }).catch(()=>{}); } /* for the number on the 💘 Love tab */
   if(!PushUI.st&&!PushUI.busy) PushUI.load().then(()=>{ if(sel&&sel.kind==='c') renderCard(true); });
-  wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}), el('button',{class:'btn sm',text:'⚙️ Settings',onclick:()=>PushUI.sheet()}), el('button',{class:'btn sm primary',text:'🚗 Drive',title:'Drive around town in 3D',onclick:()=>Drive.start()}), el('button',{class:'btn sm primary',text:'🚶 Walk',title:'Walk around town in 3D, as yourself',onclick:()=>Drive.start({mode:'walk'})}))); const row=el('div',{class:'acttabs',role:'tablist'});
+  wrap.append(el('div',{class:'row-actions followrow'}, el('button',{class:'btn sm',text:'🎥 Follow me',title:'Keep the camera on your colonist and watch what they do',onclick:()=>Watch.start(0,'Following you')}), el('button',{class:'btn sm',text:'⚙️ Settings',onclick:()=>PushUI.sheet()}), el('button',{class:'btn sm primary',text:'🚗 Drive',title:'Drive around town in 3D',onclick:()=>goOut(false)}), el('button',{class:'btn sm primary',text:'🚶 Walk',title:'Walk around town in 3D, as yourself',onclick:()=>goOut(true)}))); const row=el('div',{class:'acttabs',role:'tablist'});
   for(const [id,nm] of [['earn','💰 Earn'],['work','Work'],['home',MyHome.data&&MyHome.data.props?`🏠 Home · ${MyHome.data.props} 🏢`:'🏠 Home'],['wallet','👛 Wallet'],['love',Love.n?`💘 Love · ${Love.n}`:'💘 Love'],['cars','Cars'],['crime','Crime'],['badges','⭐ Stars']]) row.append(el('button',{class:'pill'+(actTab===id?' on':''),'aria-pressed':String(actTab===id),text:nm,onclick:()=>{ actTab=actTab===id?null:id; renderCard(true); if(actTab) scrollTabsUp(); }}));
   if(actTab==='bank') actTab='wallet'; if(actTab==='pet'||actTab==='casino'||actTab==='out') actTab='earn'; if(!actTab){ wrap.append(row); return wrap; } const P={ work:workPanel, home:homePanel, wallet:walletPanel, cars:carsPanel, love:()=>Love.box(), casino:casinoPanel, out:outPanel, crime:crimePanel, badges:c=>{ const p=Stars.panel(c); p.append(statusBox(c)); return p; }, earn:c=>Earn.panel(c) }[actTab]||workPanel;
   wrap.append(row, P(c)); return wrap; }
@@ -6391,7 +6391,7 @@ function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🏠
     box.append(el('p',{class:'jobnow'}, 'You live at ', el('b',{text:H.home.name}), H.home.mine?' (you own it)':'', '.'),
       H.home.where?el('p',{class:'hint',text:`📍 ${H.home.where[0].toUpperCase()+H.home.where.slice(1)}.`}):'',
       el('p',{class:'hint',text:H.home.mine?'You own this home, so you pay no rent.':`Rent is ${fmt(H.home.rent)} a day, taken from your wages.`}),
-      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🛋️ Go inside',onclick:()=>Room.open()}), el('button',{class:'btn',text:'Go see it',onclick:()=>goToBuilding(b||{id:H.home.id,x:H.home.x,y:H.home.y})}),
+      el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:'🛋️ Go inside',onclick:()=>goHome()}), el('button',{class:'btn',text:'Go see it',onclick:()=>goToBuilding(b||{id:H.home.id,x:H.home.x,y:H.home.y})}),
         el('button',{class:'btn danger',text:'Leave this home',onclick:()=>toast(`Move out of ${H.home.name}?${H.hasJob?' You’ll leave your job too, until you rent somewhere new.':''}`,'Move out',async()=>{ const r=await meAction('/api/me/home/leave',{},'You moved out. Find a home and tap 🔑 Rent here to move in somewhere.'); if(r){ MyHome.load(true); } })})),
       el('p',{class:'hint',text:'To move, tap any home on the map and choose 🔑 Rent here. You’ll move out of here automatically.'})); }
   else { box.append(el('p',{class:'jobnow',text:H.leftHome?"You don't have a home right now.":"You're still in cryosleep, waiting for a home."}),
@@ -6733,7 +6733,7 @@ function ownedBox(c){ const M=moneyFor(c), Pp=M&&M.props; if(!Pp) return null; c
 function nearestBank(c){ let best=null, bd=1e9; const at=(c&&(c.home||c.job))||null; const ox=at?at[2]:0, oy=at?at[3]:0;
   for(const b of D.buildings.values()){ if(!isBank(b.type)||b.done===false||b.ruin) continue; const dd=Math.abs(b.x-ox)+Math.abs(b.y-oy); if(dd<bd){ bd=dd; best=b; } } return best; }
 // Fly to a building and open its card (loading that part of the map first if it isn't here yet).
-function goToBuilding(b){ const known=D.buildings.get(b.id), [w,d]=known?T(known).size:[2,2], q=iso(b.x+w/2,b.y+d/2); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.2); follow=null;
+function goToBuilding(b){ if(toMap(()=>goToBuilding(b))) return; const known=D.buildings.get(b.id), [w,d]=known?T(known).size:[2,2], q=iso(b.x+w/2,b.y+d/2); cam.x=q.x; cam.y=q.y; cam.z=Math.max(cam.z,1.2); follow=null;
   const open=()=>{ if(D.buildings.has(b.id)){ sel={kind:'b',id:b.id}; renderCard(true); return true; } return false; };
   if(!open()){ Promise.resolve(syncChunks()).catch(()=>{}).then(()=>{ if(!open()) setTimeout(open,800); }); } }
 function walletPanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'👛 Wallet'})); const M=moneyFor(c), B=M&&M.bank;
@@ -7155,6 +7155,21 @@ const CallVoice=Object.assign(Object.create(Voice),{ R:null, cfg:null, pc:null, 
     this.serial(()=>this.sync()); this.timer=setInterval(()=>this.levels(),150); return ''; },
   quality0(){ const q=[...this.els.values()].map(x=>x.q).filter(Boolean)[0]||null; return q; }, /* the other end's connection */
   paint(){ Phone.paintCall(); }, light(id,on){ if(!on) this.lit.delete(id); Phone.talking(id,on); } });
+// A button that works on the 2D map (find your colonist, 🎥 Follow me, the intro, moving a building…), tapped on the
+// phone while you're out in 3D: the phone goes away, you're back on the map, and then it does what it says. Returns
+// true when it has taken over (the caller stops there); false when you're already on the map.
+// 🚗 Drive / 🚶 Walk on your card: from the map, out onto the street; on the phone out on the street, into your car or
+// out of it right where you are; on the phone in a place, at the races or the fights, out of there and onto the street
+function goOut(walk){ try{ if(Drive.el&&Drive.T){ const foot=Drive.T.pos.mode==='walk'&&!Drive.riding;
+      if(walk===foot){ toast(walk?'🚶 You’re already on foot.':'🚗 You’re already driving.'); return; } Phone.hide(); Drive.switchMode(); return; }
+    if(Phone.on) Phone.hide(); for(const V of [TrackView,ArenaView]) if(V.el) V.close(); }catch(e){}
+  Drive.start(walk?{mode:'walk'}:undefined); }
+// 🛋️ Go inside (your home, from your card): from the street, the races or the fights on the phone, you leave there first
+function goHome(){ try{ if(Phone.on) Phone.hide(); for(const V of [Drive,TrackView,ArenaView]) if(V.el) V.close(); }catch(e){} Room.open(); }
+function toMap(fn){ let inside=false; try{ inside=Phone.inside(); }catch(e){} if(!inside) return false;
+  try{ Phone.hide(); }catch(e){} try{ Drive.resume=null; }catch(e){} /* (leaving a place you drove to: straight to the map, not back to the car) */
+  for(const V of [Room,TrackView,ArenaView,Drive]) try{ if(V.el) V.close(); }catch(e){}
+  setTimeout(()=>{ try{ fn&&fn(); }catch(e){} },350); return true; }
 const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null, unread:0,
   inside(){ return !!((typeof Room!=='undefined'&&Room.el)||(typeof Drive!=='undefined'&&Drive.el)||(typeof TrackView!=='undefined'&&TrackView.el)||(typeof ArenaView!=='undefined'&&ArenaView.el)); }, /* in a place, in the car, at the races or the fights */
   // the phone in your hand: its home screen has the same five apps as the bar at the bottom of the map (Town Square,
@@ -8823,7 +8838,7 @@ var GuideUI={ data:null, at:0, busy:false, open:false, /* folded: just the next 
   async hide(){ try{ await api('/api/me/guide/hide',{method:'POST',body:{hidden:true}}); }catch(e){} if(this.data) this.data.hidden=true; renderCard(true); toast('Guide hidden. You can bring it back from ⚙️ Settings on your card.'); },
   async unhide(){ try{ await api('/api/me/guide/hide',{method:'POST',body:{hidden:false}}); }catch(e){} this.at=0; this.load(); },
   show(id){ if(id==='daily'){ Daily.info?Daily.sheet():Daily.load(); return; }
-    if(id==='out'){ closeCard(); openTab(null); toast('Tap any building on the map, then press 🚶 Go here on its card.'); return; }
+    if(id==='out'){ if(toMap(()=>this.show(id))) return; closeCard(); openTab(null); toast('Tap any building on the map, then press 🚶 Go here on its card.'); return; }
     if(id==='job'||id==='earn'){ actTab={job:'work',earn:'earn'}[id]; renderCard(true); requestAnimationFrame(()=>document.querySelector('#card .acttabs')?.scrollIntoView({block:'start',behavior:'smooth'})); return; }
     if(id==='bank'){ api('/api/me/bank').then(B=>{ const nb=nearestBank(null)||B.nearest; if(nb) goToBuilding(nb); else toast("The colony doesn't have a Bank yet. Check back soon."); }).catch(e=>toast(e.message)); return; }
     if(id==='post'){ feedMode='posts'; openTab('feed'); setTimeout(()=>{ const t=document.querySelector('.composer textarea'); if(t) t.focus(); },120); } },
@@ -8881,7 +8896,7 @@ function goHereRow(b){ const me=myCitizen(), [w,d]=T(b).size, bx=b.x+w/2, by=b.y
 // ("Back to me" picks it up again). A delivery watch ends by itself when the delivery is done.
 const Watch={ id:null, until:0, label:'', bar:null, done:false,
   // `who` (a handle) follows another colonist instead of you: 👀 Watch on their card.
-  async start(until, label, target, who){ this.target=target||null; this.started=Date.now(); this.other=!!who; const h=who||myHandle(); if(!h){ toast('Sign in to your colonist first (tap "Find me").'); return; }
+  async start(until, label, target, who){ if(toMap(()=>this.start(until,label,target,who))) return; this.target=target||null; this.started=Date.now(); this.other=!!who; const h=who||myHandle(); if(!h){ toast('Sign in to your colonist first (tap "Find me").'); return; }
     let c=[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===h.toLowerCase());
     if(!c){ const d=await loadDetail(h); if(!d) return; c=normC(d); pinned=c.id; S.citizens.set(c.id,c); }
     pinned=c.id; this.id=c.id; this.until=until||0; this.label=label||'Following you'; this.done=false;
@@ -9152,7 +9167,7 @@ setTimeout(()=>{ (window.requestIdleCallback||setTimeout)(()=>Radio.load().catch
 // Coming back with the radio on: it starts again with the first tap (browsers only play sound after one).
 /* The radio is off when the game starts: it plays only once the player switches it on (📻 Radio on their phone). */
 
-function findMe(){ let mine=(Me&&Me.handle)||null; if(!mine){ try{ const v=localStorage.getItem('settlement-me'); mine=v&&v.startsWith('"')?JSON.parse(v):v; }catch(e){} }
+function findMe(){ if(toMap(findMe)) return; let mine=(Me&&Me.handle)||null; if(!mine){ try{ const v=localStorage.getItem('settlement-me'); mine=v&&v.startsWith('"')?JSON.parse(v):v; }catch(e){} }
   const h = Store.canWrite ? (S.meta&&S.meta.founder) : mine;
   if(h){ openCitizen(h); return; }
   Join.sheet(); }
@@ -9188,7 +9203,7 @@ const Join={ cfg:null, step:'start', g:null, busy:false, gender:null,
   genderRow(box,C){ return el('div',{class:'cpicks'}, el('span',{text:'Your avatar:'}), ...[['m','Man'],['f','Woman']].map(([k,n])=>el('button',{class:'pill'+(this.gender===k?' on':''),text:n,onclick:e=>{ this.gender=k; e.currentTarget.parentElement.querySelectorAll('.pill').forEach(b=>b.classList.toggle('on',b===e.currentTarget)); }}))); } };
 checkMe().then(resumeClaim).then(openFromNotification).then(()=>PushUI.auto());
 // ---- The opening: plays the narrated intro video (public/intro.mp4) when there is one; it only downloads once Begin is pressed, otherwise the story as title cards ----
-async function playIntro(force){
+async function playIntro(force){ if(toMap(()=>playIntro(force))) return;
   if(document.getElementById('intro')) return; ls.set('resurgence-intro-seen',1);
   let src=null; try{ src=await (await fetch('/api/intro')).json(); }catch(e){} const video=!!(src&&src.video); /* from Cloudflare R2 when it's set up, so it doesn't use the game server's bandwidth */
   const ov=el('div',{id:'intro',role:'dialog','aria-label':'Resurgence intro'}); const skip=el('button',{class:'skip',text:'Skip ›'}); document.body.append(ov);

@@ -109,17 +109,24 @@ export function createColosseum(host, opts) {
     g.textAlign = 'center'; g.fillStyle = '#E8F4FF'; g.font = '600 34px system-ui, sans-serif'; (S.lines || []).slice(0, 3).forEach((l, i) => g.fillText(l, 512, 350 + i * 46)); scrT.needsUpdate = true; }
   // ---- the crowd: a few hundred whole people sitting in the seats nobody real is in (crowdfig.js: a handful of draws);
   // they bounce and throw their arms up when the crowd roars ----
-  const hypeU = { value: 0 }, timeU = { value: 0 }; let crowd = null; const FOLK = [];
+  const hypeU = { value: 0 }, timeU = { value: 0 }; let crowd = null; const FOLK = [], CROWD = new Map();
   { const all = [], N = 450; for (let r = 0; r < ROWS; r++) { const rr = R0 + 0.7 + r * ROW_D + 0.4, cnt = Math.floor(2 * Math.PI * rr * 1.1 / 0.62); for (let i = 0; i < cnt; i++) { const a = i / cnt * Math.PI * 2 + r * 0.13;
       const x = Math.cos(a) * rr * SX, z = Math.sin(a) * rr; if (Math.abs(x) < 3.2 && z < 0 && r < 4) continue; /* (the imperial box) */ if (Math.abs(z) < 2.2 && r < 3) continue; /* (the gates) */
       all.push([x, Y0 + (r + 1) * ROW_H + 0.01, z, Math.atan2(-x, -z)]); } }
     for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; } const spots = all.slice(0, N); /* (450 seats picked at random from every row, so the whole bowl looks evenly full) */ /* (on the step's front edge, legs over it, facing the sand) */
+    for (const sp of spots) { const k = Math.floor(sp[0]) + ',' + Math.floor(sp[2]); (CROWD.get(k) || CROWD.set(k, []).get(k)).push(sp); } /* (where each stand-in sits: you can't walk through them) */
     crowd = makeCrowd({ scene, spots, pose: 'sit', hype: hypeU, time: timeU, shoes: false, mats: view.mats, tops: ['#F1EBDD', '#C8B48A', '#8A2A22', '#E8DCC0', '#4F6E8C', '#B5743A', '#5B2A6E', '#D9C9A6', '#7A8B3C', '#A8352B'] }); } /* (Roman tunics; sandals don't show from the stands) */
   function mergeTwo(a, b) { const g = new THREE.BufferGeometry(), pa = a.toNonIndexed(), pb = b.toNonIndexed(); for (const k of ['position', 'normal']) { const A = pa.attributes[k].array, B = pb.attributes[k].array, out = new Float32Array(A.length + B.length); out.set(A); out.set(B, A.length); g.setAttribute(k, new THREE.BufferAttribute(out, 3)); } return g; }
   // ---- you, walking about the stands (like at the races): the stick or WASD walks, dragging looks round ----
   const tierAt = (x, z) => { const r = er(x, z); if (r < R0 + 0.7) return -1; if (r >= RT) return ROWS; return Math.floor((r - R0 - 0.7) / ROW_D); };
   const floorY = (x, z) => { const t = tierAt(x, z); return t < 0 ? 0 : t >= ROWS ? YT : Y0 + (t + 1) * ROW_H + (t < 0 ? 0 : 0); };
-  const free = (x, z) => { const r = er(x, z); if (r < R0 + 0.75) return false; if (r > ROUT - 0.3) return false; return true; };
+  const free = (x, z) => { const r = er(x, z); if (r < R0 + 0.75) return false; if (r > ROUT - 0.3) return false; return !inCrowd(x, z); };
+  // someone in the way: a stand-in sitting on this tier (unless they've given the seat to a real person), or another real person
+  function inCrowd(x, z) { const fy = floorY(x, z), cx = Math.floor(x), cz = Math.floor(z);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const sp of CROWD.get((cx + i) + ',' + (cz + j)) || []) { if (Math.abs(sp[1] - fy) > 0.3 || Math.hypot(sp[0] - x, sp[2] - z) > 0.42) continue;
+      let given = false; for (const o of others.values()) if (o.sit && Math.hypot(o.x - sp[0], o.z - sp[2]) < 0.6) { given = true; break; } if (!given) return true; }
+    for (const o of others.values()) if (Math.hypot(o.x - x, o.z - z) < 0.5 && Math.abs(o.P.group.position.y - fy) < 1) return true;
+    return false; }
   const spawnA = -Math.PI / 2 + (Math.random() - 0.5) * 2.2, spawnR = R0 + 0.7 + ROW_D * (2.5 + Math.random() * 2);
   const me = { x: Math.cos(spawnA) * spawnR * SX, z: Math.sin(spawnA) * spawnR, y: 0, yaw: 0, pitch: -0.25, sit: false, P: W.makePerson('me', null, opts.look || null) }; scene.add(me.P.group);
   me.yaw = Math.atan2(me.x, me.z); /* (facing the sand) */ me.y = floorY(me.x, me.z);
@@ -141,14 +148,16 @@ export function createColosseum(host, opts) {
     const yaw = fighting() ? camYaw : me.yaw, fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = -fz, rz = fx, m = Math.min(1, Math.hypot(f, st)); if (m < 0.08) return { mx: 0, mz: 0 }; const l = Math.max(1, Math.hypot(f, st));
     return { mx: (fx * f + rx * st) / l, mz: (fz * f + rz * st) / l }; };
   let sitAt = null; const bench = () => { const t = tierAt(me.x, me.z); return t >= 0 && t < ROWS ? t : -1; };
-  function sitDown() { const t = bench(); if (t < 0) return false; const r = R0 + 0.7 + t * ROW_D + 0.4, a = Math.atan2(me.z, me.x / SX); /* (on the step's front edge, legs over it) */ me.x = Math.cos(a) * r * SX; me.z = Math.sin(a) * r; me.sit = true; sitAt = Y0 + (t + 1) * ROW_H - 0.46; /* (a sitting character's hips are 0.48 above its feet: they rest on the stone) */ me.yaw = Math.atan2(me.x, me.z);
+  function sitDown() { const t = bench(); if (t < 0) return false; const r = R0 + 0.7 + t * ROW_D + 0.4, a0 = Math.atan2(me.z, me.x / SX), step = 0.62 / r; let a = null;
+    for (let k = 0; k <= 12 && a == null; k++) for (const sg of k ? [1, -1] : [1]) { const aa = a0 + sg * k * step, x = Math.cos(aa) * r * SX, z = Math.sin(aa) * r; if (![...others.values()].some(o => o.sit && Math.hypot(o.x - x, o.z - z) < 0.55)) { a = aa; break; } } /* (never on top of someone already sitting) */
+    if (a == null) return false; /* (on the step's front edge, legs over it) */ me.x = Math.cos(a) * r * SX; me.z = Math.sin(a) * r; me.sit = true; sitAt = Y0 + (t + 1) * ROW_H - 0.46; /* (a sitting character's hips are 0.48 above its feet: they rest on the stone) */ me.yaw = Math.atan2(me.x, me.z);
     const A = me.P.av || me.P; if (A.pose) A.pose('sit'); me.P.group.rotation.y = Math.atan2(-me.x, -me.z); return true; }
   function standUp() { if (!me.sit) return; me.sit = false; sitAt = null; const A = me.P.av || me.P; if (A.pose) A.pose('stand'); }
   let moved = 0, mineSide = null;
   const fighting = () => mineSide != null && cur && cur.ph !== 'over';
   function walkMe(dt) { if (fighting()) { me.P.group.visible = false; if (myPet) myPet.group.visible = false; return; } if (myPet) myPet.group.visible = true;
     const d = stickDir(), m = Math.hypot(d.mx, d.mz); if (m > 0.08 && me.sit) standUp();
-    if (m > 0.08) { const dx = d.mx * 3.2 * dt, dz = d.mz * 3.2 * dt; if (free(me.x + dx, me.z)) me.x += dx; if (free(me.x, me.z + dz)) me.z += dz; moved += Math.hypot(dx, dz); me.P.animate(dt, dx / dt, dz / dt); }
+    if (m > 0.08) { const dx = d.mx * 3.2 * dt, dz = d.mz * 3.2 * dt, stuck = inCrowd(me.x, me.z); /* (already among them: step out freely) */ const ok = (x, z) => stuck ? er(x, z) >= R0 + 0.75 && er(x, z) <= ROUT - 0.3 : free(x, z); if (ok(me.x + dx, me.z)) me.x += dx; if (ok(me.x, me.z + dz)) me.z += dz; moved += Math.hypot(dx, dz); me.P.animate(dt, dx / dt, dz / dt); }
     else if (!me.sit) me.P.animate(dt, 0, 0);
     const ty = me.sit ? sitAt : floorY(me.x, me.z); me.y += (ty - me.y) * Math.min(1, dt * 12); me.P.setPos(me.x, me.z); me.P.group.position.y = me.y; if (me.sit) me.P.group.rotation.y = Math.atan2(-me.x, -me.z);
     if (myPet && petGone) { petGone.t += dt; myPet.group.visible = true; { const k = Math.min(70, 1.6 + petGone.t * 7.5); myPet.step(dt, petGone.x0 + petGone.dx * k, petGone.z0 + petGone.dz * k); } if (petGone.t > 5.5) { myPet.dispose(); myPet = null; petGone = null; } } /* sent home: it trots off out of sight */
@@ -268,7 +277,7 @@ export function createColosseum(host, opts) {
     // sparks and dust
     for (let i = sparks.length - 1; i >= 0; i--) { const p = sparks[i]; p.t -= dt; p.vy -= 9 * dt; p.m.position.x += p.vx * dt; p.m.position.y = Math.max(0.02, p.m.position.y + p.vy * dt); p.m.position.z += p.vz * dt; p.m.scale.setScalar(Math.max(0.1, p.t * 2)); if (p.t <= 0) { scene.remove(p.m); p.m.geometry.dispose(); if (p.own) p.m.material.dispose(); sparks.splice(i, 1); } }
     // the torches flicker; the crowd jumps with the roar
-    tw += dt; if (tw > 0.06) { tw = 0; for (const f of flames) f.scale.set(1, 0.8 + Math.random() * 0.45, 1); } timeU.value = now / 1000; if (crowd) { FOLK.length = 0; FOLK.push(me.P.group.position); for (const o of others.values()) FOLK.push(o.P.group.position); crowd.update(camera, now, FOLK); } /* (the stand-ins make room for real people) */ const h = s ? Math.max(s.f[0][9], s.f[1][9]) : 0; hypeU.value += ((h * 0.8 + roar) - hypeU.value) * Math.min(1, dt * 3); roar = Math.max(0, roar - dt * 0.5);
+    tw += dt; if (tw > 0.06) { tw = 0; for (const f of flames) f.scale.set(1, 0.8 + Math.random() * 0.45, 1); } timeU.value = now / 1000; if (crowd) { FOLK.length = 0; if (me.sit) FOLK.push(me.P.group.position); for (const o of others.values()) if (o.sit) FOLK.push(o.P.group.position); crowd.update(camera, now, FOLK); } /* (a stand-in gives up their seat to a real person who sits there; walkers go round them) */ const h = s ? Math.max(s.f[0][9], s.f[1][9]) : 0; hypeU.value += ((h * 0.8 + roar) - hypeU.value) * Math.min(1, dt * 3); roar = Math.max(0, roar - dt * 0.5);
     for (const [id, b] of bubbles) if (performance.now() > b.until) { b.sp.parent && b.sp.parent.remove(b.sp); b.sp.material.map.dispose(); bubbles.delete(id); }
     placeCamera(dt, s);
     tSlow += dt; if (tSlow > 0.5) { tSlow = 0; paintScreen(now); paintBillboard(now); sunTime(); torchL.forEach(l => l.intensity = view.night > 0.3 ? 12 : 0); if (opts.onTick) opts.onTick(); } });
@@ -276,6 +285,7 @@ export function createColosseum(host, opts) {
   return { view(m) { mode = m || MODES[(MODES.indexOf(mode) + 1) % MODES.length]; return mode; }, get mode() { return mode; },
     _heavy() { const out = []; scene.traverse(o => { if (!o.isMesh && !o.isPoints && !o.isLine) return; const g = o.geometry, n = (g.index ? g.index.count : g.attributes.position.count) / 3 * (o.isInstancedMesh ? o.count : 1); out.push([Math.round(n), o.isInstancedMesh ? 'I' + o.count : '', o.material && o.material.color ? '#' + o.material.color.getHexString() : '', o.name || '', o.visible]); }); return out.sort((a, b) => b[0] - a[0]).slice(0, 25); }, /* (for checking: the heaviest meshes) */
     stats() { return { crowd: crowd && { lo: crowd.tris, hi: crowd.nearTris, near: crowd.near }, merged, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, others: others.size, snaps: snaps.length, fighters: F.filter(Boolean).length, cam: camera.position.toArray().map(v => +v.toFixed(1)) }; },
+    _crowd() { const out = []; for (const L of CROWD.values()) for (const sp of L) { out.push(sp); if (out.length > 4) return out; } return out; }, _blocked(x, z) { return !free(x, z); }, /* (for testing) */
     get me() { return { x: me.x, z: me.z, a: me.P.group.rotation.y, sit: me.sit, bench: bench() >= 0 }; }, sit() { if (me.sit) { standUp(); return false; } return sitDown(); },
     petHappy() { if (tapped) tapped.happy(); }, petLeave() { if (!myPet) return; const q = myPet.group.position; let dx = q.x - me.x, dz = q.z - me.z, d = Math.hypot(dx, dz); if (d < 0.3) { dx = 1; dz = 0; d = 1; } petGone = { t: 0, x0: me.x, z0: me.z, dx: dx / d, dz: dz / d }; }, setMyPet(kind) { if (kind && petGone) petGone = null; if (myPet && (!kind || myPet.kind !== kind)) { myPet.dispose(); myPet = null; } if (kind && !myPet) { try { myPet = follower(kind); scene.add(myPet.group); } catch (e) { myPet = null; } } },
     upsertOther, removeOther, setPet, say, brawl, setFighters, cheer(k) { roar = Math.min(1, roar + (k === 'boo' ? 0.1 : 0.25)); },

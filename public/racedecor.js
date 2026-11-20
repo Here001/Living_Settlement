@@ -186,15 +186,16 @@ export function decorate(view, P) {
 
   // ---- a crowd: racegoers sitting in the stand's seats and standing along the rail, whole people (crowdfig.js: a
   // handful of draws); they cheer, arms up, during a race ----
-  const crowdU = { value: 0 }, timeU = { value: 0 }, crowds = [];
+  const crowdU = { value: 0 }, timeU = { value: 0 }, crowds = [], crowdAt = []; /* (where each stand-in is: [x, floor y, z], so nobody walks through them) */
   { const rowsY = r => 0.6 + r * 0.9, rowZ = r => STAND_Z + r * 1.4, n = Math.floor((standW - 3) / 0.62), sit = [], stand = [];
     for (let r = 0; r < rows; r++) for (let i = 0; i < n; i++) { const x = -standW / 2 + 1.5 + i * 0.62 + 0.31; if ([-1, 0, 1].some(k => Math.abs(x - k * standW * 0.3) < 0.6)) continue; if (rnd() < 0.42) continue;
       sit.push([x, rowsY(r) + 0.46, rowZ(r) - 0.04, Math.PI]); } /* (on a seat, facing the track) */
     for (let i = 0; i < 40; i++) { const a = Math.PI / 2 + (rnd() - 0.5) * 1.6, o = WID / 2 + 1.6 + rnd() * 1.4; stand.push([Math.cos(a) * (RX + o), 0, Math.sin(a) * (RZ + o), Math.atan2(-Math.cos(a), -Math.sin(a)) + (rnd() - 0.5) * 0.5]); }
+    for (const sp of sit) crowdAt.push([sp[0], sp[1] - 0.46, sp[2]]); for (const sp of stand) crowdAt.push([sp[0], 0, sp[2]]);
     const tops = ['#C0392B', '#2E86C1', '#F1C40F', '#ECF0F1', '#8E44AD', '#27AE60', '#E67E22', '#34495E', '#D98BA8', '#1ABC9C'];
     crowds.push(makeCrowd({ scene, spots: sit, pose: 'sit', hype: crowdU, time: timeU, tops, mats: view.mats, sectors: 6 }), makeCrowd({ scene, spots: stand, pose: 'stand', hype: crowdU, time: timeU, tops, mats: view.mats, sectors: 4 })); }
   let folk = null; movers.push((dt, now) => { for (const c of crowds) if (c.update) c.update(view.camera, now, folk); }); /* (folk: where the real people are, so no stand-in sits on them) */
   movers.push((dt, now) => { timeU.value = now / 1000; });
   flush(shadowMats);
-  return { colliders, statue: { x: PR.x, y: 1.28, z: PR.z }, screen: { x: -standW / 2 - 4, y: 6.2, z: STAND_Z + 1.21, ry: 0.35 + Math.PI }, update(dt, now, racing, people) { folk = people || null; crowdU.value += ((racing ? 1 : 0.08) - crowdU.value) * Math.min(1, dt * 2); for (const f of movers) f(dt, now); } };
+  return { colliders, crowdAt, statue: { x: PR.x, y: 1.28, z: PR.z }, screen: { x: -standW / 2 - 4, y: 6.2, z: STAND_Z + 1.21, ry: 0.35 + Math.PI }, update(dt, now, racing, people) { folk = people || null; crowdU.value += ((racing ? 1 : 0.08) - crowdU.value) * Math.min(1, dt * 2); for (const f of movers) f(dt, now); } };
 }

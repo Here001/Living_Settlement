@@ -1924,6 +1924,9 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
     ok((await call('PUT', `/api/tracks/${rt.id}/ticket`, { price: 30 }, V2.P)).json.ticket === 30, 'the owner sets the price');
     const V3 = await player('fan_fern', 1000), e3 = await call('POST', `/api/tracks/${rt.id}/enter`, {}, V3.P);
     ok(e3.json.paid === 30 && Number((await pool.query('select till from buildings where id = $1', [rt.id])).rows[0].till) === 30, 'an owned track: the ticket money goes into its till', JSON.stringify(e3.json));
+    ok((await call('PUT', `/api/tracks/${rt.id}/ticket`, { price: 0 }, V2.P)).status === 400, 'a ticket is never free');
+    await pool.query('update citizens set coins_base = 500, net = 0 where id = $1', [V2.id]); const eo = await call('POST', `/api/tracks/${rt.id}/enter`, {}, V2.P); ok(eo.status === 200 && eo.json.paid === 30, 'the owner pays to go in too, like everyone', JSON.stringify(eo.json));
+    await call('POST', `/api/tracks/${rt.id}/leave`, {}, V2.P);
     await pool.query("insert into track_tickets (building_id, citizen_id, handle, until) select $1, 'x' || g, 'x' || g, $2 from generate_series(1, 30) g on conflict do nothing", [rt.id, Date.now() + 600000]);
     const V4 = await player('fan_flo', 1000), e4 = await call('POST', `/api/tracks/${rt.id}/enter`, {}, V4.P); ok(e4.status === 409 && /full/.test(e4.json.error || ''), 'a full track turns people away', JSON.stringify(e4.json));
     ok((await call('POST', `/api/tracks/${rt.id}/leave`, {}, V1.P)).status === 200 && !(await pool.query('select 1 from track_tickets where building_id = $1 and citizen_id = $2', [rt.id, V1.id])).rowCount, 'leaving frees your seat'); }

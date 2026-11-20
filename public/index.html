@@ -7506,7 +7506,7 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
     const open=d.list.filter(m=>m.open), soon=d.list.filter(m=>!m.open);
     box.append(el('h4',{class:'mh',text:this.a?'Next time':'Pick one'}));
     for(const m of open) box.append(el('div',{class:'mcard'}, el('div',{class:'mtop'}, el('b',{text:`${m.icon} ${m.name}`}), el('span',{class:'mtag '+m.side,text:m.side==='crime'?'Crime':'Work'})), el('p',{text:m.blurb}),
-      el('button',{class:'btn primary sm',text:'Start',disabled:this.a||this.busy?'':null,onclick:()=>this.start(m.kind)})));
+      m.link?el('button',{class:'btn primary sm',text:'Open the Crime tab',onclick:()=>{ this.close(); Phone.hide(); openMyTab('crime'); }}):el('button',{class:'btn primary sm',text:'Start',disabled:this.a||this.busy?'':null,onclick:()=>this.start(m.kind)})));
     /* what's ahead: just the next rank's openings, so there's always one thing to aim for (the rest stay a surprise) */
     const nextR=soon.length?Math.min(...soon.map(m=>m.rank).filter(r=>r>d.rank).concat([99])):99, ahead=soon.filter(m=>m.rank===nextR);
     if(ahead.length){ box.append(el('h4',{class:'mh',text:`Coming at ${d.ranks[nextR].icon} ${d.ranks[nextR].name}`}));
@@ -7526,6 +7526,8 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
     catch(e){ toast(e.message); } finally{ this.busy=false; } },
   begin(a){ this.a=a; this.saidHi=false; this.route(); this.paintHud(); clearInterval(this.tickT); this.tickT=setInterval(()=>this.paintHud(),a.kind==='race'?100:1000); },
   say(s){ const a=this.a, K=a&&a.kind; if(!s) return ''; if(K==='race'){ const n=a.steps.length; return a.step>=n-1?'Through the finish!':`Checkpoint ${a.step+1} of ${n}`; }
+    if(s.k==='game') return K==='holdup'?`Walk into ${s.name} and rob the till.`:K==='con'?`Find ${s.name} and walk up to them.`:`Walk up to ${s.name}.`;
+    if(s.getaway) return `Get away to ${s.name}!`;
     if(K==='hotcar') return s.k==='steal'?'Walk up to the car with the 🔑 and take it.':`Get it to ${s.name} (the chop shop).`; if(K==='taxi') return s.k==='pickup'?`Pick up your fare at ${s.name}.`:`Drive them to ${s.name}.`;
     const n=a.steps.filter(x=>x.k==='drop').length, i=a.steps.slice(0,a.step+1).filter(x=>x.k==='drop').length; return s.k==='pickup'?`Collect the parcel${n>1?'s':''} at ${s.name}.`:`Drop ${n>1?`parcel ${i} of ${n}`:'it'} at ${s.name}.`; },
   // the way to the stop: the blue arrows and the beam, on the nearest road beside it
@@ -7533,34 +7535,47 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
     if(g&&this.a.kind==='taxi'&&s.k==='pickup'){ const px=Math.max(s.x-0.3,Math.min(s.x+s.w+0.3,g.gx+0.5)), py=Math.max(s.y-0.3,Math.min(s.y+s.h+0.3,g.gy+0.5)); this.paxAt={x:px,y:py}; } },
   // your fare, waiting at the kerb (one of the people on the street)
   people(){ const a=this.a, s=this.step(); if(!a) return this.givers(Drive.T?Drive.T.pos.x:0, Drive.T?Drive.T.pos.y:0); if(a&&s&&s.k==='steal'&&s.car) return { d:0, id:'m:mark', x:s.kx+0.5, y:s.ky+0.5, car:true, m:s.car.m, col:s.car.col, drv:true, a:this.markA||0, tag:'🔑 Your mark' }; /* (the car to take, parked on the street) */
+    if(a&&s&&s.k==='game'&&s.game==='scam'&&s.kx!=null){ const tx=Math.max(s.x-0.3,Math.min(s.x+s.w+0.3,s.kx+0.5)), ty=Math.max(s.y-0.3,Math.min(s.y+s.h+0.3,s.ky+0.5)); return { d:0, id:'m:tourist', x:tx, y:ty, car:false, look:null, tag:'🧳 Tourist' }; }
     if(!a||!this.paxAt) return []; return { d:0, id:'m:pax', x:this.paxAt.x, y:this.paxAt.y, car:false, look:null, tag:'🚕 Your fare' }; },
   // as you drive: the strip, the passenger's hello, and pulling up at the stop
-  tick(x,y){ const a=this.a, s=this.step(); if(!a&&Drive.T){ this.nearGiver(x,y); return; } if(!a||!s||!Drive.T||this.busy) return; const T3=Drive.T, now=Date.now();
+  tick(x,y){ const a=this.a, s=this.step(); if(!a&&Drive.T){ this.nearGiver(x,y); return; } if(!a||!s||!Drive.T||this.busy||this.playing) return; const T3=Drive.T, now=Date.now();
     if(now>a.deadline){ this.fail('time'); return; }
-    if(a.kind==='hotcar'&&this.cops) this.chase(x,y,now);
+    if(this.cops) this.chase(x,y,now); /* (a hot car, or the getaway after a hold-up) */
     if(now<a.start) return; /* (the green light) */
     const off=offEdge({x,y},s); if(a.kind==='taxi'&&s.k==='pickup'&&!this.saidHi&&off<6){ this.saidHi=true; try{ T3.say('m:pax', FARES[a.line%FARES.length].hi); }catch(e){} }
-    const at=(s.kx!=null&&Math.hypot(x-(s.kx+0.5),y-(s.ky+0.5))<=(s.k==='steal'?1.1:1.5))||(s.k!=='cp'&&s.k!=='steal'&&off<=MISSION.near-0.2), mode=T3.pos.mode, want=s.need||'car';
-    if(at&&(s.k==='cp'||s.k==='steal'||T3.kmh()<=12)&&mode===want&&now-this.nearT>(s.k==='cp'?400:1500)){ this.nearT=now; this.arrive(); } /* (a checkpoint counts at any speed) */ },
+    const at=(s.kx!=null&&Math.hypot(x-(s.kx+0.5),y-(s.ky+0.5))<=(s.k==='steal'?1.1:1.5))||(s.k!=='cp'&&s.k!=='steal'&&off<=MISSION.near-(s.k==='game'?0.9:0.2)), mode=T3.pos.mode, want=s.need||'car';
+    if(at&&(s.k==='cp'||s.k==='steal'||s.k==='game'||T3.kmh()<=12)&&mode===want&&now-this.nearT>(s.k==='cp'?400:1500)){ this.nearT=now; this.arrive(); } /* (a checkpoint counts at any speed) */ },
   async arrive(){ if(this.busy) return; this.busy=true; const a=this.a, s=this.step();
     try{ const r=await api('/api/me/missions',{method:'POST',body:{action:'arrive'}}); this.d=r;
       if(r.failed){ this.fail(r.failed,true); return; }
+      if(r.play){ this.a=r.active; this.playGame(r.play, s); return; }
       if(r.next&&a.kind==='race'){ this.a=r.active; sfxCoin(); this.route(); this.paintHud(); return; }
       if(r.next&&a.kind==='hotcar'){ this.a=r.active; await this.takeCar(s); return; }
       if(r.next){ this.a=r.active; if(a.kind==='taxi'){ toast('🚕 They’re in. '+this.say(this.step())); setTimeout(()=>{ try{ Drive.T.say('me', '“'+FARES[a.line%FARES.length].go+'”'); }catch(e){} },1500); } else toast(`📦 ${s.k==='pickup'?'Got it.':'Delivered.'} ${this.say(this.step())}`); sfxCoin(); this.route(); this.paintHud(); return; }
       if(r.done) this.goalsToast(r);
       if(r.done&&r.kind==='race'){ const K=MISSION_KINDS[r.kind]; this.end(); sfxCoin(); toast(`${MEDALS[r.medal]} ${r.secs.toFixed(1)} s! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); try{ Earn.coins(r); }catch(e){} return; }
+      if(r.done&&r.kind==='holdup'){ this.end(); sfxCoin(); toast(`🏪 Got away with it! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); return; }
       if(r.done&&r.kind==='hotcar'){ this.end(); sfxCoin(); toast(`🔑 Sold for parts! +${r.paid.toLocaleString()} coins${r.tip?` (${r.tip.toLocaleString()} for being quick)`:''} · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); setTimeout(()=>this.walkAway(),1500); return; }
       if(r.done){ const K=MISSION_KINDS[r.kind]; this.end(); if(r.kind==='taxi'){ try{ Drive.T.say('me','“'+FARES[a.line%FARES.length].bye+'”'); }catch(e){} }
         sfxCoin(); toast(`${K.icon} Done! +${r.paid.toLocaleString()} coins${r.tip?` (${r.tip.toLocaleString()} tip)`:''} · +${r.xpGot} XP${r.short?' (the treasury was short)':''}`);
         try{ Earn.coins(r); }catch(e){}
         if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); } }
     catch(e){ if(!/not at|yet/i.test(e.message)) toast(e.message); } finally{ this.busy=false; } },
-  fail(why,told){ const a=this.a; if(!a) return; const K=MISSION_KINDS[a.kind]; this.end(); toast(why==='time'?`⏱️ Out of time: the ${K.name.toLowerCase()} is off.`:`${K.icon} ${K.name} called off.`);
+  fail(why,told){ const a=this.a; if(!a) return; const K=MISSION_KINDS[a.kind]; this.end(); toast(why==='time'?`⏱️ Out of time: the ${K.name.toLowerCase()} is off.`:why==='botched'?`${K.icon} Botched: nothing to show for it this time.`:`${K.icon} ${K.name} called off.`);
     if(!told) api('/api/me/missions',{method:'POST',body:{action:'arrive'}}).catch(()=>{}); /* (the server sees the clock ran out and closes it) */ },
   async quit(box){ try{ this.d=await api('/api/me/missions',{method:'POST',body:{action:'quit'}}); }catch(e){ toast(e.message); return; } this.end(); toast('Mission given up.'); if(box&&box.isConnected) this.fill(box); },
   goalsToast(r){ if(r&&r.goalsDone&&r.goalsDone.length) setTimeout(()=>{ toast(r.dailyBonus?`📅 All three of today’s goals done! +${r.dailyBonus.toLocaleString()} coins`:`📅 Goal done: ${r.goalsDone[0]}`); sfxCoin(); },2600); },
-  end(){ this.a=null; this.paxAt=null; this.cops=null; this.trail=null; clearInterval(this.tickT); this.tickT=null; if(DriveMap.dest&&DriveMap.dest.mission) DriveMap.clear(); this.paintHud(); },
+  end(){ this.a=null; this.paxAt=null; this.cops=null; this.trail=null; this.playing=false; this.getaway=false; clearInterval(this.tickT); this.tickT=null; if(DriveMap.dest&&DriveMap.dest.mission) DriveMap.clear(); this.paintHud(); },
+  // a crime mission: you're there, so the game plays right here (the server replays it and scores it, and the take goes by your score)
+  playGame(game, s){ const a=this.a, K=MISSION_KINDS[a.kind]; this.playing=true; try{ Drive.T&&Drive.T.stop(); }catch(e){}
+    openCrimeGame(game, { practiceOnly:true, mission:{ next:a.kind==='holdup'?'🚗 Get away!':'Back to the street' }, at:s.name, band:'mid', chance:0.3, onResult:(res,run)=>this.played(run&&run.id, res) }, crimeCtx()); },
+  async played(run, res){ this.playing=false; if(!run||!this.a) return; const a=this.a; this.busy=true;
+    try{ const r=await api('/api/me/missions',{method:'POST',body:{action:'arrive',run}}); this.d=r;
+      if(r.failed){ this.fail(r.failed,true); return; }
+      if(r.next){ this.a=r.active; this.route(); this.paintHud(); this.trail=[]; this.cops=[]; this.copsAt=Date.now()+MISSION.hotcar.after*1000; this.near0=0; this.getaway=true; /* the alarm's gone: the police are on their way */
+        setTimeout(()=>{ toast('🚨 The alarm’s gone! Get to your car and get away.'); try{ if(Drive.T&&Drive.T.pos.mode==='walk') Drive.callCar(); }catch(e){} },400); return; }
+      if(r.done){ this.goalsToast(r); this.end(); sfxCoin(); toast(`${MISSION_KINDS[r.kind].icon} The take: +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); } }
+    catch(e){ toast(e.message); } finally{ this.busy=false; } },
   // the hot car: in you get (the street again, in that car), and the police come after you
   async takeCar(s){ const c0=s.car||{m:'sports',col:'#C8382E'}, CM=CAR_MODELS[c0.m]||{name:'car'}, p=Drive.T&&Drive.T.pos; toast('🔑 You’re in. Go! The police are on their way.'); sfxCoin();
     Drive.close(true); await Drive.start({ mode:'car', x:s.kx+0.5, y:s.ky+0.5, a:this.markA||0, car:{ m:c0.m, col:c0.col, kind:c0.m, name:'stolen '+String(CM.name||'car').toLowerCase(), own:true } }); /* (own: it stays parked if you hop out) */
@@ -7576,7 +7591,7 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
     const slow=Drive.T&&Drive.T.kmh()<8; if(close&&slow){ this.near0=this.near0||now; if(now-this.near0>H0.caught*1000) this.busted(); } else this.near0=0;
     if(tr.length>4000) tr.splice(0,1000); },
   services(){ return (this.cops||[]).filter(c=>!c.gone&&c.x!=null).map((c,i)=>({ id:'m:cop'+i, type:'police', x:c.x, y:c.y, a:c.a, col:'#F4F4F0', siren:true })); },
-  async busted(){ if(!this.a) return; this.end(); toast('🚓 Busted! The police took the car back.'); try{ await api('/api/me/missions',{method:'POST',body:{action:'quit'}}); }catch(e){} setTimeout(()=>this.walkAway(),1200); },
+  async busted(){ if(!this.a) return; const ga=this.getaway; this.end(); this.getaway=ga; toast(this.getaway?'🚓 Busted! The police caught you with the takings.':'🚓 Busted! The police took the car back.'); try{ await api('/api/me/missions',{method:'POST',body:{action:'quit'}}); }catch(e){} if(!ga) setTimeout(()=>this.walkAway(),1200); this.getaway=false; },
   // after a hot car: out of it and on foot (it's gone, one way or the other)
   async walkAway(){ const p=Drive.T&&Drive.T.pos; if(!p) return; Drive.close(true); await Drive.start({ mode:'walk', x:p.x, y:p.y, a:p.a }); },
   // people with work going: a ❗ over their head outside some of the businesses near you (only while you're not on a

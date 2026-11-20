@@ -22,14 +22,17 @@ export const MISSIONS = {
   taxi: { name: 'Taxi fare', icon: '🚕', side: 'work', rank: 0, live: true, blurb: 'Someone is waiting at the kerb. Pick them up and drive them where they need to go.' },
   race: { name: 'Street race', icon: '🏁', side: 'work', rank: 1, live: true, blurb: 'Through the checkpoints on the town\'s own streets, against the clock. Beat the gold time for the top prize.' },
   hotcar: { name: 'Hot car', icon: '🔑', side: 'crime', rank: 1, live: true, blurb: 'A car someone wants is parked in town. Walk up to it, take it, and get it to the chop shop before the police catch you.' },
-  holdup: { name: 'Store hold-up', icon: '🏪', side: 'crime', rank: 2, live: false, blurb: 'Walk into a real store, empty the till, and get away before the police arrive.' },
-  heist: { name: 'Crew jobs (heists)', icon: '🕶️', side: 'crime', rank: 3, live: false, blurb: 'Plan a job with your crew: the armoured truck, the Mayor, a jailbreak, the bank.' },
+  holdup: { name: 'Store hold-up', icon: '🏪', side: 'crime', rank: 2, live: true, blurb: 'Walk into a real store in town, sneak to the till and empty it, then get away in your car with the police after you.' },
+  con: { name: 'Con a tourist', icon: '🎭', side: 'crime', rank: 2, live: true, blurb: 'A tourist is standing about in town. Walk up and sell them a "genuine" moon rock.' },
+  atm: { name: 'ATM hack', icon: '🏧', side: 'crime', rank: 3, live: true, blurb: 'Walk up to the cash machine outside a Bank, rewire it and tap in the code.' },
+  heist: { name: 'Crew jobs (heists)', icon: '🕶️', side: 'crime', rank: 3, live: true, link: 'crime', blurb: 'Plan a job with your crew: the armoured truck, the Mayor, a jailbreak, the bank. Planned from the Crime tab on your card.' },
   police: { name: 'Police patrol', icon: '🚓', side: 'work', rank: 3, live: false, blurb: 'Get paid to stop real crimes as they happen, against real players.' },
   bounty: { name: 'Bounties', icon: '🎯', side: 'crime', rank: 4, live: false, blurb: 'Put a price on someone, or hunt the ones on the board.' },
   turf: { name: 'Turf', icon: '🏴', side: 'crime', rank: 5, live: false, blurb: 'Take city blocks for your crew. The shops there pay you every hour.' },
 };
 export const MISSION_IDS = Object.keys(MISSIONS);
 export const openAt = (kind, xp) => !!MISSIONS[kind] && MISSIONS[kind].live && rankOf(xp) >= MISSIONS[kind].rank;
+export const GAME_OF = { holdup: 'rob', con: 'scam', atm: 'atm' }; /* the mini game each crime mission plays when you get there */
 // what a rank opens (for the "You're now a Runner" card)
 export const unlocksAt = rank => MISSION_IDS.filter(k => MISSIONS[k].rank === rank);
 
@@ -44,6 +47,7 @@ export const MISSION = {
   xp: { parcel: { base: 22, perTile: 0.25 }, taxi: { base: 26, perTile: 0.25 } },
   race: { checkpoints: 5, leg: [9, 17], gold: 2.6, silver: 2.1, bronze: 1.6, pay: { base: 70, perTile: 3.2, max: 650 }, medal: { gold: 1, silver: 0.65, bronze: 0.4 }, xp: { base: 30, perTile: 0.3 }, countdown: 3 },
   hotcar: { pay: { base: 160, perTile: 4.2, max: 900 }, xp: { base: 40, perTile: 0.3 }, cars: ['sports', 'gt', 'luxury', 'supercar', 'evsedan', 'suv'], police: 2, after: 6, speed: [2.6, 3.3], lose: 42, catch: 0.9, caught: 2.5 },
+  game: { holdup: { base: 260, perTile: 3.6, max: 900, xp: 55 }, con: { base: 190, xp: 40 }, atm: { base: 340, xp: 60 }, extra: 150, botched: 0.15 }, /* (a crime mission plays the shop, the con or the ATM game right there: pay by how well you played) */
   tip: 0.5,                   // up to half the fare again for arriving with lots of time left
   quitCooldown: 20000,        // after giving up on one, a short wait before the next
 };
@@ -66,8 +70,8 @@ export const atStop = (p, s) => (s.kx != null && Math.hypot(p.x - (s.kx + 0.5), 
 // Today's three goals: small things to aim for each day, from the missions you have open, with a bonus for all three.
 export const DAILY = { bonus: { base: 250, perRank: 150, xp: 60 } };
 export function dailyGoals(seed, xp) { let h = (seed >>> 0) || 1; const r = () => { h = (h + 0x6D2B79F5) >>> 0; let t = h; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-  const rank = rankOf(xp), open = MISSION_IDS.filter(k => openAt(k, xp)), pool = [];
-  for (const k of open) pool.push({ k: 'do', kind: k, need: k === 'race' || k === 'hotcar' ? 1 : 2 });
+  const rank = rankOf(xp), open = MISSION_IDS.filter(k => openAt(k, xp) && !MISSIONS[k].link), pool = [];
+  for (const k of open) pool.push({ k: 'do', kind: k, need: k === 'parcel' || k === 'taxi' ? 2 : 1 });
   pool.push({ k: 'earn', need: 300 + 200 * rank });
   if (open.includes('race')) pool.push({ k: 'medal', need: 1 });
   const out = []; while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(r() * pool.length), 1)[0]);

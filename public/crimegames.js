@@ -54,13 +54,14 @@ function intro(root, kind, info) {
   const tiles = $c('div', { class: 'mgtiles' },
     tile('Difficulty', pips, null),
     info.chance ? tile('Chance', $c('b', { text: `${pct}%` }), police) : tile('Setting', $c('b', { text: `${setting}/40` }), police || null),
-    heist ? tile('Your part', $c('b', { text: '/60' }), null) : info.usual ? tile('Pays', $c('b', { text: `${fmt(info.usual[0] / 1000)}k–${fmt(info.usual[1] / 1000)}k` }), !heist && info.hot > 1 ? `🔥 ×${info.hot.toFixed(2)}` : null) : tile('Score', $c('b', { text: '/60' }), 'practice'));
+    heist ? tile('Your part', $c('b', { text: '/60' }), null) : info.usual ? tile('Pays', $c('b', { text: `${fmt(info.usual[0] / 1000)}k–${fmt(info.usual[1] / 1000)}k` }), !heist && info.hot > 1 ? `🔥 ×${info.hot.toFixed(2)}` : null) : tile('Score', $c('b', { text: '/60' }), info.mission ? 'the take goes by it' : 'practice'));
   const more = $c('details', { class: 'mgmore' }, $c('summary', { text: 'How to play' }), $c('ul', null, ...I.how.map(t => $c('li', { text: t }))));
   const go = (practice) => { markTried(kind); root.classList.remove('intro'); begin(root, kind, info, practice); };
   const btns = $c('div', { class: 'mgbtns2' },
-    heist ? $c('button', { class: 'mgb hot big', text: '🎯 Play my part now', onclick: () => go(false) })
+    info.mission ? $c('button', { class: 'mgb hot big', text: '🎯 Do it', onclick: () => go(true) }) /* (a mission: played here and now; the mission pays by your score) */
+    : heist ? $c('button', { class: 'mgb hot big', text: '🎯 Play my part now', onclick: () => go(false) })
       : info.practiceOnly ? null : $c('button', { class: 'mgb hot big', text: real ? '🎯 Do it for real' : info.blocked, disabled: real ? null : '', onclick: () => real && go(false) }),
-    showPractice ? $c('button', { class: info.practiceOnly ? 'mgb hot big' : 'mgb soft', text: info.practiceOnly ? '▶ Practise (free)' : '▶ Practise first (free)', onclick: () => go(true) }) : null);
+    showPractice && !info.mission ? $c('button', { class: info.practiceOnly ? 'mgb hot big' : 'mgb soft', text: info.practiceOnly ? '▶ Practise (free)' : '▶ Practise first (free)', onclick: () => go(true) }) : null);
   const left = heist ? $c('p', { class: 'mgleft2', text: '' }) : null;
   root.append($c('div', { class: 'mgcard mgintro inked' },
     $c('button', { class: 'mgx', 'aria-label': 'Close', text: '×', onclick: close }),
@@ -80,7 +81,7 @@ function play(root, kind, L, run, info) {
   const finish = async log => { root._stop && root._stop(); root.innerHTML = ''; root.append($c('div', { class: 'mgcard' }, $c('p', { class: 'mghint', text: 'Counting up…' })));
     let r; try { r = await X.api('/api/me/crime/finish', { method: 'POST', body: { runId: run.id, log } }); } catch (e) { X.toast(e.message); close(); return; }
     if (r.heistId) { heistWait(root, kind, info, r); return; }
-    result(root, kind, info, run, r); if (!run.practice) X.done && X.done(r); };
+    result(root, kind, info, run, r); if (!run.practice) X.done && X.done(r); if (info.onResult) info.onResult(r, run); };
   const g = MG.GAMES[kind];
   if (g === 'stealth') stealth(root, L, finish); else if (g === 'con') con(root, L, finish); else if (g === 'atm') atm(root, L, finish, kind);
   else if (g === 'drive') drive(root, L, finish); else if (g === 'safe') safe(root, L, finish); else if (g === 'lookout') lookout(root, L, finish); else if (g === 'breakout') breakout(root, L, finish);
@@ -111,10 +112,10 @@ function heistWait(root, kind, info, r) {
 function result(root, kind, info, run, r) {
   root.innerHTML = ''; const good = r.outcome === 'clean' || r.outcome === 'partial', bad = r.outcome === 'fined' || r.outcome === 'jailed';
   const bar = (label, v, max, cls) => $c('div', { class: 'mgbar' }, $c('span', { text: label }), $c('div', { class: 'mgtrack' }, $c('i', { class: cls, style: `width:${Math.round(v / max * 100)}%` })), $c('b', { text: `${v}/${max}` }));
-  const money = r.practice && ROLE(kind) ? `Your part: ${r.score.play} of 60. ${r.score.play >= 45 ? 'The crew will be glad of you.' : r.score.play >= 12 ? 'Good enough to get away.' : 'Play like that on the job and you\'d be caught.'}` : r.practice ? (r.practiceLoot ? `For real, that would have paid about ${X.fmt(r.practiceLoot)} coins.` : bad ? 'For real, you\'d have been caught.' : 'For real, you\'d have got away with nothing.')
+  const money = info.mission ? `Your play: ${r.score.play} of 60. ${r.score.play >= 9 ? 'The better you played, the bigger the take.' : 'That botched the job.'}` : r.practice && ROLE(kind) ? `Your part: ${r.score.play} of 60. ${r.score.play >= 45 ? 'The crew will be glad of you.' : r.score.play >= 12 ? 'Good enough to get away.' : 'Play like that on the job and you\'d be caught.'}` : r.practice ? (r.practiceLoot ? `For real, that would have paid about ${X.fmt(r.practiceLoot)} coins.` : bad ? 'For real, you\'d have been caught.' : 'For real, you\'d have got away with nothing.')
     : r.money ? `+${X.fmt(r.money)} coins` : r.fine ? `Fined ${X.fmt(r.fine)} coins${r.jailed ? ` and jailed for ${Math.round(r.jailFor / 60000)} minutes` : ''}.` : 'No money this time.';
   root.append($c('div', { class: 'mgcard res ' + (good ? 'good' : bad ? 'bad' : 'meh') },
-    $c('div', { class: 'mgicon', text: good ? '💰' : bad ? '🚓' : '🫥' }), $c('h2', { text: (r.practice ? 'Practice: ' : '') + r.title }),
+    $c('div', { class: 'mgicon', text: good ? '💰' : bad ? '🚓' : '🫥' }), $c('h2', { text: (r.practice && !info.mission ? 'Practice: ' : '') + r.title }),
     r.game && r.game.invalid ? $c('p', { class: 'mghint', text: 'That game didn\'t add up, so it counts as a botched job.' }) : null,
     bar('Your play', r.score.play, 60, 'p'), bar('The setting', r.score.setting, 40, 's'), $c('div', { class: 'mgtotal' }, $c('span', { text: 'Score' }), $c('b', { text: `${r.score.total}` })),
     $c('p', { class: 'mgmoney', text: money }),
@@ -152,6 +153,7 @@ function progress(r) {
 function againRow(root, kind, info, run, r) {
   const row = $c('div', { class: 'mgbtns' });
   if (r.jailed) { row.append($c('button', { class: 'mgb hot', text: 'Back to the map', onclick: close })); return row; }
+  if (info.mission) { row.append($c('button', { class: 'mgb hot', text: info.mission.next || 'Back to the street', onclick: close })); return row; } /* (a mission carries on out there) */
   const go = $c('button', { class: 'mgb hot', text: run.practice ? '🔁 Practise again' : '🔁 Go again', onclick: () => { if (!go.disabled) begin(root, kind, info, !!run.practice); } });
   row.append($c('button', { class: 'mgb', text: 'Done', onclick: close }), go);
   // the countdown: the seconds tick down on the button, which fills up as they go; it starts once the button is on screen

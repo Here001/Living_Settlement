@@ -1330,7 +1330,7 @@ body.room-on .toast,body.room-on .rsheet-bg.rreport{z-index:9700}
 .phmissions{padding:6px 12px 20px;overflow:auto;height:100%;box-sizing:border-box}
 .mhud{position:absolute;top:calc(62px + env(safe-area-inset-top));left:12px;max-width:min(64%,340px);background:rgba(20,18,16,.78);color:#fff;border-radius:14px;padding:8px 12px;z-index:5;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.3)}
 .mhud .mhrow{display:flex;justify-content:space-between;gap:10px;align-items:center}.mhud .mclock{font-variant-numeric:tabular-nums;font-weight:800;color:#F2C94C}.mhud.late .mclock{color:#FF6B5B;animation:mgpop .5s ease-out infinite alternate}
-.mhud .mhtxt{font-weight:700;font-size:13.5px;line-height:1.3;margin:2px 0 1px}.mhud small{opacity:.75;font-size:11.5px}
+.mhud.mgo2 .mclock{font-size:28px;color:#fff}.mhud .mhtxt{font-weight:700;font-size:13.5px;line-height:1.3;margin:2px 0 1px}.mhud small{opacity:.75;font-size:11.5px}
 .bxobj{position:absolute;top:calc(58px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);max-width:calc(100% - 24px);background:rgba(20,18,16,.62);color:#fff;border-radius:12px;padding:5px 12px;font-weight:800;font-size:14px;text-align:center;pointer-events:none;z-index:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bxsub{position:absolute;left:140px;right:140px;bottom:calc(26px + env(safe-area-inset-bottom));display:flex;flex-direction:column-reverse;gap:4px;align-items:center;pointer-events:none;z-index:2;text-align:center}.bxsub .aline{background:rgba(0,0,0,.55);font-size:14px}
 .bxmap{position:absolute;left:14px;bottom:calc(14px + env(safe-area-inset-bottom));width:118px;height:118px;border-radius:50%;pointer-events:none;z-index:2;box-shadow:0 3px 10px rgba(0,0,0,.35)}
@@ -1440,7 +1440,7 @@ import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
-import { MISSIONS as MISSION_KINDS, MISSION, FARES, offEdge } from '/shared/missions.js'; /* (the kerb check is atStop on the server) */
+import { MISSIONS as MISSION_KINDS, MISSION, FARES, MEDALS, offEdge } from '/shared/missions.js'; /* (the kerb check is atStop on the server) */
 import { WEAPONS as ARENA_W } from '/shared/brawl.js';
 import { TRAIN_OF } from '/shared/fights.js';
 import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, BIZ_CATS, bizTab, bizSize, roomSize, canEnter, canTurnOnWall, footOf, placeProblem, resaleOf, layoutOf, styleOf, photoAspect } from '/shared/furniture.js';
@@ -7516,28 +7516,37 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
   async goOut(){ this.close(); if(!Drive.el) await Drive.start(); const t0=Date.now(); while(Drive.el&&!(Drive.T)&&Date.now()-t0<15000) await new Promise(r=>setTimeout(r,200)); if(!Drive.T) return false;
     if(this.a) this.route(); return true; },
   async start(kind){ if(this.busy) return; this.busy=true;
-    try{ const wasOut=!!Drive.T; if(!(await this.goOut())) return; if(Drive.T.pos.mode==='walk'||Drive.riding){ toast('🚗 Get in a car first: this one’s driving.'); return; }
+    try{ const wasOut=!!Drive.T; if(!(await this.goOut())) return; if((Drive.T.pos.mode==='walk'&&kind!=='hotcar')||Drive.riding){ toast('🚗 Get in a car first: this one’s driving.'); return; }
       if(!wasOut) await new Promise(r=>setTimeout(r,1200)); /* (the town tells the server where you are a moment after you go out) */
       const r=await api('/api/me/missions',{method:'POST',body:{action:'start',kind}}); this.close(); Phone.hide(); this.d=r; this.begin(r.active);
       const K=MISSION_KINDS[kind]; toast(`${K.icon} ${K.name}: ${this.say(this.step())}`); }
     catch(e){ toast(e.message); } finally{ this.busy=false; } },
-  begin(a){ this.a=a; this.saidHi=false; this.route(); this.paintHud(); clearInterval(this.tickT); this.tickT=setInterval(()=>this.paintHud(),1000); },
-  say(s){ const a=this.a, K=a&&a.kind; if(!s) return ''; if(K==='taxi') return s.k==='pickup'?`Pick up your fare at ${s.name}.`:`Drive them to ${s.name}.`;
+  begin(a){ this.a=a; this.saidHi=false; this.route(); this.paintHud(); clearInterval(this.tickT); this.tickT=setInterval(()=>this.paintHud(),a.kind==='race'?100:1000); },
+  say(s){ const a=this.a, K=a&&a.kind; if(!s) return ''; if(K==='race'){ const n=a.steps.length; return a.step>=n-1?'Through the finish!':`Checkpoint ${a.step+1} of ${n}`; }
+    if(K==='hotcar') return s.k==='steal'?'Walk up to the car with the 🔑 and take it.':`Get it to ${s.name} (the chop shop).`; if(K==='taxi') return s.k==='pickup'?`Pick up your fare at ${s.name}.`:`Drive them to ${s.name}.`;
     const n=a.steps.filter(x=>x.k==='drop').length, i=a.steps.slice(0,a.step+1).filter(x=>x.k==='drop').length; return s.k==='pickup'?`Collect the parcel${n>1?'s':''} at ${s.name}.`:`Drop ${n>1?`parcel ${i} of ${n}`:'it'} at ${s.name}.`; },
   // the way to the stop: the blue arrows and the beam, on the nearest road beside it
   route(){ const s=this.step(); if(!s||!Drive.T) return; if(s.kx!=null) DriveMap.go(s.kx, s.ky, {quiet:true, mission:true, name:s.name}); else DriveMap.go(s.x+Math.floor(s.w/2), s.y+Math.floor(s.h/2), {quiet:true, mission:true, name:s.name}); const g=DriveMap.dest; this.paxAt=null; /* (to the kerb beside it) */
     if(g&&this.a.kind==='taxi'&&s.k==='pickup'){ const px=Math.max(s.x-0.3,Math.min(s.x+s.w+0.3,g.gx+0.5)), py=Math.max(s.y-0.3,Math.min(s.y+s.h+0.3,g.gy+0.5)); this.paxAt={x:px,y:py}; } },
   // your fare, waiting at the kerb (one of the people on the street)
-  people(){ const a=this.a; if(!a||!this.paxAt) return null; return { d:0, id:'m:pax', x:this.paxAt.x, y:this.paxAt.y, car:false, look:null, tag:'🚕 Your fare' }; },
+  people(){ const a=this.a, s=this.step(); if(a&&s&&s.k==='steal'&&s.car) return { d:0, id:'m:mark', x:s.kx+0.5, y:s.ky+0.5, car:true, m:s.car.m, col:s.car.col, drv:true, a:this.markA||0, tag:'🔑 Your mark' }; /* (the car to take, parked on the street) */
+    if(!a||!this.paxAt) return null; return { d:0, id:'m:pax', x:this.paxAt.x, y:this.paxAt.y, car:false, look:null, tag:'🚕 Your fare' }; },
   // as you drive: the strip, the passenger's hello, and pulling up at the stop
   tick(x,y){ const a=this.a, s=this.step(); if(!a||!s||!Drive.T||this.busy) return; const T3=Drive.T, now=Date.now();
     if(now>a.deadline){ this.fail('time'); return; }
+    if(a.kind==='hotcar'&&this.cops) this.chase(x,y,now);
+    if(now<a.start) return; /* (the green light) */
     const off=offEdge({x,y},s); if(a.kind==='taxi'&&s.k==='pickup'&&!this.saidHi&&off<6){ this.saidHi=true; try{ T3.say('m:pax', FARES[a.line%FARES.length].hi); }catch(e){} }
-    const at=(s.kx!=null&&Math.hypot(x-(s.kx+0.5),y-(s.ky+0.5))<=1.5)||off<=MISSION.near-0.2; if(at&&T3.kmh()<=12&&T3.pos.mode==='car'&&now-this.nearT>1500){ this.nearT=now; this.arrive(); } },
+    const at=(s.kx!=null&&Math.hypot(x-(s.kx+0.5),y-(s.ky+0.5))<=(s.k==='steal'?1.1:1.5))||(s.k!=='cp'&&s.k!=='steal'&&off<=MISSION.near-0.2), mode=T3.pos.mode, want=s.need||'car';
+    if(at&&(s.k==='cp'||s.k==='steal'||T3.kmh()<=12)&&mode===want&&now-this.nearT>(s.k==='cp'?400:1500)){ this.nearT=now; this.arrive(); } /* (a checkpoint counts at any speed) */ },
   async arrive(){ if(this.busy) return; this.busy=true; const a=this.a, s=this.step();
     try{ const r=await api('/api/me/missions',{method:'POST',body:{action:'arrive'}}); this.d=r;
       if(r.failed){ this.fail(r.failed,true); return; }
+      if(r.next&&a.kind==='race'){ this.a=r.active; sfxCoin(); this.route(); this.paintHud(); return; }
+      if(r.next&&a.kind==='hotcar'){ this.a=r.active; await this.takeCar(s); return; }
       if(r.next){ this.a=r.active; if(a.kind==='taxi'){ toast('🚕 They’re in. '+this.say(this.step())); setTimeout(()=>{ try{ Drive.T.say('me', '“'+FARES[a.line%FARES.length].go+'”'); }catch(e){} },1500); } else toast(`📦 ${s.k==='pickup'?'Got it.':'Delivered.'} ${this.say(this.step())}`); sfxCoin(); this.route(); this.paintHud(); return; }
+      if(r.done&&r.kind==='race'){ const K=MISSION_KINDS[r.kind]; this.end(); sfxCoin(); toast(`${MEDALS[r.medal]} ${r.secs.toFixed(1)} s! +${r.paid.toLocaleString()} coins · +${r.xpGot} XP`); if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); try{ Earn.coins(r); }catch(e){} return; }
+      if(r.done&&r.kind==='hotcar'){ this.end(); sfxCoin(); toast(`🔑 Sold for parts! +${r.paid.toLocaleString()} coins${r.tip?` (${r.tip.toLocaleString()} for being quick)`:''} · +${r.xpGot} XP`); try{ Earn.coins(r); }catch(e){} if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); setTimeout(()=>this.walkAway(),1500); return; }
       if(r.done){ const K=MISSION_KINDS[r.kind]; this.end(); if(r.kind==='taxi'){ try{ Drive.T.say('me','“'+FARES[a.line%FARES.length].bye+'”'); }catch(e){} }
         sfxCoin(); toast(`${K.icon} Done! +${r.paid.toLocaleString()} coins${r.tip?` (${r.tip.toLocaleString()} tip)`:''} · +${r.xpGot} XP${r.short?' (the treasury was short)':''}`);
         try{ Earn.coins(r); }catch(e){}
@@ -7546,11 +7555,31 @@ const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false,
   fail(why,told){ const a=this.a; if(!a) return; const K=MISSION_KINDS[a.kind]; this.end(); toast(why==='time'?`⏱️ Out of time: the ${K.name.toLowerCase()} is off.`:`${K.icon} ${K.name} called off.`);
     if(!told) api('/api/me/missions',{method:'POST',body:{action:'arrive'}}).catch(()=>{}); /* (the server sees the clock ran out and closes it) */ },
   async quit(box){ try{ this.d=await api('/api/me/missions',{method:'POST',body:{action:'quit'}}); }catch(e){ toast(e.message); return; } this.end(); toast('Mission given up.'); if(box&&box.isConnected) this.fill(box); },
-  end(){ this.a=null; this.paxAt=null; clearInterval(this.tickT); this.tickT=null; if(DriveMap.dest&&DriveMap.dest.mission) DriveMap.clear(); this.paintHud(); },
+  end(){ this.a=null; this.paxAt=null; this.cops=null; this.trail=null; clearInterval(this.tickT); this.tickT=null; if(DriveMap.dest&&DriveMap.dest.mission) DriveMap.clear(); this.paintHud(); },
+  // the hot car: in you get (the street again, in that car), and the police come after you
+  async takeCar(s){ const c0=s.car||{m:'sports',col:'#C8382E'}, CM=CAR_MODELS[c0.m]||{name:'car'}, p=Drive.T&&Drive.T.pos; toast('🔑 You’re in. Go! The police are on their way.'); sfxCoin();
+    Drive.close(true); await Drive.start({ mode:'car', x:s.kx+0.5, y:s.ky+0.5, a:this.markA||0, car:{ m:c0.m, col:c0.col, kind:c0.m, name:'stolen '+String(CM.name||'car').toLowerCase(), own:true } }); /* (own: it stays parked if you hop out) */
+    this.trail=[]; this.cops=[]; this.copsAt=Date.now()+MISSION.hotcar.after*1000; this.near0=0; },
+  // the police follow your own path along the roads (never through a building), a little slower than you can go flat out
+  chase(x,y,now){ const H0=MISSION.hotcar, tr=this.trail; const last=tr[tr.length-1]; if(!last||Math.hypot(x-last.x,y-last.y)>=0.2) tr.push({x,y,S:(last?last.S+Math.hypot(x-last.x,y-last.y):0)}); const S=tr[tr.length-1].S;
+    if(!this.cops.length&&now>=this.copsAt){ for(let i=0;i<H0.police;i++) this.cops.push({ s:S-16-i*4, v:H0.speed[0] }); toast('🚨 The police are after you! Lose them, or get to the chop shop.'); } /* (they come from a dozen tiles back: before your path starts, behind where the car was parked) */
+    const dt=Math.min(0.1,(now-(this.copT||now))/1000) /* (the same step the 3D view takes per frame) */; this.copT=now; let close=false;
+    for(const c of this.cops){ if(c.gone) continue; c.v=Math.min(H0.speed[1],c.v+dt*0.02); c.s=Math.min(S,c.s+c.v*dt); if(S-c.s>H0.lose){ c.gone=true; toast('🚓 You lost one of them!'); continue; } if(S-c.s<H0.catch) close=true;
+      if(c.s<0){ const h=this.markA||0, ux=Math.cos(h), uy=-Math.sin(h); c.x=tr[0].x-ux*(-c.s); c.y=tr[0].y-uy*(-c.s); c.a=h; continue; } /* (still coming up the road behind) */
+      let k=tr.length-1; while(k>0&&tr[k-1].S>c.s) k--; const A=tr[Math.max(0,k-1)], B=tr[k], u=B.S>A.S?(c.s-A.S)/(B.S-A.S):0; c.x=A.x+(B.x-A.x)*u; c.y=A.y+(B.y-A.y)*u; c.a=Math.atan2(-(B.y-A.y),B.x-A.x); }
+    if(this.cops.length&&this.cops.every(c=>c.gone)){ /* lost them all */ }
+    const slow=Drive.T&&Drive.T.kmh()<8; if(close&&slow){ this.near0=this.near0||now; if(now-this.near0>H0.caught*1000) this.busted(); } else this.near0=0;
+    if(tr.length>4000) tr.splice(0,1000); },
+  services(){ return (this.cops||[]).filter(c=>!c.gone&&c.x!=null).map((c,i)=>({ id:'m:cop'+i, type:'police', x:c.x, y:c.y, a:c.a, col:'#F4F4F0', siren:true })); },
+  async busted(){ if(!this.a) return; this.end(); toast('🚓 Busted! The police took the car back.'); try{ await api('/api/me/missions',{method:'POST',body:{action:'quit'}}); }catch(e){} setTimeout(()=>this.walkAway(),1200); },
+  // after a hot car: out of it and on foot (it's gone, one way or the other)
+  async walkAway(){ const p=Drive.T&&Drive.T.pos; if(!p) return; Drive.close(true); await Drive.start({ mode:'walk', x:p.x, y:p.y, a:p.a }); },
   // the strip at the top of the street view: what to do now, the clock, the fare
   paintHud(){ const root=Drive.el; if(!root||!this.a){ if(this.hud){ this.hud.remove(); this.hud=null; } return; }
     if(!this.hud||!this.hud.isConnected){ this.hud=el('div',{class:'mhud'}); root.append(this.hud); }
-    const a=this.a, K=MISSION_KINDS[a.kind], left=Math.max(0,Math.ceil((a.deadline-Date.now())/1000)), t=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`, txt=this.say(this.step());
+    const a=this.a, K=MISSION_KINDS[a.kind], now=Date.now(), left=Math.max(0,Math.ceil((a.deadline-now)/1000)), t=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`, txt=this.say(this.step());
+    if(a.kind==='race'){ const go=now<a.start?Math.ceil((a.start-now)/1000):0, el2=Math.max(0,(now-a.start)/1000), key=a.id+a.step+(go||Math.floor(el2*10)); if(this.hud.dataset.k===key) return; this.hud.dataset.k=key; this.hud.classList.toggle('late',left<=10);
+      const T0=a.times||{}; this.hud.replaceChildren(el('div',{class:'mhrow'}, el('b',{text:`🏁 ${go?'Get ready…':txt}`}), el('span',{class:'mclock',text:go?String(go):`${el2.toFixed(1)} s`})), el('small',{text:`🥇 ${T0.gold} s · 🥈 ${T0.silver} s · 🥉 ${T0.bronze} s`})); this.hud.classList.toggle('mgo2',!!go); return; }
     const key=a.id+a.step+t; if(this.hud.dataset.k===key) return; this.hud.dataset.k=key; this.hud.classList.toggle('late',left<=20);
     this.hud.replaceChildren(el('div',{class:'mhrow'}, el('b',{text:`${K.icon} ${K.name}`}), el('span',{class:'mclock',text:`⏱ ${t}`})), el('div',{class:'mhtxt',text:txt}), el('small',{text:`💰 ${a.fare.toLocaleString()} + a tip if you’re quick`})); },
   // back out on the street with a mission still on: the way to the stop again
@@ -7776,7 +7805,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     let c=myCitizen(); if(!c&&Me.handle){ try{ const d=await loadDetail(Me.handle); if(d){ c=normC(d); S.citizens.set(c.id,c); } }catch(e){} } /* (you, even if the map hasn't loaded your part of town) */
     if(!c||(!c.home&&!(at&&at.x!=null))){ toast('Your colonist needs a home before they can drive about.'); return; }
     const st=citizenAt(c,gmNow()); if(st&&st.bid&&String(st.where||'').toLowerCase().includes('jail')){ toast('You can’t drive while you’re in jail.'); return; }
-    const here=st||{ x:bOf(c.home).x+1, y:bOf(c.home).y+1 }, s=at&&at.x!=null?{x:at.x,y:at.y,a:at.a||0}:this.startAt(here.x,here.y), car=at&&at.boat?at.boat:this.ride(c); /* at: back in the car where you parked it */
+    const here=st||{ x:bOf(c.home).x+1, y:bOf(c.home).y+1 }, s=at&&at.x!=null?{x:at.x,y:at.y,a:at.a||0}:this.startAt(here.x,here.y), car=at&&at.boat?at.boat:at&&at.car?at.car:this.ride(c); /* at.car: a car that isn't yours (a hot car) */ /* at: back in the car where you parked it */
     if(!(at&&at.boat)&&wet(s.x,s.y)){ let best=null, bd=1e9; for(let r=1;r<=14&&!best;r++) for(let i=-r;i<=r;i++) for(let j=-r;j<=r;j++){ if(Math.max(Math.abs(i),Math.abs(j))!==r) continue; const tx=Math.floor(s.x)+i, ty=Math.floor(s.y)+j; if(wet(tx,ty)||!walkable(tx,ty)) continue; const d=Math.hypot(i,j); if(d<bd){ bd=d; best=[tx,ty]; } }
       if(best){ s.x=best[0]+0.5; s.y=best[1]+0.5; } } /* never out on the water (only in your boat): the nearest dry land */
     this.send({type:'ride',a:'leave'}); /* (in case the server still has you in someone's car) */
@@ -7817,6 +7846,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     for(const v of D.vehicles.values()){ if(Math.abs(v.x-x)>30||Math.abs(v.y-y)>30) continue; const V=VEHICLE_TYPES[v.type]; if(!V||V.mode==='water'||V.mode==='air'||v.owner) continue;
       let st=null; try{ st=roam(v.id,v.x,v.y,gm,V,false); }catch(e){} if(!st) continue; out.push({ id:'v:'+v.id, type:v.type, x:st.x, y:st.y, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, col:V.colors[hash(v.id)%V.colors.length], siren:v.type==='police'&&Math.floor(gm/LEG)%5===0 }); }
     try{ let i=0; for(const r of responders(gm)){ i++; if(Math.abs(r.st.x-x)>30||Math.abs(r.st.y-y)>30) continue; out.push({ id:'r:'+i+':'+key(r.V), type:key(r.V), x:r.st.x, y:r.st.y, a:r.st.dx!=null?Math.atan2(-r.st.dy,r.st.dx):null, col:r.V.colors[0], siren:!!r.siren }); } }catch(e){}
+    for(const v of Missions.services()) out.unshift(v); /* (the police after you, on a hot car) */
     const road=out.slice(0,40);
     /* boats on the water and aircraft in the sky, where the map has them now (everyone's own ones too), and the boats out on the colony's water */
     try{ for(const v of D.vehicles.values()){ const V=VEHICLE_TYPES[v.type]; if(!V||(V.mode!=='water'&&V.mode!=='air')||Math.abs(v.x-x)>45||Math.abs(v.y-y)>45) continue; const st=V.mode==='water'?sailRoam(v.id,v.x,v.y,gm,V):skyRoam(v.id,v.x,v.y,gm,V); if(!st) continue;

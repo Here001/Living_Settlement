@@ -12,6 +12,7 @@ import * as M from '../shared/missions.js';
 
 export const LIVE = new Map(); // player id → { x, y, mode, t }: where they are in the 3D town right now
 const day = () => Math.floor(Date.now() / 86400000), FRESH = 15000;
+const CHOP = ['garage', 'workshop', 'warehouse', 'factory', 'carplant', 'canalwarehouses', 'busdepot']; /* where a stolen car gets taken apart */
 const DRIVE = Object.keys(ROAD_TYPES).filter(k => !ROAD_TYPES[k].nocars); /* the roads a car can drive on */
 const Q = (db, sql, args) => (db.q ? db.q(sql, args) : db.query(sql, args)); /* (a change's own connection, or the pool) */
 const nameOf = b => b.name || BUILDING_TYPES[b.type]?.name || 'a building';
@@ -29,25 +30,49 @@ export class Missions {
   view(m) { const pr = M.rankProgress(m.xp), now = Date.now();
     return { xp: m.xp, rank: pr.rank, nextXp: pr.next, frac: pr.frac, ranks: M.RANKS, paidLeft: Math.max(0, M.MISSION.perDay - (m.paid || 0)),
       list: M.MISSION_IDS.map(k => ({ kind: k, ...M.MISSIONS[k], open: M.openAt(k, m.xp) })), active: m.active && now <= m.active.deadline ? this.pub(m.active) : null }; }
-  pub(a) { return { id: a.id, kind: a.kind, step: a.step, steps: a.steps.map(s => ({ k: s.k, name: s.name, x: s.x, y: s.y, w: s.w, h: s.h, bid: s.bid, kx: s.kx, ky: s.ky })), start: a.start, deadline: a.deadline, fare: a.fare, xp: a.xp, line: a.line }; }
+  pub(a) { return { id: a.id, kind: a.kind, step: a.step, steps: a.steps.map(s => ({ k: s.k, name: s.name, x: s.x, y: s.y, w: s.w, h: s.h, bid: s.bid, kx: s.kx, ky: s.ky, need: s.need, car: s.car })), start: a.start, deadline: a.deadline, fare: a.fare, xp: a.xp, line: a.line, times: a.times }; }
   async info(id) { const c = (await pool.query('select id, missions from citizens where id = $1', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
     const m = this.stateOf(c); if (await this.seed(pool, c, m)) await this.save(pool, c, m); return this.view(m); }
 
   // ---------- planning ----------
   // buildings a car can pull up beside (a road within a couple of tiles), between min and max tiles from p
-  async spots(db, p, min, max, { work = false, not = [] } = {}) {
+  async spots(db, p, min, max, { work = false, not = [], only = null } = {}) {
     const rows = (await Q(db, `select b.id, b.type, b.name, b.x, b.y, b.level, b.rot,
         array(select array[r.x, r.y] from roads r where r.type = any($5) and r.x between b.x - 2 and b.x + 7 and r.y between b.y - 2 and b.y + 7) near
       from buildings b where b.done and not b.ruin and abs(b.x - $1::int) + abs(b.y - $2::int) between $3 and $4
       order by random() limit 40`, [Math.round(p.x), Math.round(p.y), min, max, DRIVE])).rows;
     const out = [];
-    for (const b of rows) { if (!R.canGoTo(b.type) || not.includes(b.id) || (work && BUILDING_TYPES[b.type].home)) continue;
+    for (const b of rows) { if (!R.canGoTo(b.type) || not.includes(b.id) || (work && BUILDING_TYPES[b.type].home) || (only && !only.includes(b.type))) continue;
       const [w, h] = R.footprint(R.levelSize(b.type, b.level || 1), b.rot), f = { x: b.x, y: b.y, w, h }; let kerb = null, kd = 9;
       for (const [x, y] of b.near || []) { const d = M.offEdge({ x: x + 0.5, y: y + 0.5 }, f); if (d > 0 && d < kd) { kd = d; kerb = { kx: x, ky: y }; } }
       if (kerb && kd <= 2) out.push({ bid: b.id, name: nameOf(b), x: b.x, y: b.y, w, h, type: b.type, ...kerb }); } /* (a road right beside it, to pull up on) */
     return out; }
+  // the drivable road tiles round p (within R), and how far each is from a start tile along the roads
+  async roads(db, p, R) { const px = Math.round(p.x), py = Math.round(p.y);
+    return new Set((await Q(db, 'select x, y from roads where type = any($3) and x between $1::int - $4 and $1::int + $4 and y between $2::int - $4 and $2::int + $4', [px, py, DRIVE, R])).rows.map(r => r.x + ',' + r.y)); }
+  bfs(set, from) { const d = new Map([[from, 0]]), q = [from]; for (let i = 0; i < q.length; i++) { const [x, y] = q[i].split(',').map(Number), n = d.get(q[i]);
+      for (const k of [(x + 1) + ',' + y, (x - 1) + ',' + y, x + ',' + (y + 1), x + ',' + (y - 1)]) if (set.has(k) && !d.has(k)) { d.set(k, n + 1); q.push(k); } } return d; }
+  nearestRoad(set, p) { let best = null, bd = 4; for (const k of set) { const [x, y] = k.split(',').map(Number), d = Math.abs(x + 0.5 - p.x) + Math.abs(y + 0.5 - p.y); if (d < bd) { bd = d; best = k; } } return best; }
+  // a street race: checkpoints one after another along the roads round you, each a good stretch from the last
+  async racePlan(db, p) { const set = await this.roads(db, p, 60), start = this.nearestRoad(set, p); if (!start) return null;
+    const RC = M.MISSION.race, cps = []; let cur = start, D = 0;
+    for (let i = 0; i < RC.checkpoints; i++) { const d = this.bfs(set, cur); let ok = [];
+      for (const [lo, hi, gap] of [[RC.leg[0], RC.leg[1], 6], [RC.leg[0], RC.leg[1], 3], [6, 26, 2]]) { /* (a small town: shorter legs, closer together) */
+        ok = [...d].filter(([k, n]) => n >= lo && n <= hi && [start, ...cps].every(c => { const [a, b] = c.split(','), [x, y] = k.split(','); return Math.abs(a - x) + Math.abs(b - y) > gap; })) .concat([]); if (ok.length) break; }
+      if (!ok.length) { if (i < 3) return null; break; } const [k, n] = ok[crypto.randomInt(ok.length)]; cps.push(k); D += n; cur = k; }
+    const steps = cps.map((k, i) => { const [x, y] = k.split(',').map(Number); return { k: 'cp', name: i === cps.length - 1 ? 'the finish' : `checkpoint ${i + 1}`, x, y, w: 1, h: 1, kx: x, ky: y }; });
+    const times = M.raceTimes(D); return { steps, tiles: D, times, fare: Math.min(RC.pay.max, Math.round(RC.pay.base + RC.pay.perTile * D)), xp: Math.round(RC.xp.base + RC.xp.perTile * D), secs: times.bronze }; }
+  // a hot car: a parked car a walk away (you take it on foot), then the chop shop across town
+  async hotPlan(db, p) { const set = await this.roads(db, p, 30), H0 = M.MISSION.hotcar, near = [...set].filter(k => { const [x, y] = k.split(',').map(Number), d = Math.abs(x - p.x) + Math.abs(y - p.y); return d >= 5 && d <= 22; });
+    if (!near.length) return null; const [x, y] = near[crypto.randomInt(near.length)].split(',').map(Number), steal = { k: 'steal', name: 'the parked car', x, y, w: 1, h: 1, kx: x, ky: y, need: 'walk', car: { m: H0.cars[crypto.randomInt(H0.cars.length)], col: ['#C8382E', '#1F1F24', '#E2B13C', '#2F4A7A', '#F4F4F0', '#1E7A55'][crypto.randomInt(6)] } };
+    const one = async (a, b, o) => { for (const [lo, hi] of [[a, b], [8, b + 40]]) { const s = (await this.spots(db, steal, lo, hi, o))[0]; if (s) return s; } return null; };
+    const chop = await one(15, 60, { only: CHOP }) || await one(15, 60, { work: true }); if (!chop) return null;
+    const trip = M.dist(steal, chop); return { steps: [steal, { k: 'drop', ...chop, need: 'car', chop: true }], tiles: M.dist(p, steal) + trip,
+      fare: Math.min(H0.pay.max, Math.round(H0.pay.base + H0.pay.perTile * trip)), xp: Math.round(H0.xp.base + H0.xp.perTile * trip), secs: Math.round(45 + 2.2 * M.dist(p, steal) + M.MISSION.time.perTile * trip) }; }
   async plan(db, p, kind) {
     const one = async (from, a, b, o) => { for (const [lo, hi] of [[a, b], [Math.max(2, a - 4), b + 20], [2, b + 60]]) { const s = (await this.spots(db, from, lo, hi, o))[0]; if (s) return s; } return null; };
+    if (kind === 'race') return this.racePlan(db, p);
+    if (kind === 'hotcar') return this.hotPlan(db, p);
     const steps = [];
     if (kind === 'taxi') { const pick = await one(p, 3, 22); if (!pick) return null; const drop = await one(pick, 16, 60, { not: [pick.bid] }); if (!drop) return null; steps.push({ k: 'pickup', ...pick }, { k: 'drop', ...drop }); }
     else { const pick = await one(p, 3, 22, { work: true }) || await one(p, 3, 22); if (!pick) return null; const d1 = await one(pick, 12, 45, { not: [pick.bid] }); if (!d1) return null;
@@ -68,9 +93,10 @@ export class Missions {
       if (m.active && now <= m.active.deadline) throw new HttpError(409, `You're already on a ${M.MISSIONS[m.active.kind].name.toLowerCase()}. Finish it or give it up first.`);
       if (m.last && now - m.last < M.MISSION.quitCooldown) throw new HttpError(429, 'Give it a moment before taking the next one.');
       const p = this.pos(id); if (!p) throw new HttpError(409, 'Go out on the street first (🚗 Drive): missions happen in the town.');
-      if (p.mode !== 'car') throw new HttpError(409, 'You need to be driving for this one. Get in a car first.');
+      if (p.mode !== 'car' && kind !== 'hotcar') throw new HttpError(409, 'You need to be driving for this one. Get in a car first.');
       const P = await this.plan(ch, p, kind); if (!P) throw new HttpError(409, 'Nothing nearby to do just now. Drive somewhere busier and try again.');
-      m.active = { id: crypto.randomUUID().slice(0, 8), kind, steps: P.steps, step: 0, start: now, deadline: now + P.secs * 1000, fare: P.fare, xp: P.xp, at: now, from: { x: p.x, y: p.y }, line: crypto.randomInt(M.FARES.length) };
+      const t0 = kind === 'race' ? now + M.MISSION.race.countdown * 1000 : now; /* (a race starts on the green light) */
+      m.active = { id: crypto.randomUUID().slice(0, 8), kind, steps: P.steps, step: 0, start: t0, deadline: t0 + P.secs * 1000, fare: P.fare, xp: P.xp, at: t0, from: { x: p.x, y: p.y }, line: crypto.randomInt(M.FARES.length), ...(P.times ? { times: P.times } : {}) };
       await this.save(ch, c, m); return { ok: true, active: this.pub(m.active), ...this.view(m) };
     });
   }
@@ -81,16 +107,20 @@ export class Missions {
       if (!a) throw new HttpError(409, 'You aren\'t on a mission.');
       if (now > a.deadline) { m.active = null; m.last = now; await this.save(ch, c, m); return { ok: false, failed: 'time', ...this.view(m) }; }
       const p = this.pos(id), s = a.steps[a.step]; if (!p) throw new HttpError(409, 'Where are you? Go back out on the street.');
+      if (now < a.start) throw new HttpError(409, 'Wait for the green light!');
       if (!M.atStop(p, s)) throw new HttpError(409, `You're not at ${s.name} yet.`);
+      if (s.need && p.mode !== s.need) throw new HttpError(409, s.need === 'walk' ? 'Get out and walk up to it.' : 'You need to be driving it.');
       if (now - a.at < M.dist(a.from, s) / M.MISSION.fastest * 1000) throw new HttpError(409, 'That was quicker than any car could get there.');
       a.step++; a.at = now; a.from = { x: s.x, y: s.y };
       if (a.step < a.steps.length) { await this.save(ch, c, m); return { ok: true, next: true, active: this.pub(a), ...this.view(m) }; }
       // done: the fare, a tip for the time to spare, and XP (which may move you up a rank and open something new)
-      const left = (a.deadline - now) / (a.deadline - a.start), tip = M.tipOf(a.fare, left), before = M.rankOf(m.xp); m.active = null; m.last = 0; m.done = (m.done || 0) + 1;
-      let paid = 0, short = false; if ((m.paid || 0) < M.MISSION.perDay) { const r = await this.world.earn.pay(ch, c, a.fare + tip, 'missions'); paid = r.paid; short = r.short; m.paid = (m.paid || 0) + 1; }
+      const left = (a.deadline - now) / (a.deadline - a.start), secs = +((now - a.start) / 1000).toFixed(1), medal = a.times ? M.medalOf(secs, a.times) || 'bronze' : null;
+      const fare = medal ? Math.round(a.fare * M.MISSION.race.medal[medal]) : a.fare, tip = medal ? 0 : M.tipOf(a.fare, left), before = M.rankOf(m.xp); m.active = null; m.last = 0; m.done = (m.done || 0) + 1; /* (a race pays by medal, no tip) */
+      if (medal) { const xpGot = Math.round(a.xp * M.MISSION.race.medal[medal]); a.xp = Math.max(10, xpGot); }
+      let paid = 0, short = false; if ((m.paid || 0) < M.MISSION.perDay) { const r = await this.world.earn.pay(ch, c, fare + tip, 'missions'); paid = r.paid; short = r.short; m.paid = (m.paid || 0) + 1; }
       m.xp += a.xp; const after = M.rankOf(m.xp); await this.save(ch, c, m);
       if (paid >= 300) await ch.event(`${M.MISSIONS[a.kind].icon} @${c.handle} finished a ${M.MISSIONS[a.kind].name.toLowerCase()} for ${paid.toLocaleString('en-US')} coins.`, 'gig');
-      return { ok: true, done: true, kind: a.kind, fare: a.fare, tip, paid, short, xpGot: a.xp, coins: c.coins_base,
+      return { ok: true, done: true, kind: a.kind, fare, tip, paid, short, xpGot: a.xp, coins: c.coins_base, medal, secs,
         rankUp: after > before ? { rank: after, ...M.RANKS[after], unlocks: M.unlocksAt(after).map(k => ({ kind: k, ...M.MISSIONS[k] })) } : null, ...this.view(m) };
     });
   }

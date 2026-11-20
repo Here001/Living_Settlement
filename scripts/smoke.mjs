@@ -2329,7 +2329,7 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
   ok(info.rank === 0 && info.list.filter(m => m.open).map(m => m.kind).join() === 'parcel,taxi' && info.list.some(m => m.kind === 'heist' && !m.open), 'a new player starts with two missions; the rest open up rank by rank', JSON.stringify(info.list.map(m => [m.kind, m.open])));
   const st = b => call('POST', '/api/me/missions', b, A.P);
   ok((await st({ action: 'start', kind: 'taxi' })).status === 409, 'missions happen out in the town: you have to be out on the street');
-  ok((await st({ action: 'start', kind: 'race' })).status === 409 && (await st({ action: 'start', kind: 'nope' })).status === 400, 'what isn\'t open yet (or doesn\'t exist) can\'t be started');
+  ok((await st({ action: 'start', kind: 'race' })).status === 403 && (await st({ action: 'start', kind: 'holdup' })).status === 409 && (await st({ action: 'start', kind: 'nope' })).status === 400, 'what isn\'t open yet (or doesn\'t exist) can\'t be started');
   /* a street of its own out east, with shops and cottages along it */
   { const set = {}; for (let x = 300; x <= 362; x++) set[x + ',300'] = 'street'; await call('POST', '/api/admin/roads', { set });
     for (const [t, x] of [['grocer', 302], ['cottage', 312], ['grocer', 322], ['cottage', 332], ['grocer', 342], ['cottage', 352], ['grocer', 360]]) await call('POST', '/api/admin/buildings', { type: t, x, y: 301, instant: true }); }
@@ -2352,6 +2352,22 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
     ok((await st({ action: 'quit' })).json.active === null && (await st({ action: 'start', kind: 'parcel' })).status === 429, 'giving up ends it, with a short wait before the next'); }
   { await pool.query("update citizens set missions = jsonb_set(missions, '{active}', $2::jsonb) where id = $1", [A.id, JSON.stringify({ id: 'x', kind: 'taxi', steps: [{ k: 'pickup', x: 0, y: 0, w: 1, h: 1, kx: 0, ky: 0, name: 'a' }], step: 0, start: Date.now() - 99000, deadline: Date.now() - 1000, fare: 50, xp: 10, at: 0, from: { x: 0, y: 0 }, line: 0 })]);
     const r = await st({ action: 'arrive' }); ok(r.status === 200 && r.json.failed === 'time' && !r.json.active, 'too late: the mission is off, and pays nothing'); }
+  // Runner: street races and hot cars
+  { await call('POST', '/api/me/missions', { action: 'quit' }, A.P); await pool.query("update citizens set missions = jsonb_set(missions, '{xp}', '150'::jsonb) || '{\"last\": 0}'::jsonb where id = $1", [A.id]);
+    const open = (await call('GET', '/api/me/missions', undefined, A.P)).json; ok(open.rank === 1 && open.list.find(m => m.kind === 'race').open && open.list.find(m => m.kind === 'hotcar').open, 'at Runner, street races and hot cars open up');
+    await at(road.x + 0.5, road.y + 0.5); const r0 = await st({ action: 'start', kind: 'race' }), R0 = r0.json.active;
+    ok(r0.status === 200 && R0.steps.length >= 3 && R0.steps.every(s => s.k === 'cp') && R0.times.gold < R0.times.silver && R0.times.silver < R0.times.bronze && R0.start > Date.now(), 'a race: checkpoints along the roads, medal times, and a countdown', JSON.stringify(R0 && { n: R0.steps.length, times: R0.times }));
+    if (R0) { await at(R0.steps[0].kx + 0.5, R0.steps[0].ky + 0.5); ok((await st({ action: 'arrive' })).json.error === 'Wait for the green light!', 'no jumping the start');
+      await sleep(Math.max(0, R0.start - Date.now()) + 50); let from = road, last = null;
+      for (const cp of R0.steps) { await at(cp.kx + 0.5, cp.ky + 0.5); await sleep(Math.ceil(MS.dist(from, cp) / MS.MISSION.fastest * 1000) + 60); last = await st({ action: 'arrive' }); from = cp; if (last.status !== 200) break; }
+      ok(last.status === 200 && last.json.done && ['gold', 'silver', 'bronze'].includes(last.json.medal) && last.json.paid > 0 && last.json.tip === 0, 'through the finish: a medal, paid by how fast you were', JSON.stringify({ ...last.json, list: 0, ranks: 0 }).slice(0, 300)); } }
+  { await pool.query("update citizens set missions = missions || '{\"last\": 0}'::jsonb where id = $1", [A.id]); await at(road.x + 0.5, road.y + 0.5, 'walk');
+    const h0 = await st({ action: 'start', kind: 'hotcar' }), H = h0.json.active;
+    ok(h0.status === 200 && H.steps[0].k === 'steal' && H.steps[0].need === 'walk' && H.steps[0].car && H.steps[1].need === 'car', 'a hot car: on foot to the parked car, then drive it to the chop shop (you can start it on foot)', JSON.stringify(H && H.steps.map(s => [s.k, s.need])));
+    if (H) { const [m0, m1] = H.steps; await at(m0.kx + 0.5, m0.ky + 0.5); await sleep(Math.ceil(MS.dist(road, m0) / MS.MISSION.fastest * 1000) + 60); ok((await st({ action: 'arrive' })).json.error === 'Get out and walk up to it.', 'you take it on foot, not by driving up in another car');
+      await at(m0.kx + 0.5, m0.ky + 0.5, 'walk'); const t1 = await st({ action: 'arrive' }); ok(t1.status === 200 && t1.json.next, 'walked up to it: it\'s yours');
+      await at(m1.kx + 0.5, m1.ky + 0.5, 'walk'); await sleep(Math.ceil(MS.dist(m0, m1) / MS.MISSION.fastest * 1000) + 60); ok((await st({ action: 'arrive' })).status === 409, 'turning up at the chop shop on foot doesn\'t count');
+      await at(m1.kx + 0.5, m1.ky + 0.5); const t2 = await st({ action: 'arrive' }); ok(t2.status === 200 && t2.json.done && t2.json.paid >= H.fare, 'driven in: sold for parts', JSON.stringify({ ...t2.json, list: 0, ranks: 0 }).slice(0, 200)); } }
   ok(MS.rankOf(0) === 0 && MS.rankOf(MS.RANKS[1].xp) === 1 && MS.unlocksAt(1).includes('race') && MS.RANKS.every((R, i) => !i || R.xp > MS.RANKS[i - 1].xp), 'XP moves you up the ranks, and each rank opens something new');
   { const vet = await player('mission_vet', 1000); await pool.query("insert into crime_runs (id, citizen_id, kind, seed, diff, started_at) values ($1, $2, 'rob', 1, 1, $3)", ['cr-vet-' + Date.now(), vet.id, Date.now()]);
     ok((await call('GET', '/api/me/missions', undefined, vet.P)).json.rank === 3, 'players who already did crimes before missions start at Operator, so nothing they did is locked away'); }

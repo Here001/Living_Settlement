@@ -20,8 +20,8 @@ export function rankProgress(xp) { const i = rankOf(xp), a = RANKS[i].xp, b = RA
 export const MISSIONS = {
   parcel: { name: 'Parcel run', icon: '📦', side: 'work', rank: 0, live: true, blurb: 'Collect a parcel and drop it across town before the clock runs out. The quicker you are, the bigger the tip.' },
   taxi: { name: 'Taxi fare', icon: '🚕', side: 'work', rank: 0, live: true, blurb: 'Someone is waiting at the kerb. Pick them up and drive them where they need to go.' },
-  race: { name: 'Street race', icon: '🏁', side: 'work', rank: 1, live: false, blurb: 'Through the checkpoints on the town\'s own streets, against the clock. Beat the gold time for the top prize.' },
-  hotcar: { name: 'Hot car', icon: '🔑', side: 'crime', rank: 1, live: false, blurb: 'A car someone wants is parked in town. Get in it and get it to the chop shop without the police catching you.' },
+  race: { name: 'Street race', icon: '🏁', side: 'work', rank: 1, live: true, blurb: 'Through the checkpoints on the town\'s own streets, against the clock. Beat the gold time for the top prize.' },
+  hotcar: { name: 'Hot car', icon: '🔑', side: 'crime', rank: 1, live: true, blurb: 'A car someone wants is parked in town. Walk up to it, take it, and get it to the chop shop before the police catch you.' },
   holdup: { name: 'Store hold-up', icon: '🏪', side: 'crime', rank: 2, live: false, blurb: 'Walk into a real store, empty the till, and get away before the police arrive.' },
   heist: { name: 'Crew jobs (heists)', icon: '🕶️', side: 'crime', rank: 3, live: false, blurb: 'Plan a job with your crew: the armoured truck, the Mayor, a jailbreak, the bank.' },
   police: { name: 'Police patrol', icon: '🚓', side: 'work', rank: 3, live: false, blurb: 'Get paid to stop real crimes as they happen, against real players.' },
@@ -42,6 +42,8 @@ export const MISSION = {
   time: { base: 35, perTile: 1.1 },
   pay: { parcel: { base: 45, perTile: 2.6, max: 420 }, taxi: { base: 40, perTile: 3.0, max: 480 } },
   xp: { parcel: { base: 22, perTile: 0.25 }, taxi: { base: 26, perTile: 0.25 } },
+  race: { checkpoints: 5, leg: [9, 17], gold: 2.6, silver: 2.1, bronze: 1.6, pay: { base: 70, perTile: 3.2, max: 650 }, medal: { gold: 1, silver: 0.65, bronze: 0.4 }, xp: { base: 30, perTile: 0.3 }, countdown: 3 },
+  hotcar: { pay: { base: 160, perTile: 4.2, max: 900 }, xp: { base: 40, perTile: 0.3 }, cars: ['sports', 'gt', 'luxury', 'supercar', 'evsedan', 'suv'], police: 2, after: 6, speed: [2.6, 3.3], lose: 42, catch: 0.9, caught: 2.5 },
   tip: 0.5,                   // up to half the fare again for arriving with lots of time left
   quitCooldown: 20000,        // after giving up on one, a short wait before the next
 };
@@ -50,6 +52,10 @@ export function missionTime(tiles) { return Math.round(MISSION.time.base + MISSI
 export function missionPay(kind, tiles) { const p = MISSION.pay[kind]; return p ? Math.min(p.max, Math.round(p.base + p.perTile * tiles)) : 0; }
 export function missionXp(kind, tiles) { const p = MISSION.xp[kind]; return p ? Math.round(p.base + p.perTile * tiles) : 0; }
 // the tip for the time left (0..1 of the limit still on the clock)
+// a race's medal times (seconds) for a course of D tiles along the roads, and what each medal pays
+export function raceTimes(D) { const R0 = MISSION.race; return { gold: Math.round(4 + D / R0.gold), silver: Math.round(6 + D / R0.silver), bronze: Math.round(12 + D / R0.bronze) }; }
+export const medalOf = (secs, T) => secs <= T.gold ? 'gold' : secs <= T.silver ? 'silver' : secs <= T.bronze ? 'bronze' : null;
+export const MEDALS = { gold: '🥇', silver: '🥈', bronze: '🥉' };
 export const tipOf = (fare, left) => Math.round(fare * MISSION.tip * Math.max(0, Math.min(1, left * 1.6 - 0.1)));
 // how far a point is from a building's footprint (0 inside it), in tiles
 export function offEdge(p, b) { const dx = Math.max(b.x - p.x, 0, p.x - (b.x + b.w)), dy = Math.max(b.y - p.y, 0, p.y - (b.y + b.h)); return Math.max(dx, dy); }

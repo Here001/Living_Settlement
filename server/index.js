@@ -435,12 +435,12 @@ wss.on('connection', (ws, req) => {
       if (!/^(b|h):[A-Za-z0-9_.-]{1,64}$/.test(place) || ![x, y, a].every(Number.isFinite) || x < 0 || y < 0 || x > 16 || y > 16) return;
       if (ws.inside && ws.inside !== place) insideLeave(ws);
       const first = ws.inside !== place; ws.inside = place; const who = ws.playerId ? 'p:' + ws.playerId : wsKey;
-      if (ws.insideWho && ws.insideWho !== who) bus.publish([{ inside: true, place, skip: who, k: 'gone', id: ws.insideWho }]); /* signed in since: the anonymous figure goes */ ws.insideWho = who;
+      if (ws.insideWho && ws.insideWho !== who) { bus.publish([{ inside: true, place, skip: who, k: 'gone', id: ws.insideWho }]); try { world.rooms?.here.get(place)?.delete(ws.insideWho); } catch {} } /* signed in since: the anonymous figure goes (from the head count too) */ ws.insideWho = who;
       try { world.rooms.seen(place, who, ws.playerHandle || null); } catch {}
       const p = { id: who, h: ws.playerHandle || null, x: +x.toFixed(2), y: +y.toFixed(2), a: +a.toFixed(2) };
       { const pose = String(m.pose || ''), ph = Number(m.ph); if (/^[sulprdo]$/.test(pose)) { p.pose = pose; p.ph = Number.isFinite(ph) ? +Math.max(-1.5, Math.min(1.5, ph)).toFixed(2) : 0; } } /* sitting, lying, using, playing, running */
       if (first && ws.playerId) bus.publish([{ whereIn: true, id: ws.playerId, place }]); /* the map: they're inside here, not out and about */
-      if (first) { const list = []; for (const w of wss.clients) if (w !== ws && w.inside === place && w.insidePos) list.push(w.insidePos); try { ws.send(JSON.stringify({ type: 'inside', k: 'all', place, list })); } catch {} }
+      if (first) { const list = []; for (const w of wss.clients) if (w !== ws && w.inside === place && w.insidePos && w.insideWho !== who) list.push(w.insidePos); /* (not yourself: an older connection of yours that hasn't closed yet) */ try { ws.send(JSON.stringify({ type: 'inside', k: 'all', place, list })); } catch {} }
       ws.insidePos = p; bus.publish([{ inside: true, place, skip: who, k: 'pos', p }]); return; }
     if (m?.type === 'out') { insideLeave(ws); return; }
     if (m?.type === 'auth' && take('wsAuth', wsKey).ok) playerByToken(m.token).then(p => {

@@ -799,7 +799,9 @@ export function createHouse(host, opts) {
       else if (!o.posed) { o.g.userData.av.pose(POSE[o.pose] || 'stand'); o.posed = true; dirty = true; }
       if (o.bubble && performance.now() > o.bubbleUntil) { o.g.remove(o.bubble); o.bubble.material.map.dispose(); o.bubble = null; dirty = true; } }
     for (const [id, pt] of pets) { const o = id === 'me' ? null : others.get(id); if (id !== 'me' && (!o || !o.g.visible)) { pt.f.group.visible = false; continue; } pt.f.group.visible = true;
-      if (pt.leave) { pt.leave.t += dt; pt.f.step(dt, pt.leave.x, pt.leave.z); gliding = true; dirty = true; const q = pt.f.group.position; if (pt.leave.t > 5 || Math.hypot(q.x - pt.leave.x, q.z - pt.leave.z) < 0.9) { pt.f.dispose(); pets.delete(id); } continue; } /* sent home: it trots out of the front door */
+      if (pt.leave) { const G = pt.leave; G.t += dt; pt.f.step(dt, G.x, G.z); gliding = true; dirty = true; const q = pt.f.group.position, far = Math.hypot(q.x - G.x, q.z - G.z);
+        if (!G.fade && (far < 0.9 || G.t > G.until)) G.fade = G.t; /* at the door (or a few steps towards it, when a wall's in the way): it fades away there */
+        if (G.fade != null) { const k = 1 - (G.t - G.fade) / 0.45; pt.f.group.scale.setScalar(Math.max(0.001, k)); if (k <= 0) { pt.f.dispose(); pets.delete(id); } } continue; } /* sent home: it trots out of the front door, never into a wall */
       if (pt.stay) { if (pt.f.step(dt, pt.stay.x, pt.stay.z)) { gliding = true; dirty = true; } continue; } /* staying home: it settles where it is */
       const ox = o ? o.g.position.x : act ? act.x : me.x, oz = o ? o.g.position.z : act ? act.y : me.y; if (pt.f.step(dt, ox, oz)) { gliding = true; dirty = true; } } /* pets trot after their people */
     othersMoving = gliding;
@@ -857,7 +859,10 @@ export function createHouse(host, opts) {
       else if (!on && sp) { g.remove(sp); sp.material.map.dispose(); sp.material.dispose(); g.userData.talk = null; } else return; dirty = true; wake(); },
     setPet, upsertOther, removeOther, clearOthers() { for (const id of [...others.keys()]) removeOther(id); }, say, get me() { return { x: me.x, y: me.y, a: act ? act.wyaw : me.yaw, pose: act ? CODE[act.kind] : '', ph: act ? +act.wy.toFixed(2) : 0 }; },
     act() { doAct(); }, standUp() { standUp(); }, petHappy(id) { const pt = pets.get(id); if (pt) { pt.f.happy(); dirty = true; wake(); } },
-    petLeave(id) { const pt = pets.get(id); if (!pt) return; pt.stay = null; pt.leave = frontAt ? { t: 0, x: frontAt.x, z: frontAt.y } : { t: 4.6, x: 0, z: 0 }; dirty = true; wake(); }, /* off home, out of the front door */
+    petLeave(id) { const pt = pets.get(id); if (!pt) return; pt.stay = null; const q = pt.f.group.position; if (!frontAt) { pt.leave = { t: 0, x: q.x, z: q.z, until: 0 }; dirty = true; wake(); return; }
+      let clear = true; { const from = new THREE.Vector3(q.x, 0.3, q.z), to = new THREE.Vector3(frontAt.x, 0.3, frontAt.y), d = to.distanceTo(from); if (d > 0.01) { ray.set(from, to.sub(from).normalize()); ray.near = 0; ray.far = d - 0.4; clear = !ray.intersectObjects(walls.children, true).length; ray.far = Infinity; } } /* a straight run to the door, or a wall in between? */
+      const dx = frontAt.x - q.x, dz = frontAt.y - q.z, L = Math.hypot(dx, dz) || 1, go = clear ? L : Math.min(L, 0.9);
+      pt.leave = { t: 0, x: q.x + dx / L * go, z: q.z + dz / L * go, until: clear ? 6 : 0.9 }; dirty = true; wake(); }, /* off home: out of the front door (or, behind a wall, a few steps that way and it's gone) */
     petStay(id, on) { const pt = pets.get(id); if (!pt) return; const q = pt.f.group.position, fresh = !q.x && !q.z; pt.leave = null; pt.stay = on ? (fresh ? { x: me.x + 0.9, z: me.y + 0.4 } : { x: q.x + 0.01, z: q.z }) : null; dirty = true; wake(); }, /* (a pet only just made waits beside you) */ /* at home: it stays put (or follows you again) */
     // into bed (when your colonist is asleep as you come in): the first bed in the home; stand up beside it
     sleep() { if (act) return false; const it = room.items.find(x => { const A = actOf(x.k); return A && A.kind === 'lie' && /bed/.test(x.k); }) || room.items.find(x => (actOf(x.k) || {}).kind === 'lie'); if (!it) return false;

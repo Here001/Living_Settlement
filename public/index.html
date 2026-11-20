@@ -1236,7 +1236,7 @@ body.room-on .toast,body.room-on .rsheet-bg.rreport{z-index:9700}
 .roomtools .tint{width:22px;height:22px;border-radius:50%;border:2px solid rgba(0,0,0,.18);cursor:pointer;padding:0}
 .roomtools .tint.on{border-color:#111;box-shadow:0 0 0 2px #fff inset}
 .roomshop{flex:none;background:var(--panel);border-top:1px solid var(--glass-line,rgba(0,0,0,.15));box-shadow:0 -2px 10px rgba(0,0,0,.12);max-height:42vh;display:flex;flex-direction:column}
-.roomtabs{display:flex;gap:6px;overflow-x:auto;padding:8px 10px 6px;align-items:center;scrollbar-width:none}
+.roomtabs{display:flex;gap:6px;overflow-x:auto;padding:8px 10px 6px;align-items:center;scrollbar-width:none}.roomshop .roomtabs,.roomshop .rnote{flex:none} /* (the categories never get squashed: the goods below scroll instead) */.roomstage .sidecol{max-height:calc(100% - 16px);overflow-y:auto;overflow-x:hidden;scrollbar-width:none;padding-bottom:4px}.roomstage .sidecol::-webkit-scrollbar{display:none}.roomstage .sidecol>*{flex-shrink:0}.roomview:has(.roomshop:not([hidden])) .roomstage .hact:not(.hshop){right:calc(env(safe-area-inset-right,0px) * 2 + 72px)} /* (furnishing: the view is short, so Sit / Lie down stand clear of the side buttons) */ /* (a short view, with the shop open: the side buttons stay in it and scroll) */@media (orientation:landscape) and (max-height:560px){.roomshop{max-height:56vh}.roomshop .roomtabs{padding:6px 10px 4px}.roomshop .rnote{margin-top:0}}
 .rtab{flex:none;border:1.5px solid var(--line);background:var(--paper);border-radius:999px;padding:5px 11px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;color:inherit}
 .rtab.on{background:#2E86C1;border-color:#2E86C1;color:#fff}
 .roomcash{flex:none;margin-left:auto;font-weight:800;font-size:13px;padding-left:8px}
@@ -7532,7 +7532,7 @@ const TrackView={ el:null, T:null, b:null, g:null,
     if(!force&&L&&L.pose===pose&&Math.hypot(m.x-L.x,m.z-L.z)<0.3&&Math.abs(m.a-L.a)<0.2) return;
     if(!force&&now-(this.posAt||0)<200){ clearTimeout(this.posT); this.posT=setTimeout(()=>this.sendPos(true),200); return; } this.posAt=now; this.lastSent={x:m.x,z:m.z,a:m.a,pose};
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'in',place:this.spot,x:this.enc(m.x),y:this.enc(m.z),a:((m.a%6.2832)+6.2832)%6.2832,...(pose?{pose,ph:0}:{})})); }catch(e){} },
-  insideMsg(m){ if(!this.el||!this.T||m.place!==this.spot) return; const blocked=h=>h&&typeof Blocks!=='undefined'&&Blocks.has(h);
+  insideMsg(m){ if(!this.el||!this.T||m.place!==this.spot) return; const blocked=h=>(h&&typeof Blocks!=='undefined'&&Blocks.has(h))||isMe(h);
     const show=q=>{ if(blocked(q.h)) return; const p={ id:q.id, h:q.h, x:this.dec(q.x), y:this.dec(q.y), a:q.a, pose:q.pose }; this.others.set(p.id,p); const Lk=p.h&&Looks.m.get(p.h.toLowerCase());
       this.T.upsertOther(p.id,{ x:p.x, z:p.y, a:p.a, pose:p.pose, h:p.h, look:Lk||null }); const c=p.h&&[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===p.h.toLowerCase()); this.T.setPet(p.id,petOut(c));
       if(p.h&&!Lk) Looks.want([p.h]).then(([L2])=>{ const o=this.others.get(p.id); if(L2&&this.T&&o) this.T.upsertOther(p.id,{ x:o.x, z:o.y, a:o.a, pose:o.pose, h:o.h, look:L2 }); }).catch(()=>{}); };
@@ -7713,7 +7713,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
         buildings:(x0,y0,x1,y1)=>{ const out=[]; for(const b of D.buildings.values()) if(b.x>=x0&&b.x<x1&&b.y>=y0&&b.y<y1&&!b.ruin&&BUILDING_TYPES[b.type]) out.push(b); return out; },
         byId:id=>D.buildings.get(id)||null, loaded:(x,y)=>S.chunks.has(ckTile(x,y)), minute:()=>window.__driveMinute!=null?window.__driveMinute:((gmNow()%1440)+1440)%1440, billboard:()=>BBoard.urls, /* (the Colosseum's billboard) */ weather:()=>window.__driveWx||(S.meta?weatherAt(S.meta,gmNow()):'sunny'), /* (the same weather as the map; __driveWx: for checking) */ /* (__driveMinute: for checking how it looks at a time of day) */
         people:(x,y)=>this.people(x,y), services:(x,y)=>this.services(x,y), onMove:(x,y,a,v)=>this.moved(x,y,a,v), onNear:b=>this.nearBy(b), onLost:()=>{ this.close(); toast('Your phone needed the memory back. Tap 🚗 Drive or 🚶 Walk to carry on.'); } }); }
-    catch(e){ this.close(); toast('Your phone couldn’t show the 3D town.'); return; }
+    catch(e){ try{ console.warn('town3d', e&&e.stack); }catch(_){} this.close(); toast('Your phone couldn’t show the 3D town.'); return; }
     try{ window.__drive=this; this.map=DriveMap; }catch(e){} /* (for checking how it runs) */
     this.floats();
     try{ if(!(history.state&&history.state.drive)) history.pushState({drive:1},''); }catch(e){}
@@ -7979,7 +7979,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     const near=[...(this.others||new Map()).values()].some(p=>p.h&&p.x!=null&&Math.hypot(p.x-m.x,p.y-m.y)<=R), show=near||(this.chatBox&&!this.chatBox.hidden);
     if(b.hidden===show) b.hidden=!show; },
   insideMsg(m){ if(!this.el||!this.d||m.place!==this.spot||!this.h) return; this.others||=new Map();
-    const blocked=h=>h&&typeof Blocks!=='undefined'&&Blocks.has(h);
+    const blocked=h=>(h&&typeof Blocks!=='undefined'&&Blocks.has(h))||isMe(h); /* (and never yourself as someone else: an older connection of yours) */
     const show=p=>{ const L=p.h&&Looks.m.get(p.h.toLowerCase()); this.h.upsertOther(p.id,L?{...p,look:L}:p); this.petOf(p); if(p.h&&!L) Looks.want([p.h]).then(([L2])=>{ if(L2&&this.h&&this.others.has(p.id)) this.h.upsertOther(p.id,{...this.others.get(p.id),look:L2}); }); }; /* their own character, once it's loaded */
     if(m.k==='all'){ for(const p of m.list||[]) if(!blocked(p.h)){ this.others.set(p.id,p); show(p); } }
     else if(m.k==='pos'&&m.p){ if(blocked(m.p.h)) return; this.others.set(m.p.id,m.p); show(m.p); }

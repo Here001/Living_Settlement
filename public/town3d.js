@@ -527,7 +527,20 @@ export function createTown(host, opts) {
     { const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.04, 16), rim); hub.rotation.x = Math.PI / 2; sw.add(hub); if (tier === 3) { const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.022), glow(accent)); sc.position.set(0, 0.012, 0.022); sw.add(sc); } }
     if (tier === 3) for (const sd of [-1, 1]) { const pd = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.08, 0.008), mat('#8d9096', 0.3, 0.9)); pd.position.set(sd * (yoke ? 0.13 : 0.15), 0.04, -0.05); sw.add(pd); } /* gear paddles */
     { const c2 = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.3, 10), black); c2.rotation.x = Math.PI / 2; c2.position.z = -0.15; sw.add(c2); }
-    sw.position.set(-0.36, 0.74, -0.86); sw.rotation.x = -0.42; cockpit.add(sw); }
+    sw.position.set(-0.36, 0.86, -0.76); sw.rotation.x = -0.34; cockpit.add(sw); /* (high and close enough that the whole rim sits in front of the dash, not into it) */
+    // your hands on the wheel at a quarter to three (they turn with it), and your arms reaching from your shoulders to them
+    const L0 = opts.look || {}, skinM = mat(L0.sk || '#C68642', 0.7), sleeveM = mat('#2b2f3a', 0.85); hands = [];
+    for (const sd of [-1, 1]) { const h = new THREE.Group(), palm = new THREE.Mesh(new THREE.SphereGeometry(0.042, 12, 8), skinM); palm.scale.set(1, 1.25, 0.9); h.add(palm);
+      for (let f = 0; f < 4; f++) { const fg = new THREE.Mesh(new THREE.CapsuleGeometry(0.011, 0.035, 3, 6), skinM); fg.position.set(-sd * 0.012, 0.03 - f * 0.02, 0.03); fg.rotation.x = Math.PI / 2; h.add(fg); } /* fingers wrapped over the rim */
+      const th = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.03, 3, 6), skinM); th.position.set(-sd * 0.03, 0.035, -0.012); th.rotation.z = sd * 0.7; h.add(th);
+      h.position.set(sd * 0.19, 0, 0.012); sw.add(h);
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.036, 1, 10, 1, true), sleeveM), wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.07, 10), skinM);
+      cockpit.add(arm, wrist); hands.push({ h, arm, wrist, sh: new THREE.Vector3(-0.36 + sd * 0.2, 1.0, -0.02) }); } }
+  let hands = []; const HV = new THREE.Vector3(), HD = new THREE.Vector3(), HY = new THREE.Vector3(0, 1, 0), ARMQ = new THREE.Quaternion();
+  function placeArms() { cockpit.updateMatrixWorld(true); for (const k of hands) { k.h.getWorldPosition(HV); cockpit.worldToLocal(HV); HD.subVectors(HV, k.sh); const len = HD.length(), dir = HD.normalize();
+      ARMQ.setFromUnitVectors(HY, dir); const back = 0.05; /* (the sleeve stops just short of the hand; a bare wrist fills the gap) */
+      k.arm.position.copy(k.sh).addScaledVector(dir, (len - back) / 2); k.arm.quaternion.copy(ARMQ); k.arm.scale.set(1, Math.max(0.05, len - back), 1);
+      k.wrist.position.copy(HV).addScaledVector(dir, -0.045); k.wrist.quaternion.copy(ARMQ); } } /* the arms follow the hands as the wheel turns: drawn only in the driver's view */
   buildCabin(opts.car.m, opts.car.col); cockpit.visible = false; scene.add(cockpit);
   const SEATS = [[-0.36, -0.15], [0.36, -0.15], [-0.36, 0.85], [0.36, 0.85]]; /* across and back from the middle of the car: driver, front passenger, back left, back right */
   // riding in someone's car: you go where it goes (it's drawn where their updates put it)
@@ -556,7 +569,7 @@ export function createTown(host, opts) {
     S2.x += dx / d * step; S2.z += dz / d * step; const ry = Math.atan2(-dz, dx) - Math.PI / 2; let da = ry - S2.ry; da = Math.atan2(Math.sin(da), Math.cos(da)); S2.ry += da * Math.min(1, dt * 6); }
   function chase(dt) {
     if (lk.id == null && !foot) { const back = Math.exp(-dt * Math.min(0.8, Math.abs(car.v) / 22)); lk.yaw *= back; lk.pitch *= back; } /* let go: the view stays where you turned it, and drifts gently back behind the car as you drive (not at all while you're stopped) */
-    const fp = mode === 1; cockpit.visible = fp && !foot && !BIKE && !BOAT; /* (a bike or a boat: no dashboard, just the view ahead) */ sw.rotation.z = car.steer * 1.4; if (cockpit.visible) { cockpit.position.set(car.x, 0, car.z); cockpit.rotation.set(0, car.a - Math.PI / 2, 0); }
+    const fp = mode === 1; cockpit.visible = fp && !foot && !BIKE && !BOAT; /* (a bike or a boat: no dashboard, just the view ahead) */ sw.rotation.z = car.steer * 1.4; if (cockpit.visible) { cockpit.position.set(car.x, 0, car.z); cockpit.rotation.set(0, car.a - Math.PI / 2, 0); for (const k of hands) { const on = !riding; k.h.visible = k.arm.visible = k.wrist.visible = on; } if (!riding) placeArms(); } /* (riding with someone: no hands of yours on their wheel) */
     { const near = fp ? 0.08 : 0.5; if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); } } /* in the car, close enough to see the wheel */
     if (fp && foot) { const a = lk.yaw; camera.position.set(car.x + Math.cos(a) * 0.1, 1.62, car.z - Math.sin(a) * 0.1); look.set(camera.position.x + Math.cos(a) * 10, 1.62 + Math.tan(lk.pitch - 0.02) * 10, camera.position.z - Math.sin(a) * 10); camera.lookAt(look); cam.copy(camera.position); view.cut.R.value = 0; } /* through your own eyes */
     else if (fp) { const a = car.a + lk.yaw, [sx, sz] = SEATS[riding ? riding.seat : 0] || SEATS[1]; camera.position.set(car.x - Math.cos(car.a) * sz + Math.sin(car.a) * sx, 1.18, car.z + Math.sin(car.a) * sz + Math.cos(car.a) * sx); /* your seat: the driver's on the left, or where you're riding */
@@ -615,7 +628,16 @@ export function createTown(host, opts) {
   view.resize(); around(); sunNow(true);
   view.start((dt, now) => {
     if (dead) return; drive(dt); if (DEB.length) stepDebris(dt);
-    if (myPet && petGone) { petGone.t += dt; myPet.group.visible = true; { const k = Math.min(70, 1.6 + petGone.t * 7.5); myPet.step(dt, petGone.x0 + petGone.dx * k, petGone.z0 + petGone.dz * k); } if (petGone.t > 5.5) { myPet.dispose(); myPet = null; petGone = null; } } /* sent home: it runs off out of sight, then it's gone */
+    if (myPet && petGone) { const G = petGone; G.t += dt; myPet.group.visible = true;
+      if (G.road) { const sp = 7.5 * dt, nx = G.cx + G.dx * sp, nz = G.cz + G.dz * sp, ahead = (x, z) => !!opts.road(tileOf(x), tileOf(z)); /* along the road: at the end of it, round the corner (or back the way it came) */
+        if (tileOf(nx) !== tileOf(G.cx) || tileOf(nz) !== tileOf(G.cz)) { const lx = G.cx + G.dx * TILE * 0.55, lz = G.cz + G.dz * TILE * 0.55;
+          if (!ahead(lx, lz)) { const turns = [[G.dz, -G.dx], [-G.dz, G.dx]].sort(() => Math.random() - 0.5).filter(([a, b]) => ahead(G.cx + a * TILE, G.cz + b * TILE)); const [a, b] = turns[0] || [-G.dx, -G.dz];
+            G.cx = (tileOf(G.cx) + 0.5) * TILE; G.cz = (tileOf(G.cz) + 0.5) * TILE; G.dx = a; G.dz = b; } else { G.cx = nx; G.cz = nz; } }
+        else { G.cx = nx; G.cz = nz; }
+        myPet.step(dt, G.cx, G.cz); }
+      else { const k = Math.min(70, 1.6 + G.t * 7.5); myPet.step(dt, G.x0 + G.dx * k, G.z0 + G.dz * k); }
+      if (G.t > 5.2) { const s0 = Math.max(0, 1 - (G.t - 5.2) / 0.5); myPet.group.scale.setScalar(s0 || 0.001); } /* (far off by now: it shrinks away) */
+      if (G.t > 5.7) { myPet.dispose(); myPet = null; petGone = null; } } /* sent home: it runs off along the street and out of sight, then it's gone */
     else if (myPet) { const onFoot = foot && feet && !riding; myPet.group.visible = onFoot; if (onFoot) myPet.step(dt, feet.group.position.x, feet.group.position.z); }
     me.visible = !foot && !riding && mode !== 1; if (feet) { feet.group.visible = foot && mode !== 1; if (foot) { feet.setPos(car.x, car.z); { const m = car.mv == null ? car.a : car.mv; feet.animate(dt, Math.cos(m) * car.v, -Math.sin(m) * car.v); } feet.group.rotation.y = car.a + Math.PI / 2; } } /* your character walks (and faces where you're going) */
     if (parked) pushCar(parked.kind, parked.col, parked.x, parked.z, parked.ry);
@@ -711,7 +733,10 @@ export function createTown(host, opts) {
     get parkedAt() { return parked ? { x: parked.x / TILE, y: parked.z / TILE } : null; },
     doorOf(id) { for (const v of blocks.values()) for (const s of v.solid) if (s.id === id && s.door) return { x: s.door[0] / TILE, y: s.door[1] / TILE, a: s.out }; return null; },
     petHappy() { if (tapped) tapped.happy(); }, /* (the pet you just tapped) */
-    petLeave() { if (!myPet) return; if (!foot || riding || !myPet.group.visible) { myPet.dispose(); myPet = null; return; } const p = myPet.group.position; let dx = p.x - car.x, dz = p.z - car.z, d = Math.hypot(dx, dz); if (d < 0.3) { dx = -Math.cos(car.a); dz = Math.sin(car.a); d = 1; } petGone = { t: 0, x0: car.x, z0: car.z, dx: dx / d, dz: dz / d }; }, /* go home: it trots off away from you and out of view */
+    petLeave() { if (!myPet) return; if (!foot || riding || !myPet.group.visible) { myPet.dispose(); myPet = null; return; } const p = myPet.group.position; let dx = p.x - car.x, dz = p.z - car.z, d = Math.hypot(dx, dz); if (d < 0.3) { dx = -Math.cos(car.a); dz = Math.sin(car.a); d = 1; } dx /= d; dz /= d; let best = null, bd = 1e9; const tx = tileOf(p.x), tz = tileOf(p.z); for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) if (opts.road(tx + i, tz + j)) { const cx = (tx + i + 0.5) * TILE, cz = (tz + j + 0.5) * TILE, e = Math.hypot(cx - p.x, cz - p.z); if (e < bd) { bd = e; best = [cx, cz]; } }
+      if (!best) { petGone = { t: 0, x0: car.x, z0: car.z, dx, dz }; return; } /* (no road near: straight off) */
+      const [cx, cz] = best, ok = ([a, b]) => !!opts.road(tileOf(cx + a * TILE), tileOf(cz + b * TILE)), dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].sort((u, v) => (v[0] * dx + v[1] * dz) - (u[0] * dx + u[1] * dz)), dir = dirs.find(ok) || dirs[0];
+      petGone = { t: 0, road: true, cx, cz, dx: dir[0], dz: dir[1] }; }, /* go home: it trots off along the street, away from you, round corners, and out of view (never through a building) */
     setMyPet(kind) { if (kind && petGone) petGone = null; if (myPet && (!kind || myPet.kind !== kind)) { myPet.dispose(); myPet = null; } if (kind && !myPet) { try { myPet = follower(kind); myPet.group.visible = false; scene.add(myPet.group); } catch (e) { myPet = null; } } },
     kmh() { return Math.round(Math.abs(car.v) * 3.6); }, gear() { return !CARPHYS || foot || riding ? '' : car.v < -0.3 ? 'R' : Math.abs(car.v) < 0.3 && box.pedal < 0.05 ? 'N' : String(box.g); },
     say(who, text) { sayOver(who, text); }, /* talking on the street: 'me' or a colonist's id */

@@ -140,6 +140,7 @@ export function createTown(host, opts) {
   const PERF = (() => { if (BIKE || BOAT) return ({ bicycle: { top: 9, acc: 2.6, grip: 6 }, motorbike: { top: 30, acc: 6, grip: 9 }, boat: { top: 24, acc: 4.5, grip: 3 }, sailboat: { top: 11, acc: 1.8, grip: 2.2 }, ferry: { top: 13, acc: 1.4, grip: 1.6 } })[VK] || { top: 12, acc: 3, grip: 3 }; const P = (CAR_MODELS[opts.car.m] || {}).price || 0, t = P >= 800000 ? 3 : P >= 200000 ? 2 : P >= 50000 ? 1 : 0; return { top: [22.5, 25.5, 29.5, 33.5][t], acc: [3.4, 3.8, 4.4, 5.2][t], grip: [8.6, 9.2, 10.4, 11.8][t], pw: [30, 40, 56, 80][t], trac: [3.4, 3.8, 4.4, 5.2][t], brk: [8.8, 9.3, 10.2, 11.2][t], gears: [4, 5, 5, 6][t] }; })(); /* (town speeds: about 80 km/h in an everyday car up to 120 in a supercar, and a steady pull, so there's time to steer) */ /* how your car goes: top speed (m/s), pull, tyre grip (m/s² sideways), power per kg (W), traction and brakes (m/s²), gears */
   const CARPHYS = !BIKE && !BOAT; /* a car (not a bike or a boat): the full engine, gearbox and brakes below */
   let foot = opts.mode === 'walk', parked = null, riding = null, summon = null; /* summon: your car, driving up to you after you called it */ /* riding: in someone else's car ({ id, seat }), going where they drive */ /* foot: walking (your character), not driving; parked: your car, where you got out */
+  let swimY = 0; /* (how far down in the water you are: you wade in and out) */
   let feet = null; const mkFeet = () => { if (feet) return feet; feet = W.makePerson('me', null, opts.look || null); feet.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); scene.add(feet.group); return feet; };
   if (foot) mkFeet();
   let petGone = null; /* (your pet on its way home) */
@@ -149,6 +150,11 @@ export function createTown(host, opts) {
   if (BIKE) { const P = W.makePerson('me', null, opts.look || null); const A = P.av || P; if (A.pose) { A.pose('play'); if (A.legL) for (const l of [A.legL, A.legR]) { l.rotation.x = -0.95; if (l.children[0]) l.children[0].rotation.x = 1.15; } for (const a of [A.armL, A.armR]) if (a) a.rotation.x = -0.62; }
     P.group.rotation.y = Math.PI; P.group.position.set(0, VK === 'motorbike' ? -0.02 : 0.0, VK === 'motorbike' ? 0.3 : 0.26); P.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); me.add(P.group); me.userData.rider = P; }
   const tileOf = v => Math.floor(v / TILE), PRJ = new THREE.Vector3();
+  // swimming: out in open water on foot you sink to your shoulders and swim (arms over in a crawl, a little kick); the
+  // same for anyone else you see in the water
+  const wetAt = (x, z) => { const tx = tileOf(x), tz = tileOf(z); return !!opts.water(tx, tz) && !opts.road(tx, tz); }, SINK = -1.25;
+  function swimPose(P, y, wet, now, sp) { const g = P.group; g.position.y = y; if (!wet && y > -0.05) return; const A = P.av || P; if (!A.armL || !A.armR) return; const t = now / (sp > 0.3 ? 330 : 700);
+    A.armL.rotation.x = -1.4 + Math.sin(t) * 1.6; A.armR.rotation.x = -1.4 - Math.sin(t) * 1.6; if (A.legL && A.legR) { A.legL.rotation.x = Math.sin(t * 2) * 0.35; A.legR.rotation.x = -Math.sin(t * 2) * 0.35; } }
   let blocksVer = 0, solidKey = '', solidList = []; /* the list is kept until you cross into another block or a block is built or dropped (it was rebuilt every frame) */
   const solidsNear = (x, z) => { const bx = Math.floor(tileOf(x) / B) * B, by = Math.floor(tileOf(z) / B) * B, key = bx + ',' + by + ',' + blocksVer; if (key === solidKey) return solidList; const out = [];
     for (const dx of [-B, 0, B]) for (const dz of [-B, 0, B]) { const v = blocks.get((bx + dx) + ',' + (by + dz)); if (v) for (const o of v.solid) out.push(o); } solidKey = key; solidList = out; return out; };
@@ -160,7 +166,7 @@ export function createTown(host, opts) {
   const carDep = (kind, cx, cz, ry, px, pz, m) => { const [L, Wd] = sizeOf(kind), c = Math.cos(ry), s2 = Math.sin(ry), dx = px - cx, dz = pz - cz, along = -dx * s2 - dz * c, side = dx * c - dz * s2; return Math.min(L / 2 + m - Math.abs(along), Wd / 2 + m - Math.abs(side)); }; /* > 0: inside the car's body (m: extra room) */
   const BRUSH = -0.1, SHOULDER = 0.28; /* driving: up to 10 cm of overlap is a brush; on foot: room for your shoulders */
   const depth = (x, z, s) => s.car ? carDep(s.car.kind, s.car.x, s.car.z, s.car.ry, x, z, foot ? SHOULDER : BRUSH) : s.r ? Math.min(x - s.r[0], s.r[2] - x, z - s.r[1], s.r[3] - z) : s.c[2] - Math.hypot(x - s.c[0], z - s.c[1]); /* > 0: inside, by this much */
-  const hits = (x, z, S, x0, z0) => { const tx = tileOf(x), tz = tileOf(z); if (!opts.loaded(tx, tz)) return true; if (BOAT && !foot) return !(opts.water(tx, tz) && !opts.road(tx, tz)); /* a boat: on the water only */ if (opts.water(tx, tz) && !opts.road(tx, tz) && !(opts.water(tileOf(x0), tileOf(z0)) && !opts.road(tileOf(x0), tileOf(z0)))) return true;
+  const hits = (x, z, S, x0, z0) => { const tx = tileOf(x), tz = tileOf(z); if (!opts.loaded(tx, tz)) return true; if (BOAT && !foot) return !(opts.water(tx, tz) && !opts.road(tx, tz)); /* a boat: on the water only */ if (!foot && opts.water(tx, tz) && !opts.road(tx, tz) && !(opts.water(tileOf(x0), tileOf(z0)) && !opts.road(tileOf(x0), tileOf(z0)))) return true; /* (on foot you can walk into the water and swim) */
     for (const s of S) { if (s.gone || (s.brk && !foot)) continue; const d = depth(x, z, s); if (d <= (foot ? 0 : s.soft || 0)) continue; if (foot ? d >= depth(x0, z0, s) - 1e-3 : d > depth(x0, z0, s) + 0.002) return true; } /* (a vehicle may brush a tree or a bush, and once touching something it can always slide along it or back away) */ /* (lamps, bins, hydrants and traffic lights don't stop a car: it knocks them over) */
     if (!foot) { const box = (kind, cx, cz, ry) => { const d = carDep(kind, cx, cz, ry, x, z, BRUSH); return d > 0 && d >= carDep(kind, cx, cz, ry, x0, z0, BRUSH) - 1e-3; };
       for (const t of traffic) if (Math.abs(t.px - x) < 5 && Math.abs(t.pz - z) < 5 && box(t.kind, t.px, t.pz, t.ry)) return true;
@@ -203,7 +209,7 @@ export function createTown(host, opts) {
     if (foot) { // walking: the stick (or WASD/arrows) moves you forward, back and to either side of where the camera faces; you turn to face the way you walk. Push the stick right out (or hold Shift) to run
       let iy = Math.max(-1, Math.min(1, up)), ix = -Math.max(-1, Math.min(1, turn)); const mag = Math.min(1, Math.hypot(ix, iy)), run = keys.has('Shift') || mag > 0.88;
       if (mag < 0.12) { car.v = 0; car.steer = 0; return; }
-      const ma = lk.yaw - Math.atan2(ix, iy), sp = (run ? 4.4 : 1.8) * Math.min(1, mag / 0.7); car.mv = ma;
+      const ma = lk.yaw - Math.atan2(ix, iy), sp = (run ? 4.4 : 1.8) * Math.min(1, mag / 0.7) * (wetAt(car.x, car.z) ? 0.5 : 1); car.mv = ma; /* (swimming: half the pace) */
       let d = ma - car.a; d = Math.atan2(Math.sin(d), Math.cos(d)); car.steer = Math.sign(d); car.a += d * Math.min(1, dt * 12); /* turn to face the way you're walking */
       car.v += (sp - car.v) * Math.min(1, dt * 8); const fx = Math.cos(ma), fz = -Math.sin(ma), nx = car.x + fx * car.v * dt, nz = car.z + fz * car.v * dt, S = closeSolids(solidsNear(nx, nz), nx, nz, 3);
       const free = (x, z) => !(hits(x + fx * 0.35, z + fz * 0.35, S, car.x + fx * 0.35, car.z + fz * 0.35) || hits(x, z, S, car.x, car.z)); /* (a step ahead of you, then where you stand) */
@@ -398,12 +404,12 @@ export function createTown(host, opts) {
         if (f && f.kind !== kind) { if (f.g) scene.remove(f.g); if (f.pet) f.pet.dispose(); folk.delete(p.id); f = null; }
         if (f && kind === 'walk' && p.look && !f.look) { scene.remove(f.g); if (f.pet) f.pet.dispose(); folk.delete(p.id); f = null; } /* their own look arrived: show them as themselves */
         if (!f) { if (kind === 'walk') { const P = W.makePerson(p.id, null, p.look || null); f = { kind, P, g: P.group, look: !!p.look }; if (p.pet && [...folk.values()].filter(q => q.pet).length < 8) { try { f.pet = follower(p.pet, { side: -1 }); f.owner = p.petOwner || null; scene.add(f.pet.group); } catch (e) {} } /* their pet walks with them (the nearest eight) */ if (p.tag) P.group.add(tag(p.tag, p.online, 2.15)); f.g.position.set(p.x * TILE, 0, p.y * TILE); scene.add(f.g); } else f = { kind, m: p.m || 'sedan', col: p.col || '#7c8288', x: p.x * TILE, z: p.y * TILE, ry: p.a != null ? p.a - Math.PI / 2 : 0 }; folk.set(p.id, f); }
-        f.tx = p.x * TILE; f.tz = p.y * TILE; if (f.kind === 'car') { f.m = p.m || f.m; f.col = p.col || f.col; f.drv = !!p.drv; f.h = p.h || null; f.full = !!p.full; f.ta = p.drv && p.a != null ? p.a - Math.PI / 2 : null; /* a player's car: the way they say it faces */ if (p.tag && f.tagT !== p.tag) { if (f.tagO) { scene.remove(f.tagO); f.tagO.material.map.dispose(); f.tagO.material.dispose(); } f.tagO = tag(p.tag, p.online, 0); f.tagT = p.tag; scene.add(f.tagO); } } }
+        f.tx = p.x * TILE; f.tz = p.y * TILE; if (f.kind === 'car') { f.m = p.m || f.m; f.col = p.col || f.col; f.drv = !!p.drv; f.h = p.h || null; f.full = !!p.full; f.ta = (p.drv || p.still) && p.a != null ? p.a - Math.PI / 2 : null; /* a player's car: the way they say it faces */ if (p.tag && f.tagT !== p.tag) { if (f.tagO) { scene.remove(f.tagO); f.tagO.material.map.dispose(); f.tagO.material.dispose(); } f.tagO = tag(p.tag, p.online, 0); f.tagT = p.tag; scene.add(f.tagO); } } }
       for (const [id, f] of folk) if (!seen.has(id)) { if (f.g) scene.remove(f.g); if (f.pet) f.pet.dispose(); if (f.tagO) { scene.remove(f.tagO); f.tagO.material.map.dispose(); f.tagO.material.dispose(); } folk.delete(id); } }
     for (const [id, f] of folk) { const k = Math.min(1, dt * 2.5); if (f.kind === 'car' && f.tagO) { f.tagO.position.set(f.x, 2.4, f.z); }
       if (f.kind === 'car') { const dx = f.tx - f.x, dz = f.tz - f.z; if (Math.hypot(dx, dz) > 40) { f.x = f.tx; f.z = f.tz; } else { f.x += dx * k; f.z += dz * k; if (f.ta != null || Math.hypot(dx, dz) > 0.05) { let d = (f.ta != null ? f.ta : Math.atan2(-dx, -dz)) - f.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); f.ry += d * Math.min(1, dt * 5); } } if (f.tagO) f.tagO.visible = !(riding && riding.id === id && mode === 1); if (!(riding && riding.id === id && mode === 1)) pushCar(f.m, f.col, f.x, f.z, f.ry); continue; }
       const g = f.g, dx = f.tx - g.position.x, dz = f.tz - g.position.z; if (Math.hypot(dx, dz) > 40) { g.position.x = f.tx; g.position.z = f.tz; continue; }
-      const vx = dx * k / Math.max(dt, 1e-3), vz = dz * k / Math.max(dt, 1e-3); g.position.x += dx * k; g.position.z += dz * k; f.P.animate(dt, vx, vz); if (f.pet) f.pet.step(dt, g.position.x, g.position.z); } }
+      const vx = dx * k / Math.max(dt, 1e-3), vz = dz * k / Math.max(dt, 1e-3); g.position.x += dx * k; g.position.z += dz * k; f.P.animate(dt, vx, vz); { const wet = wetAt(g.position.x, g.position.z); f.sy = (f.sy || 0) + ((wet ? SINK : 0) - (f.sy || 0)) * Math.min(1, dt * 4); swimPose(f.P, f.sy, wet, now, Math.hypot(vx, vz)); } if (f.pet) f.pet.step(dt, g.position.x, g.position.z); } }
 
   // ---- talking on the street: what someone says shows over their head (yours over yours) for 7 seconds ----
   const bubbles = new Map(); /* who → { sp, until } */
@@ -551,7 +557,15 @@ export function createTown(host, opts) {
   function rideSync(dt) { const f = riding && folk.get(riding.id); if (!f || f.kind !== 'car') return; const v = Math.hypot(f.x - car.x, f.z - car.z) / Math.max(dt, 1e-3); car.v += (Math.min(v, 80) - car.v) * Math.min(1, dt * 4); car.x = f.x; car.z = f.z; car.a = f.ry + Math.PI / 2; car.steer = 0; }
   // ---- calling your car: it sets off from a road a little way off and drives along the streets to you, slows, and
   // pulls up at the kerb beside you (rather than appearing out of thin air) ----
-  function callCar() { if (!foot || summon || parked) return false; const px = tileOf(car.x), pz = tileOf(car.z); let goal = null, bd = 9;
+  function callBoat() { const px = tileOf(car.x), pz = tileOf(car.z), wet = (x, z) => !!opts.water(x, z) && !opts.road(x, z) && opts.loaded(x, z), key = (x, z) => x + ',' + z;
+    const open = (x, z) => { let n = 0; for (const [ex, ez] of DIRS) if (wet(x + ex, z + ez)) n++; return n >= 2; };
+    let goal = null, bd = 1e9; for (let r = 0; r <= 40 && !goal; r++) for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) { if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue; const x = px + i, z = pz + j; if (!wet(x, z) || !open(x, z)) continue; const d = Math.hypot(i, j); if (d < bd) { bd = d; goal = [x, z]; } }
+    if (!goal) return false; const prev = new Map([[key(...goal), null]]), dep = new Map([[key(...goal), 0]]), q = [goal]; let far = goal;
+    while (q.length) { const [x, z] = q.shift(), d = dep.get(key(x, z)); if (d > dep.get(key(...far))) far = [x, z]; if (d >= 12) continue; for (const [ex, ez] of DIRS) { const nx = x + ex, nz = z + ez, k = key(nx, nz); if (prev.has(k) || !wet(nx, nz)) continue; prev.set(k, [x, z]); dep.set(k, d + 1); q.push([nx, nz]); } }
+    const pts = []; for (let p = far; p; p = prev.get(key(...p))) pts.push([(p[0] + 0.5) * TILE, (p[1] + 0.5) * TILE]); const at = { x: goal[0] + 0.5, y: goal[1] + 0.5, tiles: Math.round(bd) };
+    if (pts.length < 2) { const ry = 0; parked = { kind: VK, col: opts.car.col, x: pts[0][0], z: pts[0][1], ry }; opts.onCarHere && opts.onCarHere(); return at; } /* (a pond too small to sail across: it's simply there) */
+    const [sx, sz] = pts[0], [nx2, nz2] = pts[1]; summon = { pts, i: 1, x: sx, z: sz, v: 0, ry: Math.atan2(-(nz2 - sz), nx2 - sx) - Math.PI / 2, kind: VK, col: opts.car.col }; return at; }
+  function callCar() { if (!foot || summon || parked) return false; if (BOAT) return callBoat(); const px = tileOf(car.x), pz = tileOf(car.z); let goal = null, bd = 9;
     for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) if (drivable(px + dx, pz + dz)) { const d = Math.hypot(dx, dz); if (d < bd) { bd = d; goal = [px + dx, pz + dz]; } }
     if (!goal) return false; const key = (x, z) => x + ',' + z, prev = new Map([[key(...goal), null]]), depth = new Map([[key(...goal), 0]]), q = [goal]; let far = goal;
     while (q.length) { const [x, z] = q.shift(), d = depth.get(key(x, z)); if (d > depth.get(key(...far))) far = [x, z]; if (d >= 12) continue; /* (about 100 m of road away at most) */
@@ -566,6 +580,12 @@ export function createTown(host, opts) {
       pts.pop(); pts.push([car.x - tx * 4.4 + nx * side * 1.4, car.z - tz * 4.4 + nz * side * 1.4]);
       while (pts.length > 2) { const [ax, az] = pts[pts.length - 2]; if ((ax - car.x) * tx + (az - car.z) * tz > -4.4) pts.splice(pts.length - 2, 1); else break; } } /* (no stops past you on the way in) */
     const [sx, sz] = pts[0], [nx2, nz2] = pts[1]; summon = { pts, i: 1, x: sx, z: sz, v: 0, ry: Math.atan2(-(nz2 - sz), nx2 - sx) - Math.PI / 2, kind: BIKE ? VK + '!' : VK, col: opts.car.col }; return true; }
+  // the nearest dry ground within reach of a boat (m metres): a point a step in from the water's edge, clear of things
+  function shoreNear(x, z, m) { const t0x = tileOf(x), t0z = tileOf(z), R = Math.ceil(m / TILE) + 1; let best = null, bd = m;
+    for (let i = -R; i <= R; i++) for (let j = -R; j <= R; j++) { const tx = t0x + i, tz = t0z + j; if (!opts.loaded(tx, tz) || (opts.water(tx, tz) && !opts.road(tx, tz)) || opts.building(tx, tz)) continue;
+      for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) { const px = (tx + 0.08 + a * 0.28) * TILE, pz = (tz + 0.08 + b * 0.28) * TILE, d = Math.hypot(px - x, pz - z); if (d >= bd) continue;
+        const S = closeSolids(solidsNear(px, pz), px, pz, 1); let ok = true; for (const s of S) if (!s.car && depth(px, pz, s) > -0.3) { ok = false; break; } if (ok) { bd = d; best = [px, pz]; } } }
+    return best; }
   function comeUp(dt) { const S2 = summon, [tx, tz] = S2.pts[S2.i], dx = tx - S2.x, dz = tz - S2.z, d = Math.hypot(dx, dz); let left = d; for (let k = S2.i; k < S2.pts.length - 1; k++) left += Math.hypot(S2.pts[k + 1][0] - S2.pts[k][0], S2.pts[k + 1][1] - S2.pts[k][1]);
     let want = Math.min(11, Math.max(1.2, left * 0.9)); if (foot && d > 0.01) { const ahead = ((car.x - S2.x) * dx + (car.z - S2.z) * dz) / d, side = Math.abs(((car.x - S2.x) * dz - (car.z - S2.z) * dx) / d); if (ahead > 0 && ahead < 3.3 && side < 1.5) want = 0; } /* you're in its way: it waits for you to step aside */
     S2.v += Math.max(-8 * dt, Math.min(4 * dt, want - S2.v)); /* speeds up, then slows to a stop */
@@ -649,7 +669,7 @@ export function createTown(host, opts) {
       if (G.t > 5.2) { const s0 = Math.max(0, 1 - (G.t - 5.2) / 0.5); myPet.group.scale.setScalar(s0 || 0.001); } /* (far off by now: it shrinks away) */
       if (G.t > 5.7) { myPet.dispose(); myPet = null; petGone = null; } } /* sent home: it runs off along the street and out of sight, then it's gone */
     else if (myPet) { const onFoot = foot && feet && !riding; myPet.group.visible = onFoot; if (onFoot) myPet.step(dt, feet.group.position.x, feet.group.position.z); }
-    me.visible = !foot && !riding && mode !== 1; if (feet) { feet.group.visible = foot && mode !== 1; if (foot) { feet.setPos(car.x, car.z); { const m = car.mv == null ? car.a : car.mv; feet.animate(dt, Math.cos(m) * car.v, -Math.sin(m) * car.v); } feet.group.rotation.y = car.a + Math.PI / 2; } } /* your character walks (and faces where you're going) */
+    me.visible = !foot && !riding && mode !== 1; if (feet) { feet.group.visible = foot && mode !== 1; if (foot) { feet.setPos(car.x, car.z); { const m = car.mv == null ? car.a : car.mv; feet.animate(dt, Math.cos(m) * car.v, -Math.sin(m) * car.v); } feet.group.rotation.y = car.a + Math.PI / 2; const wet = wetAt(car.x, car.z); swimY += ((wet ? SINK : 0) - swimY) * Math.min(1, dt * 4); swimPose(feet, swimY, wet, now, Math.abs(car.v)); } } /* your character walks (and faces where you're going) */
     if (parked) pushCar(parked.kind, parked.col, parked.x, parked.z, parked.ry);
     if (summon) { comeUp(dt); if (summon) pushCar(summon.kind, summon.col, summon.x, summon.z, summon.ry); }
     me.position.set(car.x, BOAT ? Math.sin(now / 700) * 0.06 : 0, car.z); me.rotation.set(0, 0, 0); me.rotation.y = car.a - Math.PI / 2; if (BOAT) me.rotation.z = Math.sin(now / 900) * 0.025; /* (a boat rocks gently) */ for (const w of me.userData.wheels || []) w.rotation.x -= car.v * dt / 0.33;
@@ -665,7 +685,7 @@ export function createTown(host, opts) {
     if (now - sent > 250) { sent = now; opts.onMove(car.x / TILE, car.z / TILE, car.a, car.v / TILE); }
     if (now - nearAt > 300 && !riding) { nearAt = now; let b = null; const fx = car.x + Math.cos(car.a) * 3, fz = car.z - Math.sin(car.a) * 3;
       if (foot) { let bd = 3.2; for (const s of solidsNear(car.x, car.z)) { if (!s.door) continue; const d = Math.hypot(s.door[0] - car.x, s.door[1] - car.z); if (d < bd) { bd = d; b = s.id; } } /* at the front door */
-        const nc = !!parked && Math.hypot(parked.x - car.x, parked.z - car.z) < 6.5; /* (a few steps from its side) */ if (nc !== nearCar) { nearCar = nc; opts.onCar && opts.onCar(nc); } }
+        const nc = !!parked && Math.hypot(parked.x - car.x, parked.z - car.z) < (BOAT ? Math.max(6.5, sizeOf(parked.kind)[0] / 2 + 4) : 6.5); /* (a few steps from its side) */ if (nc !== nearCar) { nearCar = nc; opts.onCar && opts.onCar(nc); } }
       else if (Math.abs(car.v) < 5) { let bd = 7; for (const s of solidsNear(car.x, car.z)) { if (!s.id || !s.r) continue; const dx = Math.max(s.r[0] - fx, 0, fx - s.r[2]), dz = Math.max(s.r[1] - fz, 0, fz - s.r[3]), d = Math.hypot(dx, dz); if (d < bd) { bd = d; b = s.id; } } }
       if (b !== nearId) { nearId = b; opts.onNear(b ? opts.byId(b) : null); }
       { let rc = null, rd = 4.5; if (foot) for (const [id, f] of folk) if (f.kind === 'car' && f.drv) { const d = Math.hypot(f.x - car.x, f.z - car.z); if (d < rd) { rd = d; rc = id; } } /* by someone's car: ask them for a ride */
@@ -734,13 +754,15 @@ export function createTown(host, opts) {
     get riding() { return riding ? riding.id : null; },
     // get out of the car (it stays parked there if it's yours) and walk, or get back in (at your parked car, or a car appears)
     walk(keep) { if (foot) return; parked = keep ? { kind: BIKE ? VK + '!' : VK, col: opts.car.col, x: car.x, z: car.z, ry: car.a - Math.PI / 2 } : null; foot = true; mkFeet(); lk.yaw = car.a; car.mv = null;
-      const sx = -Math.sin(car.a) * 2.2, sz = -Math.cos(car.a) * 2.2; car.x += sx; car.z += sz; car.v = 0; nearCar = false; controls(); },
+      let out = 'road'; if (BOAT) { const land = shoreNear(car.x, car.z, Math.max(12, OL + 8)); if (land) { car.x = land[0]; car.z = land[1]; out = 'shore'; } else { const sx = -Math.sin(car.a) * (OW + 1.2), sz = -Math.cos(car.a) * (OW + 1.2); car.x += sx; car.z += sz; out = 'swim'; } swimY = out === 'swim' ? SINK : 0; } /* a boat: step off onto the shore when it's close, or over the side into the water */
+      else { const sx = -Math.sin(car.a) * 2.2, sz = -Math.cos(car.a) * 2.2; car.x += sx; car.z += sz; } car.v = 0; nearCar = false; controls(); return out; },
     drive() { if (!foot) return; if (parked) { car.x = parked.x; car.z = parked.z; car.a = parked.ry + Math.PI / 2; parked = null; } foot = false; car.v = 0; car.vx = car.vz = 0; car.wa = 0; lk.yaw = 0; nearCar = false; opts.onCar && opts.onCar(false); controls(); },
     get parked() { return !!parked; },
     callCar() { return callCar(); }, get coming() { return !!summon; },
     // where a point of the town is on the screen (tiles, and metres up): for buttons that sit on the door, or on the car
     project(tx, ty, h = 0) { const v = PRJ.set(tx * TILE, h, ty * TILE).project(camera), w = canvas.clientWidth, hh = canvas.clientHeight; return { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * hh, on: v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 }; },
-    get parkedAt() { return parked ? { x: parked.x / TILE, y: parked.z / TILE } : null; },
+    get parkedAt() { return parked ? { x: parked.x / TILE, y: parked.z / TILE, a: parked.ry, k: parked.kind } : null; },
+    get swimming() { return foot && !riding && wetAt(car.x, car.z); },
     doorOf(id) { for (const v of blocks.values()) for (const s of v.solid) if (s.id === id && s.door) return { x: s.door[0] / TILE, y: s.door[1] / TILE, a: s.out }; return null; },
     petHappy() { if (tapped) tapped.happy(); }, /* (the pet you just tapped) */
     petLeave() { if (!myPet) return; if (!foot || riding || !myPet.group.visible) { myPet.dispose(); myPet = null; return; } const p = myPet.group.position; let dx = p.x - car.x, dz = p.z - car.z, d = Math.hypot(dx, dz); if (d < 0.3) { dx = -Math.cos(car.a); dz = Math.sin(car.a); d = 1; } dx /= d; dz /= d; let best = null, bd = 1e9; const tx = tileOf(p.x), tz = tileOf(p.z); for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) if (opts.road(tx + i, tz + j)) { const cx = (tx + i + 0.5) * TILE, cz = (tz + j + 0.5) * TILE, e = Math.hypot(cx - p.x, cz - p.z); if (e < bd) { bd = e; best = [cx, cz]; } }

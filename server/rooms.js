@@ -48,6 +48,8 @@ export class Rooms {
   // The inside a building has of its own: a business's design (or its standard fit-out), or an empty home's (bare until its owner furnishes it).
   bizRoom(b) { const home = !!BUILDING_TYPES[b.type]?.home, size = home ? F.roomSize(b.type) : F.bizSize(b.type), plan = home ? F.homePlan(b.type) : F.bizKind(b.type);
     return { size, plan, room: F.fitRoom(b.interior || (home ? {} : { items: F.standardFit(b.type, size) }), size, plan).room }; }
+  // the owner's own home there, kept as they left it while they live elsewhere (shown and furnished as itself)
+  async keptOf(q, b) { if (!b?.owner_id || !BUILDING_TYPES[b.type]?.home) return null; return (await q('select unit, room from kept_homes where citizen_id = $1 and building_id = $2', [b.owner_id, b.id])).rows[0] || null; }
   sizeOf(type) { return BUILDING_TYPES[type]?.home ? F.roomSize(type) : F.bizSize(type); }
   enterable(type) { return F.canEnter(type) || !!BUILDING_TYPES[type]?.home; }
   async viewBuilding(meId, bid, dev = false) {
@@ -63,8 +65,8 @@ export class Rooms {
     // a night club lets in so many people at once (its owner, and their husband or wife, always get in)
     const cap = BUILDING_TYPES[b.type]?.guests || 0, inside = cap ? this.inside('b:' + b.id, meId) : 0;
     if (cap && inside >= cap && !dev && !(meId && (b.owner_id === meId || (b.owner_id && (await this.world.love?.spouseOf(meId)) === b.owner_id)))) throw new HttpError(409, `🪩 ${b.name || BUILDING_TYPES[b.type].name} is full (${cap} guests). Try again in a little while.`);
-    const { size, room } = this.bizRoom(b), mine = !!meId && !!b.owner_id && (b.owner_id === meId || (await this.world.love?.spouseOf(meId)) === b.owner_id), c = mine ? (await pool.query('select coins_base from citizens where id = $1', [meId])).rows[0] : null;
-    return { ...(cap ? { guests: cap, inside: inside + 1 } : {}), ...(dev ? { dev: true } : {}), mine: mine || dev, place: BUILDING_TYPES[b.type]?.home ? 'building' : 'business', owner: b.owner_handle || null, designed: !!b.interior, home: { id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Building', type: b.type, x: b.x, y: b.y, w: b.w, d: b.d, rot: b.rot || 0 }, size, room, photos: await this.photoUrls(room), coins: c ? Math.round(Number(c.coins_base)) : undefined };
+    const kp = await this.keptOf((x, v) => pool.query(x, v), b), z0 = this.bizRoom(b), size = z0.size, room = kp ? F.fitRoom(kp.room, size, F.homePlan(b.type, kp.unit)).room : z0.room, mine = !!meId && !!b.owner_id && (b.owner_id === meId || (await this.world.love?.spouseOf(meId)) === b.owner_id), c = mine ? (await pool.query('select coins_base from citizens where id = $1', [meId])).rows[0] : null;
+    return { ...(cap ? { guests: cap, inside: inside + 1 } : {}), ...(dev ? { dev: true } : {}), mine: mine || dev, place: BUILDING_TYPES[b.type]?.home ? 'building' : 'business', owner: b.owner_handle || null, designed: !!b.interior || !!kp, home: { id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Building', type: b.type, x: b.x, y: b.y, w: b.w, d: b.d, rot: b.rot || 0 }, size, room, photos: await this.photoUrls(room), coins: c ? Math.round(Number(c.coins_base)) : undefined };
   }
   async homeOf(q, c) {
     if (!c.home_id) return null;
@@ -110,7 +112,7 @@ export class Rooms {
     const res = await this.world.personal(async ch => {
       const dev = bid && typeof bid === 'object' && bid.dev; /* the developer: any building, anyone's home, nothing to pay */
       const q = (a, v) => ch.q(a, v), c = dev ? { id: 'developer', handle: 'developer' } : (await q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such colonist.');
-      let home, room, b = null, t = c; /* t: whose home it is (you, or your husband or wife); c pays */
+      let home, room, b = null, t = c, keptFor = null; /* t: whose home it is (you, or your husband or wife); c pays */
       if (dev === 'h') { t = (await q('select * from citizens where lower(handle) = lower($1) for update', [String(bid.handle || '')])).rows[0]; home = t && await this.homeOf(q, t); if (!home) throw new HttpError(404, 'They don’t have a home right now.'); room = F.fitRoom(t.room, home.size, home.plan).room; }
       else if (dev === 'b') { b = (await q('select * from buildings where id = $1 for update', [String(bid.id || '')])).rows[0]; if (!b) throw new HttpError(404, 'That building is gone.'); if (!this.sizeOf(b.type)) throw new HttpError(409, 'This building has no inside.');
         const z = this.bizRoom(b); room = z.room; home = { plan: z.plan, id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Building', type: b.type, x: b.x, y: b.y, w: b.w, d: b.d, size: z.size }; }
@@ -118,7 +120,8 @@ export class Rooms {
         t = (await q('select * from citizens where id = $1 for update', [sid])).rows[0]; home = t && await this.homeOf(q, t); if (!home) throw new HttpError(409, 'Your husband or wife doesn’t have a home right now.'); room = F.fitRoom(t.room, home.size, home.plan).room; bid = null; }
       else if (bid) { b = (await q('select * from buildings where id = $1 for update', [String(bid)])).rows[0]; if (!b) throw new HttpError(404, 'That building is gone.');
         if (b.owner_id !== c.id && !(b.owner_id && (await this.world.love?.spouseOf(c.id, q)) === b.owner_id)) throw new HttpError(403, 'Only its owner (or their husband or wife) can design the inside.'); if (!this.enterable(b.type) || !b.done) throw new HttpError(409, 'This building has no inside to design.');
-        const z = this.bizRoom(b); room = z.room; home = { plan: z.plan, id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Building', type: b.type, x: b.x, y: b.y, w: b.w, d: b.d, size: z.size }; }
+        const z = this.bizRoom(b); room = z.room; home = { plan: z.plan, id: b.id, name: b.name || BUILDING_TYPES[b.type]?.name || 'Building', type: b.type, x: b.x, y: b.y, w: b.w, d: b.d, size: z.size };
+        const kp = await this.keptOf(q, b); if (kp) { home.plan = F.homePlan(b.type, kp.unit); room = F.fitRoom(kp.room, z.size, home.plan).room; keptFor = b.owner_id; } } /* (your own home there, kept while you live elsewhere) */
       else { home = await this.homeOf(q, c); if (!home) throw new HttpError(409, 'You don’t have a home yet. Rent one first, then you can furnish it.'); room = F.fitRoom(c.room, home.size, home.plan).room; }
       const r = await fn(room, home, c, q, b) || {};
       if (!dev && (r.spend || r.refund)) { ch.coins(c);
@@ -127,7 +130,7 @@ export class Rooms {
         if (r.refund) { c.coins_base = Number(c.coins_base) + r.refund; track(ch, 'home:resale', r.refund, c.id); }
         ch.touch(c); await ch.saveCitizen(c); }
       if (r.gone?.length) { gone = (await q('delete from room_photos where id = any($1) returning r2key', [r.gone])).rows; }
-      if (b) await q('update buildings set interior = $2 where id = $1', [b.id, JSON.stringify(room)]); else await q('update citizens set room = $2 where id = $1', [t.id, JSON.stringify(room)]);
+      if (b && keptFor) await q('update kept_homes set room = $3 where citizen_id = $1 and building_id = $2', [keptFor, b.id, JSON.stringify(room)]); else if (b) await q('update buildings set interior = $2 where id = $1', [b.id, JSON.stringify(room)]); else await q('update citizens set room = $2 where id = $1', [t.id, JSON.stringify(room)]);
       return { c, t, home, room, item: r.item, b };
     });
     for (const g of gone) if (g.r2key && store.r2On()) store.del(g.r2key).catch(() => {}); // the photos nobody uses any more
@@ -136,6 +139,17 @@ export class Rooms {
     if (dev) { o.dev = true; delete o.coins; } else if (!res.b && res.t.id !== res.c.id) { o.partner = true; o.coins = Math.round(Number(res.c.coins_base)); } /* your spouse's home: their home, your coins */
     return { ...o, ok: true, ...(res.item ? { item: res.item } : {}) };
   }
+  // 📦 your storage: what's in it, how much it holds, and buying more space (it goes with you from home to home)
+  async storage(id) { const c = (await pool.query('select room, storage_extra from citizens where id = $1', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such colonist.');
+    const box = (c.room?.box || []).filter(it => F.FURNITURE[it?.k]).map(it => ({ i: String(it.i), k: it.k, name: F.FURNITURE[it.k].name, resale: F.resaleOf(it.k, it.std) })), extra = Number(c.storage_extra || 0);
+    const placed = (c.room?.items || []).filter(it => F.FURNITURE[it?.k]).map(it => ({ i: String(it.i), k: it.k, name: F.FURNITURE[it.k].name, resale: F.resaleOf(it.k, it.std) })); /* (set out where you live: into storage if you move to a home you own) */
+    return { box, placed, cap: F.storageCap(extra), extra, step: F.STORE_STEP, price: F.storageCap(extra) >= F.STORE_HARD ? null : F.storeSpacePrice(extra) }; }
+  async buySpace(id) {
+    return this.world.personal(async ch => { const c = (await ch.q('select * from citizens where id = $1 for update', [id])).rows[0]; if (!c) throw new HttpError(404, 'No such colonist.');
+      const extra = Number(c.storage_extra || 0); if (F.storageCap(extra) >= F.STORE_HARD) throw new HttpError(409, 'Your storage is as big as it gets.');
+      const price = F.storeSpacePrice(extra); ch.coins(c); if (Number(c.coins_base) < price) throw new HttpError(400, `More storage space costs ${fmt(price)} coins. You have ${fmt(c.coins_base)} on you${Number(c.bank) ? ' (withdraw some at a Bank first)' : ''}.`);
+      c.coins_base = Number(c.coins_base) - price; treasuryAdd(ch, price); track(ch, 'home:storage', price, c.id); ch.touch(c); await ch.saveCitizen(c);
+      await ch.q('update citizens set storage_extra = $2 where id = $1', [c.id, extra + F.STORE_STEP]); return { ok: true, cap: F.storageCap(extra + F.STORE_STEP), paid: price, coins: c.coins_base }; }); }
   find(room, i) { const at = room.items.findIndex(x => x.i === i), inBox = at < 0 ? room.box.findIndex(x => x.i === i) : -1;
     if (at < 0 && inBox < 0) throw new HttpError(404, 'That piece isn’t in your home any more.'); return { at, inBox, it: at >= 0 ? room.items[at] : room.box[inBox] }; }
   buy(id, b, bid = null) {
@@ -165,9 +179,9 @@ export class Rooms {
     }, bid);
   }
   store(id, b, bid = null) {
-    return this.edit(id, room => {
+    return this.edit(id, (room, home, c, q, bb) => {
       const { at } = this.find(room, String(b.i || '')); if (at < 0) return;
-      if (room.box.length >= F.MAX_STORED) throw new HttpError(409, 'Your storage is full. Sell something first.');
+      if (room.box.length >= (bb || !c ? F.MAX_STORED : F.storageCap(c.storage_extra))) throw new HttpError(409, 'Your storage is full. Sell something, or buy more storage space (📦 on your card’s Home tab).');
       const [it] = room.items.splice(at, 1); room.box.push({ i: it.i, k: it.k, c: it.c, ...(it.ph ? { ph: it.ph } : {}), ...(it.std ? { std: true } : {}) });
     }, bid);
   }

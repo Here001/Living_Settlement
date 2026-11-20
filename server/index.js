@@ -136,7 +136,7 @@ const jsonSmall = express.json({ limit: '64kb' }), jsonBig = express.json({ limi
 app.use((req, res, next) => (admin.check(req) ? jsonBig : jsonSmall)(req, res, next));
 const send = fn => async (req, res) => {
   try { res.json(await fn(req) ?? { ok: true }); }
-  catch (e) { const s = e instanceof HttpError ? e.status : 500; if (s === 500) console.error(e); res.status(s).json({ error: s === 500 ? 'Something went wrong on the server.' : e.message }); }
+  catch (e) { const s = e instanceof HttpError ? e.status : 500; if (s === 500) console.error(e); res.status(s).json({ error: s === 500 ? 'Something went wrong on the server.' : e.message, ...(s !== 500 && e.data ? { data: e.data } : {}) }); }
 };
 
 // ---------- public ----------

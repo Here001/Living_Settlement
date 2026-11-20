@@ -9,7 +9,7 @@ import { bump } from './achievements.js';
 import { score } from './leaderboards.js';
 import { playRound, GAMES, MAX_BET, validRoulette } from '../shared/casino.js';
 import { BUILDING_TYPES, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, roadClears, pgList } from '../shared/catalog.js';
-import { canEnter } from '../shared/furniture.js';
+import { canEnter, roomSize, fitRoom, homePlan, storageCap, storeSpacePrice, STORE_STEP } from '../shared/furniture.js';
 import { fixLook, mapLook } from '../shared/avatar.js';
 import * as R from '../shared/rules.js';
 const changeScope = new AsyncLocalStorage();
@@ -24,7 +24,7 @@ const fmt = n => Math.round(n).toLocaleString('en-US');
 export function cleanTiles(tiles, max) { const out = [], seen = new Set(); if (!Array.isArray(tiles)) return out;
   for (const p of tiles) { const x = Math.trunc(Number(p?.[0])), y = Math.trunc(Number(p?.[1])), k = x + ',' + y; if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 100000 || Math.abs(y) > 100000 || seen.has(k)) continue; seen.add(k); out.push([x, y]); if (out.length >= max) break; }
   return out; }
-export class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
+export class HttpError extends Error { constructor(status, msg, data = null) { super(msg); this.status = status; this.data = data; } } /* data: more for the page (e.g. what to sell before a move) */
 
 // ---------- row shapes ----------
 export const bRow = r => ({ id: r.id, type: r.type, x: r.x, y: r.y, cx: r.cx, cy: r.cy, name: r.name, requestedBy: r.requested_by,
@@ -182,26 +182,52 @@ class Change {
     await this.saveCitizen(c);
   }
 
-  // An owner's apartment in a building they own is theirs for good: moving out leaves it just as it is (everything in it,
-  // and its number, which nobody else is given), and moving back in gives it back. Furniture they had with them then goes
-  // into the apartment's storage. Renters' furniture still goes with them from home to home.
-  async keepApartment(c, fromId, toId) {
+  // Moving home. A home you own keeps its own things and design whether you live there or not (in kept_homes, with its
+  // number; furnished before you ever lived there, they're on the building itself). Your storage goes with you.
+  // - Into a home you own that has its things: they're back where you left them, and whatever you had set out where you
+  //   lived goes into your storage.
+  // - Into anywhere else: your things come with you (what doesn't fit there goes into your storage).
+  // A move you make yourself (check) is refused, with what's needed, if your storage couldn't hold it all: sell some
+  // things, or buy more space, then move. A move the colony makes (moving the newest tenant out) never loses anything.
+  async keepApartment(c, fromId, toId, { check = false, dry = false } = {}) { /* dry: only check (before charging for the move) */
     if (fromId === toId) return;
-    const r = (await this.q('select room, home_unit, home_unit_bid from citizens where id = $1', [c.id])).rows[0]; if (!r) return;
+    const r = (await this.q('select room, home_unit, home_unit_bid, storage_extra from citizens where id = $1', [c.id])).rows[0]; if (!r) return;
     const owns = async bid => !!bid && !!(await this.q('select 1 from buildings where id = $1 and owner_id = $2', [bid, c.id])).rowCount;
-    let room = r.room, unit = r.home_unit, ubid = r.home_unit_bid, changed = false;
-    if (await owns(fromId)) {
-      const u = ubid === fromId && Number.isInteger(unit) ? unit : ubid == null && room?.items?.length ? 1 : null; /* (furnished before apartments had numbers: number 1, as on going in) */
-      if (u != null) { await this.q(`insert into kept_homes (citizen_id, building_id, unit, room, t) values ($1, $2, $3, $4, $5)
-          on conflict (citizen_id, building_id) do update set unit = excluded.unit, room = excluded.room, t = excluded.t`, [c.id, fromId, u, JSON.stringify(room || {}), Date.now()]);
-        room = null; unit = null; ubid = null; changed = true; } }
-    if (await owns(toId)) {
-      const k = (await this.q('delete from kept_homes where citizen_id = $1 and building_id = $2 returning unit, room', [c.id, toId])).rows[0];
-      if (k) { room = withStored(k.room, room); unit = k.unit; ubid = toId; changed = true; } }
-    if (changed) { await this.q('update citizens set room = $2, home_unit = $3, home_unit_bid = $4 where id = $1', [c.id, room ? JSON.stringify(room) : null, unit, ubid]); c.room = room; c.home_unit = unit; c.home_unit_bid = ubid; }
+    const others = async bid => Number((await this.q('select count(*) n from citizens where home_id = $1 and id <> $2', [bid, c.id])).rows[0].n) > 0;
+    const boxed = it => ({ i: String(it.i), k: it.k, ...(it.c ? { c: it.c } : {}), ...(it.ph ? { ph: it.ph } : {}), ...(it.std ? { std: true } : {}) });
+    const room0 = r.room && typeof r.room === 'object' ? r.room : {}, ops = []; let unit = r.home_unit, ubid = r.home_unit_bid, changed = false;
+    let carried = { ...room0, items: [...(room0.items || [])], box: [...(room0.box || [])] }; /* (renting: everything comes with you) */
+    if (await owns(fromId)) { const design = { ...(room0.plan ? { plan: room0.plan } : {}), styles: room0.styles || {}, items: room0.items || [], box: [], ...(room0.locked ? { locked: true } : {}) };
+      const u = ubid === fromId && Number.isInteger(unit) ? unit : 1;
+      ops.push(['keep', fromId, u, design]); /* (it stays just as it is, with its number: you can go in and keep furnishing it while you live elsewhere) */
+      carried = { box: [...(room0.box || [])] }; unit = null; ubid = null; changed = true; } /* (only your storage comes along) */
+    let next = carried;
+    if (await owns(toId)) { const k = (await this.q('select unit, room from kept_homes where citizen_id = $1 and building_id = $2', [c.id, toId])).rows[0];
+      const b = !k && !(await others(toId)) ? (await this.q('select interior from buildings where id = $1', [toId])).rows[0] : null, design = k ? k.room : b && b.interior;
+      if (design) { next = { ...design, box: [...(design.box || []), ...(carried.items || []).map(boxed), ...(carried.box || []).map(boxed)] }; delete next.items; next.items = [...(design.items || [])];
+        unit = k ? k.unit : 1; ubid = toId; ops.push(k ? ['unkeep', toId] : ['uninterior', toId]); changed = true; } }
+    // what your storage will hold once you're in (anything that doesn't fit the new place counts too)
+    const tb = toId ? (await this.q('select type from buildings where id = $1', [toId])).rows[0] : null, size = tb && roomSize(tb.type);
+    const fitted = size ? fitRoom(next, size, homePlan(tb.type, ubid === toId && Number.isInteger(unit) ? unit : 1)).room : { box: next.box || [] }, cap = storageCap(r.storage_extra);
+    if (check && fitted.box.length > cap) { const over = fitted.box.length - cap, step = Math.ceil(over / STORE_STEP);
+      throw new HttpError(409, `Your storage can't take it all: ${fitted.box.length} things to store and room for ${cap}. Sell ${over} thing${over === 1 ? '' : 's'}, or buy more storage space, then move.`,
+        { storage: { need: fitted.box.length, cap, over, buy: step * STORE_STEP, price: Array.from({ length: step }, (_, i) => storeSpacePrice(Number(r.storage_extra || 0) + i * STORE_STEP)).reduce((a, b) => a + b, 0) } }); }
+    if (dry) return;
+    for (const [op, bid, u, design] of ops) {
+      if (op === 'keep') await this.q(`insert into kept_homes (citizen_id, building_id, unit, room, t) values ($1, $2, $3, $4, $5)
+          on conflict (citizen_id, building_id) do update set unit = excluded.unit, room = excluded.room, t = excluded.t`, [c.id, bid, u, JSON.stringify(design), Date.now()]);
+      else if (op === 'interior') { await this.q('update buildings set interior = $2 where id = $1', [bid, JSON.stringify(design)]); this.buildings.add(bid); }
+      else if (op === 'unkeep') await this.q('delete from kept_homes where citizen_id = $1 and building_id = $2', [c.id, bid]);
+      else if (op === 'uninterior') { await this.q('update buildings set interior = null where id = $1', [bid]); this.buildings.add(bid); } }
+    const room = next && ((next.items && next.items.length) || (next.box && next.box.length) || next.styles) ? next : null;
+    await this.q('update citizens set room = $2, home_unit = $3, home_unit_bid = $4 where id = $1', [c.id, room ? JSON.stringify(room) : null, unit, ubid]); c.room = room; c.home_unit = unit; c.home_unit_bid = ubid;
   }
   // A building stops being theirs (sold, knocked down): a kept apartment's furniture goes into their own storage.
   async giveBackApartment(buildingId, ownerId) {
+    if (ownerId) { const b = (await this.q('select type, interior from buildings where id = $1', [buildingId])).rows[0];
+      if (b && b.interior && BUILDING_TYPES[b.type]?.home && ((b.interior.items || []).length || (b.interior.box || []).length)) { /* a house they'd furnished while living elsewhere */
+        const o = (await this.q('select room from citizens where id = $1 for update', [ownerId])).rows[0]; if (o) await this.q('update citizens set room = $2 where id = $1', [ownerId, JSON.stringify(withStored(o.room, b.interior))]);
+        await this.q('update buildings set interior = null where id = $1', [buildingId]); this.buildings.add(buildingId); } }
     const rows = (await this.q(`delete from kept_homes where building_id = $1 ${ownerId ? 'and citizen_id = $2' : ''} returning citizen_id, room`, ownerId ? [buildingId, ownerId] : [buildingId])).rows;
     for (const k of rows) { const c = (await this.q('select room from citizens where id = $1 for update', [k.citizen_id])).rows[0]; if (!c) continue;
       await this.q('update citizens set room = $2 where id = $1', [k.citizen_id, JSON.stringify(withStored(c.room, k.room))]); }
@@ -728,7 +754,10 @@ export class World {
   async moveIn(ch, b, x, y, rot) {
     const id = b.id, r2 = rot === undefined || rot === null ? b.rot : R.cleanRot(rot), [w, d] = R.footprint(R.levelSize(b.type, b.level), r2);
     await this.assertFree(ch, b.type, x, y, id, r2, { level: b.level, plot: b.plot_id });
-    if (b.plot_id) { const p = (await ch.q('select * from plots where id = $1', [b.plot_id])).rows[0]; if (p && (x < p.x || y < p.y || x + w > p.x + p.w || y + d > p.y + p.d)) throw new HttpError(409, 'It has to stay on its plot.'); }
+    if (b.plot_id) { /* anywhere on the owner's land: its plot, or any plot joined to it in the same estate (land bought beside it later) */
+      const es = (await ch.q('select x, y, w, d from plots where coalesce(estate, id) = (select coalesce(estate, id) from plots where id = $1)', [b.plot_id])).rows;
+      const on = (tx, ty) => es.some(p => tx >= p.x && ty >= p.y && tx < p.x + p.w && ty < p.y + p.d);
+      if (es.length) for (let i = 0; i < w; i++) for (let j = 0; j < d; j++) if (!on(x + i, y + j)) throw new HttpError(409, es.length > 1 ? 'It has to stay on your land.' : 'It has to stay on its plot.'); }
     const [cx, cy] = R.chunkOf(x, y);
     if (cx !== b.cx || cy !== b.cy) ch.removedBuildings.set(id, R.chunkKey(b.cx, b.cy));
     await ch.q('update buildings set x = $2, y = $3, cx = $4, cy = $5, rot = $6, w = $7, d = $8 where id = $1', [id, x, y, cx, cy, r2, w, d]);

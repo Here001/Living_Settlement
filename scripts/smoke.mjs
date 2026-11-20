@@ -1741,6 +1741,8 @@ r = await call('POST', `/api/me/plots/${plotId}/build`, { type: 'bench', x: s1.x
     const info = (await call('GET', `/api/plots/${b2.json.plot.id}`, undefined, C.P)).json; ok(info.plots && info.plots.length === 2 && info.tiles === 9 + 6, 'the plot card shows the whole estate', JSON.stringify(info).slice(0, 200));
     const across = await call('POST', `/api/me/plots/${info.id}/build`, { type: 'house', x: pick.at[0], y: pick.at[1] }, C.P); ok(across.status === 200, 'a house can stand across both plots of the estate', JSON.stringify(across.json).slice(0, 200));
     if (across.status === 200) await pool.query('update buildings set done = true where id = $1', [across.json.building.id]);
+    if (across.status === 200) { const mv = await call('POST', `/api/me/buildings/${across.json.building.id}/move`, { x: pick.r.x, y: pick.r.y, rot: 0 }, C.P), mv2 = await call('POST', `/api/me/buildings/${across.json.building.id}/move`, { x: pick.r.x + 20, y: pick.r.y, rot: 0 }, C.P);
+      ok(mv.status === 200 && mv2.status === 409, 'a building can be moved anywhere on the estate, right onto the land bought later (but not off your land)', JSON.stringify([mv.json, mv2.json]).slice(0, 200)); }
     const sold = await call('POST', `/api/me/plots/${info.id}/sell`, {}, C.P); ok(sold.status === 200 && !(await pool.query('select 1 from plots where owner_id = $1', [C.id])).rowCount, 'selling the estate sells all of it', JSON.stringify(sold.json)); } }
 // plots that touch but were bought before estates existed are joined up too (here: on the owner's next purchase)
 { const F = await player('old_land_olu', 3_000_000), g1 = await spot(3, 3), g2 = { x: g1.x + 3, y: g1.y, w: 2, d: 3 };
@@ -2075,7 +2077,7 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   await pool.query(`update citizens set room = '{"plan":"h:apartment","items":[{"i":"k1","k":"plant","x":3,"y":3,"r":0}],"box":[{"i":"k2","k":"armchair"}],"styles":{}}' where id = $1`, [O.id]);
   ok((await moveTo(O, hs.id)).status === 200, '…then moves to another home');
   const away = (await call('GET', '/api/me/room', undefined, O.P)).json;
-  ok(away.room.items.length === 0 && away.room.box.length === 0, 'their furniture stays behind in their apartment (the new home starts bare)', JSON.stringify(away.room));
+  ok(away.room.items.length === 0 && away.room.box.length === 1 && away.room.box[0].i === 'k2', 'their furniture stays behind in their apartment (the new home starts bare); their storage comes with them', JSON.stringify(away.room));
   const kept = (await pool.query('select unit, room from kept_homes where citizen_id = $1 and building_id = $2', [O.id, ap.id])).rows[0];
   ok(kept && kept.unit === u0 && kept.room.items.length === 1, '…kept, with its number', JSON.stringify(kept));
   await pool.query('update citizens set home_id = $2, room = null, home_unit = null, home_unit_bid = null where id = $1', [N.id, ap.id]);
@@ -2420,6 +2422,27 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
     ok((await call('GET', '/api/me/missions', undefined, vet.P)).json.rank === 3, 'players who already did crimes before missions start at Operator, so nothing they did is locked away'); }
   w.close();
 }
+{ // moving home: a home you own keeps its own things whether you live there or not; your storage goes with you; a move your storage can't hold waits until you sell or buy space
+  const F = await import('../shared/furniture.js'), Pm = await player('mover_mia', 900000), mk = async (t, x) => (await call('POST', '/api/admin/buildings', { type: t, x, y: 310, instant: true })).json;
+  const ids = []; for (const [t, x] of [['apartment', 1700], ['house', 1720], ['apartment', 1740]]) ids.push((await call('POST', '/api/admin/buildings', { type: t, x, y: 1460, instant: true })).json.building.id);
+  await pool.query('update buildings set owner_id = $2, owner_handle = $3 where id = $1', [ids[1], Pm.id, 'mover_mia']);
+  const home = async id => { await pool.query('update citizens set home_changed_day = null where id = $1', [Pm.id]); return call('POST', '/api/me/home', { buildingId: id }, Pm.P); }, roomOf = async () => (await pool.query('select room from citizens where id = $1', [Pm.id])).rows[0].room || {};
+  ok((await home(ids[0])).status === 200, 'renting a flat');
+  const it = (i, k) => ({ i, k, x: 0, y: 0, r: 0 }); await pool.query('update citizens set room = $2 where id = $1', [Pm.id, JSON.stringify({ items: [it('a1', 'sofa')], box: [{ i: 'a2', k: 'tv' }] })]);
+  await pool.query('update buildings set interior = $2 where id = $1', [ids[1], JSON.stringify({ styles: {}, items: [it('h1', 'bigrug')], box: [] })]); /* the house, furnished while living in the flat */
+  const m1 = await home(ids[1]), r1 = await roomOf(), h1 = (await pool.query('select interior from buildings where id = $1', [ids[1]])).rows[0].interior;
+  ok(m1.status === 200 && r1.items.some(x => x.i === 'h1') && !r1.items.some(x => x.i === 'a1') && ['a1', 'a2'].every(i => r1.box.some(x => x.i === i)) && !h1, 'moving into your own house: its own things are where you left them, and what you had in the flat goes into your storage', JSON.stringify({ r1, h1 }));
+  const m2 = await home(ids[2]), r2 = await roomOf(), h2 = ((await pool.query('select room from kept_homes where citizen_id = $1 and building_id = $2', [Pm.id, ids[1]])).rows[0] || {}).room;
+  ok(m2.status === 200 && h2 && h2.items.some(x => x.i === 'h1') && !(r2.items || []).length && ['a1', 'a2'].every(i => r2.box.some(x => x.i === i)), 'moving out of it to rent again: the house keeps its things, and your storage comes with you', JSON.stringify({ r2, h2 }));
+  // more than your storage can hold: the move waits
+  await pool.query('update citizens set room = $2 where id = $1', [Pm.id, JSON.stringify({ items: [], box: Array.from({ length: F.MAX_STORED }, (_, i) => ({ i: 'b' + i, k: 'rug' })) })]);
+  const seen = (await call('GET', `/api/buildings/${ids[1]}/inside`, undefined, Pm.P)).json; ok(seen.mine && seen.room.items.some(x => x.i === 'h1'), 'going into your own house while you live elsewhere: it\'s just as you left it, and you can keep furnishing it', JSON.stringify(seen).slice(0, 200));
+  await pool.query('update kept_homes set room = $3 where citizen_id = $1 and building_id = $2', [Pm.id, ids[1], JSON.stringify({ styles: {}, items: [it('h1', 'bigrug')], box: [{ i: 'hx', k: 'tv' }] })]);
+  const m3 = await home(ids[1]); ok(m3.status === 409 && m3.json.data && m3.json.data.storage && m3.json.data.storage.over === 1 && m3.json.data.storage.price > 0, 'a move your storage can\'t hold: refused, with how much is over and what more space costs', JSON.stringify(m3.json));
+  ok((await pool.query('select home_id from citizens where id = $1', [Pm.id])).rows[0].home_id === ids[2], '…and you stay where you are, nothing charged or lost');
+  const st0 = (await call('GET', '/api/me/storage', undefined, Pm.P)).json, buy = await call('POST', '/api/me/storage/buy', {}, Pm.P);
+  ok(st0.cap === F.MAX_STORED && st0.box.length === F.MAX_STORED && buy.status === 200 && buy.json.cap === F.MAX_STORED + F.STORE_STEP, 'buy more storage space', JSON.stringify(buy.json));
+  ok((await home(ids[1])).status === 200 && (await roomOf()).box.length === F.MAX_STORED + 1, 'then the move goes ahead, with everything kept'); }
 { // inside, live: everyone in the same place sees the others walk about and can chat; frames turn on the wall; homes differ by type
   const A = await player('live_amy', 50_000), Bq = await player('live_ben', 50_000), place = 'b:live-test-' + Date.now();
   const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'inside' || m.type === 'authed') got.push(m); });

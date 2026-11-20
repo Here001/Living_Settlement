@@ -5,7 +5,7 @@ import { HttpError } from './world.js';
 import { STORES, STOCK_MAX, productOf, productsOf, wholesale } from '../shared/stores.js';
 import crypto from 'node:crypto';
 import { wardKey } from '../shared/avatar.js';
-import { FURNITURE, TINTS, MAX_STORED } from '../shared/furniture.js';
+import { FURNITURE, TINTS, MAX_STORED, storageCap } from '../shared/furniture.js';
 import { treasuryAdd } from './races.js';
 import { track } from './stats.js';
 
@@ -62,7 +62,7 @@ export async function buyGoods(world, playerId, { buildingId, item, c: tint }) {
     if (P.kind === 'wear') { if (ward.includes(wardKey(P.slot, P.key))) throw new HttpError(409, `You already have the ${P.name.toLowerCase()}: wear it from your character (✏️ on your card).`); }
     else { if (!c.home_id) throw new HttpError(409, 'You need a home first: furniture goes into your home’s storage.');
       room = c.room && typeof c.room === 'object' ? { ...c.room } : { items: [], box: [] }; room.items = room.items || []; room.box = [...(room.box || [])];
-      if (room.box.length >= MAX_STORED) throw new HttpError(409, 'Your storage is full. Place or sell something from 🛋️ Furnish first.'); }
+      if (room.box.length >= storageCap(c.storage_extra)) throw new HttpError(409, 'Your storage is full. Place or sell something from 🛋️ Furnish, or buy more storage space.'); }
     ch.coins(c); if (Number(c.coins_base) < P.price) throw new HttpError(400, `The ${P.name} costs ${fmt(P.price)} coins. You have ${fmt(c.coins_base)} on you${Number(c.bank) ? ' (withdraw some at a Bank first)' : ''}.`);
     const sold = await sell(ch, b, P.k, P.price);
     c.coins_base = Number(c.coins_base) - P.price; if (!sold.owned) treasuryAdd(ch, P.price); track(ch, P.kind === 'wear' ? 'look:wardrobe' : 'home:furniture', P.price, c.id);
@@ -88,7 +88,7 @@ export async function checkoutGoods(world, playerId, { buildingId, items }) {
     if (new Set(wears).size !== wears.length) throw new HttpError(409, 'The same piece is in your cart twice.');
     let room = null; if (homes.length) { if (!c.home_id) throw new HttpError(409, 'You need a home first: furniture goes into your home’s storage.');
       room = c.room && typeof c.room === 'object' ? { ...c.room } : { items: [], box: [] }; room.items = room.items || []; room.box = [...(room.box || [])];
-      if (room.box.length + homes.length > MAX_STORED) throw new HttpError(409, `Your storage has room for ${Math.max(0, MAX_STORED - room.box.length)} more. Place some things from 🛋️ Furnish first.`); }
+      if (room.box.length + homes.length > storageCap(c.storage_extra)) throw new HttpError(409, `Your storage has room for ${Math.max(0, storageCap(c.storage_extra) - room.box.length)} more. Place some things from 🛋️ Furnish, or buy more storage space.`); }
     const total = lines.reduce((a, l) => a + l.P.price, 0); ch.coins(c);
     if (Number(c.coins_base) < total) throw new HttpError(400, `Your cart comes to ${fmt(total)} coins. You have ${fmt(c.coins_base)} on you${Number(c.bank) ? ' (withdraw some at a Bank first)' : ''}.`);
     let owned = false; for (const l of lines) { const sold = await sell(ch, b, l.P.k, l.P.price); owned = owned || sold.owned; if (!sold.owned) treasuryAdd(ch, l.P.price); track(ch, l.P.kind === 'wear' ? 'look:wardrobe' : 'home:furniture', l.P.price, c.id);

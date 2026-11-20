@@ -405,6 +405,8 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/me/room/place', limit, send(async req => RM().place((await me(req)).id, bd(req))));
   r.post('/me/room/store', limit, send(async req => RM().store((await me(req)).id, bd(req))));
   r.post('/me/room/sell', limit, send(async req => RM().sell((await me(req)).id, bd(req))));
+  r.get('/me/storage', limit, send(async req => RM().storage((await me(req)).id)));
+  r.post('/me/storage/buy', limit, send(async req => RM().buySpace((await me(req)).id)));
   r.post('/me/room/style', limit, send(async req => RM().style((await me(req)).id, bd(req))));
   r.post('/me/buildings/:id/website', limit, quota('rename'), send(async req => H().setWebsite((await me(req)).id, req.params.id, bd(req).url)));
   r.post('/me/buildings/:id/move', limit, send(async req => H().moveBuilding((await me(req)).id, req.params.id, bd(req))));

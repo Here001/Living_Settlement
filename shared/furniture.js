@@ -435,6 +435,12 @@ export const WALLS = { midnight: { name: 'Midnight', c: '#231B35', cost: 1500 },
   blush: { name: 'Blush', c: '#EBCFCB', cost: 800 }, sun: { name: 'Sunshine', c: '#F3DE9A', cost: 800 }, lilac: { name: 'Lilac', c: '#D7CBE6', cost: 800 }, mint: { name: 'Mint', c: '#C8EBDD', cost: 800 },
   navy: { name: 'Navy', c: '#34495E', cost: 1500 }, charcoal: { name: 'Charcoal', c: '#4A4E54', cost: 1500 }, brick: { name: 'Brick', c: '#B0634A', cost: 2000, brick: true }, wood: { name: 'Wood panels', c: '#A47551', cost: 2500, panels: true } };
 export const RESALE = 0.5, MAX_ITEMS = 150, MAX_STORED = 80, MAX_PHOTOS = 40, PHOTO_BYTES = 350 * 1024;
+// Your storage: the things you own that aren't set out in a home. It goes with you when you move. It holds MAX_STORED
+// to start with; more space is bought STORE_STEP at a time (each step a little dearer). STORE_HARD is the most it can
+// ever hold (nothing is lost when a move fills it past what you've paid for: you just can't add to it until it's under).
+export const STORE_STEP = 20, STORE_HARD = 400;
+export const storageCap = extra => MAX_STORED + Math.max(0, Math.min(STORE_HARD - MAX_STORED, Number(extra) || 0));
+export const storeSpacePrice = extra => Math.round(1500 * (1 + (Math.max(0, Number(extra) || 0) / STORE_STEP) * 0.5));
 
 const hashStr = s => { let h = 2166136261 >>> 0; for (const ch of String(s)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; };
 const rngOf = seed => { let a = seed >>> 0 || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
@@ -607,8 +613,8 @@ export function fitRoom(raw, size, plan = 'home') {
   const L = layoutOf(size, plan), styles = {};
   for (const [i, s] of Object.entries(raw?.styles || {})) if (L.rooms[i] && s && (FLOORS[s.f] || WALLS[s.w])) styles[i] = { ...(FLOORS[s.f] ? { f: s.f } : {}), ...(WALLS[s.w] ? { w: s.w } : {}) };
   const room = { plan, styles, items: [], box: [], ...(raw?.locked ? { locked: true } : {}) }; let changed = false;
-  const toBox = p => { changed = true; if (room.box.length < MAX_STORED) room.box.push({ i: p.i, k: p.k, c: p.c, ...(p.ph ? { ph: p.ph } : {}), ...(p.std ? { std: true } : {}) }); };
-  for (const it of Array.isArray(raw?.box) ? raw.box : []) if (FURNITURE[it?.k] && room.box.length < MAX_STORED) room.box.push({ i: String(it.i), k: it.k, c: tintOf(it), ...(keepPhoto(it.k, it.ph) ? { ph: keepPhoto(it.k, it.ph) } : {}), ...(it.std ? { std: true } : {}) });
+  const toBox = p => { changed = true; if (room.box.length < STORE_HARD) room.box.push({ i: p.i, k: p.k, c: p.c, ...(p.ph ? { ph: p.ph } : {}), ...(p.std ? { std: true } : {}) }); };
+  for (const it of Array.isArray(raw?.box) ? raw.box : []) if (FURNITURE[it?.k] && room.box.length < STORE_HARD) room.box.push({ i: String(it.i), k: it.k, c: tintOf(it), ...(keepPhoto(it.k, it.ph) ? { ph: keepPhoto(it.k, it.ph) } : {}), ...(it.std ? { std: true } : {}) });
   for (const it of Array.isArray(raw?.items) ? raw.items : []) { if (!FURNITURE[it?.k]) { changed = true; continue; }
     const p = { i: String(it.i), k: it.k, x: it.x, y: it.y, r: it.r || 0, c: tintOf(it), ...(it.std ? { std: true } : {}), ...(it.o && canTurnOnWall(it.k) ? { o: 1 } : {}) }, ph = keepPhoto(it.k, it.ph); if (ph) p.ph = ph;
     if (room.items.length < MAX_ITEMS && !placeProblem(room, size, p.k, p.x, p.y, p.r)) room.items.push(p); else toBox(p); }

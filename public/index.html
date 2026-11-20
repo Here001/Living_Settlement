@@ -1497,7 +1497,7 @@ async function api(path, opts={}){
   try{ r=await fetch(path,{ method:opts.method||'GET', signal:ac?ac.signal:undefined, headers:{'content-type':'application/json', ...(Store.token?{authorization:'Bearer '+Store.token}:{}), ...(Me&&Me.token?{'x-player':Me.token}:{})}, body:opts.body?JSON.stringify(opts.body):undefined }); }
   catch(e){ clearTimeout(timer); if(Net){ Net.live.delete(rq); Net.fail(); } throw new Error(e&&e.name==='AbortError'?'The connection is slow. Please try again.':'Can\'t reach the colony right now. Check your connection.'); }
   if(Net){ Net.live.delete(rq); Net.took(Date.now()-t0); }
-  try{ const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||`The server said no (${r.status}).`);
+  try{ const j=await r.json().catch(()=>({})); if(!r.ok){ const er=new Error(j.error||`The server said no (${r.status}).`); if(j.data) er.data=j.data; throw er; }
     // Anything a player does may tick off a getting-started step, so the guide checks again shortly after.
     if((opts.method||'GET')!=='GET'&&/^\/api\/(me\/|square)/.test(path)&&!/\/api\/me\/guide/.test(path)&&typeof GuideUI!=='undefined'&&GuideUI.data&&!GuideUI.data.finished){ GuideUI.at=0; setTimeout(()=>GuideUI.load(),400); }
     return j; } finally { clearTimeout(timer); } }
@@ -6410,6 +6410,7 @@ async function findHomeToRent(){ try{ const H=await api('/api/me/homes'), h=H.ho
     const b=D.buildings.get(h.id)||{id:h.id,x:0,y:0}; goToBuilding(b); toast(`${h.name} has ${h.space} flat${h.space===1?'':'s'} free. Tap 🔑 Rent here on its card.`); }catch(e){ toast(e.message); } }
 function homePanel(c){ const box=el('div',{class:'authbox'}, el('h3',{text:'🏠 Home'})); MyHome.load(); const H=MyHome.data;
   if(c.home){ const d=detail.get(c.id); box.append(Visit.box(!!(d&&d.locked))); } /* locking your home lives here */
+  if(c.home&&Me&&c.handle&&Me.handle&&c.handle.toLowerCase()===Me.handle.toLowerCase()) box.append(el('button',{class:'btn mgo',text:'📦 Your storage',onclick:()=>StorageSheet.open()})); /* what's stored, selling, more space */
   if(!H){ box.append(el('p',{class:'hint',text:'Checking where you live…'})); return box; }
   if(H.home){ const b=D.buildings.get(H.home.id);
     box.append(el('p',{class:'jobnow'}, 'You live at ', el('b',{text:H.home.name}), H.home.mine?' (you own it)':'', '.'),
@@ -8341,9 +8342,25 @@ function dealerSection(b){ const box=el('div',{class:'authbox'}, el('h3',{text:'
     box.append(g, shot?el('div',{class:'carshot'}, shot, el('b',{text:`${M.name}${M.electric?' ⚡':''}`}), el('span',{class:'hint',text:`${fmt(M.price)} coins · 👥 ${seatsOf(carPick.m)} seats`})):'', M.colors.length>1?sw:'', el('p',{class:'hint',text:`${why}Upkeep: ${fmt(M.upkeep)} coins a week. Resale value: 60% of what you paid. You can keep 3 cars and bikes, 3 boats and other aircraft, and as many planes as your hangars hold.`}), el('div',{class:'row-actions'}, StoreStock.tag(b,carPick.m), StoreStock.left(b,carPick.m)===0?el('button',{class:'btn',text:'Sold out here',disabled:true}):el('button',{class:'btn primary',text:`🛒 Add the ${M.name.toLowerCase()} · ${fmt(M.price)}`,onclick:()=>Cart.add(b,{ kind:'car', k:carPick.m, col:carPick.col, name:M.name, price:M.price, icon:'🚗' })})), Cart.bar(b)); }
   if(my.cars.length) box.append(el('h4',{class:'bgroup',text:'Sell one of yours'}), garageList(my.cars, my.active));
   return box; }
+// 📦 Your storage: what's in it and how much it holds; sell things or buy more space. Opened from your Home tab, or when a
+// move needs more room than your storage has (then "Move now" tries the move again).
+const StorageSheet={ el:null,
+  close(){ if(this.el){ this.el.remove(); this.el=null; } },
+  async open(why,retry){ this.close(); const box=el('div',{class:'rsheet mbox'}), wrap=el('div',{class:'rsheet-bg storesheet msheet'}, box); wrap.addEventListener('click',e=>{ if(e.target===wrap) this.close(); }); document.body.append(wrap); this.el=wrap; this.why=why||null; this.retry=retry||null;
+    box.append(el('p',{class:'hint',text:'Loading…'})); this.fill(box); },
+  async fill(box){ let d; try{ d=await api('/api/me/storage'); }catch(e){ box.replaceChildren(el('p',{class:'hint',text:e.message})); return; } if(!this.el) return; const W=this.why;
+    box.replaceChildren(el('div',{class:'mhead'}, el('h3',{text:'📦 Your storage'}), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>this.close()})));
+    if(W) box.append(el('div',{class:'mgoals'}, el('b',{text:'🚚 Not enough room to move yet'}), el('p',{text:`${W.need} things need storing and your storage holds ${d.cap}. Sell ${Math.max(0,W.need-d.cap)} more, or buy more space, then tap Move now.`})));
+    box.append(el('div',{class:'mrank'}, el('b',{class:'mrkic',text:'📦'}), el('div',{class:'mrkt'}, el('b',{text:`${d.box.length} of ${d.cap} spaces used`}), el('div',{class:'mbar'}, el('i',{style:`width:${Math.min(100,Math.round(d.box.length/d.cap*100))}%`})),
+      el('small',{text:'Your storage goes with you from home to home.'}))));
+    if(d.price!=null) box.append(el('button',{class:'btn primary mgo',text:`➕ ${d.step} more spaces for ${fmt(d.price)} coins`,onclick:async()=>{ try{ const r=await api('/api/me/storage/buy',{method:'POST'}); myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); toast(`📦 Your storage now holds ${r.cap}.`); this.fill(box); }catch(e){ toast(e.message); } }}));
+    const row=(it,where)=>el('div',{class:'mgoal'}, el('span',{class:'mgt',text:it.name}), el('button',{class:'btn sm',text:`Sell +${fmt(it.resale)}`,onclick:async()=>{ try{ const r=await api('/api/me/room/sell',{method:'POST',body:{i:it.i}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } this.fill(box); }catch(e){ toast(e.message); } }}));
+    if(d.box.length){ box.append(el('h4',{class:'mh',text:'In storage'})); for(const it of d.box) box.append(row(it,'box')); } else box.append(el('p',{class:'hint',text:'Nothing in storage.'}));
+    if(W&&d.placed&&d.placed.length){ box.append(el('h4',{class:'mh',text:'Set out where you live now (they go into storage when you move)'})); for(const it of d.placed) box.append(row(it,'placed')); }
+    if(this.retry) box.append(el('button',{class:'btn primary mgo',text:'🚚 Move now',onclick:()=>{ const f=this.retry; this.close(); f(); }})); } };
 async function meAction(path, body, ok, method){ try{ const r=await api(path,{method:method||'POST',body}); GuideUI.at=0; if(ok) toast(typeof ok==='function'?ok(r):ok); if(r&&typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
     if(Me&&Me.handle){ const dd=[...detail.values()].find(x=>x.h&&x.h.toLowerCase()===Me.handle.toLowerCase()); if(dd) detail.delete(dd.id); }
-    Acts.at=0; if(sel) { const c=S.citizens.get(sel.id); if(c) loadDetail(c.handle).then(()=>renderCard(true)); } return r; }catch(e){ toast(e.message); return null; } }
+    Acts.at=0; if(sel) { const c=S.citizens.get(sel.id); if(c) loadDetail(c.handle).then(()=>renderCard(true)); } return r; }catch(e){ if(e.data&&e.data.storage){ StorageSheet.open(e.data.storage,()=>meAction(path,body,ok,method)); return null; } toast(e.message); return null; } } /* (a move your storage can't hold yet: the storage sheet, then Move now) */
 const Acts={ id:null, at:0, places:null, crime:null, busy:false };
 async function loadActs(c){ Acts.id=c.id; Acts.at=Date.now(); Acts.busy=true;
   try{ const [pl,cr]=await Promise.all([api('/api/me/places'),api('/api/me/crime')]); Acts.places=pl; Acts.crime=cr; }catch(e){} Acts.busy=false; if(sel&&sel.id===c.id) renderCard(true); }

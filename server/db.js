@@ -377,7 +377,9 @@ const MIGRATIONS = [
   `alter table citizens add column if not exists missions jsonb;`,
   // v84: bounties: a price on someone's head, held until a hunter catches them out in town
   `create table if not exists bounties (id text primary key, target_id text not null, target_handle text, by_id text not null, by_handle text, amount int not null, t bigint not null, claimed_by text, claimed_at bigint);
-   create index if not exists bounties_open on bounties (target_id) where claimed_by is null;`
+   create index if not exists bounties_open on bounties (target_id) where claimed_by is null;`,
+  // v85: extra storage space a colonist has bought (on top of shared/furniture.js MAX_STORED)
+  `alter table citizens add column if not exists storage_extra int not null default 0;`
 ];
 
 export async function migrate() {

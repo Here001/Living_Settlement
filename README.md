@@ -571,6 +571,12 @@ Every colonist can go inside the home they live in, owned or rented, walk around
 - **Furniture belongs to the colonist, not the building**, so it moves house with them; anything that doesn't fit the new home waits in **📦 Stored**. Furniture is for looks; it doesn't change pay or anything else. Money spent shows in the Wallet as **Furniture and decorating** and goes to the colony treasury.
 - Code: `shared/furniture.js` (plans, catalogue, rules), `public/house3d.js` (the 3D house, walking, placing), `server/rooms.js` (buying, placing, styles, photos), kept in `citizens.room` (migrations 67 and 68).
 
+### 🚚 Moving home, and your storage
+- **A home you own keeps its own things**, whether you live there or not: furnish a house you've bought while you still rent somewhere else, move out of your own house to rent for a while, and it stays just as you left it (you can still go in and keep furnishing it). Move back in and it's all where you left it.
+- **📦 Your storage goes with you** from home to home (Home tab on your card → 📦 Your storage). It holds 80 things to start with; buy 20 more spaces at a time (each lot a little dearer).
+- **Moving into a home you own:** whatever you had set out where you lived goes into your storage. **Moving into a rented home:** your things come with you, and what doesn't fit goes into storage.
+- **If your storage can't hold it all, the move waits:** you're shown how many things are over, with everything in storage (and what you have set out now) to sell, and a button to buy more space. Then tap 🚚 Move now. Nothing is charged until the move goes ahead, and nothing is ever lost.
+
 ### 🚪 Homes you can walk into
 
 - **Every home has 🚪 Go inside on its card.** If you live there, it's your home. If people live there, you choose whose home to look into (locked ones are marked). If nobody lives there, you walk into the home itself, and **its owner can furnish it** (a home they own but don't live in: a show home for buyers and renters), kept with the building like a business's design.

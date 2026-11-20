@@ -290,6 +290,7 @@ export class Economy {
       if (h.home_used >= h.home_cap && h.owner_id !== c.id) throw new HttpError(409, 'That home is full. Pick one with space.');
       const cur = c.home_id ? (await ch.q('select type, x, y from buildings where id = $1', [c.home_id])).rows[0] : null;
       const cost = R.rentCost(h.type, cur ? [cur.x, cur.y] : null, [h.x, h.y]), fee = h.owner_id === c.id ? 0 : cost.fee, total = fee + cost.movers;
+      await ch.keepApartment(c, c.home_id, h.id, { check: true, dry: true }); /* your storage has to hold what won't be set out in the new place */
       ch.coins(c); if (c.coins_base < total) throw new HttpError(400, `Moving in costs ${fmt(total)} coins (${fee ? `${fmt(fee)} moving-in fee + ` : ''}${fmt(cost.movers)} for the movers). You have ${fmt(c.coins_base)} on you${c.bank ? '; withdraw some at a Bank first' : ''}.`);
       c.coins_base -= total; ch.touch(c); await ch.saveCitizen(c);
       track(ch, 'rent:movers', cost.movers, c.id); treasuryAdd(ch, cost.movers);

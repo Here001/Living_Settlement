@@ -2327,6 +2327,43 @@ if (/127\.0\.0\.1:3999/.test(process.env.CF_REALTIME_URL || '')) { // voice chat
   { const vc = await call('GET', '/api/admin/voice/check'); ok(vc.status === 200 && vc.json.ok === true && /keys work/.test(vc.json.why), 'the developer can check the voice keys with the voice service', JSON.stringify(vc.json));
     const nw = calls.filter(c => /sessions\/new$/.test(c.u)).pop(); ok(nw && nw.raw === '', 'a new voice session is asked for without a body (as Cloudflare expects)'); }
   sfu.close(); }
+{ // missions out in the 3D town: a ladder of ranks, the server plans each stop beside a real road and checks you're really there
+  const MS = await import('../shared/missions.js'), A = await player('mission_mo', 1000);
+  const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), authed = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'authed') authed.push(m); });
+  await new Promise(r => w.once('open', r)); w.send(JSON.stringify({ type: 'auth', token: A.P.headers['x-player'] })); for (let i = 0; i < 40 && !authed.length; i++) await sleep(50);
+  const at = async (x, y, mode = 'car') => { w.send(JSON.stringify({ type: 'drive', mode, x, y, a: 0 })); await sleep(250); };
+  const info = (await call('GET', '/api/me/missions', undefined, A.P)).json;
+  ok(info.rank === 0 && info.list.filter(m => m.open).map(m => m.kind).join() === 'parcel,taxi' && info.list.some(m => m.kind === 'heist' && !m.open), 'a new player starts with two missions; the rest open up rank by rank', JSON.stringify(info.list.map(m => [m.kind, m.open])));
+  const st = b => call('POST', '/api/me/missions', b, A.P);
+  ok((await st({ action: 'start', kind: 'taxi' })).status === 409, 'missions happen out in the town: you have to be out on the street');
+  ok((await st({ action: 'start', kind: 'race' })).status === 409 && (await st({ action: 'start', kind: 'nope' })).status === 400, 'what isn\'t open yet (or doesn\'t exist) can\'t be started');
+  /* a street of its own out east, with shops and cottages along it */
+  { const set = {}; for (let x = 300; x <= 362; x++) set[x + ',300'] = 'street'; await call('POST', '/api/admin/roads', { set });
+    for (const [t, x] of [['grocer', 302], ['cottage', 312], ['grocer', 322], ['cottage', 332], ['grocer', 342], ['cottage', 352], ['grocer', 360]]) await call('POST', '/api/admin/buildings', { type: t, x, y: 301, instant: true }); }
+  const road = { x: 305, y: 300 };
+  await at(road.x + 0.5, road.y + 0.5, 'walk'); ok((await st({ action: 'start', kind: 'taxi' })).status === 409, 'a taxi fare needs a car');
+  await at(road.x + 0.5, road.y + 0.5); const s1 = await st({ action: 'start', kind: 'taxi' }), act = s1.json.active;
+  ok(s1.status === 200 && act && act.steps.length === 2 && act.steps.every(s => s.kx != null) && act.fare > 0 && act.deadline > Date.now(), 'start: a fare to pick up and a place to take them, each with a kerb to pull up on', JSON.stringify(s1.json).slice(0, 300));
+  if (act) { ok((await st({ action: 'start', kind: 'parcel' })).status === 409, 'one mission at a time');
+    ok((await st({ action: 'arrive' })).status === 409, "pulling up somewhere else doesn't count");
+    const [p0, p1] = act.steps; await at(p0.kx + 0.5, p0.ky + 0.5); const quick = Math.hypot(p0.kx - road.x, p0.ky - road.y) > 8;
+    if (quick) ok((await st({ action: 'arrive' })).status === 409, 'getting there quicker than a car could is refused');
+    await sleep(Math.ceil(MS.dist(road, p0) / MS.MISSION.fastest * 1000) + 100); const r1 = await st({ action: 'arrive' });
+    ok(r1.status === 200 && r1.json.next && r1.json.active.step === 1, 'at the kerb beside the first stop: picked up', JSON.stringify(r1.json).slice(0, 200));
+    const c0 = Number((await pool.query('select coins_base from citizens where id = $1', [A.id])).rows[0].coins_base);
+    await at(p1.kx + 0.5, p1.ky + 0.5); await sleep(Math.ceil(MS.dist(p0, p1) / MS.MISSION.fastest * 1000) + 100); const r2 = await st({ action: 'arrive' });
+    const c1 = Number((await pool.query('select coins_base from citizens where id = $1', [A.id])).rows[0].coins_base);
+    ok(r2.status === 200 && r2.json.done && r2.json.paid >= act.fare && c1 - c0 === r2.json.paid && r2.json.xp === act.xp && !r2.json.active, 'dropped off: paid the fare (plus a tip for time to spare) and XP', JSON.stringify({ ...r2.json, list: 0 }).slice(0, 300));
+    ok((await pool.query("select 1 from ledger where citizen_id = $1 and key = 'earn:missions'", [A.id])).rowCount === 1, '…and it shows in your wallet'); }
+  { await at(road.x + 0.5, road.y + 0.5); const s2 = await st({ action: 'start', kind: 'parcel' }); ok(s2.status === 200 && s2.json.active.steps[0].k === 'pickup' && s2.json.active.steps.slice(1).every(s => s.k === 'drop'), 'a parcel run: collect, then one or two drops', JSON.stringify(s2.json.active && s2.json.active.steps.map(s => s.k)));
+    ok((await st({ action: 'quit' })).json.active === null && (await st({ action: 'start', kind: 'parcel' })).status === 429, 'giving up ends it, with a short wait before the next'); }
+  { await pool.query("update citizens set missions = jsonb_set(missions, '{active}', $2::jsonb) where id = $1", [A.id, JSON.stringify({ id: 'x', kind: 'taxi', steps: [{ k: 'pickup', x: 0, y: 0, w: 1, h: 1, kx: 0, ky: 0, name: 'a' }], step: 0, start: Date.now() - 99000, deadline: Date.now() - 1000, fare: 50, xp: 10, at: 0, from: { x: 0, y: 0 }, line: 0 })]);
+    const r = await st({ action: 'arrive' }); ok(r.status === 200 && r.json.failed === 'time' && !r.json.active, 'too late: the mission is off, and pays nothing'); }
+  ok(MS.rankOf(0) === 0 && MS.rankOf(MS.RANKS[1].xp) === 1 && MS.unlocksAt(1).includes('race') && MS.RANKS.every((R, i) => !i || R.xp > MS.RANKS[i - 1].xp), 'XP moves you up the ranks, and each rank opens something new');
+  { const vet = await player('mission_vet', 1000); await pool.query("insert into crime_runs (id, citizen_id, kind, seed, diff, started_at) values ($1, $2, 'rob', 1, 1, $3)", ['cr-vet-' + Date.now(), vet.id, Date.now()]);
+    ok((await call('GET', '/api/me/missions', undefined, vet.P)).json.rank === 3, 'players who already did crimes before missions start at Operator, so nothing they did is locked away'); }
+  w.close();
+}
 { // inside, live: everyone in the same place sees the others walk about and can chat; frames turn on the wall; homes differ by type
   const A = await player('live_amy', 50_000), Bq = await player('live_ben', 50_000), place = 'b:live-test-' + Date.now();
   const sock = async P => { const w = new WebSocket(BASE.replace('http', 'ws') + '/ws'), got = []; w.on('message', d => { const m = JSON.parse(d); if (m.type === 'inside' || m.type === 'authed') got.push(m); });

@@ -719,6 +719,15 @@ Every colonist can go inside the home they live in, owned or rented, walk around
   - 📦 **Supply drop** (15 min, needs the landing station): the first 15 colonists to tap **Claim supplies** in the Earn tab get 300–900 coins each (from the treasury).
 - **Developer controls.** In developer mode, **⚡ Start a colony event** in the Town Square starts any of them now (replacing one that's on) or ends the current one.
 
+## 🎯 Missions in town
+
+The main way to make money out in the 3D town, and what gives players something to aim for. Open **🎯 Missions** on your phone (it's the first app), or the **🎯 Missions in town** button at the top of the Earn tab on your card.
+
+- **One at a time, a few to start with.** A new player sees just two missions: 📦 **Parcel run** (collect a parcel, drop it at one or two places across town) and 🚕 **Taxi fare** (someone waits at the kerb with a name tag and a wave; pick them up and drive them where they're going, and they chat on the way). Below the list, the next rank's missions show locked, so there's always one thing to aim for; the rest stay a surprise.
+- **Ranks.** Every mission gives XP: 🌱 Newcomer → 🏃 Runner → 💼 Hustler → 🕶️ Operator → 👔 Boss → 👑 Kingpin. Each new rank opens something new (street races and stealing cars, store hold-ups, crew heists and police patrols, bounties, turf) and shows a "You're now a Runner!" card with what it opened. Players who did crimes before missions came in start at Operator, so nothing they could do is locked away.
+- **Finding your way.** Starting a mission takes you out on the street in a car. Blue arrows on the road and a beam of light lead to each stop, a strip at the top says what to do and how long is left, and you just pull up beside the building (slowly) to tick it off.
+- **Fair pay.** Pay grows with the distance, plus a tip of up to half the fare for time to spare; it comes from the colony treasury (40 paid missions a day, then XP only). The server plans every stop beside a real road and checks you're really there (from where your car is in 3D) and that no car could have got there quicker. Run out of time and the mission is off.
+
 ## Ways to earn
 
 - **Where.** The **💰 Earn** tab, the first tab on your own card, lists every way to make coins and lets you do the active ones right there (`server/earn.js`).

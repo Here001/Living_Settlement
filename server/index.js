@@ -23,6 +23,7 @@ import { Radio, radioRoutes } from './radio.js';
 import { Stars } from './stars.js';
 import { GameTables } from './gametables.js';
 import { Earn } from './earn.js';
+import { Missions, LIVE as LIVE_POS } from './missions.js';
 import { ColonyEvents } from './colonyevents.js';
 import { Races } from './races.js';
 import { Fights } from './fights.js';
@@ -88,7 +89,7 @@ setInterval(() => { const places = new Map(); for (const w of wss.clients) if (w
   for (const [k, v] of places) if (v.length < 2) places.delete(k); if (places.size) world.love.together(places).catch(e => console.error('love:', e.message)); }, 60000).unref();
 setInterval(() => world.gametables.sweep().catch(e => console.error('tables:', e.message)), 10000).unref(); // slow turns and unfilled tables
 setInterval(() => world.heists.sweep().catch(e => console.error('heists:', e.message)), 15000).unref(); // planned group crimes that are due
-world.earn = new Earn(world); world.guide = new Guide(world); world.elections = new Elections(world);
+world.earn = new Earn(world); world.missions = new Missions(world); world.guide = new Guide(world); world.elections = new Elections(world);
 const cevents = new ColonyEvents(world, bus); world.cevents = cevents;
 setInterval(() => { if (isLeader && world.meta) cevents.tick().catch(e => console.error('colony events:', e.message)); }, 30000).unref();
 setInterval(() => { if (isLeader && world.meta) push.dailyReminder().catch(e => console.error('daily reminder:', e.message)); }, 5 * 60000).unref();
@@ -488,7 +489,7 @@ bus.on(ops => {
       for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.bufferedAmount > MAX_BUFFER || ws.playerId === o.id || !ws.driving || !ws.drivePos || Math.hypot(ws.drivePos[0] - o.x, ws.drivePos[1] - o.y) > 14) continue; try { ws.send(json); } catch {} } }
     ops = ops.filter(o => !o.streetSay); if (!ops.length) return; }
   // Someone driving about in 3D: every map shows their car where it is
-  if (ops.some(o => o.driving)) { for (const o of ops.filter(o => o.driving)) { const json = JSON.stringify(o.off ? { type: 'drive', id: o.id, off: true } : { type: 'drive', id: o.id, h: o.h, mode: o.mode, x: o.x, y: o.y, a: o.a, m: o.m, col: o.col, ...(o.by ? { by: o.by } : {}) });
+  if (ops.some(o => o.driving)) { for (const o of ops.filter(o => o.driving)) { if (o.off) LIVE_POS.delete(o.id); else if (o.mode !== 'ride') LIVE_POS.set(o.id, { x: o.x, y: o.y, mode: o.mode, t: Date.now() }); /* (where each player is, for missions) */ const json = JSON.stringify(o.off ? { type: 'drive', id: o.id, off: true } : { type: 'drive', id: o.id, h: o.h, mode: o.mode, x: o.x, y: o.y, a: o.a, m: o.m, col: o.col, ...(o.by ? { by: o.by } : {}) });
       for (const ws of wss.clients) { if (ws.readyState !== 1 || ws.bufferedAmount > MAX_BUFFER || ws.playerId === o.id) continue; try { ws.send(json); } catch {} } }
     ops = ops.filter(o => !o.driving); if (!ops.length) return; }
   // Private chat messages go only to the two people's own connections.

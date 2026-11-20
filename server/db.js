@@ -372,7 +372,9 @@ const MIGRATIONS = [
    alter table fighters add column if not exists champion boolean not null default false, add column if not exists tr_power real not null default 0, add column if not exists tr_speed real not null default 0, add column if not exists tr_chin real not null default 0, add column if not exists tr_day int;
    create table if not exists fight_challenges (id text primary key, from_id text not null, from_handle text, to_id text not null, to_handle text, t bigint not null, accepted boolean not null default false, n int);
    create table if not exists fight_votes (n int not null, citizen_id text not null, i int not null, primary key (n, citizen_id));
-   alter table fight_nights add column if not exists fotn int;`
+   alter table fight_nights add column if not exists fotn int;`,
+  // v83: missions out in the 3D town (shared/missions.js): XP, today's count, the one you're on
+  `alter table citizens add column if not exists missions jsonb;`
 ];
 
 export async function migrate() {

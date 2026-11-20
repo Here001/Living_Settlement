@@ -1320,6 +1320,17 @@ body.room-on .toast,body.room-on .rsheet-bg.rreport{z-index:9700}
 @media (prefers-reduced-motion: reduce){.mgpop{animation-duration:.6s}.mgbump{animation:none}}
 .zfire{position:absolute;right:22px;bottom:calc(36px + env(safe-area-inset-bottom));width:96px;height:96px;border-radius:50%;border:3px solid #2B2621;background:radial-gradient(circle at 35% 30%,#ff7a5c,#c8382e);box-shadow:0 5px 0 #2B2621,0 0 0 6px rgba(255,255,255,.12);z-index:3;font-size:40px;touch-action:none;-webkit-user-select:none;user-select:none}.zfire.on{transform:translateY(3px) scale(.95);box-shadow:0 2px 0 #2B2621,0 0 24px rgba(255,120,80,.8)}
 .mg.hurt{box-shadow:inset 0 0 80px rgba(220,0,0,.65)}
+.mrank{display:flex;gap:10px;align-items:center;background:#2B2621;color:#fff;border-radius:16px;padding:10px 12px;margin:4px 0 10px}.mrkic{font-size:30px}.mrkt{flex:1;min-width:0}.mrkt b{font-size:16px}.mrkt small{opacity:.8;font-size:12px}
+.mbar{height:8px;background:rgba(255,255,255,.18);border-radius:6px;margin:5px 0 3px;overflow:hidden}.mbar i{display:block;height:100%;background:linear-gradient(90deg,#F2C94C,#E4572E);border-radius:6px}
+.mcard{background:#fff;border:2px solid #2B2621;border-radius:14px;padding:10px 12px;margin:8px 0;box-shadow:0 3px 0 #2B2621;color:#2B2621}.mcard p{margin:4px 0 8px;font-size:13px;line-height:1.35}.mcard.on{background:#FFF6DA}.mcard.lock{opacity:.6;box-shadow:none;border-style:dashed}.mcard.lock p{margin-bottom:0}
+.mtop{display:flex;justify-content:space-between;align-items:center;gap:8px}.mtag{font-size:11px;font-weight:800;border-radius:8px;padding:2px 7px;background:#E3F3E8;color:#1E7A55}.mtag.crime{background:#FBE3DE;color:#B3261E}.mpay{font-weight:800;color:#1E7A55;font-size:13px}
+.mrow{display:flex;gap:8px;flex-wrap:wrap}.mh{margin:12px 0 2px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;opacity:.7}
+.mbox{width:min(440px,100%);max-height:min(86vh,720px);overflow:auto;padding:14px 16px}.mhead{display:flex;justify-content:space-between;align-items:center}.mhead h3{margin:0}.mhead .x{background:none;border:0;font-size:26px;line-height:1;cursor:pointer;color:inherit}
+.msheet{z-index:9700}.mup{text-align:center}.mupic{font-size:64px;line-height:1.1;animation:mgpop .5s ease-out 1}.mgo{width:100%;margin:6px 0 10px}
+.phmissions{padding:6px 12px 20px;overflow:auto;height:100%;box-sizing:border-box}
+.mhud{position:absolute;top:calc(62px + env(safe-area-inset-top));left:12px;max-width:min(64%,340px);background:rgba(20,18,16,.78);color:#fff;border-radius:14px;padding:8px 12px;z-index:5;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+.mhud .mhrow{display:flex;justify-content:space-between;gap:10px;align-items:center}.mhud .mclock{font-variant-numeric:tabular-nums;font-weight:800;color:#F2C94C}.mhud.late .mclock{color:#FF6B5B;animation:mgpop .5s ease-out infinite alternate}
+.mhud .mhtxt{font-weight:700;font-size:13.5px;line-height:1.3;margin:2px 0 1px}.mhud small{opacity:.75;font-size:11.5px}
 .bxobj{position:absolute;top:calc(58px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);max-width:calc(100% - 24px);background:rgba(20,18,16,.62);color:#fff;border-radius:12px;padding:5px 12px;font-weight:800;font-size:14px;text-align:center;pointer-events:none;z-index:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bxsub{position:absolute;left:140px;right:140px;bottom:calc(26px + env(safe-area-inset-bottom));display:flex;flex-direction:column-reverse;gap:4px;align-items:center;pointer-events:none;z-index:2;text-align:center}.bxsub .aline{background:rgba(0,0,0,.55);font-size:14px}
 .bxmap{position:absolute;left:14px;bottom:calc(14px + env(safe-area-inset-bottom));width:118px;height:118px;border-radius:50%;pointer-events:none;z-index:2;box-shadow:0 3px 10px rgba(0,0,0,.35)}
@@ -1429,6 +1440,7 @@ import { STATIONS, STATION_IDS, hostsOn } from '/shared/radio.js';
 import { openCrimeGame } from '/crimegames.js';
 import { openArena, arenaMsg, resumeArena } from '/arena.js';
 import { ROLES as MG_ROLES } from '/shared/minigames.js';
+import { MISSIONS as MISSION_KINDS, MISSION, FARES, offEdge } from '/shared/missions.js'; /* (the kerb check is atStop on the server) */
 import { WEAPONS as ARENA_W } from '/shared/brawl.js';
 import { TRAIN_OF } from '/shared/fights.js';
 import { FURNITURE, FLOORS, WALLS, TINTS, ROOM_CATS, BIZ_CATS, bizTab, bizSize, roomSize, canEnter, canTurnOnWall, footOf, placeProblem, resaleOf, layoutOf, styleOf, photoAspect } from '/shared/furniture.js';
@@ -4344,6 +4356,7 @@ async function moveBuilding(id,x,y){ const b=D.buildings.get(id); if(!b){ setToo
 /* ---------------- icons ---------------- */
 const I=(body)=>`<svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="${INK}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">${body}</svg>`;
 const ICONS={
+  missions: I('<circle cx="16" cy="16" r="11" fill="#F4EDE0"/><circle cx="16" cy="16" r="7" fill="#E4572E"/><circle cx="16" cy="16" r="3" fill="#F4EDE0"/><path d="M16 16l9-9M21 7h4v4" fill="none"/>'),
   build: I('<path d="M6 26h20" fill="none"/><rect x="8" y="14" width="10" height="12" fill="#E2B13C"/><path d="M8 14l5-5 5 5z" fill="#D9714A"/><path d="M22 26V8M22 8h-8M22 8l4 4" fill="none"/><rect x="11.5" y="18" width="3" height="4" fill="#F4EDE0"/>'),
   me: I('<rect x="5" y="6" width="22" height="20" rx="3" fill="#F4EDE0"/><circle cx="12" cy="14" r="3.2" fill="#E8A07A"/><path d="M7 22c0-3 2.3-4.6 5-4.6s5 1.6 5 4.6z" fill="#E8A07A"/><path d="M19 13h5M19 17h4M19 21h3" fill="none"/>'),
   feed: I('<path d="M5 7h22v14H14l-6 5v-5H5z" fill="#9CC4E4"/><path d="M10 12h12M10 16h8"/>'),
@@ -4649,6 +4662,7 @@ var Earn={ data:null, at:0, loading:false, skew:0, busy:false, msg:null, cast:nu
     const B=this.busy, EV=D0.event; if(EV&&EV.end>this.now()) box.append(el('div',{class:'eevent'}, el('b',null,`${EV.icon} ${EV.name} `,el('span',{class:'cdown','data-until':EV.end,text:this.left(EV.end)})), el('div',{class:'hint',text:EV.text}),
       D0.supply?(D0.supply.claimed?el('p',{class:'hint',text:'You claimed your share. 📦'}):D0.supply.left>0&&D0.housed?el('button',{class:'btn primary',text:B?'…':`📦 Claim supplies (${D0.supply.left} left)`,disabled:B,onclick:()=>this.act('/api/me/earn/supply',{},r=>toast(this.paidText(r,'📦 Supplies claimed')))}):el('p',{class:'hint',text:'All claimed. Be quicker next time!'})):''));
     if(!D0.housed){ box.append(el('p',{class:'hint',text:"You're still in cryosleep aboard the ark. Once you wake up and get a home, you can work, do deliveries, fish and more."})); }
+    if(D0.housed) box.append(el('button',{class:'btn primary mgo',text:'🎯 Missions in town: drive, deliver, earn',onclick:()=>Missions.sheet()})); /* the main way to make money out in the 3D town */
     // 1. Job
     box.append(this.section('💼','Your job',D0.salary?`Pays ${fmt(D0.salary)} coins a game day (every 30 minutes), automatically. Rent comes out of it.`:'A job pays you automatically every game day (every 30 minutes). It\'s the steadiest income.',
       D0.salary?'':el('button',{class:'btn primary',text:'Find a job',onclick:()=>{ actTab='work'; renderCard(true); }})));
@@ -5045,7 +5059,7 @@ const StreamAdmin={ data:null, busy:false, dirty:false, hold:5,
     body.append(add, el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:this.dirty?'Save changes':'Saved',disabled:!this.dirty,onclick:()=>this.save()})));
     body.append(el('p',{class:'hint',text:'YouTube, Twitch and Facebook keep the same key, so they run around the clock. Instagram and TikTok give a new key for every live: paste it here each time you start one (Instagram ends a live after 4 hours).'})); } };
 // ---- Developer stats: daily players, coins in circulation, how players earn and spend, and where they drop off ----
-const FLOW_NAMES={ 'earn:shifts':['source','Extra shifts'], 'earn:gigs':['source','Deliveries'], 'earn:fish':['source','Fishing'], 'earn:forage':['source','Foraging'], 'earn:scavenged':['source','Scavenging'],
+const FLOW_NAMES={ 'earn:shifts':['source','Extra shifts'], 'earn:gigs':['source','Deliveries'], 'earn:missions':['source','Missions'], 'earn:fish':['source','Fishing'], 'earn:forage':['source','Foraging'], 'earn:scavenged':['source','Scavenging'],
   'earn:supplies':['source','Supply drops'], daily:['source','Daily rewards'], guide:['source','Getting started rewards'], 'crime:rob':['source','Shop robberies'], 'casino:win':['source','Casino winnings'],
   'race:win':['source','Race winnings'], 'lottery:win':['source','Lottery prizes'], 'property:income':['source','Rent and profits (owners)'], 'bank:interest':['source','Savings interest'], 'mayor:pay':['source',"Mayor's pay"],
   'car:sell':['source','Selling cars'], 'property:sell':['source','Selling buildings'], 'property:refund':['source','Refunds (building knocked down)'], 'dev:adjust':['source','Developer adjustments'],
@@ -5080,7 +5094,7 @@ const Ledger={ data:null, at:0, busy:false, filter:'all', more:false,
     box.append(ul); if(this.more) box.append(el('button',{class:'linkb',text:'Show older',onclick:()=>this.older()})); return box; } };
 // A flow's [kind, name]: Game House games are 'game:<id>:bet' (coins in) and 'game:<id>:win' (coins out).
 const flowInfo=k=>{ if(FLOW_NAMES[k]) return FLOW_NAMES[k]; if(k==='table:rake') return ['sink','House share of table pots']; const tb=/^table:(\w+):(stake|win|refund)$/.exec(k); if(tb) return ['move', `${(TABLE_GAMES[tb[1]]||{name:tb[1]}).name} table ${tb[2]==='stake'?'stakes':tb[2]==='win'?'winnings':'refunds'}`]; const m=/^game:(\w+):(bet|win)$/.exec(k); if(m) return [m[2]==='bet'?'sink':'source', `${(GH_GAMES[m[1]]||{name:m[1]}).name} ${m[2]==='bet'?'stakes':'winnings'}`]; return ['source',k]; };
-const EARN_KEYS=['earn:shifts','earn:gigs','earn:fish','earn:forage','earn:scavenged','daily','earn:supplies','crime:rob','casino:win','race:win','lottery:win'];
+const EARN_KEYS=['earn:shifts','earn:gigs','earn:missions','earn:fish','earn:forage','earn:scavenged','daily','earn:supplies','crime:rob','casino:win','race:win','lottery:win'];
 // The builder's Accounts: every player's cash, savings and debt, and each one's full money history.
 const Accounts={ list:null, q:'', who:null, detail:null, busy:false,
   async load(){ if(!Store.canWrite) return; try{ this.list=await api('/api/admin/accounts'+(this.q?'?q='+encodeURIComponent(this.q):'')); }catch(e){ toast(e.message); } this.renderNow(); },
@@ -7176,8 +7190,8 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
   // the phone in your hand: its home screen has the same five apps as the bar at the bottom of the map (Town Square,
   // My card, Colonists, Races, Chats). An app is the real thing, moved onto the phone's screen while it's open (the
   // panel or the card), so everything in it works just as it does on the map; the home bar takes you back to the apps.
-  APPS:[['car','Car','#1F9E89'],['maps','Maps','#2E86DE'],['feed','Town Square','#3D7BD9'],['me','My card','#E2783B'],['people','Colonists','#2F9E6A'],['races','Races','#C0392B'],['bank','Bank','#1E7A55'],['radio','Radio','#D2453C'],['chats','Chats','#8E44AD']],
-  show(app){ if(!this.inside()){ if(app&&app!=='chats'){ app==='me'?openMyCard():openTab(app); } else openTab('chats'); return; } if(activeTab&&!this.app) openTab(null);
+  APPS:[['missions','Missions','#E2783B'],['car','Car','#1F9E89'],['maps','Maps','#2E86DE'],['feed','Town Square','#3D7BD9'],['me','My card','#E2783B'],['people','Colonists','#2F9E6A'],['races','Races','#C0392B'],['bank','Bank','#1E7A55'],['radio','Radio','#D2453C'],['chats','Chats','#8E44AD']],
+  show(app){ if(!this.inside()&&app==='missions'){ Missions.sheet(); return; } if(!this.inside()){ if(app&&app!=='chats'){ app==='me'?openMyCard():openTab(app); } else openTab('chats'); return; } if(activeTab&&!this.app) openTab(null);
     try{ window.__phone=this; }catch(e){} /* (for checking how it looks) */
     const P=this.model(); if(this.el&&this.elOf!==P.m+P.col){ this.hide(); return this.show(app); } /* a new phone: take the new one out */
     if(!this.el){ this.screen=el('div',{class:'phbody'}); this.elOf=P.m+P.col;
@@ -7225,6 +7239,7 @@ const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null,
   open(app,isBack){ if(!isBack&&this.on&&this.app&&this.app!==app&&!(this.app==='card'&&this.from)){ (this.stack||(this.stack=[])).push(this.app==='card'?'me':this.app); if(this.stack.length>12) this.stack.shift(); } /* (remember where you were, for ‹ Back) */
     if(!this.on){ this.show(app); return; } this.leave(); this.el.classList.remove('onhome'); this.showBack(true); this.anchor(); this.screen.replaceChildren(); this.busy=true;
     try{ if(app==='maps'){ this.app='maps'; if(Drive.T) DriveMap.open(this.screen); else this.screen.append(el('div',{class:'phmapsoff'}, el('b',{text:'🗺️ Maps'}), el('p',{text:'Maps shows the streets round you and the way to anywhere you pick, when you’re out on the street or driving. Inside, tap 2D for the colony map.'}))); }
+      else if(app==='missions'){ this.app='missions'; const box=el('div',{class:'phmissions'}); this.screen.append(box); Missions.fill(box); } /* 🎯 what to do in town, and the one you're on */
       else if(app==='radio'){ this.app='radio'; const box=el('div',{class:'phradio radio'}); this.screen.append(box); Radio.fill(box); Radio.refreshLive(); } /* the colony radio, anywhere you are */
       else if(app==='car'){ this.app='car'; const box=el('div',{class:'phgarage'}); this.screen.append(box); this.garage(box); } /* your vehicles: pick the one to drive */
       else if(app==='bank'){ this.app='bank'; const box=el('div',{class:'phbank'}); this.screen.append(box); this.bank(box); } /* your wallet: cash, the bank, gifts and what came in and went out */
@@ -7454,11 +7469,11 @@ const DriveMap={ route:null, idx:0, dest:null, off:0, rerouteAt:0, big:null, bv:
         if(bx[0]<0||bx[2]>cv.width||boxes.some(o=>bx[0]<o[2]&&bx[2]>o[0]&&bx[1]<o[3]&&bx[3]>o[1])) continue; boxes.push(bx); /* names that would sit on top of each other are left out */
         g.fillStyle='rgba(255,255,255,.82)'; g.fillRect(bx[0],bx[1],tw,bx[3]-bx[1]); g.fillStyle='rgba(40,34,28,.9)'; g.fillText(nm,x,y); n++; } } },
   // a waypoint: the way there along the roads, from where the car is
-  go(tx,ty){ const id=D.occ.get(tx+','+ty), b=id&&D.buildings.get(id), name=b?(b.name||T(b).name):'the spot you picked';
+  go(tx,ty,o={}){ const id=D.occ.get(tx+','+ty), b=id&&D.buildings.get(id), name=o.name||(b?(b.name||T(b).name):'the spot you picked'); /* o: { quiet, mission, name } for a mission's stop */
     let goal=null; if(b){ const [w,h]=T(b).size; for(let r=1;r<=6&&!goal;r++) for(let i=-r;i<w+r&&!goal;i++) for(let j=-r;j<h+r&&!goal;j++){ if(i>-r&&i<w+r-1&&j>-r&&j<h+r-1) continue; if(carOK((b.x+i)+','+(b.y+j))) goal=[b.x+i,b.y+j]; } }
     else goal=nearestRoad(tx,ty,6);
     if(!goal){ if(this.title) this.title.textContent='No road near there: tap nearer a road'; toast('There’s no road near there. Pick a spot by a road.'); return; }
-    this.dest={ x:tx, y:ty, gx:goal[0], gy:goal[1], name, bid:b?b.id:null }; if(!this.plan()){ this.dest=null; if(this.title) this.title.textContent=`No way to drive to ${name} from here`; toast(`There’s no way to drive to ${name} from here.`); return; }
+    this.dest={ x:tx, y:ty, gx:goal[0], gy:goal[1], name, bid:b?b.id:null, mission:!!o.mission }; if(o.quiet){ this.plan(); this.draw(); return; } if(!this.plan()){ this.dest=null; if(this.title) this.title.textContent=`No way to drive to ${name} from here`; toast(`There’s no way to drive to ${name} from here.`); return; }
     toast(`🧭 Route set to ${name}. Follow the blue arrows.`); this.done(); this.draw(); },
   plan(){ const T=Drive.T, d=this.dest; if(!T||!d) return false; const p=T.pos, cx=Math.floor(p.x), cy=Math.floor(p.y), near=[];
     for(let j=-6;j<=6;j++) for(let i=-6;i<=6;i++) if(carOK((cx+i)+','+(cy+j))) near.push([cx+i,cy+j,Math.hypot(i,j)]); near.sort((a,b)=>a[2]-b[2]);
@@ -7467,8 +7482,84 @@ const DriveMap={ route:null, idx:0, dest:null, off:0, rerouteAt:0, big:null, bv:
   // as you drive: how far along you are, a new way if you've gone off it, and arriving
   follow(p){ const r=this.route; if(!r) return; let best=1e9, bi=this.idx; for(let i=this.idx;i<Math.min(r.length,this.idx+40);i++){ const d=Math.hypot(r[i][0]+0.5-p.x,r[i][1]+0.5-p.y); if(d<best){ best=d; bi=i; } }
     if(bi-this.idx>=4){ this.idx=bi; Drive.T.setRoute(r.slice(bi)); }
-    const end=r[r.length-1]; if(Math.hypot(end[0]+0.5-p.x,end[1]+0.5-p.y)<1.6){ const name=this.dest&&this.dest.name; this.clear(); toast(`🏁 You’ve arrived at ${name}.`); return; }
+    const end=r[r.length-1]; if(!(this.dest&&this.dest.mission)&&Math.hypot(end[0]+0.5-p.x,end[1]+0.5-p.y)<1.6){ const name=this.dest&&this.dest.name; this.clear(); toast(`🏁 You’ve arrived at ${name}.`); return; }
     if(best>2.5){ if(++this.off>=4&&Date.now()-this.rerouteAt>3000){ this.rerouteAt=Date.now(); this.off=0; this.plan(); } } else this.off=0; } };
+// 🎯 Missions: things to do out in the town that pay (shared/missions.js, server/missions.js). One at a time: the
+// app (or the sheet, on the map) lists what's open at your rank and what's coming next; start one and a route leads
+// you to each stop, a strip at the top says what to do and how long is left, and pulling up at the stop (slow, beside
+// the building) ticks it off. The server checks you really are there. Finishing pays, and XP moves you up the ranks.
+const Missions={ d:null, a:null, hud:null, busy:false, paxAt:null, saidHi:false, nearT:0, tickT:null,
+  async load(){ if(!(Me&&Me.token)) return null; try{ this.d=await api('/api/me/missions'); this.a=this.d.active||null; }catch(e){ return null; } return this.d; },
+  step(){ const a=this.a; return a&&a.steps[a.step]||null; },
+  // the ladder and the list: into the phone's screen, or a sheet over the map
+  async fill(box){ box.replaceChildren(el('p',{class:'hint',text:'Loading…'})); const d=await this.load(); if(!box.isConnected) return; box.replaceChildren();
+    if(!d){ box.append(el('p',{class:'hint',text:Me&&Me.token?'Missions couldn’t load. Try again in a moment.':'Sign in to your colonist to take missions.'})); return; }
+    const R0=d.ranks[d.rank], N=d.ranks[d.rank+1];
+    box.append(el('div',{class:'mrank'}, el('b',{class:'mrkic',text:R0.icon}), el('div',{class:'mrkt'}, el('b',{text:R0.name}), el('div',{class:'mbar'}, el('i',{style:`width:${Math.round(d.frac*100)}%`})),
+      el('small',{text:N?`${(d.nextXp-d.xp).toLocaleString()} XP to ${N.icon} ${N.name}`:`${d.xp.toLocaleString()} XP · the top rank`}))));
+    if(this.a){ const a=this.a, K=MISSION_KINDS[a.kind], s=this.step();
+      box.append(el('div',{class:'mcard on'}, el('div',{class:'mtop'}, el('b',{text:`${K.icon} ${K.name}`}), el('span',{class:'mpay',text:`💰 ${a.fare.toLocaleString()}+`})), el('p',{text:s?this.say(s):''}),
+        el('div',{class:'mrow'}, el('button',{class:'btn primary sm',text:'🧭 Show the way',onclick:()=>{ Phone.hide(); this.goOut(); }}), el('button',{class:'btn sm',text:'Give up',onclick:()=>this.quit(box)})))); }
+    const open=d.list.filter(m=>m.open), soon=d.list.filter(m=>!m.open);
+    box.append(el('h4',{class:'mh',text:this.a?'Next time':'Pick one'}));
+    for(const m of open) box.append(el('div',{class:'mcard'}, el('div',{class:'mtop'}, el('b',{text:`${m.icon} ${m.name}`}), el('span',{class:'mtag '+m.side,text:m.side==='crime'?'Crime':'Work'})), el('p',{text:m.blurb}),
+      el('button',{class:'btn primary sm',text:'Start',disabled:this.a||this.busy?'':null,onclick:()=>this.start(m.kind)})));
+    /* what's ahead: just the next rank's openings, so there's always one thing to aim for (the rest stay a surprise) */
+    const nextR=soon.length?Math.min(...soon.map(m=>m.rank).filter(r=>r>d.rank).concat([99])):99, ahead=soon.filter(m=>m.rank===nextR);
+    if(ahead.length){ box.append(el('h4',{class:'mh',text:`Coming at ${d.ranks[nextR].icon} ${d.ranks[nextR].name}`}));
+      for(const m of ahead) box.append(el('div',{class:'mcard lock'}, el('div',{class:'mtop'}, el('b',{text:`🔒 ${m.icon} ${m.name}`}), el('span',{class:'mtag '+m.side,text:m.side==='crime'?'Crime':'Work'})), el('p',{text:m.blurb}))); }
+    box.append(el('p',{class:'hint',text:d.paidLeft?`Missions pay from the colony treasury: ${d.paidLeft} more today.`:'You’ve done today’s paid missions: more XP still counts. New ones tomorrow.'})); },
+  sheet(){ this.close(); const box=el('div',{class:'rsheet mbox'}), wrap=el('div',{class:'rsheet-bg storesheet msheet'}, box); wrap.addEventListener('click',e=>{ if(e.target===wrap) this.close(); });
+    box.append(el('div',{class:'mhead'}, el('h3',{text:'🎯 Missions'}), el('button',{class:'x','aria-label':'Close',text:'×',onclick:()=>this.close()}))); const inner=el('div'); box.append(inner); document.body.append(wrap); this.sheetEl=wrap; this.fill(inner); },
+  close(){ if(this.sheetEl){ this.sheetEl.remove(); this.sheetEl=null; } },
+  // out on the street, in a car, ready for the server to know where you are
+  async goOut(){ this.close(); if(!Drive.el) await Drive.start(); const t0=Date.now(); while(Drive.el&&!(Drive.T)&&Date.now()-t0<15000) await new Promise(r=>setTimeout(r,200)); if(!Drive.T) return false;
+    if(this.a) this.route(); return true; },
+  async start(kind){ if(this.busy) return; this.busy=true;
+    try{ const wasOut=!!Drive.T; if(!(await this.goOut())) return; if(Drive.T.pos.mode==='walk'||Drive.riding){ toast('🚗 Get in a car first: this one’s driving.'); return; }
+      if(!wasOut) await new Promise(r=>setTimeout(r,1200)); /* (the town tells the server where you are a moment after you go out) */
+      const r=await api('/api/me/missions',{method:'POST',body:{action:'start',kind}}); this.close(); Phone.hide(); this.d=r; this.begin(r.active);
+      const K=MISSION_KINDS[kind]; toast(`${K.icon} ${K.name}: ${this.say(this.step())}`); }
+    catch(e){ toast(e.message); } finally{ this.busy=false; } },
+  begin(a){ this.a=a; this.saidHi=false; this.route(); this.paintHud(); clearInterval(this.tickT); this.tickT=setInterval(()=>this.paintHud(),1000); },
+  say(s){ const a=this.a, K=a&&a.kind; if(!s) return ''; if(K==='taxi') return s.k==='pickup'?`Pick up your fare at ${s.name}.`:`Drive them to ${s.name}.`;
+    const n=a.steps.filter(x=>x.k==='drop').length, i=a.steps.slice(0,a.step+1).filter(x=>x.k==='drop').length; return s.k==='pickup'?`Collect the parcel${n>1?'s':''} at ${s.name}.`:`Drop ${n>1?`parcel ${i} of ${n}`:'it'} at ${s.name}.`; },
+  // the way to the stop: the blue arrows and the beam, on the nearest road beside it
+  route(){ const s=this.step(); if(!s||!Drive.T) return; if(s.kx!=null) DriveMap.go(s.kx, s.ky, {quiet:true, mission:true, name:s.name}); else DriveMap.go(s.x+Math.floor(s.w/2), s.y+Math.floor(s.h/2), {quiet:true, mission:true, name:s.name}); const g=DriveMap.dest; this.paxAt=null; /* (to the kerb beside it) */
+    if(g&&this.a.kind==='taxi'&&s.k==='pickup'){ const px=Math.max(s.x-0.3,Math.min(s.x+s.w+0.3,g.gx+0.5)), py=Math.max(s.y-0.3,Math.min(s.y+s.h+0.3,g.gy+0.5)); this.paxAt={x:px,y:py}; } },
+  // your fare, waiting at the kerb (one of the people on the street)
+  people(){ const a=this.a; if(!a||!this.paxAt) return null; return { d:0, id:'m:pax', x:this.paxAt.x, y:this.paxAt.y, car:false, look:null, tag:'🚕 Your fare' }; },
+  // as you drive: the strip, the passenger's hello, and pulling up at the stop
+  tick(x,y){ const a=this.a, s=this.step(); if(!a||!s||!Drive.T||this.busy) return; const T3=Drive.T, now=Date.now();
+    if(now>a.deadline){ this.fail('time'); return; }
+    const off=offEdge({x,y},s); if(a.kind==='taxi'&&s.k==='pickup'&&!this.saidHi&&off<6){ this.saidHi=true; try{ T3.say('m:pax', FARES[a.line%FARES.length].hi); }catch(e){} }
+    const at=(s.kx!=null&&Math.hypot(x-(s.kx+0.5),y-(s.ky+0.5))<=1.5)||off<=MISSION.near-0.2; if(at&&T3.kmh()<=12&&T3.pos.mode==='car'&&now-this.nearT>1500){ this.nearT=now; this.arrive(); } },
+  async arrive(){ if(this.busy) return; this.busy=true; const a=this.a, s=this.step();
+    try{ const r=await api('/api/me/missions',{method:'POST',body:{action:'arrive'}}); this.d=r;
+      if(r.failed){ this.fail(r.failed,true); return; }
+      if(r.next){ this.a=r.active; if(a.kind==='taxi'){ toast('🚕 They’re in. '+this.say(this.step())); setTimeout(()=>{ try{ Drive.T.say('me', '“'+FARES[a.line%FARES.length].go+'”'); }catch(e){} },1500); } else toast(`📦 ${s.k==='pickup'?'Got it.':'Delivered.'} ${this.say(this.step())}`); sfxCoin(); this.route(); this.paintHud(); return; }
+      if(r.done){ const K=MISSION_KINDS[r.kind]; this.end(); if(r.kind==='taxi'){ try{ Drive.T.say('me','“'+FARES[a.line%FARES.length].bye+'”'); }catch(e){} }
+        sfxCoin(); toast(`${K.icon} Done! +${r.paid.toLocaleString()} coins${r.tip?` (${r.tip.toLocaleString()} tip)`:''} · +${r.xpGot} XP${r.short?' (the treasury was short)':''}`);
+        try{ Earn.coins(r); }catch(e){}
+        if(r.rankUp) setTimeout(()=>this.rankCard(r.rankUp),1200); } }
+    catch(e){ if(!/not at|yet/i.test(e.message)) toast(e.message); } finally{ this.busy=false; } },
+  fail(why,told){ const a=this.a; if(!a) return; const K=MISSION_KINDS[a.kind]; this.end(); toast(why==='time'?`⏱️ Out of time: the ${K.name.toLowerCase()} is off.`:`${K.icon} ${K.name} called off.`);
+    if(!told) api('/api/me/missions',{method:'POST',body:{action:'arrive'}}).catch(()=>{}); /* (the server sees the clock ran out and closes it) */ },
+  async quit(box){ try{ this.d=await api('/api/me/missions',{method:'POST',body:{action:'quit'}}); }catch(e){ toast(e.message); return; } this.end(); toast('Mission given up.'); if(box&&box.isConnected) this.fill(box); },
+  end(){ this.a=null; this.paxAt=null; clearInterval(this.tickT); this.tickT=null; if(DriveMap.dest&&DriveMap.dest.mission) DriveMap.clear(); this.paintHud(); },
+  // the strip at the top of the street view: what to do now, the clock, the fare
+  paintHud(){ const root=Drive.el; if(!root||!this.a){ if(this.hud){ this.hud.remove(); this.hud=null; } return; }
+    if(!this.hud||!this.hud.isConnected){ this.hud=el('div',{class:'mhud'}); root.append(this.hud); }
+    const a=this.a, K=MISSION_KINDS[a.kind], left=Math.max(0,Math.ceil((a.deadline-Date.now())/1000)), t=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`, txt=this.say(this.step());
+    const key=a.id+a.step+t; if(this.hud.dataset.k===key) return; this.hud.dataset.k=key; this.hud.classList.toggle('late',left<=20);
+    this.hud.replaceChildren(el('div',{class:'mhrow'}, el('b',{text:`${K.icon} ${K.name}`}), el('span',{class:'mclock',text:`⏱ ${t}`})), el('div',{class:'mhtxt',text:txt}), el('small',{text:`💰 ${a.fare.toLocaleString()} + a tip if you’re quick`})); },
+  // back out on the street with a mission still on: the way to the stop again
+  onStreet(){ if(location.hostname==='localhost') window.__missions=this; if(!(Me&&Me.token)) return; this.load().then(()=>{ if(this.a&&Drive.T) this.begin(this.a); }); },
+  // a new rank: what it opens
+  rankCard(R1){ const box=el('div',{class:'rsheet mbox mup'}), wrap=el('div',{class:'rsheet-bg storesheet msheet'}, box); const shut=()=>wrap.remove(); wrap.addEventListener('click',e=>{ if(e.target===wrap) shut(); });
+    box.append(el('div',{class:'mupic',text:R1.icon}), el('h3',{text:`You’re now a ${R1.name}!`}));
+    if(R1.unlocks&&R1.unlocks.length){ box.append(el('p',{class:'hint',text:'New for you:'})); for(const m of R1.unlocks) box.append(el('div',{class:'mcard'}, el('b',{text:`${m.icon} ${m.name}${m.live?'':' (coming soon)'}`}), el('p',{text:m.blurb}))); }
+    box.append(el('button',{class:'btn primary',text:'Nice!',onclick:shut})); document.body.append(wrap); sfxCoin(); } };
 // Who's online right now (seen in the last minute and a half), for the green dot on the map and over people in 3D;
 // anyone out on the street in 3D counts too. Refreshed every minute while the page is open.
 const LiveOnline={ ids:new Set(), at:0, busy:false,
@@ -7718,7 +7809,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     try{ window.__drive=this; this.map=DriveMap; }catch(e){} /* (for checking how it runs) */
     this.floats();
     try{ if(!(history.state&&history.state.drive)) history.pushState({drive:1},''); }catch(e){}
-    this.paintMode();
+    this.paintMode(); Missions.onStreet();
     if(walk) toast(at&&at.x!=null?'🚶 Back out on the street.':'🚶 You’re out on foot. Walk up to a building’s front door to go in.'); else toast(at?'🚗 Back in your car.':car.own?`🚗 You’re in your ${car.name.toLowerCase()}. Tap the map to pick where to go, or pull up at a building to stop there.`:'🚗 You’re in a basic car (buy your own at a Car dealership). Tap the map to pick where to go.'); },
   // the colony's road vehicles near you, where the map has them now: the ones the developer placed (police patrols, fire
   // engines, ambulances, buses, taxis, vans, lorries), and the emergency calls going on (lights flashing)
@@ -7740,7 +7831,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
       if(online&&!L) Looks.want([c.handle]); /* their own look, for next time */
       const drv=!!(dn&&dn.mode==='car'), n=aboard.get(c.id)||0;
       out.push({ d, id:c.id, x:st.x, y:st.y, car:!!st.car, col:st.car?st.col:null, m:V&&V.mode==='water'?Object.keys(VEHICLE_TYPES).find(k=>VEHICLE_TYPES[k]===V):m&&ridden(m)?m:V===VEHICLE_TYPES.taxi?'sedan':'hatch', look:L||null, pet:!st.car?petOut(c):null, petOwner:c.handle, tag:online||live?'@'+c.handle+(n?` +${n}`:''):null, online, h:c.handle, drv, a:st.dx!=null?Math.atan2(-st.dy,st.dx):null, full:drv&&n>=seatsOf(dn.m)-1 }); }
-    const near=out.sort((a,b)=>a.d-b.d).slice(0,40); this.talkNear(near); return near; },
+    const near=out.sort((a,b)=>a.d-b.d).slice(0,40); this.talkNear(near); const pax=Missions.people(); if(pax) near.push(pax); /* (your taxi fare, waiting at the kerb) */ return near; },
   // talking on the street: what you say shows over your head for the people near you (and in their street chat)
   async say(){ const t=this.chatIn.value.trim(); if(!t||!this.T) return; this.chatIn.value=''; const p=this.T.pos;
     try{ const r=await api('/api/street/say',{method:'POST',body:{text:t,x:p.x,y:p.y}}); this.heard({...r.say,mine:true}); }catch(e){ toast(e.message); this.chatIn.value=t; } },
@@ -7755,7 +7846,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     const foot=this.T&&this.T.pos.mode==='walk'; this.speed.hidden=!!foot; if(!foot){ const gr=this.T&&this.T.gear?this.T.gear():''; this.speed.textContent=`${this.T?this.T.kmh():0} km/h${gr?' · '+gr:''}`; } /* (and the gear you're in: 1–8, N stopped, R reversing) */ this.voiceSync(); /* on foot: no speed to show */
     if(this.riding){ this.speed.textContent=`${this.T?this.T.kmh():0} km/h`; DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); } return; } /* riding: the car goes where its driver takes it */
     try{ if(ws&&ws.readyState===1){ const msg=JSON.stringify({type:'drive',mode:foot?'walk':'car',x:+x.toFixed(2),y:+y.toFixed(2),a:+a.toFixed(2),m:this.car.m,col:this.car.col}), now=Date.now(); if(msg!==this.sentMsg||now-(this.sentAt||0)>=2000||this.sentWs!==ws){ ws.send(msg); this.sentMsg=msg; this.sentAt=now; this.sentWs=ws; } } }catch(e){} /* standing still: the same place isn't sent four times a second, just a heartbeat every 2 s (others keep you for 5 s) */
-    DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); }
+    DriveMap.follow({x,y,a}); if(Date.now()-(this.mapAt||0)>300){ this.mapAt=Date.now(); DriveMap.draw(); } Missions.tick(x,y);
     if(Date.now()-this.synced>1500){ this.synced=Date.now(); const V=DriveMap.big&&DriveMap.bv, q=V?iso(V.x,V.y):iso(x,y); cam.x=q.x; cam.y=q.y; cam.z=V?Math.max(0.2,Math.min(0.45,V.s/20)):0.45; follow=null; syncChunks(); } } /* the town round the car loads; with the big map open, round where you're looking (for routes further away) */, /* the map loads the town round the car (zoomed out, so it loads plenty) */
   nearBy(b){ this.near=b; this.doorOk=false; if(this.riding){ this.goBtn.hidden=true; this.inBtn.hidden=true; return; } const name=b&&(b.name||T(b).name), foot=this.T&&this.T.pos.mode==='walk';
     if(!b||!canGoTo(b.type)||b.done===false){ this.goBtn.hidden=true; this.inBtn.hidden=true; this.sub.textContent=b?`${name}`:foot?'Stick to walk, drag the screen to look round':'Steer with the stick'; return; }

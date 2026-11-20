@@ -441,6 +441,10 @@ export function playersRouter({ limit, send, admin, world }) {
   }));
   // More ways to earn: extra shifts, delivery gigs, fishing and foraging, scavenging.
   r.get('/me/earn', limit, send(async req => world.earn.info((await me(req)).id)));
+  // missions out in the 3D town: the ladder and the one you're on; start one, pull up at a stop, give it up
+  r.get('/me/missions', limit, send(async req => world.missions.info((await me(req)).id)));
+  r.post('/me/missions', limit, send(async req => { const b = req.body || {}, id = (await me(req)).id;
+    return b.action === 'start' ? world.missions.start(id, String(b.kind || '')) : b.action === 'arrive' ? world.missions.arrive(id) : b.action === 'quit' ? world.missions.quit(id) : Promise.reject(new HttpError(400, 'Start, arrive or quit.')); }));
   r.post('/me/earn/shift', limit, send(async req => world.earn.shift((await me(req)).id)));
   r.post('/me/earn/gig', limit, send(async req => { const b = req.body || {}, id = (await me(req)).id;
     return b.action === 'take' ? world.earn.takeGig(id, String(b.id || '')) : b.action === 'deliver' ? world.earn.deliver(id) : b.action === 'drop' ? world.earn.dropGig(id) : Promise.reject(new HttpError(400, 'Take, deliver or drop.')); }));

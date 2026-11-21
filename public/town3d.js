@@ -138,7 +138,7 @@ export function createTown(host, opts) {
     const t0 = performance.now(), key = bx + ',' + by, old = blocks.get(key), s = sig(bx, by); if (old && old.sig === s) return;
     const { L, solid, parked } = blockArea(bx, by, opts), g = W.buildArea(view, L, { cordon: false, pad: 0, ring: false, add: false });
     g.position.set(bx * TILE, 0, by * TILE); { const gr = grassBlock(bx, by, opts, HQ); if (gr) g.add(gr); }
-    for (const l of g.userData.lamps) solid.push({ c: [bx * TILE + l.x, by * TILE + l.z, 0.3], brk: 'lamp', p: l }); for (const o of solid) if (o.brk) o.g = g; /* the lamps along the streets: knocked over by a car, solid on foot */ g.updateMatrixWorld(true); scene.add(g);
+    for (const l of g.userData.lamps) solid.push({ c: [bx * TILE + l.x, by * TILE + l.z, 0.3], brk: 'lamp', p: l }); for (const h of g.userData.hard || []) solid.push(h.r ? { r: [bx * TILE + h.r[0], by * TILE + h.r[1], bx * TILE + h.r[2], by * TILE + h.r[3]] } : { c: [bx * TILE + h.c[0], by * TILE + h.c[1], h.c[2]] }); /* columns, canopy posts, entrance portals, planters, tables, docks: what stands out from the businesses */ for (const o of solid) if (o.brk) o.g = g; /* the lamps along the streets: knocked over by a car, solid on foot */ g.updateMatrixWorld(true); scene.add(g);
     if (old) drop(old); blocks.set(key, { g, sig: s, bx, by, solid, parked }); blocksVer++; shadowsDue = true; const ms = performance.now() - t0; stats.builds++; stats.maxMs = Math.max(stats.maxMs, ms); stats.totalMs += ms; }
   const stats = { builds: 0, maxMs: 0, totalMs: 0 }; /* how long blocks take to build (for checking it stays smooth) */
   const drop = v => { scene.remove(v.g); const gone = new Set(); v.g.traverse(m => { m.geometry && m.geometry.dispose(); if (m.userData.sign) { gone.add(m.material); W.dropSign(m.material); } }); if (gone.size) view.mats = view.mats.filter(x => !gone.has(x)); }; /* (its name boards too) */
@@ -358,8 +358,15 @@ export function createTown(host, opts) {
       let gap = 99; const hx = -Math.sin(t.ry), hz = -Math.cos(t.ry);
       let byMe = false; for (let k = -1; k < traffic.length; k++) { const o = k < 0 ? null : traffic[k]; /* (you first, then the other cars) */ if (o === t) continue; const ox = (o ? o.px : car.x) - t.px, oz = (o ? o.pz : car.z) - t.pz, ahead = ox * hx + oz * hz, side = Math.abs(ox * hz - oz * hx); if (ahead > -1.5 && ahead < gap && side < (o ? 2.2 : 3.2)) { gap = Math.max(0, ahead); byMe = !o; } }
       const want = gap < 6.5 ? 0 : gap < 14 ? top * (gap - 6.5) / 7.5 : top; t.v += Math.max(-12 * dt, Math.min(3 * dt, want - t.v)); if (gap < 4.5) t.v = Math.min(t.v, 0);
-      t.wait = t.v < 0.3 && byMe ? (t.wait || 0) + dt : 0; /* stuck behind you a while: turn round and go another way */
-      if (t.wait > 4) { t.wait = 0; [t.fx, t.fy, t.tx, t.ty] = [t.tx, t.ty, t.fx, t.fy]; t.u = Math.max(0, 1 - t.u); t.v = 0; }
+      // a car never drives into you: where it would be next (with the swing of a corner or a lane change), if that's on
+      // top of you (on foot: your body and a step of room; in a car: its body), it stays where it is until you're clear
+      { const nu = Math.min(1, t.u + t.v * dt / TILE), ax = (t.fx + 0.5) * TILE, az = (t.fy + 0.5) * TILE, tx2 = ax + ((t.tx + 0.5) * TILE - ax) * nu - dy * 1.3, tz2 = az + ((t.ty + 0.5) * TILE - az) * nu + dx * 1.3, nx2 = t.px + (tx2 - t.px) * 0.3, nz2 = t.pz + (tz2 - t.pz) * 0.3;
+        t.hold = false; if (Math.abs(nx2 - car.x) < 7 && Math.abs(nz2 - car.z) < 7) { const m = foot ? 0.6 : 1.1, pts = [[car.x, car.z]]; /* (in a car: its middle, with room for its body) */
+          for (const [qx, qz] of pts) { const d1 = carDep(t.kind, nx2, nz2, t.ry, qx, qz, m); if (d1 > 0 && d1 >= carDep(t.kind, t.px, t.pz, t.ry, qx, qz, m) - 1e-3) { t.hold = true; break; } } }
+        if (t.hold) { t.v = 0; byMe = true; } }
+      t.wait = t.v < 0.3 && byMe ? (t.wait || 0) + dt : 0; /* stuck behind you a while: turn round and go another way (not while you're on foot right by it: it waits for you to cross) */
+      if (t.wait > 4 && !(foot && Math.hypot(t.px - car.x, t.pz - car.z) < 6)) { t.wait = 0; [t.fx, t.fy, t.tx, t.ty] = [t.tx, t.ty, t.fx, t.fy]; t.u = Math.max(0, 1 - t.u); t.v = 0; }
+      if (t.hold) { pushCar(t.kind, t.col, t.px, t.pz, t.ry); continue; }
       t.u += t.v * dt / TILE;
       while (t.u >= 1) { t.u -= 1; const nx = [];
         for (const [ex, ey] of DIRS) { if (ex === -dx && ey === -dy) continue; if (drivable(t.tx + ex, t.ty + ey)) nx.push([ex, ey]); }
@@ -831,6 +838,7 @@ export function createTown(host, opts) {
     _put(x, z, a) { car.x = x; car.z = z; car.a = a; car.v = car.vx = car.vz = 0; car.wa = 0; }, /* (for testing) */
     _why() { const out = []; for (const q of solidsNear(car.x, car.z)) { const d = q.car ? 'car' : q.r ? 'rect' : +(Math.hypot(q.c[0] - car.x, q.c[1] - car.z)).toFixed(2); if (q.car ? Math.hypot(q.car.x - car.x, q.car.z - car.z) < 6 : q.r ? (car.x > q.r[0] - 4 && car.x < q.r[2] + 4 && car.z > q.r[1] - 4 && car.z < q.r[3] + 4) : d < 4) out.push({ d, r: q.c && q.c[2], soft: q.soft, brk: q.brk, id: q.id }); } return { a: +car.a.toFixed(2), out, traffic: traffic.filter(t => Math.hypot(t.px - car.x, t.pz - car.z) < 8).length, OL, OW }; },
     _broken() { let n = 0; for (const v of blocks.values()) for (const o of v.solid) if (o.gone) n++; return { broken: n, flying: DEB.length, deb: DEB.map(d => [d.x - car.x, d.y, d.z - car.z, d.th, d.G.parent === scene, d.G.children.length].map(v => typeof v === 'number' ? +v.toFixed(2) : v)) }; },
+    probe(x, y) { const px = x == null ? car.x : x * TILE, pz = y == null ? car.z : y * TILE, S = closeSolids(solidsNear(px, pz), px, pz, 1); let inside = -9, incar = -9; for (const o of S) inside = Math.max(inside, depth(px, pz, o)); for (const t of traffic) incar = Math.max(incar, carDep(t.kind, t.px, t.pz, t.ry, px, pz, 0)); return { solid: +inside.toFixed(2), car: +incar.toFixed(2) }; }, /* (for checking: how far inside something solid a spot is, and inside a passing car) */
     stats() { return { ...stats, blocks: blocks.size, people: folk.size, traffic: traffic.length, walkers: peds.length, radius: RAD, fleet: Object.fromEntries([...fleetM].filter(([, m]) => m.count).map(([k, m]) => [k, m.count])), calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
     toggleView() { mode = (mode + 1) % 3; lk.yaw = foot ? lk.yaw : 0; lk.pitch = 0; return ['behind', 'driver', 'above'][mode]; },
     setControls(c) { ctl = c || ctl; controls(); if (riding && pad) pad.style.display = 'none'; },

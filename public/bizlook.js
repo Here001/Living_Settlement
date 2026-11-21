@@ -17,6 +17,10 @@ function kit(K, B, b, face) {
   const ux = face === 'S' ? 1 : face === 'N' ? -1 : 0, uz = face === 'W' ? 1 : face === 'E' ? -1 : 0, vx = face === 'E' ? 1 : face === 'W' ? -1 : 0, vz = face === 'S' ? 1 : face === 'N' ? -1 : 0;
   const ox = face === 'E' ? b.x + b.w : face === 'W' ? b.x : b.x + b.w / 2, oz = face === 'S' ? b.y + b.h : face === 'N' ? b.y : b.y + b.h / 2;
   const P = (u, v, y) => [ox + ux * u + vx * v, y, oz + uz * u + vz * v], ry = Math.atan2(-uz, ux);
+  // what stands out from the building at ground level is solid (you can't walk or drive through it): noted as it is made,
+  // for the town's collisions. Not the doorway itself (the way in stays clear), nor low things (steps, kerbs, crates).
+  const way = (u0, u1, v0) => u0 < 0.8 && u1 > -0.8 && v0 < 2.4, hardR = (u0, u1, v0, v1) => { if (!K.hard || v1 < 0.3 || way(u0, u1, v0)) return; const a = P(u0, Math.max(v0, 0), 0), d = P(u1, v1, 0); K.hard({ r: [Math.min(a[0], d[0]), Math.min(a[2], d[2]), Math.max(a[0], d[0]), Math.max(a[2], d[2])] }); };
+  const hardC = (u, v, r) => { if (!K.hard || v + r < 0.3 || way(u - r, u + r, v - r)) return; const a = P(u, v, 0); K.hard({ c: [a[0], a[2], Math.max(0.14, r)] }); }, low = (y0, y1) => y0 < 1.2 && y1 > 0.6;
   const c = x => (x && x.isColor) ? x : col(x);
   // a flat four-cornered piece through local points, facing `want` (a local direction [u, v, y])
   const quad = (bk, pts, color, want = [0, 1, 0]) => { let [a, b2, c2, d] = pts.map(p => P(p[0], p[1], p[2])); const w = [ux * want[0] + vx * want[1], want[2], uz * want[0] + vz * want[1]];
@@ -25,14 +29,14 @@ function kit(K, B, b, face) {
   const tri = (bk, pts, color, want = [0, 1, 0]) => { let [a, b2, c2] = pts.map(p => P(p[0], p[1], p[2])); const w = [ux * want[0] + vx * want[1], want[2], uz * want[0] + vz * want[1]];
     const e1 = [b2[0] - a[0], b2[1] - a[1], b2[2] - a[2]], e2 = [c2[0] - a[0], c2[1] - a[1], c2[2] - a[2]]; let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
     if (n[0] * w[0] + n[1] * w[1] + n[2] * w[2] < 0) { [b2, c2] = [c2, b2]; n = n.map(x => -x); } const l = Math.hypot(...n) || 1; bk.tri(a, b2, c2, n.map(x => x / l), [0, 0, 1, 0, 0.5, 1], c(color)); };
-  const box = (bk, u0, u1, v0, v1, y0, y1, color, o) => { const a = P(u0, v0, 0), d = P(u1, v1, 0); bk.box(Math.min(a[0], d[0]), Math.min(a[2], d[2]), Math.max(a[0], d[0]), Math.max(a[2], d[2]), y0, y1, c(color), o); };
+  const box = (bk, u0, u1, v0, v1, y0, y1, color, o) => { if (low(y0, y1)) hardR(Math.min(u0, u1), Math.max(u0, u1), Math.min(v0, v1), Math.max(v0, v1)); const a = P(u0, v0, 0), d = P(u1, v1, 0); bk.box(Math.min(a[0], d[0]), Math.min(a[2], d[2]), Math.max(a[0], d[0]), Math.max(a[2], d[2]), y0, y1, c(color), o); };
   const wall = (bk, u0, u1, y0, y1, v, color) => quad(bk, [[u0, v, y0], [u1, v, y0], [u1, v, y1], [u0, v, y1]], color, [0, 1, 0]); /* a piece of the front, facing the street */
-  const cyl = (bk, u, v, y0, y1, r, color) => { const p = P(u, v, (y0 + y1) / 2); bake(bk, GEO.cyl, { x: p[0], y: p[1], z: p[2], sx: r, sy: y1 - y0, sz: r, color: c(color) }); };
+  const cyl = (bk, u, v, y0, y1, r, color) => { if (low(y0, y1)) hardC(u, v, r); const p = P(u, v, (y0 + y1) / 2); bake(bk, GEO.cyl, { x: p[0], y: p[1], z: p[2], sx: r, sy: y1 - y0, sz: r, color: c(color) }); };
   const ball = (bk, u, v, y, r, color, sy = 1) => { const p = P(u, v, y); bake(bk, GEO.ball, { x: p[0], y: p[1], z: p[2], sx: r, sy: r * sy, sz: r, color: c(color) }); };
   const dome = (bk, u, v, y, r, color, sy = 1) => { const p = P(u, v, y); bake(bk, GEO.half, { x: p[0], y: p[1], z: p[2], sx: r, sy: r * sy, sz: r, color: c(color) }); };
-  const rbox = (bk, u, v, y, su, sv, sy, color, tilt = 0) => { const p = P(u, v, y); bake(bk, GEO.box, { x: p[0], y: p[1], z: p[2], sx: su, sy, sz: sv, ry, rx: tilt, color: c(color) }); }; /* a box centred at (u, v, y), sized along u / v / up */
+  const rbox = (bk, u, v, y, su, sv, sy, color, tilt = 0) => { if (low(y - sy / 2, y + sy / 2)) hardR(u - su / 2, u + su / 2, v - sv / 2, v + sv / 2); const p = P(u, v, y); bake(bk, GEO.box, { x: p[0], y: p[1], z: p[2], sx: su, sy, sz: sv, ry, rx: tilt, color: c(color) }); }; /* a box centred at (u, v, y), sized along u / v / up */
   // a round thing turned on a lathe: profile [[radius, height], …] from the bottom up (tanks, chimneys, columns, domes, pots)
-  const lathe = (bk, u, v, prof, color, seg = 12, cap = true) => { const [cx, , cz] = P(u, v, 0), cc = c(color);
+  const lathe = (bk, u, v, prof, color, seg = 12, cap = true) => { if (low(prof[0][1], prof[prof.length - 1][1])) hardC(u, v, Math.max(...prof.filter(q => q[1] < 2).map(q => q[0]), 0)); const [cx, , cz] = P(u, v, 0), cc = c(color);
     for (let k = 0; k + 1 < prof.length; k++) { const [r0, y0] = prof[k], [r1, y1] = prof[k + 1], sl = Math.atan2(r0 - r1, y1 - y0);
       for (let i = 0; i < seg; i++) { const a0 = i / seg * Math.PI * 2, a1 = (i + 1) / seg * Math.PI * 2, am = (a0 + a1) / 2, pt = (a, r, y) => [cx + Math.cos(a) * r, y, cz + Math.sin(a) * r];
         bk.quad(pt(a1, r0, y0), pt(a0, r0, y0), pt(a0, r1, y1), pt(a1, r1, y1), [Math.cos(am) * Math.cos(sl), Math.sin(sl), Math.sin(am) * Math.cos(sl)], [0, 0, 1, 0, 1, 1, 0, 1], cc); } }
@@ -49,7 +53,7 @@ function kit(K, B, b, face) {
   const mound = (bk, u, v, y, r, color) => lathe(bk, u, v, [[r, y], [r * 0.75, y + r * 0.5], [0.02, y + r * 0.8]], color, 6, false); /* a heap of fruit, a bunch of flowers: 12 triangles */
   const other = f2 => kit(K, B, b, f2); /* the same kit on another side (the back: opposite; the sides) */
   const back = () => other({ S: 'N', N: 'S', E: 'W', W: 'E' }[face]), left = () => other({ S: 'W', W: 'N', N: 'E', E: 'S' }[face]), right = () => other({ S: 'E', E: 'N', N: 'W', W: 'S' }[face]);
-  return { P, Wf, Df, quad, tri, box, wall, cyl, ball, dome, mound, rbox, lathe, vault, arch, sign, back, left, right, face, ry, c };
+  return { P, Wf, Df, hardR, hardC, quad, tri, box, wall, cyl, ball, dome, mound, rbox, lathe, vault, arch, sign, back, left, right, face, ry, c };
 }
 
 const PORTICO = { microbank: 2, communitybank: 4, bank: 4, intlbank: 6, exchange: 6, courthouse: 6, museum: 6, opera: 6, cityhall: 6, parliament: 8, library: 4, baths: 4, university: 6, college: 4, embassy: 4, townhall: 4 };
@@ -119,7 +123,7 @@ function parts(K, B, k, b, C, T) {
     if (glassRow) wl(B.shiny, u0 + 0.25, u1 - 0.25, h * 0.55, h * 0.72, 0.075, GLASS);
     bx(B.solid, u0 - 0.16, u0, 0, 0.14, 0, h + 0.2, frame); bx(B.solid, u1, u1 + 0.16, 0, 0.14, 0, h + 0.2, frame); bx(B.solid, u0 - 0.16, u1 + 0.16, 0, 0.16, h, h + 0.3, frame); };
   // a café table for two with a parasol; a planter with a clipped bush; a round bollard; a flag on a pole
-  o.table = (u, v, color = '#C8382E') => { cyl(B.shiny, u, v, 0, 0.72, 0.045, '#8a9096'); cyl(B.solid, u, v, 0.7, 0.76, 0.42, '#e9e4d8'); for (const s of [-1, 1]) { cyl(B.shiny, u + s * 0.72, v, 0, 0.44, 0.035, '#8a9096'); cyl(B.solid, u + s * 0.72, v, 0.42, 0.48, 0.2, '#3a3f45'); }
+  o.table = (u, v, color = '#C8382E') => { k.hardC(u, v, 0.45); cyl(B.shiny, u, v, 0, 0.72, 0.045, '#8a9096'); cyl(B.solid, u, v, 0.7, 0.76, 0.42, '#e9e4d8'); for (const s of [-1, 1]) { cyl(B.shiny, u + s * 0.72, v, 0, 0.44, 0.035, '#8a9096'); cyl(B.solid, u + s * 0.72, v, 0.42, 0.48, 0.2, '#3a3f45'); }
     cyl(B.shiny, u, v, 0.76, 2.35, 0.03, '#d5d9de'); lathe(B.solid, u, v, [[1.25, 2.1], [1.2, 2.16], [0.6, 2.42], [0.05, 2.56]], color, 8, false); };
   o.planter = (u, v, s = 1) => { lathe(B.solid, u, v, [[0.32 * s, 0], [0.42 * s, 0.55 * s], [0.36 * s, 0.55 * s]], '#6f6a62', 8); ball(B.solid, u, v, 0.95 * s, 0.48 * s, '#4f8f3c', 1.05); };
   o.bollard = (u, v) => lathe(B.shiny, u, v, [[0.11, 0], [0.11, 0.8], [0.08, 0.9], [0.02, 0.93]], '#8a9096', 8, false);
@@ -190,7 +194,7 @@ export function business(K, B, view, b, face, r, T, C, type) {
     box(B.solid, -pw / 2, pw / 2, 0, po, ph - 1.3, ph, band); for (const s of [-1, 1]) box(B.solid, s * pw / 2 - (s > 0 ? 0.35 : 0), s * pw / 2 + (s < 0 ? 0.35 : 0), 0, po, 0, ph - 1.3, band);
     { const kq = { ...k, wall: (bk, u0, u1, y0, y1, v, c2) => wall(bk, u0, u1, y0, y1, v + po - 0.25, c2), box: (bk, u0, u1, v0, v1, y0, y1, c2, o2) => box(bk, u0, u1, v0 + po - 0.25, v1 + po - 0.25, y0, y1, c2, o2) };
       p.windows(-pw / 2 + 0.35, -1.6, { y0: 0.1, y1: ph - 1.45, frame: '#c9ccd0', pane: 2.2, k2: kq }); p.windows(1.6, pw / 2 - 0.35, { y0: 0.1, y1: ph - 1.45, frame: '#c9ccd0', pane: 2.2, k2: kq }); p.door(0, { w: 2.8, h: 2.6, frame: '#c9ccd0', k2: kq }); }
-    k.sign(name, ph - 0.65, pw - 1.2, col(band).getStyle(), true, po + 0.08);
+    k.hardR(-pw / 2, -1.5, 0, po); k.hardR(1.5, pw / 2, 0, po); k.sign(name, ph - 0.65, pw - 1.2, col(band).getStyle(), true, po + 0.08);
     for (const s of [-1, 1]) { const u0 = s > 0 ? pw / 2 : -hw + 0.4, u1 = s > 0 ? hw - 0.4 : -pw / 2; if (u1 - u0 > 2.5) { p.windows(u0 + 0.4, u1 - 0.2, { y0: fur ? 0.2 : 1.0, y1: fur ? 3.9 : 3.0, frame: '#c9ccd0', pane: 3 }); box(B.solid, u0, u1, 0, 1.7, 4.15, 4.33, '#f2f0ea'); for (let u = u0 + 0.3; u < u1; u += 3.6) cyl(B.shiny, u, 1.5, 0, 4.15, 0.08, '#c9ccd0'); } } /* the covered walk either side, on slim posts */
     for (let u = -pw / 2 + 0.6; u <= pw / 2 - 0.5; u += 1.5) if (Math.abs(u) > 1.6) p.bollard(u, po + 0.9);
     if (sup) { const u = -hw + 2.2; vault(B.shiny, u - 1.6, u + 1.6, 2.4, 4.6, 1.5, 0.7, '#9fb8c8', 6); for (const du of [-1.6, 1.6]) for (const dv of [2.4, 4.6]) cyl(B.shiny, u + du, dv, 0, 1.5, 0.05, '#c9ccd0'); for (let i = 0; i < 3; i++) { rbox(B.shiny, u - 0.9 + i * 0.9, 3.5, 0.62, 0.55, 1.5, 0.5, '#c9ccd0'); rbox(B.solid, u - 0.9 + i * 0.9, 2.78, 0.95, 0.5, 0.06, 0.1, '#C8382E'); } } /* the trolley shelter */

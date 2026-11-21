@@ -329,7 +329,7 @@ export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add =
   const front = b => { const tx0 = Math.floor(b.x / TILE), ty0 = Math.floor(b.y / TILE), tx1 = Math.floor((b.x + b.w) / TILE), ty1 = Math.floor((b.y + b.h) / TILE); let best = 'S', bv = -1;
     const sides = { S: [], N: [], E: [], W: [] }; for (let x = tx0; x <= tx1; x++) { sides.S.push(isRoad(x, ty1 + 1) || isRoad(x, ty1)); sides.N.push(isRoad(x, ty0 - 1)); } for (let y = ty0; y <= ty1; y++) { sides.E.push(isRoad(tx1 + 1, y) || isRoad(tx1, y)); sides.W.push(isRoad(tx0 - 1, y)); }
     for (const [k, v] of Object.entries(sides)) { const c = v.filter(Boolean).length; if (c > bv) { bv = c; best = k; } } return best; };
-  view.signs = []; for (const b of L.buildings) building(B, view, b, front(b), r);
+  view.signs = []; view.hard = []; for (const b of L.buildings) building(B, view, b, front(b), r);
   for (const b of L.scenery || []) building(B, view, b, 'S', r);
   // trees, cars, benches, lamps, fences, fountains, and the hiding places
   for (const p of L.props) { if (!p.brk) { prop(B, view, p, r); continue; } const s0 = marks(B); prop(B, view, p, r); p.rng = since(B, s0); } /* (a prop a car can knock over: where its corners are kept, so it can be taken out of the merged mesh) */
@@ -342,7 +342,7 @@ export function buildArea(view, L, { cordon = true, pad = 10, ring = true, add =
   const group = new THREE.Group(), meshOf = {}; for (const sg of view.signs || []) group.add(sg); view.signs = null; /* (the name boards, with the rest of the area) */
   for (const [k, b] of Object.entries(B)) { const g = b.geometry(); if (!g) continue; const m = new THREE.Mesh(g, M[k]); m.castShadow = !['grass', 'asphalt', 'field', 'pitch', 'water', 'paint', 'pool', 'ao'].includes(k); if (k === 'pool' || k === 'ao') { m.renderOrder = 2; m.receiveShadow = false; } m.receiveShadow = true; m.matrixAutoUpdate = false; group.add(m); if (k === 'water') view.water = m; meshOf[k] = m; }
   for (const [type, b] of Object.entries(SB)) { const g = b.geometry(); if (!g) continue; const m = new THREE.Mesh(g, surfaceMat(view, type, ROAD_TYPES[type])); m.receiveShadow = true; m.matrixAutoUpdate = false; group.add(m); } /* (one draw per kind of paving a block uses) */
-  group.userData.meshOf = meshOf; group.userData.lamps = L.lamps;
+  group.userData.meshOf = meshOf; group.userData.lamps = L.lamps; group.userData.hard = view.hard || []; view.hard = null; /* (what stands out from the businesses: solid, for the town) */
   if (add) { view.scene.add(group); view.area = group; renderer_shadow(view); } return group;
 }
 // Where each bucket's corners are up to (marks), and what was added since (since): [[bucket, from, to], ...].
@@ -462,7 +462,7 @@ function venue(B, view, b, face, st, T, C) {
 function building(B, view, b, face, r) {
   const T = BUILDING_TYPES[b.type] || {}, C = T.colors || {}, x0 = b.x, z0 = b.y, x1 = b.x + b.w, z1 = b.y + b.h;
   if (VENUES.has(T.style) && !b.ruin && b.done !== false && venue(B, view, b, b.face || face, T.style, T, C)) return;
-  if (T.work && !T.home && !b.ruin && b.done !== false) { try { if (business({ bake, GEO, col, darken, sign, lamp, generic: () => plainBuilding(B, view, b, face, r) }, B, view, b, face, r, T, C, b.type)) return; } catch (e) { console.warn('business look', b.type, e); } } /* (each kind of business as itself: see bizlook.js) */ /* (built as themselves) */
+  if (T.work && !T.home && !b.ruin && b.done !== false) { try { if (business({ bake, GEO, col, darken, sign, lamp, hard: s => view.hard && view.hard.push(s), generic: () => plainBuilding(B, view, b, face, r) }, B, view, b, face, r, T, C, b.type)) return; } catch (e) { console.warn('business look', b.type, e); } } /* (each kind of business as itself: see bizlook.js) */ /* (built as themselves) */
   plainBuilding(B, view, b, face, r);
 }
 function plainBuilding(B, view, b, face, r) {

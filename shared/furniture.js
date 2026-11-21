@@ -156,6 +156,10 @@ export const FURNITURE = {
   clothesrack: { name: 'Clothes rail', goods: [3, 4, 5, 6], cat: 'shop', size: [2, 1], cost: 1600, tint: true, parts: [[0.1, 0.45, 0, 0.06, 0.06, 1.6, CH], [1.84, 0.45, 0, 0.06, 0.06, 1.6, CH], [0.1, 0.46, 1.55, 1.8, 0.04, 0.04, CH], [0.25, 0.3, 0.75, 0.35, 0.4, 0.78, '$'], [0.65, 0.3, 0.75, 0.35, 0.4, 0.78, '#F4F6F8'], [1.05, 0.3, 0.75, 0.35, 0.4, 0.78, '$'], [1.45, 0.3, 0.75, 0.3, 0.4, 0.78, '#22313F']] },
   mannequin: { name: 'Mannequin', goods: [1, 2, 3], cat: 'shop', size: [1, 1], cost: 900, tint: true, parts: [[0.35, 0.35, 0, 0.3, 0.3, 0.05, '#BDC3C7', 'c'], [0.48, 0.48, 0.05, 0.04, 0.04, 0.75, CH], [0.32, 0.4, 0.8, 0.36, 0.22, 0.6, '$'], [0.4, 0.43, 1.42, 0.2, 0.16, 0.22, '#F5E6D3', 'o']] },
   atm: { name: 'Cash machine', cat: 'shop', size: [1, 1], cost: 6500, parts: [[0.15, 0.05, 0, 0.7, 0.6, 1.6, '#5D6D7E'], [0.25, 0.64, 1.05, 0.5, 0.02, 0.35, '#0E1622', 's'], [0.3, 0.64, 0.8, 0.4, 0.06, 0.12, '#2C3E50'], [0.15, 0.05, 1.6, 0.7, 0.6, 0.1, '#2E86C1', 'l']] },
+  // the entrance hall of a Colosseum, a racetrack or a stadium: a ticket machine (walk up to it to buy your ticket) and
+  // the gate through to the stands (with a ticket, walk up to it and go in)
+  ticketmachine: { name: 'Ticket machine', cat: 'shop', size: [1, 1], cost: 6000, parts: [[0.1, 0.08, 0, 0.8, 0.55, 1.7, '#2F4A7A'], [0.08, 0.06, 1.7, 0.84, 0.6, 0.28, '#F5C542', 'l'], [0.2, 0.64, 1.0, 0.6, 0.02, 0.42, '#0E1622', 's'], [0.35, 0.64, 0.72, 0.3, 0.03, 0.06, '#111418'], [0.28, 0.6, 0.32, 0.44, 0.08, 0.06, '#B3B6B7'], [0.12, 0.64, 1.5, 0.76, 0.02, 0.1, '#D6EAF8', 'l']] },
+  arenagate: { name: 'Gate to the stands', cat: 'shop', size: [3, 1], cost: 12000, parts: [[0, 0.1, 0, 0.3, 0.6, 2.7, '#8A2A22'], [2.7, 0.1, 0, 0.3, 0.6, 2.7, '#8A2A22'], [0, 0.1, 2.7, 3, 0.6, 0.45, '#8A2A22'], [0.35, 0.72, 2.76, 2.3, 0.02, 0.32, '#F5C542', 'l'], [0.3, 0.12, 0, 2.4, 0.08, 2.7, '#1B2631', 'g'], [0.95, 0.6, 0, 0.14, 0.14, 1.0, '#B3B6B7'], [1.93, 0.6, 0, 0.14, 0.14, 1.0, '#B3B6B7'], [0.98, 0.45, 0.85, 0.06, 0.45, 0.05, '#D5D9DE'], [1.96, 0.45, 0.85, 0.06, 0.45, 0.05, '#D5D9DE'], [0.3, 0.2, 0, 0.6, 0.5, 0.9, '#7F8C8D'], [2.1, 0.2, 0, 0.6, 0.5, 0.9, '#7F8C8D']] },
   vending: { name: 'Vending machine', cat: 'shop', size: [1, 1], cost: 5000, tint: true, light: lamp('#EAF2F8', 0.35, 2), parts: [[0.05, 0.05, 0, 0.9, 0.65, 1.85, '$'], [0.12, 0.68, 0.6, 0.55, 0.03, 1.1, '#D6EAF8', 'g'], [0.72, 0.68, 1.1, 0.18, 0.03, 0.35, '#0E1622', 's'], [0.2, 0.3, 0.75, 0.45, 0.35, 0.8, '#F5B041']] },
   cafetable: { name: 'Café table for two', cat: 'food', size: [1, 1], cost: 900, tint: true, parts: [[0.4, 0.4, 0, 0.2, 0.2, 0.05, MT, 'c'], [0.47, 0.47, 0.05, 0.06, 0.06, 0.68, MT], [0.25, 0.25, 0.73, 0.5, 0.5, 0.04, '#F4F1EA', 'c'], [0.02, 0.38, 0, 0.22, 0.24, 0.45, '$'], [0.76, 0.38, 0, 0.22, 0.24, 0.45, '$']] },
   tablefour: { name: 'Table for four', cat: 'food', size: [2, 2], cost: 2800, tint: true, parts: [...legs(0.45, 0.45, 1.55, 1.55, 0.72), [0.4, 0.4, 0.72, 1.2, 1.2, 0.05, W], [0.6, 0.05, 0, 0.8, 0.3, 0.45, '$'], [0.6, 1.65, 0, 0.8, 0.3, 0.45, '$'], [0.05, 0.6, 0, 0.3, 0.8, 0.45, '$'], [1.65, 0.6, 0, 0.3, 0.8, 0.45, '$'], [0.85, 0.85, 0.77, 0.3, 0.3, 0.1, '#F5B041', 'c']] },
@@ -510,10 +514,11 @@ export function layoutOf(S, plan = 'home') {
   else if (plan !== 'home') {
     // a business: the main floor at the front, and along the back an office, a storeroom and a staff toilet
     const back = S >= 10 ? 3 : 2, mid = Math.max(2, Math.floor((S - 2) / 2)), main = { shop: 'Shop floor', food: 'Dining room', office: 'Office floor', industry: 'Factory floor', club: 'Dance floor' }[plan] || 'Main hall';
-    if (plan === 'club') room('VIP lounge', 'vip', 0, 0, mid, back); else room('Office', 'office', 0, 0, mid, back); room('Storeroom', 'store', mid, 0, S - 2 - mid, back); room('Staff toilet', 'toilet', S - 2, 0, 2, back); room(main, 'main', 0, back, S, S - back);
+    if (plan === 'lobby') { room('Entrance hall', 'main', 0, 0, S, S); const door = Math.floor(S / 2) - 1; set(`h${door},${S}`, 'front'); for (let y = 1; y < S; y += 2) win(`v0,${y}`, `v${S},${y}`); }
+    else { if (plan === 'club') room('VIP lounge', 'vip', 0, 0, mid, back); else room('Office', 'office', 0, 0, mid, back); room('Storeroom', 'store', mid, 0, S - 2 - mid, back); room('Staff toilet', 'toilet', S - 2, 0, 2, back); room(main, 'main', 0, back, S, S - back);
     hline(back, 0, S, [1, mid + 1, S - 1]); vline(mid, 0, back); vline(S - 2, 0, back);
     const door = Math.floor(S / 2) - 1; set(`h${door},${S}`, 'front');
-    for (let x = 0; x < S; x++) if (x !== door && x % 2 === 0) win(`h${x},${S}`); for (let y = back + 1; y < S; y += 2) win(`v0,${y}`, `v${S},${y}`); win(`h1,0`);
+    for (let x = 0; x < S; x++) if (x !== door && x % 2 === 0) win(`h${x},${S}`); for (let y = back + 1; y < S; y += 2) win(`v0,${y}`, `v${S},${y}`); win(`h1,0`); }
   } else if (S <= 4) { room('Main room', 'living', 0, 0, S, S); set(`h1,${S}`, 'front'); win('h2,0', 'v0,1', `v${S},2`); }
   else if (S === 5) {
     room('Bedroom', 'bed', 0, 0, 3, 2); room('Bathroom', 'bath', 3, 0, 2, 2); room('Living room & kitchen', 'living', 0, 2, 5, 3);
@@ -626,12 +631,13 @@ export const resaleOf = (k, std) => (std ? 0 : Math.floor((FURNITURE[k]?.cost ||
 // Which buildings anyone can walk into: every business and public building (not the jail or the police), and homes
 // whose owner hasn't locked them.
 const NO_ENTRY = new Set(['jail', 'prison', 'police', 'commissariat', 'policeplaza', 'dispatch']);
-export const canEnter = type => { const t = BUILDING_TYPES[type]; return !!t && !!t.work && !t.home && !t.outdoor && !NO_ENTRY.has(type) && t.cat !== 'nature' && t.cat !== 'decor'; };
+export const canEnter = type => { const t = BUILDING_TYPES[type]; return !!t && !!t.work && !t.home && (!t.outdoor || t.style === 'racetrack') && !NO_ENTRY.has(type) && t.cat !== 'nature' && t.cat !== 'decor'; };
 // The kind of business, for its floor plan and standard fit-out.
 const FOODY = /tavern|diner|restaurant|cafe|café|bar|pub|bakery|pizza|food|grill|kitchen|bistro|canteen|snack|icecream|brew/;
 export function bizKind(type) {
   const t = BUILDING_TYPES[type] || {}, n = (type + ' ' + (t.name || '')).toLowerCase(), c = t.cat || '';
   if (/club/.test(n)) return 'club'; /* a night club: dance floor, VIP lounge */
+  if (['colosseum', 'racetrack', 'stadium', 'arena'].includes(t.style)) return 'lobby'; /* the entrance hall: tickets, and the gate through to the stands */
   if (FOODY.test(n)) return 'food'; if (c === 'industry' || /factory|plant|works|mill|warehouse|depot|yard|refinery|forge|garage|hangar/.test(n)) return 'industry';
   if (c === 'offices' || /office|bank|hall|tower|exchange|agency|studio|clinic|school|library|court/.test(n)) return 'office'; return 'shop';
 }
@@ -707,6 +713,8 @@ export function standardFit(type, S) {
   // a night club, laid out properly: DJ booth on the back wall under an LED wall with speakers either side, the dance
   // floor in the middle with poles beside it, the bar by the door, sofas along the sides, a VIP booth in the VIP lounge,
   // and moving lights, lasers and a mirror ball over the floor
+  if (kind === 'lobby') { const cx = Math.floor(S / 2) - 1; put('arenagate', cx, 0); put('ticketmachine', cx - 2, 0); put('ticketmachine', cx + 4, 0); if (S >= 10) { put('ticketmachine', cx - 3, 0); put('ticketmachine', cx + 5, 0); } /* the gate on the back wall, ticket machines either side */
+    for (const [x, y, r] of [[0, 2, 1], [0, 4, 1], [S - 1, 2, 3], [S - 1, 4, 3]]) put('sofa', x, y, r, 3); put('plant', 0, 0); put('plant', S - 1, 0); put('plant', 0, S - 1); put('plant', S - 1, S - 1); return room.items; }
   if (kind === 'club') { const y0m = main.y, cx = Math.floor(S / 2), big = S >= 10, any = (k, opts, c = 0) => opts.some(([x, y, r]) => put(k, x, y, r || 0, c));
     const along = (w, y, r = 0) => Array.from({ length: S - w + 1 }, (_, x) => [x, y, r]).sort((a, b) => Math.abs(a[0] + w / 2 - S / 2) - Math.abs(b[0] + w / 2 - S / 2)); /* every spot along a wall, nearest the middle first */
     any('djbooth', along(3, y0m)) || any('djbooth', along(3, y0m + 1)); const dj = room.items.find(i => i.k === 'djbooth'); any('ledwall', dj ? [[dj.x, y0m, 0], ...along(3, y0m)] : along(3, y0m));

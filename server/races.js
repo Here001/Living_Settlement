@@ -11,11 +11,13 @@ import { track } from './stats.js';
 import { HttpError } from './world.js';
 import * as R from '../shared/rules.js';
 import { pgList, kindOf, BUILDING_TYPES } from '../shared/catalog.js';
+import * as FB from '../shared/football.js';
 import { CREATURES, CREATURE_IDS, oddsFor, runRace, fieldFor, hashStr } from '../shared/creatures.js';
 
 // RACE_EVERY_MS can shorten the cycle for testing on a local server; the live colony uses 30 minutes.
 export const RACE_EVERY = Math.max(60000, Number(process.env.RACE_EVERY_MS) || 30 * 60 * 1000), RACE_LEN = 45 * 1000, RACE_ANNOUNCE = Math.min(150 * 1000, RACE_EVERY / 2);
 export const MAX_RACE_BET = 100000;
+export const STADIUM_SEATS = 60, STADIUM_TICKET = 300; // the Stadiums: people at once (the big one takes twice as many), the colony's ticket (a ticket lasts one match)
 export const TICKET_COLONY = 200, TICKET_MIN = 10, TICKET_MAX = 5000, TRACK_SEATS = 30, ARENA_SEATS = 100, ARENA_TICKET = 500, ARENA_TICKET_MS = 3 * 3600 * 1000; // watching at the track in 3D: the colony's ticket, an owner's most, people at once (a Grand racecourse: twice)
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const SLOTS = 6; // tracks are staggered by RACE_EVERY / SLOTS
@@ -173,10 +175,11 @@ export class Races {
   // treasury); an owner sets their own price (TICKET_MIN to TICKET_MAX: never free), paid into the track's till. A ticket lasts one race
   // cycle. Each track takes only so many people at once (TRACK_SEATS), so the stands never get too heavy to draw.
   async gateOf(id) { const b = (await pool.query('select id, type, name, owner_id, owner_handle, ticket from buildings where id = $1 and done and not ruin', [String(id || '')])).rows[0];
-    if (!b || !['racetrack', 'colosseum'].includes(kindOf(b.type))) throw new HttpError(404, 'That isn’t a Racetrack or a Colosseum.'); return b; } /* (the Colosseum's gate works the same way: see Fight Night) */
+    if (!b || !['racetrack', 'colosseum'].includes(kindOf(b.type)) && !this.stadium(b)) throw new HttpError(404, 'That isn’t a Racetrack, a Stadium or a Colosseum.'); return b; }
+  stadium(b) { return ['stadium', 'arena'].includes(BUILDING_TYPES[b.type]?.style); } /* (the Stadiums: football, and a sprint at half time) */ /* (the Colosseum's gate works the same way: see Fight Night) */
   arena(b) { return kindOf(b.type) === 'colosseum'; }
-  seatsOf(b) { return this.arena(b) ? ARENA_SEATS : BUILDING_TYPES[b.type]?.grand ? TRACK_SEATS * 2 : TRACK_SEATS; }
-  priceOf(b) { const colony = this.arena(b) ? ARENA_TICKET : TICKET_COLONY; return b.owner_id ? (b.ticket == null ? colony : Math.max(TICKET_MIN, b.ticket)) : colony; } /* (never free) */
+  seatsOf(b) { return this.stadium(b) ? (b.type === 'bigstadium' ? STADIUM_SEATS * 2 : STADIUM_SEATS) : this.arena(b) ? ARENA_SEATS : BUILDING_TYPES[b.type]?.grand ? TRACK_SEATS * 2 : TRACK_SEATS; }
+  priceOf(b) { const colony = this.stadium(b) ? STADIUM_TICKET : this.arena(b) ? ARENA_TICKET : TICKET_COLONY; return b.owner_id ? (b.ticket == null ? colony : Math.max(TICKET_MIN, b.ticket)) : colony; } /* (never free) */
   // tonight's fighters (they still pay to go in, like everyone; they may go in when the stands are full)
   async fighting(playerId) { try { const nt = this.world.fights && await this.world.fights.current(); if (!nt) return false; return !!(await pool.query("select 1 from fight_bouts where n = $1 and (a->>'id' = $2 or b->>'id' = $2)", [nt.n, playerId])).rowCount; } catch { return false; } }
   async gate(playerId, id) { const b = await this.gateOf(id), now = Date.now(), inside = (await pool.query('select citizen_id, handle, until from track_tickets where building_id = $1 and until > $2 order by until', [b.id, now])).rows;
@@ -192,8 +195,8 @@ export class Races {
       const c = (await ch.q('select * from citizens where id = $1 for update', [playerId])).rows[0]; if (!c) throw new HttpError(404, 'No such citizen.');
       const price = this.priceOf(b); ch.coins(c); /* (everyone pays to go in: the owner's goes into their own till) */
       if (c.coins_base < price) throw new HttpError(400, `A ticket costs ${fmt(price)} coins. You have ${fmt(c.coins_base)} on you.`);
-      if (price) { c.coins_base -= price; ch.touch(c); await ch.saveCitizen(c); if (b.owner_id) await ch.q('update buildings set till = till + $2 where id = $1', [b.id, price]); else treasuryAdd(ch, price); track(ch, this.arena(b) ? 'fight:ticket' : 'race:ticket', price, c.id); }
-      const until = now + (this.arena(b) ? ARENA_TICKET_MS : RACE_EVERY); await ch.q('insert into track_tickets (building_id, citizen_id, handle, until) values ($1, $2, $3, $4) on conflict (building_id, citizen_id) do update set until = $4, handle = $3', [b.id, c.id, c.handle, until]);
+      if (price) { c.coins_base -= price; ch.touch(c); await ch.saveCitizen(c); if (b.owner_id) await ch.q('update buildings set till = till + $2 where id = $1', [b.id, price]); else treasuryAdd(ch, price); track(ch, this.stadium(b) ? 'stadium:ticket' : this.arena(b) ? 'fight:ticket' : 'race:ticket', price, c.id); }
+      const fb = this.stadium(b) && FB.nowAt(b.id, now), until = fb ? (fb.phase === 'full' ? fb.next + FB.FULL : fb.next) : now + (this.arena(b) ? ARENA_TICKET_MS : RACE_EVERY); /* (a stadium: until the end of this match, or the next one once this one's over) */ await ch.q('insert into track_tickets (building_id, citizen_id, handle, until) values ($1, $2, $3, $4) on conflict (building_id, citizen_id) do update set until = $4, handle = $3', [b.id, c.id, c.handle, until]);
       await ch.q('delete from track_tickets where until < $1', [now - 3600000]); /* (old tickets go) */
       return { ok: true, until, paid: price, coins: c.coins_base }; }); }
   async leave(playerId, id) { await pool.query('delete from track_tickets where building_id = $1 and citizen_id = $2', [String(id || ''), playerId]); return { ok: true }; }

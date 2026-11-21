@@ -47,7 +47,8 @@ export class Rooms {
   // A business's inside: its plan, size and design (or the standard fit-out until its owner designs it).
   // The inside a building has of its own: a business's design (or its standard fit-out), or an empty home's (bare until its owner furnishes it).
   bizRoom(b) { const home = !!BUILDING_TYPES[b.type]?.home, size = home ? F.roomSize(b.type) : F.bizSize(b.type), plan = home ? F.homePlan(b.type) : F.bizKind(b.type);
-    return { size, plan, room: F.fitRoom(b.interior || (home ? {} : { items: F.standardFit(b.type, size) }), size, plan).room }; }
+    const lobby = plan === 'lobby' && !(b.interior?.items || []).some(i => i.k === 'arenagate'); /* (an entrance hall always has its gate: one designed before it had one starts again from the standard hall) */
+    return { size, plan, room: F.fitRoom(!lobby && b.interior || (home ? {} : { items: F.standardFit(b.type, size) }), size, plan).room }; }
   // the owner's own home there, kept as they left it while they live elsewhere (shown and furnished as itself)
   async keptOf(q, b) { if (!b?.owner_id || !BUILDING_TYPES[b.type]?.home) return null; return (await q('select unit, room from kept_homes where citizen_id = $1 and building_id = $2', [b.owner_id, b.id])).rows[0] || null; }
   sizeOf(type) { return BUILDING_TYPES[type]?.home ? F.roomSize(type) : F.bizSize(type); }

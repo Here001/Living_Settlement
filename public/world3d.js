@@ -359,8 +359,85 @@ function lamp(B, view, x, z) {
   const R = 5, y = 0.05; B.pool.quad([x - R, y, z + R], [x + R, y, z + R], [x + R, y, z - R], [x - R, y, z - R], [0, 1, 0], [0, 0, 1, 0, 1, 1, 0, 1], col('#ffffff'));
 }
 
+// ---- the big venues, built as themselves (not boxes): the Colosseum (an oval of three arcades and an attic, the stands
+// and the sand inside), the Stadiums (a bowl with white fins, a roof ring and floodlights round a green pitch) and the
+// Racetracks (the oval of dirt with white rails, a covered grandstand and the winning post). A few hundred quads each,
+// all merged into the area's meshes like any other building: no extra draws.
+const VENUES = new Set(['colosseum', 'stadium', 'arena', 'racetrack']);
+// a racetrack's grandstand, on the south side of its plot (also what walkers and cars can't go through)
+export const standOf = b => { const cx = b.x + b.w / 2, sl = Math.min(b.w * 0.42, 22), z1 = b.y + b.h; return { x0: cx - sl / 2, x1: cx + sl / 2, z0: z1 - 4.4, z1: z1 - 0.5 }; };
+function venue(B, view, b, face, st, T, C) {
+  const x0 = b.x, z0 = b.y, x1 = b.x + b.w, z1 = b.y + b.h, cx = (x0 + x1) / 2, cz = st === 'racetrack' ? (z0 + z1) / 2 - 2.5 : (z0 + z1) / 2; /* (a racetrack's oval sits back from its grandstand) */
+  const q = (bk, a, b2, c, d, color) => { const ux = b2[0] - a[0], uy = b2[1] - a[1], uz = b2[2] - a[2], vx = d[0] - a[0], vy = d[1] - a[1], vz = d[2] - a[2]; let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    const su = Math.hypot(ux, uy, uz) / 6, sv = Math.hypot(vx, vy, vz) / 6; bk.quad(a, b2, c, d, [nx, ny, nz], [0, 0, su, 0, su, sv, 0, sv], color); }; /* (corners anticlockwise seen from the side that shows) */
+  // a point on the outline at angle a: an ellipse (n = 2) or a rounded rectangle (n bigger), rx by rz, k of the way out
+  const pt = (a, rx, rz, n, y) => { const c = Math.cos(a), s2 = Math.sin(a), e = 2 / n; return [cx + rx * Math.sign(c) * Math.abs(c) ** e, y, cz + rz * Math.sign(s2) * Math.abs(s2) ** e]; };
+  const wallRing = (bk, N, rx, rz, n, y0, y1, color, inward) => { for (let i = 0; i < N; i++) { const a0 = i / N * Math.PI * 2, a1 = (i + 1) / N * Math.PI * 2, A0 = pt(a0, rx, rz, n, y0), A1 = pt(a1, rx, rz, n, y0), U0 = pt(a0, rx, rz, n, y1), U1 = pt(a1, rx, rz, n, y1);
+    if (inward) q(bk, A0, A1, U1, U0, color); else q(bk, A1, A0, U0, U1, color); } };
+  const flatRing = (bk, N, ro, ri, n, yo, yi, colorOf) => { for (let i = 0; i < N; i++) { const a0 = i / N * Math.PI * 2, a1 = (i + 1) / N * Math.PI * 2;
+    q(bk, pt(a1, ro[0], ro[1], n, yo), pt(a0, ro[0], ro[1], n, yo), pt(a0, ri[0], ri[1], n, yi), pt(a1, ri[0], ri[1], n, yi), typeof colorOf === 'function' ? colorOf(i) : colorOf); } };
+  const disc = (bk, N, r2, n, y, color) => { for (let i = 0; i < N; i++) { const a0 = i / N * Math.PI * 2, a1 = (i + 1) / N * Math.PI * 2; bk.tri(pt(a1, r2[0], r2[1], n, y), pt(a0, r2[0], r2[1], n, y), [cx, y, cz], [0, 1, 0], [0, 0, 1, 0, 0.5, 1], color); } };
+  const tang = (a, rx, rz, n) => { const p0 = pt(a - 0.01, rx, rz, n, 0), p1 = pt(a + 0.01, rx, rz, n, 0); return Math.atan2(-(p1[2] - p0[2]), p1[0] - p0[0]); }; /* (the turn that lays a box along the outline) */
+  const fo = { S: [0, 1], N: [0, -1], E: [1, 0], W: [-1, 0] }[face], fa = Math.atan2(fo[1], fo[0]); /* (the front: where the gate and the name go) */
+  const gate = (rx, rz, n, w, h, color) => { const p = pt(fa, rx + 0.12, rz + 0.12, n, 0), al = [-fo[1], fo[0]], a = [p[0] - al[0] * w / 2, 0.02, p[2] - al[1] * w / 2], d = [p[0] + al[0] * w / 2, 0.02, p[2] + al[1] * w / 2];
+    q(B.solid, a, d, [d[0], h, d[2]], [a[0], h, a[2]], color); return p; };
+  const name = (p, h, room) => { const text = String(b.name || T.name || '').trim(); if (text) sign(view, text, T.sign || col(C.trim || '#2F4A7A').getStyle(), !!T.neon, [p[0] + fo[0] * 0.25, h, p[2] + fo[1] * 0.25], face, room); };
+  if (st === 'colosseum') {
+    const RX = b.w / 2 - 0.6, RZ = b.h / 2 - 0.6, N = 36, TH = 5.2, TIERS = 3, ATT = 3.2, H = TIERS * TH + ATT, stone = col(C.wall || '#D9C7A3'), dark = darken(C.wall || '#D9C7A3', 0.16), band = darken(C.wall || '#D9C7A3', 0.82), trim = col(C.trim || '#8A2A22');
+    // outside: for each tier, the dark arches (set back) and the piers between them, a cornice band over each; the attic on top
+    for (let t = 0; t < TIERS; t++) { const y0 = t * TH, y1 = y0 + TH; wallRing(B.solid, N, RX - 0.7, RZ - 0.7, 2, y0, y1 - 0.9, dark);
+      wallRing(B.plaster, N, RX - 0.7, RZ - 0.7, 2, y1 - 0.9, y1, stone); /* (over the arches) */
+      for (let i = 0; i < N; i++) { const a0 = i / N * Math.PI * 2, a1 = (i + 1) / N * Math.PI * 2, top = y1 - 0.9, r2 = TH * 0.26, P = (a, y) => pt(a, RX - 0.62, RZ - 0.62, 2, y), da = (a1 - a0) * 0.36; /* the round of each arch: its two top corners filled in */
+        q(B.plaster, P(a0 + da, top), P(a0, top - r2), P(a0, top), P(a0, top), stone); q(B.plaster, P(a1, top - r2), P(a1 - da, top), P(a1, top), P(a1, top), stone);
+        q(B.plaster, P(a0 + da * 0.45, top - r2 * 0.12), P(a0, top - r2), P(a0 + da, top), P(a0 + da, top), stone); q(B.plaster, P(a1, top - r2), P(a1 - da * 0.45, top - r2 * 0.12), P(a1 - da, top), P(a1 - da, top), stone); }
+      for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2, p = pt(a, RX - 0.25, RZ - 0.25, 2, 0); bake(B.plaster, GEO.box, { x: p[0], y: y0 + TH / 2, z: p[2], sx: 1.1, sy: TH, sz: 0.9, ry: tang(a, RX, RZ, 2), color: stone }); }
+      wallRing(B.solid, N, RX + 0.08, RZ + 0.08, 2, y1 - 0.35, y1, band); }
+    wallRing(B.plaster, N, RX - 0.25, RZ - 0.25, 2, TIERS * TH, H, stone); for (let i = 0; i < N; i += 2) { const a = (i + 0.5) / N * Math.PI * 2, p = pt(a, RX - 0.2, RZ - 0.2, 2, 0); bake(B.solid, GEO.box, { x: p[0], y: TIERS * TH + ATT / 2, z: p[2], sx: 1.0, sy: 1.2, sz: 0.2, ry: tang(a, RX, RZ, 2), color: dark }); } /* (the attic's little windows) */
+    // the top of the wall, and inside: the stands stepping down to the sand
+    flatRing(B.roof, N, [RX - 0.2, RZ - 0.2], [RX - 2.4, RZ - 2.4], 2, H, H, col(C.roof || '#B9A27A'));
+    wallRing(B.plaster, N, RX - 2.4, RZ - 2.4, 2, H - 2.2, H, stone, true);
+    const steps = 5, rIn = [RX * 0.42, RZ * 0.42]; for (let k = 0; k < steps; k++) { const f0 = k / steps, f1 = (k + 1) / steps, ro = [RX - 2.4 - (RX - 2.4 - rIn[0]) * f0, RZ - 2.4 - (RZ - 2.4 - rIn[1]) * f0], ri = [RX - 2.4 - (RX - 2.4 - rIn[0]) * f1, RZ - 2.4 - (RZ - 2.4 - rIn[1]) * f1];
+      flatRing(B.solid, N, ro, ri, 2, H - 2.2 - (H - 4.4) * f0, H - 2.2 - (H - 4.4) * f1, i => k % 2 ? band : stone); }
+    wallRing(B.solid, N, rIn[0], rIn[1], 2, 0.3, 2.2, trim, true); disc(B.solid, N, rIn, 2, 0.3, col(C.sand || '#E3C88E'));
+    // the masts that held the awning, round the top; the gate and the name
+    for (let i = 0; i < N; i += 3) { const p = pt(i / N * Math.PI * 2, RX - 0.6, RZ - 0.6, 2, 0); bake(B.shiny, GEO.cyl, { x: p[0], y: H + 1.8, z: p[2], sx: 0.12, sy: 3.6, sz: 0.12, color: col('#6b5a44') }); }
+    const g = gate(RX - 0.7, RZ - 0.7, 2, 3.4, TH - 1.2, col('#2a1d14')); name(g, TH + 0.5, 6); return true; }
+  if (st === 'stadium' || st === 'arena') {
+    const big = st === 'arena', RX = b.w / 2 - 0.5, RZ = b.h / 2 - 0.5, n = 5, N = 40, H = big ? 19 : 13, fin = col(C.wall || '#E8E6E0'), clad = col(C.trim || '#2F4A7A'), roofC = col(C.roof || '#F4F4F0'), seat = col(C.seat || '#C8382E'), seat2 = col(C.seat2 || C.trim || '#2F4A7A');
+    // the facade: coloured cladding behind a ring of white fins, glass at the bottom
+    wallRing(B.glass, N, RX - 0.6, RZ - 0.6, n, 0, 4.2, col('#9fb8c8')); wallRing(B.solid, N, RX - 0.6, RZ - 0.6, n, 4.2, H, clad);
+    for (const f of [0.32, 0.62, 0.9]) wallRing(B.solid, N, RX - 0.45, RZ - 0.45, n, H * f, H * f + 0.45, fin); /* (the concourse floors, as white bands) */
+    wallRing(B.glass, N, RX - 0.5, RZ - 0.5, n, H * 0.62 + 0.45, H * 0.9, col('#7d9fb6')); /* (a band of glass along the top concourse) */
+    for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2, p = pt(a, RX - 0.2, RZ - 0.2, n, 0); bake(B.plaster, GEO.box, { x: p[0], y: H / 2 + 0.6, z: p[2], sx: 0.5, sy: H + 1.2, sz: 1.0, ry: tang(a, RX, RZ, n), color: fin }); }
+    // the roof ring (sloping up and in), its edge, and inside the stands down to the pitch
+    const rRoof = [RX * 0.74, RZ * 0.72]; flatRing(B.roof, N, [RX + 0.3, RZ + 0.3], rRoof, n, H + 1.2, H + 3.2, roofC); wallRing(B.solid, N, rRoof[0], rRoof[1], n, H + 2.6, H + 3.2, clad, true);
+    wallRing(B.solid, N, RX + 0.3, RZ + 0.3, n, H + 0.6, H + 1.2, fin);
+    const pr = [RX * 0.6, RZ * 0.55], steps = 4; for (let k = 0; k < steps; k++) { const f0 = k / steps, f1 = (k + 1) / steps, lerp = f => [rRoof[0] + (pr[0] - rRoof[0]) * f, rRoof[1] + (pr[1] - rRoof[1]) * f];
+      flatRing(B.solid, N, lerp(f0), lerp(f1), n, H + 0.4 - (H - 1) * f0, H + 0.4 - (H - 1) * f1, k % 2 ? seat2 : seat); } /* (rows of the club's two colours) */
+    { const px = pr[0] * 0.86, pz = pr[1] * 0.84, y = 1.6, g = col('#4E9A3A'), wl = col('#f4f4f0'); q(B.solid, [cx - px, y, cz + pz], [cx + px, y, cz + pz], [cx + px, y, cz - pz], [cx - px, y, cz - pz], g); disc(B.solid, N, pr, n, 1.3, col('#B4473A'));
+      const ln = (a, b2, c, d) => q(B.paint, [a, y + 0.02, d], [b2, y + 0.02, d], [b2, y + 0.02, c], [a, y + 0.02, c], wl); ln(cx - 0.08, cx + 0.08, cz - pz * 0.9, cz + pz * 0.9); ln(cx - px * 0.92, cx + px * 0.92, cz + pz * 0.9 - 0.15, cz + pz * 0.9); ln(cx - px * 0.92, cx + px * 0.92, cz - pz * 0.9, cz - pz * 0.9 + 0.15); }
+    // floodlights at the four corners (a mast and a lit bank of lamps)
+    for (const a of [Math.PI / 4, 3 * Math.PI / 4, 5 * Math.PI / 4, 7 * Math.PI / 4]) { const p = pt(a, RX * 0.94, RZ * 0.94, n, 0), mh = H + (big ? 14 : 10); bake(B.shiny, GEO.cyl, { x: p[0], y: mh / 2, z: p[2], sx: 0.35, sy: mh, sz: 0.35, color: col('#8a9096') });
+      const ry = Math.atan2(cx - p[0], cz - p[2]); bake(B.solid, GEO.box, { x: p[0], y: mh, z: p[2], sx: 3.2, sy: 2, sz: 0.4, ry, color: col('#2B2621') }); bake(B.glow, GEO.box, { x: p[0] + Math.sin(ry) * 0.22, y: mh, z: p[2] + Math.cos(ry) * 0.22, sx: 2.8, sy: 1.6, sz: 0.06, ry, color: col('#fff6d8') }); }
+    const g = gate(RX - 0.6, RZ - 0.6, n, 4.2, 3.4, col('#1B2631')); name(g, Math.min(H - 1.5, 6.5), 8); return true; }
+  if (st === 'racetrack') {
+    const RX = b.w / 2 - 1.2, RZ = b.h / 2 - 4.5, W = Math.min(4, b.h * 0.14), N = 40, dirt = col((C.dirt) || '#C9A06A'), rail = col('#f4f4f2'), stand = col(C.stand || '#B5523B');
+    flatRing(B.solid, N, [RX, RZ], [RX - W, RZ - W], 2, 0.06, 0.06, dirt);
+    for (const r2 of [[RX + 0.1, RZ + 0.1], [RX - W - 0.1, RZ - W - 0.1]]) { wallRing(B.solid, N, r2[0], r2[1], 2, 0.75, 0.95, rail); wallRing(B.solid, N, r2[0], r2[1], 2, 0.75, 0.95, rail, true); for (let i = 0; i < N; i += 2) { const p = pt(i / N * Math.PI * 2, r2[0], r2[1], 2, 0); B.solid.box(p[0] - 0.06, p[2] - 0.06, p[0] + 0.06, p[2] + 0.06, 0, 0.85, rail); } }
+    // the grandstand along the home straight (the south side, inside its plot: see town3d's standOf): four steps, a back wall and a roof on posts
+    const sd = standOf(b), sl = sd.x1 - sd.x0, fz = 1, zs = sd.z0, d = 0.9; for (let k = 0; k < 4; k++) { const za = zs + fz * k * d, zb = za + fz * d; B.solid.box(cx - sl / 2, Math.min(za, zb), cx + sl / 2, Math.max(za, zb), 0, 0.5 + k * 0.5, k % 2 ? darken(C.stand || '#B5523B', 0.8) : col('#cfc9bc')); }
+    const zb = zs + fz * 4 * d; B.plaster.box(cx - sl / 2, Math.min(zb, zb + fz * 0.3), cx + sl / 2, Math.max(zb, zb + fz * 0.3), 0, 4.2, col('#e6e0d2'), { su: 14, sv: 12.8 });
+    for (let k = 0; k < 6; k++) { if (k === 2 || k === 3) continue; const x = cx - sl / 2 + 1 + k * (sl - 2) / 6; B.solid.box(x, zb + 0.3, x + (sl - 2) / 6 - 0.6, zb + 0.32, 1.4, 3.2, col('#1f2a33')); } /* (windows along the back: the bar and the betting hall) */ B.solid.box(cx - 1, zb + 0.3, cx + 1, zb + 0.36, 0, 2.5, col('#3a2a1e')); /* (the door in) */
+    { const text = String(b.name || T.name || '').trim(); if (text) sign(view, text, col(C.stand || '#B5523B').getStyle(), false, [cx, 3.7, zb + 0.45], 'S', Math.min(10, sl - 2)); }
+    B.roof.box(cx - sl / 2 - 0.4, Math.min(zs - fz * 0.4, zb), cx + sl / 2 + 0.4, Math.max(zs - fz * 0.4, zb), 4.2, 4.45, stand);
+    for (let k = 0; k <= 4; k++) { const x = cx - sl / 2 + k * sl / 4; B.solid.box(x - 0.1, zs - 0.1, x + 0.1, zs + 0.1, 0, 4.2, col('#5a5550')); }
+    { const p = pt(Math.PI / 2 * fz, RX - W / 2, RZ - W / 2, 2, 0); B.solid.box(p[0] - 0.12, p[2] - W / 2 - 0.3, p[0] + 0.12, p[2] - W / 2, 0, 2.6, col('#f2f2f2')); bake(B.solid, GEO.cyl, { x: p[0], y: 2.8, z: p[2] - W / 2 - 0.15, sx: 0.5, sy: 0.1, sz: 0.5, rx: Math.PI / 2, color: col('#c8382e') }); } /* the winning post */
+    return true; }
+  return false; }
+
 function building(B, view, b, face, r) {
   const T = BUILDING_TYPES[b.type] || {}, C = T.colors || {}, x0 = b.x, z0 = b.y, x1 = b.x + b.w, z1 = b.y + b.h;
+  if (VENUES.has(T.style) && !b.ruin && b.done !== false && venue(B, view, b, face, T.style, T, C)) return; /* (built as themselves) */
   if (b.outdoor) return; // open spaces are painted on the ground; their trees and benches are props
   const st = T.style || 'block', lvl = 1 + 0.15 * ((b.level || 1) - 1);
   const wallC = col(C.wall || '#e3dccf'), roofC = col(C.roof || '#8c8783'), trimC = col(C.trim || '#4e4a44');

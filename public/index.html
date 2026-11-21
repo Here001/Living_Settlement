@@ -1147,6 +1147,7 @@ body:has(#toolchip:not([hidden])) #djBubble, body:has(#card:not([hidden])) #djBu
 .hact{position:absolute;right:14px;bottom:calc(150px + env(safe-area-inset-bottom));z-index:4;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:none;padding:0;cursor:pointer}.hact.hshop{right:auto;left:14px;bottom:calc(200px + env(safe-area-inset-bottom))}
 .hact b{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.88);font-size:28px;box-shadow:0 2px 12px rgba(0,0,0,.22);color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.55);filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))} /* (round and see-through, like 🚗 Get in) */
 .hact:active b{transform:scale(.94);background:rgba(255,255,255,.26)}.hact:disabled{opacity:.55}.dacts .hact{position:static;width:96px}.dacts .hact span{white-space:normal;text-align:center;line-height:1.15;max-width:96px}.dhud .dacts{flex-direction:row-reverse;align-items:flex-start;gap:4px}.dacts .hact{background:none!important;border:0!important;box-shadow:none!important;padding:0!important;min-height:0!important}@media (orientation:portrait){.driveview .dhud .dacts{margin-right:64px}} /* (clear of the column of side buttons) */ /* (side by side, so they stay under the side buttons) */
+.hact.hlob{bottom:calc(230px + env(safe-area-inset-bottom))}.hact.hlob.go b{background:rgba(46,160,90,.55)}
 .hact span{font-size:12px;font-weight:800;color:#fff;background:rgba(20,22,28,.5);border-radius:999px;padding:3px 9px;white-space:nowrap}
 .hexit-old{position:absolute;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:4;border:2px solid #2B2621;background:#E4572E;color:#fff;font-weight:800;font-size:17px;border-radius:999px;padding:12px 26px;box-shadow:0 4px 0 #2B2621,0 8px 20px rgba(0,0,0,.25);animation:hexit .35s ease-out}.hexit[hidden]{display:none}@keyframes hexit{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
 .btn.love{background:#FCE4EB;border-color:#D9346A;color:#B23A5E}.lovechip{align-items:center;flex-wrap:wrap}.lovechip .hearts{font-size:18px}
@@ -1461,6 +1462,7 @@ body.room-on .rsheet-bg.rreport{z-index:9700} body.room-on .toast{z-index:9850} 
 window.__booted=true; try{ sessionStorage.removeItem('resurgence-reloaded'); const u=new URL(location.href); if(u.searchParams.has('r')){ u.searchParams.delete('r'); history.replaceState(null,'',u.pathname+u.search+u.hash); } }catch(e){} /* the code loaded: no rescue needed */
 import { ROAD_TYPES, CATS, BUILDING_TYPES, SUBS, WATER_TYPES, VEHICLE_TYPES, DISASTER_TYPES, WEATHER_TYPES, CAR_MODELS, roadClears, landKeeps, isBank, carPaid, kindOf, carKind, ridden, needsHangar, seatsOf, PHONE_MODELS, phoneOf } from '/shared/catalog.js';
 import { TABLE_W, TABLE_H, BALL_R, POCKETS } from '/shared/snooker.js';
+import * as FB from '/shared/football.js';
 import { placeOk, placeAuto, HEAD_X, BAULK_X, D_R } from '/shared/cuegames.js';
 import { TABLE_GAMES, WHOT_SHAPES, LUDO_SAFE, RAKE, MAX_STAKE } from '/shared/boardgames.js';
 import { GH_GAMES, GH_MAX_BET, WHEEL_PAID, WHEEL_FREE, SCRATCH_TIERS, SCRATCH_SYMBOLS, PEN_SPOTS, DART_ORDER, DART_RINGS } from '/shared/games.js';
@@ -1657,7 +1659,7 @@ function connect(){
     else if(m.type==='resync') reloadAll();
     else if(m.type==='arena') arenaMsg(m);
     else if(m.type==='authed'){ if(m.ok) resumeArena(arenaCtx()); if(typeof Room!=='undefined') Room.rejoin(); }
-    else if(m.type==='inside'){ if(TrackView.el&&m.place===TrackView.spot) TrackView.insideMsg(m); else if(typeof ArenaView!=='undefined'&&ArenaView.el&&m.place===ArenaView.spot) ArenaView.insideMsg(m); else if(typeof Room!=='undefined') Room.insideMsg(m); }
+    else if(m.type==='inside'){ if(TrackView.el&&m.place===TrackView.spot) TrackView.insideMsg(m); else if(typeof ArenaView!=='undefined'&&ArenaView.el&&m.place===ArenaView.spot) ArenaView.insideMsg(m); else if(typeof StadiumView!=='undefined'&&StadiumView.el&&m.place===StadiumView.spot) StadiumView.insideMsg(m); else if(typeof Room!=='undefined') Room.insideMsg(m); }
     else if(m.type==='tick' && m.serverNow) skew=m.serverNow-Date.now();
     else if(m.type==='dm' && m.data) Chats.incoming(m.data);
     else if(m.type==='phone' && m.data) Phone.msg(m.data);
@@ -7251,13 +7253,13 @@ const CallVoice=Object.assign(Object.create(Voice),{ R:null, cfg:null, pc:null, 
 // phone while you're out in 3D: the phone goes away, you're back on the map, and then it does what it says. Returns
 // true when it has taken over (the caller stops there); false when you're already on the map.
 // 🛋️ Go inside (your home, from your card): from the street, the races or the fights on the phone, you leave there first
-function goHome(){ try{ if(Phone.on) Phone.hide(); for(const V of [Drive,TrackView,ArenaView]) if(V.el) V.close(); }catch(e){} Room.open(); }
+function goHome(){ try{ if(Phone.on) Phone.hide(); for(const V of [Drive,TrackView,ArenaView,StadiumView]) if(V.el) V.close(); }catch(e){} Room.open(); }
 function toMap(fn){ let inside=false; try{ inside=Phone.inside(); }catch(e){} if(!inside) return false;
   try{ Phone.hide(); }catch(e){} try{ Drive.resume=null; }catch(e){} /* (leaving a place you drove to: straight to the map, not back to the car) */
   for(const V of [Room,TrackView,ArenaView,Drive]) try{ if(V.el) V.close(); }catch(e){}
   setTimeout(()=>{ try{ fn&&fn(); }catch(e){} },350); return true; }
 const Phone={ on:false, el:null, screen:null, call:null, callEl:null, ring:null, unread:0,
-  inside(){ return !!((typeof Room!=='undefined'&&Room.el)||(typeof Drive!=='undefined'&&Drive.el)||(typeof TrackView!=='undefined'&&TrackView.el)||(typeof ArenaView!=='undefined'&&ArenaView.el)); }, /* in a place, in the car, at the races or the fights */
+  inside(){ return !!((typeof Room!=='undefined'&&Room.el)||(typeof Drive!=='undefined'&&Drive.el)||(typeof TrackView!=='undefined'&&TrackView.el)||(typeof ArenaView!=='undefined'&&ArenaView.el)||(typeof StadiumView!=='undefined'&&StadiumView.el)); }, /* in a place, in the car, at the races or the fights */
   // the phone in your hand: its home screen has the same five apps as the bar at the bottom of the map (Town Square,
   // My card, Colonists, Races, Chats). An app is the real thing, moved onto the phone's screen while it's open (the
   // panel or the card), so everything in it works just as it does on the map; the home bar takes you back to the apps.
@@ -7431,7 +7433,7 @@ const World={ btn:null, last:null, booted:false,
     { const col=d3?((Drive.el&&Drive.el.querySelector('.sidecol'))||(Room.el&&!Room.el.hidden&&Room.el.querySelector('.sidecol'))):null; /* in 3D: second in the column, under ▴ */
       if(col){ if(b.parentElement!==col){ const t=col.querySelector('.sidetoggle'); col.insertBefore(b,t?t.nextSibling:col.firstChild); b.classList.add('sidebtn','sidehide'); } }
       else if(b.parentElement!==document.body){ document.body.append(b); b.classList.remove('sidebtn','sidehide'); } }
-    this.dodge(); b.hidden=!on||!!document.querySelector('.cre')||document.body.classList.contains('mg-on')||!!(typeof TrackView!=='undefined'&&TrackView.el)||!!(typeof ArenaView!=='undefined'&&ArenaView.el); /* (at the races or the fights: 🚪 Leave takes you back) */
+    this.dodge(); b.hidden=!on||!!document.querySelector('.cre')||document.body.classList.contains('mg-on')||!!(typeof TrackView!=='undefined'&&TrackView.el)||!!(typeof ArenaView!=='undefined'&&ArenaView.el)||!!(typeof StadiumView!=='undefined'&&StadiumView.el); /* (at the races or the fights: 🚪 Leave takes you back) */
     const k=d3?'2d':'3d'; if(b.dataset.k===k) return; b.dataset.k=k; b.replaceChildren(el('b',{text:d3?'2D':'3D'}));
     b.title=d3?'The colony map (2D): come back with 3D':'Back to your character in 3D'; b.setAttribute('aria-label',b.title); },
   toggle(){ if(this.in3d()) this.toMap(); else this.to3D(); },
@@ -7793,7 +7795,7 @@ const TrackView={ el:null, T:null, b:null, g:null,
   async gate(b){ if(!(Me&&Me.token)){ toast('Sign in to your colonist first.'); return; } const g=await this.load(b); if(!g) return; const have=g.until&&g.until>Date.now();
     const go=async()=>{ try{ const r=await api('/api/tracks/'+encodeURIComponent(b.id)+'/enter',{method:'POST'}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } if(r.paid) toast(`🎟️ Ticket bought: ${fmt(r.paid)} coins. Enjoy the races!`); this.open(b,g); }catch(e){ toast(e.message); } };
     if(have) return go(); toast(`🎟️ A ticket to ${g.name} costs ${fmt(g.ticket)} coins (${g.seats-g.inside} seats left). It lasts until the next race has run.`,'Buy ticket',go); },
-  async open(b,g){ if(this.el) this.close(true); if(Drive.el) Drive.close(true); if(Room.el) Room.close(true); closeCard(); openTab(null); this.b=b; this.g=g; Race.track=b.id; await loadRace();
+  async open(b,g){ if(this.el) this.close(true); if(Drive.el) Drive.close(true); if(Room.el) Room.close(true); if(ArenaView.el) ArenaView.close(true); if(StadiumView.el) StadiumView.close(true); closeCard(); openTab(null); this.b=b; this.g=g; Race.track=b.id; await loadRace();
     const stage=el('div',{class:'trackstage'}); this.status=el('div',{class:'trstatus'}); this.board=el('ol',{class:'trboard'});
     const side=sideCol(el('button',{class:'sidebtn',title:'Camera: behind you, through your eyes, from the stands, behind the leader, or from above','aria-label':'Camera',text:'🎥',onclick:()=>{ if(!this.T) return; const m=this.T.view(); toast({third:'🎥 Behind you',first:'🎥 Through your eyes',stand:'🎥 From the stands',follow:'🎥 Behind the leader',above:'🎥 From above'}[m]||'🎥'); }}), Phone.sideBtn());
     // 💬 the chat (Room's own, borrowed: the same box, private messages and bubbles over heads) and 🪑 sit on the benches
@@ -7888,7 +7890,7 @@ const ArenaView={ el:null, T:null, b:null, g:null, bb:[], act:null, blocking:fal
     if(have) return go(); toast(`🎟️ A ticket to the Colosseum costs ${fmt(g.ticket)} coins (${g.seats-g.inside} seats left). It lasts the whole Fight Night.`,'Buy ticket',go); },
   get spot(){ return this.b?'b:'+this.b.id:null; }, range:34, floor:0, get stage(){ return this.el; },
   enc(m){ return TrackView.enc(m); }, dec(v){ return TrackView.dec(v); },
-  async open(b,g){ if(this.el) this.close(true); if(Drive.el) Drive.close(true); if(Room.el) Room.close(true); if(TrackView.el) TrackView.close(true); closeCard(); openTab(null); this.b=b; this.g=g; this.side=null; loadFight(); this.loadBoard();
+  async open(b,g){ if(this.el) this.close(true); if(Drive.el) Drive.close(true); if(Room.el) Room.close(true); if(TrackView.el) TrackView.close(true); if(StadiumView.el) StadiumView.close(true); closeCard(); openTab(null); this.b=b; this.g=g; this.side=null; loadFight(); this.loadBoard();
     const stage=el('div',{class:'trackstage'});
     this.score=el('div',{class:'arhud',hidden:true}); this.note=el('div',{class:'arnote'});
     const side=sideCol(el('button',{class:'sidebtn',title:'Camera: the TV camera, behind you, through your eyes, ringside, or from above','aria-label':'Camera',text:'🎥',onclick:()=>{ if(!this.T) return; const m=this.T.view(); toast({tv:'🎥 The TV camera',third:'🎥 Behind you',first:'🎥 Through your eyes',ring:'🎥 Ringside',above:'🎥 From above'}[m]||'🎥'); }}), Phone.sideBtn());
@@ -7962,6 +7964,51 @@ const ArenaView={ el:null, T:null, b:null, g:null, bb:[], act:null, blocking:fal
   close(quiet){ if(!this.el) return; clearInterval(this.timer); clearInterval(this.inTimer); clearTimeout(this.posT); removeEventListener('keydown',this.keys); removeEventListener('keyup',this.keys); if(Voice.R===this) Voice.leave();
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'out'})); }catch(e){} this.others=new Map(); this.h=null; try{ this.T&&this.T.close(); }catch(e){} this.T=null; this.el.remove(); this.el=null; document.body.classList.remove('room-on');
     if(!quiet&&this.b) api('/api/tracks/'+encodeURIComponent(this.b.id)+'/leave',{method:'POST'}).catch(()=>{}); if(!quiet) toast('🚪 You left the Colosseum.'); } };
+// ---------------- A game at the Stadium, in 3D ----------------
+// A ticket from the machine in the entrance hall (or from the card), then the gate: walk about the main stand, find a
+// seat, and watch the football match everyone here is watching (shared/football.js), with the sprint at half time.
+const StadiumView={ el:null, T:null, b:null, g:null,
+  load(b){ return TrackView.load(b); },
+  // on the stadium's card: what's on, the ticket price and seats, a button in, and (for its owner) the price to set
+  cardBox(b){ const box=el('div',{class:'authbox trackgate'}, el('h3',{text:'⚽ Watch the game here'}), el('p',{class:'hint',text:'Loading the gate…'}));
+    this.load(b).then(g=>{ if(!g||!box.isConnected) return; box.replaceChildren(el('h3',{text:'⚽ Watch the game here'})); const I=FB.nowAt(b.id,raceNow()), m=I.match, have=g.until&&g.until>Date.now();
+      const on=I.phase==='walkout'?`Kick-off in ${fmtLeft(FB.WALKOUT-I.t)}`:I.phase==='full'?`Next game in ${fmtLeft(I.next-raceNow())}: ${FB.matchOf(b.id,I.n+1).home.name} v ${FB.matchOf(b.id,I.n+1).away.name}`:`Live now: ${I.score[0]} – ${I.score[1]} (${I.phase==='half'?'half time':I.minute+'′'})`;
+      box.append(el('p',{class:'jobnow',text:`${m.home.name} v ${m.away.name}`}), el('p',{class:'hint',text:`${on}. A new game every 15 minutes, and a 100 m sprint at half time.`}), el('p',{class:'jobnow',text:`🎟️ Ticket: ${fmt(g.ticket)} coins · ${g.inside} of ${g.seats} seats taken`}), el('p',{class:'hint',text:g.owner?`Run by @${g.owner}: the ticket money goes into the stadium’s till.`:'Run by the colony: the ticket money goes to the treasury.'}));
+      box.append(el('div',{class:'row-actions'}, el('button',{class:'btn primary',text:have?'🏟️ Go back in':`🎟️ Buy a ticket (${fmt(g.ticket)}) and go in`,disabled:!have&&g.inside>=g.seats?'':null,onclick:()=>this.gate(b)})));
+      if(g.mine){ const inp=el('input',{type:'number',min:'10',max:'5000',step:'50',value:String(g.ticket),'aria-label':'Ticket price'});
+        box.append(el('div',{class:'cbet'}, el('span',{text:'Ticket price:'}), inp, el('button',{class:'btn',text:'Save',onclick:async()=>{ try{ const r=await api('/api/tracks/'+encodeURIComponent(b.id)+'/ticket',{method:'PUT',body:{price:Number(inp.value)}}); toast(`🎟️ Tickets now cost ${fmt(r.ticket)} coins.`); }catch(e){ toast(e.message); } }}))); } });
+    return box; },
+  async gate(b){ if(!(Me&&Me.token)){ toast('Sign in to your colonist first.'); return; } const g=await this.load(b); if(!g) return; const have=g.until&&g.until>Date.now();
+    const go=async()=>{ try{ const r=await api('/api/tracks/'+encodeURIComponent(b.id)+'/enter',{method:'POST'}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } if(r.paid) toast(`🎟️ Ticket bought: ${fmt(r.paid)} coins. Enjoy the game!`); this.open(b,g); }catch(e){ toast(e.message); } };
+    if(have) return go(); toast(`🎟️ A ticket to ${g.name} costs ${fmt(g.ticket)} coins (${g.seats-g.inside} seats left). It lasts the whole game.`,'Buy ticket',go); },
+  get spot(){ return this.b?'b:'+this.b.id:null; }, range:30, floor:0, get stage(){ return this.el; },
+  enc(m){ return TrackView.enc(m); }, dec(v){ return TrackView.dec(v); },
+  async open(b,g){ if(this.el) this.close(true); for(const V of [Drive,Room,TrackView,ArenaView]) if(V.el) V.close(true); closeCard(); openTab(null); this.b=b; this.g=g;
+    const stage=el('div',{class:'trackstage'}); this.status=el('div',{class:'trstatus'}); this.board=el('ol',{class:'trboard'}); this.score=el('b',{class:'trname'});
+    const side=sideCol(el('button',{class:'sidebtn',title:'Camera: behind you, through your eyes, the TV camera, or from above','aria-label':'Camera',text:'🎥',onclick:()=>{ if(!this.T) return; const m=this.T.view(); toast({third:'🎥 Behind you',first:'🎥 Through your eyes',tv:'🎥 The TV camera',above:'🎥 From above'}[m]||'🎥'); }}), Phone.sideBtn());
+    this.chatLog=el('div',{class:'hchatlog'}); this.chatIn=el('input',{class:'hchatin',maxlength:'200',placeholder:'Say something to everyone here…','aria-label':'Message'});
+    this.chatIn.addEventListener('keydown',e=>{ e.stopPropagation(); if(e.key==='Enter') this.sendChat(); }); this.chatIn.addEventListener('keyup',e=>e.stopPropagation());
+    this.chatTo=el('select',{class:'hchatto','aria-label':'Who to send it to',onfocus:()=>this.whoOpts(),onchange:()=>this.chatIn.placeholder=this.chatTo.value?`Only @${this.chatTo.value} will see this…`:'Say something to everyone here…'}); this.whoOpts();
+    this.chatBox=el('div',{class:'hchat',hidden:true}, this.chatLog, el('div',{class:'hchatrow'}, this.chatTo, this.chatIn, el('button',{class:'btn primary sm',text:'Send',onclick:()=>this.sendChat()})));
+    this.chatBtn=el('button',{class:'rndbtn hchatbtn',hidden:true,'aria-label':'Chat',title:'Chat with the people near you',onclick:()=>{ this.chatBox.hidden=!this.chatBox.hidden; this.chatBtn.classList.remove('new'); if(!this.chatBox.hidden){ this.whoOpts(); setTimeout(()=>this.chatIn.focus(),50); } }}, el('b',{text:'💬'}), el('span',{text:'Chat'}));
+    this.sitBtn=el('button',{class:'hact',hidden:true,onclick:()=>{ if(!this.T) return; this.T.sit(); this.sendPos(true); this.paintSit(); }});
+    const cheer=el('button',{class:'hact hshop',title:'Cheer','aria-label':'Cheer',onclick:()=>{ if(this.T) this.T.cheer(); try{ this.T&&this.T.say('me',['Come on!','Goooal!','What a game!','Yesss!'][Math.floor(Math.random()*4)]); }catch(e){} }}, el('b',{text:'📣'}), el('span',{text:'Cheer'}));
+    const leave=el('button',{class:'rndbtn trleave','aria-label':'Leave the stadium',onclick:()=>this.close()}, el('b',{text:'🚪'}), el('span',{text:'Leave'}));
+    const root=el('div',{class:'webview trackview',role:'dialog','aria-label':'At the stadium'}, stage, el('div',{class:'trhud'}, this.score, this.status, this.board), side, this.chatBtn, this.chatBox, this.sitBtn, cheer, leave);
+    document.body.append(root); document.body.classList.add('room-on'); this.el=root;
+    let M, myLook=null; try{ [M,[myLook]]=await Promise.all([import('/stadium3d.js'), Me&&Me.handle?Looks.want([Me.handle]).catch(()=>[null]):[null]]); }catch(e){ this.close(true); toast('The stadium couldn’t load. Check your connection.'); return; } if(this.el!==root) return;
+    try{ this.T=M.createStadium(stage,{ id:b.id, big:b.type==='bigstadium', colours:T(b).colors||null, now:()=>raceNow()+(window.__fbShift||0), /* (__fbShift: for checking a view at another moment of the game) */ minute:()=>((gmNow()%1440)+1440)%1440, weather:()=>window.__driveWx||(S.meta?weatherAt(S.meta,gmNow()):'sunny'), people:()=>this.seated(), look:myLook||null, pet:petOut(myCitizen()), onMove:()=>{ this.sendPos(false); this.talkNear(); this.paintSit(); }, onPet:x=>petTap(x,this.T), onGoal:g0=>{ sfxCoin(); toast(`⚽ GOAL! ${g0.name} scores for ${g0.team.name} (${g0.minute}′)`); } }); }catch(e){ this.close(true); toast('Your phone couldn’t show the 3D stadium.'); return; }
+    try{ window.__stadium=this; }catch(e){}
+    const Tr=this.T; this.others=new Map(); this.h={ get me(){ const m=Tr.me; return { x:m.x, y:m.z, a:m.a, pose:m.sit?'s':'' }; }, talking(){}, say:(id,t)=>Tr.say(id,t) };
+    this.lastSent=null; this.sendPos(true); setTimeout(()=>{ if(this.T===Tr) Voice.enter(this); },1500);
+    this.tick(); clearInterval(this.timer); this.timer=setInterval(()=>this.tick(),500); },
+  tick(){ if(!this.el||!this.T) return; const st=this.T.status; if(st&&st.home){ const k=st.lines.join('|'); if(k!==this.stKey){ this.stKey=k; this.score.textContent=`⚽ ${st.home.short} ${st.score[0]} – ${st.score[1]} ${st.away.short}`; this.status.textContent=st.sprint||st.clock; this.board.replaceChildren(...(st.sprint?[]:st.scorers).map(t=>el('li',{text:t}))); } }
+    const now=Date.now(); if(!this.peopleAt||now-this.peopleAt>10000){ this.peopleAt=now; this.load(this.b).then(g=>{ if(!g||!this.el) return; const meH=((Me&&Me.handle)||'').toLowerCase(), hs=g.people.filter(h=>h.toLowerCase()!==meH);
+      Looks.want(hs).catch(()=>{}); this.people=hs.map(h=>({ id:h, look:Looks.m.get(h.toLowerCase())||null })); }); } },
+  sendPos(f){ return TrackView.sendPos.call(this,f); }, insideMsg(m){ return TrackView.insideMsg.call(this,m); }, talkNear(){ return TrackView.talkNear.call(this); }, paintSit(){ return TrackView.paintSit.call(this); }, seated(){ return TrackView.seated.call(this); },
+  addChat(c){ return Room.addChat.call(this,c); }, whoOpts(p){ return Room.whoOpts.call(this,p); }, sendChat(){ return Room.sendChat.call(this); },
+  close(quiet){ if(!this.el) return; clearInterval(this.timer); clearTimeout(this.posT); if(Voice.R===this) Voice.leave(); try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'out'})); }catch(e){} this.others=new Map(); this.h=null; try{ this.T&&this.T.close(); }catch(e){} this.T=null; this.el.remove(); this.el=null; document.body.classList.remove('room-on'); this.people=[];
+    if(!quiet&&this.b) api('/api/tracks/'+encodeURIComponent(this.b.id)+'/leave',{method:'POST'}).catch(()=>{}); if(!quiet) toast('🚪 You left the stadium. Your seat is free for someone else.'); } };
 const ordinal=n=>n+(n%100>=11&&n%100<=13?'th':['th','st','nd','rd'][n%10]||'th');
 const yourCar=(c,cap)=>c.lent?c.name:(cap?'Your ':'your ')+c.name.toLowerCase(); /* your car, or the one you borrowed (@ana’s sports car) */
 const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
@@ -8256,7 +8303,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     this.actBtn=el('button',{class:'hact',hidden:true,onclick:()=>{ this.h&&this.h.act(); this.sendPos(true,true); }}); /* sit, lie down, use: shown next to things you can use */
     this.shopBtn=isStore(d.home.type)&&!Store.canWrite?el('button',{class:'hact hshop',title:'Shop','aria-label':'Shop',onclick:()=>{ const b=this.storeB(); if(b) StoreSheet.open(b); }}, el('b',{text:'🛍️'}), el('span',{text:'Shop'})):null; /* in a store: its goods, right here */
     this.camBtn=el('button',{class:'sidebtn',text:'🎥',title:'Camera: through your eyes, behind you, or from above','aria-label':'Camera',onclick:()=>this.camera()});
-    this.stage=el('div',{class:'roomstage'}, sideCol(this.camBtn, Phone.sideBtn()), this.chatBtn, this.chatBox, this.tools, this.cross, this.exitBtn, this.actBtn, this.shopBtn||'');
+    this.stage=el('div',{class:'roomstage'}, sideCol(this.camBtn, Phone.sideBtn()), this.chatBtn, this.chatBox, this.tools, this.cross, this.exitBtn, this.actBtn, this.shopBtn||'', this.lobBtn=el('button',{class:'hact hlob',hidden:true})); this.lobG=null; this.lobbyLoad(); /* (the Colosseum, a racetrack, a stadium: the ticket machine and the gate in its entrance hall) */
     this.file=el('input',{type:'file',accept:'image/*',hidden:true,onchange:()=>this.upload()});
     const root=el('div',{class:'webview roomview',role:'dialog','aria-label':title}, bar, this.stage, this.shop, this.file);
     document.body.append(root); document.body.classList.add('room-on'); this.el=root;
@@ -8284,7 +8331,7 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
   /* the phone threw the 3D view away and never gave it back: build it again, standing where you were */
   reopen(at){ const d=this.d; if(!d||!this.el) return; this.reAt=at; Promise.resolve(this.open(null,null,d)).finally(()=>{ this.reAt=null; }); },
   // ---- live: where you stand goes to everyone else in here, and theirs comes to you; and the chat ----
-  get spot(){ return this.d?(this.bld?'b:'+this.d.home.id:'h:'+(this.d.owner||'').toLowerCase()):null; }, /* which place we're in, for the live connection (not place(), which places furniture) */
+  get spot(){ return this.d?(this.bld?'b:'+this.d.home.id+(this.lobbyView()?'.hall':''):'h:'+(this.d.owner||'').toLowerCase()):null; }, /* (an entrance hall is its own place: the people in the stands aren't in it) */ /* which place we're in, for the live connection (not place(), which places furniture) */
   join(){ this.others=new Map(); this.lastSent=null; this.sendPos(true,true); },
   rejoin(){ if(this.el&&this.d){ this.h&&this.h.clearOthers(); this.others=new Map(); this.lastSent=null; this.sendPos(true,true); } },
   leave(){ try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'out'})); }catch(e){} this.others=new Map(); },
@@ -8292,7 +8339,22 @@ const Room={ el:null, d:null, h:null, H3:null, edit:false, cat:'living', pick:nu
     if(!always&&L&&(m.pose||'')===(L.pose||'')&&Math.hypot(m.x-L.x,m.y-L.y)<0.15&&Math.abs(Math.atan2(Math.sin(m.a-L.a),Math.cos(m.a-L.a)))<0.2) return;
     if(!force&&now-(this.posAt||0)<200){ clearTimeout(this.posT); this.posT=setTimeout(()=>this.sendPos(true),200); return; } this.posAt=now; this.lastSent={x:m.x,y:m.y,a:m.a,pose:m.pose};
     try{ if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'in',place:this.spot,x:m.x,y:m.y,a:m.a,...(m.pose?{pose:m.pose,ph:m.ph}:{})})); }catch(e){} },
-  moveSoon(){ this.sendPos(false); this.talkNear(); },
+  moveSoon(x,y){ this.sendPos(false); this.talkNear(); this.lobby(x,y); },
+  // ---- the entrance hall of the Colosseum, a racetrack or a stadium: buy a ticket at a machine, then go in at the gate ----
+  lobbyView(){ const h=this.d&&this.d.place==='business'&&this.d.home; if(!h) return null; const s=(BUILDING_TYPES[h.type]||{}).style;
+    return s==='colosseum'?ArenaView:s==='racetrack'?TrackView:(s==='stadium'||s==='arena')&&typeof StadiumView!=='undefined'?StadiumView:null; },
+  lobbyB(){ const h=this.d.home; return D.buildings.get(h.id)||{ id:h.id, type:h.type, x:h.x, y:h.y, name:h.name }; },
+  async lobbyLoad(){ const V=this.lobbyView(); if(!V) return; const d=this.d, g=await V.load(this.lobbyB()); if(this.d!==d||!g) return; this.lobG=g; if(this.h) this.lobby(this.h.me.x,this.h.me.y); },
+  lobby(x,y){ const B=this.lobBtn, V=this.lobbyView(), g=this.lobG; if(!B) return; if(!V||!g||this.edit||!Number.isFinite(x)){ B.hidden=true; return; }
+    let at=null; for(const it of (this.d.room.items||[])){ if(it.k!=='ticketmachine'&&it.k!=='arenagate') continue; const [w,dp]=footOf(it.k,it.r||0), dd=Math.hypot(x-(it.x+w/2),y-(it.y+dp/2)); if(dd<=(it.k==='arenagate'?2.3:1.5)&&(!at||dd<at.d)) at={ k:it.k, d:dd }; }
+    const have=!!(g.until&&g.until>Date.now()), key=at?at.k+(have?1:0):'';
+    if(!at){ B.hidden=true; B.dataset.k=''; return; } B.hidden=false; if(B.dataset.k===key) return; B.dataset.k=key; const b=this.lobbyB(), set=(ic,t,fn,go)=>{ B.replaceChildren(el('b',{text:ic}),el('span',{text:t})); B.title=t; B.setAttribute('aria-label',t); B.onclick=fn; B.classList.toggle('go',!!go); };
+    if(at.k==='ticketmachine') set('🎟️', have?'You have a ticket':`Buy ticket · ${fmt(g.ticket)}`, have?()=>toast(`🎟️ You have your ticket. Walk to the gate to go in.`):()=>this.lobbyBuy(V,b));
+    else set(have?'🏟️':'🎟️', have?'Go in':'Ticket first', have?()=>{ B.hidden=true; V.gate(b); }:()=>toast(`🎟️ You need a ticket to go through. Buy one at a ticket machine (${fmt(g.ticket)} coins).`), have); },
+  lobbyBuy(V,b){ if(!(Me&&Me.token)){ toast('Sign in to your colonist first.'); return; } const g=this.lobG, left=Math.max(0,g.seats-g.inside), d=this.d;
+    if(!left){ toast(`The stands are full (${g.seats} people). Try again in a little while.`); return; }
+    toast(`🎟️ A ticket to ${g.name} costs ${fmt(g.ticket)} coins (${left} seats left).`,'Buy ticket',async()=>{ try{ const r=await api('/api/tracks/'+encodeURIComponent(b.id)+'/enter',{method:'POST'}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); } if(this.d!==d) return;
+      this.lobG={...g, until:r.until, inside:g.inside+(r.paid?1:0)}; this.lobBtn.dataset.k=''; sfxCoin(); toast(r.paid?`🎟️ Ticket bought: ${fmt(r.paid)} coins. Walk to the gate to go in.`:'🎟️ You already have a ticket. Walk to the gate to go in.'); if(this.h) this.lobby(this.h.me.x,this.h.me.y); }catch(e){ toast(e.message); } }); },
   // pets: everyone's pet follows them inside too (yours from your colonist, theirs from the map's colonists)
   petOf(p){ if(!this.h||!this.h.setPet||!p||!p.h) return; const c=[...S.citizens.values()].find(x=>x.handle&&x.handle.toLowerCase()===p.h.toLowerCase()), home=!!(this.d&&this.d.owner&&c&&c.handle&&this.d.owner.toLowerCase()===c.handle.toLowerCase()); this.h.setPet(p.id,petOut(c,home)); }, /* (a pet left at home is there in its home) */
   myPet(){ if(!this.h||!this.h.setPet) return; const c=myCitizen(), home=!!(this.d&&this.d.mine); this.h.setPet('me',petOut(c,home)); if(this.h.petStay) this.h.petStay('me',!!(home&&c&&c.pet&&c.pet.home)); }, /* (at home, a pet that stays home waits where it is) */
@@ -8940,7 +9002,8 @@ function renderCard(force){ if(!force && cardBusy()) return;
     if(b.type==='phonestore' && b.done!==false && !b.ruin && !Store.canWrite) card.append(PhoneStore.section(b));
     if(b.type==='cardealer' && b.done!==false && !b.ruin && !Store.canWrite) card.append(dealerSection(b));
     if(kindOf(b.type)==='racetrack' && b.done!==false && !b.ruin) card.append(TrackView.cardBox(b));
-    if(kindOf(b.type)==='colosseum' && b.done!==false && !b.ruin) card.append(ArenaView.cardBox(b)); /* Fight Night in 3D: a ticket at the gate */ /* watch the races here in 3D: a ticket at the gate */
+    if(kindOf(b.type)==='colosseum' && b.done!==false && !b.ruin) card.append(ArenaView.cardBox(b));
+    if(['stadium','arena'].includes(T(b).style) && b.done!==false && !b.ruin) card.append(StadiumView.cardBox(b)); /* a game in 3D: a ticket at the gate */ /* Fight Night in 3D: a ticket at the gate */ /* watch the races here in 3D: a ticket at the gate */
     if(STORE_UI[b.type]&&STORE_UI[b.type].kind==='goods' && b.done!==false && !b.ruin && !Store.canWrite) card.append(GoodsStore.section(b));
     if(kindOf(b.type)==='gamehouse' && b.done!==false && !b.ruin && !Store.canWrite) card.append(GH.section(b));
     if(kindOf(b.type)==='casino' && b.done!==false && !b.ruin && !Store.canWrite){ // the games are played right here, on the casino's own card
@@ -9173,7 +9236,7 @@ if('serviceWorker' in navigator) addEventListener('load',()=>{ PushUI.reg().catc
 // properly last time (the phone ran out of memory and killed it, or it froze), that's reported on the next start with
 // where you were; errors on the page are reported too (a few at most).
 const CrashLog={ n:0, t0:Date.now(),
-  view(){ try{ return Drive.el?'3d-street':Room.el?'room':TrackView.el?'races':ArenaView.el?'colosseum':'2d'; }catch(e){ return '?'; } },
+  view(){ try{ return Drive.el?'3d-street':Room.el?'room':TrackView.el?'races':ArenaView.el?'colosseum':StadiumView.el?'stadium':'2d'; }catch(e){ return '?'; } },
   mem(){ try{ return performance.memory?Math.round(performance.memory.usedJSHeapSize/1048576):null; }catch(e){ return null; } },
   send(kind,o={}){ if(this.n++>8) return; try{ fetch('/api/log',{method:'POST',keepalive:true,headers:{'content-type':'application/json',...(Me&&Me.token?{'x-player':Me.token}:{})},body:JSON.stringify({ kind, view:this.view(), mem:this.mem(), up:Math.round((Date.now()-this.t0)/1000), v:(AppVersion&&AppVersion.v)||'', ...o })}).catch(()=>{}); }catch(e){} },
   start(){ try{ const was=JSON.parse(sessionStorage.getItem('rs-alive')||'null'); if(was&&!was.clean&&Date.now()-was.t<180000) setTimeout(()=>this.send('crash',{ msg:`stopped without closing after ${Math.round(was.up/60)} min`, src:was.view, mem:was.mem }),4000); }catch(e){}
@@ -9245,7 +9308,7 @@ const PetBtn={ el:null, t:null,
     b.style.cssText=`position:fixed;left:${sx}px;top:${sy}px;z-index:9800`; document.body.append(b); this.el=b; this.t=setTimeout(()=>this.hide(),5000); },
   hide(){ clearTimeout(this.t); if(this.el){ this.el.remove(); this.el=null; } } };
 async function petFollow(on){ try{ const r=await api('/api/me/pet/follow',{method:'POST',body:{on}}); const c=myCitizen(); if(c) c.pet=r.pet; PetStore.at=0;
-    const k=petOut(c); for(const T of [Drive.T,TrackView.T,ArenaView.T]){ if(!T) continue; if(!on&&T.petLeave) T.petLeave(); else if(T.setMyPet) T.setMyPet(k); } /* (sent home: it walks off out of sight) */
+    const k=petOut(c); for(const T of [Drive.T,TrackView.T,ArenaView.T,StadiumView.T]){ if(!T) continue; if(!on&&T.petLeave) T.petLeave(); else if(T.setMyPet) T.setMyPet(k); } /* (sent home: it walks off out of sight) */
     if(Room.el&&Room.h){ const atHome=!!(Room.d&&Room.d.mine); if(atHome){ Room.myPet(); if(Room.h.petStay) Room.h.petStay('me',!on); } else if(!on&&Room.h.petLeave) Room.h.petLeave('me'); else Room.myPet(); }
     toast(on?`🐾 ${r.pet.n} is following you again.`:`🏠 ${r.pet.n} has gone home, and waits for you there.`); }catch(e){ toast(e.message); } }
 // a colonist's pet, if it's out with them (one sent home stays there: it shows only in its own home)

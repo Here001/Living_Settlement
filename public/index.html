@@ -8147,7 +8147,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     B.hidden=true; /* on foot: get in with the round 🚗 on the car itself; call it from your phone (🚗 Car) */ },
   // the car: called from the phone's 🚗 Car app
   callCar(){ const T3=this.T; if(!T3){ toast('🚗 Go outside to call your car.'); return; } if(this.riding){ toast('You’re riding with someone.'); return; }
-    if(T3.pos.mode!=='walk'){ toast('🚗 You’re already in it.'); return; } if(T3.coming){ toast('🚗 It’s on its way.'); return; } if(T3.parked){ toast('🚗 It’s parked where you left it: walk back to it to get in.'); return; }
+    if(T3.pos.mode!=='walk'){ toast('🚗 You’re already in it.'); return; } if(T3.coming){ toast('🚗 It’s on its way.'); return; } if(T3.parked&&T3.parkedInSight){ toast(this.car&&this.car.water?'⛵ It’s moored right there: walk over to it to get in.':'🚗 It’s parked right there: walk over to it to get in.'); return; } /* (parked out of sight: calling it brings it to you) */
     if(this.car&&this.car.water){ const at=T3.callCar(); if(!at){ toast('⛵ There’s no open water near you. Head towards a river, lake or the sea and call it again.'); return; }
       const m=Math.round(at.tiles*8); toast(m<=12?`⛵ ${yourCar(this.car,1)} is coming in to the water right by you.`:`⛵ ${yourCar(this.car,1)} is on its way to the nearest water, about ${m} m from you. Walk down to it.`); return; }
     if(T3.callCar()) toast(this.car.own?`🚗 ${yourCar(this.car,1)} is on its way. It’ll pull up beside you.`:'🚗 A car is on its way. It’ll pull up beside you.'); else { T3.drive(); this.title.textContent=`🚗 Driving`; this.dist=0; this.nearBy(null); this.paintMode(); } },

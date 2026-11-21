@@ -8029,7 +8029,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     try{ window.__drive=this; this.map=DriveMap; }catch(e){} /* (for checking how it runs) */
     this.floats();
     try{ if(!(history.state&&history.state.drive)) history.pushState({drive:1},''); }catch(e){}
-    this.paintMode(); Missions.onStreet();
+    this.paintMode(); Missions.onStreet(); if(DriveMap.pending){ const P0=DriveMap.pending; DriveMap.pending=null; setTimeout(()=>{ if(this.T) DriveMap.go(P0.x,P0.y,{name:P0.name}); },900); } /* (a place sent to the map from its card) */
     if(walk) toast(at&&at.x!=null?'🚶 Back out on the street.':'🚶 You’re out on foot. Walk up to a building’s front door to go in.'); else toast(at?'🚗 Back in your car.':car.own?`🚗 You’re in ${yourCar(car)}. Tap the map to pick where to go, or pull up at a building to stop there.`:'🚗 You’re in a basic car (buy your own at a Car dealership). Tap the map to pick where to go.'); },
   // the colony's road vehicles near you, where the map has them now: the ones the developer placed (police patrols, fire
   // engines, ambulances, buses, taxis, vans, lorries), and the emergency calls going on (lights flashing)
@@ -9263,13 +9263,12 @@ function goHereRow(b){ const me=myCitizen(), [w,d]=T(b).size, bx=b.x+w/2, by=b.y
     el('button',{class:'btn primary',text:mine?'🏠 Go home':'🚶 Go here',onclick:async()=>{ try{ const r=await api('/api/me/visit',{method:'POST',body:b.type==='spot'?{spot:{x:b.x,y:b.y}}:{buildingId:b.id}}); if(typeof r.coins==='number'){ myMoney={...(myMoney||{}),coins:r.coins}; refreshHUD(); }
         toast((mine?'Heading home.':`On your way to ${name}.`)+(r.fare?` ${r.mode==='cab'?'🚕 Cab fare':'🚗 Fuel'}: ${fmt(r.fare)} coins.`:r.mode==='walk'&&fare>0?' Walking (not enough cash for the ride).':'')); Watch.start(0, mine?'Heading home':`Going to ${name}`, b.id); }catch(e){ toast(e.message); } }}),
     dist!=null&&!here?el('span',{class:'hint',text:`${dist<=1?'right next to you':miles(dist)+' away'} · ${how}`}):'',
-    !here&&Me&&Me.token?el('div',{class:'row-actions'}, el('button',{class:'btn sm',text:'🚗 Drive there in 3D',title:'Out into the 3D town, with the way there set',onclick:()=>goIn3D(b,'car')}), el('button',{class:'btn sm',text:'🚶 Walk there in 3D',title:'Out on foot in the 3D town, with the walking way there set',onclick:()=>goIn3D(b,'walk')})):''); }
-// From a place or a spot on the 2D map: out into the 3D town (driving, or on foot) with the way there already set
-async function goIn3D(b,mode){ const name=b.type==='spot'?'the spot you picked':(b.name||T(b).name); closeCard();
-  if(Drive.el&&Drive.T){ const p=Drive.T.pos, foot=p.mode==='walk'; if(mode==='walk'&&!foot&&!Drive.riding) Drive.switchMode(); else if(mode==='car'&&foot&&!Drive.riding){ Drive.callCar(); } }
-  else await Drive.start(mode==='walk'?{mode:'walk'}:undefined);
-  for(let i=0;i<60&&!(Drive.T);i++) await new Promise(r=>setTimeout(r,200)); if(!Drive.T) return;
-  setTimeout(()=>DriveMap.go(b.x,b.y,{name}),400); }
+    !here&&Me&&Me.token?el('div',{class:'row-actions'}, el('button',{class:'btn sm',text:'📍 Send to map',title:'Mark it on your 3D map and set the way there',onclick:()=>sendToMap(b)})):''); }
+// 📍 Send to map: the place (or the spot you picked) marked on your 3D map with the way there set. Out on the street
+// already, the blue arrows lead there now; otherwise it's waiting for you the next time you go out (🚶 Walk or 🚗 Drive).
+function sendToMap(b){ const name=b.type==='spot'?'the spot you picked':(b.name||T(b).name); DriveMap.pending={ x:b.x, y:b.y, name };
+  if(Drive.el&&Drive.T){ DriveMap.pending=null; closeCard(); DriveMap.go(b.x,b.y,{name}); return; }
+  toast(`📍 ${name} is on your 3D map: the way there is set the next time you go out.`); }
 
 /* ---------------- watching your own colonist ---------------- */
 // "Watch me go" (a delivery) and "Follow me" (any time): the card and panels get out of the way and the camera stays on

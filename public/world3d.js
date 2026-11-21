@@ -6,6 +6,7 @@
 // neighbourhood), shadows are drawn once and not every frame, textures are painted once and shared, the picture's
 // resolution steps down by itself if a phone struggles, and nothing is drawn while the game is hidden.
 import * as THREE from 'three';
+import { business } from '/bizlook.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { BUILDING_TYPES, ROAD_TYPES } from '/shared/catalog.js';
@@ -257,7 +258,7 @@ function materials(view) {
     foam: std({ roughness: 1, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }),
     solid: std({ roughness: 0.75, flatShading: true }, 0, true), shiny: std({ roughness: 0.3, metalness: 0.5 }, 0, true),
     paint: std({ roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-    glow: std({ roughness: 1 }, 2.2),
+    glow: (m => { m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance *= vColor.rgb;'); }; return m; })(std({ roughness: 1 }, 2.2)), /* (lit in its own colour after dark: a red neon stays red) */
   };
   // pools of lamplight on the ground: one soft spot texture, added on top, shown only after dark
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,214,150,.75)'); gr.addColorStop(1, 'rgba(255,214,150,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
@@ -460,7 +461,12 @@ function venue(B, view, b, face, st, T, C) {
 
 function building(B, view, b, face, r) {
   const T = BUILDING_TYPES[b.type] || {}, C = T.colors || {}, x0 = b.x, z0 = b.y, x1 = b.x + b.w, z1 = b.y + b.h;
-  if (VENUES.has(T.style) && !b.ruin && b.done !== false && venue(B, view, b, b.face || face, T.style, T, C)) return; /* (built as themselves) */
+  if (VENUES.has(T.style) && !b.ruin && b.done !== false && venue(B, view, b, b.face || face, T.style, T, C)) return;
+  if (T.work && !T.home && !b.ruin && b.done !== false) { try { if (business({ bake, GEO, col, darken, sign, lamp, generic: () => plainBuilding(B, view, b, face, r) }, B, view, b, face, r, T, C, b.type)) return; } catch (e) { console.warn('business look', b.type, e); } } /* (each kind of business as itself: see bizlook.js) */ /* (built as themselves) */
+  plainBuilding(B, view, b, face, r);
+}
+function plainBuilding(B, view, b, face, r) {
+  const T = BUILDING_TYPES[b.type] || {}, C = T.colors || {}, x0 = b.x, z0 = b.y, x1 = b.x + b.w, z1 = b.y + b.h;
   if (b.outdoor) return; // open spaces are painted on the ground; their trees and benches are props
   const st = T.style || 'block', lvl = 1 + 0.15 * ((b.level || 1) - 1);
   const wallC = col(C.wall || '#e3dccf'), roofC = col(C.roof || '#8c8783'), trimC = col(C.trim || '#4e4a44');

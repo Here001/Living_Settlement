@@ -1401,6 +1401,17 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).some(e => e.kind === 'champions' && /Luckiest @zara_ng/.test(e.text)), "and announced in the Colony Log");
     ok((await call('GET', '/api/leaderboards/casino', undefined, P)).json.lastChampion?.h === 'zara_ng', "the board shows last week's champion"); }
   // ---- shared links get their own preview on X, WhatsApp… ----
+  { // every business is built as itself in the 3D town (public/bizlook.js): each kind, facing each way, without a slip and without costing much
+    const { business } = await import('../public/bizlook.js'), { BUILDING_TYPES: BT } = await import('../shared/catalog.js'); let tris = 0;
+    const fin = (...v) => { if (v.flat(3).some(x => !Number.isFinite(x))) throw new Error('a corner that isn’t a number'); }, mk = () => ({ box(a, b, c, d, e, f) { tris += 12; fin(a, b, c, d, e, f); }, quad(a, b, c, d, n) { tris += 2; fin(a, b, c, d, n); }, tri(a, b, c, n) { tris += 1; fin(a, b, c, n); } });
+    const Bk = new Proxy({}, { get: (t, k) => t[k] || (t[k] = mk()) }), colr = () => ({ isColor: true, multiplyScalar() { return this; }, getStyle() { return '#888888'; } });
+    const K = { bake: (bk, g, o) => { tris += g; fin(o.x, o.y, o.z, o.sx, o.sy, o.sz); }, GEO: { cyl: 40, ball: 80, half: 196, box: 12, ring: 288, cone: 18 }, col: colr, darken: colr, sign() {}, lamp() {}, generic() { tris += 60; } };
+    const plain = [], bad = []; let n = 0, worst = 0;
+    for (const [k, T] of Object.entries(BT)) { if (!T.work || T.home || ['colosseum', 'stadium', 'arena', 'racetrack', 'parking'].includes(T.style) || (T.outdoor && !['stall', 'openmarket', 'farm'].includes(k))) continue;
+      for (const face of ['S', 'N', 'E', 'W']) { tris = 0; try { if (!business(K, Bk, {}, { x: 10, y: 20, w: T.size[0] * 8 - 2.4, h: T.size[1] * 8 - 2.4, level: 1 }, face, Math.random, T, T.colors || {}, k)) { plain.push(k); break; } worst = Math.max(worst, tris); } catch (e) { bad.push(`${k} ${face}: ${e.message}`); break; } } n++; }
+    ok(!bad.length, 'every business builds its own look, whichever way it faces', bad.slice(0, 5).join(' | '));
+    ok(plain.length <= 1 && n > 130, `${n} kinds of business each have their own look (not the plain box)`, plain.join(' '));
+    ok(worst < 6000, 'the heaviest of them is still light (under 6,000 triangles)', String(worst)); }
   { // what the server sends out is metered by the host: monitors, previews and scripts get a tiny page, browsers the page packed small
     const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1', zlib = await import('node:zlib'), fs = await import('node:fs');
     const bot = await (await fetch(BASE + '/', { headers: { 'user-agent': 'Mozilla/5.0+(compatible; UptimeRobot/2.0)' } })).text(); ok(bot.length < 6000 && /og:title/.test(bot) && /\?full=1/.test(bot), 'an uptime monitor or a crawler gets a tiny page (the title and the preview tags), not the 1.5 MB game', String(bot.length));

@@ -426,7 +426,8 @@ const packFile = async rel => { const file = path.join(root, rel.startsWith('/sh
     const o = { k, br, tag: contentTag(file, st), type: rel.endsWith('.html') ? 'text/html; charset=utf-8' : 'text/javascript; charset=utf-8' }; PACKED.set(rel, o); return o; } catch (e) { return null; } };
 (async () => { for (const rel of ['/index.html', ...fs.readdirSync(path.join(root, 'public')).filter(f => f.endsWith('.js')).map(f => '/' + f), ...fs.readdirSync(path.join(root, 'shared')).filter(f => f.endsWith('.js')).map(f => '/shared/' + f)]) await packFile(rel); })().catch(() => {});
 app.use((req, res, next) => { if (req.method !== 'GET') return next(); const rel = req.path === '/' ? '/index.html' : req.path; if (!packable(rel) || !/\bbr\b/.test(String(req.get('accept-encoding') || ''))) return next();
-  const o = PACKED.get(rel); if (!o) { packFile(rel); return next(); } /* (not ready yet: the usual way this once) */
+  let o = PACKED.get(rel); if (o) { try { const st = fs.statSync(path.join(root, rel.startsWith('/shared/') ? '' : 'public', rel)); if (st.size + ':' + st.mtimeMs !== o.k) o = null; } catch (e) { o = null; } } /* (the file has changed since: pack it again) */
+  if (!o) { packFile(rel); return next(); } /* (not ready yet: the usual way this once) */
   res.set({ 'Cache-Control': 'no-cache', Vary: 'Accept-Encoding', ...(o.tag ? { ETag: o.tag } : {}) }); if (o.tag && req.get('if-none-match') === o.tag) return res.status(304).end();
   res.set({ 'Content-Type': o.type, 'Content-Encoding': 'br', 'Content-Length': String(o.br.length) }).end(o.br); });
 app.use(express.static(path.join(root, 'public'), { maxAge: '5m', lastModified: false, setHeaders: fresh }));

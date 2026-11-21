@@ -13,6 +13,7 @@
 import * as W from '/world3d.js';
 import { follower, pickPet } from '/creature3d.js';
 import * as TR from '/train3d.js';
+import { porticoHalf } from '/bizlook.js';
 import { BUILDING_TYPES, ROAD_TYPES, CAR_MODELS } from '/shared/catalog.js';
 const THREE = W.THREE;
 
@@ -62,7 +63,8 @@ function blockArea(bx, by, o) {
       const [, ddx, ddy] = side, door = [wx(ddx > 0 ? x + w * TILE - M + 0.6 : ddx < 0 ? x + M - 0.6 : x + w * TILE / 2), wz(ddy > 0 ? y + h * TILE - M + 0.6 : ddy < 0 ? y + M - 0.6 : y + h * TILE / 2)]; /* just outside the front door */
       solid.push({ r: [wx(x + M), wz(y + M), wx(x + w * TILE - M), wz(y + h * TILE - M)], id: b.id, door, out: Math.atan2(-ddy, ddx) });
       if (BANKS.has(b.type)) { /* a cash machine in the bank's front wall, a few steps along from its door, facing the street */
-        const ax = ddx > 0 ? x + w * TILE - M + 0.32 : ddx < 0 ? x + M - 0.32 : x + w * TILE / 2 + 2.6, ay = ddy > 0 ? y + h * TILE - M + 0.32 : ddy < 0 ? y + M - 0.32 : y + h * TILE / 2 + (ddx ? 2.6 : 0);
+        const fw = (ddx ? h : w) * TILE - 2 * M, off = Math.min(fw / 2 - 0.7, Math.max(2.6, porticoHalf(b.type, fw) + 0.9)); /* (clear of the bank's steps and columns) */
+        const ax = ddx > 0 ? x + w * TILE - M + 0.32 : ddx < 0 ? x + M - 0.32 : x + w * TILE / 2 + off, ay = ddy > 0 ? y + h * TILE - M + 0.32 : ddy < 0 ? y + M - 0.32 : y + h * TILE / 2 + (ddx ? off : 0);
         props.push({ k: 'atm', x: ax, y: ay, ang: Math.atan2(ddx, ddy), c: (T.colors && T.colors.accent) || '#1E7A55' }); solid.push({ c: [wx(ax), wz(ay), 0.55] }); } }
   }
   // the street: trees and bins on the pavements, traffic lights at junctions, and cars parked along the kerb

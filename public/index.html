@@ -545,9 +545,9 @@ body.pane-max .composer textarea{height:70px}
 body.streaming .watchbar,body.streaming #showUi,body.streaming #intro,body.streaming .rsheet-bg,body.streaming #card,body.streaming .atsug{display:none!important}
 .rsheet.radio{width:min(400px,100%)}
 /* the radio as an app on the phone: its own screen, scrolling, no close button (the phone's home bar takes you back) */
-.phbank{padding:4px 2px 16px;overflow-y:auto;max-height:100%;color:var(--ink)}.phbank .phbankh{margin:2px 0 6px}.phbank .authbox{margin:0;padding:10px;background:rgba(255,255,255,.85)}
+.phbank{padding:4px 2px 16px;overflow-y:auto;max-height:100%;color:var(--ink)}.phbank .phbankh{margin:2px 0 6px}.phbank .authbox{margin:0;padding:10px;background:var(--panel);color:var(--ink)} /* (the theme's own card colour: dark in dark mode, so the light text stays readable) */
 .phgarage{padding:4px 2px 16px;overflow-y:auto;max-height:100%;color:var(--ink)}.phgarage h3{margin:2px 0 10px}.phglist{display:flex;flex-direction:column;gap:8px}
-.phgcar{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:14px;background:rgba(255,255,255,.85);border:1.5px solid var(--line)}.phgcar.on{border-color:#1F9E89;box-shadow:0 0 0 2px rgba(31,158,137,.25)}
+.phgcar{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:14px;background:var(--panel);color:var(--ink);border:1.5px solid var(--line)}.phgcar.on{border-color:#1F9E89;box-shadow:0 0 0 2px rgba(31,158,137,.25)}
 .phgcar img{flex:none;border-radius:8px;background:#eef0f2}.phgname{flex:1;min-width:0;display:flex;flex-direction:column}.phgname small{opacity:.7}.phgcar .btn{flex:none}
 .phradio{padding:4px 2px 16px;overflow-y:auto;max-height:100%;color:var(--ink)}.phradio .x{display:none}.phradio .shhead h3{margin:2px 0 8px}
 .uiswitch{position:relative;flex:none;width:46px;height:28px;border-radius:999px;border:0;padding:0;background:rgba(0,0,0,.22);cursor:pointer;transition:background .2s}
@@ -655,7 +655,8 @@ body.clean #djBubble{display:none}
 @media (orientation:landscape) and (max-height:500px){ .mbanner{top:26%} }
 .dminfo{background:rgba(20,22,28,.75);color:#fff;font-weight:700;font-size:12.5px;padding:4px 10px;border-radius:10px}
 .phbody>.dbig{position:relative!important;inset:auto!important;flex:1;border-radius:0;box-shadow:none}.phbody>.dbig .webx{display:none}.phmapsoff{padding:28px 22px;display:flex;flex-direction:column;gap:8px}.phmapsoff b{font-size:20px}
-.dbig{position:absolute;inset:56px 10px calc(10px + env(safe-area-inset-bottom)) 10px;z-index:8;background:#fff;border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden}
+.dbig .webbtn{background:var(--chip);color:var(--ink);border-color:var(--soft)} /* (the map's ＋ − ⌖ 📌, readable in dark mode too) */
+.dbig{position:absolute;inset:56px 10px calc(10px + env(safe-area-inset-bottom)) 10px;z-index:8;background:var(--panel);color:var(--ink);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden}
 .dbigbar .webbtn{font-size:22px;font-weight:900;min-width:40px;height:40px;border-radius:50%;background:#f1f3f5}
 .dbigbar{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid rgba(0,0,0,.1)}.dbigbar b{flex:1;font-size:15px}.dbigc{flex:1;min-height:0;width:100%;touch-action:none;cursor:crosshair;display:block}
 .dbigfoot{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid rgba(0,0,0,.1)}

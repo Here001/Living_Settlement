@@ -409,8 +409,8 @@ export class Economy {
     ch.coins(c); c.coins_base += got; ch.touch(c); track(ch, 'property:income', got, c.id); return got; }
 
   // ---------- bills: cars every game week, property twice a game year ----------
-  // Every 7 game days: each car's upkeep. Every 26 game weeks (twice a game year): property upkeep, 0.1% of the price of
-  // every building and plot a colonist owns for each of those weeks (2.6%). Paid from cash first,
+  // Every 7 game days: each car's upkeep. Every 26 game weeks (twice a game year): property upkeep, 0.03% of the price of
+  // every building and plot a colonist owns for each of those weeks (0.78%). Paid from cash first,
   // then savings; anything still owed puts the wallet in the minus (wages pay it back). Everyone billed gets a notice and a phone notification.
   async weeklyBills(ch, force = false) {
     const week = Math.floor(ch.today / 7);

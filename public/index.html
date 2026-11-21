@@ -713,7 +713,7 @@ body.room-on .toast{z-index:9850} /* above the phone and the call screen, so a r
 .phapp{display:flex;flex-direction:column;align-items:center;gap:7px;background:none;border:0;color:inherit;font:600 12px/1.2 inherit;cursor:pointer;padding:0;text-shadow:0 1px 3px rgba(0,0,0,.4)}
 .phapp i{position:relative;width:62px;height:62px;border-radius:17px;display:grid;place-items:center;background:var(--ic);box-shadow:0 6px 16px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.35);color:#fff}
 .phapp i svg{width:32px;height:32px}.phapp i svg *{stroke:#fff}.phapp:active i{transform:scale(.94)}.phapp .phbadge{position:absolute;top:-6px;right:-6px;margin:0}
-.phdock{margin-top:auto;display:flex;justify-content:space-around;padding:12px 10px;border-radius:26px;background:rgba(255,255,255,.18)}.phdock .phapp span{display:none}
+.phdock{margin-top:auto;display:flex;justify-content:space-around;padding:12px 10px;border-radius:26px;background:rgba(255,255,255,.18)}.phdock .phapp span{font-size:10.5px;max-width:64px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* (every app keeps its name, in the dock too) */
 .phmodel{margin:10px 0 0;text-align:center;font-size:10.5px;opacity:.7;letter-spacing:.02em}
 .phlock{display:flex;flex-direction:column;align-items:center;margin:4px 0 22px}.phlock b{font-size:54px;font-weight:300;letter-spacing:-.02em;line-height:1}.phlock span{font-size:13px;opacity:.85;margin-top:4px}
 .phwidgets{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:2px 0 20px}.phw{border-radius:20px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;background:rgba(255,255,255,.16);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
@@ -7492,7 +7492,7 @@ const DriveCtl={ DEF:{ layout:'pedals', swap:false, steerSize:1, pedalSize:1, ke
         grid.append(el('span',{text:nm}), b); }
       box.append(grid, el('div',{class:'row-actions'}, el('button',{class:'linkb',text:'Back to the usual controls',onclick:()=>{ try{ ls.set('resurgence-drive',null); }catch(e){} if(Drive.T) Drive.T.setControls(this.get()); fill(); }}))); };
     fill(); return box; },
-  sheet(){ const {box}=sheetBox('🚗 Driving controls'); box.closest('.rsheet-bg')?.classList.add('drivesheet'); box.append(this.section()); } };
+  sheet(){ PushUI.sheet({ controls:true }); } }; /* (one Settings everywhere: the same sheet as ⚙️ Settings on your card, opened at the controls) */
 // The driving map: a small see-through map in the top corner that turns with the car (like a satnav), and a big one
 // (tap the small one) where you tap anywhere to set where you're going. The way there is worked out along the roads and
 // shown on both maps and as arrows on the road; go off it and it finds a new way from where you are.
@@ -8015,7 +8015,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     this.speed=el('div',{class:'dspeed'}); this.sub=sub;
     const bar=''; /* no banner on top: the 2D switch, the camera, the controls and the phone are on the right */
     const side=sideCol(el('button',{class:'sidebtn',title:'Camera: behind you, through your eyes (the driver’s seat), or from above','aria-label':'Camera',text:'🎥',onclick:()=>{ if(!this.T) return; const m=this.T.toggleView(), foot=this.T.pos.mode==='walk'; toast(m==='driver'?(foot?'🎥 Through your eyes':'🎥 From the driver’s seat'):m==='above'?'🎥 From above':foot?'🎥 Behind you':'🎥 Behind the car'); }}),
-      el('button',{class:'sidebtn',title:'Controls','aria-label':'Controls',text:'⚙️',onclick:()=>DriveCtl.sheet()}), Phone.sideBtn());
+      el('button',{class:'sidebtn',title:'Settings (your name, controls, notifications, battery saver)','aria-label':'Settings',text:'⚙️',onclick:()=>DriveCtl.sheet()}), Phone.sideBtn());
     const root=el('div',{class:'webview driveview',role:'dialog','aria-label':'Driving around town'}, bar, side, this.doorBtn, this.carBtn, stage, el('div',{class:'dhud'}, this.speed, el('div',{class:'dacts'}, this.rideBtn, this.goBtn, this.inBtn)), this.modeBtn, this.chatBtn, this.pickBtn, this.chatBox);
     document.body.append(root); document.body.classList.add('room-on','drive-on'); this.el=root; this.dist=0; this.last={x:s.x,y:s.y}; this.car=car; DriveMap.mount(root);
     let T3; try{ T3=await import('/town3d.js'); }catch(e){ this.close(); toast('Driving couldn’t load. Check your connection and try again.'); return; } if(this.el!==root) return;
@@ -9125,7 +9125,7 @@ const PushUI={ st:null, at:0, busy:false, sw:null,
     catch(e){ const m=String(e&&e.message||''); toast(/permission|denied|registration|push service|abort/i.test(m)?'This browser couldn’t sign up for notifications. On a phone, try Chrome (Android) or the Home Screen app (iPhone), and check notifications are allowed for this site.':(m||'Couldn’t turn on notifications.')); return false; } },
   async disable(){ ls.set('resurgence-push-off',1); try{ const sub=await this.mySub(); if(sub){ await api('/api/me/push',{method:'DELETE',body:{endpoint:sub.endpoint}}); await sub.unsubscribe().catch(()=>{}); } await this.load(); toast('Notifications are off for this device.'); }catch(e){ toast(e.message); } },
   async setPref(k,on){ const prefs={...(this.st&&this.st.prefs||{}),[k]:on}; try{ this.st={...this.st,...await api('/api/me/push/prefs',{method:'PUT',body:{prefs}})}; this.st.here=true; }catch(e){ toast(e.message); } },
-  async sheet(){ await this.load(); document.querySelector('.rsheet-bg.pushs')?.remove();
+  async sheet(o={}){ await this.load(); document.querySelector('.rsheet-bg.pushs')?.remove();
     const wrap=el('div',{class:'rsheet-bg pushs'}); wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
     const box=el('div',{class:'rsheet inked',role:'dialog','aria-label':'Settings'}); wrap.append(box); document.body.append(wrap);
     const fill=()=>{ box.innerHTML=''; const S0=this.st||{}, on=!!S0.here;
@@ -9145,7 +9145,7 @@ const PushUI={ st:null, at:0, busy:false, sw:null,
         box.append(seg, el('p',{class:'hint',text:Power.pref==='auto'?(Power.low?'On now: your battery is low.':'Turns on by itself when your battery is low (below 20%) and not charging.'):Power.pref==='on'?'On.':'Off.'})); }
       const G=GuideUI.data; if(G&&!G.finished){ box.append(el('h4',{class:'bgroup',text:'🧭 Getting started guide'}), el('div',{class:'row-actions'}, G.hidden?el('button',{class:'btn',text:'Show it on my card',onclick:async()=>{ await GuideUI.unhide(); wrap.remove(); }}):el('button',{class:'btn',text:'Hide it',onclick:async()=>{ await GuideUI.hide(); wrap.remove(); }}))); }
       box.append(el('div',{class:'row-actions'}, el('button',{class:'btn',text:'Done',onclick:()=>{ wrap.remove(); if(sel) renderCard(true); }}))); };
-    fill(); } };
+    fill(); if(o.controls) requestAnimationFrame(()=>{ const c=box.querySelector('.drivectl'); if(c) c.scrollIntoView({block:'start'}); }); } };
 PushUI.auto=async function(){ if(!(Me&&Me.token)||!this.supported()||this.iosNeedsInstall()) return;
   if(ls.get('resurgence-push-off')) return; // they switched it off in Settings
   if(Notification.permission==='granted'){ try{ const { key }=await api('/api/push/key'), r=await this.reg(); let sub=await r.pushManager.getSubscription();

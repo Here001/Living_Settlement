@@ -772,13 +772,13 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       await pool.query('update buildings set owner_id = $1, owner_handle = $2, price = 50000 where id = $3', [zid, 'zara_ng', own.id]);
       await pool.query("update citizens set coins_base = 50, bank = 2000, net = 0, coins_day = 0 where id = $1", [zid]);
       const bl = await call('POST', '/api/admin/test/bills'), z1 = await whoDev('zara_ng');
-      ok(bl.status === 200 && z1.coins === 0 && z1.bank === 2000 - (45 + 1300 - 50), 'bills: car upkeep (45) weekly, property upkeep twice a game year (26 weeks × 0.1% of 50,000), cash first, then savings', JSON.stringify({ bl: bl.json, coins: z1.coins, bank: z1.bank }));
+      ok(bl.status === 200 && z1.coins === 0 && z1.bank === 2000 - (45 + 390 - 50), 'bills: car upkeep (45) weekly, property upkeep twice a game year (26 weeks × 0.03% of 50,000), cash first, then savings', JSON.stringify({ bl: bl.json, coins: z1.coins, bank: z1.bank }));
       const nt = (await pool.query("select text from notices where citizen_id = $1 and kind = 'bills' order by id desc limit 1", [zid])).rows[0]?.text || '';
-      ok(/car upkeep 45 \+ 🏠 property upkeep 1,300 \(half-yearly\) = 1,345 coins/.test(nt), 'and a notice says what it was for', nt);
-      { const R2 = await import('../shared/rules.js'); ok(R2.PROPERTY_BILL_DAYS === 182 && Math.abs(R2.UPKEEP_RATE * R2.PROPERTY_BILL_WEEKS - 0.026) < 1e-12, 'property is billed every 26 game weeks (twice a 52-week game year)'); }
+      ok(/car upkeep 45 \+ 🏠 property upkeep 390 \(half-yearly\) = 435 coins/.test(nt), 'and a notice says what it was for', nt);
+      { const R2 = await import('../shared/rules.js'); ok(R2.PROPERTY_BILL_DAYS === 182 && Math.abs(R2.UPKEEP_RATE * R2.PROPERTY_BILL_WEEKS - 0.0078) < 1e-12, 'property is billed every 26 game weeks (twice a 52-week game year)'); }
       await pool.query("update citizens set coins_base = 30, bank = 20, net = 0, coins_day = 0 where id = $1", [zid]);
       const bl3 = await call('POST', '/api/admin/test/bills'), z3 = await whoDev('zara_ng');
-      ok(bl3.status === 200 && z3.bank === 0 && z3.coins === 30 + 20 - 1345, 'bills bigger than cash and savings: both are emptied and the wallet goes into the minus', JSON.stringify({ coins: z3.coins, bank: z3.bank }));
+      ok(bl3.status === 200 && z3.bank === 0 && z3.coins === 30 + 20 - 435, 'bills bigger than cash and savings: both are emptied and the wallet goes into the minus', JSON.stringify({ coins: z3.coins, bank: z3.bank }));
       await pool.query('update buildings set owner_id = null, owner_handle = null where id = $1', [own.id]); await pool.query("update citizens set cars = null, car_active = null where id = $1", [zid]); }
     ok((await call('POST', '/api/me/visit/end', {}, P)).status === 200 && (await who('zara_ng')).visit?.[4] <= Date.now() + 1000, 'and heads home (the trip back stays visible)');
     // pets

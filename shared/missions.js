@@ -43,12 +43,12 @@ export const MISSION = {
   near: 2.6,                  // how close (in tiles, from the edge of the building) counts as "there"
   fastest: 6,                 // tiles a second: nothing on the road gets between two stops quicker than this
   time: { base: 35, perTile: 1.1 },
-  pay: { parcel: { base: 85, perTile: 4.6, max: 800 }, taxi: { base: 80, perTile: 5.2, max: 900 } }, /* (raised: a side job pays enough to be worth the drive) */
+  pay: { parcel: { base: 850, perTile: 46, max: 8000 }, taxi: { base: 800, perTile: 52, max: 9000 } }, /* (a side job pays well: worth the drive) */
   xp: { parcel: { base: 22, perTile: 0.25 }, taxi: { base: 26, perTile: 0.25 } },
-  race: { checkpoints: 5, leg: [9, 17], gold: 2.6, silver: 2.1, bronze: 1.6, pay: { base: 130, perTile: 5.6, max: 1200 }, medal: { gold: 1, silver: 0.65, bronze: 0.4 }, xp: { base: 30, perTile: 0.3 }, countdown: 3 },
-  hotcar: { pay: { base: 260, perTile: 6.4, max: 1500 }, xp: { base: 40, perTile: 0.3 }, cars: ['sports', 'gt', 'luxury', 'supercar', 'evsedan', 'suv'], police: 2, after: 6, speed: [2.6, 3.3], lose: 42, catch: 0.9, caught: 2.5 },
-  game: { holdup: { base: 400, perTile: 5.4, max: 1400, xp: 55 }, con: { base: 300, xp: 40 }, atm: { base: 520, xp: 60 }, extra: 240, botched: 0.15 }, /* (a crime mission plays the shop, the con or the ATM game right there: pay by how well you played) */
-  police: { pay: 560, xp: 65, catch: 1.8, secs: 150, range: 90, patrol: { pay: 0.45, xp: 0.6 } }, /* (an arrest, or a patrol: a race's course, paid at a fraction, no medals) */
+  race: { checkpoints: 5, leg: [9, 17], gold: 2.6, silver: 2.1, bronze: 1.6, pay: { base: 1300, perTile: 56, max: 12000 }, medal: { gold: 1, silver: 0.65, bronze: 0.4 }, xp: { base: 30, perTile: 0.3 }, countdown: 3 },
+  hotcar: { pay: { base: 2600, perTile: 64, max: 15000 }, xp: { base: 40, perTile: 0.3 }, cars: ['sports', 'gt', 'luxury', 'supercar', 'evsedan', 'suv'], police: 2, after: 6, speed: [2.6, 3.3], lose: 42, catch: 0.9, caught: 2.5 },
+  game: { holdup: { base: 4000, perTile: 54, max: 14000, xp: 55 }, con: { base: 3000, xp: 40 }, atm: { base: 5200, xp: 60 }, extra: 150, botched: 0.15 }, /* (extra: seconds more to play the game there) */ /* (a crime mission plays the shop, the con or the ATM game right there: pay by how well you played) */
+  police: { pay: 5600, xp: 65, catch: 1.8, secs: 150, range: 90, patrol: { pay: 0.45, xp: 0.6 } }, /* (an arrest, or a patrol: a race's course, paid at a fraction, no medals) */
   bounty: { min: 500, max: 50000, catch: 1.6, secs: 240, xp: 70 },
   drop: { every: [8, 16], amount: [300, 1200], grab: 1.4, life: 6 }, /* cash drops: minutes between them, coins, how close, minutes it waits */
   tip: 0.5,                   // up to half the fare again for arriving with lots of time left

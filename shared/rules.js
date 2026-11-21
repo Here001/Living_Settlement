@@ -207,7 +207,7 @@ const nicePrice = n => { const step = n < 20000 ? 500 : n < 100000 ? 1000 : n < 
 export function fullIncome(type) { // what a full building earns its owner each game day, after the treasury's cut
   const t = BUILDING_TYPES[type] || {}; let g = 0;
   if (t.home) g += (t.home.capacity || 0) * (t.home.rent || 0);
-  if (t.work) g += (t.work.slots || 0) * (t.work.salary || 0) * BUSINESS_SHARE;
+  if (t.work) g += (t.work.slots || 0) * (t.work.base || t.work.salary || 0) * BUSINESS_SHARE; /* (the wage before the workers' raise: buying a business costs, and pays its owner, what it did) */
   return g * (1 - TREASURY_CUT); }
 export const propertyPrice = type => nicePrice(Math.max(PROPERTY_MIN, fullIncome(type) * PAYBACK_GAME_DAYS));
 // What an owned home, shop, office or industry earns its owner each game day: what it would earn full, so the dearer the

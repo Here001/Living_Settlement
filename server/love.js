@@ -10,13 +10,21 @@ import { LOVE } from '../shared/rules.js';
 const pairOf = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
 const dayOf = t => new Date(t).toISOString().slice(0, 10);
 const clean = s => String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140);
+// How many people you can be with at once (dating, or one of them married): see who someone's with on their card while
+// their relationship status is Open; Closed, nobody sees it, not even the people they're with.
+export const MAX_PARTNERS = 3;
 export const hearts = p => Math.max(0, Math.min(5, Math.floor((Number(p) || 0) / (LOVE.MAX / 5))));
 
 export class Love {
   constructor(world) { this.world = world; }
   async who(handle) { const c = (await pool.query('select id, handle, display_name, love_hidden, pass_hash is not null claimed from citizens where lower(handle) = lower($1)', [String(handle || '').replace(/^@/, '')])).rows[0]; if (!c) throw new HttpError(404, 'No colonist with that name.'); return c; }
   // the relationship a colonist is in right now (dating or married), if any
-  async current(q, id) { return (await q("select * from relationships where (a_id = $1 or b_id = $1) and status in ('dating', 'married') limit 1", [id])).rows[0] || null; }
+  async current(q, id) { return (await q("select * from relationships where (a_id = $1 or b_id = $1) and status in ('dating', 'married') order by (status = 'married') desc, started limit 1", [id])).rows[0] || null; }
+  async partners(q, id) { return (await q("select * from relationships where (a_id = $1 or b_id = $1) and status in ('dating', 'married') order by (status = 'married') desc, started", [id])).rows; }
+  // one of my relationships: with this person, or (no one named) the only one I have
+  async withOne(q, meId, handle, what = "status in ('dating', 'married')") {
+    if (handle) { const o = await this.who(handle); const r = (await q(`select * from relationships where pair = $1 and ${what} for update`, [pairOf(meId, o.id)])).rows[0]; if (!r) throw new HttpError(404, `You’re not with @${o.handle}.`); return r; }
+    const L = (await q(`select * from relationships where (a_id = $1 or b_id = $1) and ${what} for update`, [meId])).rows; if (!L.length) throw new HttpError(404, 'You’re not with anyone.'); if (L.length > 1) throw new HttpError(400, 'Say who: you’re with more than one person.'); return L[0]; }
   async spouseOf(id, q = (a, v) => pool.query(a, v)) { const r = (await q("select a_id, b_id from relationships where (a_id = $1 or b_id = $1) and status = 'married' limit 1", [id])).rows[0]; return r ? (r.a_id === id ? r.b_id : r.a_id) : null; }
   // points fade after a few days apart (worked out when it's next looked at)
   decayed(r, now = Date.now()) {
@@ -37,8 +45,8 @@ export class Love {
   // my side: who I'm with, and who has asked me out
   async mine(meId) {
     const rows = await this.load((a, v) => pool.query(a, v), "(r.a_id = $1 or r.b_id = $1) and r.status in ('dating', 'married', 'asked')", [meId]);
-    const cur = rows.find(r => r.status !== 'asked'), hidden = !!(await pool.query('select love_hidden from citizens where id = $1', [meId])).rows[0]?.love_hidden;
-    return { hidden, current: cur ? this.out(cur, meId) : null,
+    const with_ = rows.filter(r => r.status !== 'asked').sort((a, b) => (b.status === 'married') - (a.status === 'married') || Number(a.started) - Number(b.started)), hidden = !!(await pool.query('select love_hidden from citizens where id = $1', [meId])).rows[0]?.love_hidden;
+    return { hidden, max: MAX_PARTNERS, partners: with_.map(r => this.out(r, meId)), current: with_[0] ? this.out(with_[0], meId) : null,
       asks: rows.filter(r => r.status === 'asked' && r.asked_by !== meId).map(r => ({ from: r.asked_by === r.a_id ? r.a : r.b, message: r.message || '', t: Number(r.t) })),
       asked: rows.filter(r => r.status === 'asked' && r.asked_by === meId).map(r => (r.asked_by === r.a_id ? r.b : r.a)) };
   }
@@ -46,10 +54,11 @@ export class Love {
   async between(meId, handle) {
     const o = await this.who(handle); if (!meId || o.id === meId) return { self: o.id === meId };
     const r = (await this.load((a, v) => pool.query(a, v), 'r.pair = $1', [pairOf(meId, o.id)]))[0];
-    const mineNow = await this.current((a, v) => pool.query(a, v), meId), theirs = await this.current((a, v) => pool.query(a, v), o.id);
-    const other = !!theirs && (!r || theirs.pair !== r.pair), shown = other && !o.love_hidden; /* their relationship with someone else: shown unless they keep it private */
-    const base = { handle: o.handle, claimed: o.claimed, iTaken: !!mineNow && (!r || mineNow.pair !== r.pair), theyTaken: shown,
-      ...(shown ? { theirs: { status: theirs.status, with: (await pool.query('select handle from citizens where id = $1', [theirs.a_id === o.id ? theirs.b_id : theirs.a_id])).rows[0]?.handle || null } } : {}) };
+    const q0 = (a, v) => pool.query(a, v), mine = await this.partners(q0, meId), theirs = await this.partners(q0, o.id), withMe = !!r && ['dating', 'married'].includes(r.status);
+    const others = theirs.filter(x => !r || x.pair !== r.pair), open = !o.love_hidden; /* who else they're with: shown while their status is Open; Closed, nobody sees it (not even the people they're with) */
+    const names = open && others.length ? (await pool.query('select id, handle from citizens where id = any($1)', [others.map(x => x.a_id === o.id ? x.b_id : x.a_id)])).rows : [];
+    const list = open ? others.map(x => ({ status: x.status, with: names.find(n => n.id === (x.a_id === o.id ? x.b_id : x.a_id))?.handle || null })) : [];
+    const base = { handle: o.handle, claimed: o.claimed, open, max: MAX_PARTNERS, iTaken: !withMe && mine.length >= MAX_PARTNERS, theyFull: !withMe && theirs.length >= MAX_PARTNERS, theyTaken: list.length > 0, theirAll: list, ...(list.length ? { theirs: list[0] } : {}) };
     if (!r) return { ...base, status: 'none' };
     if (r.status === 'asked') return { ...base, status: r.asked_by === meId ? 'asked' : 'askedMe', message: r.message || '' };
     if (r.status === 'declined') return { ...base, status: Date.now() - Number(r.t) < LOVE.RETRY_MS && r.asked_by === meId ? 'declined' : 'none' };
@@ -62,9 +71,10 @@ export class Love {
     return this.world.personal(async ch => {
       const q = (a, v) => ch.q(a, v), now = Date.now(), pair = pairOf(me.id, o.id);
       await q('select id from citizens where id = any($1) order by id for update', [[me.id, o.id]]); /* one change to these two at a time */
-      if (await this.current(q, me.id)) throw new HttpError(409, 'You’re already with someone. You can only be in one relationship at a time.');
-      if (await this.current(q, o.id)) throw new HttpError(409, o.love_hidden ? `@${o.handle} isn’t available right now.` : `@${o.handle} is already with someone.`);
+      if ((await this.partners(q, me.id)).length >= MAX_PARTNERS) throw new HttpError(409, `You’re already with ${MAX_PARTNERS} people: that’s as many as anyone can be with at once.`);
+      if ((await this.partners(q, o.id)).length >= MAX_PARTNERS) throw new HttpError(409, o.love_hidden ? `@${o.handle} isn’t available right now.` : `@${o.handle} is already with ${MAX_PARTNERS} people.`);
       const r = (await q('select * from relationships where pair = $1', [pair])).rows[0];
+      if (r && ['dating', 'married'].includes(r.status)) throw new HttpError(409, `You and @${o.handle} are already together.`);
       if (r?.status === 'asked') throw new HttpError(409, r.asked_by === me.id ? `You’ve already asked @${o.handle}. Wait for an answer.` : `@${o.handle} has asked you out already: answer them on your card.`);
       if (r?.status === 'declined' && r.asked_by === me.id && now - Number(r.t) < LOVE.RETRY_MS) throw new HttpError(429, `@${o.handle} said no not long ago. Give it a while.`);
       const out = Number((await q("select count(*) n from relationships where asked_by = $1 and status = 'asked'", [me.id])).rows[0].n);
@@ -84,20 +94,17 @@ export class Love {
       const r = (await q('select * from relationships where pair = $1 for update', [pair])).rows[0];
       if (!r || r.status !== 'asked' || r.asked_by === me.id) throw new HttpError(404, 'There’s nothing to answer.');
       if (!accept) { await q("update relationships set status = 'declined', t = $2 where pair = $1", [pair, now]); await this.world.actions?.notify(ch, o.id, 'love', `💔 @${me.handle} said no this time.`); return { ok: true, status: 'declined' }; }
-      if (await this.current(q, me.id)) throw new HttpError(409, 'You’re already with someone.');
-      if (await this.current(q, o.id)) throw new HttpError(409, `@${o.handle} is with someone else now.`);
+      if ((await this.partners(q, me.id)).length >= MAX_PARTNERS) throw new HttpError(409, `You’re already with ${MAX_PARTNERS} people.`);
+      if ((await this.partners(q, o.id)).length >= MAX_PARTNERS) throw new HttpError(409, `@${o.handle} is already with ${MAX_PARTNERS} people now.`);
       await q("update relationships set status = 'dating', started = $2, t = $2, last_active = $2, points = $3 where pair = $1", [pair, now, LOVE.START]);
-      // anyone else who asked either of them out: it's off now
-      for (const x of (await q("delete from relationships where status = 'asked' and pair <> $1 and (a_id = any($2) or b_id = any($2)) returning asked_by, a_id, b_id", [pair, [me.id, o.id]])).rows) {
-        const them = [x.a_id, x.b_id].find(i => i !== x.asked_by), h = them === me.id ? me.handle : o.handle;
-        await this.world.actions?.notify(ch, x.asked_by, 'love', `💔 @${h} is seeing someone else now.`); }
       await this.world.actions?.notify(ch, o.id, 'love', `💞 @${me.handle} said yes! You’re dating now. Spend time together and talk to fill your hearts.`);
       return { ok: true, status: 'dating' };
     });
   }
-  async propose(me) {
+  async propose(me, handle) {
     return this.world.personal(async ch => {
-      const q = (a, v) => ch.q(a, v), r = await this.current(q, me.id); if (!r || r.status !== 'dating') throw new HttpError(409, 'You need to be dating someone first.');
+      const q = (a, v) => ch.q(a, v), r = await this.withOne(q, me.id, handle, "status = 'dating'").catch(e => { throw e.status === 404 ? new HttpError(409, 'You need to be dating them first.') : e; });
+      for (const id of [r.a_id, r.b_id]) if ((await this.partners(q, id)).some(x => x.status === 'married')) throw new HttpError(409, id === me.id ? 'You’re married already: one husband or wife at a time.' : 'They’re married to someone already.');
       if (this.decayed(r) < LOVE.MAX) throw new HttpError(409, 'Your hearts aren’t full yet. Spend more time together first.');
       if (r.proposed_by) throw new HttpError(409, r.proposed_by === me.id ? 'You’ve already proposed. Wait for their answer.' : 'They’ve already proposed to you: answer them on your card.');
       await q('update relationships set proposed_by = $2 where pair = $1', [r.pair, me.id]);
@@ -105,9 +112,10 @@ export class Love {
       return { ok: true };
     });
   }
-  async answerProposal(me, accept) {
+  async answerProposal(me, accept, handle) {
     return this.world.personal(async ch => {
-      const q = (a, v) => ch.q(a, v), r = await this.current(q, me.id); if (!r || r.status !== 'dating' || !r.proposed_by || r.proposed_by === me.id) throw new HttpError(404, 'There’s no proposal to answer.');
+      const q = (a, v) => ch.q(a, v), r = await this.withOne(q, me.id, handle, `status = 'dating' and proposed_by is not null and proposed_by <> '${String(me.id).replace(/'/g, '')}'`).catch(() => null); if (!r) throw new HttpError(404, 'There’s no proposal to answer.');
+      if (accept) for (const id of [r.a_id, r.b_id]) if ((await this.partners(q, id)).some(x => x.status === 'married')) throw new HttpError(409, 'One of you is married to someone else already.');
       const other = r.proposed_by, now = Date.now();
       if (!accept) { await q('update relationships set proposed_by = null where pair = $1', [r.pair]); await this.world.actions?.notify(ch, other, 'love', `💍 @${me.handle} isn’t ready to get married yet.`); return { ok: true, status: 'dating' }; }
       await q("update relationships set status = 'married', married_at = $2, proposed_by = null, last_active = $2 where pair = $1", [r.pair, now]);
@@ -117,9 +125,9 @@ export class Love {
       return { ok: true, status: 'married' };
     });
   }
-  async end(me) {
+  async end(me, handle) {
     return this.world.personal(async ch => {
-      const q = (a, v) => ch.q(a, v), r = await this.current(q, me.id); if (!r) throw new HttpError(404, 'You’re not with anyone.');
+      const q = (a, v) => ch.q(a, v), r = await this.withOne(q, me.id, handle);
       await q('delete from relationships where pair = $1', [r.pair]);
       const other = r.a_id === me.id ? r.b_id : r.a_id;
       await this.world.actions?.notify(ch, other, 'love', r.status === 'married' ? `💔 @${me.handle} has ended your marriage.` : `💔 @${me.handle} has broken up with you.`);

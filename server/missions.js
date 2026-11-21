@@ -69,7 +69,7 @@ export class Missions {
 
   // ---------- planning ----------
   // buildings a car can pull up beside (a road within a couple of tiles), between min and max tiles from p
-  async spots(db, p, min, max, { work = false, not = [], only = null } = {}) {
+  async spots(db, p, min, max, { work = false, not = [], only = null, any = false } = {}) { /* any: on foot, so it needn't have a road right beside it */
     const rows = (await Q(db, `select b.id, b.type, b.name, b.x, b.y, b.level, b.rot,
         array(select array[r.x, r.y] from roads r where r.type = any($5) and r.x between b.x - 2 and b.x + 7 and r.y between b.y - 2 and b.y + 7) near
       from buildings b where b.done and not b.ruin and abs(b.x - $1::int) + abs(b.y - $2::int) between $3 and $4
@@ -78,7 +78,8 @@ export class Missions {
     for (const b of rows) { if (!R.canGoTo(b.type) || not.includes(b.id) || (work && BUILDING_TYPES[b.type].home) || (only && !only.includes(b.type))) continue;
       const [w, h] = R.footprint(R.levelSize(b.type, b.level || 1), b.rot), f = { x: b.x, y: b.y, w, h }; let kerb = null, kd = 9;
       for (const [x, y] of b.near || []) { const d = M.offEdge({ x: x + 0.5, y: y + 0.5 }, f); if (d > 0 && d < kd) { kd = d; kerb = { kx: x, ky: y }; } }
-      if (kerb && kd <= 2) out.push({ bid: b.id, name: nameOf(b), x: b.x, y: b.y, w, h, type: b.type, ...kerb }); } /* (a road right beside it, to pull up on) */
+      if (kerb && kd <= 2) out.push({ bid: b.id, name: nameOf(b), x: b.x, y: b.y, w, h, type: b.type, ...kerb }); /* (a road right beside it, to pull up on) */
+      else if (any) out.push({ bid: b.id, name: nameOf(b), x: b.x, y: b.y, w, h, type: b.type, ...(kerb ? kerb : {}) }); } /* (walked to: any of them, wherever it was built) */
     return out; }
   // the drivable road tiles round p (within R), and how far each is from a start tile along the roads
   async roads(db, p, R) { const px = Math.round(p.x), py = Math.round(p.y);
@@ -105,7 +106,7 @@ export class Missions {
   // a crime: the store (then a getaway to a hideout), the tourist or the ATM; you walk up to it and play its game there
   async gamePlan(db, p, kind) { const G = M.MISSION.game[kind], game = M.GAME_OF[kind];
     const one = async (from, a, b, o) => { for (const [lo, hi] of [[a, b], [2, b + 40]]) { const s = (await this.spots(db, from, lo, hi, o))[0]; if (s) return s; } return null; };
-    const t = kind === 'holdup' ? await one(p, 4, 26, { only: SHOPS }) : kind === 'atm' ? await one(p, 4, 30, { only: BANK_TYPES }) : await one(p, 4, 24, { work: true }); if (!t) return null;
+    const t = kind === 'holdup' ? await one(p, 4, 26, { only: SHOPS, any: true }) : kind === 'atm' ? await one(p, 4, 30, { only: BANK_TYPES, any: true }) : await one(p, 4, 24, { work: true, any: true }); if (!t) return null;
     const name = kind === 'holdup' ? t.name : kind === 'atm' ? `the ATM at ${t.name}` : `the tourist outside ${t.name}`, steps = [{ k: 'game', game, ...t, name, need: 'walk' }];
     let trip = 0; if (kind === 'holdup') { const h = await one(t, 15, 50, { not: [t.bid] }); if (!h) return null; steps.push({ k: 'drop', ...h, name: `${h.name} (your hideout)`, need: 'car', getaway: true }); trip = M.dist(t, h); }
     const fare = Math.min(G.max || 1e9, Math.round(G.base + (G.perTile || 0) * trip));

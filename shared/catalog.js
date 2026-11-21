@@ -310,6 +310,10 @@ export const BUILDING_TYPES = {
   lavender:   { name:'Lavender field', cat:'nature', size:[3,2], style:'farm', pattern:'lavender', colors:{soil:'#8A7A5A', crop:'#9C7FD0'}, work:{title:'Farmer', slots:2, salary:16}, outdoor:true, cost:450 },
   pasture:    { name:'Pasture', cat:'nature', size:[3,3], style:'farm', pattern:'pasture', colors:{soil:'#8FC463', crop:'#F4F1E8'}, work:{title:'Shepherd', slots:1, salary:14}, outdoor:true, cost:300 },
 };
+// Wages: every job pays three times the salary written above (each work.salary is a game day's pay), and shifts, which
+// pay a multiple of it, go up with it. One place, so every screen and every payslip agree.
+export const WAGE_MULT = 3;
+for (const t of Object.values(BUILDING_TYPES)) if (t.work && t.work.salary) { t.work.base = t.work.salary; t.work.salary = Math.round(t.work.salary * WAGE_MULT); } /* (base: the old figure, which a business's price and its owner's profit still go by) */
 
 // ---------- November 2026: fences that join up, skyscrapers, big venues, more industry, shops, services and decorations ----------
 // `as` marks a bigger version of a building that works exactly like the original (a grand casino plays the casino's games,

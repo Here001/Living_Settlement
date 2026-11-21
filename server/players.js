@@ -354,8 +354,8 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/citizens/:handle/love/ask', limit, send(async req => { const p = await me(req); await assertNotMuted(p.id); return world.love.ask(p, req.params.handle, bd(req).message); }));
   r.post('/citizens/:handle/love/answer', limit, send(async req => world.love.answer(await me(req), req.params.handle, !!bd(req).accept)));
   r.post('/citizens/:handle/love/cancel', limit, send(async req => world.love.cancelAsk(await me(req), req.params.handle)));
-  r.post('/me/love/propose', limit, send(async req => world.love.propose(await me(req))));
-  r.post('/me/love/proposal', limit, send(async req => world.love.answerProposal(await me(req), !!bd(req).accept)));
+  r.post('/me/love/propose', limit, send(async req => world.love.propose(await me(req), bd(req).handle ? String(bd(req).handle) : null)));
+  r.post('/me/love/proposal', limit, send(async req => world.love.answerProposal(await me(req), !!bd(req).accept, bd(req).handle ? String(bd(req).handle) : null)));
   // night clubs: spray someone, or the whole club, and grab the money that rains down (server/clubs.js)
   // each club's own DJ mix: the developer uploads an MP3 for a club (from its card), it goes to Cloudflare R2, and that
   // club plays it as people walk in (a club without one plays Gbedu FM)
@@ -395,7 +395,7 @@ export function playersRouter({ limit, send, admin, world }) {
   r.post('/phone/answer', limit, send(async req => Ph().answer(await me(req), bd(req).id, !!bd(req).accept)));
   r.post('/phone/hangup', limit, send(async req => Ph().hangup(await me(req), bd(req).id)));
   r.post('/me/love/privacy', limit, send(async req => world.love.privacy((await me(req)).id, !!bd(req).hidden)));
-  r.post('/me/love/end', limit, send(async req => world.love.end(await me(req))));
+  r.post('/me/love/end', limit, send(async req => world.love.end(await me(req), bd(req).handle ? String(bd(req).handle) : null)));
   // best friends, and the cars you can borrow (from your husband or wife, and your best friends)
   r.get('/me/friends', limit, send(async req => { const id = (await me(req)).id; return { ...(await world.friends.mine(id)), ...(await world.friends.borrowable(id)) }; }));
   r.get('/me/friends/with/:handle', limit, send(async req => world.friends.with((await me(req)).id, req.params.handle)));

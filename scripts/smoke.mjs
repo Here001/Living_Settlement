@@ -99,9 +99,9 @@ r = await call('POST', '/api/admin/buildings', { type: 'bakery', x: 14, y: 10 })
 ok(r.status === 200, 'build a bakery (2 jobs)');
 const bakery = r.json.building;
 m = await meta();
-ok(m.employed === 2 && m.income === income0 + 2 * 5, 'two people hired; taxes raise daily income', JSON.stringify({ e: m.employed, i: m.income, i0: income0 }));
+ok(m.employed === 2 && m.income === income0 + 2 * 14, 'two people hired; taxes raise daily income', JSON.stringify({ e: m.employed, i: m.income, i0: income0 }));
 const worker = await whoDev('builder');
-ok(worker.job?.[0] === bakery.id && worker.net === 24 - 5, 'the earliest resident works there and nets 19 a day (24 less 5 tax; the tent is free)', JSON.stringify(worker));
+ok(worker.job?.[0] === bakery.id && worker.net === 72 - 14, 'the earliest resident works there and nets 58 a day (72 less 14 tax; the tent is free)', JSON.stringify(worker));
 ok((await whoDev('chidi')).net === 0, 'unemployed residents live rent-free until they find work');
 
 console.log('Demolish, undo, move');
@@ -176,7 +176,7 @@ const desk = (await call('GET', '/api/admin/places?kind=job&x=36&y=0')).json.fin
 ok(desk && desk.title === 'Analyst' && desk.used < desk.cap, 'the new office shows up with free desks', JSON.stringify(desk));
 ok((await call('PATCH', `/api/admin/citizens/${kemi.id}`, { jobId: office.id })).status === 200, "change someone's career");
 let k = await whoDev('kemi');
-ok(k.job?.[0] === office.id && k.net === 32 - 6 - 12, 'they work at the office and earn its wage minus tax and rent', JSON.stringify(k));
+ok(k.job?.[0] === office.id && k.net === 96 - 19 - 12, 'they work at the office and earn its wage minus tax and rent', JSON.stringify(k));
 ok((await call('PATCH', `/api/admin/citizens/${kemi.id}`, { jobId: null })).status === 200 && (await who('kemi')).job === null, 'make them quit');
 const bakeryNow = (await call('GET', '/api/admin/places?kind=job&x=14&y=10')).json.find(p => p.type === 'bakery');
 ok(bakeryNow.used === bakeryNow.cap, 'the bakery is full');
@@ -884,7 +884,7 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
       ok((await call('GET', '/api/me/tills', undefined, { auth: false })).status === 401, "the tills are only shown to their owner (signed in)"); }
     const shop = await build('stall', 965, 900), shopBuy = await call('POST', '/api/me/properties/buy', { buildingId: shop }, P);
     const before = (await money()).wallet; await call('DELETE', `/api/admin/buildings/${shop}`);
-    { const after = (await money()).wallet; ok(after === before + 5000, 'if the developer knocks it down, the owner gets their money back', JSON.stringify({ before, after, buy: shopBuy.json })); }
+    { const after = (await money()).wallet; ok(after === before + shopBuy.json.price, 'if the developer knocks it down, the owner gets their money back', JSON.stringify({ before, after, buy: shopBuy.json })); }
     const sl = await call('POST', '/api/me/properties/sell', { buildingId: spare }, P);
     ok(sl.status === 200 && sl.json.back === Math.floor(buy.json.price * 0.7), 'sell a building back for 70%'); }
   // ---- gifts ----
@@ -2101,18 +2101,24 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   ok((await call('POST', '/api/citizens/love_ben/love/ask', {}, A.P)).status === 200, 'later, she asks again');
   await call('POST', '/api/citizens/love_ben/love/ask', {}, C.P); /* Cat asks Ben too */
   ok((await call('POST', '/api/citizens/love_amy/love/answer', { accept: true }, B.P)).json.status === 'dating', 'Ben says yes: they’re dating');
-  ok(!(await pool.query("select 1 from relationships where status = 'asked' and asked_by = $1", [C.id])).rowCount, '…and Cat’s question is off');
-  ok((await call('POST', '/api/citizens/love_cat/love/ask', {}, A.P)).status === 409, 'you can only be with one person at a time');
+  ok((await pool.query("select 1 from relationships where status = 'asked' and asked_by = $1", [C.id])).rowCount === 1, '…and Cat’s question still waits (people can see more than one person)');
+  await call('POST', '/api/citizens/love_ben/love/cancel', {}, C.P);
+  ok((await call('POST', '/api/citizens/love_cat/love/ask', {}, A.P)).status === 200 && (await call('POST', '/api/citizens/love_amy/love/answer', { accept: true }, C.P)).json.status === 'dating', 'double dating: Amy asks Cat out too, and Cat says yes');
+  { const m = (await call('GET', '/api/me/love', undefined, A.P)).json; ok(m.partners.length === 2 && m.partners.map(x => x.with).sort().join() === 'love_ben,love_cat' && m.max === 3, 'Amy is seeing both of them', JSON.stringify(m.partners.map(x => x.with))); }
+  ok((await call('GET', '/api/citizens/love_amy/love', undefined, B.P)).json.theirAll?.some(t => t.with === 'love_cat'), 'her status is Open: Ben sees on her card that she’s also dating Cat');
+  ok((await call('POST', '/api/me/love/propose', {}, A.P)).status === 400, 'with two partners, say whom you mean');
   const s0 = (await call('GET', '/api/citizens/love_ben/love', undefined, A.P)).json; ok(s0.status === 'dating' && s0.points === 5 && s0.hearts === 0, 'the meter starts low', JSON.stringify(s0));
-  ok((await call('POST', '/api/me/love/propose', {}, A.P)).status === 409, 'you can’t propose before your hearts are full');
+  ok((await call('POST', '/api/me/love/propose', { handle: 'love_ben' }, A.P)).status === 409, 'you can’t propose before your hearts are full');
   for (let i = 0; i < 12; i++) await world_love_add(A.id, B.id, 'text', 1);
   for (let i = 0; i < 30; i++) await world_love_add(A.id, B.id, 'together', 1);
   const s1 = (await call('GET', '/api/me/love', undefined, A.P)).json.current; ok(s1.points === 33 && s1.today.texts === 8 && s1.today.together === 20 && s1.hearts === 1, 'time together and messages fill it, up to a limit each day', JSON.stringify(s1));
-  await pool.query("update relationships set points = 100, day_key = null where status = 'dating' and (a_id = $1 or b_id = $1)", [A.id]);
+  await pool.query("update relationships set points = 100, day_key = null where status = 'dating' and (a_id = $1 or b_id = $1)", [B.id]);
   ok((await call('GET', '/api/me/love', undefined, B.P)).json.current.ripe === true, 'full hearts: ready to marry');
-  ok((await call('POST', '/api/me/love/propose', {}, A.P)).status === 200, 'Amy proposes');
+  ok((await call('POST', '/api/me/love/propose', { handle: 'love_ben' }, A.P)).status === 200, 'Amy proposes to Ben');
   ok((await call('GET', '/api/me/love', undefined, B.P)).json.current.proposedBy === 'them', '…Ben sees the proposal');
   ok((await call('POST', '/api/me/love/proposal', { accept: true }, B.P)).json.status === 'married', '…and says yes: they’re married');
+  await pool.query("update relationships set points = 100 where status = 'dating' and (a_id = $1 or b_id = $1)", [C.id]);
+  ok((await call('POST', '/api/me/love/propose', { handle: 'love_cat' }, A.P)).status === 409, '…one husband or wife at a time');
   const ph = (await call('GET', '/api/citizens/love_ben/room', undefined, A.P)).json; ok(ph.mine === true && ph.partner === true, 'married: Amy can furnish Ben’s home', JSON.stringify({ mine: ph.mine, partner: ph.partner }));
   { const bb = (await pool.query('select room from citizens where id = $1', [B.id])).rows[0].room || { items: [], box: [] }; bb.box = [...(bb.box || []), { i: 'pl4nt001', k: 'plant', c: 0 }]; await pool.query('update citizens set room = $2 where id = $1', [B.id, JSON.stringify(bb)]); } /* (a plant he bought at a store, in his storage) */
   let put = null; for (let y = 0; y < 8 && !put; y++) for (let x = 0; x < 8 && !put; x++) { const r = await call('POST', '/api/me/partner/room/buy', { k: 'plant', x, y, r: 0 }, A.P); if (r.status === 200) put = r; }
@@ -2122,12 +2128,18 @@ const hm = (await call('GET', '/api/me/home', undefined, B.P)).json; ok(hm.props
   ok((await call('POST', `/api/me/buildings/${shop.id}/inside/buy`, { k: 'plant', x: 0, y: 0, r: 0 }, C.P)).status === 403, '…but nobody else can');
   ok((await call('POST', '/api/me/partner/room/buy', { k: 'plant', x: 1, y: 1, r: 0 }, C.P)).status === 403, 'someone single has no partner’s home to furnish');
   const seen = (await call('GET', '/api/citizens/love_ben/love', undefined, C.P)).json; ok(seen.theyTaken && seen.theirs?.status === 'married' && seen.theirs?.with === 'love_amy', 'others can see who Ben is married to', JSON.stringify(seen));
+  ok((await call('POST', '/api/me/love/privacy', { hidden: true }, A.P)).json.hidden === true && !(await call('GET', '/api/citizens/love_amy/love', undefined, B.P)).json.theirAll?.length, 'Amy closes her status: not even her husband sees she’s dating Cat');
+  ok((await call('GET', '/api/citizens/love_amy/love', undefined, B.P)).json.status === 'married', '…he only sees their own marriage');
+  await call('POST', '/api/me/love/privacy', { hidden: false }, A.P);
   ok((await call('POST', '/api/me/love/privacy', { hidden: true }, B.P)).json.hidden === true && (await call('GET', '/api/me/love', undefined, B.P)).json.hidden === true, 'Ben can keep it private');
-  const unseen = (await call('GET', '/api/citizens/love_ben/love', undefined, C.P)).json; ok(!unseen.theyTaken && !unseen.theirs && unseen.status === 'none', '…then others can’t see it', JSON.stringify(unseen));
+  const unseen = (await call('GET', '/api/citizens/love_ben/love', undefined, C.P)).json; ok(!unseen.theyTaken && !unseen.theirs && !unseen.theirAll.length, '…then others can’t see it', JSON.stringify(unseen));
   ok((await call('GET', '/api/citizens/love_ben/love', undefined, A.P)).json.status === 'married', '…but his wife still can');
-  const nope = await call('POST', '/api/citizens/love_ben/love/ask', {}, C.P); ok(nope.status === 409 && /isn’t available/.test(nope.json.error || ''), '…and someone asking him out is just told he isn’t available', JSON.stringify(nope.json));
-  ok((await call('GET', '/api/citizens/love_amy/love', undefined, C.P)).json.theirs?.with === 'love_ben', '(Amy didn’t hide it, so her card still shows it)');
-  ok((await call('POST', '/api/me/love/end', {}, B.P)).json.ended === 'married', 'either of them can end it');
+  { await pool.query("update relationships set status = 'dating' where pair = 'zz'"); const D1 = await player('love_dee', 1000), E1 = await player('love_eve', 1000);
+    for (const X of [D1, E1]) { await call('POST', '/api/citizens/love_ben/love/ask', {}, X.P); await call('POST', `/api/citizens/${X.handle}/love/answer`, { accept: true }, B.P); }
+    const nope = await call('POST', '/api/citizens/love_ben/love/ask', {}, C.P); ok(nope.status === 409 && /isn’t available/.test(nope.json.error || ''), '…and once he’s with three, someone asking him out is just told he isn’t available (his status is Closed)', JSON.stringify(nope.json));
+    for (const X of [D1, E1]) await call('POST', '/api/me/love/end', { handle: 'love_ben' }, X.P); }
+  ok((await call('GET', '/api/citizens/love_amy/love', undefined, C.P)).json.theirAll?.some(t => t.with === 'love_ben'), '(Amy’s status is Open, so her card still shows it)');
+  ok((await call('POST', '/api/me/love/end', {}, B.P)).json.ended === 'married', 'either of them can end it'); await call('POST', '/api/me/love/end', { handle: 'love_cat' }, A.P);
   ok((await call('GET', '/api/citizens/love_ben/room', undefined, A.P)).json.mine === false, '…and then it’s his home again, not hers to change'); }
 { // night clubs: a club floor plan and fit-out, a guest limit, spraying someone, spraying the whole club (money rains, people grab it, the rest goes to the club), the DJ's shout-out
   const O = await player('club_owner', 0), A = await player('club_amy', 2_000_000), B = await player('club_ben', 1000), C = await player('club_cat', 1000), E = await player('club_eve', 1000);

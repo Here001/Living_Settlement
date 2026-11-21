@@ -159,6 +159,7 @@ export function createTown(host, opts) {
   const trainBox = [], trainCars = new Map(); /* the trains near you: their cars, and where each is (for bumping into) */
   let BUSY = false; /* on a driving mission: both sides of the street parked up (set each frame) */
   let foot = opts.mode === 'walk', parked = null, riding = null, summon = null; /* summon: your car, driving up to you after you called it */ /* riding: in someone else's car ({ id, seat }), going where they drive */ /* foot: walking (your character), not driving; parked: your car, where you got out */
+  if (foot && opts.parked && Number.isFinite(opts.parked.x) && Number.isFinite(opts.parked.y)) parked = { kind: BIKE ? VK + '!' : VK, col: opts.car.col, x: opts.parked.x * TILE, z: opts.parked.y * TILE, ry: opts.parked.a || 0 }; /* your vehicle, still parked where you left it */
   let swimY = 0; /* (how far down in the water you are: you wade in and out) */
   let feet = null; const mkFeet = () => { if (feet) return feet; feet = W.makePerson('me', null, opts.look || null); feet.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); scene.add(feet.group); return feet; };
   if (foot) mkFeet();

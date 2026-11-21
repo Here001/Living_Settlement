@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import compression from 'compression';
+import zlib from 'node:zlib';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import path from 'node:path';
@@ -104,6 +105,25 @@ app.disable('x-powered-by');
 // the old server until the health check passes, so an update never fails for being slow to start, and nobody sees a gap.
 let ready = false;
 app.use((req, res, next) => { if (ready || req.path === '/health') return next(); res.status(503).set('retry-after', '5').type('text').send('Starting up, back in a moment.'); });
+// ---------- what the server sends out (the host meters it): counted by what was asked for and by who asked ----------
+// Bytes really written to each connection (after compression), kept in memory by path and by kind of client, shown to
+// the builder (/api/admin/traffic) and noted in the log table once an hour, so a leak can be found.
+const TRAFFIC = { since: Date.now(), total: 0, by: new Map(), who: new Map(), ws: 0, hour: 0 };
+const clientOf = req => { const ua = String(req.get('user-agent') || ''); if (!ua) return 'no user agent';
+  const m = /(UptimeRobot|Better ?Uptime|Pingdom|StatusCake|Site24x7|cron-job\.org|Render|kube-probe|Googlebot|bingbot|GPTBot|ClaudeBot|facebookexternalhit|Twitterbot|WhatsApp|TelegramBot|Slackbot|Discordbot|LinkedInBot|AhrefsBot|SemrushBot|YandexBot|Bytespider|curl|python-requests|Go-http-client|node|axios|okhttp|HeadlessChrome)/i.exec(ua); if (m) return m[1];
+  if (/bot|crawl|spider|monitor|preview|scan/i.test(ua)) return 'other bot'; return /Mozilla/.test(ua) ? 'browser' : ua.slice(0, 24); };
+const routeOf = req => { const p = req.path || '/'; if (p === '/') return '/'; const seg = p.split('/').filter(Boolean); return '/' + (seg[0] === 'api' ? seg.slice(0, 3).join('/') : seg[0] === 'shared' || seg[0] === 'vendor' ? seg[0] + '/*' : seg.length > 1 ? seg[0] + '/*' : seg[0]).replace(/[0-9a-f-]{16,}/g, ':id').slice(0, 60); };
+const bump = (m, k, n) => { let o = m.get(k); if (!o) { if (m.size > 400) return; m.set(k, o = { n: 0, bytes: 0 }); } o.n++; o.bytes += n; };
+app.use((req, res, next) => { const sock = req.socket, b0 = sock.bytesWritten; res.on('close', () => { const n = Math.max(0, sock.bytesWritten - b0); TRAFFIC.total += n; TRAFFIC.hour += n; bump(TRAFFIC.by, routeOf(req), n); bump(TRAFFIC.who, clientOf(req), n); }); next(); });
+// The page itself is big (about 1.5 MB before compression). Anything that isn't a player's browser (an uptime monitor,
+// a link preview, a crawler, a script: no compression asked for, or it says what it is) gets a tiny page instead with
+// the title and the preview tags, which is all it wants. A real browser that somehow lands on it is sent on to the game.
+let shell = null; const BOTS = /bot|crawl|spider|monitor|uptime|pingdom|statuscake|preview|facebookexternalhit|whatsapp|curl|wget|python|go-http|okhttp|axios|node-fetch|headless|scan|probe/i;
+const isBrowser = req => { const ua = String(req.get('user-agent') || ''); return /Mozilla/.test(ua) && !BOTS.test(ua) && /gzip|br/.test(String(req.get('accept-encoding') || '')); };
+const getShell = () => { if (shell) return shell; let head = ''; try { const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8'), h = html.slice(0, html.indexOf('</head>')); head = [...h.matchAll(/<title>[\s\S]*?<\/title>|<meta [^>]*>|<link rel="(?:icon|canonical|manifest|apple-touch-icon)"[^>]*>/g)].map(m => m[0]).join('\n'); } catch (e) {}
+  return shell = `<!doctype html><html lang="en"><head>${head}</head><body><h1>Resurgence</h1><p>A living colony you can join. <a href="/?full=1">Open the game</a>.</p><script>location.replace('/?full=1'+location.hash)</script></body></html>`; };
+const sendShell = (res, html) => res.set({ 'cache-control': 'public, max-age=300', vary: 'user-agent, accept-encoding' }).type('html').send(html);
+app.get('/', (req, res, next) => { if ('full' in req.query || isBrowser(req) || typeof req.query.c === 'string') return next(); /* (a colonist's link: its own preview, further on) */ sendShell(res, getShell()); });
 app.use(compression()); // map data is very repetitive JSON; this shrinks it several times over
 app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1)); // Render, Fly and most hosts sit one proxy in front
 // Security headers on every reply: browsers mustn't guess file types, frame the game inside other sites, leak full
@@ -221,6 +241,8 @@ const APP_VERSION = (() => { const h = crypto.createHash('sha1'); try { h.update
   for (const f of fs.readdirSync(path.join(root, 'shared')).sort()) h.update(fs.readFileSync(path.join(root, 'shared', f)));
   for (const f of fs.readdirSync(path.join(root, 'public')).filter(f => f.endsWith('.js')).sort()) h.update(fs.readFileSync(path.join(root, 'public', f))); } catch (e) { h.update(String(Date.now())); }
   return h.digest('hex').slice(0, 12); })();
+app.get('/api/admin/traffic', admin, (req, res) => { const top = m => [...m].sort((x, y) => y[1].bytes - x[1].bytes).slice(0, 40).map(([k, o]) => ({ what: k, requests: o.n, mb: +(o.bytes / 1e6).toFixed(2) }));
+  res.json({ hours: +((Date.now() - TRAFFIC.since) / 3600000).toFixed(1), totalMb: +(TRAFFIC.total / 1e6).toFixed(1), liveUpdatesMb: +(TRAFFIC.ws / 1e6).toFixed(1), byPath: top(TRAFFIC.by), byClient: top(TRAFFIC.who) }); });
 app.get('/api/version', (req, res) => { res.set('cache-control', 'no-store'); res.json({ v: APP_VERSION }); });
 app.get('/health', (req, res) => ready ? res.json({ ok: true, founded: !!world.meta, population: world.meta?.population || 0, viewers: wss?.clients.size || 0, bus: bus.kind, leader: isLeader, photosCors: store.corsStatus() }) : res.status(503).json({ ok: false, starting: true }));
 
@@ -385,19 +407,28 @@ app.use('/shared', express.static(path.join(root, 'shared'), { maxAge: '5m', las
 app.use('/vendor/three', express.static(path.join(root, 'node_modules', 'three', 'build'), { maxAge: '7d' }));
 app.use('/vendor/three-addons', express.static(path.join(root, 'node_modules', 'three', 'examples', 'jsm'), { maxAge: '7d' }));
 // A shared colonist link (/?c=handle) gets its own title in link previews on X, WhatsApp and so on.
-app.get('/', async (req, res, next) => {
-  const h = typeof req.query.c === 'string' ? R.cleanHandle(req.query.c) : ''; if (!h) return next();
+app.get('/', async (req, res, next) => { /* a shared colonist link, opened by a link preview (or anything that isn't a player's browser): the small page, with their name in its title */
+  if (typeof req.query.c !== 'string' || isBrowser(req) || 'full' in req.query) return next(); const h = R.cleanHandle(req.query.c);
   try {
-    const c = (await pool.query('select handle, display_name from citizens where lower(handle) = lower($1)', [h])).rows[0]; if (!c) return next();
+    const c = h ? (await pool.query('select handle, display_name from citizens where lower(handle) = lower($1)', [h])).rows[0] : null; if (!c) return sendShell(res, getShell());
     const who = c.display_name ? `${c.display_name} (@${c.handle})` : `@${c.handle}`, title = `${who} on Resurgence`, desc = `${who} lives in ${world.meta?.name || 'the colony'} on Gliese 12 b. Come and find them, and claim your own colonist. Free to play.`;
     const url = `https://${req.get('host')}/?c=${encodeURIComponent(c.handle)}`;
-    let html = await fs.promises.readFile(path.join(root, 'public', 'index.html'), 'utf8');
-    html = html.replace(/(<meta (?:property="og:title"|name="twitter:title") content=")[^"]*/g, `$1${esc(title)}`)
+    sendShell(res, getShell().replace(/(<meta (?:property="og:title"|name="twitter:title") content=")[^"]*/g, `$1${esc(title)}`)
       .replace(/(<meta (?:property="og:description"|name="twitter:description"|name="description") content=")[^"]*/g, `$1${esc(desc)}`)
-      .replace(/(<meta property="og:url" content=")[^"]*/, `$1${esc(url)}`);
-    res.set('cache-control', 'no-cache').type('html').send(html);
-  } catch (e) { next(); }
+      .replace(/(<meta property="og:url" content=")[^"]*/, `$1${esc(url)}`).replace("location.replace('/?full=1'", `location.replace('/?full=1&c=${encodeURIComponent(c.handle)}'`));
+  } catch (e) { sendShell(res, getShell()); }
 });
+// The page and its scripts, squeezed as small as they go once (Brotli at its strongest: about a third smaller than the
+// compression done on the fly), kept in memory and sent to every browser that takes it. Made in the background at start.
+const PACKED = new Map(); const packable = rel => /^\/(index\.html|[\w.-]+\.js|shared\/[\w.-]+\.js)$/.test(rel);
+const packFile = async rel => { const file = path.join(root, rel.startsWith('/shared/') ? '' : 'public', rel); try { const st = await fs.promises.stat(file), k = st.size + ':' + st.mtimeMs, hit = PACKED.get(rel); if (hit && hit.k === k) return hit;
+    const raw = await fs.promises.readFile(file), br = await new Promise((ok, no) => zlib.brotliCompress(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 11, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length } }, (e, b) => e ? no(e) : ok(b)));
+    const o = { k, br, tag: contentTag(file, st), type: rel.endsWith('.html') ? 'text/html; charset=utf-8' : 'text/javascript; charset=utf-8' }; PACKED.set(rel, o); return o; } catch (e) { return null; } };
+(async () => { for (const rel of ['/index.html', ...fs.readdirSync(path.join(root, 'public')).filter(f => f.endsWith('.js')).map(f => '/' + f), ...fs.readdirSync(path.join(root, 'shared')).filter(f => f.endsWith('.js')).map(f => '/shared/' + f)]) await packFile(rel); })().catch(() => {});
+app.use((req, res, next) => { if (req.method !== 'GET') return next(); const rel = req.path === '/' ? '/index.html' : req.path; if (!packable(rel) || !/\bbr\b/.test(String(req.get('accept-encoding') || ''))) return next();
+  const o = PACKED.get(rel); if (!o) { packFile(rel); return next(); } /* (not ready yet: the usual way this once) */
+  res.set({ 'Cache-Control': 'no-cache', Vary: 'Accept-Encoding', ...(o.tag ? { ETag: o.tag } : {}) }); if (o.tag && req.get('if-none-match') === o.tag) return res.status(304).end();
+  res.set({ 'Content-Type': o.type, 'Content-Encoding': 'br', 'Content-Length': String(o.br.length) }).end(o.br); });
 app.use(express.static(path.join(root, 'public'), { maxAge: '5m', lastModified: false, setHeaders: fresh }));
 
 // ---------- live updates ----------
@@ -604,5 +635,7 @@ ready = true; started = true; console.log(`City running on :${PORT} with ${world
 { const mem = () => { const m = process.memoryUsage(); return { rss: Math.round(m.rss / 1048576), heap: Math.round(m.heapUsed / 1048576) }; };
   pool.query('insert into app_events (t, kind, detail) values ($1, $2, $3)', [Date.now(), 'boot', JSON.stringify({ ...mem(), node: process.version, commit: process.env.RENDER_GIT_COMMIT || null })]).catch(() => {});
   pool.query('delete from app_events where t < $1', [Date.now() - 14 * 86400000]).catch(() => {});
+  setInterval(() => { if (TRAFFIC.hour < 1e6) { TRAFFIC.hour = 0; return; } const top = m => [...m].sort((x, y) => y[1].bytes - x[1].bytes).slice(0, 6).map(([k, o]) => `${k} ${(o.bytes / 1e6).toFixed(1)}MB/${o.n}`); /* (an hour that sent more than 1 MB: who and what, in the log) */
+    pool.query('insert into app_events (t, kind, detail) values ($1, $2, $3)', [Date.now(), 'traffic', JSON.stringify({ hourMb: +(TRAFFIC.hour / 1e6).toFixed(1), totalMb: +(TRAFFIC.total / 1e6).toFixed(1), paths: top(TRAFFIC.by), clients: top(TRAFFIC.who) })]).catch(() => {}); TRAFFIC.hour = 0; }, 3600000).unref();
   let warned = 0; setInterval(() => { const m = mem(); console.log(`memory: ${m.rss} MB in use (${m.heap} MB heap), ${wss.clients.size} connected`); if (m.rss > 420 && Date.now() - warned > 3600000) { warned = Date.now(); pool.query('insert into app_events (t, kind, detail) values ($1, $2, $3)', [Date.now(), 'memory-high', JSON.stringify({ ...m, clients: wss.clients.size })]).catch(() => {}); } }, 5 * 60000).unref(); }
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => { server.close(); try { const { drainFlows } = await import('./stats.js'); await Promise.race([drainFlows(), new Promise(r => setTimeout(r, 3000))]); } catch {} process.exit(0); }); // the last few seconds of stats are saved first

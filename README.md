@@ -1000,6 +1000,11 @@ Without Docker: install Node 20+ and Postgres, copy `.env.example` to `.env`, fi
 
 ## Put it online for free (Render + Neon)
 
+**Bandwidth (what the server sends out is metered by the host).** The game page is about 1.5 MB before compression, so who asks for it matters:
+- **Monitors, link previews, crawlers and scripts get a tiny page** (about 2 KB: the title and the preview tags, with a link into the game). Anything that isn't a player's browser (it says what it is, or doesn't ask for compression) used to be sent the whole 1.5 MB every time. A shared colonist link (`/?c=handle`) still shows that colonist's name in its preview.
+- **Browsers get the page and its scripts packed as small as they go** (Brotli at its strongest, made once at start and kept in memory): the page is about 365 KB instead of 455 KB, and coming back to an unchanged page downloads nothing.
+- **The traffic meter.** The server counts the bytes it really sends, by path and by kind of client. The builder sees it at `/api/admin/traffic` (since the last restart), and any hour that sent more than 1 MB is noted in the log (`app_events`, kind `traffic`) with its top paths and clients.
+
 1. **Database:** sign up at neon.com, create a project, and copy the connection string (`postgresql://…`).
 2. **Server:** sign up at render.com with GitHub. Click **New → Blueprint** and pick this repo. Paste the Neon string when asked for `DATABASE_URL`. Render generates your `ADMIN_TOKEN` and `CRON_KEY`; copy them from the service's **Environment** tab.
 3. **Keep it awake:** on cron-job.org, call `https://YOUR-APP.onrender.com/api/cron/tick?key=YOUR_CRON_KEY` every 10 minutes. Render's free plan sleeps after 15 idle minutes, and this ping prevents that. If it does sleep, the city catches up the moment it wakes.

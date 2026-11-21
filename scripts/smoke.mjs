@@ -1401,6 +1401,16 @@ ok((await call('POST', '/api/me/gender', { gender: 'm' }, { auth: false, headers
     ok(((await call('GET', '/api/meta', undefined, { auth: false })).json.events || []).some(e => e.kind === 'champions' && /Luckiest @zara_ng/.test(e.text)), "and announced in the Colony Log");
     ok((await call('GET', '/api/leaderboards/casino', undefined, P)).json.lastChampion?.h === 'zara_ng', "the board shows last week's champion"); }
   // ---- shared links get their own preview on X, WhatsApp… ----
+  { // what the server sends out is metered by the host: monitors, previews and scripts get a tiny page, browsers the page packed small
+    const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1', zlib = await import('node:zlib'), fs = await import('node:fs');
+    const bot = await (await fetch(BASE + '/', { headers: { 'user-agent': 'Mozilla/5.0+(compatible; UptimeRobot/2.0)' } })).text(); ok(bot.length < 6000 && /og:title/.test(bot) && /\?full=1/.test(bot), 'an uptime monitor or a crawler gets a tiny page (the title and the preview tags), not the 1.5 MB game', String(bot.length));
+    ok((await (await fetch(BASE + '/?c=zara_ng', { headers: { 'user-agent': 'facebookexternalhit/1.1' } })).text()).length < 6000, '…a link preview too');
+    const raw = await new Promise((done, no) => { import('node:http').then(h => h.get(BASE + '/', { headers: { 'user-agent': UA, 'accept-encoding': 'gzip, deflate, br' } }, r => { const c = []; r.on('data', d => c.push(d)); r.on('end', () => done({ h: r.headers, b: Buffer.concat(c) })); }).on('error', no)); });
+    const page = fs.readFileSync(new URL('../public/index.html', import.meta.url));
+    ok(raw.h['content-encoding'] === 'br' && zlib.brotliDecompressSync(raw.b).equals(page) && raw.b.length < page.length * 0.3, 'a browser gets the whole game, packed to under a third of its size', `${raw.h['content-encoding']} ${raw.b.length}`);
+    const again = await fetch(BASE + '/', { headers: { 'user-agent': UA, 'accept-encoding': 'br', 'if-none-match': raw.h.etag } }); ok(again.status === 304, '…and coming back to an unchanged page downloads nothing', String(again.status));
+    const tr = (await call('GET', '/api/admin/traffic')).json; ok(tr.totalMb >= 0 && tr.byPath.some(x => x.what === '/') && tr.byClient.some(x => x.what === 'UptimeRobot'), 'the builder can see what was sent, by path and by who asked', JSON.stringify(tr).slice(0, 200));
+    ok((await call('GET', '/api/admin/traffic', undefined, { auth: false })).status >= 401, '…only the builder'); }
   { const pg = await (await fetch(BASE + '/?c=zara_ng')).text();
     ok(/<meta property="og:title" content="[^"]*@zara_ng\)? on Resurgence"/.test(pg) && /og:url" content="[^"]*\?c=zara_ng"/.test(pg), 'a colonist link has their name in the link preview');
     ok(/og:title" content="Resurgence: a new beginning/.test(await (await fetch(BASE + '/?c=nobody_here_xyz')).text()), 'an unknown colonist falls back to the normal preview');

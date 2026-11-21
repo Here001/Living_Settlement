@@ -12,6 +12,7 @@
 // The map's own data comes from index.html through the callbacks in `opts`; this file only draws and drives.
 import * as W from '/world3d.js';
 import { follower, pickPet } from '/creature3d.js';
+import * as TR from '/train3d.js';
 import { BUILDING_TYPES, ROAD_TYPES, CAR_MODELS } from '/shared/catalog.js';
 const THREE = W.THREE;
 
@@ -20,6 +21,7 @@ const HQ = !(PHONE && ((navigator.deviceMemory || 4) <= 3 || (navigator.hardware
 const BANKS = new Set(['microbank', 'communitybank', 'bank', 'intlbank']); /* (shared/catalog.js BANK_TYPES: each has a cash machine outside) */
 const TILE = 8, B = 20, M = 1.2;     // metres to a tile; tiles to a block; how far a building stands in from its plot's edge
 const TREES = new Set(['tree', 'pine', 'birch', 'poplar', 'palm', 'xmastree']);
+const hashS = t => { let h = 2166136261; t = String(t); for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 const GREEN = new Set(['park', 'garden', 'fitpark', 'playground', 'pitch', 'farm', 'bush', 'hedge', 'flowers', 'tree', 'pine', 'birch', 'poplar', 'palm', 'xmastree', 'rocks', 'golf']);
 const rng = seed => { let s = (seed >>> 0) || 1; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 const sizeOf = b => { const T = BUILDING_TYPES[b.type]; return b.rot ? [T.size[1], T.size[0]] : [T.size[0], T.size[1]]; };
@@ -40,7 +42,11 @@ function blockArea(bx, by, o) {
     if (st === 'bush' || st === 'hedge') { spots.push({ x: x + TILE / 2, y: y + TILE / 2, k: 'bush' }); solid.push({ c: [wx(x + TILE / 2), wz(y + TILE / 2), 1.1], soft: 0.5 }); continue; }
     if (st === 'fence') { props.push({ k: 'fence', x: x + TILE / 2, y: y + TILE / 2, c: T.colors?.wall || '#F4F1E8', w: TILE }); solid.push({ r: [wx(x), wz(y + TILE / 2 - 0.4), wx(x + TILE), wz(y + TILE / 2 + 0.4)] }); continue; }
     if (st === 'lamp' || st === 'bench' || st === 'prop' || st === 'busstop') { const k = st === 'prop' ? T.prop || 'prop' : st, pr = { k, x: x + TILE / 2, y: y + TILE / 2, rot: b.rot || 0, brk: k === 'lamp' }; props.push(pr); solid.push(pr.brk ? { c: [wx(pr.x), wz(pr.y), 0.3], brk: 'lamp', p: pr } : { c: [wx(x + TILE / 2), wz(y + TILE / 2), 0.7] }); continue; } /* (a street lamp: a car knocks it over) */
-    if (T.outdoor) { buildings.push({ id: b.id, type: b.type, x, y, w: w * TILE, h: h * TILE, outdoor: true, rot: b.rot || 0 });
+    if (T.outdoor) { const face = st === 'parking' ? [['S', 0, 1], ['N', 0, -1], ['E', 1, 0], ['W', -1, 0]].map(([k, dx, dy]) => { let n = 0; if (dx) for (let j = 0; j < h; j++) n += o.road(b.x + (dx > 0 ? w : -1), b.y + j) ? 1 : 0; else for (let i = 0; i < w; i++) n += o.road(b.x + i, b.y + (dy > 0 ? h : -1)) ? 1 : 0; return [k, n]; }).sort((p, q) => q[1] - p[1])[0][0] : undefined;
+      buildings.push({ id: b.id, type: b.type, x, y, w: w * TILE, h: h * TILE, outdoor: true, rot: b.rot || 0, face });
+      if (st === 'parking') { const P = W.parkingLayout({ x, y, w: w * TILE, h: h * TILE }, face), HH = k => ((hashS(b.id) ^ (k * 2654435761)) >>> 0) % 1000; /* a car park: about half its bays taken, the same cars for everyone; the pay booth is solid */
+        P.bays.forEach((by2, i) => { if (HH(i + 1) >= 560) return; const pc = { kind: ['hatch', 'sedan', 'suv', 'ev', 'evsedan', 'pickup', 'luxury', 'sedan'][HH(i + 40) % 8], col: ['#C8382E', '#2F5D9E', '#E9E4D8', '#2B2F33', '#E2B13C', '#3C8A5A', '#7C8288', '#F2F0EA'][HH(i + 80) % 8], x: wx(by2.x), z: wz(by2.z), ry: by2.ry }; parked.push(pc); solid.push({ car: pc }); });
+        { const gu = P.gate.u + (P.gate.u > P.L / 2 ? -1.2 : 1.2), [kx, kz] = P.at(gu, P.mid - 4.6); solid.push({ r: [wx(kx - 0.9), wz(kz - 0.9), wx(kx + 0.9), wz(kz + 0.9)] }); } }
       if (st === 'racetrack') { const g = W.standOf({ x, y, w: w * TILE, h: h * TILE }); solid.push({ r: [wx(g.x0 - 0.4), wz(g.z0 - 0.4), wx(g.x1 + 0.4), wz(g.z1)], id: b.id, door: [wx((g.x0 + g.x1) / 2), wz(g.z1 + 0.7)], out: Math.atan2(-1, 0) }); } /* (the way in: the door in the middle of the stand's back) */ /* (its grandstand: see world3d's venue) */
       const n = Math.round(w * h * (st === 'park' || st === 'garden' ? 1.2 : st === 'square' ? 0.3 : 0));
       for (let k = 0; k < n; k++) { const px = x + 3 + r() * (w * TILE - 6), py = y + 3 + r() * (h * TILE - 6);
@@ -65,14 +71,18 @@ function blockArea(bx, by, o) {
   for (const [tx, ty, type] of roads) { const R0 = ROAD_TYPES[type] || {}; if (R0.rail || R0.nocars || R0.kind !== 'street' && R0.kind !== 'highway') continue;
     const x0 = tx * TILE, z0 = ty * TILE, n = { N: isR(tx, ty - 1), S: isR(tx, ty + 1), W: isR(tx - 1, ty), E: isR(tx + 1, ty) }, links = n.N + n.S + n.W + n.E;
     const kerbs = [['N', 0, -1], ['S', 0, 1], ['W', -1, 0], ['E', 1, 0]].filter(([k, dx, dy]) => !n[k] && free(tx + dx, ty + dy));
+    const here = []; /* (the cars that could park along this tile: one side, mostly) */
     for (const [k, dx, dy] of kerbs) { const along = dx === 0, px = (d) => along ? x0 + d : dx < 0 ? x0 - 0.8 : x0 + TILE + 0.8, pz = (d) => along ? (dy < 0 ? z0 - 0.8 : z0 + TILE + 0.8) : z0 + d;
       if (R0.deco === 'trees' || R0.lanes === 'median' || H(tx, ty, 1) < 260) { props.push({ k: 'tree', lite: true, x: px(1.6), y: pz(1.6), c: ['#6FAE45', '#5E9E45', '#7DB656'][H(tx, ty, 2) % 3], s: 0.7 + (H(tx, ty, 3) % 30) / 100 }); solid.push({ c: [wx(px(1.6)), wz(pz(1.6)), 0.42], soft: 0.2 }); } /* (a street tree: its trunk, not its leaves; a vehicle can brush past) */
       else if (H(tx, ty, 4) < 120) { const pr = { k: 'bin', x: px(6.2), y: pz(6.2), brk: true }; props.push(pr); solid.push({ c: [wx(pr.x), wz(pr.y), 0.4], brk: 'bin', p: pr }); }
       else if (H(tx, ty, 5) < 70) { const pr = { k: 'hydrant', x: px(6.6), y: pz(6.6), brk: true }; props.push(pr); solid.push({ c: [wx(pr.x), wz(pr.y), 0.3], brk: 'hydrant', p: pr }); } /* (bins and hydrants: a car sends them flying) */
       // a car parked at this kerb (on a street with parking, most tiles; elsewhere now and then)
       if (links === 2 && ((n.N && n.S) || (n.E && n.W)) && H(tx, ty, 6) < (R0.deco === 'cars' ? 700 : 110)) { const cx = along ? x0 + TILE / 2 : dx < 0 ? x0 + 0.95 : x0 + TILE - 0.95, cz = along ? (dy < 0 ? z0 + 0.95 : z0 + TILE - 0.95) : z0 + TILE / 2; /* tight to the kerb */
-        const pc = { kind: PARK[H(tx, ty, 7) % PARK.length], col: PAINT[H(tx, ty, 8) % PAINT.length], x: wx(cx), z: wz(cz), ry: along ? (H(tx, ty, 9) & 1 ? Math.PI / 2 : -Math.PI / 2) : (H(tx, ty, 9) & 1 ? 0 : Math.PI) }; parked.push(pc);
-        solid.push({ car: pc }); } } /* (solid as the car's own body: you can drive past it close enough to brush it) */
+        const pc = { kind: PARK[H(tx, ty, 7 + here.length * 5) % PARK.length], col: PAINT[H(tx, ty, 8 + here.length * 5) % PAINT.length], x: wx(cx), z: wz(cz), ry: along ? (H(tx, ty, 9) & 1 ? Math.PI / 2 : -Math.PI / 2) : (H(tx, ty, 9) & 1 ? 0 : Math.PI) }; here.push(pc); } }
+    /* cars on both sides of the street narrow it to one lane: that's now and then (about one tile in eight); otherwise one side only.
+       The others are still there for a driving mission (a street race, a hot car, a chase), when the town's own streets are made harder */
+    if (here.length > 1) { const keep = H(tx, ty, 11) % here.length, both = H(tx, ty, 12) < 125; here.forEach((pc, i) => { if (i !== keep && !both) pc.extra = true; }); }
+    for (const pc of here) { parked.push(pc); solid.push({ car: pc }); } /* (solid as the car's own body: you can drive past it close enough to brush it) */ /* (solid as the car's own body: you can drive past it close enough to brush it) */
     if (links >= 3) { const corner = [[-1, -1], [1, -1], [-1, 1], [1, 1]].find(([dx, dy]) => free(tx + dx, ty) && free(tx, ty + dy) || free(tx + dx, ty + dy) && !isR(tx + dx, ty + dy) && (free(tx + dx, ty) || free(tx, ty + dy)));
       if (corner) { const [dx, dy] = corner, sx = dx < 0 ? x0 - 0.7 : x0 + TILE + 0.7, sz = dy < 0 ? z0 - 0.7 : z0 + TILE + 0.7; const pr = { k: 'signal', x: sx, y: sz, ang: Math.atan2(-dy, -dx), on: H(tx, ty, 10) % 3, brk: true }; props.push(pr); solid.push({ c: [wx(sx), wz(sz), 0.3], brk: 'signal', p: pr }); } } }
   // what's next door, so kerbs and riverbanks know whether to stop at the block's edge
@@ -144,6 +154,8 @@ export function createTown(host, opts) {
   const VK = opts.car.kind || 'car', BOAT = W.vehOn(VK) === 'water', BIKE = W.isVeh(VK) && !BOAT;
   const PERF = (() => { if (BIKE || BOAT) return ({ bicycle: { top: 9, acc: 2.6, grip: 6 }, motorbike: { top: 30, acc: 6, grip: 9 }, boat: { top: 24, acc: 4.5, grip: 3 }, sailboat: { top: 11, acc: 1.8, grip: 2.2 }, ferry: { top: 13, acc: 1.4, grip: 1.6 } })[VK] || { top: 12, acc: 3, grip: 3 }; const P = (CAR_MODELS[opts.car.m] || {}).price || 0, t = P >= 800000 ? 3 : P >= 200000 ? 2 : P >= 50000 ? 1 : 0; return { top: [22.5, 25.5, 29.5, 33.5][t], acc: [3.4, 3.8, 4.4, 5.2][t], grip: [8.6, 9.2, 10.4, 11.8][t], pw: [30, 40, 56, 80][t], trac: [3.4, 3.8, 4.4, 5.2][t], brk: [8.8, 9.3, 10.2, 11.2][t], gears: [4, 5, 5, 6][t] }; })(); /* (town speeds: about 80 km/h in an everyday car up to 120 in a supercar, and a steady pull, so there's time to steer) */ /* how your car goes: top speed (m/s), pull, tyre grip (m/s² sideways), power per kg (W), traction and brakes (m/s²), gears */
   const CARPHYS = !BIKE && !BOAT; /* a car (not a bike or a boat): the full engine, gearbox and brakes below */
+  const trainBox = [], trainCars = new Map(); /* the trains near you: their cars, and where each is (for bumping into) */
+  let BUSY = false; /* on a driving mission: both sides of the street parked up (set each frame) */
   let foot = opts.mode === 'walk', parked = null, riding = null, summon = null; /* summon: your car, driving up to you after you called it */ /* riding: in someone else's car ({ id, seat }), going where they drive */ /* foot: walking (your character), not driving; parked: your car, where you got out */
   let swimY = 0; /* (how far down in the water you are: you wade in and out) */
   let feet = null; const mkFeet = () => { if (feet) return feet; feet = W.makePerson('me', null, opts.look || null); feet.group.traverse(m => { if (m.isMesh) m.castShadow = true; }); scene.add(feet.group); return feet; };
@@ -177,10 +189,10 @@ export function createTown(host, opts) {
   const solidsNear = (x, z) => { const bx = Math.floor(tileOf(x) / B) * B, by = Math.floor(tileOf(z) / B) * B, key = bx + ',' + by + ',' + blocksVer; if (key === solidKey) return solidList; const out = [];
     for (const dx of [-B, 0, B]) for (const dz of [-B, 0, B]) { const v = blocks.get((bx + dx) + ',' + (by + dz)); if (v) for (const o of v.solid) out.push(o); } solidKey = key; solidList = out; return out; };
   // only the obstacles within reach of you (m metres, and a car's length more for cars): what the bump tests look at
-  const REACH = [], closeSolids = (S, x, z, m) => { REACH.length = 0; for (const s of S) { if (s.car) { if (Math.abs(s.car.x - x) < m + 7 && Math.abs(s.car.z - z) < m + 7) REACH.push(s); } else if (s.r) { if (x > s.r[0] - m && x < s.r[2] + m && z > s.r[1] - m && z < s.r[3] + m) REACH.push(s); } else if (Math.abs(x - s.c[0]) < s.c[2] + m && Math.abs(z - s.c[1]) < s.c[2] + m) REACH.push(s); } return REACH; };
+  const REACH = [], closeSolids = (S, x, z, m) => { REACH.length = 0; for (const s of S) { if (s.car) { if (s.car.extra && !BUSY) continue; if (Math.abs(s.car.x - x) < m + 7 && Math.abs(s.car.z - z) < m + 7) REACH.push(s); } else if (s.r) { if (x > s.r[0] - m && x < s.r[2] + m && z > s.r[1] - m && z < s.r[3] + m) REACH.push(s); } else if (Math.abs(x - s.c[0]) < s.c[2] + m && Math.abs(z - s.c[1]) < s.c[2] + m) REACH.push(s); } return REACH; };
   // Would this point of the car be inside something? (x0, z0: where the same point is now.) A point that's already
   // overlapping something may always move further out of it, so two cars that end up overlapping can always part.
-  const SIZES = new Map(), sizeOf = kind => { let v = SIZES.get(kind); if (!v) SIZES.set(kind, v = W.carSize(kind)); return v; };
+  const SIZES = new Map([['train', [TR.CAR_LEN + 0.3, TR.CAR_W]]]), sizeOf = kind => { let v = SIZES.get(kind); if (!v) SIZES.set(kind, v = W.carSize(kind)); return v; };
   const carDep = (kind, cx, cz, ry, px, pz, m) => { const [L, Wd] = sizeOf(kind), c = Math.cos(ry), s2 = Math.sin(ry), dx = px - cx, dz = pz - cz, along = -dx * s2 - dz * c, side = dx * c - dz * s2; return Math.min(L / 2 + m - Math.abs(along), Wd / 2 + m - Math.abs(side)); }; /* > 0: inside the car's body (m: extra room) */
   const BRUSH = -0.1, SHOULDER = 0.28; /* driving: up to 10 cm of overlap is a brush; on foot: room for your shoulders */
   const depth = (x, z, s) => s.car ? carDep(s.car.kind, s.car.x, s.car.z, s.car.ry, x, z, foot ? SHOULDER : BRUSH) : s.r ? Math.min(x - s.r[0], s.r[2] - x, z - s.r[1], s.r[3] - z) : s.c[2] - Math.hypot(x - s.c[0], z - s.c[1]); /* > 0: inside, by this much */
@@ -188,13 +200,15 @@ export function createTown(host, opts) {
     for (const s of S) { if (s.gone || (s.brk && !foot)) continue; const d = depth(x, z, s); if (d <= (foot ? 0 : s.soft || 0)) continue; if (foot ? d >= depth(x0, z0, s) - 1e-3 : d > depth(x0, z0, s) + 0.002) return true; } /* (a vehicle may brush a tree or a bush, and once touching something it can always slide along it or back away) */ /* (lamps, bins, hydrants and traffic lights don't stop a car: it knocks them over) */
     if (!foot) { const box = (kind, cx, cz, ry) => { const d = carDep(kind, cx, cz, ry, x, z, BRUSH); return d > 0 && d >= carDep(kind, cx, cz, ry, x0, z0, BRUSH) - 1e-3; };
       for (const t of traffic) if (Math.abs(t.px - x) < 5 && Math.abs(t.pz - z) < 5 && box(t.kind, t.px, t.pz, t.ry)) return true;
-      for (const r of racers) if (Math.abs(r.x - x) < 5 && Math.abs(r.z - z) < 5 && box(r.kind, r.x, r.z, r.ry)) return true; /* (the other cars in a street race: solid, you can bump them) */
+      for (const r of racers) if (Math.abs(r.x - x) < 5 && Math.abs(r.z - z) < 5 && box(r.kind, r.x, r.z, r.ry)) return true;
+      for (const t of trainBox) if (Math.abs(t.x - x) < 6 && Math.abs(t.z - z) < 6 && box('train', t.x, t.z, t.ry)) return true; /* (a train: solid, it doesn't stop for you) */ /* (the other cars in a street race: solid, you can bump them) */
       for (const f of folk.values()) if (f.kind === 'car' && Math.abs(f.x - x) < 5 && Math.abs(f.z - z) < 5 && box(f.m, f.x, f.z, f.ry)) return true; return false; } /* other cars: their real size, so you can squeeze past */
     // on foot, a car is solid all along its body (its own length and width, and a little for your shoulders): yours where
     // you parked it, other players' cars and the traffic
     const carHit = (kind, cx, cz, ry) => { const d = carDep(kind, cx, cz, ry, x, z, SHOULDER); return d > 0 && d >= carDep(kind, cx, cz, ry, x0, z0, SHOULDER) - 1e-3; };
     if (parked && carHit(parked.kind, parked.x, parked.z, parked.ry)) return true;
     for (const t of traffic) if (Math.abs(t.px - x) < 4 && Math.abs(t.pz - z) < 4 && carHit(t.kind, t.px, t.pz, t.ry)) return true;
+    for (const t of trainBox) if (Math.abs(t.x - x) < 6 && Math.abs(t.z - z) < 6 && carHit('train', t.x, t.z, t.ry)) return true;
     for (const f of folk.values()) if (f.kind === 'car' && Math.abs(f.x - x) < 4 && Math.abs(f.z - z) < 4 && carHit(f.m, f.x, f.z, f.ry)) return true;
     return false; };
   const [OL, OW] = (() => { try { const [l, w] = W.carSize(VK); return [Math.max(0.6, l / 2 - 0.05), Math.max(0.2, w / 2 - 0.05)]; } catch (e) { return [2.1, 0.85]; } })(); /* (your vehicle's own size: a motorbike is much smaller than a car) */
@@ -677,7 +691,14 @@ export function createTown(host, opts) {
     for (const [id, g] of boards) if (!seen.has(id)) { scene.remove(g); g.traverse(o => o.geometry && o.geometry.dispose()); boards.delete(id); }
     if (boards.size) paintBoard(now); }
   view.resize(); around(); sunNow(true);
-  view.start((dt, now) => {
+  // ---- the trains on the railways near you: the same trains, on the same timetable, as on the 2D map (from the page) ----
+  function stepTrains() { trainBox.length = 0; if (!opts.trains) return; const R = 34, px = car.x / TILE, pz = car.z / TILE, list = opts.trains(px - R, pz - R, px + R, pz + R), seen = new Set(); if (list.length > 16) { list.sort((p, q) => Math.hypot(p.x - px, p.y - pz) - Math.hypot(q.x - px, q.y - pz)); list.length = 16; } /* (a busy network: the nearest 16 cars only) */
+    for (const c of list) { const id = c.id; seen.add(id); let g = trainCars.get(id); const kind = c.cab ? 'cab' : 'mid'; if (g && g.userData.kind !== kind) { scene.remove(g); g = null; }
+      if (!g) { g = TR.makeCar(kind, c.live); scene.add(g); trainCars.set(id, g); }
+      const x = c.x * TILE, z = c.y * TILE, a = Math.atan2(-c.dy, c.dx), rt = opts.road(Math.floor(c.x), Math.floor(c.y)), y = rt && ROAD_TYPES[rt]?.kind === 'crossing' ? 0.05 : 0.3; /* (rails flush with the road at a level crossing) */
+      g.position.set(x, y, z); g.rotation.y = a + (c.cab < 0 ? Math.PI : 0); if (c.cab) TR.setFront(g, c.cab > 0); trainBox.push({ x, z, ry: a - Math.PI / 2 }); }
+    for (const [id, g] of trainCars) if (!seen.has(id)) { scene.remove(g); trainCars.delete(id); } }
+  view.start((dt, now) => { BUSY = !!(opts.busy && opts.busy()); stepTrains();
     if (dead) return; drive(dt); if (DEB.length) stepDebris(dt);
     for (let i = strays.length - 1; i >= 0; i--) { const G = strays[i]; G.t += dt; const k = Math.min(70, 1.6 + G.t * 7.5); G.pet.step(dt, G.x0 + G.dx * k, G.z0 + G.dz * k); if (G.t > 5.2) G.pet.group.scale.setScalar(Math.max(0.001, 1 - (G.t - 5.2) / 0.5)); if (G.t > 5.7) { G.pet.dispose(); strays.splice(i, 1); } }
     if (myPet && petGone) { const G = petGone; G.t += dt; myPet.group.visible = true;
@@ -697,7 +718,7 @@ export function createTown(host, opts) {
     if (summon) { comeUp(dt); if (summon) pushCar(summon.kind, summon.col, summon.x, summon.z, summon.ry); }
     me.position.set(car.x, BOAT ? Math.sin(now / 700) * 0.06 : 0, car.z); me.rotation.set(0, 0, 0); me.rotation.y = car.a - Math.PI / 2; if (BOAT) me.rotation.z = Math.sin(now / 900) * 0.025; /* (a boat rocks gently) */ for (const w of me.userData.wheels || []) w.rotation.x -= car.v * dt / 0.33;
     roll += (car.steer * Math.min(1, Math.abs(car.v) / 14) * 0.05 - roll) * Math.min(1, dt * 5); accS += ((car.v - accel0) / Math.max(dt, 1 / 30) - accS) * Math.min(1, dt * 2.5); accel0 = car.v; pitch += (-accS * 0.0022 - pitch) * Math.min(1, dt * 3); /* the body dips under braking and squats as it pulls away: smoothed, so it never twitches */ me.rotateZ(roll); me.rotateX(Math.max(-0.035, Math.min(0.035, pitch))); /* the body leans into a turn and dips when you brake */
-    const night = view.night || 0; for (const blk of blocks.values()) for (const c of blk.parked) pushCar(c.kind, c.col, c.x, c.z, c.ry);
+    const night = view.night || 0; for (const blk of blocks.values()) for (const c of blk.parked) if (!c.extra || BUSY) pushCar(c.kind, c.col, c.x, c.z, c.ry); /* (the double-parked ones: only on a driving mission) */
     driveTraffic(dt); walk(dt); skyLife(dt, now, night);
     head.intensity = foot || riding ? 0 : night * 60; if (night > 0.02) { const fx = Math.cos(car.a), fz = -Math.sin(car.a); head.position.set(car.x + fx * 1.8, 0.9, car.z + fz * 1.8); head.target.position.set(car.x + fx * 14, 0, car.z + fz * 14); }
     const fov = mode === 1 && camera.aspect < 1 ? 72 + (foot ? 0 : Math.min(8, Math.abs(car.v) * 0.3)) : foot ? 62 : 60 + Math.min(14, Math.abs(car.v) * 0.45); if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); } /* the view widens with speed */

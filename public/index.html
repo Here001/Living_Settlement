@@ -3128,6 +3128,16 @@ function trainCars(gm,tminX,tmaxX,tminY,tmaxY){ const out=[]; railBusy.clear();
         if(c===0||c===r.cars-1) for(let ox=-2;ox<=2;ox++) for(let oy=-2;oy<=2;oy++){ const kk=(Math.floor(p[0])+ox)+','+(Math.floor(p[1])+oy); if(D.roads.get(kk)==='railcross') railBusy.add(kk); } } } }
   return out; }
 
+// The trains for the 3D town: every car near (x0,y0)-(x1,y1) at this moment, from the same timetable as the 2D map, with
+// which end is a driving cab (1: leading, -1: the trailing cab, 0: a carriage) and the line's colours
+function trains3d(x0,y0,x1,y1){ const out=[], gm=gmNow();
+  for(const r of railRoutes()){ if(r.box[2]<x0||r.box[0]>x1||r.box[3]<y0||r.box[1]>y1) continue;
+    for(let i=0;i<r.trains;i++){ const t=trainAt(r,gm,i);
+      for(let c=0;c<r.cars;c++){ const s=t.s+t.dir*(r.tlen/2-CAR_GAP/2-c*CAR_GAP), p=routePoint(r,s); if(p[0]<x0||p[0]>x1||p[1]<y0||p[1]>y1) continue;
+        const A=routePoint(r,s-0.3*t.dir), B=routePoint(r,s+0.3*t.dir); let dx=B[0]-A[0], dy=B[1]-A[1]; const L=Math.hypot(dx,dy)||1;
+        out.push({ id:r.id+'#'+i+':'+c, x:p[0], y:p[1], dx:dx/L, dy:dy/L, cab:c===0?1:c===r.cars-1?-1:0, live:r.live }); } } }
+  return out; }
+
 /* ---------------- vehicles ---------------- */
 // One drawer for every vehicle: an oriented box with a cabin, coloured by type, lights at night, sirens when on a call.
 // Vehicles come from small cached pictures, one per type, colour and heading (32 headings), so a busy street costs a
@@ -8066,7 +8076,7 @@ const Drive={ el:null, T:null, dist:0, last:null, near:null, synced:0,
     const root=el('div',{class:'webview driveview',role:'dialog','aria-label':'Driving around town'}, bar, side, this.doorBtn, this.carBtn, stage, el('div',{class:'dhud'}, this.speed, el('div',{class:'dacts'}, this.rideBtn, this.goBtn, this.inBtn)), this.modeBtn, this.chatBtn, this.pickBtn, this.chatBox);
     document.body.append(root); document.body.classList.add('room-on','drive-on'); this.el=root; this.dist=0; this.last={x:s.x,y:s.y}; this.car=car; DriveMap.mount(root);
     let T3; try{ T3=await import('/town3d.js'); }catch(e){ this.close(); toast('Driving couldn’t load. Check your connection and try again.'); return; } if(this.el!==root) return;
-    try{ this.T=T3.createTown(stage,{ start:s, car, controls:DriveCtl.get(), mode:walk?'walk':'car', look, pet:petOut(c), onPet:x=>petTap(x,this.T), onCar:near=>{ this.atCar=near; this.paintMode(); }, onCarHere:()=>{ toast(this.car.water?`⛵ ${yourCar(this.car,1)} is moored at the water’s edge. Walk (or swim) up to it to get in.`:`🚗 Your ${this.car.own?this.car.name.toLowerCase():'car'} is here. Get in when you’re ready.`); this.paintMode(); }, onRide:c=>this.nearRide(c),
+    try{ this.T=T3.createTown(stage,{ start:s, car, trains:(x0,y0,x1,y1)=>trains3d(x0,y0,x1,y1), busy:()=>!!(Missions.a&&['race','hotcar','police','bounty'].includes(Missions.a.kind)), /* (a driving mission: the streets double-parked, harder) */ controls:DriveCtl.get(), mode:walk?'walk':'car', look, pet:petOut(c), onPet:x=>petTap(x,this.T), onCar:near=>{ this.atCar=near; this.paintMode(); }, onCarHere:()=>{ toast(this.car.water?`⛵ ${yourCar(this.car,1)} is moored at the water’s edge. Walk (or swim) up to it to get in.`:`🚗 Your ${this.car.own?this.car.name.toLowerCase():'car'} is here. Get in when you’re ready.`); this.paintMode(); }, onRide:c=>this.nearRide(c),
         road:(x,y)=>D.roads.get(x+','+y)||null, water:(x,y)=>D.water.has(x+','+y),
         building:(x,y)=>{ const id=D.occ.get(x+','+y); return id?D.buildings.get(id)||null:null; },
         buildings:(x0,y0,x1,y1)=>{ const out=[]; for(const b of D.buildings.values()) if(b.x>=x0&&b.x<x1&&b.y>=y0&&b.y<y1&&!b.ruin&&BUILDING_TYPES[b.type]) out.push(b); return out; },

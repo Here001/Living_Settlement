@@ -363,7 +363,13 @@ function lamp(B, view, x, z) {
 // and the sand inside), the Stadiums (a bowl with white fins, a roof ring and floodlights round a green pitch) and the
 // Racetracks (the oval of dirt with white rails, a covered grandstand and the winning post). A few hundred quads each,
 // all merged into the area's meshes like any other building: no extra draws.
-const VENUES = new Set(['colosseum', 'stadium', 'arena', 'racetrack']);
+const VENUES = new Set(['colosseum', 'stadium', 'arena', 'racetrack', 'parking']);
+// A car park's layout (b: x, y, w, h in metres; face: the side on the road): a drive-through aisle from the road, a row
+// of bays either side of it, the gate where it meets the road. town3d parks its cars in these same bays.
+export function parkingLayout(b, face) { const alongX = face === 'E' || face === 'W', L = alongX ? b.w : b.h, Wd = alongX ? b.h : b.w, BAY = 2.6, DEEP = 5, n = Math.max(1, Math.floor((L - 2.4) / BAY)), mid = Wd / 2, bays = [];
+  const at = (u, v) => alongX ? [b.x + u, b.y + v] : [b.x + v, b.y + u]; /* (u along the aisle, v across it) */
+  for (const side of [-1, 1]) for (let i = 0; i < n; i++) { const u = (L - n * BAY) / 2 + (i + 0.5) * BAY, v = mid + side * (3 + DEEP / 2), [x, z] = at(u, v); bays.push({ x, z, ry: alongX ? (side < 0 ? 0 : Math.PI) : (side < 0 ? Math.PI / 2 : -Math.PI / 2), u, v, side }); }
+  const end = face === 'E' || face === 'S' ? L - 0.4 : 0.4, [gx, gz] = at(end, mid); return { alongX, L, Wd, BAY, DEEP, n, mid, bays, gate: { x: gx, z: gz, u: end }, at }; }
 // a racetrack's grandstand, on the south side of its plot (also what walkers and cars can't go through)
 export const standOf = b => { const cx = b.x + b.w / 2, sl = Math.min(b.w * 0.42, 22), z1 = b.y + b.h; return { x0: cx - sl / 2, x1: cx + sl / 2, z0: z1 - 4.4, z1: z1 - 0.5 }; };
 function venue(B, view, b, face, st, T, C) {
@@ -420,6 +426,23 @@ function venue(B, view, b, face, st, T, C) {
     for (const a of [Math.PI / 4, 3 * Math.PI / 4, 5 * Math.PI / 4, 7 * Math.PI / 4]) { const p = pt(a, RX * 0.94, RZ * 0.94, n, 0), mh = H + (big ? 14 : 10); bake(B.shiny, GEO.cyl, { x: p[0], y: mh / 2, z: p[2], sx: 0.35, sy: mh, sz: 0.35, color: col('#8a9096') });
       const ry = Math.atan2(cx - p[0], cz - p[2]); bake(B.solid, GEO.box, { x: p[0], y: mh, z: p[2], sx: 3.2, sy: 2, sz: 0.4, ry, color: col('#2B2621') }); bake(B.glow, GEO.box, { x: p[0] + Math.sin(ry) * 0.22, y: mh, z: p[2] + Math.cos(ry) * 0.22, sx: 2.8, sy: 1.6, sz: 0.06, ry, color: col('#fff6d8') }); }
     const g = gate(RX - 0.6, RZ - 0.6, n, 4.2, 3.4, col('#1B2631')); name(g, Math.min(H - 1.5, 6.5), 8); return true; }
+  if (st === 'parking') { // a car park: tarmac, white bays and arrows, a kerb round it, lamps, trees in planters, the barrier and pay booth at the gate
+    const P = parkingLayout(b, face), at = P.at, w = col('#f2f0e8'), kerbC = col('#cfc9bc'), y = 0.05, q2 = (bk, u0, v0, u1, v1, yy, c) => { const [ax, az] = at(u0, v0), [bx2, bz2] = at(u1, v1), X0 = Math.min(ax, bx2), X1 = Math.max(ax, bx2), Z0 = Math.min(az, bz2), Z1 = Math.max(az, bz2); bk.quad([X0, yy, Z1], [X1, yy, Z1], [X1, yy, Z0], [X0, yy, Z0], [0, 1, 0], [0, 0, (X1 - X0) / 6, 0, (X1 - X0) / 6, (Z1 - Z0) / 6, 0, (Z1 - Z0) / 6], c); };
+    q2(B.asphalt, 0, 0, P.L, P.Wd, 0.04, col('#ffffff'));
+    for (const sd of [-1, 1]) { const v0 = P.mid + sd * 3, v1 = P.mid + sd * (3 + P.DEEP); for (let i = 0; i <= P.n; i++) { const u = (P.L - P.n * P.BAY) / 2 + i * P.BAY; q2(B.paint, u - 0.06, Math.min(v0, v1), u + 0.06, Math.max(v0, v1), y, w); } q2(B.paint, (P.L - P.n * P.BAY) / 2, Math.min(v0, v0 + sd * 0.12), (P.L + P.n * P.BAY) / 2, Math.max(v0, v0 + sd * 0.12), y, w); } /* (the bay lines, and the line along their front) */
+    for (const k of [0.3, 0.7]) { const u = P.L * k, dir = P.gate.u > P.L / 2 ? -1 : 1; q2(B.paint, u - 0.9, P.mid - 0.09, u + 0.9, P.mid + 0.09, y, w); const tip = u + dir * 1.3, [t0x, t0z] = at(tip, P.mid), [l0x, l0z] = at(u + dir * 0.6, P.mid - 0.55), [r0x, r0z] = at(u + dir * 0.6, P.mid + 0.55); const tri = [[t0x, y, t0z], [l0x, y, l0z], [r0x, y, r0z]]; if ((tri[1][0] - tri[0][0]) * (tri[2][2] - tri[0][2]) - (tri[1][2] - tri[0][2]) * (tri[2][0] - tri[0][0]) > 0) tri.reverse(); B.paint.tri(tri[0], tri[1], tri[2], [0, 1, 0], [0, 0, 1, 0, 0.5, 1], w); } /* (arrows: in from the road) */
+    // the kerb round it, open where the aisle meets the road
+    const K = 0.35; for (const [u0, v0, u1, v1] of [[0, 0, P.L, K], [0, P.Wd - K, P.L, P.Wd]]) { const [ax, az] = at(u0, v0), [bx2, bz2] = at(u1, v1); B.paving.box(Math.min(ax, bx2), Math.min(az, bz2), Math.max(ax, bx2), Math.max(az, bz2), 0, 0.16, kerbC, { su: 2, sv: 2 }); }
+    for (const ue of [0, P.L - K]) { const gate = Math.abs(ue + K / 2 - P.gate.u) < 1; for (const [v0, v1] of gate ? [[0, P.mid - 3], [P.mid + 3, P.Wd]] : [[0, P.Wd]]) { const [ax, az] = at(ue, v0), [bx2, bz2] = at(ue + K, v1); B.paving.box(Math.min(ax, bx2), Math.min(az, bz2), Math.max(ax, bx2), Math.max(az, bz2), 0, 0.16, kerbC, { su: 2, sv: 2 }); } }
+    // the barrier and the pay booth at the gate, lamps and planted trees
+    { const gu = P.gate.u + (P.gate.u > P.L / 2 ? -1.2 : 1.2), [px0, pz0] = at(gu, P.mid - 3.4), [bx3, bz3] = at(gu, P.mid + 2.6); bake(B.solid, GEO.box, { x: px0, y: 0.55, z: pz0, sx: 0.35, sy: 1.1, sz: 0.35, color: col('#E2B13C') });
+      const arm = [bx3 - px0, bz3 - pz0], la = Math.hypot(arm[0], arm[1]); for (let k = 0; k < 6; k++) { const f0 = k / 6, f1 = (k + 1) / 6; bake(B.solid, GEO.box, { x: px0 + arm[0] * (f0 + f1) / 2, y: 1.0, z: pz0 + arm[1] * (f0 + f1) / 2, sx: P.alongX ? 0.1 : la / 6, sy: 0.1, sz: P.alongX ? la / 6 : 0.1, color: col(k % 2 ? '#F2F0EA' : '#C8382E') }); }
+      const [kx, kz] = at(gu, P.mid - 4.6); B.plaster.box(kx - 0.8, kz - 0.8, kx + 0.8, kz + 0.8, 0, 2.3, col('#E9E4D8'), { su: 14, sv: 12.8 }); B.glass.box(kx - 0.82, kz - 0.5, kx + 0.82, kz + 0.5, 1.0, 1.9, col('#9fb8c8')); B.roof.box(kx - 1.0, kz - 1.0, kx + 1.0, kz + 1.0, 2.3, 2.45, col('#2F5D9E'), { sides: true });
+      const [mx, mz] = at(gu, P.mid + 3.5); bake(B.shiny, GEO.box, { x: mx, y: 0.7, z: mz, sx: 0.35, sy: 1.4, sz: 0.3, color: col('#3a3f45') }); bake(B.glow, GEO.box, { x: mx, y: 1.15, z: mz, sx: 0.37, sy: 0.25, sz: 0.32, color: col('#7FC8C2') }); } /* (the ticket machine by the barrier) */
+    for (const dv of [-2.6, 2.6]) { const [lx, lz] = at(P.gate.u > P.L / 2 ? 0.75 : P.L - 0.75, P.mid + dv); lamp(B, view, lx, lz); /* (at the far end of the aisle, out of the way) */ bake(B.solid, GEO.cyl, { x: lx, y: 0.3, z: lz, sx: 0.35, sy: 0.6, sz: 0.35, color: kerbC }); }
+    { const tu = P.gate.u > P.L / 2 ? 0.6 : P.L - 0.6; for (const v of [0.6, P.Wd - 0.6]) { const [tx, tz] = at(tu, v); B.paving.box(tx - 0.45, tz - 0.45, tx + 0.45, tz + 0.45, 0, 0.45, kerbC, { su: 2, sv: 2 }); bake(B.solid, GEO.cyl, { x: tx, y: 1.5, z: tz, sx: 0.1, sy: 2.2, sz: 0.1, color: col('#6b4f3a') }); bake(B.solid, GEO.ball, { x: tx, y: 3.1, z: tz, sx: 0.8, sy: 0.9, sz: 0.8, color: col('#5E9E45') }); } }
+    { const [sx2, sz2] = at(P.gate.u, P.mid - 3.6); bake(B.shiny, GEO.cyl, { x: sx2, y: 1.4, z: sz2, sx: 0.06, sy: 2.8, sz: 0.06, color: col('#9aa1a8') }); bake(B.solid, GEO.box, { x: sx2, y: 2.9, z: sz2, sx: 0.8, sy: 0.8, sz: 0.08, ry: P.alongX ? Math.PI / 2 : 0, color: col('#2F5D9E') }); bake(B.glow, GEO.box, { x: sx2, y: 2.9, z: sz2, sx: 0.5, sy: 0.5, sz: 0.1, ry: P.alongX ? Math.PI / 2 : 0, color: col('#ffffff') }); } /* (the blue P sign) */
+    return true; }
   if (st === 'racetrack') {
     const RX = b.w / 2 - 1.2, RZ = b.h / 2 - 4.5, W = Math.min(4, b.h * 0.14), N = 40, dirt = col((C.dirt) || '#C9A06A'), rail = col('#f4f4f2'), stand = col(C.stand || '#B5523B');
     flatRing(B.solid, N, [RX, RZ], [RX - W, RZ - W], 2, 0.06, 0.06, dirt);
@@ -437,7 +460,7 @@ function venue(B, view, b, face, st, T, C) {
 
 function building(B, view, b, face, r) {
   const T = BUILDING_TYPES[b.type] || {}, C = T.colors || {}, x0 = b.x, z0 = b.y, x1 = b.x + b.w, z1 = b.y + b.h;
-  if (VENUES.has(T.style) && !b.ruin && b.done !== false && venue(B, view, b, face, T.style, T, C)) return; /* (built as themselves) */
+  if (VENUES.has(T.style) && !b.ruin && b.done !== false && venue(B, view, b, b.face || face, T.style, T, C)) return; /* (built as themselves) */
   if (b.outdoor) return; // open spaces are painted on the ground; their trees and benches are props
   const st = T.style || 'block', lvl = 1 + 0.15 * ((b.level || 1) - 1);
   const wallC = col(C.wall || '#e3dccf'), roofC = col(C.roof || '#8c8783'), trimC = col(C.trim || '#4e4a44');
